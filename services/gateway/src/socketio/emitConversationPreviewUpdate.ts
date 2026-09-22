@@ -61,6 +61,9 @@ const PREVIEW_MESSAGE_SELECT = {
   isBlurred: true,
   isViewOnce: true,
   expiresAt: true,
+  // #7451 — cf. `resolveLastMessageSummaryKind` : sans elle, un éphémère de
+  // trente secondes s'affiche « actif » sept jours dans la liste.
+  ephemeralDuration: true,
   sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
   attachments: { take: 1, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
   _count: { select: { attachments: true } },
@@ -117,6 +120,7 @@ type PreviewMessage = {
   isBlurred?: boolean | null;
   isViewOnce?: boolean | null;
   expiresAt?: Date | string | null;
+  ephemeralDuration?: number | null;
   sender?: { displayName?: string | null; user?: { displayName?: string | null } | null } | null;
   attachments?: ReturnType<typeof resolvePreviewMediaFields>['lastMessageAttachments'];
   _count?: { attachments?: number } | null;

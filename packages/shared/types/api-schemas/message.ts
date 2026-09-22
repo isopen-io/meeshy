@@ -215,6 +215,7 @@ export const messageSchema = {
         // par une réponse. Mêmes formes que le schéma racine, pour qu'un client
         // typé sur la racine lise la même chose ici.
         expiresAt: { type: 'string', format: 'date-time', nullable: true },
+        ephemeralDuration: { type: 'integer', nullable: true },
         isViewOnce: { type: 'boolean' },
         isBlurred: { type: 'boolean' },
         effectFlags: { type: 'number' },
@@ -378,7 +379,8 @@ export const messageSchema = {
     },
 
     // Expiration & View-once
-    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : D(lecteur) pour un destinataire, la plus tardive des D connues pour l\'expéditeur, null tant que rien n\'a démarré. Pour un non-éphémère, la grâce de vue unique.' },
+    ephemeralDuration: { type: 'integer', nullable: true, description: 'Durée d\'un éphémère, en secondes. Le décompte part de la RÉCEPTION de chaque destinataire (#7451).' },
     isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
     viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
     isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
@@ -524,7 +526,8 @@ export const messageMinimalSchema = {
     // ce `null` en `false`/`0` au lieu de le transmettre, et le client ne peut
     // plus distinguer « pas protégé » de « le serveur ne sait pas ». Les deux
     // lots avaient posé la même déclaration ; celui-ci en avait la forme juste.
-    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : D(lecteur) pour un destinataire, la plus tardive des D connues pour l\'expéditeur, null tant que rien n\'a démarré. Pour un non-éphémère, la grâce de vue unique.' },
+    ephemeralDuration: { type: 'integer', nullable: true, description: 'Durée d\'un éphémère, en secondes. Le décompte part de la RÉCEPTION de chaque destinataire (#7451).' },
     isViewOnce: { type: 'boolean', nullable: true, description: 'View-once message (disappears after view)' },
     isBlurred: { type: 'boolean', nullable: true, description: 'Content blurred until tap to reveal' },
     effectFlags: { type: 'number', nullable: true, description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },

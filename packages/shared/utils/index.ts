@@ -39,6 +39,7 @@ export * from './anonymous-username.js';
 export * from './join-notice.js';
 export * from './conversation-join-error.js';
 export * from './last-message-protection.js';
+export * from './ephemeral-countdown.js';
 export { getSenderUserId, isAnonymousSender } from './sender-identity.js';
 export {
   type AttachmentMessageType,

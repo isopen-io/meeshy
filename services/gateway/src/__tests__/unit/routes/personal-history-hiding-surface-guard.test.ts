@@ -296,7 +296,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // TEXTUELLE qui s'en va (`applyPersonalHistoryHiding` sur le chemin de la
   // liste) est remplacée par la fusion EN MÉMOIRE du cutoff dans le plancher,
   // exigée par `IN_MEMORY_HIDING_SURFACES` sur le fichier qui la porte.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 5, applications: 1 },
+  // 5 → 4 (#7451) : le GEL par message est parti dans
+  // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
+  // de fichier, pas de nature — elle ne servait déjà aucun contenu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -362,6 +365,28 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
       "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
+  },
+
+  // #7451 — les deux moitiés du décompte éphémère. Aucune des deux ne SERT de
+  // contenu : le masquage protège ce qu'un lecteur VOIT, et ces lectures ne
+  // rendent rien à personne.
+  'messaging/freezeMessageStatus.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Fenêtre du gel d'accusés (`select: { id: true }`) : elle décide quelles " +
+      'lignes de statut écrire, pas ce qui est servi. Masquer ici ferait ' +
+      "qu'un message effacé de l'historique personnel d'un lecteur ne serait " +
+      'jamais marqué livré pour lui — donc compté non lu à vie.',
+  },
+  'messaging/ephemeralCountdown.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Écriture d'échéance à la réception : elle lit la durée et l'expéditeur " +
+      "d'un message que le destinataire VIENT de recevoir, et ne rend aucun " +
+      'contenu. Un masquage personnel arrêterait le décompte de ce lecteur — ' +
+      'soit exactement le contraire de ce que la directive demande.',
   },
 
   // #5689 — même famille qu'ExpiredMessagesCleanupService juste au-dessus,

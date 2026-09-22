@@ -28,8 +28,8 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
  * La tête du cycle 93 laissait ouvert « propager ou refuser ». Ce n'est pas une
  * préférence produit : chaque promesse force sa réponse, et elles diffèrent.
  *
- * **Éphémère → propager.** La copie hérite de la DURÉE de l'original
- * (`expiresAt − createdAt`), recomptée depuis l'envoi du transfert. Le compte
+ * **Éphémère → propager.** La copie hérite de la DURÉE de l'original, dont le
+ * décompte repartira de la réception de chaque nouveau destinataire. Le compte
  * repart de zéro parce que les nouveaux destinataires n'ont rien vu : leur
  * servir les 3 secondes résiduelles d'un minuteur de 24 h ne voudrait rien
  * dire. La copie meurt, et elle meurt TRANSITIVEMENT — la copie étant à son
@@ -43,14 +43,20 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
  * C'est aussi ce que font WhatsApp et Signal, qui interdisent l'un comme
  * l'autre le transfert d'un contenu à vue unique.
  *
- * ─── POURQUOI LA DURÉE SE RECALCULE, ET NE SE LIT PAS ───────────────────────
+ * ─── LA DURÉE SE LIT, ET NE SE RECALCULE QUE POUR LE LEGACY (#7451) ─────────
  *
- * `Message.ephemeralDuration` existe au schéma et dit exactement ce qu'il
- * faudrait ici. Il est ÉCRIT PAR PERSONNE : aucun des trois transports ne le
- * transmet, `MessageProcessor.saveMessage` ne le range pas, et il vaut `null`
- * sur toute la collection. S'y fier aurait rendu ce module inopérant en
- * silence. `expiresAt − createdAt` reconstitue la même valeur à partir de deux
- * colonnes réellement peuplées — c'est la seule source de vérité disponible.
+ * Ce module a d'abord dérivé la durée d'`expiresAt − createdAt`, en écrivant sa
+ * raison : `Message.ephemeralDuration` existait au schéma et n'avait AUCUN
+ * écrivain. Elle en a un depuis #7451 — et la dérivation est devenue FAUSSE dans
+ * le même mouvement : `expiresAt` ne porte plus l'échéance du client mais
+ * l'heure de DESTRUCTION, qui vaut le plafond de rétention (sept jours) tant que
+ * personne n'a reçu. Transférer un éphémère de trente secondes en aurait fait
+ * une copie de sept jours, sans qu'un seul témoin ne tombe.
+ *
+ * La colonne prime donc, et `expiresAt − createdAt` reste le repli pour les
+ * lignes écrites AVANT ce lot, qui n'ont pas de durée. Ce qui voyage vers
+ * `saveMessage` est la DURÉE, jamais une échéance : c'est le serveur qui décide
+ * de l'échéance, à la réception de chacun.
  *
  * ─── BEST-EFFORT DÉLIBÉRÉ, ET SA SEULE EXCEPTION ────────────────────────────
  *
@@ -85,6 +91,7 @@ export interface ForwardSourceReader {
       select: {
         isViewOnce: true;
         effectFlags: true;
+        ephemeralDuration: true;
         expiresAt: true;
         createdAt: true;
         _count: { select: { attachments: true } };
@@ -96,6 +103,7 @@ export interface ForwardSourceReader {
 export interface ForwardSourceRow {
   readonly isViewOnce?: boolean | null;
   readonly effectFlags?: number | null;
+  readonly ephemeralDuration?: number | null;
   readonly expiresAt?: Date | null;
   readonly createdAt?: Date | null;
   /** Ce que la copie serveur des pièces jointes pourra donner au transfert. */
@@ -121,8 +129,12 @@ export type ForwardRefusal = 'view-once-not-forwardable' | 'forward-source-unava
 export type ForwardAdmission =
   | {
       readonly admitted: true;
-      /** L'échéance héritée de la source. Absente si elle n'était pas éphémère. */
-      readonly expiresAt?: Date;
+      /**
+       * La DURÉE héritée de la source, en secondes. Absente si elle n'était pas
+       * éphémère. Ce n'est plus une échéance : le serveur la dérive à la
+       * réception de chaque destinataire (#7451).
+       */
+      readonly ephemeralDuration?: number;
     }
   | { readonly admitted: false; readonly reason: ForwardRefusal };
 
@@ -182,6 +194,9 @@ export async function admitMessageForward(
       select: {
         isViewOnce: true,
         effectFlags: true,
+        // La colonne d'abord (#7451) ; les deux suivantes ne servent plus qu'au
+        // repli legacy, pour les lignes écrites avant qu'elle n'ait un écrivain.
+        ephemeralDuration: true,
         expiresAt: true,
         createdAt: true,
         // Compté par CETTE lecture, pas par une seconde : le chemin nominal
@@ -210,17 +225,31 @@ export async function admitMessageForward(
     return SOURCE_UNAVAILABLE;
   }
 
-  const { expiresAt, createdAt } = source;
-  if (!(expiresAt instanceof Date) || !(createdAt instanceof Date)) {
-    return ADMITTED_WITHOUT_INHERITANCE;
+  const inherited = inheritedDuration(source);
+  if (inherited === null) return ADMITTED_WITHOUT_INHERITANCE;
+
+  return { admitted: true, ephemeralDuration: inherited };
+}
+
+/**
+ * La durée de la source, en secondes — la colonne, ou le repli legacy.
+ *
+ * Le repli borne à zéro : une distance négative (décalage d'horloge, ou client
+ * qui avait envoyé une échéance déjà passée) ne doit en aucun cas faire vivre la
+ * copie PLUS que l'original. Une durée nulle n'étant pas une durée, la copie
+ * dégénère alors en message ordinaire plutôt qu'en message immortel — le même
+ * arbitrage que `normalizeEphemeralDuration`, qui refuse zéro.
+ */
+function inheritedDuration(source: ForwardSourceRow): number | null {
+  const { ephemeralDuration, expiresAt, createdAt } = source;
+  if (typeof ephemeralDuration === 'number' && Number.isFinite(ephemeralDuration) && ephemeralDuration > 0) {
+    return Math.floor(ephemeralDuration);
   }
 
-  // Une durée négative — décalage d'horloge, ou client qui a envoyé une échéance
-  // déjà passée — rend la copie immédiatement échue plutôt que durable : elle ne
-  // doit en aucun cas vivre PLUS que l'original.
-  const lifespanMs = Math.max(0, expiresAt.getTime() - createdAt.getTime());
+  if (!(expiresAt instanceof Date) || !(createdAt instanceof Date)) return null;
 
-  return { admitted: true, expiresAt: new Date(params.at.getTime() + lifespanMs) };
+  const seconds = Math.floor(Math.max(0, expiresAt.getTime() - createdAt.getTime()) / 1000);
+  return seconds > 0 ? seconds : null;
 }
 
 /**

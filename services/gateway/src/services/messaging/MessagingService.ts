@@ -399,14 +399,18 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `expiresAt` : l'échéance HÉRITÉE de la source prime sur celle que le
-      //    client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `ephemeralDuration` : la DURÉE héritée de la source prime sur celle
+      //    que le client a (ou n'a pas) envoyée — c'est tout l'objet du garde
+      //    ci-dessus. Depuis #7451 c'est bien une durée et non une échéance :
+      //    le décompte de la copie repart de la réception de chaque nouveau
+      //    destinataire. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.expiresAt ? { expiresAt: forwardAdmission.expiresAt } : {}),
+          ...(forwardAdmission.ephemeralDuration
+            ? { ephemeralDuration: forwardAdmission.ephemeralDuration }
+            : {}),
           originalLanguage,
           conversationId,
           senderId: participant!.id,

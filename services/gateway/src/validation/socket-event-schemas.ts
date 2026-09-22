@@ -13,6 +13,7 @@ import {
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
+import { EPHEMERAL_DURATION_SHAPE } from './ephemeral-duration';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_CONTENT_BYTES } from './content-limits.js';
 
@@ -62,6 +63,7 @@ export const SocketMessageSendSchema = z.object({
   // depuis `isBlurred` / `expiresAt` / `isViewOnce`.
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
@@ -110,6 +112,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // `effectFlags` depuis ces champs bruts.
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
