@@ -56,6 +56,7 @@ import {
 } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { readDeviceServedTo } from '../../utils/read-device-visibility';
 import {
   RECEIPTS_MAX_WRITE_MESSAGE_IDS,
   RECEIPTS_MAX_READ_MESSAGE_IDS,
@@ -667,8 +668,7 @@ async function readPeople(
       deliveredAt: iso(row.deliveredAt),
       receivedAt: iso(row.receivedAt),
       readAt: iso(row.readAt),
-      // readDevice should only be served to the viewer (#7358)
-      readDevice: row.participantId === reader.membership.id ? (row.readDevice ?? null) : null,
+      readDevice: readDeviceServedTo(row, reader.membership.id),
     }));
 
   const { total, limit: served, offset: from, hasMore } = page.pagination;
