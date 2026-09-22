@@ -16,6 +16,7 @@ import { useParams, useSearch } from '@/lib/router';
 import { COMMENTS_ANCHOR, revealComments, useCommentsReveal } from '@/lib/view/comments-anchor';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link } from '@/routes/route-table';
 
@@ -125,6 +126,11 @@ const isRefusal = (error: unknown): boolean => error instanceof ApiError && (err
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
   const post = usePost(postId);
+  /* LA SALLE DE LA PUBLICATION (#7395) — la seule audience par laquelle le
+     lecteur qui n'est pas ami de l'auteur reçoit la traduction du texte et les
+     commentaires en direct. Tenue dès l'ouverture : un refus (403/404) est
+     refusé aussi par `post:join`, indistinctement (D-6). */
+  usePublicationRoom(postId);
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
