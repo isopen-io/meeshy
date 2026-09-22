@@ -168,17 +168,23 @@ describe('updateAppBadge — les deux surfaces du même nombre', () => {
     expect(doc.title).toBe('Meeshy');
   });
 
+  /**
+   * Le titre de départ porte DÉJÀ un préfixe : un titre nu ne distinguerait
+   * pas « rien écrit » de « effacé », les deux rendant « Meeshy ». C'est le
+   * préfixe SURVIVANT qui prouve que le cache absent laisse les deux surfaces
+   * intactes.
+   */
   test('undefined ⇒ ni setAppBadge ni clearAppBadge ni modification du titre', () => {
     let setAppBadgeCalled = false;
     let clearAppBadgeCalled = false;
-    const doc = { title: 'Meeshy' };
+    const doc = { title: '(3) Meeshy' };
     const navigator = {
       setAppBadge: () => { setAppBadgeCalled = true; return Promise.resolve(); },
       clearAppBadge: () => { clearAppBadgeCalled = true; return Promise.resolve(); },
     };
-    updateAppBadge(undefined as any, { navigator, document: doc });
+    updateAppBadge(undefined, { navigator, document: doc });
     expect(setAppBadgeCalled).toBe(false);
     expect(clearAppBadgeCalled).toBe(false);
-    expect(doc.title).toBe('Meeshy');
+    expect(doc.title).toBe('(3) Meeshy');
   });
 });
