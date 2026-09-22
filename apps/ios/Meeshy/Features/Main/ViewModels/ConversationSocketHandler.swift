@@ -746,6 +746,12 @@ final class ConversationSocketHandler {
                 // message détruit : le garder ferait grossir un magasin dont
                 // aucune entrée ne resservira.
                 EphemeralReceiptLedger.shared.forget(event.messageId)
+                // #7453 — le troisième chemin du balayage. Il est le seul à
+                // savoir qu'un message PRÉCIS vient de mourir, y compris
+                // pendant que l'application est à l'écran : ni la NSE (qui
+                // n'agit qu'à l'arrivée d'un push) ni le retour au premier
+                // plan ne couvrent ce cas.
+                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
             }
             .store(in: &cancellables)
 

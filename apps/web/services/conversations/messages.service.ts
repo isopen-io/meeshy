@@ -8,6 +8,7 @@ import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import { splitConsumedLanguages } from '@/utils/consumed-language';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import type {
   Message,
   SendMessageRequest,
@@ -84,7 +85,7 @@ export class MessagesService {
         data: unknown[];
         pagination?: PaginationMeta;
         cursorPagination?: CursorPaginationMeta;
-        meta?: { userLanguage?: string };
+        meta?: { userLanguage?: string; mentionedUsers?: readonly MentionedUser[] };
       }>(
         API_ENDPOINTS.conversations.byIdMessages(conversationId),
         queryParams,
@@ -98,8 +99,13 @@ export class MessagesService {
         return MessagesService.EMPTY_MESSAGES_RESPONSE;
       }
 
+      // `meta.mentionedUsers` résout les `@pseudo` de la PAGE — c'est ici,
+      // et nulle part ailleurs, qu'on la voit : aucun message ne la porte sur
+      // le chemin REST. La remettre à chaque message est ce qui permet à la
+      // bulle d'afficher « @Jean Dupont » plutôt que « @jdupont42 » (#7458).
+      const mentionedUsers = response.data.meta?.mentionedUsers;
       const transformedMessages = response.data.data.map(msg =>
-        transformersService.transformMessageData(msg)
+        transformersService.transformMessageData(msg, { mentionedUsers })
       );
 
       const pagination = response.data.pagination;
