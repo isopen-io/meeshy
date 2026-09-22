@@ -3,58 +3,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-// MARK: - Views Sub-Filter
-
-private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched, opened
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoyé", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribué", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
-        case .opened: return String(localized: "message-detail.views.opened", defaultValue: "Ouvert", bundle: .main)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .sent: return "paperplane.fill"
-        case .delivered: return "checkmark.circle.fill"
-        case .read: return "eye.fill"
-        case .notSeen: return "eye.slash.fill"
-        case .listened: return "headphones"
-        case .watched: return "play.rectangle.fill"
-        case .opened: return "doc.viewfinder"
-        }
-    }
-
-    /// La famille de consommation que cet onglet montre, s'il en montre une.
-    /// Les quatre onglets de statut TEXTE (envoyé, distribué, lu, pas vu)
-    /// n'en ont aucune.
-    var family: MediaConsumptionFamily? {
-        switch self {
-        case .listened: return .listened
-        case .watched: return .watched
-        case .opened: return .opened
-        default: return nil
-        }
-    }
-
-    init(family: MediaConsumptionFamily) {
-        switch family {
-        case .listened: self = .listened
-        case .watched: self = .watched
-        case .opened: self = .opened
-        }
-    }
-}
-
 // MARK: - MessageViewsDetailView
 
 /// Onglet « Qui a vu » du détail d'un message : sous-filtres (Envoyé / Distribué /
@@ -75,22 +23,31 @@ struct MessageViewsDetailView: View {
     @State private var isLoadingReadStatus = false
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
-    @State private var readStatusError: String? = nil
+    @State private var readStatusError: MessageViewsLabels.LoadFailure? = nil
 
-    // Views sub-filter
-    @State private var viewsFilter: ViewsFilter = .sent
+    // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
+    // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
+    // juge pertinent (#7366), jamais « Envoyé » par défaut.
+    @State private var chosenViewsFilter: MessageViewsFilter? = nil
+    private var viewsFilter: MessageViewsFilter {
+        chosenViewsFilter ?? .initial(
+            readCount: message.readCount,
+            deliveredCount: message.deliveredCount,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
+    }
 
     // Historique local des tentatives d'envoi (spec 2026-07-08
     // message-send-failure-retry-flow) — vide pour les messages reçus
     // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
     @State private var sendAttempts: [SendAttemptRecord] = []
 
-    private var availableViewsFilters: [ViewsFilter] {
+    private var availableViewsFilters: [MessageViewsFilter] {
         // #7228 — un onglet par famille de consommation PRÉSENTE. La partition
         // est celle de `MediaConsumptionFamily` : audio, vidéo, et tout le
         // reste, qui s'OUVRE (image, PDF, tableur, présentation, archive…).
         let families = MessageViewsConsumption.families(in: message.attachments)
-        return [.sent, .delivered, .read, .notSeen] + families.map(ViewsFilter.init(family:))
+        return [.sent, .delivered, .read, .notSeen] + families.map(MessageViewsFilter.init(family:))
     }
 
     var body: some View {
@@ -174,7 +131,7 @@ struct MessageViewsDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func viewsFilterCapsule(_ filter: ViewsFilter, accent: Color) -> some View {
+    private func viewsFilterCapsule(_ filter: MessageViewsFilter, accent: Color) -> some View {
         let isSelected = viewsFilter == filter
         var count: Int? = nil
 
@@ -194,7 +151,7 @@ struct MessageViewsDetailView: View {
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                viewsFilter = filter
+                chosenViewsFilter = filter
             }
             HapticFeedback.light()
         } label: {
@@ -250,7 +207,7 @@ struct MessageViewsDetailView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(message.senderName ?? "Inconnu")
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -549,7 +506,7 @@ struct MessageViewsDetailView: View {
                 } else {
                     timelineBanner(
                         icon: "checkmark.circle.fill",
-                        text: status.receivedCount >= status.totalMembers ? "Distribue a tous" : "Distribue",
+                        text: MessageViewsLabels.deliveredBanner(receivedCount: status.receivedCount, totalMembers: status.totalMembers),
                         detail: status.receivedBy.first.map { formatTimeFR($0.receivedAt) } ?? "",
                         count: "\(status.receivedCount)/\(status.totalMembers)",
                         accent: accent
@@ -585,7 +542,7 @@ struct MessageViewsDetailView: View {
                 } else {
                     timelineBanner(
                         icon: "eye.fill",
-                        text: status.readCount >= status.totalMembers ? "Lu par tous" : "Lu",
+                        text: MessageViewsLabels.readBanner(readCount: status.readCount, totalMembers: status.totalMembers),
                         detail: status.readBy.first.map { formatTimeFR($0.readAt) } ?? "",
                         count: "\(status.readCount)/\(status.totalMembers)",
                         accent: accent
@@ -757,19 +714,6 @@ struct MessageViewsDetailView: View {
 
     private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: 10) {
-            // Checkmark indicating delivery/read status
-            if date != nil {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(accent)
-                    .frame(width: 16)
-                    .accessibilityHidden(true)
-            } else {
-                // Placeholder for alignment when no date
-                Color.clear.frame(width: 16)
-                    .accessibilityHidden(true)
-            }
-
             MeeshyAvatar(
                 name: username,
                 context: .userListItem,
@@ -797,9 +741,8 @@ struct MessageViewsDetailView: View {
                     .foregroundColor(theme.textMuted)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .padding(.horizontal, 4)
-        .frame(minHeight: 44)
     }
 
     /// #7228 — la famille est PASSÉE, plus devinée depuis un booléen `isAudio`
@@ -1013,7 +956,7 @@ struct MessageViewsDetailView: View {
                 // Not combined into one element: the button must stay independently
                 // focusable for VoiceOver.
                 .accessibilityHidden(true)
-            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
+            Text(readStatusError.map { MessageViewsLabels.loadFailure($0) } ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
             Button {
@@ -1074,11 +1017,11 @@ struct MessageViewsDetailView: View {
             if response.success {
                 readStatusData = response.data
             } else {
-                readStatusError = "Erreur serveur"
+                readStatusError = .server
                 Logger.network.error("read-status error: success=false")
             }
         } catch {
-            readStatusError = "Erreur de connexion"
+            readStatusError = .connection
             Logger.network.error("read-status decode/network error: \(error)")
         }
     }
