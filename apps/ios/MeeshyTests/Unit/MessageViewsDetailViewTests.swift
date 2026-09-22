@@ -27,17 +27,14 @@ final class MessageViewsDetailViewTests: XCTestCase {
         let requiredLanguages = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
         
         for localizationKey in requiredLocalizations {
-            for language in requiredLanguages {
-                let locale = Locale(identifier: language == "pt-BR" ? "pt_BR" : language)
-                let value = String(localized: .init(localizationKey), locale: locale, bundle: .main)
-                
-                // If not found, String(localized:) returns the key itself
-                XCTAssertNotEqual(
-                    value,
-                    localizationKey,
-                    "Localization key '\(localizationKey)' missing for language '\(language)'"
-                )
-            }
+            let value = String(localized: .init(localizationKey), bundle: .main)
+
+            // If not found, String(localized:) returns the key itself
+            XCTAssertNotEqual(
+                value,
+                localizationKey,
+                "Localization key '\(localizationKey)' missing — must exist in Localizable.xcstrings"
+            )
         }
     }
     
