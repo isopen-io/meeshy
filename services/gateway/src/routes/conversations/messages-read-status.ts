@@ -27,6 +27,8 @@ import type { ConversationParams } from './types';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logger } from './messages-shared';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { MeeshySocketIOHandler } from '../../socketio/MeeshySocketIOHandler';
+import { bridgeNotComputed } from '../../socketio/unreadBridgeField';
 
 /**
  * Enregistre `POST /conversations/:id/mark-read` — ADAPTATEUR de la collection
@@ -137,7 +139,7 @@ export function registerMarkUnreadRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
   participantAuth: any,
-  socketIOHandler?: any
+  socketIOHandler?: Pick<MeeshySocketIOHandler, 'getManager'>
 ) {
   fastify.post<{ Params: ConversationParams }>('/conversations/:id/mark-unread', {
     schema: {
@@ -318,11 +320,12 @@ export function registerMarkUnreadRoute(
       // carry. No `bridge` field: this route has no `ConversationBridgeService`
       // wired in, so it DECLARES "I did not compute" (`unreadBridgeField.ts`)
       // rather than guessing — the client keeps whatever bridge it already has.
-      const io = socketIOHandler?.getManager?.()?.getIO?.();
+      const io = socketIOHandler?.getManager()?.getIO();
       if (io) {
         io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
-          unreadCount: 1
+          unreadCount: 1,
+          ...bridgeNotComputed()
         });
       }
 
