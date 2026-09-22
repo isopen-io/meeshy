@@ -81,6 +81,7 @@ struct RiverConversationHost: View {
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
+        onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -95,6 +96,7 @@ struct RiverConversationHost: View {
         self.onViewStory = onViewStory
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
+        self.onConsumeViewOnce = onConsumeViewOnce
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
