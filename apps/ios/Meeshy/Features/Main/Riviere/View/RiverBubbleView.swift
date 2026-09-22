@@ -73,6 +73,10 @@ struct RiverBubbleContent: Equatable {
     /// la vue. Défaut vide : les sites de montage antérieurs restent justes.
     let protection: MessageProtectionDescriptor
 
+    /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
+    /// (#7467) — projeté par `RiverConversationMapping`, jamais lu ici.
+    let isBurning: Bool
+
     init(
         bubble: RiverLaneResolver.RiverBubble,
         senderDisplayName: String,
@@ -94,6 +98,7 @@ struct RiverBubbleContent: Equatable {
         forwardAttribution: ForwardAttribution? = nil,
         storyCitation: ReplyReference? = nil,
         protection: MessageProtectionDescriptor = .unprotected,
+        isBurning: Bool = false,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -109,6 +114,7 @@ struct RiverBubbleContent: Equatable {
         self.forwardAttribution = forwardAttribution
         self.storyCitation = storyCitation
         self.protection = protection
+        self.isBurning = isBurning
     }
 }
 
@@ -338,6 +344,9 @@ struct RiverBubbleView: View, Equatable {
                 speechRow
             }
         }
+        // #7467 — la destruction se VOIT ici aussi. La rivière était, avec le
+        // résumé, l'un des deux modes où un éphémère disparaissait d'un coup.
+        .ephemeralBurn(isBurning: content.isBurning)
     }
 
     /// Le haut du rang. Une nouvelle voix qui prend la parole gagne du VIDE

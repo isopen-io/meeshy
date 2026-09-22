@@ -44,4 +44,26 @@ nonisolated enum ReadingModeProtectionChrome {
             return "Features/Main/Focal/Summary/SummaryProtectionsView.swift"
         }
     }
+
+    /// Le fichier SOURCE qui monte la COMBUSTION d'un éphémère détruit sous les
+    /// yeux du lecteur (#7467), relatif à `apps/ios/Meeshy/`.
+    ///
+    /// **Ce n'est pas toujours le même fichier que le chrome, et c'est voulu.**
+    /// Le chrome est un badge : il se pose au milieu d'une mise en page. La
+    /// combustion se pose sur le message ENTIER — en peau bulle, cela inclut
+    /// le sticker, qui ne passe pas par `BubbleStandardLayout`. Le poser deux
+    /// fois doublerait l'opacité et l'échelle ; le poser trop bas laisserait
+    /// un sticker disparaître d'un coup.
+    static func burnHostPath(for mode: ReadingModeOrchestrator.ConversationReadingMode) -> String {
+        switch mode {
+        case .focal, .script:
+            return "Features/Main/Focal/Row/FocalRow.swift"
+        case .bubbles:
+            return "Features/Main/Views/ThemedMessageBubble.swift"
+        case .river:
+            return "Features/Main/Riviere/View/RiverBubbleView.swift"
+        case .summary:
+            return "Features/Main/Focal/Summary/SummaryProtectionsView.swift"
+        }
+    }
 }

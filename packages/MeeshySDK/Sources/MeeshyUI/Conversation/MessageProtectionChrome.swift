@@ -92,12 +92,28 @@ public struct MessageProtectionChrome: View, Equatable {
     private func ephemeralCapsule(_ state: EphemeralDeadline.State) -> some View {
         switch state {
         case .running(let deadline):
+            // **La flamme SEULE, hors de la dernière minute** (#7467). Elle dit
+            // déjà tout ce qu'il y a à savoir — ce message va disparaître — et
+            // un chiffre qui descend pendant vingt-trois heures n'ajoute rien
+            // qu'une horloge à faire battre. Le lecteur d'écran, lui, donne
+            // TOUJOURS le temps restant : il n'a pas la flamme pour le dire.
+            chrome(tint: MeeshyColors.error) {
+                Image(systemName: MessageProtectionSymbols.ephemeral)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(MeeshyColors.error)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.ephemeralA11y(deadline: deadline))
+
+        case .imminent(let deadline):
             chrome(tint: MeeshyColors.error) {
                 Image(systemName: MessageProtectionSymbols.ephemeral)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(MeeshyColors.error)
                 // Le battement est rendu PAR LE SYSTÈME : le texte se met à
-                // jour sans que SwiftUI ré-évalue la cellule.
+                // jour sans que SwiftUI ré-évalue la cellule. Il n'est monté
+                // QUE dans ce cas — c'est ce qui fait qu'aucune horloge ne bat
+                // avant la dernière minute.
                 // La borne haute est forcée dans le futur : `ClosedRange`
                 // piège sur `lower > upper`, et une passe de rendu peut très
                 // bien tomber APRÈS l'échéance, entre le moment où l'hôte
@@ -226,7 +242,10 @@ public extension MessageProtectionChrome {
     ) -> [String] {
         descriptor.badges.compactMap { badge in
             switch badge {
-            case .ephemeral(.running(let deadline)):
+            // Le libellé accessible donne TOUJOURS le temps restant, seuil ou
+            // pas (#7467) : un lecteur d'écran ne voit pas la flamme, et
+            // « Message éphémère » sans échéance ne dit pas quand.
+            case .ephemeral(.running(let deadline)), .ephemeral(.imminent(let deadline)):
                 return ephemeralA11y(deadline: deadline, now: now)
             case .ephemeral(.awaitingReception(let duration)):
                 return awaitingA11y(duration: duration)

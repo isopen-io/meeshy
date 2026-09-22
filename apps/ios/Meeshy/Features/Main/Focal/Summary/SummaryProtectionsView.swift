@@ -27,6 +27,11 @@ struct SummaryProtectionEntry: Identifiable, Equatable {
     let id: String
     let senderDisplayName: String
     let descriptor: MessageProtectionDescriptor
+    /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
+    /// (#7467). Le Résumé aussi montre la destruction : une ligne qui
+    /// disparaît d'un coup d'une section intitulée « Ce qui va disparaître »
+    /// serait la seule à ne pas le montrer.
+    let isBurning: Bool
 }
 
 enum LivingSummaryProtections {
@@ -44,7 +49,8 @@ enum LivingSummaryProtections {
             return SummaryProtectionEntry(
                 id: message.id,
                 senderDisplayName: message.senderName ?? message.senderUsername ?? message.senderId,
-                descriptor: descriptor
+                descriptor: descriptor,
+                isBurning: message.isBurning
             )
         }
     }
@@ -87,6 +93,7 @@ struct SummaryProtectionsView: View {
                                       : Color.black.opacity(FocalMetrics.SurfaceTint.lightFill))
                         )
                         .accessibilityElement(children: .combine)
+                        .ephemeralBurn(isBurning: entry.isBurning)
                     }
                 }
             }
