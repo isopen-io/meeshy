@@ -259,6 +259,7 @@ extension BubbleContent {
         // conversation après coup héritait d'une horloge démarrée chez
         // quelqu'un d'autre.
         self.protection = message.protection()
+        self.isBurning = message.isBurning
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred

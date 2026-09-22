@@ -286,6 +286,13 @@ nonisolated struct BubbleContent: Equatable {
     /// Le contenu est-il voilé jusqu'au geste du lecteur — flou OU vue unique
     /// (#7452). Projection de `protection.requiresVeil`, le site de la règle.
     var requiresVeil: Bool { protection.requiresVeil }
+    /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
+    /// (#7467) — projection de `MeeshyMessage.isBurning`.
+    ///
+    /// `var`/`= false` plutôt que `let` : l'init memberwise garde ainsi sa
+    /// compatibilite source avec les fixtures existantes, meme patron que
+    /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
+    var isBurning: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
     /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
@@ -400,6 +407,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.attachments == rhs.attachments
             && lhs.location == rhs.location
             && lhs.protection == rhs.protection
+            && lhs.isBurning == rhs.isBurning
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned

@@ -892,6 +892,8 @@ const it = {
   'message-detail.attachment.complete': 'Completo',
   'message-detail.attachment.listen.empty': 'Non ancora ascoltato',
   'message-detail.attachment.watch.empty': 'Non ancora guardato',
+  'message-detail.attachment.open': 'Apri {name}',
+  'message-detail.attachment.opened.empty': 'Non ancora aperto',
   'message-detail.loading': 'Caricamento…',
   'message-detail.load-error': 'Impossibile caricare queste informazioni',
   'message-detail.retry': 'Riprova',

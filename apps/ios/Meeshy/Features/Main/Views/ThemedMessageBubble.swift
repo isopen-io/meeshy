@@ -364,6 +364,10 @@ struct ThemedMessageBubble: View {
                 // `messages` à son échéance ; la branche `isExpired` ci-dessus
                 // reste le filet de sécurité d'une passe de rendu qui
                 // précéderait ce retrait.
+                // #7467 — la destruction se VOIT. Posé sur le `Group`, donc
+                // sur la bulle comme sur le sticker : un éphémère détruit sous
+                // les yeux du lecteur se consume, puis l'hôte retire la ligne.
+                .ephemeralBurn(isBurning: content.isBurning)
                 .onAppear {
                     applyBlurRevealDurationFromPrefs()
                 }

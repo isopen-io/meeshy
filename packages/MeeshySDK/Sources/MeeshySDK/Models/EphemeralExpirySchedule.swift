@@ -16,6 +16,10 @@ import Foundation
 public enum EphemeralExpirySchedule {
 
     /// Ce que l'hôte doit faire MAINTENANT, et quand revenir.
+    ///
+    /// `nextWake` vise le plus proche de DEUX genres d'instants : le
+    /// franchissement du seuil de la dernière minute (#7467), qui change ce qui
+    /// s'affiche, et l'échéance, qui retire le message.
     public struct Plan: Equatable, Sendable {
         /// Les messages dont l'échéance est passée : à retirer de l'écran et
         /// de tout texte dérivé.
@@ -43,11 +47,23 @@ public enum EphemeralExpirySchedule {
         var next: Date?
 
         for (messageId, deadline) in deadlines {
-            if deadline <= now {
+            guard deadline > now else {
                 expired.append(messageId)
-            } else if next == nil || deadline < next! {
-                next = deadline
+                continue
             }
+            // **DEUX instants intéressent l'hôte par message** (#7467), pas un.
+            //
+            // Le franchissement du seuil de la dernière minute change ce qui
+            // s'AFFICHE — la flamme gagne son compteur — sans que rien d'autre
+            // ne bouge dans les données. Sans ce réveil, le compteur
+            // n'apparaîtrait qu'au prochain rendu fortuit de la conversation,
+            // ou jamais.
+            //
+            // Le seuil passe AVANT l'échéance quand il est encore devant : une
+            // fois franchi, il n'y a plus rien à attendre que la fin.
+            let threshold = deadline.addingTimeInterval(-EphemeralDeadline.countdownThreshold)
+            let candidate = threshold > now ? threshold : deadline
+            if next == nil || candidate < next! { next = candidate }
         }
 
         return Plan(expired: expired.sorted(), nextWake: next)

@@ -539,6 +539,44 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - La destruction se voit, dans les cinq modes (#7467)
+
+    func test_chaqueModeDeLecture_monteLaCombustionDUnÉphémère() throws {
+        // Un message qui disparaît d'une liste sans transition ne se lit pas
+        // comme une destruction : il se lit comme un SAUT — la liste se
+        // réorganise et le lecteur croit avoir raté un défilement. L'effet est
+        // donc une INFORMATION, pas un ornement, et il se doit d'exister
+        // partout où le message s'affiche.
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let path = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            let code = try source(at: path)
+            XCTAssertTrue(
+                code.contains(".ephemeralBurn(isBurning:"),
+                "Le mode « \(mode.rawValue) » retire un éphémère échu SANS le montrer. "
+                    + "`\(path)` doit poser `.ephemeralBurn(isBurning:…)` — le modificateur "
+                    + "lit lui-même « Réduire les animations », il n'y a rien d'autre à câbler."
+            )
+        }
+    }
+
+    /// La combustion ne se pose JAMAIS deux fois sur le même message : elle
+    /// doublerait l'opacité et l'échelle. En peau bulle, l'hôte est
+    /// `ThemedMessageBubble` (sticker compris) et non `BubbleStandardLayout`,
+    /// où vit le chrome — c'est pourquoi les deux tables existent.
+    func test_laCombustion_nEstPoséeQuUneFoisParPeau() throws {
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let chromePath = ReadingModeProtectionChrome.rendererPath(for: mode)
+            let burnPath = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            guard chromePath != burnPath else { continue }
+            let chromeCode = try source(at: chromePath)
+            XCTAssertFalse(
+                chromeCode.contains(".ephemeralBurn(isBurning:"),
+                "`\(chromePath)` ne doit pas poser la combustion : `\(burnPath)` la pose déjà "
+                    + "pour le mode « \(mode.rawValue) », et deux poses se multiplient."
+            )
+        }
+    }
+
     // MARK: - Plus aucun minuteur par cellule
 
     func test_aucuneCelluleNeFaitTournerSonPropreMinuteurÉphémère() throws {
@@ -609,5 +647,99 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
                 )
             }
         }
+    }
+}
+
+
+/// **Un contrôle monté derrière un drapeau qu'aucun écran de production n'arme
+/// est un contrôle ABSENT** (#7472).
+///
+/// Il ne rougit nulle part : il compile, il se teste en isolation, il s'affiche
+/// en aperçu. Seul un témoin qui regarde le SITE DE MONTAGE peut le voir — d'où
+/// la place de cette suite, à côté de la garde d'atteignabilité des fonctions
+/// de la surface conversation, qui ferme la même famille de défaut un cran plus
+/// bas.
+final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
+
+    private func appRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // …/Unit/Architecture
+            .deletingLastPathComponent()  // …/Unit
+            .deletingLastPathComponent()  // …/MeeshyTests
+            .deletingLastPathComponent()  // …/apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    // MARK: - #7472 — la vue unique se pose d'un seul geste, à côté du flou
+
+    /// **Le bouton existait, à la bonne place, et personne ne pouvait le voir.**
+    ///
+    /// > « Il faut mettre "1" cerclé à côté du flou dans l'universal composer
+    /// > bar ! afin de facilement envoyer des vues unique ! »
+    ///
+    /// `viewOnceToggleButton` était écrit, stylé, localisé et monté dans la
+    /// rangée haute juste après `blurToggleButton` — mais derrière
+    /// `if showViewOnce`, un drapeau qu'un SEUL site d'appel arme, et pour
+    /// l'aperçu de notification : `showViewOnce: previewMode`. Dans le
+    /// composeur de conversation, il valait `false` depuis toujours.
+    ///
+    /// La vue unique se choisissait donc par la feuille des effets — trois
+    /// gestes — pendant que le flou, sa jumelle de masquage, s'armait d'un tap
+    /// à dix points de là. Ce n'est pas un bouton à écrire, c'est une porte à
+    /// ouvrir : d'où la bascule d'un drapeau d'OPT-IN vers un drapeau
+    /// d'OPT-OUT, `hideViewOnce`, exactement celui du flou.
+    ///
+    /// > Un contrôle monté derrière un drapeau qu'aucun écran de production
+    /// > n'arme est un contrôle absent — et il ne rougit nulle part, puisqu'il
+    /// > compile, se teste en isolation et s'affiche en aperçu.
+    func test_leComposeur_exposeLaBasculeDeVueUniqueParDéfaut() throws {
+        let composer = try source(at: "Features/Main/Components/UniversalComposerBar.swift")
+        XCTAssertTrue(
+            composer.contains("var hideViewOnce: Bool = false"),
+            "La vue unique doit s'afficher PAR DÉFAUT, comme le flou : un drapeau "
+                + "d'opt-in la laissait invisible dans le composeur de conversation."
+        )
+        XCTAssertFalse(
+            composer.contains("var showViewOnce"),
+            "`showViewOnce` était le drapeau d'OPT-IN. Le garder à côté de "
+                + "`hideViewOnce` rouvrirait la porte par deux sens contraires."
+        )
+    }
+
+    /// Les deux protections de masquage sont VOISINES dans la rangée, et
+    /// gardées par le même genre de drapeau. Le voisinage est la moitié de la
+    /// demande : « à côté du flou ».
+    func test_lesDeuxBasculesDeMasquage_sontVoisinesEtGardéesPareil() throws {
+        let toolbar = try source(at: "Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        guard let blur = toolbar.range(of: "blurToggleButton"),
+              let viewOnce = toolbar.range(of: "viewOnceToggleButton") else {
+            return XCTFail("Les deux bascules de masquage ont quitté la rangée haute.")
+        }
+        XCTAssertTrue(blur.lowerBound < viewOnce.lowerBound,
+                      "La vue unique se pose À CÔTÉ du flou, après lui.")
+        let between = String(toolbar[blur.upperBound..<viewOnce.lowerBound])
+        XCTAssertFalse(
+            between.contains("ToggleButton"),
+            "Aucune autre bascule ne doit s'insérer entre le flou et la vue unique : "
+                + "« à côté » est la moitié de la demande."
+        )
+        XCTAssertTrue(toolbar.contains("if !hideViewOnce"),
+                      "La vue unique se cache par opt-OUT, comme le flou (`if !hideBlur`).")
+    }
+
+    /// L'ÉTAT armé part bien dans le message. Sans ce versant, la bascule
+    /// pourrait s'afficher et ne rien envoyer — loi 4 : un contrôle existe
+    /// s'il a un effet.
+    func test_lÉtatArmé_atteintLEnvoi() throws {
+        let mount = try source(at: "Features/Main/Views/ConversationView+Composer.swift")
+        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.isViewOnceEnabled"),
+                      "La bascule doit écrire dans l'état du ViewModel, pas dans un `@State` local.")
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("isViewOnceEnabled"),
+                      "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
     }
 }

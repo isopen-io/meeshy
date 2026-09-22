@@ -4,6 +4,10 @@ import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
+import { reportAttachmentStatus } from '@/lib/api/attachments';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
+import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
@@ -344,6 +348,51 @@ function VoiceAttachment({
   );
 }
 
+/**
+ * LA RANGÉE D'UN DOCUMENT (#7363, W6) — avant ce lot, un `<div>` STATIQUE
+ * (aucun `href`, aucun `onClick`) : un document reçu n'était PAS ouvrable du
+ * tout. `<a target="_blank">` : le navigateur RESTITUE le fichier (un PDF
+ * s'affiche inline, le reste télécharge selon son propre `Content-
+ * Disposition`) — l'équivalent web de la fiche plein écran
+ * `DocumentViewerView.swift`. Le clic rapporte IMMÉDIATEMENT (`attachment
+ * OpenReport`, miroir `DocumentViewerView.onAppear { reportDocumentOpened()
+ * }`) — `isMine` ferme le rapport pour sa propre pièce, jamais l'ouverture
+ * elle-même.
+ */
+function FileAttachmentRow({
+  attachment,
+  isMine,
+  deps,
+}: {
+  readonly attachment: Attachment;
+  readonly isMine: boolean;
+  readonly deps?: ConversationsDeps;
+}) {
+  const lang = currentInterfaceLanguage();
+  const name = attachment.originalName;
+
+  return (
+    <a
+      href={attachmentSrc(attachment.fileUrl)}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={translate(lang, 'message-detail.attachment.open', { name })}
+      data-attachment-file={attachment.id}
+      className="flex items-center gap-2 py-1"
+      style={{ minHeight: 44 }}
+      onClick={() => {
+        const report = attachmentOpenReport({ isMine });
+        if (report === null) return;
+        void reportAttachmentStatus({ ...(deps ?? apiDeps), attachmentId: attachment.id, report });
+      }}
+    >
+      <Glyph name="file" size={24} />
+      <span className="min-w-0 flex-1 truncate text-title">{name}</span>
+      <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+    </a>
+  );
+}
+
 export function Attachments({
   attachments,
   languages,
@@ -351,6 +400,8 @@ export function Attachments({
   fallbackLanguage,
   carrier,
   mediaFrame,
+  isMine = false,
+  deps,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -363,6 +414,14 @@ export function Attachments({
   readonly carrier?: MediaCarrier;
   /** La forme de la grille, DÉCLARÉE par l'hôte (revue #6169) : `box` en bulle, `tiles` en rangée plate. Obligatoire — un défaut muet ferait porter à l'une des peaux la forme de l'autre. */
   readonly mediaFrame: MediaGridFrame;
+  /** CE MESSAGE EST-IL LE MIEN ? (#7363, W6) — gouverne le rapport d'OUVERTURE
+   * (image/document) : un expéditeur qui rouvre son propre envoi ne
+   * s'auto-déclare pas destinataire (`attachmentOpenReport`). Défaut `false`
+   * — comportement historique inchangé pour les appelants qui ne connaissent
+   * pas encore la propriété (miroir `DocumentViewerView.isMe`, même défaut). */
+  readonly isMine?: boolean;
+  /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut. */
+  readonly deps?: ConversationsDeps;
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -398,11 +457,7 @@ export function Attachments({
         maskedAttachment(attachment) ? (
           <MaskedAttachment key={`file-${i}`} attachment={attachment} />
         ) : (
-          <div key={`file-${i}`} className="flex items-center gap-2 py-1">
-            <Glyph name="file" size={24} />
-            <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
-            <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
-          </div>
+          <FileAttachmentRow key={`file-${i}`} attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />
         ),
       )}
 
@@ -414,8 +469,10 @@ export function Attachments({
             onClose={() => setOpenIndex(null)}
             languages={languages}
             fallbackLanguage={fallbackLanguage}
+            isMine={isMine}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
             {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
           />
         </Suspense>
       ) : null}

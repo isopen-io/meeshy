@@ -979,6 +979,8 @@ const fr = {
   'message-detail.attachment.complete': 'Terminé',
   'message-detail.attachment.listen.empty': 'Pas encore écouté',
   'message-detail.attachment.watch.empty': 'Pas encore regardé',
+  'message-detail.attachment.open': 'Ouvrir {name}',
+  'message-detail.attachment.opened.empty': 'Pas encore ouvert',
   'message-detail.loading': 'Chargement…',
   'message-detail.load-error': 'Impossible de charger ces informations',
   'message-detail.retry': 'Réessayer',
