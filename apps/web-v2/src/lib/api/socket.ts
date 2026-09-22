@@ -43,12 +43,14 @@ import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
   applyMessageAttachmentUpdated,
+  applyMessageConsumed,
   applyMessageNew,
   applyMessageTranslation,
   applyReadStatusUpdated,
   isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
+  isMessageConsumedEvent,
   isMessageTranslationEvent,
   isReadStatusUpdated,
   isSocketMessage,
@@ -375,6 +377,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onReadStatusUpdated = (payload: unknown): void => {
     if (!isReadStatusUpdated(payload)) return;
     applyReadStatusUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `message:consumed` (#7354, V6) — L'ÉVÉNEMENT PAIR DE
+   * `consumeViewOnceOptimistic` (`view-once.ts:20-26`), diffusé par la
+   * passerelle à TOUTE la room de conversation au PREMIER visionnage d'une
+   * vue unique (`messages-view-once.ts:158-167`). La règle vit dans
+   * `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onMessageConsumed = (payload: unknown): void => {
+    if (!isMessageConsumedEvent(payload)) return;
+    applyMessageConsumed(deps.queryClient, payload);
   };
 
   /**
@@ -758,6 +772,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
@@ -827,6 +842,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);

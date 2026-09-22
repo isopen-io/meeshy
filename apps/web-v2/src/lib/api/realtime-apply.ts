@@ -7,7 +7,11 @@ import type {
   ConversationUpdatedEventData,
   LastMessagePreviewAttachment,
 } from '@meeshy/shared/types/socketio-events/conversation';
-import type { ReadStatusUpdatedEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+import type {
+  MessageConsumedEventData,
+  ReadStatusUpdatedEventData,
+  SocketIOMessage,
+} from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
 import { maskedAttachment, raisedAttachmentProtection } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
@@ -25,6 +29,7 @@ import {
 } from './messages';
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Conversation, Message, Participant } from './types';
+import { applyConsumption } from './view-once';
 
 /**
  * L'APPLICATION DU TEMPS RÉEL AU CACHE (#5793) — des fonctions PURES,
@@ -836,4 +841,52 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
   );
 
   void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });
+}
+
+/**
+ * Garde de FORME pour `message:consumed` (#7354, V6), motif
+ * `isAttachmentUpdated` — FAIL-CLOSED : une charge qui ne nomme pas SON
+ * message, SA conversation et un compte NUMÉRIQUE est rejetée plutôt que
+ * devinée. `userId`/`maxViewOnceCount`/`isFullyConsumed` ne sont pas vérifiés
+ * ici : `applyMessageConsumed` ci-dessous ne les consomme pas (seul
+ * `viewOnceCount` atteint le cache, motif `applyConsumption`,
+ * `view-once.ts:51-58`).
+ */
+export function isMessageConsumedEvent(payload: unknown): payload is MessageConsumedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.messageId === 'string' && typeof p.conversationId === 'string' && typeof p.viewOnceCount === 'number';
+}
+
+/**
+ * `applyMessageConsumed` — LE PUITS DE `message:consumed` (#7354, V6) : LA
+ * BULLE D'UNE VUE UNIQUE SUIT LE DIRECT.
+ *
+ * L'ÉVÉNEMENT PAIR que `view-once.ts:20-26` annonçait déjà sans qu'aucun
+ * `socket.on` ne le branche (« un seul réducteur pour la réponse REST et
+ * l'événement socket ») : `applyConsumption` (`view-once.ts`), déjà le
+ * réducteur IMMUABLE de `consumeViewOnceOptimistic`, est réutilisé tel quel —
+ * jamais une seconde écriture de la même règle. La passerelle ne diffuse cet
+ * événement qu'au PREMIER visionnage (`firstConsumption`,
+ * `messages-view-once.ts:158-167`), donc chaque destinataire de la room —
+ * l'expéditeur compris — voit `viewOnceCount` bouger SANS recharger le fil.
+ *
+ * MONOTONE (revue V6) : le compte ne REDESCEND jamais. L'événement socket et
+ * la réponse REST de `consumeViewOnceOptimistic` voyagent sur deux canaux —
+ * un `message:consumed` EN RETARD (compte 1) arrivé après le compte servi (2)
+ * ramènerait une vue brûlée à `veiled` et la rouvrirait au remontage. Seul le
+ * rollback optimiste (`view-once.ts`) a le droit d'abaisser le compte ; il
+ * n'emprunte pas ce puits.
+ *
+ * `patchThreadMessages` est un NO-OP silencieux si la conversation n'a pas
+ * de cache (fil non ouvert) ou si `messageId` n'y figure pas
+ * (`applyConsumption`, motif `.map` sans correspondance) — jamais une
+ * exception, même motif que `applyReadStatusUpdated`.
+ */
+export function applyMessageConsumed(queryClient: QueryClient, data: MessageConsumedEventData): void {
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => m.id === data.messageId && (m.viewOnceCount ?? 0) < data.viewOnceCount)
+      ? applyConsumption(messages, data)
+      : messages,
+  );
 }

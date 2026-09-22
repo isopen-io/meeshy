@@ -5,6 +5,8 @@ import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph, GlyphSvg } from './glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf } from '@/lib/send/compose-protection';
 import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ÉTAT ARMÉ D'UNE BASCULE (revue-correction #6175, défaut majeur) — le
@@ -55,16 +57,25 @@ const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
  * (`UniversalComposerBar+Toolbar.swift:25-81`), EXTRAITE de `composer.tsx`
  * pour tenir le budget de 1000–1200 lignes (CLAUDE.md racine).
  *
- * QUATRE occupants à EFFET (éphémère, flou, effets, langue) + UN indicateur
- * PASSIF (tonalité) + UN compteur CONDITIONNEL — pas six contrôles égaux :
- * la capture de référence (`targets/thread.composer-top-row.{light,dark}.png`)
- * et le code source (`showViewOnce: previewMode`, `maxLength == nil` en
- * conversation) corrigent le libellé initial de l'issue #6175. Voir
- * `docs/product/…/composeur-du-fil.md` § 1.2.
+ * CINQ occupants à EFFET (éphémère, flou, vue unique, effets, langue) + UN
+ * indicateur PASSIF (tonalité) + UN compteur CONDITIONNEL — pas six
+ * contrôles égaux : la capture de référence
+ * (`targets/thread.composer-top-row.{light,dark}.png`) et le code source
+ * (`maxLength == nil` en conversation) corrigent le libellé initial de
+ * l'issue #6175. Voir `docs/product/…/composeur-du-fil.md` § 1.2.
  *
- * ORDRE FIXE, jamais réordonné : éphémère · flou · effets · tonalité ·
- * langue · spacer · compteur — le groupe MENANT d'iOS (`targets/README.md`
- * § 1.4).
+ * **« VUE UNIQUE » (#7354, V6)** — décision antérieure RENVERSÉE :
+ * `showViewOnce: previewMode` (iOS, `ConversationView+Composer.swift:214-215`)
+ * réservait ce contrôle au composeur de prévisualisation de notification ;
+ * #7354 l'exige en conversation standard, GATÉE côté appelant sur la
+ * présence d'une pièce jointe IMAGE (`composer.tsx`) — jamais dans ce
+ * composant, qui reste un simple RENDU des props reçues (§ « ce composant
+ * n'a AUCUNE règle », motif `onSend`).
+ *
+ * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
+ * tonalité · langue · spacer · compteur — le groupe MENANT d'iOS
+ * (`targets/README.md` § 1.4, `+Protections.swift:161-238` pour le rang de
+ * « vue unique » entre flou et effets).
  */
 export function ComposerTopRow({
   ephemeralSeconds,
@@ -73,6 +84,9 @@ export function ComposerTopRow({
   onSelectEphemeral,
   blurred,
   onToggleBlur,
+  showViewOnce,
+  viewOnce,
+  onToggleViewOnce,
   effectCount,
   onOpenEffects,
   sentiment,
@@ -92,6 +106,12 @@ export function ComposerTopRow({
   readonly onSelectEphemeral: (seconds: number | undefined) => void;
   readonly blurred: boolean;
   readonly onToggleBlur: () => void;
+  /** La capsule « vue unique » n'existe QUE si l'appelant la demande (#7354) —
+   * gate PRODUIT décidée par `composer.tsx` (présence d'une image en
+   * attente), jamais par ce composant. */
+  readonly showViewOnce: boolean;
+  readonly viewOnce: boolean;
+  readonly onToggleViewOnce: () => void;
   /** Nombre d'effets décoratifs actifs — la capsule affiche ce compte,
    * jamais un booléen (miroir `effectsToggleButton`, `+Toolbar.swift`). */
   readonly effectCount: number;
@@ -108,6 +128,11 @@ export function ComposerTopRow({
   readonly maxLength?: number;
 }) {
   const counter = characterCounterOf({ text, ...(maxLength === undefined ? {} : { maxLength }) });
+  /** LIBELLÉS DE LA BASCULE « VUE UNIQUE » (#7354) — SEUL occupant de cette
+   * rangée à passer par le catalogue (Prisme Linguistique, CLAUDE.md
+   * racine) : les autres bascules restent en français en dur, dette
+   * antérieure (#6310) que ce lot n'étend pas mais ne répand pas non plus. */
+  const language = currentInterfaceLanguage();
 
   return (
     <>
@@ -204,6 +229,27 @@ export function ComposerTopRow({
           <Glyph name="eyeSlash" size={16} />
           {blurred ? <span className="text-title font-bold">Flou</span> : null}
         </button>
+
+        {/* « VUE UNIQUE » (#7354, V6) — n'existe QUE si `composer.tsx` la
+            demande (une image est en attente) : `showViewOnce` est la gate
+            PRODUIT, ce composant ne fait que la RESPECTER (loi 4, motif
+            `!hideBlur ? blurToggleButton` iOS). Même famille visuelle que
+            « Flou » (`indigo600`, `+Protections.swift:161-238` : les DEUX
+            bascules partagent cette teinte côté iOS). */}
+        {showViewOnce ? (
+          <button
+            type="button"
+            onClick={onToggleViewOnce}
+            aria-pressed={viewOnce}
+            data-composer-view-once
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+            style={viewOnce ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
+            aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
+          >
+            <Glyph name="eye" size={16} />
+            {viewOnce ? <span className="text-title font-bold">{translate(language, 'composer.viewOnce.label')}</span> : null}
+          </button>
+        ) : null}
 
         <button
           type="button"
