@@ -297,13 +297,15 @@ Conventions pour l'affichage de la taille de fichier sur un attachment non telec
 
 | Type | Composant | Layout |
 |---|---|---|
-| Video | `DownloadBadgeView(compact: true)` | Pill coin bas-droit avec icone + taille |
-| Image | `DownloadBadgeView(compact: false)` | Cercle 56pt centre + pill taille sous |
+| Video | `VideoAvailabilityResolver` + `MeeshyVideoPlayer` (bouton play → « ↓ taille » / anneau) | **Seul** composant de téléchargement vidéo (#7492) : `DownloadBadgeView` s'efface devant le lecteur (`yieldsToThePlayer`) |
+| Image | `DownloadBadgeView` | Cercle 56pt centre + pill taille sous |
 | Audio | `AudioPlayerView.playButtonLabel` | Cercle play-button + label taille sous (parite visuelle) |
 
 Source de verite : `attachment.fileSize` (Int, bytes) hydrate par le payload REST `/messages` et le payload socket `message:new` (ce dernier via `serializeAttachmentForSocket` cote gateway). Si la taille est 0, le label n'apparait pas (no-op).
 
 Le label audio est rendu par les helpers purs `AudioPlayerView.formattedNeedsDownloadLabel` / `formattedDownloadingLabel` / `formatBytes` (tests dans `MeeshyUITests/Media/AudioPlayerViewLabelTests.swift`).
+
+**Un téléchargement par média, partagé par toutes les surfaces (#7492).** `AttachmentDownloadCenter` (`Views/AttachmentDownloadCenter.swift`) tient, par clé de cache (URL résolue), le SEUL téléchargement en cours et sa progression ; chaque `AttachmentDownloader` n'est qu'une façade par vue qui observe la clé de son média (`observe(_:)`, appelé par les résolveurs, la galerie et `AudioMediaView`). Deux surfaces montrant le même média affichent la même progression et finissent ensemble ; une clé déjà sur disque se termine sans réseau. Ne jamais réintroduire un téléchargeur à état local.
 
 Pendant le telechargement, le label passe a `"410 KB / 850 KB"` via le payload `.downloading(progress:downloadedBytes:totalBytes:)` enrichi de `AudioAvailability`. `AudioMediaView` et `AudioAvailabilityResolver` propagent les bytes depuis `AttachmentDownloader.downloadedBytes` / `totalBytes`.
 
