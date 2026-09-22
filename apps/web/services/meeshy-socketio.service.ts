@@ -697,8 +697,12 @@ class MeeshySocketIOService {
       // en direct et le NOM après rechargement, pour le même message (#7458).
       // Champ ABSENT plutôt que tableau vide quand rien n'est résolu — mêmes
       // règles de présence conditionnelle que le transformer REST.
-      ...(Array.isArray((socketMessage as any).mentionedUsers) && (socketMessage as any).mentionedUsers.length > 0
-        ? { mentionedUsers: (socketMessage as any).mentionedUsers as readonly MentionedUser[] }
+      // `SocketIOMessage` DÉCLARE ce champ (`readonly unknown[]`) : le lire
+      // demande un affinage de `unknown`, jamais un `as any` — la règle du
+      // dépôt (« No `any` types - ever ») et le cliquet de dette ESLint
+      // comptent l'un et pas l'autre.
+      ...(Array.isArray(socketMessage.mentionedUsers) && socketMessage.mentionedUsers.length > 0
+        ? { mentionedUsers: socketMessage.mentionedUsers as readonly MentionedUser[] }
         : {}),
       // Le broadcast gateway porte déjà ces champs (`MessageHandler` pose
       // `forwardedFromConversation` et `effectFlags`). Les omettre ici rendait
