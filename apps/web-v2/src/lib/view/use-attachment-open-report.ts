@@ -36,6 +36,6 @@ export function useAttachmentOpenReport(params: {
     const report = attachmentOpenReport({ isMine });
     if (report === null) return;
     void reportAttachmentStatus({ ...(deps ?? apiDeps), attachmentId, report });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` est le PORT, pas une raison de rapporter : l'inclure ferait re-rapporter la même ouverture dès qu'un hôte reconstruit son objet de dépendances en ligne.
   }, [isActive, attachmentId, isMine]);
 }

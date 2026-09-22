@@ -904,17 +904,35 @@ describe('MediaViewer — ouvrir une image REÇUE rapporte, jamais la sienne (#7
     expect(calls()).toHaveLength(0);
   });
 
+  /**
+   * CHANGER DE PAGE EST UN GESTE, PAS UN `startIndex` (revue #7363) — la
+   * première rédaction de ce témoin montait DÉJÀ sur la seconde page et
+   * n'observait donc que le rapport d'ENTRÉE : il serait resté vert avec un
+   * effet réduit au montage. Il NAVIGUE désormais, par la pellicule, et
+   * mesure le SECOND rapport.
+   */
   test('changer de page (pellicule) rapporte pour la NOUVELLE page active', () => {
     const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const first = items[0]!;
     const second = items[1]!;
-    const { calls, deps } = scriptedGateway({ [`POST /api/v1/attachments/${second.id}/status`]: { ok: true, data: {} } });
+    const { calls, deps } = scriptedGateway({
+      [`POST /api/v1/attachments/${first.id}/status`]: { ok: true, data: {} },
+      [`POST /api/v1/attachments/${second.id}/status`]: { ok: true, data: {} },
+    });
 
-    const body = mount({ items, startIndex: 1, onClose: () => {}, deps });
-
+    const body = mount({ items, startIndex: 0, onClose: () => {}, deps });
     expect(calls()).toHaveLength(1);
-    expect(calls()[0]?.path).toBe(`/api/v1/attachments/${second.id}/status`);
-    // La pellicule marque bien la seconde vignette comme active (contrôle).
+    expect(calls()[0]?.path).toBe(`/api/v1/attachments/${first.id}/status`);
+
     const filmstripItems = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
-    expect(filmstripItems[1]!.getAttribute('aria-current')).toBe('true');
+    act(() => {
+      filmstripItems[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(calls()).toHaveLength(2);
+    expect(calls()[1]?.path).toBe(`/api/v1/attachments/${second.id}/status`);
+    expect(calls()[1]?.body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+    const after = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
+    expect(after[1]!.getAttribute('aria-current')).toBe('true');
   });
 });

@@ -4,6 +4,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { fetchAttachmentStatusDetails, reportAttachmentStatus, uploadAttachments } from './attachments';
 import { createHttpTransport } from './http';
 import { resetUploadedAttachmentsForTests } from './fixtures';
+import { apiDeps } from './deps';
 
 beforeAll(() => {
   ensureHappyDomRegistered();
@@ -272,5 +273,34 @@ describe('reportAttachmentStatus — le port serveur (#7225)', () => {
     const body = JSON.parse(String(calls[0]?.init.body));
     expect(body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
     expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * L'INVARIANT DU CORPUS (revue #7363) — `viewCount > 0` ⟺ `viewedAt !== null`.
+ *
+ * La passerelle pose les deux dans la MÊME transaction
+ * (`MessageMediaConsumptionService.markImageAsViewed` : `viewedAt: now,
+ * viewCount: 1` à la création, les deux incrémentés ensuite) : une ligne qui
+ * compte des ouvertures sans en dater aucune n'existe pas en base. Le corpus
+ * de fixtures les tirait SÉPARÉMENT, et ses deux tirages étaient exactement
+ * inverses — la fiche affichait alors « 1 ouverture » ET « Pas encore
+ * ouvert » sur la même pièce. Le témoin balaie un ÉVENTAIL d'identifiants
+ * (le seed dépend des caractères) pour que la propriété tienne sur le
+ * corpus, pas sur un cas heureux.
+ */
+describe('attachmentStatusFixtureOf — le corpus ne contredit pas la passerelle (#7363)', () => {
+  const ids = ['att-fixture-2', 'att-test-6', 'att-doc-1', 'att-1', 'att-2', 'att-3', 'att-4', 'att-5'];
+
+  test('une ligne compte des ouvertures si et seulement si elle en DATE une', async () => {
+    for (const attachmentId of ids) {
+      const result = await fetchAttachmentStatusDetails({ ...apiDeps, attachmentId });
+      if (!result.ok) throw new Error(`la fixture « ${attachmentId} » doit répondre \`ok\``);
+      for (const row of result.data) {
+        expect(`${attachmentId}: viewCount=${row.viewCount} viewedAt=${row.viewedAt === null ? 'null' : 'date'}`).toBe(
+          `${attachmentId}: viewCount=${row.viewCount} viewedAt=${row.viewCount > 0 ? 'date' : 'null'}`,
+        );
+      }
+    }
   });
 });
