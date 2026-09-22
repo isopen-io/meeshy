@@ -172,36 +172,19 @@ extension ConversationViewModel {
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
-        // aggregator. Cleared in `deinit`. This is the TRANSIENT "I'm
-        // looking at it right now" view — it reverts on close, it does not
-        // stamp a persisted read frontier.
+        // aggregator. Cleared in `deinit`.
+        //
+        // OUVRIR N'EST PAS LIRE (#7350, I-2). Ce zéro est TRANSITOIRE : il ne
+        // pose aucune frontière de lecture, et la fermeture redonne à la ligne
+        // ce qui reste réellement non lu (`notePartialRead(seen:)`, borné par
+        // `FirstUnreadBoundary`). Un `ConversationReadSignal.markReadLocally`
+        // vivait ici : il datait une frontière de l'ouverture, forcément
+        // postérieure au dernier message, et `reconcileUnread` ramenait ensuite
+        // à 0 tout instantané serveur — 99 non-lus, 5 vus, liste à 0 pendant
+        // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
+        // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
+        // contient le message le plus récent) ou un geste explicite.
         syncEngine.setCurrentlyOpenConversation(conversationId)
-        // OUVRIR N'EST PLUS LIRE (#7350, I-2 — retiré le 2026-09-22).
-        //
-        // Un appel à `ConversationReadSignal.markReadLocally` vivait ici,
-        // posant `unreadCount = 0` et `lastReadAt = Date()` sur les trois
-        // surfaces locales (badge/widget, `ConversationStore` RAM, cache
-        // disque) À CHAQUE OUVERTURE, avant même que `loadMessages()` charge
-        // la fenêtre ou établisse la frontière S1 (`FirstUnreadBoundary
-        // .resolve`). Il corrigeait un défaut de COHÉRENCE réel (le store
-        // gardait 99 le temps d'un rechargement de cache débouncé à 200 ms
-        // pendant que le cache disait déjà 0 — le va-et-vient que
-        // l'utilisateur voyait) en fabriquant un défaut plus grave : la
-        // frontière posée arrive TOUJOURS après le dernier message connu (on
-        // ouvre forcément APRÈS qu'il a été envoyé), donc `reconcileUnread`
-        // clampait à 0 tout instantané serveur ultérieur — y compris un « 94
-        // encore non lus » légitime après que seuls 5 des 99 messages aient
-        // réellement été affichés. Recette 2026-09-21 : l'API dit 1
-        // conversation non lue pendant que le badge affiche 0.
-        //
-        // La frontière locale n'est plus posée qu'à une lecture RÉELLE :
-        // `sendReadReceipt` (ConversationViewModel.swift) l'écrit UNIQUEMENT
-        // quand le lot vu contient le message le plus récent
-        // (`caughtUpMessageId`), ou sur un geste explicite « marquer comme
-        // lu ». Le va-et-vient de cohérence que ce lot corrigeait reste
-        // fermé par `setCurrentlyOpenConversation` ci-dessus, qui montre déjà
-        // 0 pendant que l'écran est affiché — sans jamais persister de
-        // frontière au-delà de la fermeture.
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
@@ -258,6 +241,32 @@ extension ConversationViewModel {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
+    }
+
+    // MARK: - Lecture partielle
+
+    /// Lecture PARTIELLE (#7350, I-2) : ce qui reste non lu, borné par la
+    /// frontière du premier non-lu (`FirstUnreadBoundary.remainingUnread`, la
+    /// loi de S1), est confié au moteur, qui le redonne à la ligne de liste
+    /// quand l'écran se ferme. 99 non-lus, 5 affichés ⇒ 94 — et non le 0 que
+    /// l'ouverture posait avant ce lot.
+    func notePartialRead(seen messageIds: [String]) {
+        seenServerMessageIds.formUnion(messageIds)
+        let remaining = FirstUnreadBoundary.remainingUnread(
+            messages: messages.map {
+                FirstUnreadCandidateMessage(id: serverId(for: $0.id), senderId: $0.senderId, createdAt: $0.createdAt)
+            },
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: memberJoinedAt,
+            viewerId: currentUserId,
+            seenIds: seenServerMessageIds,
+            unreadAtOpen: initialUnreadCount,
+            windowIsAtTip: !hasNewerMessages,
+            caughtUpMessageId: lastCaughtUpMessageId
+        )
+        syncEngine.noteUnreadRemaining(conversationId, remaining)
     }
 
     // MARK: - Miroirs et préférences de langue
