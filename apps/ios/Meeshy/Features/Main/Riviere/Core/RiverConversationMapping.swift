@@ -276,6 +276,7 @@ nonisolated enum RiverConversationMapping {
                 // la rivière la PROJETTE comme la bulle et la rangée plate,
                 // sans réécrire d'arithmétique d'échéance.
                 protection: message.protection(),
+                isBurning: message.isBurning,
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),

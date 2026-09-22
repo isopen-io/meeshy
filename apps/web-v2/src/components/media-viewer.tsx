@@ -8,6 +8,7 @@ import { Avatar } from '@/components/avatar';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
+import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { initialsOf } from '@/lib/view/conversation';
@@ -29,6 +30,7 @@ import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { lateralSeek } from '@/lib/view/media-transport';
+import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -85,6 +87,13 @@ export type MediaViewerProps = {
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   readonly carrier?: MediaCarrier;
+  /** CE MESSAGE EST-IL LE MIEN ? (#7363, W6) — gouverne le rapport
+   * d'OUVERTURE d'une page image (`useAttachmentOpenReport`) : un
+   * expéditeur qui rouvre son propre envoi ne s'auto-déclare pas
+   * destinataire. Défaut `false`, même patron que `Attachments.isMine`. */
+  readonly isMine?: boolean;
+  /** INJECTABLE pour les témoins — `apiDeps` par défaut. */
+  readonly deps?: ConversationsDeps;
   /**
    * LA NATURE « SCÈNE » D'UNE PAGE (#6902, D-78, § B de la spécification
    * `scenes-plein-ecran`) — miroir `GallerySceneContext` : une entrée de
@@ -194,12 +203,21 @@ function ViewerImagePage({
   languages,
   displayLanguage,
   fallbackLanguage,
+  isActive,
+  isMine,
+  deps,
 }: {
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
+  /** LA PAGE COURANTE (#7363, W6) — déclenche le rapport d'ouverture
+   * (`useAttachmentOpenReport`) quand elle le devient. */
+  readonly isActive: boolean;
+  readonly isMine: boolean;
+  readonly deps?: ConversationsDeps;
 }) {
+  useAttachmentOpenReport({ attachmentId: attachment.id, isActive, isMine, ...(deps !== undefined ? { deps } : {}) });
   const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
   const [zoomed, setZoomed] = useState(false);
@@ -425,6 +443,8 @@ export default function MediaViewer({
   fallbackLanguage,
   carrier,
   scenes,
+  isMine = false,
+  deps,
 }: MediaViewerProps) {
   const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
@@ -666,7 +686,10 @@ export default function MediaViewer({
                   attachment={attachment}
                   languages={languages}
                   fallbackLanguage={fallbackLanguage}
+                  isActive={i === index}
+                  isMine={isMine}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                  {...(deps !== undefined ? { deps } : {})}
                 />
               )}
             </div>

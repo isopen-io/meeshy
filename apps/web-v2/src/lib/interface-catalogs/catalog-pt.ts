@@ -896,6 +896,8 @@ const pt = {
   'message-detail.attachment.complete': 'Completo',
   'message-detail.attachment.listen.empty': 'Ainda não ouvido',
   'message-detail.attachment.watch.empty': 'Ainda não assistido',
+  'message-detail.attachment.open': 'Abrir {name}',
+  'message-detail.attachment.opened.empty': 'Ainda não aberto',
   'message-detail.loading': 'Carregando…',
   'message-detail.load-error': 'Não foi possível carregar estas informações',
   'message-detail.retry': 'Tentar novamente',

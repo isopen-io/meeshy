@@ -246,10 +246,21 @@ struct UniversalComposerBar: View {
     /// view-once message (revealed once, then burned). Parent owns the state.
     var isViewOnceEnabled: Binding<Bool> = .constant(false)
 
-    /// When true, the view-once toggle is shown. Off by default so the standard
-    /// conversation composer is unchanged; opted into by the notification
-    /// preview composer.
-    var showViewOnce: Bool = false
+    /// **Opt-OUT, comme le flou** (#7472, directive porteur 2026-09-22 : « il
+    /// faut mettre "1" cerclé à côté du flou dans l'universal composer bar ! »).
+    ///
+    /// Ce drapeau était un opt-IN (`showViewOnce`), armé par UN seul site
+    /// d'appel — l'aperçu de notification. Dans le composeur de conversation il
+    /// valait donc `false` depuis toujours, et la bascule, pourtant écrite,
+    /// stylée, localisée et montée juste après celle du flou, n'était visible
+    /// nulle part où l'on écrit un message.
+    ///
+    /// Un contrôle monté derrière un drapeau qu'aucun écran de production
+    /// n'arme est un contrôle ABSENT — et il ne rougit nulle part, puisqu'il
+    /// compile, se teste en isolation et s'affiche en aperçu. Les deux
+    /// protections de MASQUAGE se gardent désormais pareil : masquées en
+    /// édition, offertes partout ailleurs.
+    var hideViewOnce: Bool = false
 
     // MARK: - Effects picker
 

@@ -165,6 +165,82 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
 });
 
 /**
+ * QUI A OUVERT (#7363, W6) — avant ce lot, une image/un document
+ * n'affichaient que des AGRÉGATS (comptes), jamais un nom ni une heure
+ * (test ci-dessus, "jamais de ligne de lecture"). `openedRowsOf` filtre sur
+ * `viewedAt` (`lib/view/message-receipts.ts`), jamais `downloadedAt` :
+ * télécharger n'est pas ouvrir.
+ *
+ * LES PIÈCES SONT CHOISIES SUR CE QUE LE CORPUS PORTE (revue #7363) —
+ * `att-test-6` compte une ouverture, `att-fixture-2` aucune. L'AGRÉGAT de la
+ * carte est asserté À CÔTÉ de la rangée, parce que c'est leur DÉSACCORD qui
+ * se voyait à l'écran : « 1 ouverture » au-dessus de « Pas encore ouvert ».
+ */
+describe('MessageReceiptsSheet — qui a OUVERT une image ou un document (#7363, W6)', () => {
+  test('une image avec une ouverture connue affiche le NOM et l’HEURE de qui a ouvert', async () => {
+    const rows = await fetchAttachmentStatusDetails({ ...apiDeps, attachmentId: 'att-test-6' });
+    if (!rows.ok) throw new Error('la fixture « att-test-6 » doit répondre `ok`');
+    const [row] = rows.data;
+    if (row === undefined || row.viewedAt === null) throw new Error('la fixture « att-test-6 » doit porter une ouverture');
+
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-test-6', mimeType: 'image/png', originalName: 'photo.png' })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    const openedRow = card?.querySelector(`[data-message-receipts-opened="${row.participantId}"]`) ?? null;
+    expect(openedRow).not.toBe(null);
+    expect(openedRow?.textContent ?? '').toContain(row.username);
+    expect(openedRow?.querySelector('[data-message-receipts-opened-time]')?.textContent).toBe(time(row.viewedAt));
+    // L'AGRÉGAT compte ce que la rangée NOMME — jamais l'état vide à côté.
+    expect(card?.textContent ?? '').toContain('1 ouverture');
+    expect(card?.textContent ?? '').not.toContain('Pas encore ouvert');
+  });
+
+  test('un DOCUMENT (kind « file ») avec une ouverture connue affiche aussi le nom et l’heure', async () => {
+    const rows = await fetchAttachmentStatusDetails({ ...apiDeps, attachmentId: 'att-test-6' });
+    if (!rows.ok) throw new Error('la fixture « att-test-6 » doit répondre `ok`');
+    const [row] = rows.data;
+    if (row === undefined || row.viewedAt === null) throw new Error('la fixture « att-test-6 » doit porter une ouverture');
+
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-test-6', mimeType: 'application/pdf', originalName: 'contrat.pdf' })],
+    });
+
+    const openedRow = host.querySelector(`[data-message-receipts-opened="${row.participantId}"]`);
+    expect(openedRow?.textContent ?? '').toContain(row.username);
+  });
+
+  test('aucune ouverture connue ⇒ état vide « Pas encore ouvert », et AUCUN agrégat d’ouverture', async () => {
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-fixture-2', mimeType: 'image/png', originalName: 'photo.png' })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-fixture-2"]');
+    expect(card?.textContent ?? '').toContain('Pas encore ouvert');
+    expect(card?.querySelector('[data-message-receipts-opened]')).toBe(null);
+    expect(card?.textContent ?? '').not.toContain('ouverture');
+  });
+
+  test('audio/vidéo restent sur `PlaybackRow` — jamais de rangée « opened »', async () => {
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-test-6', mimeType: 'audio/webm', originalName: 'vocal.webm', duration: 20_000 })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    expect(card?.querySelector('[data-message-receipts-opened]')).toBe(null);
+  });
+});
+
+/**
  * « L'HEURE DE CHAQUE ACCUSÉ » (#7352, V4) — `receivedAt`/`readAt` sont
  * SERVIS par `fetchMessageReceiptsPeople` (`api/receipts.ts:99-106`) depuis
  * toujours, jamais RENDUS avant ce lot (relevé de l'issue,

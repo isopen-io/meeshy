@@ -34,6 +34,18 @@ import Foundation
 /// indépendant de la fusion de #7451.
 public enum EphemeralDeadline {
 
+    /// **En deçà de combien de temps le COMPTEUR s'affiche** (#7467).
+    ///
+    /// > « afficher le compteur de l'éphémère dans la conversation uniquement
+    /// > quand on est déjà à 1 min et moins de sa destruction »
+    ///
+    /// Avant ce seuil, la flamme SEULE dit déjà tout ce qu'il y a à savoir :
+    /// ce message va disparaître. Le CHIFFRE, lui, ne devient une information
+    /// qu'au moment où il devient une urgence — un message de vingt-quatre
+    /// heures affichait « 23:59:58 » sous chaque bulle, une horloge qui ne dit
+    /// rien pendant vingt-trois heures et fait battre une seconde pour rien.
+    public static let countdownThreshold: TimeInterval = 60
+
     /// Ce qu'il y a à AFFICHER pour un message, à un instant donné.
     ///
     /// `notEphemeral` plutôt que `none` : `none` entrerait en collision de
@@ -46,16 +58,38 @@ public enum EphemeralDeadline {
         /// Éphémère, mais personne n'a encore reçu : la DURÉE s'affiche, sans
         /// décompte. C'est ce que voit l'expéditeur avant le premier accusé.
         case awaitingReception(duration: TimeInterval)
-        /// Éphémère, l'horloge tourne jusqu'à `deadline`.
+        /// Éphémère, l'horloge tourne jusqu'à `deadline` — mais on en est
+        /// ENCORE LOIN : la flamme seule, sans chiffre (#7467).
         case running(deadline: Date)
+        /// Éphémère dans sa DERNIÈRE MINUTE : la flamme ET le compteur qui
+        /// défile, 0:59 → 0:00.
+        ///
+        /// Deux cas plutôt qu'un booléen à côté de `running` : le rendu n'est
+        /// pas le même, et c'est le MODÈLE qui doit le dire. Une vue qui
+        /// lirait `Date()` dans son corps pour trancher deviendrait non
+        /// déterministe — donc intestable, et son `Equatable` mentirait sur ce
+        /// qu'elle affiche.
+        case imminent(deadline: Date)
         /// L'échéance est passée : le message quitte l'écran.
         case expired
 
         /// L'échéance, quand il y en a une. Évite de déballer le cas sur les
         /// sites qui n'ont besoin que de la date (ordonnancement du balayage).
         public var deadline: Date? {
-            if case .running(let deadline) = self { return deadline }
-            return nil
+            switch self {
+            case .running(let deadline), .imminent(let deadline): return deadline
+            case .notEphemeral, .awaitingReception, .expired: return nil
+            }
+        }
+
+        /// Le compteur chiffré doit-il s'afficher ?
+        ///
+        /// La question se pose à la VUE, la réponse vient du modèle. C'est
+        /// aussi ce qui garantit qu'aucune horloge ne bat avant la dernière
+        /// minute : `Text(timerInterval:)` n'est monté que dans ce cas.
+        public var showsCountdown: Bool {
+            if case .imminent = self { return true }
+            return false
         }
 
         /// Un message éphémère (quel que soit l'état de son horloge).
@@ -95,6 +129,9 @@ public enum EphemeralDeadline {
             return .awaitingReception(duration: duration)
         }
 
-        return deadline <= now ? .expired : .running(deadline: deadline)
+        if deadline <= now { return .expired }
+        return deadline.timeIntervalSince(now) <= countdownThreshold
+            ? .imminent(deadline: deadline)
+            : .running(deadline: deadline)
     }
 }

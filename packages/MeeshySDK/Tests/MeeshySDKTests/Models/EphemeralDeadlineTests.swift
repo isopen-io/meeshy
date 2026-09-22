@@ -49,7 +49,11 @@ struct EphemeralDeadlineTests {
         let state = EphemeralDeadline.resolve(
             servedExpiresAt: served, ephemeralDuration: 300, localReceivedAt: received, now: now
         )
-        #expect(state == .running(deadline: served))
+        // `.imminent` et non `.running` : +30 s est dans la dernière minute
+        // (#7467). L'ÉCHÉANCE retenue reste celle du serveur, qui est le sujet
+        // de ce témoin.
+        #expect(state == .imminent(deadline: served))
+        #expect(state.deadline == served)
     }
 
     @Test("Deux échéances connues : la PLUS PROCHE gagne, ici la locale")
@@ -59,16 +63,18 @@ struct EphemeralDeadlineTests {
         let state = EphemeralDeadline.resolve(
             servedExpiresAt: served, ephemeralDuration: 300, localReceivedAt: received, now: now
         )
-        #expect(state == .running(deadline: received.addingTimeInterval(300)))
+        // +20 s : dans la dernière minute (#7467).
+        #expect(state.deadline == received.addingTimeInterval(300))
+        #expect(state.showsCountdown)
     }
 
     @Test("Une échéance servie seule suffit — un message hérité n'a pas de durée")
-    func test_resolve_échéanceServieSeule_rendRunning() {
+    func test_resolve_échéanceServieSeule_suffitÀFaireUneÉchéance() {
         let served = now.addingTimeInterval(45)
         let state = EphemeralDeadline.resolve(
             servedExpiresAt: served, ephemeralDuration: nil, localReceivedAt: nil, now: now
         )
-        #expect(state == .running(deadline: served))
+        #expect(state.deadline == served)
     }
 
     @Test("À l'échéance, le message est expiré")
@@ -87,7 +93,7 @@ struct EphemeralDeadlineTests {
         #expect(state == .notEphemeral)
     }
 
-    @Test("L'échéance du state running est lisible sans déballer le cas")
+    @Test("L'échéance est lisible sans déballer le cas")
     func test_deadline_exposéeParLeState() {
         let served = now.addingTimeInterval(45)
         let state = EphemeralDeadline.resolve(

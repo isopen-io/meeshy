@@ -206,13 +206,16 @@ extension ConversationView {
             hideEphemeral: composerState.editingMessageId != nil,
             isBlurEnabled: $viewModel.isBlurEnabled,
             hideBlur: composerState.editingMessageId != nil,
-            // Notification preview composer: expose the view-once toggle (text /
-            // voice / effects / blur / ephemeral stay available). No-op for the
-            // full conversation. `forceHideAttachment` is passed earlier (its
-            // property is declared before `selectedLanguage`, so the synthesized
-            // memberwise initializer requires it in that position).
+            // #7472 — la vue unique s'arme d'un TAP, à côté du flou, et se
+            // cache dans les mêmes cas que lui : en ÉDITION, où la protection
+            // d'un message déjà parti ne se change plus. Elle était auparavant
+            // réservée à l'aperçu de notification (`showViewOnce: previewMode`),
+            // donc invisible là où l'on écrit.
+            // `forceHideAttachment` est passé plus haut (sa propriété est
+            // déclarée avant `selectedLanguage`, l'init memberwise l'exige à
+            // cette position).
             isViewOnceEnabled: $viewModel.isViewOnceEnabled,
-            showViewOnce: previewMode,
+            hideViewOnce: composerState.editingMessageId != nil,
             pendingEffects: $viewModel.pendingEffects,
             onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
             hideEffects: composerState.editingMessageId != nil,
@@ -222,6 +225,7 @@ extension ConversationView {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
     }
 
