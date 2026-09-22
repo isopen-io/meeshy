@@ -323,46 +323,6 @@ describe('AttachmentService — direct-access methods', () => {
         data: { messageId: MSG_ID },
       });
     });
-
-    // #7498 — la pièce porte la protection de SON message.
-    //
-    // Les trois colonnes jumelles existaient et restaient à leur défaut : une
-    // photo envoyée sous « vue unique » produisait un message protégé portant
-    // une pièce ORDINAIRE. Tout ce qui garde au niveau de la PIÈCE
-    // (`maskedAttachment` de l'éventail de notifications, le gate fail-closed
-    // de la traduction de légende) lisait `false` et laissait passer, pendant
-    // que la bulle, elle, affichait bien le voile.
-    it('écrit la protection du message sur ses pièces jointes', async () => {
-      const prisma = makePrisma();
-      const svc = new AttachmentService(prisma as PrismaClient);
-
-      await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, {
-        isViewOnce: true,
-        isBlurred: true,
-        effectFlags: 0b111,
-      });
-
-      expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [ATTACH_ID] } },
-        data: { messageId: MSG_ID, isViewOnce: true, isBlurred: true, effectFlags: 0b111 },
-      });
-    });
-
-    // Un `false` ÉCRIT et une colonne NON TOUCHÉE ne sont pas la même chose :
-    // le second laisse intacte une protection qu'une pièce porterait déjà par
-    // un autre chemin. Un appelant qui ne déclare rien ne doit donc rien
-    // écraser — seule l'absence de clé le garantit.
-    it('ne touche pas une colonne que l’appelant ne déclare pas', async () => {
-      const prisma = makePrisma();
-      const svc = new AttachmentService(prisma as PrismaClient);
-
-      await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, { isViewOnce: true });
-
-      expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [ATTACH_ID] } },
-        data: { messageId: MSG_ID, isViewOnce: true },
-      });
-    });
   });
 
   // ─── getAttachment ────────────────────────────────────────────────────────

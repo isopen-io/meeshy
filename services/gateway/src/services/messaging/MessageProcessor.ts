@@ -713,19 +713,7 @@ export class MessageProcessor {
     try {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
-        // La pièce porte la protection de SON message (#7498). Les trois
-        // colonnes jumelles restaient à leur défaut : une photo envoyée sous
-        // « vue unique » produisait un message protégé portant une pièce
-        // ORDINAIRE, et toute garde qui lit le niveau PIÈCE laissait passer.
-        //
-        // Les valeurs relues sur `message` plutôt que sur `data` : c'est la
-        // ligne ÉCRITE qui fait foi, et elle a déjà composé `effectFlags`
-        // depuis toutes ses sources.
-        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, {
-          isViewOnce: message.isViewOnce,
-          isBlurred: message.isBlurred,
-          effectFlags: message.effectFlags,
-        });
+        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
         // Déclencher le traitement audio si nécessaire
         if (this.translationService) {

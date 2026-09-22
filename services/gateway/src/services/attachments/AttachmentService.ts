@@ -130,6 +130,11 @@ export class AttachmentService {
    * déclarent, et c'est au moment où le lien se fait qu'ils doivent être mis
    * d'accord. Une pièce non liée n'a pas encore de protection à porter ; une
    * pièce liée en a exactement une, celle de son message.
+   *
+   * `protection` se lit sur la LIGNE ÉCRITE (l'appelant passe son `message`),
+   * jamais sur la charge reçue : c'est la ligne qui a composé `effectFlags`
+   * depuis toutes ses sources. Une clé ABSENTE ne touche pas sa colonne —
+   * l'appelant qui ne déclare rien n'écrase rien.
    */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
