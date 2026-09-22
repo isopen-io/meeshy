@@ -67,25 +67,80 @@ final class GalleryImageOpenReportTests: XCTestCase {
     }
 }
 
-/// Garde de CÂBLAGE : la règle ci-dessus peut être juste et n'être appelée par
-/// personne — c'était exactement le défaut #7362 (`ImageViewerView` la posait
-/// déjà sur un chemin mort).
+/// #7362 — le PARCOURS réel de la galerie du fil : ouvrir sur une image,
+/// glisser, fermer. C'est la suite de passages que `ConversationMediaGalleryView`
+/// rejoue (`.onAppear`, `handlePageChange`, `.onDisappear` →
+/// `trackImageOpen`) ; le témoin la rejoue sur la MÊME valeur.
+@MainActor
+final class GalleryImageViewSessionTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 1_000)
+
+    private func image(_ id: String) -> MessageAttachment {
+        MessageAttachment(id: id, mimeType: "image/jpeg", uploadedBy: "u-1")
+    }
+
+    private func video(_ id: String) -> MessageAttachment {
+        MessageAttachment(id: id, mimeType: "video/mp4", uploadedBy: "u-1")
+    }
+
+    func test_openSwipeClose_reportsEachReceivedImageItLeaves() {
+        var session = GalleryImageViewSession()
+        let a = image("a"), b = image("b")
+
+        XCTAssertNil(session.move(leaving: nil, leavingIsMine: nil, entering: a, reportsConsumption: true, now: t0))
+        let first = session.move(leaving: a, leavingIsMine: false, entering: b, reportsConsumption: true, now: t0.addingTimeInterval(2))
+        let last = session.move(leaving: b, leavingIsMine: false, entering: nil, reportsConsumption: true, now: t0.addingTimeInterval(3))
+
+        XCTAssertEqual(first, GalleryImageOpenReport.Report(attachmentId: "a", durationMs: 2000))
+        XCTAssertEqual(last, GalleryImageOpenReport.Report(attachmentId: "b", durationMs: 1000))
+        XCTAssertEqual(last?.body.action, "viewed")
+        XCTAssertEqual(last?.body.durationMs, 1000)
+    }
+
+    func test_closingOnTheOpeningImage_reportsIt() {
+        var session = GalleryImageViewSession()
+        let a = image("a")
+        _ = session.move(leaving: nil, leavingIsMine: nil, entering: a, reportsConsumption: true, now: t0)
+        let report = session.move(leaving: a, leavingIsMine: false, entering: nil, reportsConsumption: true, now: t0.addingTimeInterval(1))
+        XCTAssertEqual(report?.attachmentId, "a")
+    }
+
+    func test_ownImage_isNeverReported() {
+        var session = GalleryImageViewSession()
+        let a = image("a")
+        _ = session.move(leaving: nil, leavingIsMine: nil, entering: a, reportsConsumption: true, now: t0)
+        XCTAssertNil(session.move(leaving: a, leavingIsMine: true, entering: nil, reportsConsumption: true, now: t0.addingTimeInterval(5)))
+    }
+
+    func test_imageReachedAfterAVideo_isTimedFromItsOwnArrival() {
+        var session = GalleryImageViewSession()
+        let v = video("v"), a = image("a")
+        _ = session.move(leaving: nil, leavingIsMine: nil, entering: v, reportsConsumption: true, now: t0)
+        XCTAssertNil(session.move(leaving: v, leavingIsMine: false, entering: a, reportsConsumption: true, now: t0.addingTimeInterval(10)))
+        let report = session.move(leaving: a, leavingIsMine: false, entering: nil, reportsConsumption: true, now: t0.addingTimeInterval(11))
+        XCTAssertEqual(report?.durationMs, 1000)
+    }
+
+    func test_postOrCommentGallery_reportsNothing() {
+        var session = GalleryImageViewSession()
+        let a = image("a")
+        _ = session.move(leaving: nil, leavingIsMine: nil, entering: a, reportsConsumption: false, now: t0)
+        XCTAssertNil(session.move(leaving: a, leavingIsMine: false, entering: nil, reportsConsumption: false, now: t0.addingTimeInterval(5)))
+    }
+}
+
+/// Garde de CÂBLAGE, en complément du parcours ci-dessus : les trois passages
+/// (apparition, changement de page, fermeture) appellent la session.
 @MainActor
 final class GalleryImageOpenReportWiringTests: XCTestCase {
 
     private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
 
-    func test_handlePageChange_asksTheRuleAndReports() throws {
+    func test_appearPageChangeAndDismiss_allDriveTheSession() throws {
         let source = try AppSourceGuard.unit(Self.gallery)
-        XCTAssertTrue(source.contains("GalleryImageOpenReport.report("),
-                       "handlePageChange doit demander la règle en quittant une page")
-        XCTAssertTrue(source.contains("AttachmentStatusReporter.report(attachmentId:"),
-                       "le rapport résolu doit partir via l'entonnoir unique")
-    }
-
-    func test_galleryDismiss_flushesTheLastActivePage() throws {
-        let source = try AppSourceGuard.unit(Self.gallery)
-        XCTAssertTrue(source.contains(".onDisappear"),
-                       "la fermeture de la galerie doit remonter le visionnage de la DERNIÈRE page — pas seulement les transitions entre pages")
+        XCTAssertTrue(source.contains("trackImageOpen(leaving: nil, entering: currentPageID)"))
+        XCTAssertTrue(source.contains("trackImageOpen(leaving: oldID, entering: newID)"))
+        XCTAssertTrue(source.contains(".onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }"))
     }
 }

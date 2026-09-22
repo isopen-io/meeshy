@@ -2,26 +2,21 @@ import Foundation
 
 /// #7362 — décide ce qu'il faut remonter à l'OUVERTURE d'un document reçu.
 ///
-/// `AttachmentConsumptionResolver.primaryAction` (MeeshySDK) ne tient qu'UNE
-/// action de consommation pour un fichier générique : `.downloaded` — il
-/// n'existe aucune action « opened » dédiée côté passerelle
-/// (`AttachmentStatusBodySchema`, `services/gateway/src/routes/messages-writes.ts`).
-/// C'est ce même marqueur qui alimente l'onglet « Ouvert » de « Vu par »
-/// (`AttachmentConsumptionResolver.Action.downloaded`) — pas un nom
-/// malheureux à corriger, le contrat serveur réel.
-///
-/// `DocumentFullSheet.saveDocument()` le reportait déjà, mais seulement sur
-/// le bouton Enregistrer explicite : lire le document dans la fiche sans
-/// l'enregistrer dans Fichiers ne remontait rien. Cette règle est le MÊME
-/// corps, posé à l'ouverture — `nonisolated` pour rester une décision pure,
-/// appelable depuis un test synchrone, sur le modèle de
-/// `VideoDismissWatchReport`.
+/// `viewed`, pas `downloaded` : l'onglet « Ouvert » de « Vu par » lit
+/// `viewedAt` comme date d'ouverture et `viewCount` comme nombre d'ouvertures
+/// (`MessageViewsConsumption.reading(for:in: .opened)`), et la passerelle les
+/// pose pour toute pièce (`MessageMediaConsumptionService.markImageAsViewed`,
+/// aucun filtre de type). `downloaded` garde son sens : l'enregistrement
+/// explicite (`DocumentFullSheet.saveDocument()`). Lire un document dans la
+/// fiche n'est pas l'enregistrer — l'étiqueter « téléchargé » affichait à
+/// l'expéditeur une action que le lecteur n'a pas faite, sans jamais compter
+/// ses ouvertures.
 public nonisolated enum DocumentOpenReport {
 
     /// `nil` pour son propre document : un expéditeur qui relit ce qu'il
     /// vient d'envoyer ne s'auto-déclare pas destinataire.
     public static func bodyForOpening(isMine: Bool) -> AttachmentStatusBody? {
         guard !isMine else { return nil }
-        return AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+        return AttachmentStatusBody(action: "viewed", playPositionMs: 0, durationMs: 0, complete: true)
     }
 }

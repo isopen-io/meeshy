@@ -90,16 +90,8 @@ struct ConversationMediaGalleryView: View {
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
-    /// **Cette galerie porte-t-elle des `MessageAttachment` RÉELS ?** (#7362)
-    ///
-    /// Cette vue est réemployée par les galeries POST / COMMENTAIRE
-    /// (`SocialMediaGalleryPresentation`, `CommentMediaView`), dont les
-    /// pièces ne vivent PAS dans `MessageAttachment` côté serveur — leur id
-    /// ne résout à rien sur `POST /attachments/:id/status`
-    /// (`services/gateway/.../messages-writes.ts`, qui ne connaît que
-    /// `prisma.messageAttachment`). `false` y éteint tout report de
-    /// consommation ; `true` (défaut) couvre le SEUL appelant qui en a
-    /// besoin, la galerie du fil (`ConversationMediaGalleryLayer`).
+    /// #7362 — `false` pour les galeries POST / COMMENTAIRE : leurs pièces ne
+    /// sont pas des `MessageAttachment` (cf. `+Consumption.swift`).
     var reportsAttachmentConsumption: Bool = true
 
     /// **Créer une story, un réel ou un post avec CE média** (#4014).
@@ -187,8 +179,8 @@ struct ConversationMediaGalleryView: View {
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
-    /// ET à chaque fermeture (`stopActiveVideoAudio`).
-    private let indexByID: [String: Int]
+    /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
+    let indexByID: [String: Int]
 
     @Environment(\.dismiss) private var dismiss
     /// `internal` — le couloir bas du plateau le PILOTE depuis
@@ -255,11 +247,8 @@ struct ConversationMediaGalleryView: View {
     /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
     @State var scenePlaying = true
 
-    /// **L'instant où la page ACTIVE est devenue active** (#7362) — arme
-    /// `GalleryImageOpenReport`. Posé à l'apparition initiale (`.onAppear`) et
-    /// à chaque page atteinte (`handlePageChange`) ; lu en quittant la page
-    /// (changement de page suivant, ou fermeture de la galerie).
-    @State private var imageViewStart: Date?
+    /// #7362 — la page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
+    @State var imageViewSession = GalleryImageViewSession()
 
     init(
         allAttachments: [MessageAttachment],
@@ -449,14 +438,9 @@ struct ConversationMediaGalleryView: View {
                 currentPageID = startAttachmentId
             }
             prefetchNeighbors(around: currentIndex)
-            armImageViewStart(for: currentPageID)
+            trackImageOpen(leaving: nil, entering: currentPageID)
         }
-        .onDisappear {
-            // #7362 — la galerie se FERME : la dernière page vue n'a jamais
-            // traversé `handlePageChange` (rien ne la suit), donc rien ne
-            // l'aurait reportée sans cette ligne.
-            reportImageOpenIfNeeded(leaving: currentPageID)
-        }
+        .onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
@@ -619,45 +603,9 @@ struct ConversationMediaGalleryView: View {
             HapticFeedback.light()
         }
 
-        if oldID != newID {
-            // #7362 — on QUITTE oldID : c'est le seul moment où son temps de
-            // visionnage est connu en entier.
-            reportImageOpenIfNeeded(leaving: oldID)
-            armImageViewStart(for: newID)
-        }
+        if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
 
         prefetchNeighbors(around: newIndex)
-    }
-
-    // MARK: - #7362 — consommation image
-
-    /// Arme le chronomètre pour la page qui VIENT de devenir active — ou
-    /// l'éteint si elle n'a rien à mesurer (vidéo, pièce sans propriétaire
-    /// connu, galerie qui ne reporte pas — cf. `reportsAttachmentConsumption`).
-    private func armImageViewStart(for pageID: String?) {
-        guard reportsAttachmentConsumption,
-              let pageID, let index = indexByID[pageID],
-              allAttachments[index].type == .image
-        else {
-            imageViewStart = nil
-            return
-        }
-        imageViewStart = Date()
-    }
-
-    /// Reporte le visionnage de la page qu'on QUITTE, si `GalleryImageOpenReport`
-    /// en décide ainsi (seuil de durée, pas sa propre pièce).
-    private func reportImageOpenIfNeeded(leaving pageID: String?) {
-        guard reportsAttachmentConsumption, let pageID, let index = indexByID[pageID] else { return }
-        let attachment = allAttachments[index]
-        guard let report = GalleryImageOpenReport.report(
-            for: attachment,
-            isMine: senderInfoMap[attachment.id]?.isMe,
-            viewStart: imageViewStart,
-            now: Date()
-        ) else { return }
-        let body = AttachmentStatusBody(action: "viewed", playPositionMs: 0, durationMs: report.durationMs, complete: true)
-        AttachmentStatusReporter.report(attachmentId: report.attachmentId, body: body)
     }
 
     // MARK: - Gallery Page
