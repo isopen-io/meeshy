@@ -54,7 +54,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationSocketHandler.swift",
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
@@ -451,7 +450,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // le mou antérieur (327 lignes au moment de la mesure) appartient aux lots
     // qui l'ont créé, et le reprendre d'ici casserait leur séquencement — c'est
     // exactement l'asymétrie que la règle 3 protège.
-    private static let legacyLineCeiling = 54_249
+    //
+    // **53 109 depuis le lot i4-7360.** `ConversationSocketHandler.swift` est
+    // repassé SOUS le budget — 1 140 lignes — quand l'écriture « consommé par
+    // tous » l'a quitté pour `MessagePersistenceActor` : il sort donc de
+    // `legacyOverBudget` pour toujours, et le plafond baisse d'EXACTEMENT les
+    // 1 140 lignes qu'il pesait. Le mou antérieur (636 lignes après cette
+    // sortie) n'est PAS repris ici : il appartient aux lots qui l'ont créé.
+    private static let legacyLineCeiling = 53_109
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
