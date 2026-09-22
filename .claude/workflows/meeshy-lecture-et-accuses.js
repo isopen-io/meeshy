@@ -208,6 +208,13 @@ ${ATTRIBUTION}
 - Le code est nommé en ANGLAIS (D-13) ; la prose (commentaires, commits, textes utilisateur) en français,
   les textes utilisateur dans les SEPT langues du catalogue.
 - Dossier de travail hors dépôt suivi : ${SCRATCH} (spécifications, captures, journaux).
+
+TON RENDU STRUCTURÉ est du JSON validé : un rendu refusé fait ÉCHOUER ton lot même si le travail est fait et
+poussé (V6 le 2026-09-22 : trois refus « could not be parsed as JSON » sur un rapport de 10 000 caractères).
+Chaque champ texte est COURT — \`rapport\` ≤ 3 000 caractères, chaque sortie de gate ≤ 800 (la fin utile,
+pas le journal entier) — et le détail va dans ${SCRATCH}/<clé>-rapport.md, que tu CITES. Aucun caractère
+de contrôle brut (tabulation, retour chariot, séquence ANSI de couleur) : ASCII ou UTF-8 imprimable,
+guillemets et antislashs échappés. Un refus ⇒ raccourcis de moitié et renvoie, ne renvoie jamais le même.
 `
 
 const GATES_PAR_CHAINE = {
@@ -696,8 +703,12 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
   const parChaine = await parallel(chaines.map((lots) => async () => {
     const faits = []
     for (const l of lots) {
-      const r = await developperLot(l)
-      faits.push(r)
+      try {
+        faits.push(await developperLot(l))
+      } catch (e) {
+        log(`${l.cle} : ÉCHEC d'un agent (${String(e && e.message ? e.message : e).slice(0, 160)}) — le lot repart au tour suivant, la chaîne ${l.chaine} continue`)
+        faits.push({ cle: l.cle, issue: numeros[l.cle] || l.issue || 0, arret: 'échec agent' })
+      }
     }
     return faits
   }))
