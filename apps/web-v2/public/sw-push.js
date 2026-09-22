@@ -34,6 +34,10 @@
  * déduplication par `notificationId` contre les bannières déjà affichées,
  * pour la course résiduelle entre push et socket.
  *
+ * Une CORRECTION n'est pas un second événement (#7342) : elle remplace la
+ * bannière de sa notification là où elle est encore affichée — voir
+ * `corriger()`.
+ *
  * ## LA TABLE DE DESTINATIONS EST UN JUMEAU GATÉ
  *
  * Un script classique chargé par `importScripts` ne peut importer aucun module
@@ -109,6 +113,16 @@ const TAP_FIELDS = ['notificationId', 'type', 'conversationId', 'postId', 'postT
  * où il était : un contrôle qui ment (loi 4).
  */
 const NOTIFICATION_CLICKED_MESSAGE = 'NOTIFICATION_CLICKED';
+
+/**
+ * LE CHAMP PAR LEQUEL LA PASSERELLE DÉCLARE UNE CORRECTION — JUMEAU de
+ * `REPRODUCED_PUSH_FIELD` / `REPRODUCED_PUSH_VALUE`
+ * (`packages/shared/types/reproduced-notification-push.ts`), que ce script
+ * classique ne peut pas importer. `sw-push.test.ts` compose ses charges avec
+ * les constantes PARTAGÉES : si ce jumeau dérive, ses témoins rougissent.
+ */
+const REPRODUCED_PUSH_FIELD = 'reproduced';
+const REPRODUCED_PUSH_VALUE = 'true';
 
 /** L'icône de la bannière — un actif de l'application, jamais une URL de la charge. */
 const BANNER_ICON = '/android-chrome-192x192.png';
@@ -211,14 +225,41 @@ async function fenetres() {
   }
 }
 
-async function dejaAffichee(notificationId) {
-  if (notificationId === '') return false;
+/** La bannière encore affichée de cette notification, ou `null`. */
+async function banniereAffichee(notificationId) {
+  if (notificationId === '') return null;
   try {
     const affichees = await self.registration.getNotifications();
-    return affichees.some((affichee) => affichee && texte(objet(affichee.data).notificationId) === notificationId);
+    return (
+      affichees.find((affichee) => affichee && texte(objet(affichee.data).notificationId) === notificationId) || null
+    );
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * LE SON ET L'EMPILEMENT SONT CEUX QUE LE LECTEUR A CHOISIS (#7308).
+ *
+ * La passerelle les calcule au chokepoint de ses préférences et les pose dans
+ * le bloc `notification` : `silent` pour `soundEnabled:false`, `tag` pour
+ * l'empilement par conversation — et AUCUN `tag` quand il a choisi
+ * `groupNotifications:false`. Le repli est donc l'identifiant de la
+ * notification, jamais `conversationId` : ce repli-là empilerait quand même.
+ *
+ * Une bannière qui REMPLACE une autre de même tag n'alerte qu'avec
+ * `renotify` ; sans lui, chaque message après le premier d'une conversation
+ * arriverait sans son ni annonce. Il accompagne aussi une bannière muette :
+ * `silent` retire le son et la vibration, pas l'annonce. `showNotification`
+ * lève un TypeError sur `renotify` sans tag et sur `silent` avec `vibrate` —
+ * `renotify` ne part qu'avec un tag, et ce worker ne pose jamais `vibrate`.
+ */
+function livraison(notification, notificationId) {
+  const tag = texte(notification.tag) || notificationId;
+  return {
+    ...(tag === '' ? {} : { tag: tag, renotify: true }),
+    ...(notification.silent === true ? { silent: true } : {}),
+  };
 }
 
 function donneesDuTap(data) {
@@ -228,6 +269,49 @@ function donneesDuTap(data) {
     if (valeur !== '') retenu[champ] = valeur;
   });
   return retenu;
+}
+
+function montrer(banniere, notification, data) {
+  return self.registration.showNotification(banniere.titre, {
+    body: banniere.corps,
+    ...livraison(notification, texte(data.notificationId)),
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    data: donneesDuTap(data),
+  });
+}
+
+/**
+ * UNE CORRECTION REMPLACE UNE BANNIÈRE, ELLE N'EN LÈVE JAMAIS UNE (#7342).
+ *
+ * Éditer un message, un post ou un commentaire réécrit sa notification sous
+ * la MÊME identité, et la passerelle repousse la version d'après en la
+ * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS et Android, un push de
+ * révocation retire d'abord la bannière d'avant ; le web ne le reçoit pas
+ * (#7308), et le dédoublonnage de D-11 point 4 écartait donc la correction.
+ *
+ * - La bannière de CETTE notification est encore affichée : elle est
+ *   remplacée EN PLACE, sous SON tag — pas sous celui de la charge. Si le
+ *   lecteur a changé `groupNotifications` entre les deux pushes, le tag neuf
+ *   laisserait l'ancienne bannière à côté de la nouvelle ; et chaque bannière
+ *   de ce worker porte un tag, puisque `livraison()` en pose un dès que
+ *   l'identifiant existe.
+ * - Elle dit DÉJÀ le texte d'après (correction livrée deux fois, édition qui
+ *   ne touche pas le texte notifié) : rien — D-11 point 4.
+ * - Elle n'est plus affichée : rien. Un message plus récent de la conversation
+ *   l'a remplacée (même tag, #7340) et la faire remonter cacherait le message
+ *   que le lecteur n'a pas lu ; ou il l'a fermée ; ou il lisait l'application
+ *   quand elle est arrivée (D-11 point 1). Dans les trois cas, la bannière
+ *   visible n'est plus la sienne.
+ *
+ * Le remplacement s'annonce (`renotify`), muet si le son est coupé : iOS fait
+ * sonner le push nominal qui suit la révocation, comme tout contenu neuf.
+ */
+async function corriger(banniere, notification, data) {
+  const affichee = await banniereAffichee(texte(data.notificationId));
+  if (affichee === null) return;
+  if (texte(affichee.title) === banniere.titre && texte(affichee.body) === banniere.corps) return;
+  await montrer(banniere, { ...notification, tag: affichee.tag }, data);
 }
 
 async function afficher(payload) {
@@ -242,23 +326,22 @@ async function afficher(payload) {
   /* Rien à dire : le worker se tait plutôt que d'écrire un libellé qu'aucun
      catalogue ne porte. */
   if (titre === '' && corps === '') return;
+  const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
 
   /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
      bannière in-app, une bannière système la doublerait. */
   const ouvertes = await fenetres();
   if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
 
-  const notificationId = texte(data.notificationId);
-  /* D-11 point 4 — la course résiduelle entre le push et le socket. */
-  if (await dejaAffichee(notificationId)) return;
+  if (texte(data[REPRODUCED_PUSH_FIELD]) === REPRODUCED_PUSH_VALUE) {
+    await corriger(banniere, notification, data);
+    return;
+  }
 
-  await self.registration.showNotification(titre === '' ? corps : titre, {
-    body: titre === '' ? '' : corps,
-    tag: texte(data.conversationId) || notificationId || undefined,
-    icon: BANNER_ICON,
-    badge: BANNER_BADGE,
-    data: donneesDuTap(data),
-  });
+  /* D-11 point 4 — la course résiduelle entre le push et le socket. */
+  if ((await banniereAffichee(texte(data.notificationId))) !== null) return;
+
+  await montrer(banniere, notification, data);
 }
 
 async function ouvrir(data) {

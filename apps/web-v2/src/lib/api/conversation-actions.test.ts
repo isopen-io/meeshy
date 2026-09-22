@@ -3,10 +3,12 @@ import { createStore } from 'zustand/vanilla';
 import { describe, expect, test } from 'bun:test';
 
 import { performRowAction } from './conversation-actions';
-import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import { createHttpTransport } from './http';
+import { message, VIEWER_ID } from './fixtures-base';
 import { effectiveFlagsOf, effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
-import type { Conversation } from './types';
+import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
+import type { Conversation, Message } from './types';
 
 const conversation = (partial: Partial<Conversation>): Conversation =>
   ({
@@ -243,5 +245,61 @@ describe('source fixtures — fetchImpl JAMAIS appelé', () => {
 
     expect(calls).toBe(0);
     expect(effectiveFlagsOf(c, store.getState().overrides).isPinned).toBe(true);
+  });
+});
+
+/**
+ * « LU » DEPUIS LA LISTE, PUIS LE FIL ROUVERT (#7351, revue-correction) — le
+ * fil calcule son séparateur sur le cache de DÉTAIL (`conversationQueryKey`)
+ * ou, à défaut, sur la ligne de liste (`initialData`). Le geste confirmé ne
+ * posait `unreadCount: 0` QUE sur la liste, sans avancer le curseur : un
+ * détail en cache gardait son compte (repli `unreadCountHint` sans curseur),
+ * et un curseur ancien gardait ses messages « non lus » (le curseur prime
+ * sur le compte) — deux séparateurs sur ce qu'on venait de marquer lu.
+ */
+describe("performRowAction('read') 2xx — le fil rouvert ne remet pas de séparateur sur ce qui est lu", () => {
+  const at = (iso: string) => new Date(iso);
+  const messageOf = (id: string, iso: string): Message =>
+    message({ id, conversationId: 'c1', senderId: 'u-autrui', content: id, originalLanguage: 'fr', translations: [], createdAt: at(iso) });
+  const THREAD: readonly Message[] = [
+    messageOf('m1', '2026-09-21T09:01:00.000Z'),
+    messageOf('m2', '2026-09-21T09:02:00.000Z'),
+    messageOf('m3', '2026-09-21T09:03:00.000Z'),
+  ];
+  const lastMessage = THREAD[2] as Message;
+  const readThroughList = async (c: Conversation, withDetail: boolean) => {
+    const queryClient = seededClient([c]);
+    if (withDetail) queryClient.setQueryData(conversationQueryKey('c1'), c);
+    const transport = createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200, body: { success: true, data: {} } }) });
+    await performRowAction({ conversationId: 'c1', action: 'read', deps: { source: 'gateway', transport, store: freshStore(), queryClient } });
+    return {
+      listed: findCachedConversation(queryClient, 'c1'),
+      detail: queryClient.getQueryData<Conversation>(conversationQueryKey('c1')),
+    };
+  };
+
+  test('sans curseur (appareil neuf) : le détail en cache ne rouvre plus « 2 messages non lus »', async () => {
+    const { detail } = await readThroughList(conversation({ id: 'c1', unreadCount: 2, lastMessage }), true);
+
+    expect(unreadBoundaryOf({ conversation: detail!, messages: THREAD, viewerId: VIEWER_ID })).toBeNull();
+  });
+
+  test('curseur ANCIEN : liste et détail avancent jusqu’au dernier message, et un message arrivé ensuite rouvre SON séparateur', async () => {
+    const stale = conversation({
+      id: 'c1',
+      unreadCount: 2,
+      lastMessage,
+      lastReadMessageId: 'm1',
+      lastReadMessageCreatedAt: at('2026-09-21T09:01:00.000Z'),
+    });
+    const { listed, detail } = await readThroughList(stale, true);
+    const later = [...THREAD, messageOf('m4', '2026-09-21T09:10:00.000Z')];
+
+    expect(unreadBoundaryOf({ conversation: listed!, messages: THREAD, viewerId: VIEWER_ID })).toBeNull();
+    expect(unreadBoundaryOf({ conversation: detail!, messages: THREAD, viewerId: VIEWER_ID })).toBeNull();
+    expect(unreadBoundaryOf({ conversation: detail!, messages: later, viewerId: VIEWER_ID })).toEqual({
+      firstUnreadId: 'm4',
+      unreadCount: 1,
+    });
   });
 });

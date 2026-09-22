@@ -2,7 +2,18 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { QueryClient, type QueryKey } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
+
+import { authorPostsInfiniteOptions } from '@/lib/api/author-posts';
+import { bookmarkedPostsQuery } from '@/lib/api/bookmarked-posts';
+import { updateCardPost } from '@/lib/api/card-caches';
+import { feedQuery } from '@/lib/api/feed';
+import type { FeedPost } from '@/lib/api/feed-pages';
+import { hashtagInfiniteOptions } from '@/lib/api/hashtag-posts';
+import type { HttpTransport } from '@/lib/api/http';
+import { postQueryOptions } from '@/lib/api/publication-detail';
+import { reelsQuery } from '@/lib/api/reels';
 
 /**
  * **TOUT ÉCRAN QUI MONTE LA CARTE OFFRE LE COMPTEUR QUI MÈNE AU FIL** (#7113).
@@ -70,7 +81,8 @@ describe('le compteur de commentaires est offert partout où la carte est monté
       .map((path) => path.slice(SRC.length + 1))
       .sort();
 
-    expect(hotes.length).toBeGreaterThanOrEqual(4);
+    expect(hotes.length).toBeGreaterThanOrEqual(5);
+    expect(hotes).toContain('routes/bookmarks.tsx');
     expect(hotes).toContain('routes/feed.tsx');
     expect(hotes).toContain('routes/hashtag.tsx');
     expect(hotes).toContain('routes/post.tsx');
@@ -123,5 +135,89 @@ describe('le geste d’ouverture est offert partout où la carte est montée', (
     expect(carte).toContain('isDetail');
     expect(carte).toContain('to="post"');
     expect(carte).toContain('data-feed-post-open');
+  });
+});
+
+/**
+ * **TOUT ÉCRAN QUI MONTE LA CARTE LA PEINT DEPUIS UNE CAISSE DU REGISTRE**
+ * (#7341), troisième inventaire, même motif.
+ *
+ * La page d'un hashtag et les publications d'un profil montaient la carte
+ * depuis LEUR caisse, qu'aucun geste ni aucun écho n'écrivait : le cœur y
+ * partait au serveur et la carte ne bougeait pas. Aucun témoin ne pouvait le
+ * voir — la carte est irréprochable, le geste aussi ; le défaut était ENTRE
+ * l'écran et la liste des caisses que le geste parcourt.
+ *
+ * La garde tient trois affirmations, chacune mesurée :
+ *  1. les hôtes de la carte (`<FeedPostCard` ou `<ReelPage`, trouvés dans les
+ *     FICHIERS) sont EXACTEMENT ceux que la table déclare — un septième écran
+ *     qui monterait la carte rougit ici tant qu'il n'a pas dit d'où il la lit ;
+ *  2. chaque hôte NOMME bien la requête que la table lui prête ;
+ *  3. la clé que cette requête sert est ATTEINTE par le registre : une carte
+ *     posée à cette clé bascule quand `updateCardPost` passe — une mesure de
+ *     comportement, pas une comparaison de chaînes.
+ *
+ * **CE QU'ELLE NE MESURE PAS, DIT À VOIX HAUTE** : qu'un hôte ne lise pas, EN
+ * PLUS de la requête déclarée, une seconde caisse de cartes qu'il ne nomme
+ * pas ; et que `useFeed` / `usePost` (`lib/api/query.ts`) servent bien
+ * `feedQuery` / `postQueryOptions`. La table est un fil de déclenchement, pas
+ * une preuve d'exhaustivité.
+ */
+describe('toute caisse qui peint une carte est atteinte par le registre', () => {
+  const deps = { source: 'fixtures' as const, transport: {} as HttpTransport };
+
+  type Source = { readonly names: string; readonly queryKey: QueryKey; readonly holds: 'pages' | 'card' };
+
+  const PAINTS_FROM: Readonly<Record<string, readonly Source[]>> = {
+    'routes/feed.tsx': [{ names: 'useFeed', queryKey: feedQuery(deps).queryKey, holds: 'pages' }],
+    'routes/reels.tsx': [
+      { names: 'feedQuery', queryKey: feedQuery(deps).queryKey, holds: 'pages' },
+      { names: 'postQueryOptions', queryKey: postQueryOptions({ ...deps, postId: 'p' }).queryKey, holds: 'card' },
+      { names: 'reelsQuery', queryKey: reelsQuery(deps, 'graine').queryKey, holds: 'pages' },
+    ],
+    'routes/post.tsx': [{ names: 'usePost', queryKey: postQueryOptions({ ...deps, postId: 'p' }).queryKey, holds: 'card' }],
+    'routes/bookmarks.tsx': [{ names: 'bookmarkedPostsQuery', queryKey: bookmarkedPostsQuery(deps).queryKey, holds: 'pages' }],
+    'routes/hashtag.tsx': [{ names: 'hashtagInfiniteOptions', queryKey: hashtagInfiniteOptions({ ...deps, tag: 'voyage' }).queryKey, holds: 'pages' }],
+    'routes/user-profile.tsx': [
+      { names: 'authorPostsInfiniteOptions', queryKey: authorPostsInfiniteOptions({ ...deps, authorId: 'u' }).queryKey, holds: 'pages' },
+    ],
+  };
+
+  const PAINTS_CARD = /<(FeedPostCard|ReelPage)\b/;
+
+  test('les hôtes de la carte sont EXACTEMENT ceux que la table déclare', () => {
+    const hotes = handWrittenSources()
+      .filter((path) => PAINTS_CARD.test(readFileSync(path, 'utf8')))
+      .map((path) => path.slice(SRC.length + 1))
+      .sort();
+
+    expect(hotes).toEqual(Object.keys(PAINTS_FROM).sort());
+  });
+
+  test('chaque hôte nomme la requête d’où la table dit qu’il peint', () => {
+    const muets = Object.entries(PAINTS_FROM).flatMap(([host, sources]) => {
+      const source = readFileSync(join(SRC, host), 'utf8');
+      return sources.filter(({ names }) => !source.includes(names)).map(({ names }) => `${host} › ${names}`);
+    });
+
+    expect(muets).toEqual([]);
+  });
+
+  test('une carte posée à chacune de ces clés bascule quand le registre passe', () => {
+    const card: FeedPost = { id: 'p', type: 'POST', createdAt: '2026-09-21T10:00:00.000Z', likeCount: 0 };
+    const inertes = Object.entries(PAINTS_FROM).flatMap(([host, sources]) =>
+      sources
+        .filter(({ queryKey, holds }) => {
+          const queryClient = new QueryClient();
+          queryClient.setQueryData(queryKey, holds === 'card' ? card : { pages: [{ posts: [card] }], pageParams: [undefined] });
+          updateCardPost(queryClient, 'p', (post) => ({ ...post, likeCount: 1 }));
+          const held = queryClient.getQueryData<FeedPost | { readonly pages: readonly { readonly posts: readonly FeedPost[] }[] }>(queryKey);
+          const painted = held !== undefined && 'pages' in held ? held.pages[0]?.posts[0] : held;
+          return painted?.likeCount !== 1;
+        })
+        .map(({ names }) => `${host} › ${names}`),
+    );
+
+    expect(inertes).toEqual([]);
   });
 });

@@ -5,14 +5,15 @@ import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
+import { cachedCardSeed } from './card-caches';
 import { ApiError } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
-import { FEED_QUERY_KEY, feedQuery, refreshFeed } from './feed';
+import { feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
-import type { FeedAuthor, FeedInfiniteData } from './feed-pages';
+import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
 import { commentsInfiniteOptions, performComment, type CommentResult } from './publication-comments';
 import { postQueryOptions } from './publication-detail';
@@ -192,21 +193,20 @@ export function recordShareAction(postId: string): Promise<boolean> {
 
 /**
  * `usePost` (#6278) — le détail d'une publication, CACHE D'ABORD : ouvert
- * depuis le fil, il se peint AVEC la carte déjà reçue (`initialData`, datée
- * du fil pour que `staleTime: 0` la revalide en fond) — jamais un squelette
- * sur une publication que l'écran précédent affichait. Ouvert par un lien
- * direct, le cache est vide et le squelette est juste. `retry: false` : un
- * 404 est un VERDICT (D-6), pas une panne à réessayer.
+ * depuis N'IMPORTE QUEL écran qui montrait la carte — le Flux, un hashtag, un
+ * profil, les enregistrées, un fil de Réels (#7384) —, il se peint AVEC la
+ * carte déjà reçue (`cachedCardSeed`, datée de la caisse qui l'a fournie, que
+ * `staleTime: 0` revalide en fond) — jamais un squelette sur une publication
+ * que l'écran précédent affichait. La relecture REMPLACE la carte sans la
+ * retirer : une carte de liste qui ne porterait pas tous les champs est
+ * complétée, jamais effacée. Ouvert par un lien direct, aucune caisse ne la
+ * porte et le squelette est juste. `retry: false` : un 404 est un VERDICT
+ * (D-6), pas une panne à réessayer.
  */
 export function usePost(postId: string) {
   return useQuery({
     ...postQueryOptions({ ...apiDeps, postId }),
-    initialData: () =>
-      appQueryClient
-        .getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)
-        ?.pages.flatMap((page) => page.posts)
-        .find((post) => post.id === postId),
-    initialDataUpdatedAt: () => appQueryClient.getQueryState(FEED_QUERY_KEY)?.dataUpdatedAt,
+    ...cachedCardSeed(appQueryClient, postId),
     staleTime: 0,
     retry: false,
   });
@@ -232,6 +232,10 @@ export function useConversation(id: string) {
  * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
  * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
  * (`lib/lens/pagination.ts`), lue côté écran.
+ *
+ * **Fraîcheur** : `staleTime: 0` est porté par la FABRIQUE `messagesQuery`
+ * (`messages.ts`, #7353), jamais reposé ici — le témoin
+ * `thread-reload-freshness.test.ts` joue la fabrique, donc ce que l'écran sert.
  */
 export function useMessages(id: string) {
   return useInfiniteQuery(messagesQuery(apiDeps, id));

@@ -37,6 +37,8 @@ struct RiverConversationHost: View {
     /// l'appelant qui possède le contrôleur de mode et le composeur.
     var onOpenInThread: ((String) -> Void)? = nil
     var onReply: ((String) -> Void)? = nil
+    /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -79,6 +81,7 @@ struct RiverConversationHost: View {
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
+        onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -93,6 +96,7 @@ struct RiverConversationHost: View {
         self.onViewStory = onViewStory
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
+        self.onConsumeViewOnce = onConsumeViewOnce
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -197,6 +201,7 @@ struct RiverConversationHost: View {
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
                 onReply: onReply,
+                onConsumeViewOnce: onConsumeViewOnce,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

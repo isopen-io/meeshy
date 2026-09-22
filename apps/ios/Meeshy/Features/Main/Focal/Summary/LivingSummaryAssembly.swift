@@ -80,10 +80,22 @@ nonisolated enum LivingSummaryAssembly {
         )
     }
 
+    /// **Le contenu d'un message PROTÉGÉ n'entre jamais dans un texte dérivé**
+    /// (#7452, exigence 3).
+    ///
+    /// Un digest est une COPIE composée une fois : aucune destruction serveur
+    /// ne l'atteint, et ce ViewModel ne le recompose jamais (contrainte §WS-9).
+    /// Un éphémère dont le texte aurait été absorbé ici lui survivrait donc à
+    /// l'écran, après son échéance — une fuite qu'aucun balayage ne rattrape.
+    /// Le message reste COMPTÉ (il a bien eu lieu) ; seul son texte est vidé,
+    /// et il est désigné à part par `SummaryProtectionsView`.
+    @MainActor
     private static func digestInput(_ message: MeeshyMessage, viewerUsername: String?) -> DigestInputMessage {
-        DigestInputMessage(
+        let protection = message.protection()
+        let isProtected = !protection.isEmpty || protection.isExpired
+        return DigestInputMessage(
             base: episodeInput(message),
-            content: message.content,
+            content: isProtected ? "" : message.content,
             languageCode: message.originalLanguage,
             attachmentKinds: message.attachments.compactMap { DigestMediaKind(rawValue: $0.type.rawValue) },
             linkCount: message.trackedLinkMap.count,

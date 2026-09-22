@@ -45,6 +45,7 @@ import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -67,7 +68,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
-import { useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
@@ -179,10 +180,14 @@ export default function ThreadScreen() {
    * moitié qui soit à lui (`online`, D-16 — une révélation dont la
    * confirmation ne peut pas partir ne s'accorde pas).
    */
-  const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
-  const onEphemeralExpired = useCallback((messageId: string) => {
-    setExpiredIds((previous) => (previous.has(messageId) ? previous : new Set(previous).add(messageId)));
-  }, []);
+  /**
+   * LA DESTRUCTION D'UN ÉPHÉMÈRE, EN TROIS PHASES (#7468) — le crochet tient
+   * les deux ensembles et la minuterie qui fait passer de l'un à l'autre, et
+   * s'inscrit au canal d'annonce pour que `message:expired` emprunte le MÊME
+   * chemin que l'échéance atteinte sous les yeux du lecteur. L'écran ne fait
+   * plus que le consommer — il tenait `expiredIds` à la main jusqu'ici.
+   */
+  const { destroyingIds, expiredIds, noteExpired: onEphemeralExpired } = useEphemeralDestruction();
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
@@ -563,7 +568,7 @@ export default function ThreadScreen() {
   };
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
+    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
   };
 
   /**
@@ -882,6 +887,7 @@ export default function ThreadScreen() {
           group={group}
           highlightedId={highlightedId}
           expiredIds={expiredIds}
+          destroyingIds={destroyingIds}
           jumpToMessage={jumpToMessage}
           consume={consume}
           onEphemeralExpired={onEphemeralExpired}
@@ -897,6 +903,7 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
+          onOpenDetail={messageMenu.setDetailFor}
           typists={typing.typists}
           typistAvatarOf={typistAvatarOf}
           accent={accent}

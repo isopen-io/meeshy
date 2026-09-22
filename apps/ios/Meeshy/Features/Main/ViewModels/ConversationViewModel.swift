@@ -46,7 +46,21 @@ class ConversationViewModel: ObservableObject {
             _mentionDisplayNames = nil
             _mentionCandidates = nil
         }
+
+        // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
+        // TOUT changement de `messages` traverse (les deux pipelines, legacy et
+        // GRDB). Le retrait lui-même est toujours différé : voir
+        // `EphemeralExpiryCoordinator`.
+        refreshEphemeralExpirySchedule()
     }
+
+    /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le
+    /// fil, jamais un minuteur par bulle (#7452).
+    lazy var ephemeralExpiry: EphemeralExpiryCoordinator = {
+        let coordinator = EphemeralExpiryCoordinator()
+        coordinator.onExpired = { [weak self] ids in self?.expireEphemeralsIfNeeded(ids) }
+        return coordinator
+    }()
 
     var _cachedLastReceivedIndex: IndexCache = .uncomputed
 
@@ -251,7 +265,12 @@ class ConversationViewModel: ObservableObject {
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
     /// Cf. `caughtUpMessageId(seen:)`.
-    private var lastCaughtUpMessageId: String?
+    private(set) var lastCaughtUpMessageId: String?
+
+    /// Tout ce que l'observateur de visibilité a rapporté depuis l'ouverture
+    /// (#7350) — le préfixe contigu depuis la frontière s'y mesure, jamais sur
+    /// le seul dernier lot. Cf. `notePartialRead(seen:)`.
+    var seenServerMessageIds: Set<String> = []
 
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
@@ -407,6 +426,20 @@ class ConversationViewModel: ObservableObject {
         let senderAvatarURL: String?
         let senderColor: String
         let sentAt: Date
+        /// #7362 — la galerie plein écran n'a aucune autre source pour savoir
+        /// qui a envoyé une pièce donnée ; c'est ce qui gouverne
+        /// `GalleryImageOpenReport` (jamais reporter sa propre image). Défaut
+        /// `false` : les galeries POST / COMMENTAIRE (`SocialMediaGalleryPresentation`,
+        /// `CommentMediaGallery`) construisent ce type sans connaître la
+        /// notion — elles ne reportent de toute façon aucune consommation
+        /// (`ConversationMediaGalleryView.reportsAttachmentConsumption`).
+        ///
+        /// `var`, pas `let` : un stored `let` porteur d'un initialiseur
+        /// littéral n'entre PAS dans l'init memberwise synthétisé (le
+        /// compilateur le traite comme fixé à la déclaration, pas comme un
+        /// défaut substituable) — seul un `var` avec défaut y ajoute un
+        /// paramètre substituable (SE-0242).
+        var isMe: Bool = false
     }
 
     var _mediaSenderInfoMap: [String: MediaSenderInfo]?
@@ -1015,7 +1048,9 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
-        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds, visible: visibleIds))
+        let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
+        if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
     }
 
     /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux

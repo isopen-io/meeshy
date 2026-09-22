@@ -33,6 +33,28 @@ public struct MessageExpiredEvent: Decodable, Sendable {
     }
 }
 
+/// `message:countdown-started` — le gateway a enregistré la PREMIÈRE réception
+/// d'un destinataire et sert désormais une échéance pour ce lecteur (contrat du
+/// fil #7451, point 5).
+///
+/// L'événement existe parce que `message:new` ne PEUT PAS porter l'échéance
+/// d'un éphémère : c'est une diffusion en room, et l'échéance est résolue par
+/// LECTEUR (`D(u) = réception(u) + ephemeralDuration`). Il part donc vers la
+/// room `user:<destinataire>` — pour ses AUTRES appareils, qui n'ont pas vu
+/// l'arrivée — et vers `user:<expéditeur>`, avec la plus tardive des échéances
+/// connues, qui est la seule horloge qu'un envoi puisse afficher.
+public struct MessageCountdownStartedEvent: Decodable, Sendable {
+    public let messageId: String
+    public let conversationId: String
+    public let expiresAt: Date
+
+    public init(messageId: String, conversationId: String, expiresAt: Date) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+        self.expiresAt = expiresAt
+    }
+}
+
 /// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
 ///
 /// Le couple, jamais le seul `messageId` : un lot de masquage traverse
@@ -702,74 +724,21 @@ public struct TranscriptionFailedEvent: Codable, Sendable {
     public let taskId: String?
 }
 
-public struct ReadStatusSummary: Decodable, Sendable {
-    public let totalMembers: Int
-    public let deliveredCount: Int
-    public let readCount: Int
-}
+/// `message:pending-delivered` — la file hors-ligne d'un utilisateur vient
+/// d'être rejouée au reconnect. `count` ne compte que ce qui est réellement
+/// reparti ; `conversationIds` nomme les fils TOUCHÉS par le drain (rejeu
+/// réussi ou entrée perdue), pour qu'un client aille les resynchroniser.
+/// I3 (#7349) : iOS ne l'écoutait pas du tout (vérifié : aucune occurrence
+/// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que web-v2
+/// l'utilise déjà pour invalider ses listes de messages
+/// (`apps/web-v2/src/lib/api/socket.ts`).
+public struct PendingMessagesDeliveredEvent: Decodable, Sendable {
+    public let count: Int
+    public let conversationIds: [String]
 
-public struct ReadStatusUpdateEvent: Decodable, Sendable {
-    public let conversationId: String
-    public let participantId: String
-    /// `User.id` of the actor, or `nil` when the actor is an ANONYMOUS
-    /// participant — they have no `User` row, so `participantId` is their only
-    /// identity. Expected on the automatic delivery receipt of a share-link
-    /// conversation, where anonymous participants are the dominant population.
-    /// Consumers comparing this against the current user (multi-device read
-    /// cursor sync) need no change: `nil` matches nobody, which is correct.
-    public let userId: String?
-    public let type: String
-    public let updatedAt: Date
-    public let summary: ReadStatusSummary
-    /// Read frontier of the ACTOR at broadcast time. Lets the actor's OTHER
-    /// devices sync their own read cursor (multi-device read sync). `nil` from
-    /// a pre-rollout gateway or when the actor has no cursor yet. A recipient
-    /// who is not the actor MUST ignore it. Read receipts are monotone, so a
-    /// client applies it only when strictly newer than its local cursor.
-    ///
-    /// The actor is `userId ?? participantId`, in that order. `userId` alone is
-    /// `nil` for a share-link guest, whose devices could then never recognise
-    /// themselves; `participantId` is non-nil for the whole population and
-    /// shared by every device of one identity. Same rule that names the
-    /// personal room. This client has no accountless session, so it matches on
-    /// `userId` only — the second branch stays unused here, and
-    /// `ConversationStoreSocketBridge` is correct as written.
-    ///
-    /// **Delivered ONLY in the copy addressed to the actor.** This field and
-    /// `unreadCount` describe a person, not the conversation — how far behind
-    /// they are on this thread, and when they last caught up. The gateway
-    /// therefore emits a `read` TWICE: one copy without them to the
-    /// conversation fan-out, one complete copy to the actor's personal room
-    /// (`user:<userId ?? participantId>`), which the fan-out excludes so no
-    /// socket receives both. Nothing changes for this client: a device of the
-    /// actor still joins that room at authentication and still receives the
-    /// pair. A device that is NOT the actor now simply never sees the values
-    /// its `event.userId == me` gate was already discarding.
-    public let lastReadAt: Date?
-    /// Server-authoritative unread count for the ACTOR after the action.
-    /// Same `userId ?? participantId` scoping as `lastReadAt`, and the same
-    /// addressing scope: the actor's copy, never the fan-out. `nil` from a
-    /// pre-rollout gateway.
-    public let unreadCount: Int?
-
-    public init(
-        conversationId: String,
-        participantId: String,
-        userId: String?,
-        type: String,
-        updatedAt: Date,
-        summary: ReadStatusSummary,
-        lastReadAt: Date? = nil,
-        unreadCount: Int? = nil
-    ) {
-        self.conversationId = conversationId
-        self.participantId = participantId
-        self.userId = userId
-        self.type = type
-        self.updatedAt = updatedAt
-        self.summary = summary
-        self.lastReadAt = lastReadAt
-        self.unreadCount = unreadCount
+    public init(count: Int, conversationIds: [String]) {
+        self.count = count
+        self.conversationIds = conversationIds
     }
 }
 
@@ -1683,6 +1652,11 @@ public protocol MessageSocketProviding: Sendable {
     /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
+    /// `message:countdown-started` — l'échéance SERVIE d'un éphémère, résolue
+    /// pour CE lecteur. Dans le protocole pour la même raison que ses voisins :
+    /// le consommateur (`ConversationSocketHandler`) ne détient qu'un
+    /// `MessageSocketProviding`.
+    var messageCountdownStarted: PassthroughSubject<MessageCountdownStartedEvent, Never> { get }
     /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
@@ -1706,6 +1680,8 @@ public protocol MessageSocketProviding: Sendable {
     /// sans attendre une transition d'état spontanée.
     var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    /// `message:pending-delivered` — voir `PendingMessagesDeliveredEvent`.
+    var pendingMessagesDelivered: PassthroughSubject<PendingMessagesDeliveredEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     /// `message:attachment-updated` — delta émis par le gateway après un
     /// enrichissement async (transcription Whisper, traduction audio NLLB+TTS).
@@ -2000,6 +1976,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    public let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -2023,6 +2000,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    public let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
 
     // Combine publishers — attachment status
     public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
@@ -3271,6 +3249,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // L'échéance SERVIE d'un éphémère (#7451 point 5). Elle ne REMPLACE pas
+        // l'échéance locale : les deux concourent et la plus PROCHE gagne
+        // (`EphemeralDeadline.resolve`). C'est ce qui rend le client correct
+        // avant comme après la fusion du lot gateway — sans cet événement, il
+        // décompte depuis sa propre réception ; avec lui, il ne peut que
+        // raccourcir.
+        socket.on("message:countdown-started") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageCountdownStartedEvent.self, from: data) { [weak self] event in
+                self?.messageCountdownStarted.send(event)
+            }
+        }
+
         // Le canal de visibilité PERSONNELLE. La room est celle de
         // l'UTILISATEUR, pas du socket : l'appareil qui a émis la requête reçoit
         // l'événement lui aussi, et le retrait y est idempotent (il a déjà
@@ -3495,6 +3486,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(AttachmentStatusUpdatedEvent.self, from: data) { [weak self] event in
                 self?.attachmentStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("message:pending-delivered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(PendingMessagesDeliveredEvent.self, from: data) { [weak self] event in
+                self?.pendingMessagesDelivered.send(event)
             }
         }
 

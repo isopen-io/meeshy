@@ -176,7 +176,15 @@ export function useSend(params: {
       const reason = sendFailureReason(
         [...entries].reverse().find((entry) => entry.delivery === 'failed')?.lastError,
       );
-      announce(reason === undefined ? 'Message non envoyé' : `Message non envoyé — ${reason}`);
+      /* LA MÊME LANGUE QUE LA BANDE QU'ELLE ANNONCE (#7337) — sa jumelle
+         « Message envoyé », deux lignes plus bas, lisait déjà le catalogue ;
+         celle-ci était restée EN DUR, en français. */
+      const language = currentInterfaceLanguage();
+      announce(
+        reason === undefined
+          ? translate(language, 'announce.messageNotSent')
+          : translate(language, 'announce.messageNotSent.reason', { reason }),
+      );
     }
     else if (confirmedCount > previousConfirmedCount.current)
       announce(translate(currentInterfaceLanguage(), 'announce.messageSent'));

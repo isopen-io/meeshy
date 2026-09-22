@@ -296,7 +296,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // TEXTUELLE qui s'en va (`applyPersonalHistoryHiding` sur le chemin de la
   // liste) est remplacée par la fusion EN MÉMOIRE du cutoff dans le plancher,
   // exigée par `IN_MEMORY_HIDING_SURFACES` sur le fichier qui la porte.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 5, applications: 1 },
+  // 5 → 4 (#7451) : le GEL par message est parti dans
+  // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
+  // de fichier, pas de nature — elle ne servait déjà aucun contenu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -364,6 +367,28 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
 
+  // #7451 — les deux moitiés du décompte éphémère. Aucune des deux ne SERT de
+  // contenu : le masquage protège ce qu'un lecteur VOIT, et ces lectures ne
+  // rendent rien à personne.
+  'messaging/freezeMessageStatus.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Fenêtre du gel d'accusés (`select: { id: true }`) : elle décide quelles " +
+      'lignes de statut écrire, pas ce qui est servi. Masquer ici ferait ' +
+      "qu'un message effacé de l'historique personnel d'un lecteur ne serait " +
+      'jamais marqué livré pour lui — donc compté non lu à vie.',
+  },
+  'messaging/ephemeralCountdown.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Écriture d'échéance à la réception : elle lit la durée et l'expéditeur " +
+      "d'un message que le destinataire VIENT de recevoir, et ne rend aucun " +
+      'contenu. Un masquage personnel arrêterait le décompte de ce lecteur — ' +
+      'soit exactement le contraire de ce que la directive demande.',
+  },
+
   // #5689 — même famille qu'ExpiredMessagesCleanupService juste au-dessus,
   // pour la même raison : un balayage de purge de compte supprimé, sans
   // lecteur, qui détruit les messages du compte plutôt que de les masquer
@@ -415,6 +440,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * MÉMOIRE ci-dessous, seule forme que le balayage puisse prouver ici.
    */
   'unreadCountsCore.ts': { kind: 'applies', reads: 1, applications: 0 },
+
+  /**
+   * #7377 — la liste des favoris de message. Sa lecture unique charge les
+   * messages étoilés d'une page qui traverse PLUSIEURS conversations :
+   * `applyPersonalHistoryHiding` ne merge qu'un SEUL `where`, d'où
+   * `applications: 0` et le masquage appliqué EN MÉMOIRE, conversation par
+   * conversation, après le keyset — même forme que `sync/messages.ts`. Les
+   * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
 };
 
 /**
@@ -452,6 +487,22 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * ce qu'il garde.
    */
   'unreadCountsCore.ts': ['exclusiveFloorMsFor(', '!hidden.has('],
+
+  /**
+   * #7377 — la liste des favoris CHARGE le masquage de chaque conversation de
+   * la page et le remet au verdict de lecture ; le verdict porte les deux
+   * coupes, exigées séparément parce qu'elles se perdent séparément : les
+   * messages retirés un par un (`hiddenMessageIds.includes(`) et l'historique
+   * effacé (`clearHistoryBefore`, comparé en `gte` comme le `where` partagé).
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': [
+    'loadPersonalHistoryHidingByConversation(',
+    'readableByReader(',
+  ],
+  'messaging/messageStars/starredMessageVerdict.ts': [
+    'reader.hiding.hiddenMessageIds.includes(',
+    'const cutoff = reader.hiding.clearHistoryBefore;',
+  ],
 
   /**
    * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME

@@ -234,7 +234,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
                 ],
                 nonMedia: []
             ),
-            location: nil, ephemeral: nil, isBlurred: false, isViewOnce: false, isPinned: false,
+            location: nil, protection: .unprotected, isBlurred: false, isViewOnce: false, isPinned: false,
             forwardAttribution: nil, editedAt: nil, isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )

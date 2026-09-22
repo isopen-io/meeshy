@@ -109,6 +109,19 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// rows predating the field decode to `[:]`.
     public var trackedLinkMap: [String: String] = [:]
 
+    /// **Ce message est en train d'être DÉTRUIT, sous les yeux du lecteur**
+    /// (#7467).
+    ///
+    /// Un vrai état, pas un doublon d'`expiresAt` : l'échéance dit QUAND le
+    /// message meurt, celui-ci dit qu'on est en train de le regarder mourir.
+    /// Il ne vaut `true` que pendant `EphemeralBurn.duration`, entre l'échéance
+    /// et le retrait de la ligne — le temps que la combustion se voie.
+    ///
+    /// Hors du `Codable` (défaut `false`, jamais encodé) : il n'a aucun sens à
+    /// survivre à la session, et un message restauré du cache en état de
+    /// combustion serait invisible pour rien.
+    public var isBurning: Bool = false
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)

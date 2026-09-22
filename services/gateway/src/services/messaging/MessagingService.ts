@@ -35,6 +35,7 @@ import { getCachedParticipant, cacheParticipant } from '../../utils/participant-
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
+import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -47,7 +48,8 @@ export class MessagingService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly translationService: MessageTranslationService,
-    notificationService?: NotificationService
+    notificationService?: NotificationService,
+    private readonly readBroadcastDeps?: ReadBroadcastDepsProvider
   ) {
     this.validator = new MessageValidator(prisma);
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
@@ -397,14 +399,18 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `expiresAt` : l'échéance HÉRITÉE de la source prime sur celle que le
-      //    client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `ephemeralDuration` : la DURÉE héritée de la source prime sur celle
+      //    que le client a (ou n'a pas) envoyée — c'est tout l'objet du garde
+      //    ci-dessus. Depuis #7451 c'est bien une durée et non une échéance :
+      //    le décompte de la copie repart de la réception de chaque nouveau
+      //    destinataire. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.expiresAt ? { expiresAt: forwardAdmission.expiresAt } : {}),
+          ...(forwardAdmission.ephemeralDuration
+            ? { ephemeralDuration: forwardAdmission.ephemeralDuration }
+            : {}),
           originalLanguage,
           conversationId,
           senderId: participant!.id,
@@ -536,8 +542,21 @@ export class MessagingService {
         logger.error(`post-save ${effect} failed`, err as Error)
     });
 
+    // G-8 (#7347) — l'arriéré que la réponse marque lu se DIT à la
+    // conversation, message par message (`announceSenderBacklogRead`).
+    const frozenSince = new Date();
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
+      .then((frozenCount) =>
+        announceSenderBacklogRead({
+          depsProvider: this.readBroadcastDeps,
+          frozenCount,
+          frozenSince,
+          participantId: senderParticipantId,
+          conversationId,
+          senderUserId: saved.sender?.userId ?? null,
+        })
+      )
       .catch((err) =>
         logger.error('post-save markMessagesAsRead failed', err as Error)
       );

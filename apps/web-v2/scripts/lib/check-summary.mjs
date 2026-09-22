@@ -145,8 +145,19 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     );
 
     // --- 14.3 : en-tête du Résumé — comptes ET ligne partielle.
-    const h2 = await page.locator('[data-summary] h2').first().textContent();
-    expect((h2 ?? '').trim() === 'Résumé Vivant', `le titre est « Résumé Vivant » (lu : ${JSON.stringify(h2)})`);
+    /* LE TITRE EXISTE ET PARLE — ÉNONCÉ SANS LANGUE (#7337). La ligne
+       attendait « Résumé Vivant » à la lettre ; le Chromium de ce gate est
+       `en-US` (aucune `locale` posée), elle n'était donc verte que parce que
+       le titre est EN DUR, en français — le jour où il rejoint le catalogue
+       (#6310), elle rougissait sur un correctif juste. Ce qu'elle garde : le
+       Résumé porte un titre de section VISIBLE, non vide, qui n'est pas une
+       clé de catalogue. */
+    const h2 = ((await page.locator('[data-summary] header h2').first().textContent()) ?? '').trim();
+    const h2Visible = await page.locator('[data-summary] header h2').first().isVisible();
+    expect(
+      h2Visible && h2 !== '' && !/^[a-z]+(\.[a-zA-Z-]+)+$/.test(h2),
+      `le Résumé porte un titre visible, non vide, qui n’est pas une clé (lu : ${JSON.stringify(h2)})`,
+    );
     const summaryText = (await page.locator('[data-summary]').first().textContent()) ?? '';
     expect(/messages? ·/.test(summaryText), 'la ligne de comptes « N messages · P personnes » est rendue');
     expect(summaryText.includes('Sur les') && summaryText.includes('derniers messages'), 'la ligne partielle « Sur les N derniers messages » est rendue (la fenêtre de rattrapage est déclarée PARTIELLE)');
@@ -238,12 +249,32 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     expect(firstOtherVisible, 'sortie « Reprendre le fil » : le premier message d’un autre est visible dans le fil');
 
     // --- 14.8 : Automatique ⇒ la puce redit « AUTO Résumé ».
+    /* LE MODE ÉLU SE LIT DANS SES DONNÉES, PLUS DANS SON LIBELLÉ (#7337).
+       La ligne cherchait « AUTO » ET « Résumé » dans le texte du chip : le
+       second est le NOM FRANÇAIS du mode, vert tant qu'il n'est pas traduit.
+       Le fait qu'elle garde — la loi a repris la main et réélu le Résumé — se
+       lit sur `data-chip-mode` / `data-chip-source` (le chip) et
+       sur la scène elle-même (`[data-summary]` monté). Le préfixe visible
+       « AUTO » reste exigé : c'est un jeton du produit, pas un mot d'une
+       langue, et c'est lui que l'œil lit pour savoir que la loi décide.
+       Ce commentaire se tient AU-DESSUS des délais : posé entre le délai et la
+       lecture, il les écartait assez pour que `fixed-delay-ratchet.test.ts`
+       ne voie plus la paire — la dette aurait baissé sans qu'aucun délai ne
+       soit remplacé par un fait. */
     await page.getByRole('button', { name: /Mode de lecture/ }).click();
     await page.waitForTimeout(150);
     await page.getByRole('menuitem', { name: 'Automatique' }).click();
     await page.waitForTimeout(300);
-    const chipAfterAuto = await page.getByRole('button', { name: /Mode de lecture/ }).textContent();
-    expect(chipAfterAuto?.includes('AUTO') === true && chipAfterAuto?.includes('Résumé') === true, `« Automatique » redonne la main à la loi, qui réélit Résumé (lu : ${JSON.stringify(chipAfterAuto)})`);
+    const chipAfterAuto = await page.getByRole('button', { name: /Mode de lecture/ }).evaluate((el) => ({
+      mode: el.getAttribute('data-chip-mode'),
+      source: el.getAttribute('data-chip-source'),
+      text: (el.textContent ?? '').trim(),
+    }));
+    const summaryMounted = (await page.locator('main [data-summary]').count()) === 1;
+    expect(
+      chipAfterAuto.mode === 'summary' && chipAfterAuto.source === 'auto' && chipAfterAuto.text.includes('AUTO') && summaryMounted,
+      `« Automatique » redonne la main à la loi, qui réélit le Résumé (chip ${JSON.stringify(chipAfterAuto)}, scène Résumé montée : ${summaryMounted})`,
+    );
 
     // --- 14.9 : clavier — Tab jusqu'au premier visage, Entrée a le MÊME effet que le clic.
     await page.waitForSelector('[data-face-ramp] [data-face]');

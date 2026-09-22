@@ -168,6 +168,19 @@ service worker (push), et une bannière déjà affichée. La règle :
 Le point 1 est propre au web : sur iOS, le système sait que l'application est au
 premier plan. Dans un navigateur, c'est au service worker de le demander.
 
+**Une correction n'est pas un second événement (2026-09-21, #7342).** Éditer un
+message, un post ou un commentaire repousse sa notification sous la MÊME
+identité, et la passerelle le déclare (`REPRODUCED_PUSH_FIELD`,
+`packages/shared/types/reproduced-notification-push.ts`). iOS et Android
+reçoivent d'abord une révocation ; le web non (#7308), si bien que le point 4
+écartait la version d'après. Le worker (`corriger()`, `public/sw-push.js`)
+remplace donc EN PLACE la bannière de cette notification quand elle est encore
+affichée, ne fait rien quand elle dit déjà le texte d'après, et **n'en lève
+aucune** quand elle ne l'est plus : un message plus récent de la conversation
+l'a remplacée (même tag, #7340), le lecteur l'a fermée, ou il lisait
+l'application. Le remplacement s'annonce, muet si le son est coupé — comme le
+push nominal qui suit la révocation sur iOS.
+
 ## D-12 · Le renommage du 2026-09-07 — `web-v4` devient `web-v3`, l'ancienne v3 devient `web-old-version3`
 
 Directive du porteur : *« Décommissionne web-v3 en web-old-version3 et nomme le web-v4
@@ -3661,3 +3674,137 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 **Piège MESURÉ pendant l'essai de découpage, consigné pour qui le rejouerait** : un `import` **statique** vers le module différé — ici le squelette d'attente du `Suspense`, que l'hôte doit rendre — le **ramène dans le chunk de l'hôte** et laisse à sa place un **talon de 145 octets**. Le chunk apparaît dans le relevé, le gate voit deux fichiers, et rien n'a maigri d'un octet. Le squelette d'attente doit vivre chez l'HÔTE (`user-profile-states.tsx`), jamais dans le module qu'il attend.
 
 **Le lecteur de la LIGNE n'est pas celui du GESTE.** `titleOf` a besoin d'un identifiant pour savoir qui est « l'autre » dans un direct ; lui passer la chaîne vide fait de la PREMIÈRE partie l'autre — mesuré au navigateur : la rangée de `/c/c-direct-kwame` portait « Vous ». L'écran résout donc `resolveViewer({ source, session })` — le site unique, fixtures comprises, que la Lentille et le fil emploient déjà — pour la RANGÉE, et garde `viewerId` (l'identité de COMPTE, `null` sans session) pour les gestes, qui ne doivent rien inventer. **Un témoin de pièce ne peut pas voir quelle identité l'ÉCRAN sert au composant** : c'est `check-profile.mjs` qui l'attrape, et il le mesure désormais explicitement.
+
+## D-107 — « Vue unique » a une bascule dans le composeur de CONVERSATION, gatée sur une image en attente ; écart assumé avec iOS (2026-09-22, #7354)
+
+**iOS ne l'offre pas en conversation.** `UniversalComposerBar+Toolbar.swift:37-40` ne monte `viewOnceToggleButton` que si `showViewOnce`, et `ConversationView+Composer.swift:215` le pose à `previewMode` : le composeur de prévisualisation de notification seul. Le web suivait cette règle (`compose-protection.ts`, `composer.tsx`) : la LOI savait composer `isViewOnce`, aucun contrôle ne l'armait. Conséquence mesurée à la recette du 2026-09-21 : W5 (`consumeViewOnceOptimistic`, #7224) n'avait AUCUN chemin d'entrée depuis le web.
+
+**La forme retenue.** Le GESTE est celui d'iOS (`+Protections.swift:199-241` : capsule tapée, libellé « Vue unique » seulement une fois armée, teinte `indigo600` partagée avec « Flou », rang entre flou et effets) ; l'EMPLACEMENT diverge. La capsule n'existe que si une pièce jointe IMAGE est en attente — un texte marqué vue unique n'a aucun rendu qui le dise (loi 4) — et elle redescend si la dernière image part, et après chaque envoi. Glyphe : `eye` (Phosphor) pour `1.circle`, sans pendant dans le socle.
+
+**`message:consumed` est MONOTONE côté client.** L'événement et la réponse REST de la consommation voyagent sur deux canaux ; `applyMessageConsumed` (`realtime-apply.ts`) n'abaisse jamais `viewOnceCount`, sans quoi un événement en retard ramènerait une vue brûlée à `veiled` et la rouvrirait. Seul le rollback optimiste de `view-once.ts` abaisse le compte.
+
+**À trancher côté iOS, pas ici** : exposer la même bascule en conversation (parité inverse). Le miroir Kotlin natif est gelé (directive 2026-09-16) et ne reçoit rien.
+
+## D-108 — L'échéance d'un éphémère part de la RÉCEPTION, et un seul chrome la rend pour tous les modes (2026-09-22, #7454)
+
+Directive porteur 2026-09-22 : « les messages avec temps décompté ne doivent
+décompter que lorsque l'utilisateur l'a reçu », et « il est important de
+s'assurer que cette feature a un décompte en Script, Focal ou bulle **ou tout
+autre affichage plus tard** ». Contrat du fil : #7451.
+
+**La règle vit dans `packages/shared`, pas ici.** `ephemeralDeadline()`
+(`utils/ephemeral-deadline.ts`) retient la plus PROCHE de l'échéance SERVIE
+(`expiresAt` par lecteur sur REST, `message:countdown-started` sur le socket)
+et de la RÉCEPTION locale + `ephemeralDuration`. Jamais la plus tardive : des
+deux erreurs d'horloge possibles, une seule est acceptable — montrer le message
+un instant de MOINS que promis, jamais un instant de plus.
+
+**La réception, elle, ne peut pas y vivre** : c'est un état du client, et ses
+deux chemins (`message:new`, le rendu du fil) n'ont aucun ancêtre React commun
+— le socket vit hors de l'arbre. D'où un registre de module
+(`lib/view/ephemeral-reception.ts`), borné à 1 000 entrées, première-vue-gagne.
+Il est volontairement EN MÉMOIRE : un rechargement de page ne peut qu'ALLONGER
+l'échéance locale, et c'est exactement ce que la règle refuse de retenir dès
+que le serveur sert la sienne.
+
+**Un seul chrome, et il est OBLIGATOIRE au type.** `ProtectionChrome`
+(`components/protection-chrome.tsx`) rend le décompte ET la désignation de la
+vue unique ; `FocalRow` et `Bubble` déclarent `ephemeralDeadline` en prop
+REQUISE. Avant ce lot, chaque peau câblait son propre `EphemeralBadge` : un
+mode ajouté demain aurait eu un fil complet, aucun décompte, et aucun témoin
+rouge. `thread-modes-protection-chrome.test.tsx` énumère désormais
+`ConversationReadingModeSchema.options` — table exhaustive au TYPE, re-croisée
+à l'exécution parce que `bun test` n'applique aucun typage.
+
+**`river` n'a pas de peau à lui, et c'est ce qui rend la garde utile** :
+`ThreadModes` aiguille sur `usesFlatRow`, donc tout ce qui n'est ni `summary`
+ni plat retombe sur `<Bubble>` — un mode neuf y retombera pareillement, avec le
+chrome. `summary` porte l'autre moitié de la règle : un éphémère échu n'entre
+pas dans le corpus qu'il résume, sans quoi un texte DÉRIVÉ garderait en vie,
+sur le même écran, un message disparu du fil.
+
+**Deux pictogrammes, parce que deux sens.** Le dépôt se contredisait comme iOS
+(#7452) : `flame` désignait la VUE UNIQUE dans la liste et l'ÉPHÉMÈRE dans la
+bulle. Le vocabulaire retenu est celui du COMPOSEUR — là où l'utilisateur
+CHOISIT la protection : `flameFill` + rouge pour l'éphémère, `eye` + indigo
+pour la vue unique. Le libellé suit jusqu'à la CLÉ : la désignation lit
+`composer.viewOnce.label`, la chaîne même que la bascule affiche — une clé
+jumelle porterait aujourd'hui les mêmes sept traductions et divergerait au
+premier lot qui n'en relit qu'une.
+
+**UNE horloge.** `secondClock` (`lib/view/interval-clock.ts`) existait déjà ;
+`EphemeralBadge` ouvrait un `setInterval` par message affiché.
+
+**Ce que ce lot NE touche PAS : le chemin d'ENVOI.** Faire parler les clients
+en DURÉE plutôt qu'en échéance traverse le cliquet d'égalité de clés du
+gateway (`socket-event-schemas.ts`, § `SendDoorRatchet`) et appartient à
+#7451. Ici, seul ce qui REVIENT du serveur change.
+Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
+`aria-label` « éphémère, disparaît dans N »), 6 (un pictogramme par sens, en
+parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
+registre), 13 (les cinq modes énumérés, et le suivant).
+
+## D-109 — Le compteur d'un éphémère ne paraît que dans sa dernière minute, et sa destruction se voit (2026-09-22, #7468)
+
+Précision du porteur, arrivée pendant que la PR de D-108 était en vol :
+« l'éphémère est la flamme avec la configuration de durée par défaut ! Ce qu'il
+faudrait c'est d'afficher le compteur de l'éphémère dans la conversation
+uniquement quand on est déjà à 1 min et moins de sa destruction. Et sa
+destruction doit avoir un effet visuel si on est dans la conversation au moment
+de la destruction. »
+
+**Le seuil est une loi PARTAGÉE, pas un réglage de peau.**
+`ephemeralCounterVisible` (`@meeshy/shared/utils/ephemeral-deadline`) est la
+suite de la règle d'échéance : l'une dit QUAND, l'autre à partir de quand on
+l'ÉCRIT. iOS la reprend (#7467) ; un seuil recopié dans deux peaux divergerait
+au premier ajustement. Elle gouverne DEUX choses que rien d'autre ne relie — ce
+que l'œil voit, et ce qui s'abonne à l'horloge.
+
+**Deux régimes, un seul à la fois.** Au-delà de la minute, aucune horloge ne bat
+pour ce message : un SEUL `setTimeout` dort jusqu'au franchissement du seuil.
+Sous le seuil, l'horloge partagée reprend. Le passage se fait tout seul — le
+minuteur repose le reste, la fenêtre bascule, l'effet se rejoue dans l'autre
+régime.
+
+**L'œil est soulagé, jamais l'oreille.** Le libellé accessible donne TOUJOURS le
+temps restant. Privé des chiffres, un lecteur d'écran n'aurait aucun autre
+chemin vers l'échéance — et la flamme seule ne dit pas « dans douze minutes ».
+C'est aussi pourquoi les deux écritures diffèrent : `countdownDigits` rend
+`0:38` pour la puce, `formatRemaining` rend `38s` pour la voix.
+
+**La phase de destruction est PURE et SANS ÉTAT, et c'est ce qui ferme la
+course.** `destructionPhaseOf` (`lib/view/ephemeral-destruction.ts`) tranche
+entre `visible`, `destroying` et `gone` en comparant l'échéance à MAINTENANT.
+Entre l'échéance et le tic suivant de l'horloge, l'écran peut se rendre pour une
+raison étrangère — une frappe, un défilement qui bouge le virtualiseur. Une
+phase lue d'un ensemble alimenté par le seul rappel du chrome aurait coupé la
+rangée net à ce rendu-là, sans effet : le défaut même qu'on corrige. **Et passée
+la fenêtre, `gone` : on n'assiste pas à une destruction passée** — un fil
+rouvert des heures plus tard ne rejoue pas la combustion de chaque éphémère
+échu.
+
+**L'annonce précède le retrait, des deux côtés.** `message:expired` annonce la
+destruction sur-le-champ et ne retire la ligne du cache qu'après la fenêtre ;
+sinon la rangée disparaîtrait d'une image à l'autre, par le chemin qui
+deviendra le plus fréquent une fois #7451 fusionné. `forgetEphemeral` attend
+lui aussi : oublier la réception tout de suite ferait repasser la puce « en
+attente de réception » sur un message en train de brûler.
+
+**L'effet se pose sur le nœud de RANGÉE**, jamais dans une peau : `thread-modes`
+l'applique au `<div role="article">` qui enveloppe la rangée plate ET la bulle,
+si bien qu'un mode ajouté demain l'a sans rien câbler — même doctrine que le
+chrome de D-108.
+
+**Le repli des voisins vient de la GRILLE**, pas d'un `max-height` deviné :
+`grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
+`ResizeObserver` du virtualiseur suit à chaque image. Les rangées suivantes
+remontent à mesure, au lieu de sauter quand la ligne quitte la liste.
+
+**`prefers-reduced-motion` : un fondu, et rien d'autre** — pas même le repli.
+Un repli EST un mouvement, et c'est précisément ce que ce réglage demande
+d'éviter ; la rangée garde donc sa place jusqu'au retrait.
+
+Dimensions mûres : 4 (aucune horloge avant la dernière minute ; le repli suit le
+virtualiseur au lieu de le bousculer), 5 (le temps reste dit à l'oreille,
+`prefers-reduced-motion` honoré), 8 (la disparition se comprend), 13 (les cinq
+modes, par le nœud commun).

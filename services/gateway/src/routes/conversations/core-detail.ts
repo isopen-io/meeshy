@@ -192,6 +192,7 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   'memberCount',
   'unreadCount',
   'currentUserRole',
+  'currentUserJoinedAt', // Quand l'utilisateur courant a rejoint (#7358)
   // La frontière de lecture du lecteur (#7198), jumelle de celle que la
   // LISTE sert désormais inconditionnellement — même curseur
   // (`ConversationReadCursor`), même coût (`veutParticipantAppelant`
@@ -214,8 +215,8 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
  *   `type` entre pour la même raison : c'est lui qui décide si le titre se
  *   compose (`direct` ⇒ jamais).
  * - **`memberCount` vient du `_count`**, pas de la colonne homonyme.
- * - **`unreadCount` et `currentUserRole` ne coûtent AUCUNE colonne** — ce sont
- *   deux agrégations à part, et le tableau vide est ce qui le déclare. Leur
+ * - **`unreadCount`, `currentUserRole` et `currentUserJoinedAt` ne coûtent AUCUNE colonne** — ce sont
+ *   trois agrégations à part, et le tableau vide est ce qui le déclare. Leur
  *   coût réel se paie en REQUÊTES, gouvernées plus bas par `isFieldServed`.
  */
 export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns> = {
@@ -226,6 +227,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     memberCount: ['_count'],
     unreadCount: [],
     currentUserRole: [],
+    currentUserJoinedAt: [], // Calculé depuis participant.joinedAt du lecteur (#7358)
     lastReadMessageId: [],
     lastReadAt: [],
     lastReadMessageCreatedAt: [],
@@ -346,6 +348,7 @@ export function registerConversationDetailRoute(
       const sertEffectif = isFieldServed(champs, 'memberCount');
       const sertRang = isFieldServed(champs, 'currentUserRole');
       const sertNonLus = isFieldServed(champs, 'unreadCount');
+      const sertCurrentUserJoinedAt = isFieldServed(champs, 'currentUserJoinedAt');
       const sertMessageLu = isFieldServed(champs, 'lastReadMessageId');
       const sertDerniereLecture = isFieldServed(champs, 'lastReadAt');
       const sertHorlogeMessageLu = isFieldServed(champs, 'lastReadMessageCreatedAt');
@@ -407,6 +410,8 @@ export function registerConversationDetailRoute(
       // aveugle dans le seul cas où le plafond joue. Le participant appelant est
       // déjà résolu ici pour le compteur de non-lus — il porte le rôle avec lui.
       let callerConversationRole: string | null = null;
+      // Quand l'utilisateur courant a rejoint la conversation (#7358)
+      let currentUserJoinedAt: Date | null = null;
       // La frontière de lecture du lecteur (#7198), jumelle de la liste —
       // ABSENTE (jamais `null`) sans curseur, comme `unreadCount` ci-dessus
       // se garde d'affirmer 0 par fabrication au-delà de son propre défaut.
@@ -425,13 +430,16 @@ export function registerConversationDetailRoute(
        * et « non calculé » sont deux propriétés distinctes, et seule la seconde
        * économise quelque chose en amont.
        */
-      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture;
+      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture || sertCurrentUserJoinedAt;
       try {
         const participant = veutParticipantAppelant
           ? await resolveCallerParticipant(prisma, authRequest.authContext, conversationId)
           : null;
         if (participant) {
           callerConversationRole = participant.role;
+          if (sertCurrentUserJoinedAt) {
+            currentUserJoinedAt = participant.joinedAt ?? null;
+          }
           if (sertNonLus) {
             const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
             const readStatusService = new MessageReadStatusService(prisma);
@@ -532,6 +540,9 @@ export function registerConversationDetailRoute(
       // donc AUCUN moyen de savoir qu'ils l'administrent. Même clé que la
       // ligne de liste : une seule notion, un seul nom.
       if (sertRang) charge.currentUserRole = callerConversationRole;
+      if (sertCurrentUserJoinedAt && currentUserJoinedAt) {
+        charge.currentUserJoinedAt = currentUserJoinedAt;
+      }
       if (sertNonLus) charge.unreadCount = unreadCount;
       // ABSENTES (jamais `null`) sans curseur — REV-4, même règle que la liste.
       if (sertMessageLu && readCursorBoundary?.lastReadMessageId) {

@@ -524,7 +524,7 @@ struct ThemedConversationRow: View {
         let totalCount = conversation.lastMessageAttachmentCount
         HStack(spacing: 4) {
             if showEphemeralIcon {
-                Image(systemName: "timer")
+                Image(systemName: MessageProtectionSymbols.ephemeral)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(accent)
             }
@@ -587,7 +587,7 @@ struct ThemedConversationRow: View {
             case .viewOnce:
                 HStack(spacing: 4) {
                     senderLabel
-                    Image(systemName: "flame")
+                    Image(systemName: MessageProtectionSymbols.viewOnce)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                     Text(String(localized: "conversation.summary.view_once", ))

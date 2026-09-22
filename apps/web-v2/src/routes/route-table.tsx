@@ -86,6 +86,19 @@ export const ROUTES = {
   progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — miroir `Route.bookmarks`
+     (`Router.swift`), atteinte depuis Réglages › Outils comme sur iOS.
+
+     Sous `/me`, l'espace du profil, pour la même raison que `/me/progression`
+     ci-dessus : c'est un corpus qui n'existe QUE pour le lecteur connecté
+     (`scope=bookmarks` rend 401 sans session), d'où `bookmarks` dans
+     `PRIVATE_ROUTES` (`session-guard.ts`).
+
+     Adresse NEUVE : le legacy ne sert aucun écran de favoris, il n'y a donc
+     pas de nomenclature à reprendre (D-5). L'ORDRE est sans danger — le motif
+     est littéral et aucune adresse paramétrée à deux segments n'existe sous
+     `/me`. */
+  bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
   /* LES STORIES (#6080) — le rail de la liste ouvre ces DEUX adresses, et
      c'est ce qui en fait des contrôles plutôt que des promesses. Jusqu'ici
      chaque tuile du rail pointait vers un FIL sous un anneau de story, faute

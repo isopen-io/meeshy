@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { scriptedGateway } from '@/test-support/scripted-transport';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
 import { resolveInterfaceLanguageCode } from '@/lib/inline-interface-language-bootstrap.js';
@@ -525,5 +526,106 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
     const bar = container.querySelector('[data-consumption]') as HTMLElement | null;
     expect(bar).not.toBeNull();
     expect(bar?.style.width).toBe('50%');
+  });
+});
+
+/**
+ * OUVRIR UN DOCUMENT ÉMET (#7363, W6) — avant ce lot, la rangée d'un
+ * document était un `<div>` sans `href` ni `onClick` : rien ne s'ouvrait,
+ * rien ne se rapportait. Patron `createRoot`/`act`, `deps` INJECTÉ
+ * (`scriptedGateway`) pour observer ce qui PART sans réseau réel.
+ */
+describe('Attachments — ouvrir un document REÇU rapporte, jamais le sien (#7363, W6)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  const document_: Attachment = {
+    ...attachmentDefaults,
+    id: 'att-doc-1',
+    messageId: 'm-doc',
+    fileName: 'contrat.pdf',
+    originalName: 'contrat.pdf',
+    mimeType: 'application/pdf',
+    fileSize: 204_800,
+    fileUrl: 'https://cdn/contrat.pdf',
+    uploadedBy: 'u-sender',
+    createdAt: '2026-09-22T09:00:00.000Z',
+  };
+
+  test('la rangée est un lien accessible (44px, aria-label, href vers le fichier)', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[document_]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
+    });
+
+    const link = container.querySelector('[data-attachment-file="att-doc-1"]') as HTMLAnchorElement | null;
+    expect(link).not.toBeNull();
+    expect(link?.tagName).toBe('A');
+    expect(link?.getAttribute('href')).toBe('https://cdn/contrat.pdf');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('aria-label')).toBe('Ouvrir contrat.pdf');
+    expect(link?.style.minHeight).toBe('44px');
+  });
+
+  test('cliquer un document REÇU (isMine=false) rapporte "viewed" sur le port serveur', () => {
+    const { calls, deps } = scriptedGateway({ 'POST /api/v1/attachments/att-doc-1/status': { ok: true, data: {} } });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <Attachments attachments={[document_]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" isMine={false} deps={deps} />,
+      );
+    });
+
+    const link = container.querySelector('[data-attachment-file="att-doc-1"]') as HTMLAnchorElement;
+    act(() => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]?.path).toBe('/api/v1/attachments/att-doc-1/status');
+    expect(calls()[0]?.body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+  });
+
+  test('cliquer SON PROPRE document (isMine=true) n’émet AUCUN rapport', () => {
+    const { calls, deps } = scriptedGateway({ 'POST /api/v1/attachments/att-doc-1/status': { ok: true, data: {} } });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <Attachments attachments={[document_]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" isMine={true} deps={deps} />,
+      );
+    });
+
+    const link = container.querySelector('[data-attachment-file="att-doc-1"]') as HTMLAnchorElement;
+    act(() => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(calls()).toHaveLength(0);
   });
 });

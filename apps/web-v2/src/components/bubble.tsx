@@ -1,5 +1,7 @@
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
-import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -8,7 +10,7 @@ import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
-import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -16,7 +18,8 @@ import { Avatar } from './avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
-import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
 import {
@@ -81,6 +84,7 @@ export function Bubble({
   onOpenStory,
   highlighted = false,
   expired = false,
+  ephemeralDeadline,
   onConsumeViewOnce,
   onEphemeralExpired,
   now = defaultNow,
@@ -90,6 +94,7 @@ export function Bubble({
   onReact,
   selected,
   onToggleSelect,
+  onOpenDetail,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
@@ -144,15 +149,31 @@ export function Bubble({
   onOpenStory?: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
   highlighted?: boolean;
-  /** FORCÉ par l'hôte quand `EphemeralBadge.onExpired` s'est déclenché pour CE message. */
+  /** FORCÉ par l'hôte quand le chrome de protection a annoncé l'échéance de CE message. */
   expired?: boolean;
+  /** L'échéance de CE lecteur, composée par l'hôte — voir `focal-row.tsx`, même contrat (#7454). */
+  ephemeralDeadline: EphemeralDeadline;
   /** Consomme une vue unique (D-10, `lib/api/view-once.ts`). */
   onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement. */
   now?: () => number;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé sur `Check` (`message-blocks
+   * .tsx`), qui n'accepte `onOpen` que sur les DEUX rendus de cette peau
+   * (bulle libre / bulle pleine, la coche ne peignant de toute façon que
+   * sur `isMine`). `undefined` ⇒ le glyphe reste NU (loi 4). L'hôte
+   * réutilise `messageMenu.setDetailFor` (`use-message-menu.ts`), la MÊME
+   * fiche que « Plus… » ouvre déjà — jamais une seconde machine d'état.
+   */
+  onOpenDetail?: (messageId: string) => void;
 }) {
   const { message, tail } = place;
+  /* EN SÉLECTION, un tap sur la rangée BASCULE la coche de sélection
+     (`thread-modes.tsx`, `onRowTap`) : l'accusé y redevient un glyphe NU,
+     sinon un seul geste ouvrirait la fiche ET basculerait la sélection. */
+  const openDetail =
+    onOpenDetail === undefined || selected !== undefined ? undefined : () => onOpenDetail(message.id);
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
@@ -257,7 +278,6 @@ export function Bubble({
   });
 
   const reactions = reactionEntries(message.reactionSummary);
-  const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
   /**
    * LES BADGES DE TÊTE, LE CORPS ET LA STORY CITÉE (#5936) — `badgesOf`
@@ -269,8 +289,7 @@ export function Bubble({
    * `ephemeralBadge`/`isEdited` LISENT CETTE SORTIE (revue-correction #5936,
    * défaut majeur 1) — voir le même doc-comment côté `focal-row.tsx`.
    */
-  const badges = badgesOf(message, nowMs);
-  const ephemeralBadge = ephemeralBadgeOf(badges);
+  const badges = badgesOf(message);
   const isEdited = editedOf(badges);
   const storyCitation = storyCitationOf(message);
   const sharedPlace = placeOf(message);
@@ -308,6 +327,7 @@ export function Bubble({
           fallbackLanguage={message.originalLanguage}
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
+          isMine={isMine}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
@@ -454,17 +474,16 @@ export function Bubble({
           <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
-        {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré
-            (`BubbleStandardLayout.swift:543-550`). Aligné du côté de la bulle. */}
-        {ephemeral.state === 'running' && ephemeralBadge !== undefined ? (
-          <div className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-            <EphemeralBadge
-              expiresAt={ephemeralBadge.expiresAt}
-              now={now}
-              onExpired={() => onEphemeralExpired?.(message.id)}
-            />
-          </div>
-        ) : null}
+        {/* LE CHROME DE PROTECTION — AU-DESSUS de la bulle, HORS du fond
+            coloré (`BubbleStandardLayout.swift:543-550`), aligné du côté de la
+            bulle. LE MÊME composant que la rangée plate (#7454) : décompte de
+            l'éphémère et désignation de la vue unique, une seule écriture. */}
+        <ProtectionChrome
+          deadline={ephemeralDeadline}
+          isViewOnce={message.isViewOnce}
+          align={isMine ? 'end' : 'start'}
+          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
+        />
 
         {/* LA STORY CITÉE — HORS de la boîte colorée (« une scène ne tient
             pas dans une bulle », `BubbleStandardLayout.swift:557-565`). */}
@@ -522,6 +541,7 @@ export function Bubble({
                     status={checkStatus}
                     isMine={isMine}
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                    {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                   />
                 )}
               </div>
@@ -644,6 +664,7 @@ export function Bubble({
                       status={checkStatus}
                       isMine={isMine}
                       {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                      {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                     />
                   )}
                 </div>

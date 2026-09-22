@@ -139,34 +139,10 @@ struct BubbleForwardedIndicator: View, Equatable {
 // inline by `BubbleFooter` / `BubbleDeliveryCheck`. The former standalone
 // `BubbleDeliveryBadge` has been removed.
 
-// MARK: - Ephemeral Badge (was: ThemedMessageBubble.ephemeralTimerOverlay)
-
-/// Capsule "flame + timer" affichee sous les messages ephemeres pour
-/// rappeler le compte a rebours avant expiration.
-struct BubbleEphemeralBadge: View, Equatable {
-    let timerText: String
-    let isDark: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(MeeshyColors.error)
-
-            Text(timerText)
-                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.error.opacity(isDark ? 0.15 : 0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message éphémère, expire dans \(timerText)", bundle: .main))
-    }
-}
+// MARK: - Le badge éphémère a quitté ce fichier (#7452)
+//
+// `BubbleEphemeralBadge` vivait ici, et `FocalEphemeralBadge` en était une
+// seconde implémentation pour la rangée plate — deux badges pour une même
+// chose, et RIEN en Rivière ni en Résumé. Les cinq modes consomment désormais
+// `MessageProtectionChrome` (`MeeshyUI/Conversation/`), qui porte le décompte,
+// la vue unique et le flou, et n'a plus de minuteur par cellule.

@@ -247,6 +247,10 @@ export interface NotificationContext extends NotificationAttachmentWire {
    *  bulle pré-persistée par la NSE porte le bon rendu.
    *  @see schema.prisma Message.messageType */
   readonly messageType?: string;
+  /** #7451 — durée d'un éphémère (s) + bitfield d'effets ; jamais d'échéance, fausse
+   *  par construction sur un canal qui atteint un appareil ÉTEINT. @see services/notifications/ephemeralPushFields.ts */
+  readonly ephemeralDuration?: number;
+  readonly effectFlags?: number;
   /** GW5 — Prisme : traduction du message vers la langue résolue du
    *  destinataire quand elle existe déjà en DB au fan-out (tronquée à 200
    *  chars, jamais chiffrée). Absente = le contenu original est déjà dans la

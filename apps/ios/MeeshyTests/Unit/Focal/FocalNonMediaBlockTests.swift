@@ -52,7 +52,7 @@ final class FocalNonMediaBlockTests: XCTestCase {
             reply: nil,
             attachments: attachments,
             location: location,
-            ephemeral: nil,
+            protection: .unprotected,
             isBlurred: false,
             isViewOnce: false,
             isPinned: false,

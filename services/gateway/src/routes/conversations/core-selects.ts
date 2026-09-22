@@ -98,6 +98,9 @@ export const conversationLastMessagePreviewSelect = {
   isViewOnce: true,
   effectFlags: true,
   expiresAt: true,
+  // #7451 — dit à `resolveLastMessageSummaryKind` que `expiresAt` est l'heure
+  // INTERNE de destruction, et non l'échéance d'un lecteur.
+  ephemeralDuration: true,
   // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
   // MÊME document Mongo que le message (`translations` est une
   // colonne JSON, pas une relation) : les sélectionner ne coûte ni

@@ -6,6 +6,7 @@ import type { ReceiptPersonRow } from '@/lib/api/receipts';
 import {
   attachmentAggregateOf,
   hasServerMessageId,
+  openedRowsOf,
   playCountLabel,
   positionFraction,
   receiptCategoriesOf,
@@ -131,5 +132,20 @@ describe('playCountLabel', () => {
   test('2 et plus ⇒ « Nx »', () => {
     expect(playCountLabel(2)).toBe('2x');
     expect(playCountLabel(7)).toBe('7x');
+  });
+});
+
+describe('openedRowsOf (#7363, W6)', () => {
+  test('ne garde que les lignes avec `viewedAt` — jamais `downloadedAt` seul', () => {
+    const rows = [
+      statusRow({ participantId: 'a', viewedAt: '2026-09-22T09:00:00.000Z' }),
+      statusRow({ participantId: 'b', viewedAt: null, downloadedAt: '2026-09-22T09:05:00.000Z' }),
+      statusRow({ participantId: 'c', viewedAt: null, downloadedAt: null }),
+    ];
+    expect(openedRowsOf(rows).map((r) => r.participantId)).toEqual(['a']);
+  });
+
+  test('aucune ouverture ⇒ liste vide', () => {
+    expect(openedRowsOf([statusRow({ viewedAt: null })])).toEqual([]);
   });
 });

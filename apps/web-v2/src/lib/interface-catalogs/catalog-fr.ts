@@ -110,6 +110,22 @@ const fr = {
      « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
      il s'agit dans un fil qui en aligne vingt. */
   'feed.post.open': 'Ouvrir la publication de {author}',
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
+  'bookmarks.title': 'Publications enregistrées',
+  'bookmarks.back': 'Retour aux réglages',
+  'bookmarks.loading': 'Chargement des publications enregistrées',
+  'bookmarks.empty.title': 'Aucune publication enregistrée',
+  'bookmarks.empty.subtitle': 'Touchez le signet sous une publication pour la garder ici et la relire quand vous voulez.',
+  'bookmarks.empty.cta': 'Ouvrir le Flux',
+  'bookmarks.error.title': 'Impossible de charger vos enregistrements',
+  'bookmarks.error.body': 'Réessayez dans un instant.',
+  'bookmarks.offline.body': 'Vos enregistrements s’afficheront à la reconnexion.',
+  'bookmarks.allLoaded': 'Toutes vos publications enregistrées sont chargées',
+  'bookmarks.filter.all': 'Tout',
+  'bookmarks.filter.posts': 'Postes',
+  'bookmarks.filter.reels': 'Réels',
+  'bookmarks.filter.a11y': 'Filtrer les enregistrements',
+  'settings.tools.bookmarks': 'Publications enregistrées',
   'feed.error.title': 'Impossible de charger le fil',
   'feed.error.body': 'Réessayez dans un instant.',
   'feed.offline.title': 'Hors ligne',
@@ -930,6 +946,7 @@ const fr = {
   'message-detail.received-by.empty': 'Aucune confirmation de distribution',
   'message-detail.read-by.empty': 'Personne n’a encore lu ce message',
   'message-detail.not-yet.empty': 'Tout le monde a reçu le message',
+  'message-detail.open': 'Voir les détails du message',
   'message-detail.attachment.opens.one': '{count} ouverture',
   'message-detail.attachment.opens.other': '{count} ouvertures',
   'message-detail.attachment.downloads.one': '{count} téléchargement',
@@ -939,6 +956,8 @@ const fr = {
   'message-detail.attachment.complete': 'Terminé',
   'message-detail.attachment.listen.empty': 'Pas encore écouté',
   'message-detail.attachment.watch.empty': 'Pas encore regardé',
+  'message-detail.attachment.open': 'Ouvrir {name}',
+  'message-detail.attachment.opened.empty': 'Pas encore ouvert',
   'message-detail.loading': 'Chargement…',
   'message-detail.load-error': 'Impossible de charger ces informations',
   'message-detail.retry': 'Réessayer',
@@ -983,6 +1002,14 @@ const fr = {
   'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
 
+  /* LA BASCULE « VUE UNIQUE » DE LA RANGÉE HAUTE (#7354, V6) — même famille
+     que `composer.attach.*` ci-dessus. Libellés repris du catalogue iOS
+     (`composer.viewonce.activate`/`.active`/`.label`,
+     `+Protections.swift:233-235`), la référence de cette bascule. */
+  'composer.viewOnce.activate': 'Activer le mode vue unique',
+  'composer.viewOnce.active': 'Mode vue unique actif',
+  'composer.viewOnce.label': 'Vue unique',
+
   /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
      (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,
      `location.fullscreen.openInMaps`, `location.a11y.label`), la référence de
@@ -991,6 +1018,46 @@ const fr = {
   'message.location.shared': 'Position partagée',
   'message.location.open': 'Ouvrir dans Plans',
   'message.location.a11y': 'Position : {place}',
+
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — le transfert, l'échec d'envoi, les
+     tombstones et les substituts de pièce protégée. Ils étaient EN DUR, en
+     français, sur des surfaces servies en SEPT langues : un lecteur anglophone,
+     arabophone ou lusophone lisait du français sur les états les plus
+     anxiogènes de l'application. D-13 ne les couvre pas — elle EXCLUT
+     explicitement « les textes affichés à l'utilisateur, qui relèvent de
+     l'internationalisation, pas du nommage ».
+
+     Valeurs reprises du catalogue iOS là où il en a une : `bubble.meta.forwarded`,
+     `bubble.meta.forwarded.fromGroup`, `bubble.meta.forwarded.from`,
+     `bubble.system.deleted`, `bubble.system.burned`, `bubble.system.burned.a11y`,
+     `bubble.media.masked`, `bubble.media.viewOnce`, `common.retry`,
+     `sync.pill.failed.message` (l'annonce au lecteur d'écran). */
+  'message.forwarded': 'Transféré',
+  'message.forwarded.fromGroup': 'Transféré depuis {name}',
+  'message.forwarded.fromPerson': 'Transféré de {name}',
+  'message.send.failed': 'Non envoyé',
+  'message.send.failed.reason': 'Non envoyé — {reason}',
+  'message.send.retry': 'Réessayer',
+  'announce.messageNotSent': 'Message non envoyé',
+  'announce.messageNotSent.reason': 'Message non envoyé — {reason}',
+  'message.deleted': 'Message supprimé',
+  'message.burned': 'Vu et supprimé',
+  'message.burned.a11y': 'Message vu et supprimé',
+  'message.expired.a11y': 'Message éphémère expiré',
+  'message.withheld': 'Contenu retenu',
+  'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
+  'message.veiled': 'Contenu masqué',
+  'message.veiled.hint': 'Toucher pour révéler le contenu',
+  'message.veiled.viewOnce': 'Voir une fois',
+  'message.veiled.error': 'Révélation impossible pour l’instant',
+  'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
+  'message.ephemeral.awaiting': 'En attente de réception',
+  'message.ephemeral.awaiting.a11y': 'Message éphémère de {duration}, en attente de réception',
+  'message.viewOnce.a11y': 'Vue unique, ce message ne s’affiche qu’une fois',
+  'attachment.protected.image': 'Photo protégée',
+  'attachment.protected.video': 'Vidéo protégée',
+  'attachment.protected.audio': 'Vocal protégé',
+  'attachment.protected.file': 'Pièce protégée',
 
 } as const;
 

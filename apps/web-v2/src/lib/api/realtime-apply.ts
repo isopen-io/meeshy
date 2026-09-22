@@ -7,7 +7,11 @@ import type {
   ConversationUpdatedEventData,
   LastMessagePreviewAttachment,
 } from '@meeshy/shared/types/socketio-events/conversation';
-import type { ReadStatusUpdatedEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+import type {
+  MessageConsumedEventData,
+  ReadStatusUpdatedEventData,
+  SocketIOMessage,
+} from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
 import { maskedAttachment, raisedAttachmentProtection } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
@@ -23,7 +27,9 @@ import {
   patchThreadMessages,
   upsertThreadMessage,
 } from './messages';
+import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Conversation, Message, Participant } from './types';
+import { applyConsumption } from './view-once';
 
 /**
  * L'APPLICATION DU TEMPS RÉEL AU CACHE (#5793) — des fonctions PURES,
@@ -694,16 +700,34 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
 }
 
 /**
- * Garde de FORME pour `read-status:updated` (#7223), motif
+ * Garde de FORME pour `read-status:updated` (#7223, #7348), motif
  * `isConversationUnreadUpdated` : ne valide QUE les champs qu'
- * `applyReadStatusUpdated` consomme — `conversationId` et les trois compteurs
+ * `applyReadStatusUpdated` consomme — `conversationId` et les compteurs
  * RÉELS de `ReadStatusSummary` (`packages/shared/types/socketio-events/
- * message.ts:31-37` — `totalMembers`/`deliveredCount`/`readCount`, PAS les
+ * message.ts` — `totalMembers`/`deliveredCount`/`readCount`, PAS les
  * noms du libellé du lot). `participantId`/`userId`/`type`/`updatedAt` ne
  * sont pas vérifiés ici : ce puits les ignore, et les DEUX audiences de
  * `broadcastReadStatus` (l'éventail de la conversation, la room personnelle
  * de l'acteur) partagent `conversationId` + `summary` (doc-comment
  * `services/gateway/src/socketio/broadcastReadStatus.ts:98-118`).
+ *
+ * `summary.messageId` (#7348, contrat G-5/#7347 anticipé) est OPTIONNEL —
+ * la passerelle actuelle ne le pose pas encore — mais quand IL EST PRÉSENT,
+ * une forme mal typée est rejetée FAIL-CLOSED comme le reste de la garde,
+ * jamais laissée traverser en silence.
+ *
+ * `summary.readByAllAt` (#7347, G-5) — de même OPTIONNEL (repli legacy sans
+ * lot exact), et validé dès qu'il est CONSOMMÉ par `applyReadStatusUpdated`
+ * ci-dessous : `null` (pas encore tout le monde) ou une chaîne (l'ISO 8601
+ * réelle du fil — `updatedAt` voyage de la même façon) sont acceptées ; toute
+ * AUTRE forme (un nombre, un objet) est rejetée, même motif que `messageId`.
+ *
+ * **Et la CHAÎNE VIDE est une forme mal typée** (revue-correction W2) : aucun
+ * `Message.id` n'est vide, et `''` ne retombe PAS dans le repli « la charge
+ * ne nomme aucun message » — `applyReadStatusUpdated` distingue le repli par
+ * `=== undefined`, donc `''` prenait la branche NOMMÉE, n'appariait aucune
+ * rangée et se taisait. Un événement cassé devenait un no-op silencieux, ce
+ * que cette garde existe précisément pour empêcher.
  */
 export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpdatedEventData {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -715,31 +739,65 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
   return (
     typeof s.totalMembers === 'number' &&
     typeof s.deliveredCount === 'number' &&
-    typeof s.readCount === 'number'
+    typeof s.readCount === 'number' &&
+    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0)) &&
+    (s.readByAllAt === undefined || s.readByAllAt === null || typeof s.readByAllAt === 'string')
   );
 }
 
 /**
- * `applyReadStatusUpdated` — LE PUITS DE `read-status:updated` (#7223) : LES
- * COCHES ✓✓ D'UN MESSAGE ENVOYÉ BOUGENT EN DIRECT.
+ * `applyReadStatusUpdated` — LE PUITS DE `read-status:updated` (#7223,
+ * #7348) : LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ BOUGENT EN DIRECT.
  *
- * La charge ne nomme AUCUN message : `summary` décrit le DERNIER message NON
+ * **`summary.messageId` PRÉSENT (#7348, contrat G-5/#7347 anticipé)** : la
+ * charge nomme désormais LE message qu'elle décrit — cette fonction cible
+ * `findCachedThreadMessage` par cet id, qu'il soit ou non le plus récent du
+ * fil. C'est la correction du défaut relevé le 2026-09-21 : dans une rafale
+ * de lecture sur trois messages de trois auteurs (M1, M2, M3), la passerelle
+ * émettra un résumé PAR message — trois événements, chacun ne devant patcher
+ * QUE sa ligne, jamais rétrograder les deux autres au silence.
+ *
+ * **`summary.messageId` ABSENT (repli — passerelle pré-G5)** : la charge ne
+ * nomme encore aucun message — `summary` décrit alors le DERNIER message NON
  * SUPPRIMÉ de la conversation
  * (`MessageReadStatusService.getLatestMessageSummary`,
- * `services/gateway/src/services/MessageReadStatusService.ts:2530-2560`).
- * Cette fonction cible donc `latestCachedThreadMessage` — le message le plus
- * récent du fil EN CACHE, motif `applyMessageAttachmentUpdated` ci-dessus
+ * `services/gateway/src/services/MessageReadStatusService.ts:2530-2560`) —
+ * et cette fonction retombe sur `latestCachedThreadMessage`, le comportement
+ * `#7223` d'origine, motif `applyMessageAttachmentUpdated` ci-dessus
  * (« le fil n'est pas OUVERT ⇒ rien à peindre localement, le prochain
- * `GET …/messages` sert le résumé exact »).
+ * `GET …/messages` sert le résumé exact »). Un `messageId` qui ne correspond
+ * à AUCUNE rangée en cache (fil partiellement chargé) est un NO-OP, même
+ * motif — jamais un repli silencieux sur un AUTRE message.
  *
- * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
- * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
- * posés ici : la charge ne les porte pas, et les inventer depuis un événement
- * qui ne les affirme pas serait une horloge fabriquée. Ce sont les COMPTEURS
- * que ce puits rafraîchit, et `deliveryOf` les tranche palier par palier
- * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
- * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
- * dans `view/message.ts`, ce puits ne la réécrit pas.
+ * `deliveredToAllAt` — l'horodatage FIGÉ que `deliveryOf` (`lib/view/message.ts`)
+ * consulte au palier LIVRÉ — n'est PAS posé ici : la charge ne le porte pas
+ * (`ReadStatusSummary` n'a que `readByAllAt`, cf. #7347/G-5), et l'inventer
+ * depuis un événement qui ne l'affirme pas serait une horloge fabriquée. C'est
+ * un COMPTEUR (`deliveredCount`) que ce puits rafraîchit pour ce palier, et
+ * `deliveryOf` le tranche palier par palier (#7223, revue-correction W2 :
+ * l'horloge « distribué à tous » ne court-circuite plus le palier LU).
+ * TOUS-OU-RIEN EN GROUPE conservé — la règle vit dans `view/message.ts`, ce
+ * puits ne la réécrit pas.
+ *
+ * `readByAllAt` (#7347, G-5), lui, EST posé ici quand le résumé l'AFFIRME —
+ * même moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * celui que `GET …/receipts` sert déjà) : `summary.readByAllAt` PRÉSENT
+ * (`Date` ou `null`) remplace la valeur connue, `undefined` (repli legacy —
+ * gateway pré-G5, ou résumé agrégé sans lot exact) ne la touche pas. Un
+ * `null` EFFACE une date déjà connue plutôt que de la préserver : le
+ * dénominateur peut grandir (nouveau participant) après que « tous ont lu »
+ * a été vrai, et ce résumé est SERVEUR-AUTORITATIF sur ce point précis, comme
+ * il l'est déjà pour `deliveredCount`/`readCount` ci-dessus.
+ *
+ * **LA FICHE « INFOS DU MESSAGE » SUIT LE MÊME DIRECT (#7352, V4)** — ce
+ * puits ne PATCHAIT que les compteurs agrégés ci-dessus ; il n'invalidait
+ * jamais `messageReceiptsPeopleQueryKey` (`receipts.ts:122-123`), la query
+ * de la LISTE NOMINATIVE que `MessageReceiptsSheet` lit. Une fiche ouverte
+ * pendant qu'un accusé arrive ne bougeait donc pas. Même idiome
+ * qu'`onAttachmentStatusUpdated` (`socket.ts:365`) : INVALIDER `target.id`
+ * (déjà résolu, AVEC ou SANS `summary.messageId`), jamais PATCHER — la forme
+ * paginée par participant ne se fusionne pas champ à champ sans risquer de
+ * désynchroniser une ligne encore en vol.
  */
 export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
   const { summary } = data;
@@ -753,17 +811,82 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
      peindre ne perd aucune information. */
   if (summary.totalMembers <= 0) return;
 
-  const target = latestCachedThreadMessage(queryClient, data.conversationId);
+  const target =
+    summary.messageId !== undefined
+      ? findCachedThreadMessage(queryClient, data.conversationId, summary.messageId)
+      : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const next: Message = {
+  const counters: Message = {
     ...target,
     deliveredCount: summary.deliveredCount,
     readCount: summary.readCount,
     recipientCount: summary.totalMembers,
   };
+  // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
+  // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
+  // lui assignant `undefined`.
+  let next: Message = counters;
+  if (summary.readByAllAt !== undefined) {
+    if (summary.readByAllAt === null) {
+      const { readByAllAt: _drop, ...rest } = counters;
+      next = rest;
+    } else {
+      next = { ...counters, readByAllAt: summary.readByAllAt };
+    }
+  }
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
     messages.map((m) => (m.id === target.id ? next : m)),
+  );
+
+  void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });
+}
+
+/**
+ * Garde de FORME pour `message:consumed` (#7354, V6), motif
+ * `isAttachmentUpdated` — FAIL-CLOSED : une charge qui ne nomme pas SON
+ * message, SA conversation et un compte NUMÉRIQUE est rejetée plutôt que
+ * devinée. `userId`/`maxViewOnceCount`/`isFullyConsumed` ne sont pas vérifiés
+ * ici : `applyMessageConsumed` ci-dessous ne les consomme pas (seul
+ * `viewOnceCount` atteint le cache, motif `applyConsumption`,
+ * `view-once.ts:51-58`).
+ */
+export function isMessageConsumedEvent(payload: unknown): payload is MessageConsumedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.messageId === 'string' && typeof p.conversationId === 'string' && typeof p.viewOnceCount === 'number';
+}
+
+/**
+ * `applyMessageConsumed` — LE PUITS DE `message:consumed` (#7354, V6) : LA
+ * BULLE D'UNE VUE UNIQUE SUIT LE DIRECT.
+ *
+ * L'ÉVÉNEMENT PAIR que `view-once.ts:20-26` annonçait déjà sans qu'aucun
+ * `socket.on` ne le branche (« un seul réducteur pour la réponse REST et
+ * l'événement socket ») : `applyConsumption` (`view-once.ts`), déjà le
+ * réducteur IMMUABLE de `consumeViewOnceOptimistic`, est réutilisé tel quel —
+ * jamais une seconde écriture de la même règle. La passerelle ne diffuse cet
+ * événement qu'au PREMIER visionnage (`firstConsumption`,
+ * `messages-view-once.ts:158-167`), donc chaque destinataire de la room —
+ * l'expéditeur compris — voit `viewOnceCount` bouger SANS recharger le fil.
+ *
+ * MONOTONE (revue V6) : le compte ne REDESCEND jamais. L'événement socket et
+ * la réponse REST de `consumeViewOnceOptimistic` voyagent sur deux canaux —
+ * un `message:consumed` EN RETARD (compte 1) arrivé après le compte servi (2)
+ * ramènerait une vue brûlée à `veiled` et la rouvrirait au remontage. Seul le
+ * rollback optimiste (`view-once.ts`) a le droit d'abaisser le compte ; il
+ * n'emprunte pas ce puits.
+ *
+ * `patchThreadMessages` est un NO-OP silencieux si la conversation n'a pas
+ * de cache (fil non ouvert) ou si `messageId` n'y figure pas
+ * (`applyConsumption`, motif `.map` sans correspondance) — jamais une
+ * exception, même motif que `applyReadStatusUpdated`.
+ */
+export function applyMessageConsumed(queryClient: QueryClient, data: MessageConsumedEventData): void {
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => m.id === data.messageId && (m.viewOnceCount ?? 0) < data.viewOnceCount)
+      ? applyConsumption(messages, data)
+      : messages,
   );
 }

@@ -484,6 +484,7 @@ describe('decodeMessage — les clés NON-DATE servies `null` par la passerelle 
         servedText: 'aucune réaction, aucun transfert',
         delivery: 'sent',
         protection: 'standard',
+        language: 'fr',
       }),
     ).not.toThrow();
   });

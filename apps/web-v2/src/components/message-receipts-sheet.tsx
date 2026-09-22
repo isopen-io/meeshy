@@ -10,9 +10,11 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { attachmentDurationLabel, formatMediaTime } from '@/lib/view/media-transport';
+import { time } from '@/lib/grouping';
 import { kindOf } from '@/lib/view/message';
 import {
   attachmentAggregateOf,
+  openedRowsOf,
   playCountLabel,
   positionFraction,
   receiptCategoriesOf,
@@ -144,6 +146,7 @@ function ReceiptPeopleSections({
         glyph="check"
         tint="var(--color-ios-ink-3)"
         section="received-by"
+        timeOf={(person) => (person.receivedAt === null ? null : time(person.receivedAt))}
       />
       <PersonSection
         title={translate(lang, 'message-detail.read-by')}
@@ -152,6 +155,7 @@ function ReceiptPeopleSections({
         glyph="checks"
         tint="var(--color-read)"
         section="read-by"
+        timeOf={(person) => (person.readAt === null ? null : time(person.readAt))}
       />
       <PersonSection
         title={translate(lang, 'message-detail.not-yet')}
@@ -160,6 +164,7 @@ function ReceiptPeopleSections({
         glyph={null}
         tint="var(--color-ios-ink-3)"
         section="not-yet"
+        timeOf={() => null}
       />
     </>
   );
@@ -172,6 +177,7 @@ function PersonSection({
   glyph,
   tint,
   section,
+  timeOf,
 }: {
   readonly title: string;
   readonly empty: string;
@@ -179,6 +185,15 @@ function PersonSection({
   readonly glyph: GlyphName | null;
   readonly tint: string;
   readonly section: 'read-by' | 'received-by' | 'not-yet';
+  /**
+   * L'HEURE DE CET ACCUSÉ (#7352, V4) — `receivedAt`/`readAt` sont SERVIS
+   * par `fetchMessageReceiptsPeople` depuis toujours (`api/receipts.ts:99-
+   * 106`), jamais RENDUS avant ce lot. `null` ⇒ rien peint (« Pas encore »
+   * n'a ni l'un ni l'autre, `receiptCategoriesOf`) : chaque SECTION lit le
+   * SEUL champ que sa catégorie affirme, jamais les deux — `time()`
+   * (`lib/grouping.ts`), le même SSOT que l'horodatage de la bulle.
+   */
+  readonly timeOf: (person: ReceiptPersonRow) => string | null;
 }) {
   return (
     <>
@@ -210,6 +225,12 @@ function PersonSection({
               {...(person.avatar === null ? {} : { src: person.avatar })}
             />
             <span className="flex-1 truncate">{person.displayName}</span>
+            {((personTime) =>
+              personTime === null ? null : (
+                <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-person-time>
+                  {personTime}
+                </span>
+              ))(timeOf(person))}
             {glyph !== null ? <Glyph name={glyph} size={16} style={{ color: tint }} /> : null}
           </li>
         ))
@@ -234,6 +255,10 @@ function AttachmentReceiptCard({
   const name = attachment.title !== undefined && attachment.title.length > 0 ? attachment.title : attachment.originalName;
   const durationLabel = attachmentDurationLabel(attachment.duration);
   const isTimebased = kind === 'audio' || kind === 'video';
+  /** L'OUVERTURE (#7363, W6) — `image`/`file` seulement : `audio`/`video`
+   * restent sur `PlaybackRow` (progression, pas une simple ouverture). */
+  const isOpenable = kind === 'image' || kind === 'file';
+  const opened = isOpenable ? openedRowsOf(rows) : [];
   const kindGlyph: GlyphName = kind === 'audio' ? 'microphone' : kind === 'video' ? 'fillPlay' : kind === 'image' ? 'image' : 'file';
 
   return (
@@ -277,6 +302,14 @@ function AttachmentReceiptCard({
             {isTimebased
               ? rows.map((row) => <PlaybackRow key={row.participantId} row={row} kind={kind} durationMs={attachment.duration} lang={lang} />)
               : null}
+
+            {isOpenable && opened.length === 0 ? (
+              <p className="pt-2 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {translate(lang, 'message-detail.attachment.opened.empty')}
+              </p>
+            ) : null}
+
+            {isOpenable ? opened.map((row) => <OpenedRow key={row.participantId} row={row} />) : null}
           </>
         )}
       </div>
@@ -316,25 +349,35 @@ function PlaybackRow({
           {row.username}
         </p>
         {!complete && fraction > 0 ? (
-          <div
-            className="mt-1 h-1 rounded-full"
-            style={{ backgroundColor: 'var(--color-hairline)' }}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(fraction * 100)}
-            aria-label={row.username}
-            {...(positionLabel === null
-              ? {}
-              : {
-                  'aria-valuetext': translate(
-                    lang,
-                    kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until',
-                    { time: positionLabel },
-                  ),
-                })}
-          >
-            <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
+          <div className="mt-1 flex items-center gap-1">
+            <div
+              className="h-1 flex-1 rounded-full"
+              style={{ backgroundColor: 'var(--color-hairline)' }}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(fraction * 100)}
+              aria-label={row.username}
+              {...(positionLabel === null
+                ? {}
+                : {
+                    'aria-valuetext': translate(
+                      lang,
+                      kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until',
+                      { time: positionLabel },
+                    ),
+                  })}
+            >
+              <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
+            </div>
+            <span
+              className="text-mini text-right font-semibold tabular-nums"
+              style={{ color: 'var(--color-ios-ink-3)', minWidth: 30 }}
+              aria-hidden="true"
+              data-message-receipts-percent
+            >
+              {Math.round(fraction * 100)}%
+            </span>
           </div>
         ) : null}
       </div>
@@ -348,6 +391,43 @@ function PlaybackRow({
       ) : positionLabel !== null ? (
         <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
           {translate(lang, kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until', { time: positionLabel })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * QUI A OUVERT (#7363, W6) — miroir de `PlaybackRow`, réduit à ce qu'une
+ * image/un document PORTE : nom, heure de la dernière ouverture (`viewedAt`),
+ * badge « Nx » à partir de deux (`viewCount`, § `MessageViewsDetailView.
+ * swift:831`). Aucune barre de progression : « ouvert » n'est ni « à 40 % »
+ * ni « complet » (miroir `family.showsProgress === false` pour `.opened`).
+ */
+function OpenedRow({ row }: { readonly row: AttachmentStatusRow }) {
+  const playCount = playCountLabel(row.viewCount);
+  const openedAt = row.viewedAt !== null ? time(row.viewedAt) : null;
+
+  return (
+    <div className="flex items-center gap-2 pt-2" data-message-receipts-opened={row.participantId}>
+      <Avatar
+        initials={initialsOf(row.username)}
+        color={colorForName(row.username)}
+        size={24}
+        name={row.username}
+        {...(row.avatar === null || row.avatar === undefined ? {} : { src: row.avatar })}
+      />
+      <span className="min-w-0 flex-1 truncate text-mini" style={{ color: 'var(--color-ios-ink)' }}>
+        {row.username}
+      </span>
+      {playCount !== null ? (
+        <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {playCount}
+        </span>
+      ) : null}
+      {openedAt !== null ? (
+        <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-opened-time>
+          {openedAt}
         </span>
       ) : null}
     </div>

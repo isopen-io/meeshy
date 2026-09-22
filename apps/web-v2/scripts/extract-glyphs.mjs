@@ -134,6 +134,16 @@ const USED = [
   'prohibit',
   'eye-slash',
   /**
+   * `eye` (#7354, V6) — la bascule « vue unique » du composeur : PENDANT
+   * OUVERT d'`eye-slash` (le VOILE d'un message déjà protégé), même
+   * métaphore que quoted.isViewOnce → « 👁️ » (iOS,
+   * `ConversationViewModel+ReplyReference.swift:200`) et `bubble.media.viewOnce`
+   * (« Voir une fois »). iOS arme sa capsule avec `1.circle`/`1.circle.fill`
+   * (SF Symbol, sans pendant Phosphor) — `eye` en est la traduction dans le
+   * socle de glyphes déjà établi par ce dépôt pour cette famille.
+   */
+  'eye',
+  /**
    * `timer` (revue #5676) — iOS distingue dans la LIGNE DE LISTE l'éphémère
    * (`timer`) de la vue unique (`flame`)
    * (`LentilleConversationRow.swift:578-584`, `:616`, `standardPreview`
@@ -604,6 +614,11 @@ const SETTINGS = [
   'sign-out',
   'arrow-square-out',
   'caret-right',
+  /* LES PUBLICATIONS ENREGISTREES (#7286) — la rangee « Outils » des reglages,
+     miroir du `bookmark.fill` d'iOS (`SettingsView.swift`). Le jeu du FLUX le
+     porte deja, mais le tirer d'ici ferait entrer toute sa table dans le chunk
+     des reglages pour un seul trace. */
+  'bookmark-fill',
 ];
 
 emit({

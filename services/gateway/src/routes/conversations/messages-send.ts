@@ -31,6 +31,7 @@ import {
   toEncryptedPayload,
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
+import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
 import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -85,6 +86,7 @@ export const SendMessageBodySchema = z.object({
   attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
+  ...EPHEMERAL_DURATION_SHAPE,
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
@@ -175,6 +177,7 @@ export function registerSendMessageRoute(
           attachmentIds: { type: 'array', items: { type: 'string' }, maxItems: MAX_ATTACHMENTS_PER_MESSAGE, description: 'IDs des attachments pré-uploadés' },
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
+          ephemeralDuration: { type: 'integer', minimum: 1, description: 'Durée d\'un message éphémère, en secondes. Le décompte part de la RÉCEPTION de chaque destinataire (#7451).' },
           effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
           mentionedUserIds: { type: 'array', items: { type: 'string' } },
           location: {
@@ -240,6 +243,7 @@ export function registerSendMessageRoute(
         attachmentIds,
         isBlurred,
         expiresAt,
+        ephemeralDuration,
         isViewOnce,
         maxViewOnceCount,
         mentionedUserIds,
@@ -257,7 +261,7 @@ export function registerSendMessageRoute(
       const { MESSAGE_EFFECT_FLAGS } = await import('@meeshy/shared/types/message-effect-flags');
       let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
       if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
-      if (expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+      if ((expiresAt || ephemeralDuration) && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
       if (isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
       const userId = authRequest.authContext.userId;
@@ -372,6 +376,10 @@ export function registerSendMessageRoute(
         attachmentIds,
         isBlurred,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+        // #7451 — la DURÉE, pas l'échéance. `MessageProcessor.saveMessage` la
+        // normalise, et la DÉRIVE d'`expiresAt` pour un client déjà distribué :
+        // c'est le point où les trois transports se rejoignent.
+        ephemeralDuration,
         effectFlags,
         isViewOnce,
         maxViewOnceCount,

@@ -105,9 +105,35 @@ export const FIXTURES_LOADED_AT: Date = new Date();
 
 const THREAD_ANCHOR: Date = resolveThreadAnchor(FIXTURES_LOADED_AT, THREAD_SPAN_MINUTES);
 
+type ThreadMomentInput = {
+  readonly at: Date;
+  readonly anchor: Date;
+  readonly spanMinutes: number;
+  readonly minutesAgo: number;
+};
+
+/**
+ * TROISIÈME TRAVERSÉE (#7411) — `threadMoment` TRANSLATAIT le fil depuis
+ * l'ancre : entre 00:00 et 01:36 à Paris, l'ancre avancée jusqu'à minuit
+ * poussait les messages « écrits il y a 2 à 82 minutes » APRÈS `at`, dans le
+ * futur, et tout message envoyé par un gate se rangeait AVANT eux (la dernière
+ * bulle lue par `check-thread-chrome.mjs` était une fixture). L'échelle des
+ * minutes est désormais COMPRIMÉE entre l'ancre et `at` : `minutesAgo = 0`
+ * tombe sur `at`, `minutesAgo = spanMinutes` sur l'ancre, l'ordre est
+ * conservé, et hors de la fenêtre de minuit (`at − ancre = spanMinutes`)
+ * chaque instant reste exactement `minutesAgo(n)`.
+ */
+export const resolveThreadMoment = ({ at, anchor, spanMinutes, minutesAgo }: ThreadMomentInput): Date =>
+  new Date(at.getTime() - minutesAgo * ((at.getTime() - anchor.getTime()) / spanMinutes));
+
 /** `threadMoment(96)` = le premier message du fil ; `threadMoment(82)` = le dernier — voir `THREAD_ANCHOR`. */
 export const threadMoment = (minutesAgoAtWriting: number): Date =>
-  new Date(THREAD_ANCHOR.getTime() + (THREAD_SPAN_MINUTES - minutesAgoAtWriting) * 60_000);
+  resolveThreadMoment({
+    at: FIXTURES_LOADED_AT,
+    anchor: THREAD_ANCHOR,
+    spanMinutes: THREAD_SPAN_MINUTES,
+    minutesAgo: minutesAgoAtWriting,
+  });
 
 export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */

@@ -5,7 +5,7 @@ import type { Delivery } from '@/lib/view/message';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
@@ -267,6 +267,7 @@ export function Check({
   status,
   isMine,
   sendStartedAt,
+  onOpen,
 }: {
   status: Delivery;
   isMine: boolean;
@@ -274,6 +275,22 @@ export function Check({
    * `status === 'pending'` en tient compte (§5 étape 9 de la spécification
    * #5813) : sous ce seuil, aucune horloge ne clignote. */
   sendStartedAt?: number;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — `undefined` ⇒ comportement
+   * INCHANGÉ, un glyphe NU (`role="img"`, `title` pour nom accessible),
+   * exactement comme avant ce lot. Fourni ⇒ le glyphe devient DÉCORATIF
+   * (`aria-hidden`, `Glyph` sans `title`) À L'INTÉRIEUR d'un vrai
+   * `<button>` nommé par son EFFET (`message-detail.open`, catalogue des
+   * sept langues — Prisme Linguistique, jamais une chaîne en dur), pas par
+   * le statut — même dispositif
+   * que `ReactionChip` (capsule voisine de la même ligne méta,
+   * `tap-target-chip`). SEUL `Bubble` (mode `bulles`) le câble
+   * aujourd'hui : `FocalRow` (`focal`/`script`, le défaut, D-7) garde sa
+   * ligne méta `aria-hidden` INCONDITIONNEL (revue #5935) — y poser ce
+   * bouton reproduirait l'anti-motif WCAG que cette revue a fermé
+   * (`V4.md` § 1).
+   */
+  onOpen?: () => void;
 }) {
   if (!isMine) return null;
   const check = CHECKS[status];
@@ -282,14 +299,30 @@ export function Check({
     <Glyph
       name={check.name}
       size={check.size}
-      title={STATUS_LABEL[status]}
+      {...(onOpen === undefined ? { title: STATUS_LABEL[status] } : {})}
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
+  const node =
+    onOpen === undefined ? (
+      glyph
+    ) : (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+        aria-label={translate(currentInterfaceLanguage(), 'message-detail.open')}
+        className="tap-target-chip inline-flex items-center"
+      >
+        {glyph}
+      </button>
+    );
   if (status === 'pending' && sendStartedAt !== undefined) {
-    return <SendingClock startedAt={sendStartedAt}>{glyph}</SendingClock>;
+    return <SendingClock startedAt={sendStartedAt}>{node}</SendingClock>;
   }
-  return glyph;
+  return node;
 }
 
 /**
@@ -459,7 +492,7 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
             style={{ color: 'var(--color-ios-ink-3)' }}
           >
             <GlyphSvg glyph={THREAD_STATES_GLYPHS.arrowBendUpRight} size={11} />
-            {forwardLabelOf(badge.attribution)}
+            {forwardLabelOf(badge.attribution, currentInterfaceLanguage())}
           </em>
         ),
       )}
@@ -641,7 +674,17 @@ export function FailedSendBand({
   readonly onRetry?: () => void;
   readonly textColor: string;
 }) {
-  const label = reason === undefined ? 'Non envoyé' : `Non envoyé — ${reason}`;
+  /* LES TROIS LIBELLÉS VIENNENT DU CATALOGUE (#7337) — « Non envoyé »,
+     « Non envoyé — {reason} » et « Réessayer » étaient EN DUR, en français,
+     sur la bande que SEPT langues lisent. La RAISON, elle, reste telle que
+     l'appelant la sert : elle vient du refus (`lib/api/outcome.ts`), pas du
+     catalogue, et sa place dans la phrase est décidée par la LANGUE
+     (`{reason}`), jamais par une concaténation ici. */
+  const language = currentInterfaceLanguage();
+  const label =
+    reason === undefined
+      ? translate(language, 'message.send.failed')
+      : translate(language, 'message.send.failed.reason', { reason });
   const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
   const style = {
     backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
@@ -650,20 +693,23 @@ export function FailedSendBand({
   };
   const titleProp = reason === undefined ? {} : { title: reason };
 
+  /* `data-send-failed` / `-label` / `data-send-retry` : les POIGNÉES des
+     gates (#7337). Ils désignaient la bande par son texte français, et ne
+     pouvaient donc la trouver que tant qu'elle n'était pas traduite. */
   if (onRetry === undefined) {
     return (
-      <div className={className} style={style} {...titleProp}>
+      <div data-send-failed="permanent" className={className} style={style} {...titleProp}>
         <Glyph name="warningCircle" size={12} />
-        <span className="flex-1">{label}</span>
+        <span data-send-failed-label className="flex-1">{label}</span>
       </div>
     );
   }
 
   return (
-    <button type="button" onClick={onRetry} {...titleProp} className={className} style={style}>
+    <button type="button" data-send-failed="retryable" onClick={onRetry} {...titleProp} className={className} style={style}>
       <Glyph name="warningCircle" size={12} />
-      <span className="flex-1">{label}</span>
-      <span style={{ textDecoration: 'underline' }}>Réessayer</span>
+      <span data-send-failed-label className="flex-1">{label}</span>
+      <span data-send-retry style={{ textDecoration: 'underline' }}>{translate(language, 'message.send.retry')}</span>
     </button>
   );
 }

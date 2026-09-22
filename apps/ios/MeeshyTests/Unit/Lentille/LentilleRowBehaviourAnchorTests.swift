@@ -119,24 +119,25 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     // MARK: - L03 — glyphes SF des kinds (expired/hidden/viewOnce) : FERMÉ (V3ter)
 
     // behaviour-matrix:L03
-    /// FERMÉ (REV-3/V3ter). `ThemedConversationRow.swift` porte les glyphes
-    /// SF `timer`/`eye.slash`/`flame` pour ces branches (lignes ~510/561/573,
-    /// lu seulement, fichier interdit d'édition) — `LentilleConversationRow
-    /// .previewLine` les reproduit désormais (branches `.expired` via
-    /// `timer.badge.xmark`, `.hidden` via `eye.slash`, `.viewOnce` via
-    /// `flame`, `.ephemeralActive` via `timer` dans `standardPreview`) : la
-    /// matrice exige « conservent leurs glyphes SF actuels », le rang plat
-    /// les a retrouvés.
+    /// FERMÉ (REV-3/V3ter), **puis réaligné par #7452**. La matrice exigeait
+    /// « conservent leurs glyphes SF actuels » — et les glyphes d'alors se
+    /// contredisaient : `flame` désignait la VUE UNIQUE ici et l'ÉPHÉMÈRE dans
+    /// la bulle, pendant que le COMPOSEUR, là où l'utilisateur choisit la
+    /// protection, montrait `hourglass` et `1.circle`. Conserver un vocabulaire
+    /// faux n'était pas l'intention de la matrice : le rang plat porte
+    /// désormais `MessageProtectionSymbols`, la source unique, et c'est ELLE
+    /// que cette ancre vérifie — le littéral aurait figé la contradiction.
     func test_L03_previewKindGlyphs_areRestoredToTheFlatRow() throws {
         let code = normalizedCode(try rowSource())
         XCTAssertTrue(
-            code.contains("systemName: \"timer\"")
+            code.contains("systemName: MessageProtectionSymbols.")
                 || code.contains("systemName: \"eye.slash\"")
-                || code.contains("systemName: \"flame\""),
-            "behaviour-matrix:L03 : « conservent leurs glyphes SF actuels " +
-            "(timer, eye.slash, flame) » — LentilleConversationRow.swift doit rendre au moins " +
-            "un de ces trois glyphes dans previewLine (expired/hidden/viewOnce/ephemeral) : les " +
-            "branches italiques doivent porter leur icône, comme ThemedConversationRow.swift."
+                || code.contains("systemName: \"timer.badge.xmark\""),
+            "behaviour-matrix:L03 : les branches italiques de previewLine " +
+            "(expired/hidden/viewOnce/ephemeral) doivent porter leur icône. Depuis #7452 " +
+            "le vocabulaire vient de `MessageProtectionSymbols` — celui du COMPOSEUR — " +
+            "et non plus d'un littéral par site : `flame` y désignait la vue unique " +
+            "pendant que la bulle en faisait l'éphémère."
         )
     }
 

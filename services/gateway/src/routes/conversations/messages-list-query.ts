@@ -10,6 +10,7 @@
  * (`registerMessagesRoutes`).
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { EphemeralReaderResolution } from './ephemeralReaderDeadlines';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import {
   buildPostReplyTo,
@@ -43,7 +44,6 @@ import type {
   RawMessageAttachment,
   CleanedAttachment,
   RawMessageSender,
-  MessageProtectionRow,
   RawMessageRow,
   MappedMessageRow,
 } from './messages-list-query-types';
@@ -206,35 +206,17 @@ export function parseLanguageFilterParam(languagesStr?: string): string[] | unde
 }
 
 /**
- * Les quatre familles de protection d'un message — vue unique, flou,
- * expiration, et le bitfield qui les résume — plus les deux compteurs de
- * limite/vues de la vue unique. Source UNIQUE du `select` Prisma ET de la
- * projection servie : #4885 a mesuré que `GET .../messages/search` les
- * réécrivait à la main sans elles, laissant un message à vue unique trouvé
- * par recherche FORWARDABLE (le garde côté client lit `isViewOnce`, absent
- * de la réponse). Toute route qui sert `Message.content` doit ce bloc, ou
- * dire pourquoi non (#4885 critère 4).
+ * La projection de PROTECTION vit dans `messageProtectionProjection.ts` depuis
+ * #7451 — son `expiresAt` est devenu une résolution PAR LECTEUR, et ce fichier
+ * est borné à 1 000 lignes. Ré-exportée ici : trois modules l'importent par
+ * cette adresse (`messages-search`, `links/utils/message-formatters`, et le
+ * mappeur ci-dessous).
  */
-export const MESSAGE_PROTECTION_SELECT = {
-  isViewOnce: true,
-  maxViewOnceCount: true,
-  viewOnceCount: true,
-  isBlurred: true,
-  effectFlags: true,
-  expiresAt: true,
-} as const;
-
-/** Projette les mêmes six champs depuis une ligne Prisma déjà chargée — le pendant servi de `MESSAGE_PROTECTION_SELECT`. */
-export function mapMessageProtectionFields(message: MessageProtectionRow): MessageProtectionRow {
-  return {
-    isViewOnce: message.isViewOnce,
-    maxViewOnceCount: message.maxViewOnceCount,
-    viewOnceCount: message.viewOnceCount,
-    isBlurred: message.isBlurred,
-    effectFlags: message.effectFlags,
-    expiresAt: message.expiresAt,
-  };
-}
+import {
+  MESSAGE_PROTECTION_SELECT,
+  mapMessageProtectionFields,
+} from './messageProtectionProjection';
+export { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields };
 
 /**
  * Construit le `select` Prisma de `GET /conversations/:id/messages` selon les
@@ -369,6 +351,7 @@ export function buildMessageListSelect(options: {
             isViewOnce: true,
             isBlurred: true,
             expiresAt: true,
+            ephemeralDuration: true,
             effectFlags: true,
             isEncrypted: true,
             encryptionMode: true,
@@ -593,6 +576,12 @@ export type MessageRowMappingContext = {
   listMissingEntry: PresenceMissingEntryPolicy;
   /** #3909 — la progression de lecture du participant, par pièce jointe. */
   consumptionMap: Map<string, CurrentUserConsumption>;
+  /**
+   * #7451 — l'échéance d'éphémère de CE lecteur, par message. Absente ⇒ aucun
+   * décompte servi : la projection ferme par défaut plutôt que de rendre la
+   * colonne, qui porte l'heure interne de destruction.
+   */
+  ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -606,6 +595,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
     readStatusMap,
     senderPresenceVis,
     listMissingEntry,
+    ephemeralDeadlines,
   } = ctx;
         // Construire l'objet de réponse aligné avec GatewayMessage
         const mappedMessage: MappedMessageRow = {
@@ -642,8 +632,9 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           forwardedFromId: message.forwardedFromId,
           forwardedFromConversationId: message.forwardedFromConversationId,
 
-          // View-once / Blur / Expiration
-          ...mapMessageProtectionFields(message),
+          // View-once / Blur / Expiration — l'échéance est celle du LECTEUR
+          // pour un éphémère (#7451), jamais la colonne.
+          ...mapMessageProtectionFields(message, ephemeralDeadlines?.get(message.id)),
 
           // Épinglage
           pinnedAt: message.pinnedAt,

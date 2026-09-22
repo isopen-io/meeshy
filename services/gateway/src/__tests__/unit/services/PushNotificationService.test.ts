@@ -158,6 +158,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { NOTIFICATION_REVOCATION_TTL_MS } from '../../../services/notifications/notificationRevocationPush';
+import type { PushNotificationPayload } from '../../../services/PushNotificationService';
 
 // Store original environment variables
 const originalEnv = { ...process.env };
@@ -2588,64 +2589,53 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.notification).toEqual({ title: 'Alice vous appelle', body: 'Appel audio' });
     });
 
-    it('should include webpush config with link for web FCM tokens', async () => {
-      const service = await getFCMService();
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web',
-        payload: {
-          title: 'Message',
-          body: 'Hello',
-          data: { conversationId: 'conv-999' },
-        },
+    describe('web FCM tokens carry the delivery preferences of the chokepoint (#7308)', () => {
+      afterEach(() => {
+        delete (mockPrisma as any).userPreferences;
       });
 
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush).toBeDefined();
-      expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/conversations/conv-999');
-      expect(sentMsg?.webpush?.notification?.icon).toBe('/android-chrome-192x192.png');
-    });
+      const sendWeb = async (notification: Record<string, unknown>, payload: Partial<PushNotificationPayload>) => {
+        const service = await getFCMService();
+        (mockPrisma as any).userPreferences = { findUnique: jest.fn().mockResolvedValue({ notification }) };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
+        ]);
+        await service.sendToUser({ userId: 'user-web', payload: { title: 'Alice', body: 'Salut', ...payload } });
+        return mockFirebaseMessagingSend.mock.calls.at(-1)?.[0]?.webpush;
+      };
 
-    it('should include webpush without fcmOptions when no link or conversationId', async () => {
-      const service = await getFCMService();
+      it('soundEnabled:false, threadId and collapseId all reach the web message', async () => {
+        const webpush = await sendWeb(
+          { pushEnabled: true, soundEnabled: false },
+          { threadId: 'conv-42', collapseId: 'conv-42', data: { conversationId: 'conv-42' } },
+        );
 
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web-no-link',
-        payload: { title: 'Alert', body: 'System notification' },
+        expect(webpush).toEqual({
+          notification: {
+            title: 'Alice',
+            body: 'Salut',
+            icon: '/android-chrome-192x192.png',
+            badge: '/badge-72x72.png',
+            silent: true,
+            tag: 'conv-42',
+            renotify: true,
+          },
+          fcmOptions: { link: '/conversations/conv-42' },
+          headers: { Topic: 'conv-42' },
+        });
       });
 
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush).toBeDefined();
-      expect(sentMsg?.webpush?.fcmOptions).toBeUndefined();
-    });
+      // Le `tag` vient de `threadId`, que le chokepoint retire — jamais de
+      // `data.conversationId`, qui est toujours là ; `renotify` part avec lui.
+      it('groupNotifications:false stops web banners from stacking — no tag, hence no renotify', async () => {
+        const webpush = await sendWeb(
+          { pushEnabled: true, groupNotifications: false },
+          { threadId: 'conv-42', data: { conversationId: 'conv-42' } },
+        );
 
-    it('should use explicit payload.link over conversationId for web webpush', async () => {
-      const service = await getFCMService();
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web-link',
-        payload: {
-          title: 'Post',
-          body: 'New post',
-          link: '/posts/123',
-          data: { conversationId: 'conv-ignore' },
-        },
+        expect(webpush?.notification).not.toHaveProperty('tag');
+        expect(webpush?.notification).not.toHaveProperty('renotify');
       });
-
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/posts/123');
     });
 
     it('should forward payload.badge as android notificationCount for android FCM', async () => {

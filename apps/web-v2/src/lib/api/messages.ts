@@ -126,9 +126,20 @@ export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId:
 
 /** FABRIQUE (F3) — la même forme que `conversationsQuery`. `select` reste une
  * fonction de MODULE (`threadWindowOf`), jamais une lambda écrite en ligne :
- * le doc-comment de `flattenMessagePages` porte la mesure. */
+ * le doc-comment de `flattenMessagePages` porte la mesure.
+ *
+ * **`staleTime: 0` (#7353)** — un fil n'est PAS une famille quasi-immuable
+ * (`query-freshness.test.ts`, #6974) : c'est la donnée la plus VIVANTE de
+ * l'application. Le défaut de `createAppQueryClient` (30 s) laissait un
+ * rechargement qui suit une absence COURTE dans la fenêtre de fraîcheur :
+ * le cache restauré était servi et rien ne revalidait, alors que le serveur
+ * avait avancé (recette staging 2026-09-21). Cache-first reste entier (D-2,
+ * aucun spinner sur un cache non vide) : la valeur ne gouverne QUE la
+ * revalidation de fond — la MÊME doctrine que `useStoryFeed` / `usePost`.
+ * Posée ICI, dans la fabrique que `useMessages` consomme telle quelle, pour
+ * que le témoin `thread-reload-freshness.test.ts` mesure ce que l'écran sert. */
 export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
-  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf };
+  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf, staleTime: 0 };
 }
 
 export type { HttpTransport };
@@ -156,11 +167,16 @@ export type { HttpTransport };
  *
  * `latestCachedThreadMessage` (#7223) rejoint les lectures pour la MÊME
  * raison que les quatre premiers accès : `applyReadStatusUpdated`
- * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — `
- * read-status:updated` ne nomme aucun message, il décrit le dernier de la
- * conversation (`MessageReadStatusService.getLatestMessageSummary`) — et ne
+ * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — et ne
  * doit pas réapprendre que `pages[0]` est la page la plus récente,
  * ASCENDANTE en interne.
+ *
+ * **CE REPLI N'EST PLUS LA RÈGLE NOMINALE (#7348).** `ReadStatusSummary`
+ * porte désormais `messageId?` : quand la charge NOMME son message, le puits
+ * cible `findCachedThreadMessage` ci-dessus, pas cette lecture-ci. Elle ne
+ * sert plus qu'à la passerelle qui ne pose pas encore ce champ (G-5/#7347 —
+ * `MessageReadStatusService.getLatestMessageSummary` décrit alors le dernier
+ * message non supprimé de la conversation, et il faut bien en désigner un).
  */
 
 /**

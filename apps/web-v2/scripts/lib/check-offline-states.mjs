@@ -42,13 +42,35 @@ import { awaitFact } from './await-fact.mjs';
  * `click()` SEUL, plus aucun délai après (#7054) : l'EFFET du clic est
  * attendu par l'APPELANT, sur le fait qu'il nomme — jamais ici, où aucun fait
  * générique ne conviendrait à tous les appels.
+ *
+ * La cible est un LOCATOR, plus un texte (#7337) : elle se désignait par
+ * « Réessayer », en français, et ne pouvait donc être trouvée que tant que la
+ * bande n'était pas traduite.
  */
-const clickIfPresent = async (page, label) => {
-  const target = page.getByText(label);
+const clickIfPresent = async (target) => {
   if ((await target.count()) === 0) return false;
   await target.first().click();
   return true;
 };
+
+/**
+ * LA BANDE D'ÉCHEC ET SON GESTE, DÉSIGNÉS PAR LEURS POIGNÉES (#7337) —
+ * `data-send-failed` / `data-send-failed-label` / `data-send-retry`
+ * (`FailedSendBand`, `message-blocks.tsx`). Les sept assertions de ce fichier
+ * cherchaient le texte « Non envoyé » : le Chromium de ce gate est `en-US`
+ * (aucune `locale` posée), elles étaient donc vertes PARCE QUE la bande
+ * n'était pas traduite. La bande vient désormais du catalogue.
+ */
+const failedBand = (page) => page.locator('main li [data-send-failed]');
+const retryGesture = (page) => page.locator('main li [data-send-failed="retryable"] [data-send-retry]');
+
+/**
+ * Le libellé d'échec énoncé sans langue : non vide, et pas un identifiant de
+ * catalogue — une clé absente d'une langue se rend telle quelle, et « non
+ * vide » seul la laisserait passer. Ce qui distingue CE texte d'un autre,
+ * c'est la poignée qui le désigne, pas le mot qu'il emploie.
+ */
+const isSpokenLabel = (text, namespace) => typeof text === 'string' && text.trim() !== '' && !text.includes(namespace);
 
 export async function checkOfflineStates({ browser, BASE, expect }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -93,14 +115,22 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
     "hors ligne, le fil reste lisible (aucun voile, aucune modale)",
   );
 
+  /* L'annonce hors écran AVANT l'envoi : elle doit être vide, sans quoi la
+     lecture qui suit l'échec ne prouverait pas que c'est L'ÉCHEC qui parle. */
+  const liveRegion = page.locator('.offscreen[aria-live="polite"]');
+  const announcedBefore = ((await liveRegion.innerText()) ?? '').trim();
+
   const field = page.getByPlaceholder('Message…');
   await field.fill('Un message écrit sans réseau');
   await field.press('Enter');
-  await awaitFact(page.getByText('Non envoyé').first());
+  await awaitFact(failedBand(page).first());
 
+  const failedLabel = (await failedBand(page).count()) > 0
+    ? ((await failedBand(page).first().locator('[data-send-failed-label]').innerText()) ?? '').trim()
+    : null;
   const failedShown = expect(
-    (await page.getByText('Non envoyé').count()) > 0,
-    "un message écrit hors ligne est marqué NON ENVOYÉ",
+    (await failedBand(page).count()) > 0 && isSpokenLabel(failedLabel, 'message.send'),
+    `un message écrit hors ligne est marqué NON ENVOYÉ (libellé ${JSON.stringify(failedLabel)})`,
   );
 
   /**
@@ -119,10 +149,17 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
    * asynchrone par nature : on attend le NŒUD qui porte le texte, jamais un
    * délai après l'envoi.
    */
-  await awaitFact(page.locator('.offscreen[aria-live="polite"]').filter({ hasText: /non envoyé/i }));
+  /* LE FAIT, SANS LA LANGUE (#7337) — l'attente filtrait sur /non envoyé/i
+     et l'assertion relisait ce mot : vertes parce que l'annonce était EN DUR.
+     Ce qui compte : la région était MUETTE avant l'envoi, elle PARLE après
+     l'échec, et ce qu'elle dit n'est pas une clé de catalogue. L'échec est
+     le seul événement de ce parcours qui annonce — hors ligne, aucun envoi
+     n'est confirmé. */
+  await awaitFact(liveRegion.filter({ hasText: /\S/ }));
+  const announced = ((await liveRegion.innerText()) ?? '').trim();
   expect(
-    (await page.locator('.offscreen[aria-live="polite"]').innerText()).toLowerCase().includes('non envoyé'),
-    "l'annonce aria-live signale « non envoyé » après un envoi hors ligne",
+    announcedBefore === '' && isSpokenLabel(announced, 'announce.'),
+    `l'annonce aria-live signale l'échec après un envoi hors ligne (avant ${JSON.stringify(announcedBefore)}, après ${JSON.stringify(announced)})`,
   );
 
   /**
@@ -132,10 +169,8 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
    */
   expect(
     await page.evaluate(() => {
-      const bands = [...document.querySelectorAll('main li button')].filter((b) =>
-        (b.textContent ?? '').includes('Non envoyé'),
-      );
-      return bands.length === 1 && bands[0]?.closest('li') !== null;
+      const bands = [...document.querySelectorAll('[data-send-failed="retryable"]')];
+      return bands.length === 1 && bands[0]?.tagName === 'BUTTON' && bands[0]?.closest('main li') !== null;
     }),
     "la bande de reprise est DANS la bulle, une seule fois",
   );
@@ -150,7 +185,7 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
    * seul contrôle du chantier sous la règle.
    */
   if (failedShown) {
-    const band = page.locator('main li button', { hasText: 'Non envoyé' }).first();
+    const band = page.locator('main li button[data-send-failed="retryable"]').first();
     const box = await band.boundingBox();
     expect(
       box !== null && box.height >= 44,
@@ -182,10 +217,12 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
      * appel ») rend AVANT tout `await` — l'absence de changement est donc
      * déjà vraie dès que `click()` a résolu.
      */
-    await clickIfPresent(page, 'Réessayer');
+    const retriedOffline = await clickIfPresent(retryGesture(page));
     expect(
-      (await page.getByText('Non envoyé').count()) > 0,
-      "réessayer TOUJOURS hors ligne laisse le message en échec",
+      retriedOffline && (await failedBand(page).count()) > 0,
+      retriedOffline
+        ? "réessayer TOUJOURS hors ligne laisse le message en échec"
+        : "réessayer TOUJOURS hors ligne laisse le message en échec — aucun geste de reprise à toucher",
     );
 
     await context.setOffline(false);
@@ -197,13 +234,13 @@ export async function checkOfflineStates({ browser, BASE, expect }) {
       (await page.getByText('Hors ligne', { exact: false }).count()) === 0,
       "le bandeau disparaît au retour du réseau",
     );
-    const clicked = await clickIfPresent(page, 'Réessayer');
-    await awaitFact(page.getByText('Non envoyé').first(), { state: 'detached' });
+    const clicked = await clickIfPresent(retryGesture(page));
+    await awaitFact(failedBand(page).first(), { state: 'detached' });
     expect(
-      clicked && (await page.getByText('Non envoyé').count()) === 0,
+      clicked && (await failedBand(page).count()) === 0,
       clicked
         ? "réessayer une fois le réseau revenu retire l'échec"
-        : "réessayer une fois le réseau revenu retire l'échec — la bande avait déjà disparu hors ligne",
+        : "réessayer une fois le réseau revenu retire l'échec — aucun geste de reprise à toucher",
     );
   }
 
