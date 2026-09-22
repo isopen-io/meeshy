@@ -205,9 +205,42 @@ export function patchThreadMessages(
 }
 
 /**
- * `upsertThreadMessage` — REMPLACE par `id` **OU** `clientMessageId` si la
- * rangée existe, sinon APPEND en queue (l'ordre ASCENDANT que ce port
- * établit).
+ * `mergeThreadMessage` — LA LOI DE RECOUVREMENT D'UNE RANGÉE DÉJÀ EN CACHE
+ * (#7371). La charge entrante gagne CHAMP PAR CHAMP ; trois champs font
+ * exception parce qu'ils ne RÉGRESSENT jamais.
+ *
+ * `deliveredCount` / `readCount` — l'accusé REST d'un envoi est composé du
+ * message LOCAL (`confirmedMessageOf`, `send/local-message.ts`), donc de
+ * `0`/`0` quand la passerelle ne sert pas ses compteurs. Si un
+ * `read-status:updated` a déjà peint ✓✓ pendant que le POST était en vol, le
+ * remplacement intégral faisait REDESCENDRE la coche d'un cran
+ * (`deliveryOf`, `lib/view/message.ts`). Le maximum est la seule lecture qui
+ * ne dépend pas de l'ORDRE d'arrivée des deux transports.
+ *
+ * `translations` — même forme, autre contenu : le message local en porte une
+ * liste VIDE, et l'écraser sur une rangée que le temps réel a déjà traduite
+ * retirerait au Prisme la seule matière qu'il ait à servir (CLAUDE.md racine,
+ * § Prisme, cycle 128 : « qu'est-ce qui part À CÔTÉ de ce que je viens de
+ * corriger ? »). Une liste vide n'AFFIRME rien ; une liste pleine, si.
+ *
+ * `recipientCount` et `readByAllAt` — les deux AUTRES entrées de `deliveryOf`
+ * — n'ont besoin d'aucune clause : le message local ne porte NI l'une NI
+ * l'autre, et l'étalement ne touche pas une clé absente. Le témoin de statut
+ * (`perform-send.test.ts`) mesure l'invariant, pas ce raisonnement : le jour
+ * où `localMessageOf` poserait `recipientCount: 0`, il rougit.
+ */
+const mergeThreadMessage = (current: Message, incoming: Message): Message => ({
+  ...current,
+  ...incoming,
+  deliveredCount: Math.max(current.deliveredCount, incoming.deliveredCount),
+  readCount: Math.max(current.readCount, incoming.readCount),
+  translations: incoming.translations.length === 0 ? current.translations : incoming.translations,
+});
+
+/**
+ * `upsertThreadMessage` — FUSIONNE (`mergeThreadMessage` ci-dessus) par `id`
+ * **OU** `clientMessageId` si la rangée existe, sinon APPEND en queue
+ * (l'ordre ASCENDANT que ce port établit).
  *
  * La loi était écrite DEUX fois — `applyMessageNew` (`realtime-apply.ts`) et
  * `upsertConfirmed` (`send/perform-send.ts`) — et leurs doc-comments
@@ -236,19 +269,7 @@ export function upsertThreadMessage(
         ...data,
         pages: data.pages.map((page, i) =>
           i === host
-            ? {
-                ...page,
-                messages: page.messages.map((m) =>
-                  matches(m)
-                    ? {
-                        ...m,
-                        ...message,
-                        deliveredCount: Math.max(m.deliveredCount ?? 0, message.deliveredCount ?? 0),
-                        readCount: Math.max(m.readCount ?? 0, message.readCount ?? 0),
-                      }
-                    : m,
-                ),
-              }
+            ? { ...page, messages: page.messages.map((m) => (matches(m) ? mergeThreadMessage(m, message) : m)) }
             : page,
         ),
       };

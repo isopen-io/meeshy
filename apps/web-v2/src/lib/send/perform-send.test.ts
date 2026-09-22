@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { createHttpTransport } from '@/lib/api/http';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { messagesQueryKey } from '@/lib/api/messages';
+import { deliveryOf } from '@/lib/view/message';
 import type { Conversation, Message } from '@/lib/api/types';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -221,7 +222,14 @@ describe('performSend', () => {
     expect(entry?.message.replyTo).toBe(m1);
   });
 
-  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est REMPLACÉ, jamais dupliqué', async () => {
+  /**
+   * #7371 — ce témoin gardait le mot « REMPLACÉ », et le site FUSIONNE
+   * désormais (`mergeThreadMessage`, `api/messages.ts`). Ce qu'il mesure
+   * vraiment n'a pas changé — l'identifiant SERVEUR gagne, la rangée reste
+   * UNIQUE — mais il dit maintenant ce que la loi dit, et il ajoute la moitié
+   * qui manquait : ce que l'écho socket portait SEUL survit à la greffe.
+   */
+  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est FUSIONNÉ, jamais dupliqué', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     const outbox = createOutboxStore();
@@ -232,7 +240,12 @@ describe('performSend', () => {
     // `clientMessageId` au moment où le 2xx arrive.
     const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const cid = JSON.parse(String(init?.body)).clientMessageId as string;
-      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...m1, id: 'echo', clientMessageId: cid } as Message]));
+      queryClient.setQueryData(
+        messagesQueryKey('c-a'),
+        threadPages([
+          { ...m1, id: 'echo', clientMessageId: cid, translations: [{ targetLanguage: 'en', translatedContent: 'hello 2' }] } as unknown as Message,
+        ]),
+      );
       return new Response(JSON.stringify(ackBody('m9', cid)), { status: 200 });
     }) as typeof fetch;
     const deps: SendDeps = {
@@ -253,23 +266,44 @@ describe('performSend', () => {
     const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m9');
+    // Ce que l'écho socket portait SEUL — la traduction que le Prisme sert —
+    // n'est pas effacé par la liste VIDE du message local.
+    expect(page?.messages[0]?.translations).toHaveLength(1);
   });
 
-  test('fusion champ par champ : accusé REST ne regresse pas ✓✓ à ✓ si socket a montré readCount plus haut', async () => {
+  /**
+   * LA COURSE DE #7371 — `read-status:updated` peint ✓✓ pendant que le POST
+   * est EN VOL, puis l'accusé REST arrive avec les compteurs du message
+   * LOCAL (`confirmedMessageOf` : `0`/`0`). Le remplacement intégral faisait
+   * redescendre la coche d'un cran.
+   *
+   * **LE TÉMOIN MESURE LE STATUT, PAS LES COMPTEURS** (critère de #7371 :
+   * « jamais de régression de statut »). `deliveryOf` lit QUATRE entrées —
+   * `readByAllAt`, `recipientCount`, `readCount`, `deliveredCount` — et une
+   * assertion sur les deux derniers seulement laisserait passer la
+   * régression que les deux premiers produiraient. C'est la valeur qui
+   * atteint le PIXEL (`checkStatusOf` → `BubbleFooter`) que l'on épingle.
+   */
+  test('course : l’accusé REST ne fait pas redescendre ✓✓ bleu (statut LU) posé par le temps réel', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     const outbox = createOutboxStore();
 
-    // Séquence :
-    // 1. Socket event `read-status:updated` arrive avec readCount=1, deliveredCount=1 (✓✓)
-    // 2. REST accusé arrive avec readCount=0, deliveredCount=0 (✓)
-    // La fusion doit garder les compteurs plus hauts : readCount=1, deliveredCount=1
     const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const cid = JSON.parse(String(init?.body)).clientMessageId as string;
-      // Socket event simule un message avec des compteurs plus hauts
-      const messageFromSocket = { ...m1, id: 'm-sent', clientMessageId: cid, deliveredCount: 1, readCount: 1 } as Message;
-      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([messageFromSocket]));
-      // REST accusé retourne des compteurs plus bas (ou absents)
+      // Ce que `applyReadStatusUpdated` (`api/realtime-apply.ts`) pose :
+      // les deux compteurs, le dénominateur, et l'horloge « lu par tous ».
+      const fromSocket = {
+        ...m1,
+        id: 'm-sent',
+        clientMessageId: cid,
+        senderId: 'u-viewer',
+        deliveredCount: 2,
+        readCount: 2,
+        recipientCount: 2,
+        readByAllAt: new Date('2026-09-09T09:59:00.000Z'),
+      } as unknown as Message;
+      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([fromSocket]));
       return new Response(JSON.stringify(ackBody('m-sent', cid, { deliveredCount: 0, readCount: 0 })), { status: 200 });
     }) as typeof fetch;
     const deps: SendDeps = {
@@ -289,10 +323,11 @@ describe('performSend', () => {
 
     const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
-    expect(page?.messages[0]?.id).toBe('m-sent');
-    // Non-régression : les compteurs de socket ne doivent pas redescendre
-    expect(page?.messages[0]?.deliveredCount).toBe(1);
-    expect(page?.messages[0]?.readCount).toBe(1);
+    const merged = page?.messages[0];
+    expect(merged?.id).toBe('m-sent');
+    expect(deliveryOf(merged as Message)).toBe('read');
+    expect(merged?.deliveredCount).toBe(2);
+    expect(merged?.readCount).toBe(2);
   });
 
   test('4xx (403 USER_BLOCKED) : entrée failed, lastError.status/code posés, page toBe-identique', async () => {
