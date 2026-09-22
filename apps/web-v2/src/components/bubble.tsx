@@ -163,6 +163,11 @@ export function Bubble({
   onOpenDetail?: (messageId: string) => void;
 }) {
   const { message, tail } = place;
+  /* EN SÉLECTION, un tap sur la rangée BASCULE la coche de sélection
+     (`thread-modes.tsx`, `onRowTap`) : l'accusé y redevient un glyphe NU,
+     sinon un seul geste ouvrirait la fiche ET basculerait la sélection. */
+  const openDetail =
+    onOpenDetail === undefined || selected !== undefined ? undefined : () => onOpenDetail(message.id);
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
@@ -532,7 +537,7 @@ export function Bubble({
                     status={checkStatus}
                     isMine={isMine}
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
-                    {...(onOpenDetail === undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
+                    {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                   />
                 )}
               </div>
@@ -655,7 +660,7 @@ export function Bubble({
                       status={checkStatus}
                       isMine={isMine}
                       {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
-                      {...(onOpenDetail === undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
+                      {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                     />
                   )}
                 </div>

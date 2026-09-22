@@ -309,7 +309,10 @@ export function Check({
     ) : (
       <button
         type="button"
-        onClick={onOpen}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
         aria-label={translate(currentInterfaceLanguage(), 'message-detail.open')}
         className="tap-target-chip inline-flex items-center"
       >
