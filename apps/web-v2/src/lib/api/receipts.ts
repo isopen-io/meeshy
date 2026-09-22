@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
+import { createOfflineQueue } from '@/lib/offline-queue';
 import type { Transport } from '../net/transport';
 import type { ConversationsDeps } from './conversations';
 import { patchConversation, patchConversationDetail } from './conversations';
@@ -50,8 +51,8 @@ export type MarkCaughtUpDeps = ConversationsDeps & {
  * (`conversation-actions.ts`, action `'read'`) : l'override retombe la
  * pastille de la Lentille AVANT que le réseau ne confirme (« la pastille
  * redescend sans geste », critère de fin #7201), un refus PERMANENT (4xx) le
- * défait, une panne (réseau, 5xx) le LAISSE (transitoire — pas de rejeu
- * automatique côté web, comme `performRowAction`), un succès pose la valeur
+ * défait, une panne (réseau, 5xx/408/429) le LAISSE ET LA MET EN FILE (#7367,
+ * W3 — voir `readReceiptOfflineQueue` ci-dessous), un succès pose la valeur
  * CONFIRMÉE dans le cache et retire l'override.
  *
  * `source !== 'gateway'` (fixtures) : l'override optimiste reste posé, aucun
@@ -76,24 +77,51 @@ export async function markCaughtUp(params: {
   readonly deps: MarkCaughtUpDeps;
 }): Promise<void> {
   const { conversationId, caughtUpToMessageId, deps } = params;
-  const { store, queryClient, source, transport } = deps;
+  const { store, source } = deps;
 
   store.getState().markRead(conversationId);
 
   if (source !== 'gateway') return;
 
+  const job: PendingReadReceipt = { conversationId, caughtUpToMessageId, deps };
+  const resolved = await attemptReadReceipt(job);
+  if (!resolved) {
+    ensureOnlineFlushListener();
+    readReceiptOfflineQueue.enqueue(conversationId, job);
+  }
+}
+
+type PendingReadReceipt = {
+  readonly conversationId: string;
+  readonly caughtUpToMessageId: string;
+  readonly deps: MarkCaughtUpDeps;
+};
+
+/**
+ * `attemptReadReceipt` — LA TENTATIVE, extraite de `markCaughtUp` (#7367,
+ * W3) pour être rejouée À L'IDENTIQUE par le flush de reconnexion, jamais
+ * réécrite une seconde fois. Rend `true` quand l'issue est RÉSOLUE (succès
+ * confirmé au cache, ou refus permanent défait) — plus rien à rejouer —,
+ * `false` quand elle reste TRANSITOIRE (réseau, 5xx/408/429) : c'est ce
+ * booléen que `OfflineQueue.flush` lit pour décider de retirer le job ou de
+ * le garder en tête de file.
+ */
+async function attemptReadReceipt(job: PendingReadReceipt): Promise<boolean> {
+  const { conversationId, caughtUpToMessageId, deps } = job;
+  const { store, queryClient, transport } = deps;
+
   let result: unknown;
   try {
     result = await pushReadReceipt(transport, conversationId, caughtUpToMessageId);
   } catch {
-    return;
+    return false;
   }
 
   const outcome = outcomeOf(result);
-  if (outcome === 'transient') return;
+  if (outcome === 'transient') return false;
   if (outcome === 'permanent') {
     store.getState().clearOverride(conversationId, ['unreadCount']);
-    return;
+    return true;
   }
   const caughtUp = findCachedThreadMessage(queryClient, conversationId, caughtUpToMessageId);
   const advance = (c: Conversation): Conversation =>
@@ -105,6 +133,51 @@ export async function markCaughtUp(params: {
   patchConversation(queryClient, conversationId, advance);
   patchConversationDetail(queryClient, conversationId, advance);
   store.getState().clearOverride(conversationId, ['unreadCount']);
+  return true;
+}
+
+/**
+ * `readReceiptOfflineQueue` (#7367, W3) — LA FILE HORS LIGNE du marquage
+ * lu, seule consommatrice de `createOfflineQueue` (`lib/offline-queue.ts`)
+ * pour ce domaine (CLAUDE.md § Instant App, « Offline Graceful
+ * Degradation »). Dédoublonnée par `conversationId` : rattraper une
+ * conversation plus loin REMPLACE le job en attente, sa position FIFO ne
+ * bouge pas (une frontière plus récente rend les précédentes obsolètes,
+ * jamais l'inverse).
+ *
+ * Singleton de MODULE — même motif que `consumedViewOnceIds`
+ * (`api/fixtures.ts`) : un onglet, une file. `resetReadReceiptQueueForTests`
+ * / `readReceiptQueueSizeForTests` ci-dessous, TÉMOINS SEULS, jamais
+ * appelés par l'application.
+ */
+const readReceiptOfflineQueue = createOfflineQueue<PendingReadReceipt>();
+
+const onOnlineFlush = (): void => {
+  void readReceiptOfflineQueue.flush(attemptReadReceipt);
+};
+
+/**
+ * `ensureOnlineFlushListener` — posé au premier échec, jamais au chargement
+ * du module (SSR : aucun `window` à ce moment-là, même garde que
+ * `net/online.ts`). `addEventListener` avec la MÊME référence de fonction
+ * est idempotent (spec DOM) : rappeler cette fonction à chaque échec ne pose
+ * jamais un second écouteur sur la même fenêtre, et ré-attache correctement
+ * sur une fenêtre RECHARGÉE (un test qui réenregistre happy-dom, par
+ * exemple) — aucun drapeau booléen à désynchroniser.
+ */
+function ensureOnlineFlushListener(): void {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('online', onOnlineFlush);
+}
+
+/** TÉMOIN SEUL — jamais appelé par l'application. */
+export function resetReadReceiptQueueForTests(): void {
+  readReceiptOfflineQueue.clear();
+}
+
+/** TÉMOIN SEUL — jamais appelé par l'application. */
+export function readReceiptQueueSizeForTests(): number {
+  return readReceiptOfflineQueue.size();
 }
 
 /**

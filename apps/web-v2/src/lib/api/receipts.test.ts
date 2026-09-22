@@ -1,8 +1,14 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createStore } from 'zustand/vanilla';
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-import { fetchMessageReceiptsPeople, markCaughtUp, pushReadReceipt } from './receipts';
+import {
+  fetchMessageReceiptsPeople,
+  markCaughtUp,
+  pushReadReceipt,
+  readReceiptQueueSizeForTests,
+  resetReadReceiptQueueForTests,
+} from './receipts';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import { createAppQueryClient, type StorageLike } from './query-client';
 import { messagesQueryKey, upsertThreadMessage } from './messages';
@@ -12,7 +18,19 @@ import { createHttpTransport } from './http';
 import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
 import { message, VIEWER_ID } from '@/lib/api/fixtures-base';
 import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { Conversation, Message } from './types';
+
+/**
+ * `readReceiptOfflineQueue` (#7367, W3) est un singleton de MODULE (même
+ * motif que `consumedViewOnceIds`, `api/fixtures.ts`) : une panne dans
+ * N'IMPORTE quel test de ce fichier y laisse un job. Reset après CHAQUE
+ * test, pas seulement dans les `describe` qui l'inspectent — un test
+ * antérieur ne doit jamais polluer la file lue par un test suivant.
+ */
+afterEach(() => {
+  resetReadReceiptQueueForTests();
+});
 
 function fakeStorage(): StorageLike {
   const raw = new Map<string, string>();
@@ -173,6 +191,25 @@ describe('markCaughtUp — 4xx (refus PERMANENT)', () => {
     const cached = findCachedConversation(queryClient, 'c1');
     expect(cached?.unreadCount).toBe(3);
   });
+
+  /**
+   * TÉMOIN 3 (#7367, W3) — un refus PERMANENT n'a rien à rejouer : le
+   * garder en file rejouerait, à la reconnexion, un appel dont l'issue ne
+   * changera jamais (même statut, même corps).
+   */
+  test('AUCUNE mise en file hors ligne — rien à rejouer sur un refus définitif', async () => {
+    const c = conversation({ id: 'c1', unreadCount: 3 });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 404, body: { success: false, error: 'Message non trouvé' } }),
+    });
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(readReceiptQueueSizeForTests()).toBe(0);
+  });
 });
 
 describe('markCaughtUp — panne réseau / 5xx (TRANSITOIRE)', () => {
@@ -188,6 +225,126 @@ describe('markCaughtUp — panne réseau / 5xx (TRANSITOIRE)', () => {
     await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
 
     expect(effectiveUnreadOf(c, store.getState().overrides)).toBe(0);
+  });
+
+  /**
+   * TÉMOIN 1 (#7367, W3) — la panne RÉSEAU (fetch qui lève) met le
+   * marquage en file, prêt pour la reconnexion (critère de fin de #7367).
+   */
+  test('la panne réseau (fetch qui lève) met le marquage en FILE hors ligne', async () => {
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const rejecting = (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: rejecting });
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+  });
+
+  /**
+   * TÉMOIN 2 (#7367, W3) — un 5xx (transitoire au sens `outcomeOf`) met
+   * ÉGALEMENT en file, pas seulement l'exception réseau brute.
+   */
+  test('un 503 (transitoire) met AUSSI le marquage en FILE hors ligne', async () => {
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 503, body: { success: false, error: 'Service indisponible' } }),
+    });
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+  });
+});
+
+/**
+ * TÉMOIN 4 ET 5 (#7367, W3) — le critère de fin lui-même : « panne pendant
+ * le marquage ⇒ rejoué à la reconnexion, FIFO (OfflineQueue) ».
+ */
+describe('markCaughtUp — rejeu à la reconnexion (#7367, W3)', () => {
+  afterEach(async () => {
+    await releaseHappyDomIfRegistered();
+  });
+
+  /**
+   * `Transport` capture son `fetchImpl` dans une fermeture au moment de
+   * `createHttpTransport` (`http.ts:305-306`), jamais mutable après coup —
+   * un INDIRECTION locale (`currentImpl`, réaffectée par le test) simule la
+   * reconnexion SANS ajouter d'API de test au transport réel : « offline »
+   * jusqu'à la bascule, « répond 200 » ensuite, le MÊME transport dans les
+   * deux cas (c'est bien lui que le job en file rejoue).
+   */
+  function switchableTransport() {
+    let currentImpl: typeof fetch = (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: ((input: RequestInfo | URL, init?: RequestInit) => currentImpl(input, init)) as typeof fetch,
+    });
+    return { transport, goOnline: (impl: typeof fetch) => { currentImpl = impl; } };
+  }
+
+  test('l’événement `online` rejoue le job en file : la seconde tentative réussit, le cache se met à jour, la file se vide', async () => {
+    ensureHappyDomRegistered();
+
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const { transport, goOnline } = switchableTransport();
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+
+    // Reconnexion : le MÊME transport répond 200 désormais — sans qu'aucun
+    // second `markCaughtUp` ne soit appelé, c'est le FLUSH qui doit reposter.
+    goOnline(fakeFetch({ status: 200, body: { success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } } }));
+
+    window.dispatchEvent(new Event('online'));
+    // `flush` est asynchrone (attend la réponse réseau) : laisser le
+    // micro-tour d'événements s'écouler avant d'observer le résultat.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(readReceiptQueueSizeForTests()).toBe(0);
+    const cached = findCachedConversation(queryClient, 'c1');
+    expect(cached?.unreadCount).toBe(0);
+    expect(store.getState().overrides['c1']).toBeUndefined();
+  });
+
+  test('deux pannes successives sur la MÊME conversation ⇒ UNE seule entrée en file, portant la frontière la PLUS RÉCENTE', async () => {
+    ensureHappyDomRegistered();
+
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const { transport, goOnline } = switchableTransport();
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm5', deps: { source: 'gateway', transport, store, queryClient } });
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+
+    const calls: string[] = [];
+    goOnline(((_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)).caughtUpToMessageId);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } }), { status: 200 }),
+      );
+    }) as unknown as typeof fetch);
+
+    window.dispatchEvent(new Event('online'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toEqual(['m9']);
   });
 });
 

@@ -812,6 +812,19 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #7449 — LE FIL SE LIT DANS UNE COLONNE, ET ON Y PUBLIE. Le SEUL gate du
+      # dépôt qui mesure un gabarit LARGE (1440 × 900) : tous les autres
+      # tournent à 390 × 844 et 320 × 568, et c'est exactement pour cela que le
+      # fil a pu s'étaler sur 1416 px sans qu'aucun ne rougisse. Il garde aussi
+      # l'autre moitié — que la borne ne MORD PAS sur un téléphone — puis
+      # traverse la porte de création : ses deux formats, le refus NOMMÉ d'un
+      # réel non qualifiant, la bascule qui garde la saisie, la publication.
+      - name: Gate colonne du fil (centrage large, porte de création, publication)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-column.mjs
+
       # #7135 — LES GESTES D'UNE RANGÉE DE COMMENTAIRE ONT UN EFFET. Les
       # témoins `bun test` tournent sous happy-dom et prouvent que les rappels
       # partent ; seul un moteur réel peut dire que le cœur se REMPLIT avant la

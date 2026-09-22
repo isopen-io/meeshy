@@ -3808,3 +3808,41 @@ Dimensions mûres : 4 (aucune horloge avant la dernière minute ; le repli suit 
 virtualiseur au lieu de le bousculer), 5 (le temps reste dit à l'oreille,
 `prefers-reduced-motion` honoré), 8 (la disparition se comprend), 13 (les cinq
 modes, par le nœud commun).
+
+## D-110 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
+
+**Le fait, mesuré.** `/feed` posait son scrollport en `flex-1 … px-3` sans aucune borne : à 1440 px, une carte de publication faisait **1416 px** de large. `/reels` étalait de même son pager 9:16 sur toute la largeur — la vidéo en `object-contain` au centre, le rail d'actions au bord opposé du regard. Aucun gate ne pouvait le voir : les trente-huit autres mesurent **390 × 844** et **320 × 568**, deux téléphones. **Un défaut qui ne se voit qu'au-delà des gabarits mesurés est invisible par construction** — d'où `scripts/check-feed-column.mjs`, qui ajoute 1440 × 900 au dépôt.
+
+**La borne vaut à TOUTE largeur, et c'est ce qui évite une media query.** `READING_COLUMN_STYLE` (`lib/view/reading-column.ts`) est un `max-width` + `margin-inline: auto` : en dessous de la borne il ne mord pas, au-dessus il centre. Aucun seuil à tenir, aucun gabarit à nommer, aucun second rendu à maintenir. Le rendu mobile est, au pixel près, celui d'avant le lot — le gate le mesure dans les deux sens.
+
+**640 px vient du CONTENU, jamais d'un appareil** : `MEDIA_GRID_MAX_WIDTH` borne déjà une mosaïque à 300 px, une carte en porte deux colonnes de cette échelle plus ses gouttières, et 640 tient ~85 caractères au corps du dépôt.
+
+**LE CHROME PREND LA FENÊTRE, LE CONTENU PREND LA COLONNE** (directive porteur du 2026-09-22, après une première écriture fausse). La colonne est portée par les CARTES, le squelette et les états vide/erreur ; l'en-tête, le plateau des stories et le scrollport — donc la barre de défilement — gardent toute la largeur.
+
+La première écriture la posait sur le SCROLLPORT : un `style` de moins, et faux — elle emportait avec elle le titre « Meeshy Feed » et le plateau des stories, qui sont du chrome et n'ont aucune raison de rétrécir. **Ce qu'on borne est la mesure de LECTURE** (une ligne trop longue se relit mal), jamais l'application. Le plateau vit pourtant DANS le scrollport (il sort du champ au défilement, #6103) : la règle ne se lit donc pas « ce qui défile se borne », mais « ce qui se LIT se borne ».
+
+Conséquence de forme : le pied de pagination (`LensPaginationFooter`) rend ses propres `<li>` et ne peut pas être enveloppé ; c'est `FeedSkeleton` — le contenu qu'il porte en `loading-more` — qui prend la colonne, et ses trois autres états (légende centrée, erreur centrée, sentinelle d'un pixel) n'en ont pas besoin. Le détail d'une publication (`/post/$post`) garde la colonne sur son scrollport, lui : aucun chrome ne vit dans son défilement.
+
+**Les Réels se bornent par la HAUTEUR, pas par un nombre de pixels** — `hauteur × 9/16`, le rapport de la scène. En `dvh` et non `vh` : c'est la hauteur que `ReelsFrame` emploie (`h-dvh`), et les deux divergent dès que la barre d'adresse d'une WebView bouge. La colonne porte le `relative`, donc « Retour » et les états plein cadre s'ancrent à ELLE — sans quoi le contrôle part à 460 px du contenu qu'il ferme.
+
+**Ce n'est PAS la géographie desktop** (#5418, deux colonnes liste + fil) : c'est une lecture réparée, pas un bureau dessiné. Le chantier de design reste entier.
+
+## D-111 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
+
+**Le fait.** `apps/web-v2` LISAIT le fil sans pouvoir l'alimenter : la table des routes n'offrait que `/stories/new` et `/status/new`. Aucune adresse ne créait de `Post.type = 'POST'` ni `'REEL'`, alors que la passerelle les sert depuis toujours. C'est pour cela que le doc-comment de `routes/feed.tsx` rangeait le « placeholder de composeur » d'iOS dans ce qui n'est PAS repris — un contrôle sans effet ne se dessine pas (loi 4). Ce lot lui donne son effet, donc sa porte.
+
+**`/posts/new` et `/posts/new?type=reel` sont le MÊME écran.** La composition est identique — un texte, des médias ; seule la CLASSIFICATION diffère, et l'auteur doit pouvoir changer d'avis sans perdre sa saisie. D'où la bascule dans l'écran, et d'où l'adresse qui SUIT ce choix (un rechargement retrouve le format). Même dispositif que `/stories?author=`.
+
+C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui tient : une humeur n'a ni texte long, ni média, ni format — ce n'était pas un mode, c'était un autre écran.
+
+**PLURIEL, et sans collision** : `/posts/new` voisine `/conversations/new`, `/communities/new`, `/links/share/new` ; le DÉTAIL d'une publication est au SINGULIER (`/post/$post`), et aucun motif paramétré ne vit sous `/posts`.
+
+**Le réel se REFUSE, il ne se dégrade pas.** `qualifiesAsReel` (`packages/shared/utils/reel-composition.ts`) est la règle SERVEUR, importée et non réécrite. Sans elle côté client, un réel de texte seul partait et la passerelle le **dégradait en post** (`createPost: REEL non qualifiant dégradé en POST`) : l'auteur choisissait un format et en obtenait un autre, sans un mot. L'écran nomme ce qui manque — miroir de `ComposerDocumentSendRefusal.reelWithoutQualifyingMedia` (iOS), et « le seul des deux verdicts qu'il puisse réparer ».
+
+**La qualification lit la COMPOSITION, pas l'état du réseau.** Un média encore en vol qualifie déjà : son type et sa durée sont connus du FICHIER LOCAL dès la sélection, et la publication attend les envois de toute façon. Éteindre le bouton pendant la montée d'une vidéo de huit secondes dirait « ce réel ne qualifie pas » d'un réel qui qualifie. Un envoi ÉCHOUÉ, lui, sort de la qualification — et l'écran le DIT, sans quoi la publication partirait amputée d'un média que l'auteur croit joint.
+
+**`visibility` n'est PAS envoyée**, comme en story : le défaut est une règle serveur (`defaultVisibilityForPostType`, PUBLIC hors story), et un défaut recopié côté client est exactement ce qui avait laissé les stories web à FRIENDS pendant que les posts naissaient publics.
+
+**DÉLIBÉRÉMENT MINIMAL**, même discipline que l'humeur : un texte, des médias, un format. Audience, lieu, mentions déclarées, repartage, son, montage et brouillon persisté restent hors tranche — des issues de suivi, jamais une dette silencieuse.
+
+**La porte se pose À GAUCHE de « Lancer les Réels », et ce n'est pas un goût** : `check-reels.mjs` mesure que le bouton des Réels touche le bord droit (`innerWidth - right <= 16`) et `check-feed-disc.mjs` qu'il vit dans les 64 derniers pixels — deux gates qui disent la place que la cible iOS lui donne (#6457). Insérer la création à sa droite l'aurait déplacée sans qu'aucune décision ne l'ait demandé.

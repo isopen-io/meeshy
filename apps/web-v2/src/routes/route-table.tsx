@@ -115,6 +115,20 @@ export const ROUTES = {
      `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
      « retour » doit refermer la composition d'humeur seule. */
   statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
+  /* PUBLIER DANS LE FIL (#7449) — la porte de création de l'en-tête du Flux.
+     UNE adresse pour les DEUX formats : `/posts/new` ouvre un post,
+     `/posts/new?type=reel` un réel. La composition est la MÊME (un texte, des
+     médias) et seule la CLASSIFICATION diffère — deux écrans à faire diverger
+     pour un `type` de plus n'auraient rien acheté, et l'auteur doit pouvoir
+     changer d'avis sans perdre sa saisie (bascule dans l'écran, qui SUIT
+     l'adresse). C'est l'inverse de `statusCompose` ci-dessus, et pour une
+     raison qui tient : une humeur n'a ni texte long, ni média, ni format.
+
+     PLURIEL, comme `/conversations/new`, `/communities/new` et
+     `/links/share/new` — et SANS collision avec le détail, qui est au
+     SINGULIER (`/post/$post`, plus bas) : aucun motif paramétré ne vit sous
+     `/posts`. */
+  postCompose: { pattern: '/posts/new', screen: () => import('@/routes/post-compose') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;

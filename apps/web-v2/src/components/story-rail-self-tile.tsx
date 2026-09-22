@@ -39,6 +39,12 @@ import { Link } from '@/routes/route-table';
  * de la cellule d'environ 9 px : ma cellule est la PREMIÈRE du rail, dont le
  * `paddingInline` vaut 16, et le `gap` de 8 tient le reste.
  *
+ * **Cette phrase était FAUSSE jusqu'au 2026-09-22 (#7449)** : la cible et le
+ * disque étaient la MÊME boîte, `minWidth: 44` l'emportait sur `width: badge`,
+ * et les deux pastilles étaient donc PEINTES à 44 px — mesuré au navigateur.
+ * Elles sont désormais deux boîtes (`badgeTarget` / `disque`, voir plus bas),
+ * et deux témoins mesurent ce qui est peint, pas seulement ce qui se touche.
+ *
  * ## EN RTL, LA GÉOGRAPHIE SE MIROITE — et c'est le sens de la directive
  *
  * « haut-gauche » et « bas-droite » nomment un DÉBUT et une FIN de ligne, pas
@@ -128,7 +134,24 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
     </span>
   );
 
-  const badgeStyle = {
+  /**
+   * **LA CIBLE, PAS LE DISQUE** (#7449, directive porteur du 2026-09-22) — et
+   * c'est la correction d'un défaut que ce fichier DÉCLARAIT sans l'appliquer.
+   *
+   * Le doc-comment ci-dessus promet depuis toujours « chaque pastille MESURE
+   * ~26 px et se TOUCHE sur 44 ». Le style, lui, posait `width: badge` PUIS
+   * `minWidth: 44` sur le MÊME élément, qui portait aussi `rounded-full` et le
+   * fond : le minimum gagne, et le disque était donc PEINT à 44 px — mesuré au
+   * navigateur, 44×44 pour un anneau de 94. Le (+) couvrait presque la moitié
+   * du visage.
+   *
+   * La cible et le disque sont désormais DEUX boîtes : le lien garde ses 44 px
+   * (dimension 5, et les deux gates qui les mesurent), transparent ; le disque
+   * est un `<span>` intérieur au diamètre que la loi DÉRIVE de l'anneau. Un
+   * `minWidth` sur la boîte qui porte le fond ne peut pas être « une cible » :
+   * il est aussi une taille de peinture.
+   */
+  const badgeTarget = {
     width: badge,
     height: badge,
     minWidth: `${MIN_TOUCH_TARGET}px`,
@@ -136,6 +159,8 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
     margin: -hit,
     outlineColor: 'var(--color-ios-brand)',
   } as const;
+
+  const disque = { width: badge, height: badge } as const;
 
   return (
     <li
@@ -168,14 +193,21 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
           data-self-create
           aria-label={translate(language, 'stories.self.addStory')}
           className="absolute top-0 start-0 grid place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{
-            ...badgeStyle,
-            color: 'var(--color-ios-on-brand, #fff)',
-            background: 'var(--color-ios-brand)',
-            boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
-          }}
+          style={badgeTarget}
         >
-          <Glyph name="plus" size={Math.max(10, Math.round(badge * 0.5))} />
+          <span
+            aria-hidden="true"
+            data-self-create-disc
+            className="grid place-items-center rounded-full"
+            style={{
+              ...disque,
+              color: 'var(--color-ios-on-brand, #fff)',
+              background: 'var(--color-ios-brand)',
+              boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+            }}
+          >
+            <Glyph name="plus" size={Math.max(10, Math.round(badge * 0.5))} />
+          </span>
         </Link>
 
         {/* LA PASTILLE D'HUMEUR — FIN de ligne, en bas. `data-mood` porte
@@ -191,19 +223,17 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
               : translate(language, 'stories.self.mood.change', { emoji })
           }
           className="absolute bottom-0 end-0 grid place-items-center rounded-full leading-none focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{
-            ...badgeStyle,
-            background: 'var(--color-ios-surface)',
-            boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
-          }}
+          style={badgeTarget}
         >
           <span
             aria-hidden="true"
+            data-self-mood-disc
             {...(emoji === undefined ? {} : { 'data-mood-animates': 'true' })}
-            className={emoji === undefined ? 'grid place-items-center' : 'grid place-items-center mood-breathe'}
+            className={`rounded-full ${emoji === undefined ? 'grid place-items-center' : 'grid place-items-center mood-breathe'}`}
             style={{
-              width: badge,
-              height: badge,
+              ...disque,
+              background: 'var(--color-ios-surface)',
+              boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
               fontSize: Math.max(10, Math.round(badge * 0.65)),
             }}
           >
