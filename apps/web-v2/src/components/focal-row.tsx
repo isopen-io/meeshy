@@ -1,8 +1,10 @@
 import { memo, useRef } from 'react';
 
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
-import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
+import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
@@ -11,7 +13,7 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
-import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import {
   AVATAR_FRAME,
   AVATAR_SIZE,
@@ -33,7 +35,8 @@ import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
-import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
 import {
@@ -124,6 +127,7 @@ export const FocalRow = memo(function FocalRow({
   highlighted = false,
   elected = false,
   expired = false,
+  ephemeralDeadline,
   onConsumeViewOnce,
   onEphemeralExpired,
   now = defaultNow,
@@ -208,6 +212,15 @@ export const FocalRow = memo(function FocalRow({
    * dans une peau »).
    */
   expired?: boolean;
+  /**
+   * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée par l'HÔTE
+   * (`thread-modes.tsx`, `resolveEphemeralDeadline`) et jamais recalculée ici :
+   * la règle est partagée (`@meeshy/shared/utils/ephemeral-deadline`) et la
+   * RÉCEPTION locale qui l'alimente est un état du client, hors de cette
+   * rangée. OBLIGATOIRE : c'est ce qui rend impossible de monter une peau de
+   * message sans décider ce qu'elle fait d'un éphémère.
+   */
+  ephemeralDeadline: EphemeralDeadline;
   /** Consomme une vue unique (D-10, `lib/api/view-once.ts`) ; `undefined` en environnement sans réseau. */
   onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
   onEphemeralExpired?: (messageId: string) => void;
@@ -439,22 +452,19 @@ export const FocalRow = memo(function FocalRow({
   // (`memo`), donc `new Date()` ici ne tourne pas à chaque frame de la scène.
   const nowMoment = elected ? new Date() : null;
 
-  const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
   /**
    * LES BADGES DE TÊTE (#5936) — `badgesOf` porte l'ORDRE complet
-   * (épinglé, transféré, éphémère, modifié) ; `Badges` n'en peint que les
-   * deux premiers (l'éphémère reste `EphemeralBadge`, « modifié »
-   * `EditedMark` — chacun a sa propre place, § doc-comment de `Badges`).
+   * (épinglé, transféré, modifié) ; `Badges` n'en peint que les deux premiers
+   * (« modifié » revient à `EditedMark` — chacun a sa propre place, §
+   * doc-comment de `Badges`). L'ÉPHÉMÈRE a quitté cette loi au lot #7454 :
+   * voir `message-badges.ts` § « L'ÉPHÉMÈRE A QUITTÉ CETTE LOI ».
    *
-   * `ephemeralBadge`/`isEdited` LISENT CETTE SORTIE, jamais `message.expiresAt`
-   * / `message.isEdited` en direct (revue-correction #5936, défaut majeur 1) —
-   * sans quoi la moitié de ce que `badgesOf` calcule n'atteignait aucun
-   * pixel, et rien ne garantissait plus que la rangée montre exactement ce
-   * que la loi a décidé.
+   * `isEdited` LIT CETTE SORTIE, jamais `message.isEdited` en direct
+   * (revue-correction #5936, défaut majeur 1) — sans quoi la moitié de ce que
+   * `badgesOf` calcule n'atteignait aucun pixel.
    */
-  const badges = badgesOf(message, nowMs);
-  const ephemeralBadge = ephemeralBadgeOf(badges);
+  const badges = badgesOf(message);
   const isEdited = editedOf(badges);
 
   /**
@@ -659,17 +669,17 @@ export const FocalRow = memo(function FocalRow({
           <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
-        {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
-            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),
-            monté SEULEMENT quand le minuteur tourne. Tient SON PROPRE
-            intervalle (`memo`) — cette rangée ne re-rend jamais pour lui. */}
-        {ephemeral.state === 'running' && ephemeralBadge !== undefined ? (
-          <EphemeralBadge
-            expiresAt={ephemeralBadge.expiresAt}
-            now={now}
-            onExpired={() => onEphemeralExpired?.(message.id)}
-          />
-        ) : null}
+        {/* LE CHROME DE PROTECTION — AU-DESSUS de l'identité (F11,
+            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`). UN
+            composant pour les deux peaux et pour les modes à venir (#7454) :
+            le décompte d'un éphémère ET la désignation d'une vue unique, que
+            cette rangée ne câble plus elle-même. L'horloge est PARTAGÉE
+            (`secondClock`) — cette rangée ne re-rend jamais pour elle. */}
+        <ProtectionChrome
+          deadline={ephemeralDeadline}
+          isViewOnce={message.isViewOnce}
+          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
+        />
 
         {head ? (
           /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne

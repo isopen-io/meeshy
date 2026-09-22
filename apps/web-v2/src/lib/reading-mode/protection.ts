@@ -64,18 +64,17 @@ export function protectionOf(message: ProtectionFields, now: number): Protection
   return 'standard';
 }
 
-export type EphemeralState =
-  | { readonly state: 'none' }
-  | { readonly state: 'running'; readonly remainingSeconds: number }
-  | { readonly state: 'expired' };
-
-/** Miroir de `BubbleEphemeralLifecycle.State.evaluate` (:8-20). */
-export function ephemeralOf(expiresAt: Date | string | undefined, now: number): EphemeralState {
-  if (expiresAt === undefined) return { state: 'none' };
-  const remainingMs = new Date(expiresAt).getTime() - now;
-  if (remainingMs <= 0) return { state: 'expired' };
-  return { state: 'running', remainingSeconds: Math.floor(remainingMs / 1000) };
-}
+/**
+ * `ephemeralOf` A ÉTÉ RETIRÉE AU LOT #7454 — elle lisait `expiresAt` et
+ * répondait « reste-t-il du temps ? » depuis lui seul. Un éphémère n'a plus
+ * d'`expiresAt` sur `message:new` (contrat du fil #7451, point 4) : ce que le
+ * lecteur voit se compose de son échéance SERVIE et de sa RÉCEPTION locale,
+ * par `ephemeralDeadline()` (`@meeshy/shared/utils/ephemeral-deadline`) et
+ * `resolveEphemeralDeadline()` (`lib/view/ephemeral-reception.ts`).
+ *
+ * `formatRemaining` reste ICI : c'est une écriture, pas une décision, et le
+ * chrome de protection la consomme telle quelle.
+ */
 
 /** Miroir de `BubbleEphemeralLifecycle.format` (:25-37). */
 export function formatRemaining(seconds: number): string {

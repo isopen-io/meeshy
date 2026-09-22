@@ -304,8 +304,13 @@ export interface MessageSendData {
   readonly copyAttachmentsFromMessageId?: string;
   readonly isBlurred?: boolean;
   /**
-   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL, et en DÉRIVE la
-   * durée pour un client déjà distribué qui ne sait envoyer que ça (#7451).
+   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL.
+   *
+   * LE REPLI DES CLIENTS DÉJÀ DISTRIBUÉS, depuis #7451 : un client à jour
+   * envoie `ephemeralDuration` ci-dessous, et la passerelle DÉRIVE la durée de
+   * cette échéance pour ceux qui ne savent envoyer que ça. Les deux côtés du
+   * cliquet d'égalité de clés portent le champ
+   * (`services/gateway/src/validation/socket-event-schemas.ts`, § SendDoorRatchet).
    */
   readonly expiresAt?: string;
   /**
@@ -379,6 +384,7 @@ export interface MessageSendWithAttachmentsData {
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
   readonly isBlurred?: boolean;
+  /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
   readonly expiresAt?: string;
   /**
    * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
@@ -494,13 +500,14 @@ export interface SocketIOMessage {
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
   /**
-   * ABSENT pour un éphémère (#7451) : `message:new` est une diffusion de ROOM et
-   * l'échéance d'un éphémère est par destinataire. Le client décompte depuis SA
-   * réception locale, et `message:countdown-started` lui porte l'échéance
-   * serveur dès qu'elle existe.
+   * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room
+   * ne peut pas porter une échéance différente par lecteur. Le client compose
+   * la sienne depuis `ephemeralDuration` et sa RÉCEPTION locale
+   * (`utils/ephemeral-deadline.ts`), et `message:countdown-started` lui porte
+   * l'échéance SERVEUR dès qu'elle existe — la passerelle l'émet depuis #7451.
    */
   readonly expiresAt?: Date;
-  /** La DURÉE d'un éphémère, en secondes — la même pour tout le monde (#7451). */
+  /** Secondes entières, > 0 — servi partout : REST, `message:new` et push. */
   readonly ephemeralDuration?: number;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
