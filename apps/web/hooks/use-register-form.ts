@@ -190,7 +190,7 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
         body: JSON.stringify(requestBody),
       });
 
-      logger.debug('[REGISTER_FORM]', 'Réponse HTTP:', response.status, response.statusText);
+      logger.debug('[REGISTER_FORM]', 'Réponse HTTP', { status: response.status, statusText: response.statusText });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
