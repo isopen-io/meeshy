@@ -22,7 +22,7 @@ struct EphemeralDeadlineTests {
         let state = EphemeralDeadline.resolve(
             servedExpiresAt: nil, ephemeralDuration: nil, localReceivedAt: now, now: now
         )
-        #expect(state == .none)
+        #expect(state == .notEphemeral)
     }
 
     @Test("Une durée sans réception ni échéance servie : en attente de réception")
@@ -84,7 +84,7 @@ struct EphemeralDeadlineTests {
         let state = EphemeralDeadline.resolve(
             servedExpiresAt: nil, ephemeralDuration: 0, localReceivedAt: now, now: now
         )
-        #expect(state == .none)
+        #expect(state == .notEphemeral)
     }
 
     @Test("L'échéance du state running est lisible sans déballer le cas")
@@ -94,6 +94,6 @@ struct EphemeralDeadlineTests {
             servedExpiresAt: served, ephemeralDuration: nil, localReceivedAt: nil, now: now
         )
         #expect(state.deadline == served)
-        #expect(EphemeralDeadline.State.none.deadline == nil)
+        #expect(EphemeralDeadline.State.notEphemeral.deadline == nil)
     }
 }

@@ -65,6 +65,14 @@ struct RiverBubbleContent: Equatable {
     /// `BubbleContent.detachedStoryCitation`, projeté par le mapping.
     let storyCitation: ReplyReference?
 
+    /// **Le chrome de protection — le MÊME que celui des quatre autres modes**
+    /// (#7452). La rivière n'affichait AUCUN décompte : un éphémère y vivait
+    /// sans jamais annoncer qu'il allait disparaître, et une vue unique ne s'y
+    /// désignait pas davantage. La valeur est résolue par la PROJECTION
+    /// (`RiverConversationMapping`) via `MeeshyMessage.protection`, jamais par
+    /// la vue. Défaut vide : les sites de montage antérieurs restent justes.
+    let protection: MessageProtectionDescriptor
+
     init(
         bubble: RiverLaneResolver.RiverBubble,
         senderDisplayName: String,
@@ -85,6 +93,7 @@ struct RiverBubbleContent: Equatable {
         // même sujet évite qu'un appelant en oublie un au milieu de l'autre.
         forwardAttribution: ForwardAttribution? = nil,
         storyCitation: ReplyReference? = nil,
+        protection: MessageProtectionDescriptor = .unprotected,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -99,6 +108,7 @@ struct RiverBubbleContent: Equatable {
         self.identity = identity
         self.forwardAttribution = forwardAttribution
         self.storyCitation = storyCitation
+        self.protection = protection
     }
 }
 
@@ -296,6 +306,12 @@ struct RiverBubbleView: View, Equatable {
     /// « Copier ». Les deux premiers sont des actes de l'hôte.
     var onOpenInThread: ((String) -> Void)? = nil
     var onReply: ((String) -> Void)? = nil
+    /// #7452 — la consommation d'une vue unique, reçue de l'hôte. `nil` ⇒ le
+    /// voile ne se lève pas : `BubbleBlurRevealController.requestReveal` est
+    /// fail-closed sur un message qui exige l'accusé serveur. C'est le bon
+    /// défaut — un texte à vue unique ne doit jamais s'afficher parce qu'un
+    /// site de montage a oublié de brancher son canal.
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -392,6 +408,14 @@ struct RiverBubbleView: View, Equatable {
         .contextMenu { bubbleMenu }
     }
 
+    /// Le texte du message, nu. Extrait pour que le voile de protection
+    /// l'enveloppe sans dupliquer sa typographie.
+    private var riverText: some View {
+        Text(content.text)
+            .font(MeeshyFont.relative(FocalMetrics.Text.size))
+            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+    }
+
     // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots
 
     /// Les libellés sont CEUX du Fil (`action.reply`, `action.copy`,
@@ -442,6 +466,14 @@ struct RiverBubbleView: View, Equatable {
                 )
             }
 
+            // **#7452 — le décompte, enfin.** La rivière était, avec le résumé,
+            // l'un des deux modes où un éphémère ne disait RIEN de son
+            // échéance. Le chrome est celui des quatre autres modes, pas un
+            // cinquième badge : `MessageProtectionChrome`, monté ici comme
+            // `BubbleForwardedIndicator` l'est au-dessus.
+            MessageProtectionChrome(descriptor: content.protection, isDark: isDark)
+                .equatable()
+
             // **#5059 — une story citée est une SCÈNE ici aussi.**
             //
             // La carte fait 132 pt de large, donc elle tient dans une bulle de
@@ -471,9 +503,25 @@ struct RiverBubbleView: View, Equatable {
             }
 
             // « Le message en ENTIER » (§7ter A1) — pas de lineLimit ici.
-            Text(content.text)
-                .font(MeeshyFont.relative(FocalMetrics.Text.size))
-                .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+            //
+            // #7452 — mais VOILÉ tant que le lecteur n'a pas fait le geste,
+            // quand le message est flouté ou à vue unique. La rivière rendait
+            // le texte d'une vue unique EN CLAIR, exactement comme la rangée
+            // plate avant ce lot. Le wrapper est le même que celui de Focal :
+            // il possède l'état de révélation, la rivière reste sans `@State`.
+            if content.protection.requiresVeil {
+                FocalProtectedContent(
+                    isBlurred: true,
+                    isViewOnce: content.protection.isViewOnce,
+                    isDark: isDark,
+                    messageId: content.bubble.messageId,
+                    onConsumeViewOnce: onConsumeViewOnce
+                ) {
+                    riverText
+                }
+            } else {
+                riverText
+            }
 
             // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »
             // (arbitrage produit 2026-08-21). Elle ne vivait en base que pour

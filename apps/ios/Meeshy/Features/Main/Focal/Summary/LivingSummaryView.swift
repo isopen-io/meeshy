@@ -17,6 +17,9 @@ import MeeshyUI
 struct LivingSummaryView: View {
     @ObservedObject var viewModel: LivingSummaryViewModel
     let isDark: Bool
+    /// #7452 — les messages protégés encore vivants. Reçus, jamais dérivés du
+    /// digest : le digest ne contient plus leur texte, et c'est voulu.
+    var protections: [SummaryProtectionEntry] = []
     var onReplyToPerson: (FaceRampEntry) -> Void
     var onOpenEpisode: (ConversationEpisode) -> Void
     var onResumeThread: () -> Void
@@ -32,6 +35,7 @@ struct LivingSummaryView: View {
                         LivingSummarySkeleton(isDark: isDark)
                     } else {
                         stateHeader
+                        SummaryProtectionsView(entries: protections, isDark: isDark)
                         if !viewModel.faceRamp.isEmpty {
                             FaceRampView(entries: viewModel.faceRamp, isDark: isDark, onTap: onReplyToPerson)
                         }

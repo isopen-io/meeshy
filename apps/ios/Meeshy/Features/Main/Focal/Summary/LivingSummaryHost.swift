@@ -15,6 +15,11 @@ import MeeshySDK
 /// passer, aucun `@State`/`@StateObject` supplémentaire n'y est introduit.
 struct LivingSummaryHost: View {
     let isDark: Bool
+    /// #7452 — les messages protégés encore vivants, recomposés par le SITE DE
+    /// MONTAGE à chaque passe (ils dérivent de `viewModel.messages`, qui est
+    /// `@Published`). Volontairement HORS du `@StateObject` : le digest, lui,
+    /// n'est bâti qu'une fois, et un décompte figé au montage ne vaudrait rien.
+    let protections: [SummaryProtectionEntry]
     var onReplyToPerson: (FaceRampEntry) -> Void
     var onOpenEpisode: (ConversationEpisode) -> Void
     var onResumeThread: () -> Void
@@ -29,11 +34,13 @@ struct LivingSummaryHost: View {
         analysisProvider: ConversationAnalysisProviding?,
         conversationId: String,
         isDark: Bool,
+        protections: [SummaryProtectionEntry] = [],
         onReplyToPerson: @escaping (FaceRampEntry) -> Void,
         onOpenEpisode: @escaping (ConversationEpisode) -> Void,
         onResumeThread: @escaping () -> Void
     ) {
         self.isDark = isDark
+        self.protections = protections
         self.onReplyToPerson = onReplyToPerson
         self.onOpenEpisode = onOpenEpisode
         self.onResumeThread = onResumeThread
@@ -56,6 +63,7 @@ struct LivingSummaryHost: View {
         LivingSummaryView(
             viewModel: viewModel,
             isDark: isDark,
+            protections: protections,
             onReplyToPerson: onReplyToPerson,
             onOpenEpisode: onOpenEpisode,
             onResumeThread: onResumeThread

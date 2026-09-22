@@ -742,6 +742,32 @@ final class ConversationSocketHandler {
                     }
                 }
                 StarredMessagesStore.shared.remove(messageId: event.messageId)
+                // Le registre des réceptions n'a plus rien à dire sur un
+                // message détruit : le garder ferait grossir un magasin dont
+                // aucune entrée ne resservira.
+                EphemeralReceiptLedger.shared.forget(event.messageId)
+            }
+            .store(in: &cancellables)
+
+        // **L'échéance SERVIE d'un éphémère** (`message:countdown-started`,
+        // contrat du fil #7451 point 5).
+        //
+        // Elle ne REMPLACE pas l'échéance locale : les deux concourent, et
+        // `EphemeralDeadline.resolve` retient la plus PROCHE. Poser la valeur
+        // servie sur `expiresAt` suffit donc — elle ne peut que raccourcir la
+        // vie du message, jamais l'allonger, ce qui est la seule direction
+        // qu'une protection ait le droit de prendre.
+        //
+        // C'est aussi ce qui donne une horloge à l'EXPÉDITEUR, dont l'envoi ne
+        // compte pas comme une réception : tant que cet événement n'est pas
+        // arrivé, il lit « en attente de réception ».
+        socketManager.messageCountdownStarted
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate else { return }
+                guard let index = delegate.messageIndex(for: event.messageId) else { return }
+                delegate.messages[index].expiresAt = event.expiresAt
             }
             .store(in: &cancellables)
 
