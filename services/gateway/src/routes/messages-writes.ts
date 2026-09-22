@@ -657,18 +657,23 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
 
       switch (action) {
         case 'listened':
+          // `durationMs` n'est JAMAIS passé au service : c'est la durée de la
+          // PISTE (dénominateur de `percentage` ci-dessous), identique à
+          // chaque rapport du même client — pas le temps réellement écouté
+          // depuis le rapport précédent. Le service dérive `totalListenDurationMs`
+          // de `stretches` lui-même (#7359) ; lui repasser `durationMs` ferait
+          // recompter la piste entière à chaque appel.
           served = await readStatusService.markAudioAsListened(participant.id, attachmentId, {
             playPositionMs,
-            listenDurationMs: durationMs,
             complete,
             stretches,
             language
           });
           break;
         case 'watched':
+          // Même raison que `listened` ci-dessus.
           served = await readStatusService.markVideoAsWatched(participant.id, attachmentId, {
             watchPositionMs: playPositionMs,
-            watchDurationMs: durationMs,
             complete,
             stretches,
             language

@@ -2393,7 +2393,6 @@ export class MessageReadStatusService {
     attachmentId: string,
     options?: {
       playPositionMs?: number;
-      listenDurationMs?: number;
       complete?: boolean;
       /** Écoutes réellement continues depuis le dernier rapport. */
       stretches?: readonly unknown[];
@@ -2409,7 +2408,6 @@ export class MessageReadStatusService {
     attachmentId: string,
     options?: {
       watchPositionMs?: number;
-      watchDurationMs?: number;
       complete?: boolean;
       /** Visionnages réellement continus depuis le dernier rapport. */
       stretches?: readonly unknown[];

@@ -140,26 +140,67 @@ function capTrace(trace: PlaybackStretch[], maxStretches: number): PlaybackStret
  * distinctes tombant à la milliseconde près sur les mêmes bornes ET le même
  * motif) est négligeable devant celui du rejeu.
  */
+/**
+ * Les entrées de `incoming` qui sont à la fois VALIDES et NOUVELLES — absentes
+ * de `existing` par leur identité (bornes + motif de fin). Un rejeu de la file
+ * hors-ligne (même rapport posté deux fois) ou un doublon à l'intérieur d'un
+ * même rapport n'y apparaît qu'une fois. Factorisé hors de
+ * {@link appendPlaybackStretches} et {@link newStretchesDurationMs}, qui
+ * doivent s'accorder sur EXACTEMENT les mêmes écoutes acceptées — l'une pour
+ * les stocker, l'autre pour en compter la durée.
+ */
+function acceptNewStretches(
+  existing: readonly PlaybackStretch[],
+  incoming: readonly unknown[]
+): PlaybackStretch[] {
+  const seen = new Set<string>(existing.map(identity));
+  const accepted: PlaybackStretch[] = [];
+
+  for (const candidate of incoming ?? []) {
+    if (!isUsable(candidate)) continue;
+    const stretch = canonical(candidate);
+    const key = identity(stretch);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    accepted.push(stretch);
+  }
+
+  return accepted;
+}
+
 export function appendPlaybackStretches(
   existing: readonly PlaybackStretch[],
   incoming: readonly unknown[],
   options: { maxStretches?: number } = {}
 ): PlaybackStretch[] {
   const maxStretches = options.maxStretches ?? MAX_TRACE_STRETCHES;
+  return capTrace([...existing, ...acceptNewStretches(existing, incoming)], maxStretches);
+}
 
-  const trace: PlaybackStretch[] = [];
-  const seen = new Set<string>();
-
-  for (const candidate of [...existing, ...(incoming ?? [])]) {
-    if (!isUsable(candidate)) continue;
-    const stretch = canonical(candidate);
-    const key = identity(stretch);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    trace.push(stretch);
-  }
-
-  return capTrace(trace, maxStretches);
+/**
+ * Durée réellement AJOUTÉE par ce rapport — la somme des écoutes continues
+ * nouvelles de `incoming`, en écartant celles déjà connues de `existing`
+ * (rejeu de la file hors-ligne) et les entrées malformées. C'est la valeur
+ * qui doit incrémenter `totalListenDurationMs`/`totalWatchDurationMs` (#7359) :
+ * ces deux champs comptent le temps RÉELLEMENT joué, replays compris — jamais
+ * la durée de la PISTE, que les deux clients (iOS, web-v2) renvoient IDENTIQUE
+ * à chaque rapport dans `durationMs` (dénominateur du pourcentage, sans
+ * rapport avec ce qui a été écouté depuis le rapport précédent).
+ *
+ * Jamais affectée par le plafond de la trace PERSISTÉE ({@link capTrace}) :
+ * une trace qui sacrifie ses écoutes les plus courtes pour ne pas enfler ne
+ * doit pas faire redescendre une durée cumulée déjà comptée.
+ *
+ * @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+ */
+export function newStretchesDurationMs(
+  existing: readonly PlaybackStretch[],
+  incoming: readonly unknown[]
+): number {
+  return acceptNewStretches(existing, incoming).reduce(
+    (total, stretch) => total + (stretch.endMs - stretch.startMs),
+    0
+  );
 }
 
 /**

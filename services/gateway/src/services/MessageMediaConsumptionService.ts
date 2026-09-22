@@ -30,7 +30,7 @@
 import { PrismaClient } from "@meeshy/shared/prisma/client";
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
-import { appendPlaybackStretches, parsePlaybackTrace } from '../utils/playback-trace';
+import { appendPlaybackStretches, newStretchesDurationMs, parsePlaybackTrace } from '../utils/playback-trace';
 import { mergeViewedLanguages, MAX_VIEWED_LANGUAGES } from '../utils/viewed-languages';
 
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -148,7 +148,6 @@ export class MessageMediaConsumptionService {
     attachmentId: string,
     options?: {
       playPositionMs?: number;
-      listenDurationMs?: number;
       complete?: boolean;
       /** Écoutes réellement continues depuis le dernier rapport. */
       stretches?: readonly unknown[];
@@ -190,10 +189,12 @@ export class MessageMediaConsumptionService {
             },
           });
 
-          const trace = appendPlaybackStretches(
-            parsePlaybackTrace(previous?.listenSegments),
-            options?.stretches ?? []
-          );
+          const existingTrace = parsePlaybackTrace(previous?.listenSegments);
+          const trace = appendPlaybackStretches(existingTrace, options?.stretches ?? []);
+          // Durée AJOUTÉE par CE rapport — jamais la durée de la piste (voir
+          // `newStretchesDurationMs`) : c'est elle, pas un paramètre distinct,
+          // qui incrémente `totalListenDurationMs` (#7359).
+          const addedListenMs = newStretchesDurationMs(existingTrace, options?.stretches ?? []);
           const viewedLanguages = mergeViewedLanguages(
             previous?.viewedLanguages,
             options?.language
@@ -226,7 +227,7 @@ export class MessageMediaConsumptionService {
               listenedAt: now,
               listenCount: 1,
               lastPlayPositionMs: servedPosition.value ?? undefined,
-              totalListenDurationMs: options?.listenDurationMs || 0,
+              totalListenDurationMs: addedListenMs || 0,
               listenedComplete: servedComplete.value,
               listenSegments: trace,
               viewedLanguages,
@@ -235,9 +236,7 @@ export class MessageMediaConsumptionService {
               listenedAt: now,
               listenCount: { increment: 1 },
               lastPlayPositionMs: servedPosition.changed ? servedPosition.value : undefined,
-              totalListenDurationMs: options?.listenDurationMs
-                ? { increment: options.listenDurationMs }
-                : undefined,
+              totalListenDurationMs: addedListenMs > 0 ? { increment: addedListenMs } : undefined,
               listenedComplete: servedComplete.changed ? servedComplete.value : undefined,
               listenSegments: trace,
               viewedLanguages,
@@ -265,7 +264,6 @@ export class MessageMediaConsumptionService {
     attachmentId: string,
     options?: {
       watchPositionMs?: number;
-      watchDurationMs?: number;
       complete?: boolean;
       /** Visionnages réellement continus depuis le dernier rapport. */
       stretches?: readonly unknown[];
@@ -305,10 +303,11 @@ export class MessageMediaConsumptionService {
             },
           });
 
-          const trace = appendPlaybackStretches(
-            parsePlaybackTrace(previous?.watchSegments),
-            options?.stretches ?? []
-          );
+          const existingTrace = parsePlaybackTrace(previous?.watchSegments);
+          const trace = appendPlaybackStretches(existingTrace, options?.stretches ?? []);
+          // Même raison que pour l'audio : la durée AJOUTÉE par ce rapport,
+          // jamais la durée de la piste. Voir `markAudioAsListened`.
+          const addedWatchMs = newStretchesDurationMs(existingTrace, options?.stretches ?? []);
           const viewedLanguages = mergeViewedLanguages(
             previous?.viewedLanguages,
             options?.language
@@ -337,7 +336,7 @@ export class MessageMediaConsumptionService {
               watchedAt: now,
               watchCount: 1,
               lastWatchPositionMs: servedPosition.value ?? undefined,
-              totalWatchDurationMs: options?.watchDurationMs || 0,
+              totalWatchDurationMs: addedWatchMs || 0,
               watchedComplete: servedComplete.value,
               watchSegments: trace,
               viewedLanguages,
@@ -346,9 +345,7 @@ export class MessageMediaConsumptionService {
               watchedAt: now,
               watchCount: { increment: 1 },
               lastWatchPositionMs: servedPosition.changed ? servedPosition.value : undefined,
-              totalWatchDurationMs: options?.watchDurationMs
-                ? { increment: options.watchDurationMs }
-                : undefined,
+              totalWatchDurationMs: addedWatchMs > 0 ? { increment: addedWatchMs } : undefined,
               watchedComplete: servedComplete.changed ? servedComplete.value : undefined,
               watchSegments: trace,
               viewedLanguages,
