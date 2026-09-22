@@ -115,6 +115,18 @@ struct MessageViewsDetailView: View {
             ) { _ in
                 Task { await loadReadStatus(force: true) }
             }
+            // I4 (#7360) — same defect as I3, one tab over: the consumption
+            // cards (« écouté jusqu'à », « Nx ») only loaded at `.onAppear`.
+            // `loadAttachmentStatuses()` has no "already loaded" guard (only
+            // an in-flight one), so calling it again on a live event is
+            // already a refetch — no `force` parameter needed here.
+            .onReceive(
+                MessageSocketManager.shared.attachmentStatusUpdated
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadAttachmentStatuses() }
+            }
     }
 
     // MARK: - Views Tab Content (Premium Redesign)
