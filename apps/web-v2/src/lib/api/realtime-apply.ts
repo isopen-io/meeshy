@@ -23,6 +23,7 @@ import {
   patchThreadMessages,
   upsertThreadMessage,
 } from './messages';
+import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Conversation, Message, Participant } from './types';
 
 /**
@@ -764,6 +765,16 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
  * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
  * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
  * dans `view/message.ts`, ce puits ne la réécrit pas.
+ *
+ * **LA FICHE « INFOS DU MESSAGE » SUIT LE MÊME DIRECT (#7352, V4)** — ce
+ * puits ne PATCHAIT que les compteurs agrégés ci-dessus ; il n'invalidait
+ * jamais `messageReceiptsPeopleQueryKey` (`receipts.ts:122-123`), la query
+ * de la LISTE NOMINATIVE que `MessageReceiptsSheet` lit. Une fiche ouverte
+ * pendant qu'un accusé arrive ne bougeait donc pas. Même idiome
+ * qu'`onAttachmentStatusUpdated` (`socket.ts:365`) : INVALIDER `target.id`
+ * (déjà résolu, AVEC ou SANS `summary.messageId`), jamais PATCHER — la forme
+ * paginée par participant ne se fusionne pas champ à champ sans risquer de
+ * désynchroniser une ligne encore en vol.
  */
 export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
   const { summary } = data;
@@ -793,4 +804,6 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
     messages.map((m) => (m.id === target.id ? next : m)),
   );
+
+  void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });
 }

@@ -90,6 +90,7 @@ export function Bubble({
   onReact,
   selected,
   onToggleSelect,
+  onOpenDetail,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
@@ -151,6 +152,15 @@ export function Bubble({
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement. */
   now?: () => number;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé sur `Check` (`message-blocks
+   * .tsx`), qui n'accepte `onOpen` que sur les DEUX rendus de cette peau
+   * (bulle libre / bulle pleine, la coche ne peignant de toute façon que
+   * sur `isMine`). `undefined` ⇒ le glyphe reste NU (loi 4). L'hôte
+   * réutilise `messageMenu.setDetailFor` (`use-message-menu.ts`), la MÊME
+   * fiche que « Plus… » ouvre déjà — jamais une seconde machine d'état.
+   */
+  onOpenDetail?: (messageId: string) => void;
 }) {
   const { message, tail } = place;
   const nowMs = now();
@@ -522,6 +532,7 @@ export function Bubble({
                     status={checkStatus}
                     isMine={isMine}
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                    {...(onOpenDetail === undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
                   />
                 )}
               </div>
@@ -644,6 +655,7 @@ export function Bubble({
                       status={checkStatus}
                       isMine={isMine}
                       {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                      {...(onOpenDetail === undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
                     />
                   )}
                 </div>

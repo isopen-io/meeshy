@@ -267,6 +267,7 @@ export function Check({
   status,
   isMine,
   sendStartedAt,
+  onOpen,
 }: {
   status: Delivery;
   isMine: boolean;
@@ -274,6 +275,20 @@ export function Check({
    * `status === 'pending'` en tient compte (§5 étape 9 de la spécification
    * #5813) : sous ce seuil, aucune horloge ne clignote. */
   sendStartedAt?: number;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — `undefined` ⇒ comportement
+   * INCHANGÉ, un glyphe NU (`role="img"`, `title` pour nom accessible),
+   * exactement comme avant ce lot. Fourni ⇒ le glyphe devient DÉCORATIF
+   * (`aria-hidden`, `Glyph` sans `title`) À L'INTÉRIEUR d'un vrai
+   * `<button>` nommé par son EFFET, jamais par le statut — même dispositif
+   * que `ReactionChip` (capsule voisine de la même ligne méta,
+   * `tap-target-chip`). SEUL `Bubble` (mode `bulles`) le câble
+   * aujourd'hui : `FocalRow` (`focal`/`script`, le défaut, D-7) garde sa
+   * ligne méta `aria-hidden` INCONDITIONNEL (revue #5935) — y poser ce
+   * bouton reproduirait l'anti-motif WCAG que cette revue a fermé
+   * (`V4.md` § 1).
+   */
+  onOpen?: () => void;
 }) {
   if (!isMine) return null;
   const check = CHECKS[status];
@@ -282,14 +297,22 @@ export function Check({
     <Glyph
       name={check.name}
       size={check.size}
-      title={STATUS_LABEL[status]}
+      {...(onOpen === undefined ? { title: STATUS_LABEL[status] } : {})}
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
+  const node =
+    onOpen === undefined ? (
+      glyph
+    ) : (
+      <button type="button" onClick={onOpen} aria-label="Voir les détails du message" className="tap-target-chip inline-flex items-center">
+        {glyph}
+      </button>
+    );
   if (status === 'pending' && sendStartedAt !== undefined) {
-    return <SendingClock startedAt={sendStartedAt}>{glyph}</SendingClock>;
+    return <SendingClock startedAt={sendStartedAt}>{node}</SendingClock>;
   }
-  return glyph;
+  return node;
 }
 
 /**
