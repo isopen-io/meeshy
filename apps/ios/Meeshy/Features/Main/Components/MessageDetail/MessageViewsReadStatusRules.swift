@@ -1,6 +1,7 @@
 import Foundation
+import MeeshySDK
 
-/// Les deux règles PURES du statut de lecture de la fiche « Vu par »
+/// Les règles PURES du statut de lecture de la fiche « Vu par »
 /// (`MessageViewsDetailView`) : **faut-il repartir au réseau**, et **le
 /// spinner a-t-il le droit de remplacer ce qui est déjà à l'écran**.
 ///
@@ -34,5 +35,32 @@ enum MessageViewsReadStatusRules {
     /// spinner sur un cache non vide » (Instant App, § Cache-First).
     static func showsSpinner(isLoading: Bool, hasExisting: Bool) -> Bool {
         isLoading && !hasExisting
+    }
+
+    /// #7365 — le palier affiché par le badge de la fiche (-1 échec, 0 envoi
+    /// en cours, 1 envoyé, 2 distribué, 3 lu), résolu via
+    /// `DeliveryStatusResolver` plutôt que lu sur `message.deliveryStatus`
+    /// BRUT. Le brut promeut `.read` dès qu'UN destinataire sur N a lu
+    /// (`readCount > 0`, `MessageRecord+ToMessage.swift`) — juste pour une
+    /// conversation directe, faux dans un groupe. `recipientCount` est le
+    /// dénominateur porté par le message lui-même (même champ que lit
+    /// `ConversationSocketHandler+MediaEvents.swift`) ; `<= 1` fait confiance
+    /// au statut stocké tel quel (`DeliveryStatusResolver` documente cette
+    /// règle).
+    static func deliveryStatusLevel(for message: MeeshyMessage) -> Int {
+        switch DeliveryStatusResolver.resolve(
+            status: message.deliveryStatus,
+            deliveredCount: message.deliveredCount,
+            readCount: message.readCount,
+            recipientCount: message.recipientCount,
+            deliveredToAllAt: message.deliveredToAllAt,
+            readByAllAt: message.readByAllAt
+        ) {
+        case .failed: return -1
+        case .sending, .invisible, .clock, .slow: return 0
+        case .sent: return 1
+        case .delivered: return 2
+        case .read: return 3
+        }
     }
 }

@@ -412,7 +412,10 @@ struct ThemedMessageBubble: View {
             isDark: isDark,
             accentHex: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
             timeString: content.meta.timeString,
-            deliveryStatus: message.deliveryStatus,
+            // #7365 — statut RÉSOLU (tout-ou-rien pour un groupe), déjà posé
+            // par `BubbleContentBuilder` sur `content.meta` ; le brut
+            // `message.deliveryStatus` vaut « lu » dès UN lecteur sur N.
+            deliveryStatus: content.meta.deliveryStatus ?? message.deliveryStatus,
             sendStartedAt: message.createdAt,
             isOnline: NetworkMonitor.shared.isOnline,
             effects: message.effects,
