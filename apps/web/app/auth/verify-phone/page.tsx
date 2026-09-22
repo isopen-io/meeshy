@@ -7,6 +7,7 @@ import { LargeLogo } from '@/components/branding';
 import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 // Composants inline légers
 const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -215,7 +216,7 @@ function VerifyPhoneContent() {
 
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.auth.sendPhoneCode);
-      console.log('[VERIFY_PHONE] Envoi du code à:', apiUrl);
+      logger.debug('[VERIFY_PHONE]', 'Envoi du code');
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -226,7 +227,7 @@ function VerifyPhoneContent() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        console.log('[VERIFY_PHONE] ✅ Code envoyé');
+        logger.debug('[VERIFY_PHONE]', 'Code envoyé');
         toast.success(t('verifyPhone.codeSent', 'Code sent by SMS!'));
         setStep('verify');
         setCountdown(60); // 60 secondes avant renvoi
@@ -253,7 +254,7 @@ function VerifyPhoneContent() {
 
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.auth.verifyPhone);
-      console.log('[VERIFY_PHONE] Vérification du code');
+      logger.debug('[VERIFY_PHONE]', 'Vérification du code');
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -264,7 +265,7 @@ function VerifyPhoneContent() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        console.log('[VERIFY_PHONE] ✅ Téléphone vérifié');
+        logger.debug('[VERIFY_PHONE]', 'Téléphone vérifié');
         toast.success(t('verifyPhone.success', 'Number verified successfully!'));
         setStep('success');
       } else {

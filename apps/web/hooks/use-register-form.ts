@@ -12,6 +12,7 @@ import { requestBrowserGeolocation, getGeolocationHeaders } from '@/lib/geolocat
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { User } from '@/types';
 import type { JoinConversationResponse } from '@/types/frontend';
+import { logger } from '@/utils/logger';
 
 export interface RegisterFormData {
   username: string;
@@ -31,7 +32,6 @@ interface UseRegisterFormProps {
 }
 
 export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegisterFormProps = {}) {
-  console.log('[useRegisterForm] Hook called');
   const router = useRouter();
   const { setUser, setTokens } = useAuthActions();
   const { t } = useI18n('auth');
@@ -149,7 +149,7 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
     }
 
     setIsLoading(true);
-    console.log('[REGISTER_FORM] Tentative d\'inscription pour:', formData.username || formData.email);
+    logger.debug('[REGISTER_FORM]', "Tentative d'inscription");
 
     try {
       const emailUsername = formData.email.split('@')[0];
@@ -175,10 +175,10 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
       };
 
       const apiUrl = buildApiUrl(API_ENDPOINTS.auth.register);
-      console.log('[REGISTER_FORM] URL API:', apiUrl);
+      logger.debug('[REGISTER_FORM]', 'URL API:', apiUrl);
 
       if (affiliateToken) {
-        console.log('[REGISTER_FORM] ✅ Token d\'affiliation détecté:', affiliateToken.substring(0, 10) + '...');
+        logger.debug('[REGISTER_FORM]', "Token d'affiliation détecté");
       }
 
       const response = await fetch(apiUrl, {
@@ -190,7 +190,7 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
         body: JSON.stringify(requestBody),
       });
 
-      console.log('[REGISTER_FORM] Réponse HTTP:', response.status, response.statusText);
+      logger.debug('[REGISTER_FORM]', 'Réponse HTTP:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -223,15 +223,15 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
       }
 
       const data = await response.json();
-      console.log('[REGISTER_FORM] Données reçues:', { success: data.success, hasToken: !!data.data?.token, hasUser: !!data.data?.user });
+      logger.debug('[REGISTER_FORM]', 'Données reçues:', { success: data.success, hasToken: !!data.data?.token, hasUser: !!data.data?.user });
 
       if (linkId && onJoinSuccess) {
-        console.log('[REGISTER_FORM] ✅ Inscription via lien réussie');
+        logger.debug('[REGISTER_FORM]', 'Inscription via lien réussie');
         toast.success(t('register.success.registrationSuccess'));
         onJoinSuccess(data);
       } else {
         if (data.success && data.data?.user && data.data?.token) {
-          console.log('[REGISTER_FORM] ✅ Inscription réussie pour:', data.data.user.username);
+          logger.debug('[REGISTER_FORM]', 'Inscription réussie');
           toast.success(t('register.success.registrationSuccess'));
           login(data.data.user, data.data.token);
 
@@ -239,13 +239,13 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
             onSuccess(data.data.user, data.data.token);
           } else {
             const currentPath = window.location.pathname;
-            console.log('[REGISTER_FORM] Redirection après inscription...');
+            logger.debug('[REGISTER_FORM]', 'Redirection après inscription');
 
             if (currentPath === '/') {
-              console.log('[REGISTER_FORM] Rechargement de la page d\'accueil');
+              logger.debug('[REGISTER_FORM]', "Rechargement de la page d'accueil");
               window.location.reload();
             } else {
-              console.log('[REGISTER_FORM] Redirection vers dashboard');
+              logger.debug('[REGISTER_FORM]', 'Redirection vers dashboard');
               window.location.href = '/dashboard';
             }
           }
