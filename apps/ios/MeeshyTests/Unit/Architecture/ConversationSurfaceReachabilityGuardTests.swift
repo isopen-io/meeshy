@@ -806,3 +806,87 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         XCTAssertTrue(pending.isEmpty, "La lecture vide l'attente — sinon la seconde sortie reconsomme.")
     }
 }
+
+
+// MARK: - #7500 — un texte à vue unique se consomme en QUITTANT la conversation
+
+/// > « pour le texte, le faire disparaître lorsqu'on quitte la conversation
+/// > uniquement » — directive porteur, recette 1.1.0.
+///
+/// Un texte n'a pas de plein écran : sa consommation ne peut partir ni du
+/// toucher — qui le détruisait avant lecture — ni d'un minuteur de cinq
+/// secondes, qui décide à la place du lecteur combien de temps il lui faut
+/// pour comprendre une phrase.
+final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// Une vue unique révélée RESTE lisible : elle ne repasse pas par le
+    /// minuteur de disparition, qui appartient au FLOU (on révèle, on regarde,
+    /// ça se referme — et rien n'est consommé, on peut recommencer).
+    func test_uneVueUniqueRévélée_neSeReferméPasTouteSeule() throws {
+        let cycle = try source(at: "Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift")
+        XCTAssertTrue(cycle.contains("private func revealUntilLeaving()"),
+                      "Une vue unique doit avoir sa propre révélation, SANS disparition programmée.")
+        guard let demande = cycle.range(of: "func requestReveal(") else {
+            return XCTFail("Impossible de localiser la demande de révélation.")
+        }
+        let corps = String(cycle[demande.upperBound...].prefix(600))
+        XCTAssertTrue(corps.contains("revealUntilLeaving()"),
+                      "Le chemin vue unique doit révéler sans programmer la disparition.")
+        XCTAssertTrue(corps.contains("guard request.requiresConsume else"),
+                      "Le flou garde son va-et-vient : seul le chemin vue unique change.")
+    }
+
+    /// Le canal de consommation ARME au lieu de détruire, et confirme aussitôt
+    /// pour que la révélation se fasse. C'est le défaut lui-même : la
+    /// révélation dépendait d'un aller-retour serveur pour afficher ce que ce
+    /// même aller-retour venait de détruire.
+    func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        guard let canal = hôte.range(of: "onConsumeViewOnce: { messageId, completion in") else {
+            return XCTFail("Impossible de localiser le canal de consommation de l'hôte.")
+        }
+        let corps = String(hôte[canal.upperBound...].prefix(1400))
+        XCTAssertTrue(corps.contains("pendingViewOnceConsumption.arm(messageId)"),
+                      "La révélation doit ARMER la consommation, pas la déclencher.")
+        XCTAssertTrue(corps.contains("completion(true)"),
+                      "Et confirmer aussitôt : sinon la révélation n'a jamais lieu.")
+        XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
+                       "Le serveur n'est plus appelé au moment de la révélation.")
+    }
+
+    /// **Les DEUX portes de sortie**, et elles sont jumelles : « quitter, c'est
+    /// quitter ». N'en câbler qu'une laisse une vue unique survivre à un
+    /// verrouillage d'écran, c'est-à-dire au cas le plus probable.
+    func test_lesDeuxSorties_consommentToutesLesDeux() throws {
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        XCTAssertEqual(
+            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 2,
+            "La navigation (`onDisappear`) ET l'arrière-plan (`scenePhase`) doivent consommer."
+        )
+
+        guard let fond = hôte.range(of: "if phase == .background {") else {
+            return XCTFail("Impossible de localiser la sortie par arrière-plan.")
+        }
+        let corpsFond = String(hôte[fond.upperBound...].prefix(700))
+        XCTAssertTrue(corpsFond.contains("consumeOpenedViewOnceOnExit()"),
+                      "Le passage en arrière-plan est une sortie au même titre que le retour.")
+    }
+
+    /// Le geste vit HORS de l'hôte : `ConversationView.swift` est dans la dette
+    /// héritée du cliquet de taille, où ajouter est interdit — on extrait
+    /// d'abord, on ajoute ensuite.
+    func test_leGesteDeSortie_vitHorsDeLHôte() throws {
+        let extension_ = try source(at: "Features/Main/Views/ConversationView+ViewOnceExit.swift")
+        XCTAssertTrue(extension_.contains("func consumeOpenedViewOnceOnExit()"),
+                      "Le geste appartient à son fichier d'extension.")
+        XCTAssertTrue(extension_.contains("pendingViewOnceConsumption.takeAll()"),
+                      "Il vide l'attente en la lisant — la seconde porte ne trouve plus rien.")
+    }
+}

@@ -51,19 +51,44 @@ final class BubbleBlurRevealController: ObservableObject {
         self.visibilityDuration = duration
     }
 
-    /// Demande la revelation. Pour les messages view-once, le `consumeViewOnce`
-    /// est appele d'abord; la revelation ne demarre que si le serveur confirme.
+    /// Demande la révélation.
+    ///
+    /// **Une vue unique se révèle et RESTE lisible** (#7500) : elle ne
+    /// re-disparaît pas au bout de la durée de visibilité, parce que sa
+    /// disparition n'est pas une affaire de secondes — c'est la SORTIE de la
+    /// conversation qui la consomme. La relire le temps de la comprendre est
+    /// exactement ce que la directive demande.
+    ///
+    /// Le flou, lui, garde son va-et-vient : on révèle, on regarde, ça se
+    /// referme — rien n'est consommé, on peut recommencer.
+    ///
+    /// `consumeViewOnce` reste le canal, mais il ne DÉTRUIT plus ici : l'hôte
+    /// s'en sert pour ARMER la consommation et confirme aussitôt, puis
+    /// consomme quand on quitte. La révélation ne dépend donc plus d'un
+    /// aller-retour serveur — elle dépendait de lui pour afficher ce que ce
+    /// même aller-retour venait de détruire.
     func requestReveal(
         request: BubbleBlurRevealLifecycle.RevealRequest,
         consumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     ) {
-        if request.requiresConsume {
-            consumeViewOnce?(request.messageId) { [weak self] success in
-                guard let self, success else { return }
-                Task { @MainActor in self.scheduleReveal() }
-            }
-        } else {
+        guard request.requiresConsume else {
             scheduleReveal()
+            return
+        }
+        consumeViewOnce?(request.messageId) { [weak self] success in
+            guard let self, success else { return }
+            Task { @MainActor in self.revealUntilLeaving() }
+        }
+    }
+
+    /// Révèle SANS programmer la disparition : ce contenu restera lisible tant
+    /// qu'on est dans la conversation.
+    private func revealUntilLeaving() {
+        revealTask?.cancel()
+        revealTask = nil
+        fogOpacity = 0
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isRevealed = true
         }
     }
 
