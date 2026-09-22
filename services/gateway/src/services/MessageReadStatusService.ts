@@ -2319,10 +2319,7 @@ export class MessageReadStatusService {
 
       const participants = statuses.length
         ? await this.prisma.participant.findMany({
-            where: {
-              id: { in: statuses.map(s => s.participantId) },
-              userId: { not: null }, // Exclude anonymous invitees (#7358)
-            },
+            where: { id: { in: statuses.map(s => s.participantId) } },
             select: {
               id: true,
               displayName: true,
