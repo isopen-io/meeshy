@@ -1,10 +1,14 @@
 import { memo, useEffect, useRef, useState } from 'react';
 
-import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+import {
+  EPHEMERAL_COUNTER_WINDOW_SECONDS,
+  ephemeralCounterVisible,
+  type EphemeralDeadline,
+} from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatRemaining } from '@/lib/reading-mode/protection';
+import { countdownDigits, formatRemaining } from '@/lib/reading-mode/protection';
 import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
 
 import { Glyph } from './glyph';
@@ -122,8 +126,23 @@ const EphemeralMention = memo(function EphemeralMention({
   const expiresAtMs = deadline.state === 'scheduled' ? deadline.expiresAtMs : null;
   const [remainingMs, setRemainingMs] = useState(() => (expiresAtMs === null ? null : expiresAtMs - now()));
 
+  /** La fenêtre de la loi partagée, lue du reste COURANT — voir l'effet ci-dessous. */
+  const withinCounterWindow = remainingMs !== null && ephemeralCounterVisible(remainingMs);
+
   /**
-   * L'ABONNEMENT SE DÉFAIT — `subscribe` rend sa propre fonction de retrait, et
+   * **DEUX RÉGIMES, ET UN SEUL À LA FOIS** (#7468, conséquence de fluidité).
+   *
+   * Au-delà de la dernière minute, rien à rafraîchir : la puce ne montre que
+   * la flamme, et un abonnement à l'horloge réveillerait la rangée soixante
+   * fois par minute pour repeindre un pixel identique. Un SEUL `setTimeout`
+   * dort jusqu'au franchissement du seuil.
+   *
+   * Sous le seuil, l'horloge PARTAGÉE reprend — un `setInterval` pour toute
+   * l'application, jamais un par bulle (D-108).
+   *
+   * Le passage de l'un à l'autre se fait tout seul : le minuteur repose
+   * `remainingMs`, `withinCounterWindow` bascule, et cet effet se rejoue dans
+   * l'autre régime. `subscribe` rend sa propre fonction de retrait, et
    * l'horloge arrête son `setInterval` dès le dernier abonné parti : une liste
    * virtualisée qui recycle ses rangées ne laisse aucun minuteur derrière elle.
    */
@@ -132,9 +151,15 @@ const EphemeralMention = memo(function EphemeralMention({
       setRemainingMs(null);
       return;
     }
-    setRemainingMs(expiresAtMs - now());
+    const current = expiresAtMs - now();
+    setRemainingMs(current);
+    if (!ephemeralCounterVisible(current)) {
+      const delay = Math.max(0, current - EPHEMERAL_COUNTER_WINDOW_SECONDS * 1000);
+      const timer = setTimeout(() => setRemainingMs(expiresAtMs - now()), delay);
+      return () => clearTimeout(timer);
+    }
     return clock.subscribe((tick) => setRemainingMs(expiresAtMs - tick));
-  }, [expiresAtMs, clock, now]);
+  }, [expiresAtMs, withinCounterWindow, clock, now]);
 
   /**
    * L'ÉCHÉANCE REMONTE UNE FOIS — par une `ref`, pour que changer de
@@ -174,16 +199,26 @@ const EphemeralMention = memo(function EphemeralMention({
 
   if (remainingMs === null || remainingMs <= 0) return null;
 
-  const label = formatRemaining(Math.floor(remainingMs / 1000));
+  const seconds = Math.floor(remainingMs / 1000);
+  /**
+   * **L'ŒIL EST SOULAGÉ, JAMAIS L'OREILLE** (#7468). Le compteur disparaît
+   * au-delà de la dernière minute ; le libellé accessible, lui, donne TOUJOURS
+   * le temps restant. Privé des chiffres, un lecteur d'écran n'aurait aucun
+   * autre chemin vers l'échéance — et la flamme seule ne dit pas « dans douze
+   * minutes ».
+   */
   return (
     <span
       data-ephemeral="running"
+      data-counter={withinCounterWindow ? 'on' : 'off'}
       data-glyph="flameFill"
       className="protected-ephemeral-badge rounded-chip inline-flex items-center gap-1"
-      aria-label={translate(language, 'message.ephemeral.a11y', { remaining: label })}
+      aria-label={translate(language, 'message.ephemeral.a11y', { remaining: formatRemaining(seconds) })}
     >
       <Glyph name="flameFill" size={11} />
-      <span className="tabular-nums font-bold text-chip">{label}</span>
+      {withinCounterWindow ? (
+        <span className="tabular-nums font-bold text-chip">{countdownDigits(seconds)}</span>
+      ) : null}
     </span>
   );
 });

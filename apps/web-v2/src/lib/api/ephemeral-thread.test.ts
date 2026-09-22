@@ -15,7 +15,10 @@ import {
   resolveEphemeralDeadline,
 } from '@/lib/view/ephemeral-reception';
 
+import { DESTRUCTION_MS, subscribeDestruction } from '@/lib/view/ephemeral-destruction';
+
 import { messagesQueryKey } from './messages';
+import { applyMessageExpired } from './realtime-ephemeral';
 import { createRealtimeConnection } from './socket';
 import { createTypingStore } from './typing-store';
 import type { Message } from './types';
@@ -181,23 +184,45 @@ describe('le registre de réception — l’état que `packages/shared` ne peut 
 });
 
 describe('les deux puits socket (#7454, travail 3)', () => {
-  test('`message:expired` RETIRE la rangée du fil ouvert, sur-le-champ', () => {
+  /**
+   * **L'ANNONCE D'ABORD, LE RETRAIT ENSUITE** (#7468) — ce témoin disait
+   * « sur-le-champ » au lot #7454, et c'était le défaut : la rangée
+   * disparaissait d'une image à l'autre, sans que rien ne montre sa
+   * destruction. Elle reste donc MONTÉE le temps de l'effet.
+   */
+  test('`message:expired` ANNONCE la destruction et laisse la rangée le temps de brûler', () => {
     const { socket, queryClient, destroy } = connect();
     seedThread(queryClient, [messageOf({ id: 'm-ephemere' }), messageOf({ id: 'm-autre' })]);
+    const annonces: string[] = [];
+    const unsubscribe = subscribeDestruction((messageId) => annonces.push(messageId));
 
     socket.fire(SERVER_EVENTS.MESSAGE_EXPIRED, { messageId: 'm-ephemere', conversationId: 'c-a' });
 
-    expect(threadIds(queryClient)).toEqual(['m-autre']);
+    expect(annonces).toEqual(['m-ephemere']);
+    expect(threadIds(queryClient)).toEqual(['m-ephemere', 'm-autre']);
+    unsubscribe();
     destroy();
   });
 
-  test('`message:expired` OUBLIE le message du registre — la mémoire ne fuit pas', () => {
-    const { socket, queryClient, destroy } = connect();
-    seedThread(queryClient, [messageOf({ id: 'm-ephemere' })]);
+  /**
+   * LA FENÊTRE PASSÉE, la ligne s'en va — et le registre l'oublie du même
+   * mouvement. L'ordonnanceur est INJECTÉ : attendre 700 ms réels ne
+   * mesurerait rien de plus et rendrait la suite plus lente à chaque lot.
+   */
+  test('la fenêtre écoulée, la ligne part et le registre l’oublie', () => {
+    const queryClient = new QueryClient();
+    seedThread(queryClient, [messageOf({ id: 'm-ephemere' }), messageOf({ id: 'm-autre' })]);
     noteEphemeralReception('m-ephemere', RECEPTION);
+    const retards: number[] = [];
 
-    socket.fire(SERVER_EVENTS.MESSAGE_EXPIRED, { messageId: 'm-ephemere', conversationId: 'c-a' });
+    applyMessageExpired(queryClient, { messageId: 'm-ephemere', conversationId: 'c-a' }, (fn, ms) => {
+      retards.push(ms);
+      fn();
+    });
 
+    expect(retards).toEqual([DESTRUCTION_MS]);
+    expect(threadIds(queryClient)).toEqual(['m-autre']);
+    /* La réception oubliée : sans elle, l'échéance retombe en « attente ». */
     expect(
       resolveEphemeralDeadline({
         message: messageOf({ id: 'm-ephemere', ephemeralDuration: 30 }),
@@ -205,7 +230,6 @@ describe('les deux puits socket (#7454, travail 3)', () => {
         now: RECEPTION,
       }),
     ).toEqual({ state: 'awaiting-reception', durationSeconds: 30 });
-    destroy();
   });
 
   test('une charge MALFORMÉE est ignorée — le fil ne bouge pas', () => {

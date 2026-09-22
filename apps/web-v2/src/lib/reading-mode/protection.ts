@@ -88,6 +88,22 @@ export function formatRemaining(seconds: number): string {
   return `${secs}s`;
 }
 
+/**
+ * LE COMPTEUR DE LA DERNIÈRE MINUTE — `0:59 → 0:00`, la forme que le porteur
+ * écrit (#7468). DISTINCT de `formatRemaining` ci-dessus, et les deux sont
+ * justes : celui-ci s'adresse à l'ŒIL, dans une puce où deux chiffres qui
+ * défilent se lisent d'un coup ; l'autre s'adresse à l'OREILLE, où « 0:45 » se
+ * prononce mal et où « 45s » se comprend seul.
+ *
+ * C'est la raison pour laquelle le libellé accessible ne recopie PAS ce qui est
+ * peint : ils ne disent pas la même chose au même public.
+ */
+export function countdownDigits(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  return `${minutes}:${String(total % 60).padStart(2, '0')}`;
+}
+
 export type RevealPhase =
   | { readonly phase: 'hidden' }
   | { readonly phase: 'revealed'; readonly until: number }

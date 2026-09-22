@@ -261,11 +261,52 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
     );
   }
 
-  // 6 — éphémère : minuteur vivant, puis disparition.
+  // 6 — éphémère : la flamme SEULE, puis le compteur dans sa dernière minute,
+  //     puis la disparition.
   const ephemeralBadge = rowOf(EPHEMERAL_WITNESS_ID).locator('[data-ephemeral]');
   const before6 = await ephemeralBadge.count() > 0 ? await ephemeralBadge.first().innerText() : null;
   expect(before6 !== null, `[${skin}] le badge éphémère existe (${before6})`);
   if (before6 !== null) {
+    /*
+      **AU-DELÀ DE LA DERNIÈRE MINUTE, LA FLAMME EST NUE** (#7468) — le témoin
+      `prot-5` échoit dans DEUX minutes, donc au-dessus du seuil : la puce doit
+      exister sans montrer un seul chiffre.
+
+      Mesuré ICI plutôt que dans un unitaire, et c'est le sens de ce gate : ce
+      que `bun test` sait dire, c'est qu'un nœud porte tel attribut ; ce que le
+      NAVIGATEUR sait dire, c'est ce qui est PEINT. Un compteur rendu puis
+      caché par une règle CSS passerait le premier et tomberait ici.
+    */
+    expect(
+      !/\d/.test(before6),
+      `[${skin}] au-delà de la dernière minute, la flamme ne montre aucun chiffre (« ${before6} »)`,
+    );
+    expect(
+      (await ephemeralBadge.first().getAttribute('data-counter')) === 'off',
+      `[${skin}] le compteur est éteint au-delà de la dernière minute`,
+    );
+    /* L'OREILLE, ELLE, GARDE LE TEMPS : c'est l'œil qu'on soulage. */
+    const aria6 = (await ephemeralBadge.first().getAttribute('aria-label')) ?? '';
+    expect(/\d/.test(aria6), `[${skin}] le libellé accessible dit le temps restant (« ${aria6} »)`);
+
+    /*
+      LE FRANCHISSEMENT DU SEUIL — 70 s plus tard, il reste 50 s : le compteur
+      doit APPARAÎTRE. C'est le pas que l'implémentation joue avec un SEUL
+      `setTimeout` (aucune horloge ne bat avant lui) ; s'il n'était pas armé,
+      la puce resterait nue jusqu'à un rendu venu d'ailleurs.
+    */
+    await chrono.advanceBy(70 * 1000);
+    let entered = await ephemeralBadge.first().innerText();
+    for (let tick = 0; tick < 20 && !/\d/.test(entered); tick += 1) {
+      await chrono.advanceBy(250);
+      entered = await ephemeralBadge.first().innerText();
+    }
+    expect(/\d/.test(entered), `[${skin}] dans la dernière minute, le compteur apparaît (« ${entered} »)`);
+    expect(
+      (await ephemeralBadge.first().getAttribute('data-counter')) === 'on',
+      `[${skin}] le compteur est allumé dans la dernière minute`,
+    );
+    const before6b = entered;
     /*
       AVANCER L'HORLOGE N'EST PAS AVOIR REPEINT (#6061) — `runFor` livre son tick
       au composant, qui PROGRAMME un rendu ; `innerText` peut lire avant que ce
@@ -293,11 +334,11 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
     */
     await chrono.advanceBy(1000);
     let after6 = await ephemeralBadge.first().innerText();
-    for (let tick = 0; tick < 20 && after6 === before6; tick += 1) {
+    for (let tick = 0; tick < 20 && after6 === before6b; tick += 1) {
       await chrono.advanceBy(250);
       after6 = await ephemeralBadge.first().innerText();
     }
-    expect(after6 !== before6, `[${skin}] le minuteur éphémère décroît (${before6} → ${after6})`);
+    expect(after6 !== before6b, `[${skin}] le minuteur éphémère décroît (${before6b} → ${after6})`);
     await chrono.advanceBy(2 * 60 * 1000);
     // « vide OU absente » (§4.8 §6) : la bulle DÉMONTE (`kind === 'expired' → null`),
     // la rangée plate garde une ANCRE vide (`data-protected="expired"`) — les
