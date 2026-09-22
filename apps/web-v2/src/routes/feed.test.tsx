@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { FeedEmpty, FeedError, FeedHeader, FeedSkeleton, FeedTopChrome, FEED_HEADER_HEIGHT, FEED_TOP_RESERVE } from './feed';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { READING_COLUMN_MAX } from '@/lib/view/reading-column';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
@@ -90,6 +91,30 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     const anchor = html.match(/<a [^>]*href="\/reels"[^>]*>/)?.[0] ?? '';
     expect(anchor).toContain('size-11');
     expect(anchor).toContain('draggable="false"');
+  });
+
+  /**
+   * LA PORTE DE CRÉATION (#7449) — et son ORDRE, qui n'est pas un goût : deux
+   * gates mesurent que « Lancer les Réels » touche le bord droit
+   * (`check-reels.mjs`, `innerWidth - right <= 16`) et vit dans les 64 derniers
+   * pixels (`check-feed-disc.mjs`). Insérer la création à sa droite le
+   * déplacerait ; ce témoin fixe l'ordre AVANT qu'un navigateur n'ait à le
+   * mesurer.
+   */
+  test('la porte de création se pose AVANT « Lancer les Réels », qui reste le dernier contrôle', () => {
+    const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).toContain('data-feed-create');
+    expect(html).toContain('aria-label="Créer une publication ou un réel"');
+    expect(html.indexOf('data-feed-create')).toBeGreaterThan(html.indexOf('Meeshy Feed'));
+    expect(html.indexOf('data-feed-create')).toBeLessThan(html.indexOf('href="/reels"'));
+  });
+
+  /** LA COLONNE DE LECTURE (#7449) — l'en-tête la suit, sinon il flotterait
+   * seul sur toute la largeur au-dessus d'un fil centré. */
+  test('l’en-tête porte la colonne de lecture, bornée et centrée', () => {
+    const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).toContain(`max-width:${READING_COLUMN_MAX}px`);
+    expect(html).toContain('margin-inline:auto');
   });
 });
 

@@ -17,6 +17,7 @@ import { COMMENTS_ANCHOR, revealComments, useCommentsReveal } from '@/lib/view/c
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link } from '@/routes/route-table';
 
@@ -57,7 +58,7 @@ import { FeedSkeleton } from './feed';
 
 export function PostDetailHeader() {
   return (
-    <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+    <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2" style={READING_COLUMN_STYLE}>
       <Link
         to="feed"
         aria-label="Retour au fil"
@@ -180,7 +181,11 @@ export default function PostDetailScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
+      {/* LA MÊME COLONNE QUE LE FIL (#7449) — cet écran EST la destination du
+          geste d'ouverture d'une carte : laissé pleine largeur, il aurait
+          étiré, à UN tap du fil borné, la carte que le fil venait de borner.
+          `READING_COLUMN_STYLE` est le site unique de la cote. */}
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe" style={READING_COLUMN_STYLE}>
         {model !== undefined ? (
           <FeedPostCard
             model={model}

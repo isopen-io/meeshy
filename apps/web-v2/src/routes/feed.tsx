@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
+import { FeedCreateDoor } from '@/components/feed-create-door';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -22,6 +23,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
+import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useOnline } from '@/lib/net/online';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -57,13 +59,26 @@ import { Link } from '@/routes/route-table';
  * `RailTitleSlot` et `useStoryRailProps`, les MÊMES composants avec la MÊME
  * cote (#6133) — jamais une seconde tuile ni une seconde bascule.
  *
- * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le placeholder
- * de composeur, le bouton rond « À proximité » de l'en-tête (celui des Réels
- * l'a rejoint avec son lecteur, #6457), le menu « Plus d'options », le panneau de traduction secondaire et la bannière
- * temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait une route
- * ou un geste absent (loi 4), ou un compagnon de temps réel hors périmètre
- * lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par le disque
- * qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
+ * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le bouton rond
+ * « À proximité » de l'en-tête (celui des Réels l'a rejoint avec son lecteur,
+ * #6457), le menu « Plus d'options », le panneau de traduction secondaire et la
+ * bannière temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait
+ * une route ou un geste absent (loi 4), ou un compagnon de temps réel hors
+ * périmètre lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par
+ * le disque qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
+ *
+ * LE PLACEHOLDER DE COMPOSEUR A UNE PORTE (#7449) — il figurait dans la liste
+ * ci-dessus tant qu'aucune adresse ne créait de `Post.type = 'POST'` ni
+ * `'REEL'` : c'était un contrôle sans effet, donc un contrôle à ne pas
+ * dessiner. `FeedCreateDoor` le remplace dans l'EN-TÊTE plutôt qu'en tête de
+ * liste — la rangée d'iOS coûterait le plateau des stories, qui occupe déjà
+ * cette place ici, et une porte d'en-tête reste atteignable une fois le fil
+ * défilé.
+ *
+ * LE FIL SE LIT DANS UNE COLONNE (#7449) — `READING_COLUMN_STYLE`
+ * (`lib/view/reading-column.ts`), posée sur l'en-tête ET sur le scrollport.
+ * La borne ne mord qu'au-delà d'elle-même : aux deux gabarits que les gates
+ * mesurent (390 × 844, 320 × 568), le rendu est au pixel près celui d'avant.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
 
@@ -103,7 +118,7 @@ export const FEED_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT;
 export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; readonly railProps: StoryRailProps }) {
   const language = currentInterfaceLanguage();
   return (
-    <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: FEED_HEADER_HEIGHT }}>
+    <header className="flex shrink-0 items-center gap-2 px-3" style={{ ...READING_COLUMN_STYLE, height: FEED_HEADER_HEIGHT }}>
       <Link
         to="list"
         aria-label={translate(language, 'pending.back')}
@@ -113,6 +128,12 @@ export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; re
         <Glyph name="caretLeft" size={20} />
       </Link>
       <RailTitleSlot title="Meeshy Feed" pinned={pinned} railProps={railProps} />
+      {/* PUBLIER (#7449) — « Publication » ou « Réel », deux adresses sous une
+          porte. Elle se pose À GAUCHE des Réels et ce n'est pas un goût :
+          `check-reels.mjs` mesure que « Lancer les Réels » touche le bord droit
+          (`innerWidth - right <= 16`) et `check-feed-disc.mjs` qu'il vit dans
+          les 64 derniers pixels — la place que la cible iOS lui donne. */}
+      <FeedCreateDoor language={language} />
       {/* LANCER LES RÉELS (#6457) — la première action de l'en-tête d'iOS
           (`FeedView.swift`, `reelsButton` ⇒ `ReelsPresenter.presentFresh()`),
           en haut à droite, sans graine. Le disque flottant de droite se pose
@@ -327,7 +348,12 @@ export default function FeedScreen() {
         ref={frame}
         id="contenu"
         className="scrollbar-none overscroll-contain flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe"
-        style={pullTransform(pull.phase, pull.offsetPx)}
+        /* LA COLONNE DE LECTURE (#7449) — la borne est portée par le
+           SCROLLPORT lui-même, pas par une boîte intérieure : ainsi la barre de
+           défilement, le tirer-pour-rafraîchir et la mémoire de position
+           (`useScrollportMemory`) restent sur le MÊME élément qu'avant, et la
+           bande du plateau (`-mx-3`) court de bord à bord DE LA COLONNE. */
+        style={{ ...READING_COLUMN_STYLE, ...pullTransform(pull.phase, pull.offsetPx) }}
         {...(loading ? { 'aria-busy': true, 'aria-label': translate(language, 'feed.loading') } : {})}
       >
         <FeedTopChrome railProps={railProps} inert={pinned} observe={observeGrandRail} />

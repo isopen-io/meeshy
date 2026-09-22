@@ -17,6 +17,7 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
+import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -332,12 +333,24 @@ export function ReelsFrame({
   readonly children: React.ReactNode;
 }) {
   return (
-    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
-      {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
-          absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
-          document — après le fil, il fallait traverser chaque réel monté. */}
-      <ReelsBackButton language={language} onBack={onBack} />
-      {children}
+    <div data-reels className="h-dvh overflow-hidden bg-black text-white">
+      {/* LA COLONNE DES RÉELS (#7449) — `REEL_COLUMN_STYLE`
+          (`lib/view/reading-column.ts`) : un réel est en 9:16, sa largeur utile
+          est donc `hauteur × 9/16` et tout le reste n'est que du noir — du noir
+          qui éloigne le rail d'actions du regard et du pouce. Elle porte le
+          `relative` : le bouton « Retour » et les états plein cadre
+          (`StateFrame`, `ReelsSkeleton`) s'ancrent à la COLONNE, pas à la
+          fenêtre, sinon les contrôles partiraient au bord opposé.
+
+          Aux deux gabarits que les gates mesurent, elle ne retire rien :
+          844 × 9/16 = 474 (> 390) et 568 × 9/16 = 319,5 (≈ 320). */}
+      <div data-reels-column className="relative h-full" style={REEL_COLUMN_STYLE}>
+        {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
+            absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
+            document — après le fil, il fallait traverser chaque réel monté. */}
+        <ReelsBackButton language={language} onBack={onBack} />
+        {children}
+      </div>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
