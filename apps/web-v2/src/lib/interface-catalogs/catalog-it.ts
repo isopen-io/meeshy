@@ -865,6 +865,7 @@ const it = {
   'message-detail.received-by.empty': 'Nessuna conferma di consegna',
   'message-detail.read-by.empty': 'Nessuno ha ancora letto questo messaggio',
   'message-detail.not-yet.empty': 'Tutti hanno ricevuto il messaggio',
+  'message-detail.open': 'Visualizza i dettagli del messaggio',
   'message-detail.attachment.opens.one': '{count} apertura',
   'message-detail.attachment.opens.other': '{count} aperture',
   'message-detail.attachment.downloads.one': '{count} download',

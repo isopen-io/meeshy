@@ -90,6 +90,10 @@ struct ConversationMediaGalleryView: View {
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
+    /// #7362 — `false` pour les galeries POST / COMMENTAIRE : leurs pièces ne
+    /// sont pas des `MessageAttachment` (cf. `+Consumption.swift`).
+    var reportsAttachmentConsumption: Bool = true
+
     /// **Créer une story, un réel ou un post avec CE média** (#4014).
     ///
     /// Une CLOSURE, et pas un chemin que la galerie prendrait elle-même : elle
@@ -175,8 +179,8 @@ struct ConversationMediaGalleryView: View {
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
-    /// ET à chaque fermeture (`stopActiveVideoAudio`).
-    private let indexByID: [String: Int]
+    /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
+    let indexByID: [String: Int]
 
     @Environment(\.dismiss) private var dismiss
     /// `internal` — le couloir bas du plateau le PILOTE depuis
@@ -243,6 +247,9 @@ struct ConversationMediaGalleryView: View {
     /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
     @State var scenePlaying = true
 
+    /// #7362 — la page image en cours de visionnage. `internal` : `+Consumption.swift` l'écrit.
+    @State var imageViewSession = GalleryImageViewSession()
+
     init(
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
@@ -250,6 +257,7 @@ struct ConversationMediaGalleryView: View {
         captionServings: [String: SocialMediaCaptionServing] = [:],
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
+        reportsAttachmentConsumption: Bool = true,
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
         onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
         onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
@@ -265,6 +273,7 @@ struct ConversationMediaGalleryView: View {
         self.captionServings = captionServings
         self.captionMap = captionMap
         self.senderInfoMap = senderInfoMap
+        self.reportsAttachmentConsumption = reportsAttachmentConsumption
         self.onComposeWithMedia = onComposeWithMedia
         self.onReplyToMedia = onReplyToMedia
         self.onSendReplyToMedia = onSendReplyToMedia
@@ -429,7 +438,9 @@ struct ConversationMediaGalleryView: View {
                 currentPageID = startAttachmentId
             }
             prefetchNeighbors(around: currentIndex)
+            trackImageOpen(leaving: nil, entering: currentPageID)
         }
+        .onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
@@ -591,6 +602,8 @@ struct ConversationMediaGalleryView: View {
             }
             HapticFeedback.light()
         }
+
+        if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
 
         prefetchNeighbors(around: newIndex)
     }

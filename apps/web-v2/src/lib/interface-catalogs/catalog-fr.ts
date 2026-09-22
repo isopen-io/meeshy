@@ -946,6 +946,7 @@ const fr = {
   'message-detail.received-by.empty': 'Aucune confirmation de distribution',
   'message-detail.read-by.empty': 'Personne n’a encore lu ce message',
   'message-detail.not-yet.empty': 'Tout le monde a reçu le message',
+  'message-detail.open': 'Voir les détails du message',
   'message-detail.attachment.opens.one': '{count} ouverture',
   'message-detail.attachment.opens.other': '{count} ouvertures',
   'message-detail.attachment.downloads.one': '{count} téléchargement',

@@ -897,6 +897,7 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
+          onOpenDetail={messageMenu.setDetailFor}
           typists={typing.typists}
           typistAvatarOf={typistAvatarOf}
           accent={accent}

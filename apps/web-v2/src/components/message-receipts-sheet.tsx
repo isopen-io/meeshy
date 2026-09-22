@@ -10,6 +10,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { attachmentDurationLabel, formatMediaTime } from '@/lib/view/media-transport';
+import { time } from '@/lib/grouping';
 import { kindOf } from '@/lib/view/message';
 import {
   attachmentAggregateOf,
@@ -144,6 +145,7 @@ function ReceiptPeopleSections({
         glyph="check"
         tint="var(--color-ios-ink-3)"
         section="received-by"
+        timeOf={(person) => (person.receivedAt === null ? null : time(person.receivedAt))}
       />
       <PersonSection
         title={translate(lang, 'message-detail.read-by')}
@@ -152,6 +154,7 @@ function ReceiptPeopleSections({
         glyph="checks"
         tint="var(--color-read)"
         section="read-by"
+        timeOf={(person) => (person.readAt === null ? null : time(person.readAt))}
       />
       <PersonSection
         title={translate(lang, 'message-detail.not-yet')}
@@ -160,6 +163,7 @@ function ReceiptPeopleSections({
         glyph={null}
         tint="var(--color-ios-ink-3)"
         section="not-yet"
+        timeOf={() => null}
       />
     </>
   );
@@ -172,6 +176,7 @@ function PersonSection({
   glyph,
   tint,
   section,
+  timeOf,
 }: {
   readonly title: string;
   readonly empty: string;
@@ -179,6 +184,15 @@ function PersonSection({
   readonly glyph: GlyphName | null;
   readonly tint: string;
   readonly section: 'read-by' | 'received-by' | 'not-yet';
+  /**
+   * L'HEURE DE CET ACCUSÉ (#7352, V4) — `receivedAt`/`readAt` sont SERVIS
+   * par `fetchMessageReceiptsPeople` depuis toujours (`api/receipts.ts:99-
+   * 106`), jamais RENDUS avant ce lot. `null` ⇒ rien peint (« Pas encore »
+   * n'a ni l'un ni l'autre, `receiptCategoriesOf`) : chaque SECTION lit le
+   * SEUL champ que sa catégorie affirme, jamais les deux — `time()`
+   * (`lib/grouping.ts`), le même SSOT que l'horodatage de la bulle.
+   */
+  readonly timeOf: (person: ReceiptPersonRow) => string | null;
 }) {
   return (
     <>
@@ -210,6 +224,12 @@ function PersonSection({
               {...(person.avatar === null ? {} : { src: person.avatar })}
             />
             <span className="flex-1 truncate">{person.displayName}</span>
+            {((personTime) =>
+              personTime === null ? null : (
+                <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-person-time>
+                  {personTime}
+                </span>
+              ))(timeOf(person))}
             {glyph !== null ? <Glyph name={glyph} size={16} style={{ color: tint }} /> : null}
           </li>
         ))

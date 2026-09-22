@@ -294,6 +294,9 @@ struct SocialMediaGalleryContent: View {
             captionServings: lot.captionServings,
             captionMap: lot.captionMap,
             senderInfoMap: lot.attributions.mapValues(Self.senderInfo),
+            // #7362 — pièces de POST/COMMENTAIRE, pas de `MessageAttachment` :
+            // aucune consommation à reporter (cf. doc-comment de la propriété).
+            reportsAttachmentConsumption: false,
             // **« Créer avec CE média »** (#6709) : la cible de la pièce OUVERTE, par
             // la règle d'offre unique — une scène sème le média qu'elle montre, et une
             // pièce sans cible n'a pas de bouton.

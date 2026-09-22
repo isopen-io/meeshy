@@ -862,6 +862,7 @@ const ar = {
   'message-detail.received-by.empty': 'لا يوجد تأكيد تسليم بعد',
   'message-detail.read-by.empty': 'لم يقرأ أحد هذه الرسالة بعد',
   'message-detail.not-yet.empty': 'استلم الجميع الرسالة',
+  'message-detail.open': 'عرض تفاصيل الرسالة',
   'message-detail.attachment.opens.one': '{count} فتحة',
   'message-detail.attachment.opens.other': '{count} فتحات',
   'message-detail.attachment.downloads.one': '{count} تنزيل',

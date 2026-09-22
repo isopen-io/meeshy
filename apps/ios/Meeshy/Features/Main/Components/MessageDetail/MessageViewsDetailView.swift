@@ -115,6 +115,18 @@ struct MessageViewsDetailView: View {
             ) { _ in
                 Task { await loadReadStatus(force: true) }
             }
+            // I4 (#7360) — les cartes « écouté jusqu'à » / « Nx » se relancent
+            // en direct, pour CE message seulement (règle testée à part).
+            .onReceive(
+                MessageSocketManager.shared.attachmentStatusUpdated
+                    .filter { [messageId = message.id, conversationId] in
+                        MessageViewsConsumption.refreshesCards(
+                            on: $0, messageId: messageId, conversationId: conversationId)
+                    }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadAttachmentStatuses() }
+            }
     }
 
     // MARK: - Views Tab Content (Premium Redesign)

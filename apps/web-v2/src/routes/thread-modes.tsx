@@ -148,6 +148,7 @@ export function ThreadModes({
   longPress,
   onPickLanguage,
   onReact,
+  onOpenDetail,
   typists,
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
@@ -216,6 +217,16 @@ export function ThreadModes({
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact?: (messageId: string, emoji: string) => void;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé UNIQUEMENT sur `<Bubble>`
+   * (mode `bulles`), jamais sur `<FocalRow>` : sa ligne méta reste
+   * `aria-hidden` INCONDITIONNEL (revue #5935, `focal-row.tsx`), et y poser
+   * un bouton reproduirait l'anti-motif WCAG que cette revue a fermé —
+   * décision consignée dans `.cache/lecture-workflow/V4.md` § 1. Dans
+   * `focal`/`script` (le DÉFAUT, D-7), la fiche reste atteignable par le
+   * chemin déjà mûr : appui long sur la rangée → « Plus… » (2 gestes).
+   */
+  readonly onOpenDetail?: (messageId: string) => void;
   /** LE ROSTER ENTIER (#6171, G1) — `[]` ⇒ aucun frappeur connu ⇒ aucune
    * cellule (`useThreadTyping`, `lib/view/use-thread-typing.ts`). Jamais
    * tronqué à un seul frappeur : `typingAnnouncement`/`typingLead`
@@ -613,6 +624,7 @@ export function ThreadModes({
                     {...(rowSelected === undefined || onRowTap === undefined
                       ? {}
                       : { selected: rowSelected, onToggleSelect: onRowTap })}
+                    {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
                     {...sendProps}
                   />
                 )}
