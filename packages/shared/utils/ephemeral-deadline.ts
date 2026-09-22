@@ -91,3 +91,33 @@ export function ephemeralDeadline(input: EphemeralDeadlineInput): EphemeralDeadl
   if (durationSeconds !== null) return { state: 'awaiting-reception', durationSeconds };
   return { state: 'none' };
 }
+
+/**
+ * LA DERNIÈRE MINUTE — **le compteur n'apparaît que là** (#7468 web, #7467 iOS).
+ *
+ * Précision du porteur, 2026-09-22 : « l'éphémère est la flamme avec la
+ * configuration de durée par défaut ! Ce qu'il faudrait c'est d'afficher le
+ * compteur de l'éphémère dans la conversation uniquement quand on est déjà à
+ * 1 min et moins de sa destruction. »
+ *
+ * La valeur vit ICI, avec la règle d'échéance, parce qu'elle en est la SUITE :
+ * l'échéance dit QUAND, celle-ci dit à partir de quand on l'ÉCRIT. Les deux
+ * clients la partagent — un seuil recopié dans deux peaux divergerait au
+ * premier ajustement.
+ */
+export const EPHEMERAL_COUNTER_WINDOW_SECONDS = 60;
+
+/**
+ * `true` dès que le compteur doit se peindre — et il gouverne DEUX choses que
+ * rien d'autre ne relie : ce que l'œil voit (des chiffres, ou la seule flamme)
+ * et ce qui s'abonne à l'horloge. Au-delà de la fenêtre, AUCUNE horloge ne bat
+ * pour ce message : il n'y a rien à rafraîchir, et vingt rangées éphémères
+ * réveillaient vingt fois par seconde un écran qui n'en montrait rien.
+ *
+ * Un reste NÉGATIF rend `true` : une échéance passée n'est pas « au-delà de la
+ * minute » — c'est un message en train de disparaître, et lui remettre la
+ * flamme nue serait un pas en arrière au pire moment.
+ */
+export function ephemeralCounterVisible(remainingMs: number): boolean {
+  return remainingMs <= EPHEMERAL_COUNTER_WINDOW_SECONDS * 1000;
+}

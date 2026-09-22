@@ -27,12 +27,21 @@
  * « refuser ». Ce n'est pas une préférence produit : chaque promesse force sa
  * réponse, et elles diffèrent.
  *
- * **Éphémère → propager.** La copie hérite de la DURÉE de l'original
- * (`expiresAt − createdAt`), recomptée depuis l'envoi du transfert. Le compte à
- * zéro repart parce que les nouveaux destinataires n'ont rien vu : leur servir
- * les 3 secondes résiduelles d'un minuteur de 24 h ne voudrait rien dire. La
- * copie meurt, la promesse tient, et elle tient TRANSITIVEMENT — un transfert
- * de transfert reste éphémère.
+ * **Éphémère → propager.** La copie hérite de la DURÉE de l'original — la
+ * colonne `ephemeralDuration` depuis #7451, `expiresAt − createdAt` en repli
+ * pour les lignes écrites avant qu'elle n'ait un écrivain. Le compte repart de
+ * zéro parce que les nouveaux destinataires n'ont rien vu : leur servir les
+ * 3 secondes résiduelles d'un minuteur de 24 h ne voudrait rien dire. La copie
+ * meurt, la promesse tient, et elle tient TRANSITIVEMENT — un transfert de
+ * transfert reste éphémère.
+ *
+ * **Et ce qui voyage est bien une DURÉE, jamais une échéance (#7451).** Le
+ * serveur décide de l'échéance à la réception de CHAQUE destinataire ; rendre
+ * ici un `expiresAt` le court-circuiterait. La bascule de ce module est ce qui
+ * empêche un défaut silencieux : `Message.expiresAt` porte désormais l'heure de
+ * DESTRUCTION, qui vaut le plafond de rétention (sept jours) tant que personne
+ * n'a reçu — le repli legacy appliqué à une ligne NEUVE aurait donc fait d'un
+ * éphémère de trente secondes une copie de sept jours.
  *
  * **Vue unique → refuser.** Propager ne fermerait RIEN ici : `viewOnceCount`
  * repart à zéro sur la nouvelle ligne. Se transférer à soi-même une photo à vue
@@ -67,6 +76,7 @@ const prisma = { message: { findUnique: messageFindUnique } } as any;
 const source = (over: Record<string, unknown> = {}) => ({
   isViewOnce: false,
   effectFlags: 0,
+  ephemeralDuration: null,
   expiresAt: null,
   createdAt: new Date('2026-08-12T11:00:00.000Z'),
   // Compté par la MÊME lecture que l'héritage éphémère : c'est ce qui dit si
@@ -139,9 +149,28 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      // 30 s de durée d'origine, recomptées depuis AT — et non les 30 s
-      // résiduelles d'un minuteur déjà largement écoulé.
-      expect(admission).toEqual({ admitted: true, expiresAt: new Date(AT.getTime() + 30_000) });
+      // 30 s de durée d'origine. Une DURÉE, pas une échéance : le décompte de
+      // la copie repartira de la réception de chaque nouveau destinataire.
+      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
+    });
+
+    it('lit la COLONNE, jamais la distance à `expiresAt`, dès qu\'elle existe (#7451)', async () => {
+      // Le défaut que ce témoin ferme : sur une ligne écrite APRÈS #7451,
+      // `expiresAt` porte l'heure de DESTRUCTION — le plafond de rétention de
+      // sept jours tant que personne n'a reçu. Le repli legacy y aurait lu
+      // « sept jours » et transformé un éphémère de trente secondes en copie
+      // d'une semaine, sans qu'aucun autre témoin ne tombe.
+      messageFindUnique.mockResolvedValue(
+        source({
+          createdAt: AT,
+          ephemeralDuration: 30,
+          expiresAt: new Date(AT.getTime() + 7 * 24 * 60 * 60 * 1000),
+        }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
     });
 
     it('propage aussi quand seul le bit EPHEMERAL est posé mais que l’échéance existe', async () => {
@@ -155,16 +184,14 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({
-        admitted: true,
-        expiresAt: new Date(AT.getTime() + 60 * 60 * 1000),
-      });
+      expect(admission).toEqual({ admitted: true, ephemeralDuration: 3600 });
     });
 
-    it('rend la copie immédiatement échue quand la source naît déjà expirée', async () => {
-      // Décalage d'horloge ou client qui envoie une échéance passée : la copie
-      // ne doit en aucun cas vivre PLUS que l'original. Échue à l'instant du
-      // transfert, le balayage la prend à sa passe suivante.
+    it('ne propage AUCUNE durée quand la source legacy naît déjà expirée', async () => {
+      // Décalage d'horloge ou client qui envoyait une échéance passée : la
+      // distance est nulle, donc ce n'est pas une durée. La copie dégénère en
+      // message ordinaire — le seul comportement qui ne la fait pas vivre PLUS
+      // que l'original, là où une durée nulle l'aurait rendue immortelle.
       messageFindUnique.mockResolvedValue(
         source({
           createdAt: new Date('2026-08-12T11:00:00.000Z'),
@@ -174,15 +201,16 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true, expiresAt: AT });
+      expect(admission).toEqual({ admitted: true });
     });
 
     it('reste transitif — la copie éphémère est elle-même une source éphémère', async () => {
-      // La copie du premier transfert porte `createdAt = AT` et
-      // `expiresAt = AT + 30 s`. La transférer à son tour doit rendre la même
-      // durée, sans érosion.
-      const firstHop = new Date(AT.getTime() + 30_000);
-      messageFindUnique.mockResolvedValue(source({ createdAt: AT, expiresAt: firstHop }));
+      // La copie du premier transfert porte sa propre `ephemeralDuration`.
+      // La transférer à son tour doit rendre la même durée, sans érosion — et
+      // sans que le module ait à remonter la chaîne.
+      messageFindUnique.mockResolvedValue(
+        source({ createdAt: AT, ephemeralDuration: 30, expiresAt: null }),
+      );
 
       const secondForwardAt = new Date(AT.getTime() + 10_000);
       const admission = await admitMessageForward(prisma, {
@@ -190,10 +218,7 @@ describe('admitMessageForward', () => {
         at: secondForwardAt,
       });
 
-      expect(admission).toEqual({
-        admitted: true,
-        expiresAt: new Date(secondForwardAt.getTime() + 30_000),
-      });
+      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
     });
   });
 
@@ -253,7 +278,7 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
 
-      expect(admission).toEqual({ admitted: true, expiresAt: new Date(AT.getTime() + 30_000) });
+      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
     });
 
     it('dit d’abord la vue unique — le motif le plus informatif gagne', async () => {

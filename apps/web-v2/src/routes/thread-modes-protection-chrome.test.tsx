@@ -169,7 +169,16 @@ test('la table des modes couvre TOUTE l’énumération partagée', () => {
 });
 
 for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
-  test('rend le DÉCOMPTE d’un éphémère reçu', async () => {
+  /**
+   * **AU-DELÀ DE LA DERNIÈRE MINUTE : LA FLAMME SEULE** (#7468, travail 1) —
+   * « afficher le compteur de l'éphémère dans la conversation uniquement quand
+   * on est déjà à 1 min et moins de sa destruction ».
+   *
+   * Le témoin interroge le TEXTE peint, pas un drapeau : un badge qui
+   * porterait `data-counter="off"` en affichant quand même ses chiffres
+   * passerait une assertion d'attribut et raterait le seul fait qui compte.
+   */
+  test('AU-DELÀ d’une minute : la flamme, AUCUN chiffre', async () => {
     const message = messageOf({ id: 'm-ephemere', ephemeralDuration: 600 });
     noteEphemeralReception('m-ephemere', Date.now());
     const host = await monte(mode, [message]);
@@ -177,9 +186,26 @@ for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
     const badge = host.querySelector('[data-ephemeral]');
     expect(badge).not.toBeNull();
     expect(badge?.getAttribute('data-ephemeral')).toBe('running');
-    /* LE LECTEUR D'ÉCRAN (#7454, exigence 6) — « éphémère, disparaît dans
-       N minutes », jamais un chiffre nu. */
+    expect(badge?.getAttribute('data-counter')).toBe('off');
+    expect(badge?.textContent ?? '').not.toMatch(/\d/);
+    /* LE LECTEUR D'ÉCRAN DIT TOUJOURS LE TEMPS (#7468) — c'est l'œil qu'on
+       soulage, jamais l'oreille : privée des chiffres, elle n'aurait AUCUN
+       autre chemin vers l'échéance. */
     expect(badge?.getAttribute('aria-label') ?? '').toContain('éphémère');
+    expect(badge?.getAttribute('aria-label') ?? '').toContain('disparaît dans');
+    expect(badge?.getAttribute('aria-label') ?? '').toMatch(/\d/);
+  });
+
+  test('DANS la dernière minute : la flamme ET le compteur', async () => {
+    const message = messageOf({ id: 'm-ephemere', ephemeralDuration: 45 });
+    noteEphemeralReception('m-ephemere', Date.now());
+    const host = await monte(mode, [message]);
+
+    const badge = host.querySelector('[data-ephemeral]');
+    expect(badge).not.toBeNull();
+    expect(badge?.getAttribute('data-counter')).toBe('on');
+    /* `0:45` — la forme que le porteur écrit (« 0:59 → 0:00 »). */
+    expect(badge?.textContent ?? '').toMatch(/0:4[45]/);
     expect(badge?.getAttribute('aria-label') ?? '').toContain('disparaît dans');
   });
 

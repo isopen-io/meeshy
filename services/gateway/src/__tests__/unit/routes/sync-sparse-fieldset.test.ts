@@ -121,6 +121,9 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       'conversationId',
       'createdAt',
       'effectFlags',
+      // #7451 — membre du bloc de protection : un client qui reçoit une ligne
+      // sans elle ne sait pas que le message décompte.
+      'ephemeralDuration',
       'expiresAt',
       'id',
       'isBlurred',
