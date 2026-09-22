@@ -549,6 +549,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         conversationId: message.conversationId,
         reader: historyReaderFromAuthContext(authRequest.authContext),
       });
+      if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
+      }
 
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
         offset: pageOffset,
@@ -586,7 +589,13 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       // Vérifier que l'attachment existe et que l'utilisateur a accès
       const attachment = await prisma.messageAttachment.findFirst({
-        where: { id: attachmentId },
+        // `MessageAttachment` ne porte pas `deletedAt` : c'est le MESSAGE
+        // parent qui le porte (#7357). Un filtre sur l'attachment lui-même
+        // lève `PrismaClientValidationError` à chaque appel.
+        where: {
+          id: attachmentId,
+          message: { is: { deletedAt: null } }
+        },
         include: {
           message: {
             include: {
@@ -616,13 +625,27 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       // SSOT guard: same string-schema pagination as the message variant above.
       const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      // #7357 — même plancher que la porte du message : un accusé d'écoute est
+      // NOMINATIF, donc de l'historique. Refusé ICI par le même 404 qu'un id
+      // inconnu — le service lève aussi, mais son erreur sortirait en 500 et
+      // distinguerait « antérieur à ton arrivée » de « n'existe pas ».
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: attachment.message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext),
+      });
+      if (historyFloor && attachment.message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
+      }
+
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
         offset: pageOffset,
         limit: pageLimit,
         filter,
         // Le lecteur reste visible à lui-même même s'il a désactivé ses
         // accusés — même convention que les cinq portes texte (#3907).
-        viewerUserId: userId
+        viewerUserId: userId,
+        historyFloor
       });
 
       return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
