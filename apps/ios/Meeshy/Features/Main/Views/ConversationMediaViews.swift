@@ -556,6 +556,8 @@ struct AudioMediaView: View, Equatable {
     var replyReference: ReplyReference? = nil
     var replyIsStory: Bool = false
     var parentIsMe: Bool = false
+    /// Peau de la citation hébergée — `.focal` sous la rangée plate : nom seul, sans avatar (#7491).
+    var replySkin: QuotedReplyPresentation.Skin = .bubble
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
     /// LOI DES ZONES (2026-08-24) — ZONES 1 et 2 de la citation hebergee par
@@ -648,6 +650,7 @@ struct AudioMediaView: View, Equatable {
             && lhs.replyReference == rhs.replyReference
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
+            && lhs.replySkin == rhs.replySkin
             && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget
             && lhs.transcription?.text == rhs.transcription?.text
             && lhs.transcription?.segments.count == rhs.transcription?.segments.count
@@ -993,6 +996,7 @@ struct AudioMediaView: View, Equatable {
         if let ref = replyReference {
             BubbleQuotedReply(
                 style: .inline,
+                skin: replySkin,
                 reply: ref,
                 parentIsMe: false,
                 accentHex: accentColor,
