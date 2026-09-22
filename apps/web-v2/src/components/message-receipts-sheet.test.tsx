@@ -1,14 +1,16 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 
 import { appQueryClient } from '@/lib/api/query-client';
 import { apiDeps } from '@/lib/api/deps';
+import { attachmentStatusDetailsQueryKey, fetchAttachmentStatusDetails, type AttachmentStatusRow } from '@/lib/api/attachments';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { fetchMessageReceiptsPeople } from '@/lib/api/receipts';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Attachment } from '@/lib/api/types';
 import { time } from '@/lib/grouping';
-import { receiptCategoriesOf } from '@/lib/view/message-receipts';
+import { positionFraction, receiptCategoriesOf } from '@/lib/view/message-receipts';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -133,6 +135,17 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
     expect(card?.textContent ?? '').not.toContain('Regardé jusqu’à');
   });
 
+  test('vidéo COMPLÈTE : aucun pourcentage, la pastille suffit', async () => {
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-fixture-2', mimeType: 'video/mp4', originalName: 'clip.mp4', duration: 15_000 })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-fixture-2"]');
+    expect(card?.querySelector('[data-message-receipts-percent]')).toBe(null);
+  });
+
   test('sans pièce jointe, aucune carte ne se monte', async () => {
     const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [] });
     expect(host.querySelectorAll('[data-message-receipts-attachment]').length).toBe(0);
@@ -189,5 +202,66 @@ describe('MessageReceiptsSheet — l’heure de chaque accusé (#7352, V4)', () 
       const row = host.querySelector(`[data-message-receipts-person="${person.participantId}"]`);
       expect(row?.querySelector('[data-message-receipts-person-time]')).toBe(null);
     }
+  });
+});
+
+/**
+ * « LE % EST LISIBLE ET BOUGE EN DIRECT » (#7361, W8) — avant ce lot, le
+ * pourcentage ne vivait que dans `aria-valuenow` : invisible à l'œil. Miroir
+ * iOS : `MessageViewsDetailView.swift:891-899` (barre + « N% » sur la même
+ * ligne).
+ *
+ * « En direct » : `attachment-status:updated` INVALIDE la query de la pièce
+ * (`socket.ts`, témoin `socket.test.ts`) et le refetch REMPLACE les lignes en
+ * cache. Ce témoin mesure l'autre moitié — une ligne remplacée dans le cache
+ * atteint le PIXEL de la feuille ouverte, sans la rouvrir.
+ *
+ * Les valeurs attendues sortent de la MÊME fonction que le composant lit
+ * (`fetchAttachmentStatusDetails` + `positionFraction`), jamais d'un chiffre
+ * recalculé à la main.
+ */
+describe('MessageReceiptsSheet — le pourcentage écouté / regardé (#7361, W8)', () => {
+  const audio = attachment({ id: 'att-test-6', mimeType: 'audio/webm', originalName: 'vocal.webm', duration: 20_000 });
+
+  async function servedRows(): Promise<readonly AttachmentStatusRow[]> {
+    const result = await fetchAttachmentStatusDetails({ ...apiDeps, attachmentId: 'att-test-6' });
+    if (!result.ok) throw new Error('la fixture « att-test-6 » doit répondre `ok`');
+    return result.data;
+  }
+
+  test('audio INCOMPLET : le % est VISIBLE, égal à la valeur de la barre', async () => {
+    const [row] = await servedRows();
+    if (row === undefined) throw new Error('la fixture « att-test-6 » doit servir une ligne');
+    const expected = Math.round(
+      positionFraction({ positionMs: row.lastPlayPositionMs, complete: row.listenedComplete, durationMs: 20_000 }) * 100,
+    );
+    expect(expected).toBeGreaterThan(0);
+    expect(expected).toBeLessThan(100);
+
+    const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [audio] });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    expect(card?.querySelector('[data-message-receipts-percent]')?.textContent).toBe(`${expected}%`);
+    expect(card?.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe(String(expected));
+  });
+
+  test('une ligne REMPLACÉE dans le cache (refetch après `attachment-status:updated`) fait bouger le % et la barre sans rouvrir la feuille', async () => {
+    const rows = await servedRows();
+    const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [audio] });
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    const before = card?.querySelector('[data-message-receipts-percent]')?.textContent;
+    expect(before).not.toBe('50%');
+
+    await act(async () => {
+      appQueryClient.setQueryData(
+        attachmentStatusDetailsQueryKey('att-test-6'),
+        rows.map((row) => ({ ...row, lastPlayPositionMs: 10_000, listenedComplete: false })),
+      );
+    });
+    await mounter.settle();
+
+    expect(card?.querySelector('[data-message-receipts-percent]')?.textContent).toBe('50%');
+    const bar = card?.querySelector('[role="progressbar"] > div') as HTMLElement | null;
+    expect(bar?.style.width).toBe('50%');
   });
 });

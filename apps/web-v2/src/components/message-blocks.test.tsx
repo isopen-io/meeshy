@@ -45,9 +45,9 @@ describe('Badges', () => {
     expect(html).toBe('');
   });
 
-  test('ephemeral/edited ne sont PAS peints ici — chacun a son propre composant', () => {
+  test('« modifié » n’est PAS peint ici — il a son propre composant', () => {
     const html = renderToStaticMarkup(
-      <Badges badges={[{ kind: 'ephemeral', expiresAt: new Date() }, { kind: 'edited' }]} />,
+      <Badges badges={[{ kind: 'edited' }]} />,
     );
     expect(html).toBe('');
   });

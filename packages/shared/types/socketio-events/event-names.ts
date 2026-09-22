@@ -42,8 +42,10 @@ export const SERVER_EVENTS = {
    */
   MESSAGE_EXPIRED: 'message:expired',
   /**
-   * La passerelle a enregistré la PREMIÈRE réception d'un destinataire et sert
-   * désormais une échéance POUR CE LECTEUR (contrat du fil #7451, point 5).
+   * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
+   * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
+   * `user:<destinataire>` (pour ses autres appareils) et vers
+   * `user:<expéditeur>` (la plus tardive des échéances connues).
    *
    * Il existe parce que `MESSAGE_NEW` ne PEUT PAS porter l'échéance d'un
    * éphémère : c'est une diffusion en room, et l'échéance est résolue par
@@ -51,10 +53,11 @@ export const SERVER_EVENTS = {
    * minutes reçu quatre minutes après son envoi doit vivre cinq minutes chez
    * son destinataire, pas une.
    *
-   * Il part donc vers deux rooms d'UTILISATEUR, jamais vers la conversation :
-   * `user:<destinataire>` pour ses AUTRES appareils, qui n'ont pas vu
-   * l'arrivée, et `user:<expéditeur>` avec la plus TARDIVE des échéances
-   * connues — la seule horloge qu'un envoi puisse honnêtement afficher.
+   * DISTINCT de `MESSAGE_EXPIRED`, qui dit la FIN : celui-ci pose l'échéance,
+   * celui-là retire le message. Un client qui n'en reçoit aucun n'est pas
+   * démuni — il retombe sur `réception locale + ephemeralDuration`
+   * (`utils/ephemeral-deadline.ts`), et c'est le cas nominal du temps réel,
+   * `message:new` ne portant pas d'`expiresAt` pour un éphémère (point 4).
    *
    * Un client ne REMPLACE jamais son échéance locale par celle-ci : les deux
    * concourent et la plus PROCHE gagne. C'est une règle de sécurité — aucune
@@ -539,25 +542,22 @@ export const SERVER_EVENTS = {
  * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
  * avait entre-temps implémenté l'émission.
  *
- * Ce qui reste : le pipeline de traduction EN APPEL — trois noms décodés côté
- * clients, qui attendent le service qui les produira — et le démarrage du
- * décompte d'un éphémère, dont l'émetteur est livré par le lot #7451.
+ * Ce qui reste : le pipeline de traduction EN APPEL (les trois noms sont
+ * décodés côté clients et attendent le service qui les produira) et
+ * `message:countdown-started`, réservé par le lot web-v2 #7454.
+ *
+ * CE DERNIER EST RÉSERVÉ POUR UN LOT, PAS POUR UN SERVICE ABSENT, et c'est une
+ * différence qui doit rester lisible : le contrat du fil est arrêté dans
+ * #7451, que la session passerelle livre EN PARALLÈLE. Le nom est déclaré ICI,
+ * une seule fois, pour que les trois clients ne l'écrivent pas chacun de leur
+ * côté ; **la ligne ci-dessous sort de cette liste dans le lot qui pose
+ * l'émetteur** (`MessageReadStatusService`, à la première réception d'un
+ * destinataire) — la garde du sens inverse le rappellera d'elle-même.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
-  /**
-   * Le CLIENT arrive avant la passerelle, et c'est voulu : le contrat du fil
-   * (#7451) a été fixé AVANT le développement pour que les trois lots — iOS,
-   * web-v2, gateway — avancent en parallèle sans s'attendre. iOS s'y abonne
-   * déjà ; sans l'événement, sa règle d'affichage retombe sur la réception
-   * LOCALE et reste juste.
-   *
-   * La garde vérifie les DEUX sens : le jour où la passerelle l'émet, elle
-   * rougira tant que cette ligne n'aura pas été retirée. C'est au lot #7451
-   * de la retirer, dans le commit qui ajoute l'émetteur.
-   */
   SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED,
 ]);
 

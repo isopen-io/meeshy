@@ -109,14 +109,14 @@ const post = (): FeedPost =>
 describe('les deux moitiés de l’identité mènent au MÊME profil', () => {
   test('la bulle d’une conversation', () => {
     const html = renderToStaticMarkup(
-      <Bubble place={place} languages={['fr']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      <Bubble place={place} languages={['fr']} isGrouped viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
     );
     expect(compteLiens(html, 'nour')).toBe(2);
   });
 
   test('la rangée plate d’une conversation (Focal)', () => {
     const html = renderToStaticMarkup(
-      <FocalRow mode="focal" place={place} languages={['fr']} viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      <FocalRow mode="focal" place={place} languages={['fr']} viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
     );
     expect(compteLiens(html, 'nour')).toBe(2);
   });
