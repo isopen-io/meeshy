@@ -5,8 +5,18 @@
  * décompter que lorsque l'utilisateur l'a reçu ! Le serveur rend le message
  * indisponible après le temps imparti + 1 h ».
  *
- * Ces témoins portent la LOI — les quatre dates et leurs bords. Le câblage
- * (réception, service par lecteur, balayage) a ses propres suites.
+ * Ces témoins portent la LOI — les quatre dates et leurs bords — et ils vivent
+ * ICI, à côté d'elle, plutôt que dans la suite du gateway où ils ont d'abord
+ * été écrits. Deux raisons, et la seconde a mordu :
+ *
+ *   - la loi est PARTAGÉE : les trois clients la lisent, pas seulement la
+ *     passerelle. Ses témoins appartiennent à son paquet ;
+ *   - le seuil de couverture de `packages/shared` ne voit QUE ce que son
+ *     propre runner exécute. Des témoins parfaits, exécutés ailleurs, laissent
+ *     le module à 8 % ici — et c'est le gate `Test shared` qui l'a dit.
+ *
+ * Il n'en existe donc pas de second exemplaire : la suite du gateway garde le
+ * CÂBLAGE (réception, service par lecteur, balayage), qui exerce son code.
  *
  * ─── UN TÉMOIN DE DÉCOMPTE S'ÉCRIT SUR UN DESTINATAIRE QUI A ATTENDU ────────
  *
@@ -15,9 +25,9 @@
  * posé là ne peut pas tomber. Chacun de ceux-ci écarte donc la réception de
  * l'envoi.
  *
- * @jest-environment node
  */
 
+import { describe, it, expect } from 'vitest';
 import {
   EPHEMERAL_UNAVAILABILITY_GRACE_MS,
   EPHEMERAL_UNRECEIVED_RETENTION_MS,
@@ -26,7 +36,7 @@ import {
   normalizeEphemeralDuration,
   recipientEphemeralDeadline,
   servedEphemeralExpiresAt,
-} from '@meeshy/shared';
+} from './ephemeral-countdown';
 
 const SENT_AT = new Date('2026-09-22T10:00:00.000Z');
 const at = (msAfterSend: number): Date => new Date(SENT_AT.getTime() + msAfterSend);
@@ -164,6 +174,16 @@ describe('servedEphemeralExpiresAt — l\'échéance PAR LECTEUR', () => {
         readerDeadline: null,
         latestRecipientDeadline: null,
       }),
+    ).toBeNull();
+  });
+
+  it("sert null sur un message non éphémère SANS colonne — `rawExpiresAt` absent", () => {
+    // Le repli `?? null` de la branche non éphémère : un message ordinaire n'a
+    // ni durée ni échéance, et ce qui sort ne doit pas être `undefined` — les
+    // trois clients lisent `null` comme « aucun décompte », jamais comme
+    // « le serveur n'a pas répondu ».
+    expect(
+      servedEphemeralExpiresAt({ ephemeralDuration: null, isSender: false }),
     ).toBeNull();
   });
 
