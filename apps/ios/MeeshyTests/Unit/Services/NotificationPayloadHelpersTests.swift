@@ -997,6 +997,30 @@ final class NSEDeliveryReceiptGateTests: XCTestCase {
         }
     }
 
+    func test_everyMessageArrivalType_triggersDeliveryReceipt() {
+        for type in NotificationPayloadHelpers.messageArrivalTypes {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) annonce une arrivée de message : il doit être accusé remis"
+            )
+        }
+    }
+
+    func test_conversationCreationTypes_keepTheirDeliveryReceipt() {
+        for type in ["new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) accusait déjà la remise avant l'extraction"
+            )
+        }
+    }
+
+    func test_missingOrBlankType_doesNotTriggerDeliveryReceipt() {
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType(nil))
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType(""))
+        XCTAssertFalse(NotificationPayloadHelpers.isDeliveryReceiptType("   "))
+    }
+
     func test_nonMessageTypesDoNotRequireDeliveryReceipt() {
         // Les types sociaux (réactions, commentaires) ne déclenchent pas d'accusé
         for type in [
