@@ -2197,6 +2197,13 @@ export class MessageReadStatusService {
        * disparaissent, y compris le demandeur.
        */
       viewerUserId?: string;
+      /**
+       * #7357 — plancher d'historique du lecteur. Un attachment antérieur
+       * au plancher n'existe pas pour ce lecteur — même erreur que
+       * l'absence, pour que les deux cas restent indiscernables de
+       * l'extérieur.
+       */
+      historyFloor?: Date | null;
     } = {}
   ): Promise<{
     statuses: Array<{
@@ -2243,9 +2250,21 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all", viewerUserId } = options;
+    const { offset = 0, limit = 20, filter = "all", viewerUserId, historyFloor = null } = options;
 
     try {
+      // #7357 — même garde que `getMessageStatusDetails` (#4179). Un attachment
+      // orphelin (`messageId` nul) n'a pas d'historique à ouvrir : refusé.
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { message: { select: { createdAt: true } } },
+      });
+
+      if (!attachment?.message) throw new Error("Attachment not found");
+      if (historyFloor && attachment.message.createdAt < historyFloor) {
+        throw new Error("Attachment not found");
+      }
+
       const whereClause: any = { attachmentId };
       if (filter === "viewed") whereClause.viewedAt = { not: null };
       else if (filter === "downloaded")

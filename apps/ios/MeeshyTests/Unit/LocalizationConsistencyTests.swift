@@ -381,6 +381,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
+        // #7366 — les onglets et libellés de la fiche en sont sortis ; le cliquet suit le code.
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsFilter.swift",  // 13
         "apps/ios/Meeshy/Features/Intents/MeeshyAppIntents.swift",  // 1
         // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
         // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
