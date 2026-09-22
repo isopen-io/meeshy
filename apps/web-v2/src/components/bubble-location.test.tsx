@@ -83,6 +83,7 @@ const render = (message: Message): string =>
       languages={['fr', 'en']}
       isGrouped
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
     />,

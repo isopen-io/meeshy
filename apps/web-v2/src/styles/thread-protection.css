@@ -143,3 +143,23 @@
 :root.light .protected-ephemeral-badge {
   --ephemeral-fill: 10%;
 }
+
+/**
+ * LA DÉSIGNATION D'UNE VUE UNIQUE (#7454) — même grammaire de puce que
+ * l'éphémère ci-dessus, AUTRE teinte : `--color-i600`, celle que le composeur
+ * donne déjà à ses deux bascules de masquage (« Flou » et « Vue unique »,
+ * `composer-top-row.tsx`). Deux sens, deux couleurs comme deux pictogrammes —
+ * le rouge de l'éphémère dit « ça va disparaître », l'indigo du masquage dit
+ * « ça ne se montre qu'une fois ».
+ */
+.protected-view-once-badge {
+  padding-inline: 8px;
+  padding-block: 4px;
+  color: var(--color-i600);
+  border: 0.5px solid color-mix(in srgb, var(--color-i600) 30%, transparent);
+  --view-once-fill: 15%;
+  background-color: color-mix(in srgb, var(--color-i600) var(--view-once-fill), transparent);
+}
+:root.light .protected-view-once-badge {
+  --view-once-fill: 10%;
+}

@@ -550,7 +550,13 @@ function LensRowImpl({
             ) : previewKind === 'view-once' ? (
               <>
                 {senderPrefix}
-                <Glyph name="flame" size={13} className="mr-1 inline-block align-[-2px]" />
+                {/* `eye`, JAMAIS `flame` (#7454) — `flame` désigne l'ÉPHÉMÈRE
+                    partout ailleurs (le chrome de protection du fil, la
+                    bascule armée du composeur), et cette ligne était le site
+                    où le dépôt se contredisait, exactement comme iOS (#7452).
+                    Le vocabulaire est celui du COMPOSEUR : `eye` pour la vue
+                    unique, `flameFill` pour l'éphémère. */}
+                <Glyph name="eye" size={13} className="mr-1 inline-block align-[-2px]" />
                 <span className="italic">1 message vue unique</span>
               </>
             ) : previewKind === 'expired' ? (
@@ -563,7 +569,10 @@ function LensRowImpl({
             ) : (
               <>
                 {senderPrefix}
-                {previewKind === 'ephemeral' ? <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" /> : null}
+                {/* `flameFill` — le MÊME pictogramme que le décompte du fil
+                    et que la bascule ARMÉE du composeur (#7454). `timer` reste
+                    au message ÉCHU ci-dessus : là, le temps a fini de couler. */}
+                {previewKind === 'ephemeral' ? <Glyph name="flameFill" size={13} className="mr-1 inline-block align-[-2px]" /> : null}
                 {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
                     document : un lecteur d'écran doit prononcer un aperçu traduit
                     avec la voix de sa langue, jamais avec celle de l'expéditeur.
