@@ -83,6 +83,15 @@ const OVERRIDES = {
    * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
    */
   'coin-fill': join(CORE, 'fill/coin-fill.svg'),
+  /**
+   * `star-fill` (#7378, #7286) — l'étoile PLEINE d'un message en favori :
+   * « Retirer des favoris » dans « Plus… », la rangée de Réglages › Outils et
+   * le bouton de retrait de l'écran des favoris (`star.fill` iOS,
+   * `SettingsView.swift`, `StarredMessagesView.swift`). Phosphor ne publie
+   * pas de `star-slash` : l'étoile PLEINE dit « en favori, toucher pour
+   * retirer », le CONTOUR (`star`) dit « ajouter ».
+   */
+  'star-fill': join(CORE, 'fill/star-fill.svg'),
 };
 
 /**
@@ -257,8 +266,12 @@ emit({
  * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne
  * sont pas la meme route), donc aucun octet n'est paye deux fois au meme
  * demarrage.
+ *
+ * `star` / `star-fill` (#7378) — le favori de la feuille « Plus... »
+ * (`action.star` / `action.unstar`, `star.fill` iOS) : Ajouter (contour),
+ * Retirer (plein). La feuille vit dans le chunk du fil, comme ce jeu.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three'];
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three', 'star', 'star-fill'];
 
 emit({
   ids: THREAD_MENU,
