@@ -58,7 +58,7 @@ import { FeedSkeleton } from './feed';
 
 export function PostDetailHeader() {
   return (
-    <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2" style={READING_COLUMN_STYLE}>
+    <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="feed"
         aria-label="Retour au fil"
@@ -184,7 +184,10 @@ export default function PostDetailScreen() {
       {/* LA MÊME COLONNE QUE LE FIL (#7449) — cet écran EST la destination du
           geste d'ouverture d'une carte : laissé pleine largeur, il aurait
           étiré, à UN tap du fil borné, la carte que le fil venait de borner.
-          `READING_COLUMN_STYLE` est le site unique de la cote. */}
+          Elle est ici sur le SCROLLPORT et non sur les cartes, parce que cet
+          écran n'a aucun chrome à l'intérieur de son défilement — pas de
+          plateau de stories à laisser courir de bord à bord. L'en-tête, lui,
+          prend la fenêtre, comme celui du fil. */}
       <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe" style={READING_COLUMN_STYLE}>
         {model !== undefined ? (
           <FeedPostCard

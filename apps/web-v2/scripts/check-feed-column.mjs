@@ -16,10 +16,12 @@
  * construction. Ce gate ajoute 1440 × 900, et garde les 390 × 844 pour prouver
  * l'autre moitié — que la borne ne MORD PAS sur un téléphone.
  *
- *  1. à 1440 × 900, le scrollport du Flux fait exactement la colonne, centré ;
- *  2. aucune carte ne déborde de la colonne, l'en-tête la suit, et la FICHE
- *     d'une publication — à un tap du fil — la suit aussi ;
- *  3. à 390 × 844, le scrollport fait toute la largeur — rien n'a changé ;
+ *  1. à 1440 × 900, le CHROME prend la fenêtre — en-tête, plateau des stories
+ *     et scrollport ;
+ *  2. le CONTENU prend la colonne — chaque carte fait exactement la colonne et
+ *     se centre, et la FICHE d'une publication (à un tap du fil) la suit ;
+ *  3. à 390 × 844, la carte fait la largeur du téléphone moins ses gouttières
+ *     — rien n'a changé ;
  *  4. la porte de création est dans l'en-tête, atteignable, 44 au moins, et
  *     « Lancer les Réels » RESTE le contrôle le plus à droite ;
  *  5. elle ouvre deux lignes, vers /posts/new et /posts/new?type=reel ;
@@ -106,34 +108,46 @@ for (const scheme of ['light', 'dark']) {
     await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
     await page.waitForSelector('[data-feed-card]');
 
+    /* LE CHROME PREND LA FENÊTRE — en-tête, plateau des stories et scrollport
+       (donc la barre de défilement). C'est la directive porteur du 2026-09-22,
+       et c'est le témoin qui a manqué à la première écriture du lot : bornée
+       sur le scrollport, la colonne emportait le titre et le plateau. */
     const scrollport = await boxOf(page, '#contenu');
     check(
-      scrollport !== null && near(scrollport.width, COLUMN_MAX),
-      `${label} 1440×900 : le fil ne fait pas la colonne (${JSON.stringify(scrollport)} ≠ ${COLUMN_MAX})`,
-    );
-    check(
-      scrollport !== null && near(scrollport.centerX, WIDE.width / 2),
-      `${label} 1440×900 : le fil n'est pas CENTRÉ (centre ${scrollport?.centerX} ≠ ${WIDE.width / 2})`,
+      scrollport !== null && near(scrollport.width, WIDE.width),
+      `${label} 1440×900 : le scrollport du Flux ne prend pas la fenêtre (${scrollport?.width} ≠ ${WIDE.width})`,
     );
 
     const entete = await boxOf(page, 'header');
     check(
-      entete !== null && near(entete.width, COLUMN_MAX) && near(entete.centerX, WIDE.width / 2),
-      `${label} 1440×900 : l'en-tête ne suit pas la colonne (${JSON.stringify(entete)})`,
+      entete !== null && near(entete.width, WIDE.width),
+      `${label} 1440×900 : l'en-tête ne prend pas la fenêtre (${JSON.stringify(entete)})`,
     );
 
+    const plateau = await boxOf(page, '[data-rail="grande"]');
+    check(
+      plateau !== null && near(plateau.width, WIDE.width),
+      `${label} 1440×900 : le plateau des stories ne court pas de bord à bord (${JSON.stringify(plateau)})`,
+    );
+
+    /* ...ET LE CONTENU PREND LA COLONNE : chaque carte fait exactement la
+       colonne, et elle est centrée dans la fenêtre. */
     const cartes = await page.evaluate(
       (max) =>
         [...document.querySelectorAll('[data-feed-card]')].map((el) => {
           const r = el.getBoundingClientRect();
-          return { w: Math.round(r.width), deborde: r.width > max + 1 };
+          return { w: r.width, cx: r.left + r.width / 2 };
         }),
       COLUMN_MAX,
     );
-    check(cartes.length > 0, `${label} 1440×900 : aucune carte peinte — le témoin de débordement ne peut pas tomber`);
+    check(cartes.length > 0, `${label} 1440×900 : aucune carte peinte — le témoin de largeur ne peut pas tomber`);
     check(
-      cartes.every((c) => !c.deborde),
-      `${label} 1440×900 : une carte déborde de la colonne (${JSON.stringify(cartes.filter((c) => c.deborde))})`,
+      cartes.every((c) => near(c.w, COLUMN_MAX)),
+      `${label} 1440×900 : une carte ne fait pas la colonne (${JSON.stringify(cartes.filter((c) => !near(c.w, COLUMN_MAX)))})`,
+    );
+    check(
+      cartes.every((c) => near(c.cx, WIDE.width / 2)),
+      `${label} 1440×900 : une carte n'est pas centrée dans la fenêtre (${JSON.stringify(cartes.filter((c) => !near(c.cx, WIDE.width / 2)))})`,
     );
     check(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -166,10 +180,10 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForSelector('[data-feed-card]');
 
     // ------------------------------------------------- 3. la borne ne mord pas
-    const scrollport = await boxOf(page, '#contenu');
+    const carte = await boxOf(page, '[data-feed-card]');
     check(
-      scrollport !== null && near(scrollport.width, PHONE.width),
-      `${label} 390×844 : la colonne a RÉTRÉCI le téléphone (${scrollport?.width} ≠ ${PHONE.width})`,
+      carte !== null && near(carte.width, PHONE.width - 24),
+      `${label} 390×844 : la colonne a RÉTRÉCI la carte du téléphone (${carte?.width} ≠ ${PHONE.width - 24})`,
     );
 
     // --------------------------------- 4. la porte, et les Réels restent à droite
@@ -304,7 +318,8 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `check-feed-column : vert — ${invariants} invariants, 2 schémas : le Flux borné à ${COLUMN_MAX} px et centré à 1440×900, ` +
-    'intact à 390×844, la porte de création à gauche des Réels qui restent au bord, ses deux formats, le refus nommé d’un réel ' +
-    'non qualifiant, la bascule qui garde la saisie, la publication qui ramène au Flux, et les Réels en colonne 9:16 centrée.',
+  `check-feed-column : vert — ${invariants} invariants, 2 schémas : à 1440×900 le chrome du Flux prend la fenêtre (en-tête, ` +
+    `plateau, scrollport) pendant que chaque carte fait ${COLUMN_MAX} px centrés, la fiche d’une publication suit, le téléphone ` +
+    'est intact à 390×844 ; la porte de création à gauche des Réels qui restent au bord, ses deux formats, le refus nommé d’un ' +
+    'réel non qualifiant, la bascule qui garde la saisie, la publication qui ramène au Flux, et les Réels en colonne 9:16 centrée.',
 );

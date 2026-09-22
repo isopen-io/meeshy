@@ -3752,7 +3752,11 @@ registre), 13 (les cinq modes énumérés, et le suivant).
 
 **640 px vient du CONTENU, jamais d'un appareil** : `MEDIA_GRID_MAX_WIDTH` borne déjà une mosaïque à 300 px, une carte en porte deux colonnes de cette échelle plus ses gouttières, et 640 tient ~85 caractères au corps du dépôt.
 
-**La colonne est portée par le SCROLLPORT lui-même**, pas par une boîte intérieure : la barre de défilement, le tirer-pour-rafraîchir et `useScrollportMemory` restent sur le MÊME élément qu'avant, et la bande du plateau (`-mx-3`) court de bord à bord DE LA COLONNE.
+**LE CHROME PREND LA FENÊTRE, LE CONTENU PREND LA COLONNE** (directive porteur du 2026-09-22, après une première écriture fausse). La colonne est portée par les CARTES, le squelette et les états vide/erreur ; l'en-tête, le plateau des stories et le scrollport — donc la barre de défilement — gardent toute la largeur.
+
+La première écriture la posait sur le SCROLLPORT : un `style` de moins, et faux — elle emportait avec elle le titre « Meeshy Feed » et le plateau des stories, qui sont du chrome et n'ont aucune raison de rétrécir. **Ce qu'on borne est la mesure de LECTURE** (une ligne trop longue se relit mal), jamais l'application. Le plateau vit pourtant DANS le scrollport (il sort du champ au défilement, #6103) : la règle ne se lit donc pas « ce qui défile se borne », mais « ce qui se LIT se borne ».
+
+Conséquence de forme : le pied de pagination (`LensPaginationFooter`) rend ses propres `<li>` et ne peut pas être enveloppé ; c'est `FeedSkeleton` — le contenu qu'il porte en `loading-more` — qui prend la colonne, et ses trois autres états (légende centrée, erreur centrée, sentinelle d'un pixel) n'en ont pas besoin. Le détail d'une publication (`/post/$post`) garde la colonne sur son scrollport, lui : aucun chrome ne vit dans son défilement.
 
 **Les Réels se bornent par la HAUTEUR, pas par un nombre de pixels** — `hauteur × 9/16`, le rapport de la scène. En `dvh` et non `vh` : c'est la hauteur que `ReelsFrame` emploie (`h-dvh`), et les deux divergent dès que la barre d'adresse d'une WebView bouge. La colonne porte le `relative`, donc « Retour » et les états plein cadre s'ancrent à ELLE — sans quoi le contrôle part à 460 px du contenu qu'il ferme.
 

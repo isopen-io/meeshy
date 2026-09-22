@@ -75,8 +75,18 @@ import { Link } from '@/routes/route-table';
  * cette place ici, et une porte d'en-tête reste atteignable une fois le fil
  * défilé.
  *
- * LE FIL SE LIT DANS UNE COLONNE (#7449) — `READING_COLUMN_STYLE`
- * (`lib/view/reading-column.ts`), posée sur l'en-tête ET sur le scrollport.
+ * LE CHROME PREND LA FENÊTRE, LE CONTENU PREND LA COLONNE (#7449, directive
+ * porteur du 2026-09-22) — `READING_COLUMN_STYLE` (`lib/view/reading-column.ts`)
+ * est posée sur les CARTES, le squelette et les états vide/erreur ; l'en-tête,
+ * le plateau des stories et le scrollport (donc la barre de défilement)
+ * gardent toute la largeur de la fenêtre.
+ *
+ * La première écriture de ce lot bornait le SCROLLPORT : plus simple d'un
+ * `style`, et faux — elle emportait avec elle le titre « Meeshy Feed » et le
+ * plateau, qui sont du CHROME et n'ont aucune raison de rétrécir. C'est la
+ * mesure de LECTURE qu'on borne (une ligne trop longue se relit mal), jamais
+ * l'application.
+ *
  * La borne ne mord qu'au-delà d'elle-même : aux deux gabarits que les gates
  * mesurent (390 × 844, 320 × 568), le rendu est au pixel près celui d'avant.
  */
@@ -118,7 +128,7 @@ export const FEED_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT;
 export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; readonly railProps: StoryRailProps }) {
   const language = currentInterfaceLanguage();
   return (
-    <header className="flex shrink-0 items-center gap-2 px-3" style={{ ...READING_COLUMN_STYLE, height: FEED_HEADER_HEIGHT }}>
+    <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: FEED_HEADER_HEIGHT }}>
       <Link
         to="list"
         aria-label={translate(language, 'pending.back')}
@@ -184,7 +194,7 @@ export function FeedTopChrome({
 export function FeedError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
   const language = currentInterfaceLanguage();
   return (
-    <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
+    <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center" style={READING_COLUMN_STYLE}>
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
@@ -209,7 +219,7 @@ export function FeedError({ online, onRetry }: { readonly online: boolean; reado
 export function FeedEmpty() {
   const language = currentInterfaceLanguage();
   return (
-    <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
+    <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center" style={READING_COLUMN_STYLE}>
       <Glyph name="image" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'feed.empty.title')}
@@ -235,7 +245,7 @@ export function FeedSkeleton({ count = SKELETON_CARDS_COLD_START }: { readonly c
     /* AUCUN `aria-busy` ICI — le scrollport qui PORTE ce squelette l'annonce
        déjà (`FeedScreen`) ; le poser deux fois faisait lire « Chargement du
        fil » deux fois de suite (revue-correction #5893). */
-    <div aria-hidden="true" className="flex flex-col gap-3">
+    <div aria-hidden="true" className="flex flex-col gap-3" style={READING_COLUMN_STYLE}>
       {Array.from({ length: count }, (_, i) => i).map((i) => (
         <div key={i} className="flex flex-col gap-2 p-3" style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18 }}>
           <div className="flex items-center gap-2.5">
@@ -348,12 +358,7 @@ export default function FeedScreen() {
         ref={frame}
         id="contenu"
         className="scrollbar-none overscroll-contain flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe"
-        /* LA COLONNE DE LECTURE (#7449) — la borne est portée par le
-           SCROLLPORT lui-même, pas par une boîte intérieure : ainsi la barre de
-           défilement, le tirer-pour-rafraîchir et la mémoire de position
-           (`useScrollportMemory`) restent sur le MÊME élément qu'avant, et la
-           bande du plateau (`-mx-3`) court de bord à bord DE LA COLONNE. */
-        style={{ ...READING_COLUMN_STYLE, ...pullTransform(pull.phase, pull.offsetPx) }}
+        style={pullTransform(pull.phase, pull.offsetPx)}
         {...(loading ? { 'aria-busy': true, 'aria-label': translate(language, 'feed.loading') } : {})}
       >
         <FeedTopChrome railProps={railProps} inert={pinned} observe={observeGrandRail} />
@@ -368,7 +373,12 @@ export default function FeedScreen() {
         ) : (
           <>
             {models.map((model) => (
-              <li key={model.id}>
+              /* LA COLONNE EST SUR LA CARTE (#7449) — pas sur le scrollport,
+                 et c'est la directive porteur du 2026-09-22 : le CHROME prend
+                 la fenêtre (l'en-tête, le plateau des stories, la barre de
+                 défilement), seul le CONTENU se borne. Bornée plus haut, la
+                 colonne emportait le plateau et le titre avec elle. */
+              <li key={model.id} style={READING_COLUMN_STYLE}>
                 <FeedPostCard
                   model={model}
                   /* L'ANNEAU DE STORY VIENT DU CORPUS QUE CET ÉCRAN TIENT DÉJÀ

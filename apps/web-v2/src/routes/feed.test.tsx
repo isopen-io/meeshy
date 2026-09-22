@@ -109,10 +109,30 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     expect(html.indexOf('data-feed-create')).toBeLessThan(html.indexOf('href="/reels"'));
   });
 
-  /** LA COLONNE DE LECTURE (#7449) — l'en-tête la suit, sinon il flotterait
-   * seul sur toute la largeur au-dessus d'un fil centré. */
-  test('l’en-tête porte la colonne de lecture, bornée et centrée', () => {
+  /**
+   * LE CHROME PREND LA FENÊTRE (#7449, directive porteur du 2026-09-22) —
+   * l'en-tête ne porte AUCUNE borne, et le témoin l'exige plutôt que de le
+   * constater : la première écriture du lot la lui avait donnée, ce qui
+   * rétrécissait « Meeshy Feed » avec les cartes. C'est la mesure de LECTURE
+   * qu'on borne, jamais l'application.
+   */
+  test('l’en-tête ne se borne PAS — il prend toute la fenêtre', () => {
     const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).not.toContain(`max-width:${READING_COLUMN_MAX}px`);
+  });
+
+  /** LE PLATEAU DES STORIES AUSSI — il vit DANS le scrollport (il sort du
+   * champ au défilement, #6103) et reste pourtant du chrome : il court de
+   * bord à bord de la fenêtre. */
+  test('le plateau des stories ne se borne PAS non plus', () => {
+    const html = renderToStaticMarkup(<FeedTopChrome railProps={RAIL_PLEIN} inert={false} />);
+    expect(html).not.toContain(`max-width:${READING_COLUMN_MAX}px`);
+  });
+
+  /** ...et le CONTENU, lui, la porte : le squelette est la seule pièce de
+   * contenu que ce fichier peut rendre seule. */
+  test('le contenu porte la colonne, bornée et centrée', () => {
+    const html = renderToStaticMarkup(<FeedSkeleton count={1} />);
     expect(html).toContain(`max-width:${READING_COLUMN_MAX}px`);
     expect(html).toContain('margin-inline:auto');
   });
