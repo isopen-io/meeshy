@@ -333,7 +333,7 @@ describe('markCaughtUp — rejeu à la reconnexion (#7367, W3)', () => {
     expect(readReceiptQueueSizeForTests()).toBe(1);
 
     const calls: string[] = [];
-    goOnline(((input: RequestInfo | URL, init?: RequestInit) => {
+    goOnline(((_input: RequestInfo | URL, init?: RequestInit) => {
       calls.push(JSON.parse(String(init?.body)).caughtUpToMessageId);
       return Promise.resolve(
         new Response(JSON.stringify({ success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } }), { status: 200 }),
