@@ -3,8 +3,8 @@
  * LE FIL SE LIT DANS UNE COLONNE, ET ON Y PUBLIE (#7449).
  *
  * Les témoins `bun test` prouvent l'ARITHMÉTIQUE de la colonne
- * (`lib/view/reading-column.test.ts`), la loi du brouillon
- * (`lib/publish/draft.test.ts`), le port (`lib/api/posts-publish.test.ts`) et
+ * (`lib/view/reading-column.test.ts`), la loi du format
+ * (`lib/stories/publication-kind.test.ts`), le port (`lib/api/stories-publish.test.ts`) et
  * les deux adresses de la porte (`components/feed-create-door.test.tsx`).
  * Aucun d'eux ne peut dire ce qui se PEINT : ce gate mesure au navigateur, sur
  * le `dist` construit (source fixtures), dans les deux schémas.
@@ -25,11 +25,12 @@
  *  4. la porte de création est dans l'en-tête, atteignable, 44 au moins, et
  *     « Lancer les Réels » RESTE le contrôle le plus à droite ;
  *  5. elle ouvre deux lignes, vers /posts/new et /posts/new?type=reel ;
- *  6. la ligne « Réel » ouvre le composeur AU FORMAT RÉEL ;
- *  7. un réel de texte seul est REFUSÉ en le disant, et « Publier » est éteint ;
- *  8. basculer sur « Publication » rallume « Publier » et RETIRE le format de
- *     l'adresse — la saisie survit à la bascule ;
- *  9. publier ramène au Flux ;
+ *  6. la ligne « Réel » ouvre le COMPOSER UNIQUE (#7497) au format réel ;
+ *  7. un réel de texte seul est REFUSÉ en le disant, et « Publier le réel »
+ *     est éteint ;
+ *  8. le chevron de `[Publier … | ▾]` offre story, post et réel — le réel
+ *     grisé AVEC sa raison ;
+ *  9. publier en post par le chevron ramène au Flux ;
  * 10. les Réels se lisent eux aussi dans une colonne 9:16 centrée, et leur
  *     bouton « Retour » s'ancre à la COLONNE, pas au bord de la fenêtre ;
  * 11. aucun défilement horizontal, aucune erreur de page.
@@ -224,41 +225,43 @@ for (const scheme of ['light', 'dark']) {
     );
     await capture(page, `feed-create-menu.${scheme}`);
 
-    // ------------------------------------- 6. la ligne « Réel » ouvre le format
+    // -------------- 6. la ligne « Réel » ouvre le COMPOSER UNIQUE au format réel
     await page.click('[data-feed-create-choice="reel"]');
-    await page.waitForSelector('[data-post-format]');
-    const format = () => page.evaluate(() => document.querySelector('[data-post-format-choice][aria-checked="true"]')?.getAttribute('data-post-format-choice') ?? null);
+    await page.waitForSelector('[data-publish-split]');
+    const format = () => page.evaluate(() => document.querySelector('[data-story-publish]')?.getAttribute('data-publish-kind') ?? null);
     check((await format()) === 'REEL', `${label} : la ligne « Réel » n'ouvre pas le composeur au format RÉEL (${await format()})`);
 
     // ------------------- 7. un réel de texte seul est refusé, en le DISANT
-    await page.fill('[data-post-text]', 'un réel de texte seul');
-    const refus = await page.evaluate(() => document.querySelector('[data-post-refusal]')?.getAttribute('data-post-refusal') ?? null);
+    await page.fill('#story-studio-text', 'un réel de texte seul');
+    const refus = await page.evaluate(() => document.querySelector('[data-publish-refusal]')?.getAttribute('data-publish-refusal') ?? null);
     check(refus === 'reel-without-qualifying-media', `${label} : un réel sans média n'est pas refusé en le disant (${refus})`);
     check(
-      await page.evaluate(() => document.querySelector('[data-post-publish]')?.hasAttribute('disabled') === true),
-      `${label} : « Publier » reste allumé sur un réel non qualifiant`,
+      await page.evaluate(() => document.querySelector('[data-story-publish]')?.hasAttribute('disabled') === true),
+      `${label} : « Publier le réel » reste allumé sur un réel non qualifiant`,
     );
     await capture(page, `post-compose-reel-refus.${scheme}`);
 
-    // ------------- 8. la bascule rallume, retire le format, et GARDE la saisie
-    await page.click('[data-post-format-choice="POST"]');
-    check((await format()) === 'POST', `${label} : la bascule ne passe pas au format POST`);
-    check(
-      await page.evaluate(() => document.querySelector('[data-post-text]')?.value === 'un réel de texte seul'),
-      `${label} : la bascule de format a PERDU la saisie`,
+    // ------ 8. le chevron offre les trois formats, le réel grisé AVEC sa raison
+    await page.click('[data-publish-kind-toggle]');
+    await page.waitForSelector('[data-publish-kind-menu]');
+    const formats = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-publish-kind-choice]')].map((el) => ({
+        id: el.getAttribute('data-publish-kind-choice'),
+        off: el.getAttribute('aria-disabled') === 'true',
+        h: Math.round(el.getBoundingClientRect().height),
+      })),
     );
     check(
-      await page.evaluate(() => `${location.pathname}${location.search}`) === '/posts/new',
-      `${label} : l'adresse garde le format réel après la bascule (${await page.evaluate(() => location.search)})`,
-    );
-    check(
-      await page.evaluate(() => document.querySelector('[data-post-publish]')?.hasAttribute('disabled') === false),
-      `${label} : « Publier » reste éteint sur un post qui porte un texte`,
+      formats.map((f) => f.id).join(',') === 'STORY,POST,REEL' &&
+        formats.find((f) => f.id === 'REEL')?.off === true &&
+        formats.filter((f) => f.id !== 'REEL').every((f) => !f.off) &&
+        formats.every((f) => f.h >= TAP_FLOOR),
+      `${label} : le chevron n'offre pas story/post/réel avec le réel grisé (${JSON.stringify(formats)})`,
     );
     await capture(page, `post-compose-post.${scheme}`);
 
-    // ------------------------------------------------- 9. publier ramène au Flux
-    await page.click('[data-post-publish]');
+    // ------------------ 9. publier en post par le chevron ramène au Flux
+    await page.click('[data-publish-kind-choice="POST"]');
     check(
       await page
         .waitForFunction(() => location.pathname === '/feed', undefined, { timeout: 5000 })
@@ -321,5 +324,5 @@ console.log(
   `check-feed-column : vert — ${invariants} invariants, 2 schémas : à 1440×900 le chrome du Flux prend la fenêtre (en-tête, ` +
     `plateau, scrollport) pendant que chaque carte fait ${COLUMN_MAX} px centrés, la fiche d’une publication suit, le téléphone ` +
     'est intact à 390×844 ; la porte de création à gauche des Réels qui restent au bord, ses deux formats, le refus nommé d’un ' +
-    'réel non qualifiant, la bascule qui garde la saisie, la publication qui ramène au Flux, et les Réels en colonne 9:16 centrée.',
+    'réel non qualifiant dans le composer unique, le chevron qui offre story/post/réel, la publication en post qui ramène au Flux, et les Réels en colonne 9:16 centrée.',
 );
