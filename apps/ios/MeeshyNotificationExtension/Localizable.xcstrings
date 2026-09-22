@@ -22,8 +22,7 @@
             "state" : "new",
             "value" : "🎵 Message vocal"
           }
-        }
-      ,
+        },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
@@ -41,15 +40,13 @@
             "state" : "translated",
             "value" : "🎵 Messaggio vocale"
           }
-        }
-      ,
+        },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "🎵 Mensagem de voz"
           }
-        }
-      ,
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -107,6 +104,60 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "加密消息"
+          }
+        }
+      }
+    },
+    "notification.ephemeral_message.deadline" : {
+      "comment" : "Push body for an ephemeral message, carrying the local deadline time (#7453).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ رسالة مؤقتة · تختفي عند %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Kurzlebige Nachricht · verschwindet um %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Ephemeral message · disappears at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Mensaje efímero · desaparece a las %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Message éphémère · disparaît à %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Messaggio effimero · scompare alle %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ Mensagem efêmera · desaparece às %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⏳ 限时消息 · %@ 后消失"
           }
         }
       }
@@ -194,7 +245,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Message éphémère"
+            "value" : "Message à vue unique"
           }
         },
         "it" : {
@@ -206,7 +257,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mensagem temporária"
+            "value" : "Mensagem de visualização única"
           }
         },
         "zh-Hans" : {

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// La bannière d'un message éphémère affiche son échéance et disparaît à
@@ -14,11 +15,18 @@ import XCTest
 /// qu'elle annonçait — sur l'écran verrouillé, avec le placeholder qui dit
 /// exactement qu'il y a quelque chose à cacher.
 ///
-/// Les trois décisions sont donc des fonctions pures de `Foundation`, dans
-/// `NotificationPayloadHelpers` (compilé dans la NSE **et** dans `MeeshyTests`
-/// par `project.yml`) : calculer l'échéance, réécrire le corps, choisir ce
-/// qu'on retire. Le runtime `UNNotificationServiceExtension` n'entre jamais
-/// dans le processus de test.
+/// Les décisions sont donc des fonctions PURES, et elles vivent à deux
+/// endroits pour une raison :
+/// - `NotificationPayloadHelpers` (NSE, compilé aussi dans `MeeshyTests` par
+///   `project.yml`) CALCULE l'échéance à l'arrivée d'un push et réécrit le
+///   corps — deux gestes qui n'ont de sens qu'à ce moment-là ;
+/// - `MeeshySDK.EphemeralBannerDeadline` LIT une échéance déjà gravée et dit
+///   ce qu'on retire — une règle dont les trois chemins d'exécution (NSE,
+///   retour au premier plan, `message:expired`) vivent dans trois cibles, et
+///   qui diverge si on la recopie.
+///
+/// Le runtime `UNNotificationServiceExtension` n'entre jamais dans le
+/// processus de test.
 final class NSEEphemeralNotificationTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -68,7 +76,7 @@ final class NSEEphemeralNotificationTests: XCTestCase {
         )
         // L'heure LOCALE de l'appareil, jamais celle du serveur : la bannière
         // se lit sur l'écran verrouillé, où aucun fuseau ne s'explique.
-        XCTAssertTrue(body.contains("15:32"), "corps rendu : \(body)")
+        XCTAssertTrue(body.contains("10:32"), "corps rendu : \(body)")
     }
 
     func test_ephemeralBody_neFabriquePasDeSecondes() {
@@ -78,7 +86,7 @@ final class NSEEphemeralNotificationTests: XCTestCase {
             locale: Locale(identifier: "fr_FR"),
             timeZone: TimeZone(identifier: "Europe/Paris")!
         )
-        XCTAssertFalse(body.contains(":35"), "l'heure s'affiche en heures et minutes : \(body)")
+        XCTAssertFalse(body.contains("35"), "l'heure s'affiche en heures et minutes, sans secondes : \(body)")
     }
 
     // MARK: - Le pré-enregistrement
@@ -115,6 +123,55 @@ final class NSEEphemeralNotificationTests: XCTestCase {
         XCTAssertEqual(plan?.effectFlags, 0)
     }
 
+    // MARK: - La vue unique garde son libellé
+
+    /// La bannière d'une vue unique dit « Vue unique », pas une heure : ce qui
+    /// compte pour ce message n'est pas quand il meurt, c'est qu'on ne pourra
+    /// le lire qu'une fois (#7453, exigence 3).
+    func test_ephemeralBodyOverride_vueUnique_neRéécritPasLeCorps() {
+        let deadline = now.addingTimeInterval(300)
+        let parLeDrapeau: [AnyHashable: Any] = ["effectFlags": "5"]     // ephemeral | viewOnce
+        let parLaClé: [AnyHashable: Any] = ["notificationLocKey": "notification.view_once_message"]
+        XCTAssertNil(NotificationPayloadHelpers.ephemeralBodyOverride(userInfo: parLeDrapeau, deadline: deadline))
+        XCTAssertNil(NotificationPayloadHelpers.ephemeralBodyOverride(userInfo: parLaClé, deadline: deadline))
+    }
+
+    func test_ephemeralBodyOverride_éphémèreOrdinaire_réécritLeCorps() {
+        let deadline = now.addingTimeInterval(300)
+        let body = NotificationPayloadHelpers.ephemeralBodyOverride(
+            userInfo: ["effectFlags": "1"],
+            deadline: deadline,
+            locale: Locale(identifier: "fr_FR"),
+            timeZone: TimeZone(identifier: "Europe/Paris")!
+        )
+        XCTAssertNotNil(body)
+    }
+
+    // MARK: - Aucun média sous une protection
+
+    /// **Le second verrou.** Le serveur ne pose déjà plus d'URL de média pour
+    /// un message protégé (`mediaMayTravel`, cycle 125) — mais un champ de
+    /// service qui DÉCLARE une restriction ne la fait pas respecter, et c'est
+    /// l'hôte qui rend. Une photo à vue unique s'est affichée ENTIÈRE sur un
+    /// écran verrouillé sous une bannière qui disait « 👁️ 🖼️ ».
+    func test_declaresProtection_reconnaîtLesDeuxDéclarations() {
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "4"]))   // viewOnce
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "2"]))   // blurred
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "1"]))   // ephemeral
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(
+            userInfo: ["notificationLocKey": "notification.view_once_message"]
+        ))
+    }
+
+    /// Un effet purement VISUEL (arc-en-ciel, bit 18) n'est pas une
+    /// protection : le confondre priverait de vignette un message ordinaire.
+    func test_declaresProtection_ignoreLesEffetsQuiNeProtègentRien() {
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: [:]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "0"]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "\(1 << 18)"]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["notificationLocKey": "  "]))
+    }
+
     // MARK: - Le balayage local
 
     func test_expiredNotificationIdentifiers_retientCeQuiEstÉchu() {
@@ -125,19 +182,33 @@ final class NSEEphemeralNotificationTests: XCTestCase {
             ("ordinaire", [:]),
         ]
         XCTAssertEqual(
-            NotificationPayloadHelpers.expiredNotificationIdentifiers(from: entries, now: now).sorted(),
+            EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now).sorted(),
             ["pile", "vieux"]
+        )
+    }
+
+    func test_expiredNotificationIdentifiers_litUneÉchéanceEnChaîneCommeEnNombre() {
+        // Un `userInfo` traverse une sérialisation APNs : l'échéance ne doit
+        // pas dépendre du sérialiseur qui la rend.
+        let entries: [(id: String, userInfo: [AnyHashable: Any])] = [
+            ("nombre", [EphemeralBannerDeadline.userInfoKey: now.addingTimeInterval(-1).timeIntervalSince1970]),
+            ("chaine", [EphemeralBannerDeadline.userInfoKey: "\(now.addingTimeInterval(-1).timeIntervalSince1970)"]),
+        ]
+        XCTAssertEqual(
+            EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now).sorted(),
+            ["chaine", "nombre"]
         )
     }
 
     /// Une bannière sans échéance n'est JAMAIS retirée par ce balayage : il ne
     /// connaît que les éphémères, et confondre les deux effacerait des
-    /// notifications que personne n'a demandé de retirer.
+    /// notifications que personne n'a demandé de retirer — un retrait étant
+    /// irréversible pour l'utilisateur.
     func test_expiredNotificationIdentifiers_ignoreCeQuiNAPasDÉchéance() {
         let entries: [(id: String, userInfo: [AnyHashable: Any])] = [
             ("ordinaire", ["type": "new_message"]),
             ("illisible", ["ephemeralDeadline": "bientôt"]),
         ]
-        XCTAssertTrue(NotificationPayloadHelpers.expiredNotificationIdentifiers(from: entries, now: now).isEmpty)
+        XCTAssertTrue(EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now).isEmpty)
     }
 }

@@ -144,6 +144,10 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let removeDeliveredForPost: @MainActor (String) -> Void
     private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
     private var revocationSubscription: AnyCancellable?
+    /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
+    /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
+    /// la racine SwiftUI peut rejouer son câblage sans balayer deux fois.
+    private var foregroundSweepSubscription: AnyCancellable?
 
     /// Resolved lazily so tests never touch `DependencyContainer.shared`
     /// (which opens the on-disk GRDB pool).
@@ -247,6 +251,39 @@ final class NotificationActionHandler: NotificationActionHandling {
     func revokeDeliveredBanners(notificationIds: [String]) async {
         guard !notificationIds.isEmpty else { return }
         await removeDeliveredForNotificationIds(notificationIds)
+    }
+
+    /// **Le balayage local des bannières éphémères** (#7453).
+    ///
+    /// iOS n'offre aucune échéance native pour une notification délivrée : le
+    /// seul retrait possible est ce balayage. Le retrait SERVEUR existe déjà
+    /// (`notification_revoked`), mais il ne part qu'à la destruction du message
+    /// — sans réseau, la bannière d'un éphémère survivait indéfiniment au
+    /// message qu'elle annonce, sur l'écran verrouillé, avec le placeholder qui
+    /// dit exactement qu'il y a quelque chose à cacher.
+    ///
+    /// Trois occasions l'appellent, et il en faut trois parce qu'aucune ne
+    /// couvre les deux autres : la NSE (à chaque push reçu, la plus fréquente),
+    /// le retour de l'application au premier plan (le seul moment où
+    /// l'utilisateur REGARDE), et `message:expired` (le seul qui sache qu'un
+    /// message précis vient de mourir, y compris pendant l'usage).
+    ///
+    /// La règle de sélection n'est pas réécrite ici : `EphemeralBannerDeadline`
+    /// (SDK) la tient pour les trois cibles. Une bannière sans échéance n'est
+    /// jamais retirée.
+    nonisolated static func sweepExpiredEphemeralBanners(now: Date = Date()) async {
+        await removeDeliveredNotificationsAwaiting(
+            matching: { EphemeralBannerDeadline.isExpired(userInfo: $0, now: now) }
+        )
+    }
+
+    /// Rejoue `sweepExpiredEphemeralBanners` à chaque retour au premier plan.
+    func observeForegroundSweep() {
+        foregroundSweepSubscription = NotificationCenter.default
+            .publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { _ in
+                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
+            }
     }
 
     /// Fenêtre de regroupement des révocations reçues par socket. Assez courte
