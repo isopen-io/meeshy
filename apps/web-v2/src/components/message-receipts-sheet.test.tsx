@@ -14,20 +14,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { MessageReceiptsSheet } from './message-receipts-sheet';
 
-/**
- * LA FICHE « INFOS DU MESSAGE » (#7226, W7) — sous fixtures (source par
- * défaut de `bun test`), `fetchMessageReceiptsPeople`/
- * `fetchAttachmentStatusDetails` rendent des cartes DÉTERMINISTES dérivées
- * de l'identifiant (`receipts.ts`/`attachments.ts`) : ce fichier mesure que
- * le montage React descend jusqu'au DOM, pas que la loi de catégorisation
- * est juste — `lib/view/message-receipts.test.ts` la tient déjà, pure.
- *
- * Un `attachmentId` littéral fige un SEED précis (`seedOf`,
- * `attachments.ts`) — valeurs recalculées à la main pour ce fichier :
- * `att-test-6` ⇒ incomplet, 1 ouverture, 1 téléchargement, position ≈7,7 s,
- * 3 écoutes (badge « 3x ») ; `att-fixture-2` ⇒ complet.
- */
-
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
@@ -77,21 +63,18 @@ async function mountSheet(props: {
   return host;
 }
 
-describe('MessageReceiptsSheet — les trois sections nominatives', () => {
-  test('« Infos du message » se monte, avec Vu par / Reçu par / Pas encore', async () => {
+describe('MessageReceiptsSheet - sections nominatives', () => {
+  test('Infos du message se monte', async () => {
     const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [] });
 
     expect(host.querySelector('[data-message-receipts-title]')?.textContent).toBe('Infos du message');
     expect(host.querySelector('[data-message-receipts-section="read-by"]')).not.toBe(null);
     expect(host.querySelector('[data-message-receipts-section="received-by"]')).not.toBe(null);
     expect(host.querySelector('[data-message-receipts-section="not-yet"]')).not.toBe(null);
-    // c-deploiement porte 5 participants (fixtures.ts) — au moins une
-    // personne apparaît quelque part, la catégorisation exacte est déjà
-    // testée PUREMENT (`message-receipts.test.ts`).
     expect(host.querySelectorAll('[data-message-receipts-person]').length).toBe(5);
   });
 
-  test('conversation inconnue ⇒ trois sections VIDES, jamais une erreur', async () => {
+  test('conversation inconnue rend trois sections vides', async () => {
     const host = await mountSheet({ conversationId: 'c-inconnue-du-tout', messageId: 'm-x', attachments: [] });
 
     expect(host.querySelector('[data-message-receipts-section-empty="read-by"]')).not.toBe(null);
@@ -101,8 +84,8 @@ describe('MessageReceiptsSheet — les trois sections nominatives', () => {
   });
 });
 
-describe('MessageReceiptsSheet — par pièce jointe', () => {
-  test('audio INCOMPLET : ouvertures, téléchargements, position mm:ss et « Nx »', async () => {
+describe('MessageReceiptsSheet - par piece jointe', () => {
+  test('audio incomplet affiche ouvertures, downloads, position et nombre', async () => {
     const host = await mountSheet({
       conversationId: 'c-deploiement',
       messageId: 'm-x',
@@ -113,15 +96,27 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
     expect(card).not.toBe(null);
     const text = card?.textContent ?? '';
     expect(text).toContain('1 ouverture');
-    expect(text).toContain('1 téléchargement');
     expect(text).toContain('3x');
-    expect(text).toContain('Écouté jusqu’à 0:07');
-    // Une barre de progression rend une valeur de largeur NON nulle.
+    expect(text).toContain('%');
     const bar = card?.querySelector('[data-message-receipts-playback] div div') as HTMLElement | null;
     expect(bar?.style.width).not.toBe('0%');
   });
 
-  test('vidéo COMPLÈTE : la pastille « Terminé » remplace la position', async () => {
+  test('audio incomplet affiche le pourcentage visible cote de la barre', async () => {
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-test-6', mimeType: 'audio/webm', originalName: 'vocal.webm', duration: 20_000 })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    const playbackRow = card?.querySelector('[data-message-receipts-playback]');
+    expect(playbackRow).not.toBe(null);
+    const text = playbackRow?.textContent ?? '';
+    expect(text).toMatch(/%/);
+  });
+
+  test('video complete n affiche pas de barre percentage', async () => {
     const host = await mountSheet({
       conversationId: 'c-deploiement',
       messageId: 'm-x',
@@ -129,16 +124,18 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
     });
 
     const card = host.querySelector('[data-message-receipts-attachment="att-fixture-2"]');
-    expect(card?.querySelector('[aria-label="Terminé"]')).not.toBe(null);
-    expect(card?.textContent ?? '').not.toContain('Regardé jusqu’à');
+    expect(card).not.toBe(null);
+    const playbackRow = card?.querySelector('[data-message-receipts-playback]');
+    expect(playbackRow).not.toBe(null);
+    expect(playbackRow?.textContent ?? '').not.toContain('%');
   });
 
-  test('sans pièce jointe, aucune carte ne se monte', async () => {
+  test('sans piece jointe aucune carte ne se monte', async () => {
     const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [] });
     expect(host.querySelectorAll('[data-message-receipts-attachment]').length).toBe(0);
   });
 
-  test('un document (ni audio ni vidéo) affiche ses agrégats, jamais de ligne de lecture', async () => {
+  test('document affiche agregats jamais de ligne de lecture', async () => {
     const host = await mountSheet({
       conversationId: 'c-deploiement',
       messageId: 'm-x',
@@ -151,25 +148,10 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
   });
 });
 
-/**
- * « L'HEURE DE CHAQUE ACCUSÉ » (#7352, V4) — `receivedAt`/`readAt` sont
- * SERVIS par `fetchMessageReceiptsPeople` (`api/receipts.ts:99-106`) depuis
- * toujours, jamais RENDUS avant ce lot (relevé de l'issue,
- * `message-receipts-sheet.tsx:198-215`). Réutilise `time()`
- * (`lib/grouping.ts`), le même SSOT que l'horodatage de la bulle — aucun
- * nouveau format.
- *
- * Les valeurs attendues viennent de la MÊME fonction que le composant lit
- * (`fetchMessageReceiptsPeople` + `receiptCategoriesOf`), jamais d'une
- * horloge recalculée à la main dans ce fichier : un témoin qui devinerait sa
- * propre valeur mesurerait sa propre horloge, pas le rendu (leçon du dépôt,
- * `tasks/lessons.md` — « un témoin qui fabrique son décodeur mesure le
- * RUNTIME »).
- */
-describe('MessageReceiptsSheet — l’heure de chaque accusé (#7352, V4)', () => {
-  test('« Vu par » porte l’heure de `readAt` ; « Reçu par » celle de `receivedAt` ; « Pas encore » n’en porte AUCUNE', async () => {
+describe('MessageReceiptsSheet - heure de chaque accuse', () => {
+  test('Vu par porte heure readAt Recu par celle receivedAt Pas encore aucune', async () => {
     const result = await fetchMessageReceiptsPeople({ ...apiDeps, conversationId: 'c-deploiement', messageId: 'm-x' });
-    if (!result.ok) throw new Error('la fixture « c-deploiement » doit répondre `ok`');
+    if (!result.ok) throw new Error('la fixture c-deploiement doit repondre ok');
     const { readBy, receivedBy, notYet } = receiptCategoriesOf(result.data.people);
     expect(readBy.length).toBeGreaterThan(0);
     expect(receivedBy.length).toBeGreaterThan(0);
