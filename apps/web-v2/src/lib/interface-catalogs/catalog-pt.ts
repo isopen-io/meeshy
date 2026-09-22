@@ -869,6 +869,7 @@ const pt = {
   'message-detail.received-by.empty': 'Ainda sem confirmação de entrega',
   'message-detail.read-by.empty': 'Ninguém leu esta mensagem ainda',
   'message-detail.not-yet.empty': 'Todos receberam a mensagem',
+  'message-detail.open': 'Ver detalhes da mensagem',
   'message-detail.attachment.opens.one': '{count} abertura',
   'message-detail.attachment.opens.other': '{count} aberturas',
   'message-detail.attachment.downloads.one': '{count} download',

@@ -280,7 +280,9 @@ export function Check({
    * INCHANGÉ, un glyphe NU (`role="img"`, `title` pour nom accessible),
    * exactement comme avant ce lot. Fourni ⇒ le glyphe devient DÉCORATIF
    * (`aria-hidden`, `Glyph` sans `title`) À L'INTÉRIEUR d'un vrai
-   * `<button>` nommé par son EFFET, jamais par le statut — même dispositif
+   * `<button>` nommé par son EFFET (`message-detail.open`, catalogue des
+   * sept langues — Prisme Linguistique, jamais une chaîne en dur), pas par
+   * le statut — même dispositif
    * que `ReactionChip` (capsule voisine de la même ligne méta,
    * `tap-target-chip`). SEUL `Bubble` (mode `bulles`) le câble
    * aujourd'hui : `FocalRow` (`focal`/`script`, le défaut, D-7) garde sa
@@ -305,7 +307,12 @@ export function Check({
     onOpen === undefined ? (
       glyph
     ) : (
-      <button type="button" onClick={onOpen} aria-label="Voir les détails du message" className="tap-target-chip inline-flex items-center">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={translate(currentInterfaceLanguage(), 'message-detail.open')}
+        className="tap-target-chip inline-flex items-center"
+      >
         {glyph}
       </button>
     );
