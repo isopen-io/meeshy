@@ -385,7 +385,10 @@ struct CommentMediaView: View {
             startAttachmentId: media.id,
             accentColor: accentColor,
             captionMap: snapshot.captions,
-            senderInfoMap: snapshot.senders
+            senderInfoMap: snapshot.senders,
+            // #7362 — pièce de COMMENTAIRE, pas de `MessageAttachment` :
+            // aucune consommation à reporter.
+            reportsAttachmentConsumption: false
         )
     }
 }

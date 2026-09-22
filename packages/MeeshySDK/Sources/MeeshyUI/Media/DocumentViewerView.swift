@@ -13,6 +13,12 @@ public struct DocumentViewerView: View {
     /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
     /// l'app quand fourni ; nil = save Documents direct legacy.
     public var onSaveRequested: (() -> Void)? = nil
+    /// #7362 — ce document est-il le SIEN ? Gouverne le rapport de
+    /// consommation posé à l'ouverture (`DocumentOpenReport`) : un
+    /// expéditeur qui relit son propre envoi ne s'auto-déclare pas
+    /// destinataire. Défaut `false` — comportement historique inchangé pour
+    /// les appelants qui ne connaissent pas encore la propriété (aperçus).
+    public var isMe: Bool = false
 
     // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
     // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
@@ -26,10 +32,11 @@ public struct DocumentViewerView: View {
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
                 accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil,
-                onSaveRequested: (() -> Void)? = nil) {
+                onSaveRequested: (() -> Void)? = nil, isMe: Bool = false) {
         self.attachment = attachment; self.context = context
         self.accentColor = accentColor; self.onDelete = onDelete
         self.onSaveRequested = onSaveRequested
+        self.isMe = isMe
     }
 
     // MARK: - Body
@@ -47,7 +54,8 @@ public struct DocumentViewerView: View {
                 attachment: attachment,
                 docType: docType,
                 accentColor: accentColor,
-                onSaveRequested: onSaveRequested
+                onSaveRequested: onSaveRequested,
+                isMe: isMe
             )
         }
     }
@@ -178,6 +186,8 @@ public struct DocumentFullSheet: View {
     /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
     /// l'app quand fourni ; nil = save Documents direct legacy.
     public var onSaveRequested: (() -> Void)? = nil
+    /// #7362 — voir `DocumentViewerView.isMe`.
+    public var isMe: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
@@ -190,9 +200,10 @@ public struct DocumentFullSheet: View {
     private var isDark: Bool { colorScheme == .dark }
 
     public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String,
-                onSaveRequested: (() -> Void)? = nil) {
+                onSaveRequested: (() -> Void)? = nil, isMe: Bool = false) {
         self.attachment = attachment; self.docType = docType; self.accentColor = accentColor
         self.onSaveRequested = onSaveRequested
+        self.isMe = isMe
     }
 
     public var body: some View {
@@ -207,6 +218,7 @@ public struct DocumentFullSheet: View {
             }
             .navigationTitle(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { reportDocumentOpened() }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { dismiss() } label: {
@@ -253,6 +265,15 @@ public struct DocumentFullSheet: View {
         }
     }
 
+    /// #7362 — la fiche plein écran se PRÉSENTE : c'est l'ouverture, distincte
+    /// de l'enregistrement explicite ci-dessous. Un document reçu qu'on se
+    /// contente de lire (sans le sauver dans Fichiers) doit déjà compter dans
+    /// l'onglet « Ouvert » de « Vu par ».
+    private func reportDocumentOpened() {
+        guard !attachment.id.isEmpty, let body = DocumentOpenReport.bodyForOpening(isMine: isMe) else { return }
+        AttachmentStatusReporter.report(attachmentId: attachment.id, body: body)
+    }
+
     /// Saves the document into the Files app (Documents) in one tap.
     private func saveDocument() {
         guard !attachment.fileUrl.isEmpty,
@@ -279,7 +300,7 @@ public struct DocumentFullSheet: View {
                 // reflète les téléchargements de DOCUMENTS, pas seulement les
                 // images. Durable via l'outbox : un enregistrement hors-ligne
                 // remonte au retour du réseau au lieu d'être perdu.
-                if !attachment.id.isEmpty {
+                if !attachment.id.isEmpty, !isMe {
                     let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                     AttachmentStatusReporter.report(attachmentId: attachment.id, body: body)
                 }
