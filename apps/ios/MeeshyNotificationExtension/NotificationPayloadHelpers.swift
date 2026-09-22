@@ -235,6 +235,27 @@ nonisolated enum NotificationPayloadHelpers {
         return messageArrivalTypes.contains(type)
     }
 
+    /// Push types that qualify for delivery receipt acknowledgement to the gateway.
+    /// These are exactly the message-arrival types — every push that announces
+    /// a message arrival to the recipient also warrants an offline delivery receipt.
+    ///
+    /// Reactions and social events (like, comment, story reactions) carry a
+    /// `messageId`, but they do not constitute message delivery to the recipient,
+    /// so they are excluded and do not trigger receipts.
+    nonisolated static let deliveryReceiptTypes: Set<String> = [
+        "new_message", "message_reply", "reply", "message_forwarded",
+        "new_conversation", "new_conversation_direct", "new_conversation_group",
+        "added_to_conversation"
+    ]
+
+    /// Ce push-type déclenche-t-il un accusé de remise ?
+    nonisolated static func isDeliveryReceiptType(_ type: String?) -> Bool {
+        guard let type = type?.trimmingCharacters(in: .whitespaces), !type.isEmpty else {
+            return false
+        }
+        return deliveryReceiptTypes.contains(type)
+    }
+
     /// Ce que la NSE écrit dans la bulle pré-enregistrée, ou `nil` quand elle
     /// n'a rien à écrire.
     ///

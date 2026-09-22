@@ -966,3 +966,48 @@ final class NSEMessageArrivalGateTests: XCTestCase {
         XCTAssertTrue(NotificationPayloadHelpers.announcesMessageArrival("  new_message  "))
     }
 }
+
+// MARK: - Delivery Receipt Types
+
+/// Delivery receipt acknowledgements — a push type becomes a delivery receipt
+/// if and only if it announces a message arrival to the recipient.
+///
+/// The same distinction exists in two places: `messageArrivalTypes` (which gates
+/// NSE bubble persistence) and `deliveryReceiptTypes` (which gates receipt posting).
+/// They must stay in lockstep — every message-arrival type also triggers a receipt.
+final class NSEDeliveryReceiptGateTests: XCTestCase {
+
+    func test_user_mentioned_triggerDeliveryReceipt() {
+        // user_mentioned doit déclencher l'envoi d'un accusé de remise,
+        // comme new_message, message_reply, reply, et message_forwarded
+        XCTAssertTrue(
+            NotificationPayloadHelpers.isDeliveryReceiptType("user_mentioned"),
+            "user_mentioned doit déclencher l'envoi d'un accusé de remise"
+        )
+    }
+
+    func test_messageTypesRequireDeliveryReceipt() {
+        // Tous les types qui annoncent l'arrivée d'un message doivent
+        // déclencher un accusé de remise
+        for type in ["new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) doit déclencher un accusé de remise"
+            )
+        }
+    }
+
+    func test_nonMessageTypesDoNotRequireDeliveryReceipt() {
+        // Les types sociaux (réactions, commentaires) ne déclenchent pas d'accusé
+        for type in [
+            "message_reaction", "post_like", "post_comment", "comment_reply",
+            "story_reaction", "story_new_comment", "friend_request", "contact_request",
+            "friend_accepted", "member_joined", "missed_call", "system",
+        ] {
+            XCTAssertFalse(
+                NotificationPayloadHelpers.isDeliveryReceiptType(type),
+                "\(type) ne doit pas déclencher d'accusé de remise"
+            )
+        }
+    }
+}
