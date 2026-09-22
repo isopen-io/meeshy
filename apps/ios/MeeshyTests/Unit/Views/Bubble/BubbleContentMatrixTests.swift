@@ -5,6 +5,52 @@ import MeeshySDK
 @MainActor
 final class BubbleContentMatrixTests: XCTestCase {
 
+    // MARK: - #7365 — la source résolue du statut de livraison (groupe)
+
+    /// La valeur que `BubbleStandardLayout`/`ThemedMessageBubble` doivent
+    /// TOUTES lire (`content.meta.deliveryStatus`) est déjà correcte : 1
+    /// lecteur sur 10 dans un groupe ne doit jamais produire `.read`, même
+    /// si le statut BRUT stocké sur le message vaut déjà `.read` (promu dès
+    /// `readCount > 0`, `MessageRecord+ToMessage.swift`). Verrouille la
+    /// source commune que `BubbleDeliveryStatusWiringSourceGuardTests`
+    /// vérifie être effectivement lue par les trois sites d'affichage.
+    func test_meta_groupOneReaderOfTen_deliveryStatusIsNotRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 1)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        XCTAssertNotEqual(content.meta.deliveryStatus, .read)
+    }
+
+    /// VoiceOver, par le COMPORTEMENT : le libellé que la bulle et la rangée
+    /// focale annoncent (`MessageAccessibilityLabelComposer`) ne dit jamais
+    /// « lu » pour 1 lecteur sur 10 — il dit « envoyé », localisé.
+    func test_voiceOverDelivery_groupOneReaderOfTen_announcesSentNotRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 1)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        let label = MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus)
+
+        XCTAssertEqual(label, String(localized: "a11y.delivery.sent", defaultValue: "envoyé", bundle: .main))
+        XCTAssertNotEqual(label, String(localized: "a11y.delivery.read", defaultValue: "lu", bundle: .main))
+    }
+
+    /// Symétrique positif : tous les 10 destinataires ont lu.
+    func test_meta_groupAllTenRead_deliveryStatusIsRead() {
+        let msg = makeMessage(content: "Salut", isMe: true, deliveryStatus: .read, readCount: 10)
+        let content = BubbleContent(
+            message: msg, translations: [], preferredTranslation: nil,
+            currentUserId: "u1", recipientCount: 10
+        )
+
+        XCTAssertEqual(content.meta.deliveryStatus, .read)
+    }
+
     func test_simpleText_hasOnlyTextAndMeta() {
         let msg = makeMessage(content: "Salut")
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
@@ -875,7 +921,10 @@ final class BubbleContentMatrixTests: XCTestCase {
         createdAt: Date = Date(timeIntervalSince1970: 0),
         cachedTimeString: String? = "12:34",
         messageSource: MeeshyMessage.MessageSource = .user,
-        callSummary: CallSummaryMetadata? = nil
+        callSummary: CallSummaryMetadata? = nil,
+        deliveryStatus: MeeshyMessage.DeliveryStatus = .sent,
+        deliveredCount: Int = 0,
+        readCount: Int = 0
     ) -> MeeshyMessage {
         var effects = MessageEffects(flags: [])
         if isViewOnce {
@@ -915,12 +964,12 @@ final class BubbleContentMatrixTests: XCTestCase {
             senderColor: "#888",
             senderAvatarURL: nil,
             senderUserId: senderId,
-            deliveryStatus: .sent,
+            deliveryStatus: deliveryStatus,
             isMe: isMe,
             deliveredToAllAt: nil,
             readByAllAt: nil,
-            deliveredCount: 0,
-            readCount: 0,
+            deliveredCount: deliveredCount,
+            readCount: readCount,
             cachedTimeString: cachedTimeString,
             callSummary: callSummary
         )

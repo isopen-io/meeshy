@@ -1,6 +1,7 @@
 import Foundation
+import MeeshySDK
 
-/// Les deux règles PURES du statut de lecture de la fiche « Vu par »
+/// Les règles PURES du statut de lecture de la fiche « Vu par »
 /// (`MessageViewsDetailView`) : **faut-il repartir au réseau**, et **le
 /// spinner a-t-il le droit de remplacer ce qui est déjà à l'écran**.
 ///
@@ -34,5 +35,51 @@ enum MessageViewsReadStatusRules {
     /// spinner sur un cache non vide » (Instant App, § Cache-First).
     static func showsSpinner(isLoading: Bool, hasExisting: Bool) -> Bool {
         isLoading && !hasExisting
+    }
+
+    /// Le décompte que sert `GET /messages/:messageId/read-status`
+    /// (`MessageReadStatusService`, `totalMembers` = participants actifs,
+    /// expéditeur EXCLU) — le même dénominateur que la bulle.
+    struct ReadStatusTally: Equatable {
+        let recipientCount: Int
+        let deliveredCount: Int
+        let readCount: Int
+    }
+
+    /// #7365 — le palier affiché par le badge de la fiche (-1 échec, 0 envoi
+    /// en cours, 1 envoyé, 2 distribué, 3 lu), résolu par
+    /// `DeliveryStatusResolver` comme la coche de la bulle, jamais lu sur
+    /// `message.deliveryStatus` BRUT (promu `.read` dès UN lecteur sur N).
+    ///
+    /// Le dénominateur : le décompte serveur que la fiche charge, dès qu'il
+    /// est là — une ligne d'origine socket porte `recipientCount == 0`, et le
+    /// résolveur ferait alors confiance au brut. Avant son arrivée, celui du
+    /// message. La réciprocité (`showReadReceipts`) est celle de la bulle :
+    /// qui cache ses accusés ne voit « Lu » nulle part.
+    static func deliveryStatusLevel(
+        for message: MeeshyMessage,
+        tally: ReadStatusTally? = nil,
+        showReadReceipts: Bool = true
+    ) -> Int {
+        let counts = tally.flatMap { $0.recipientCount > 0 ? $0 : nil } ?? ReadStatusTally(
+            recipientCount: message.recipientCount,
+            deliveredCount: message.deliveredCount,
+            readCount: message.readCount
+        )
+        switch DeliveryStatusResolver.resolve(
+            status: message.deliveryStatus,
+            deliveredCount: counts.deliveredCount,
+            readCount: counts.readCount,
+            recipientCount: counts.recipientCount,
+            deliveredToAllAt: message.deliveredToAllAt,
+            readByAllAt: message.readByAllAt,
+            showReadReceipts: showReadReceipts
+        ) {
+        case .failed: return -1
+        case .sending, .invisible, .clock, .slow: return 0
+        case .sent: return 1
+        case .delivered: return 2
+        case .read: return 3
+        }
     }
 }

@@ -1106,19 +1106,15 @@ struct MessageViewsDetailView: View {
 
     // MARK: - Helpers
 
+    /// #7365 — résolu comme la bulle (`MessageViewsReadStatusRules`).
     private var deliveryStatusLevel: Int {
-        // Phase 4 spec §6.2 — `.invisible`, `.clock`, `.slow` are all visual
-        // refinements of the "still sending" phase (between optimistic apply
-        // and server ACK). They share level 0 with `.sending` so the badge
-        // collapses them to the single "Envoi..." label, matching the existing
-        // 4-bucket design (failed / sending / sent / delivered / read).
-        switch message.deliveryStatus {
-        case .failed: return -1
-        case .sending, .invisible, .clock, .slow: return 0
-        case .sent: return 1
-        case .delivered: return 2
-        case .read: return 3
-        }
+        MessageViewsReadStatusRules.deliveryStatusLevel(
+            for: message,
+            tally: readStatusData.map {
+                .init(recipientCount: $0.totalMembers, deliveredCount: $0.receivedCount, readCount: $0.readCount)
+            },
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
     }
 
     private func formatDateFR(_ date: Date) -> String {

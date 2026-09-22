@@ -11,13 +11,10 @@ import MeeshySDK
 /// **Écart assumé vs la source** (F-080, documenté plutôt que corrigé en
 /// silence — le contrat demande explicitement une fonction de `BubbleContent`
 /// SEUL, pas de `Message`) :
-/// - `deliveryStatusAccessibilityLabel` lit `message.deliveryStatus` côté
-///   `BubbleStandardLayout` ; ici `content.meta.deliveryStatus` (le seul
-///   canal disponible sans `Message`). `Meta` documente `deliveryStatus`
-///   comme `nil` uniquement pour un message REÇU — pour `content.isMe`
-///   (seul cas où ce composeur lit ce champ), il est donc attendu non-nil ;
-///   `nil` inattendu se replie sur le libellé "en cours d'envoi" plutôt que
-///   de planter.
+/// - `deliveryStatusAccessibilityLabel` est la SOURCE UNIQUE du libellé de
+///   livraison, que `BubbleStandardLayout` appelle aussi (#7365) : elle lit
+///   `content.meta.deliveryStatus`, déjà RÉSOLU tout-ou-rien pour un groupe.
+///   `nil` (message REÇU, jamais lu ici) se replie sur « en cours d'envoi ».
 /// - la mention éphémère se déclenche sur `content.ephemeral != nil`, pas
 ///   `message.expiresAt` (indisponible ici). `BubbleStandardLayout` note que
 ///   son propre `content.ephemeral` peut être nil pour un message déjà
@@ -171,7 +168,7 @@ enum MessageAccessibilityLabelComposer {
     /// « distribue ») étaient une régression i18n vs la source bulle
     /// (audit 2026-08-18) : un lecteur d'écran anglophone entendait du
     /// français approximatif.
-    private static func deliveryStatusAccessibilityLabel(_ status: MeeshyMessage.DeliveryStatus?) -> String {
+    static func deliveryStatusAccessibilityLabel(_ status: MeeshyMessage.DeliveryStatus?) -> String {
         switch status {
         case .sending, .invisible, .clock, nil:
             return String(localized: "a11y.delivery.sending", defaultValue: "en cours d'envoi", bundle: .main)
