@@ -41,6 +41,26 @@ export const SERVER_EVENTS = {
    * apart (a toast, a distinct log line) can.
    */
   MESSAGE_EXPIRED: 'message:expired',
+  /**
+   * La passerelle a enregistré la PREMIÈRE réception d'un destinataire et sert
+   * désormais une échéance POUR CE LECTEUR (contrat du fil #7451, point 5).
+   *
+   * Il existe parce que `MESSAGE_NEW` ne PEUT PAS porter l'échéance d'un
+   * éphémère : c'est une diffusion en room, et l'échéance est résolue par
+   * lecteur — `D(u) = réception(u) + ephemeralDuration`. Un message de cinq
+   * minutes reçu quatre minutes après son envoi doit vivre cinq minutes chez
+   * son destinataire, pas une.
+   *
+   * Il part donc vers deux rooms d'UTILISATEUR, jamais vers la conversation :
+   * `user:<destinataire>` pour ses AUTRES appareils, qui n'ont pas vu
+   * l'arrivée, et `user:<expéditeur>` avec la plus TARDIVE des échéances
+   * connues — la seule horloge qu'un envoi puisse honnêtement afficher.
+   *
+   * Un client ne REMPLACE jamais son échéance locale par celle-ci : les deux
+   * concourent et la plus PROCHE gagne. C'est une règle de sécurité — aucune
+   * des deux sources n'a le droit de PROLONGER la vie d'un message protégé.
+   */
+  MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
   // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
   // `message:translation`, et sous ce nom seul. `message:translated` a été
@@ -519,13 +539,26 @@ export const SERVER_EVENTS = {
  * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
  * avait entre-temps implémenté l'émission.
  *
- * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
- * décodés côté clients et attendent le service qui les produira.
+ * Ce qui reste : le pipeline de traduction EN APPEL — trois noms décodés côté
+ * clients, qui attendent le service qui les produira — et le démarrage du
+ * décompte d'un éphémère, dont l'émetteur est livré par le lot #7451.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
+  /**
+   * Le CLIENT arrive avant la passerelle, et c'est voulu : le contrat du fil
+   * (#7451) a été fixé AVANT le développement pour que les trois lots — iOS,
+   * web-v2, gateway — avancent en parallèle sans s'attendre. iOS s'y abonne
+   * déjà ; sans l'événement, sa règle d'affichage retombe sur la réception
+   * LOCALE et reste juste.
+   *
+   * La garde vérifie les DEUX sens : le jour où la passerelle l'émet, elle
+   * rougira tant que cette ligne n'aura pas été retirée. C'est au lot #7451
+   * de la retirer, dans le commit qui ajoute l'émetteur.
+   */
+  SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED,
 ]);
 
 // Événements du client vers le serveur

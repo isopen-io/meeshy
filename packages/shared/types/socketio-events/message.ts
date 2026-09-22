@@ -30,6 +30,19 @@ export interface MessageExpiredEventData {
 }
 
 /**
+ * L'échéance SERVIE d'un message éphémère, résolue pour le destinataire de
+ * l'événement. @see MESSAGE_COUNTDOWN_STARTED
+ *
+ * `expiresAt` est une date ISO 8601. Pour un destinataire c'est `D(u)` ; pour
+ * l'expéditeur, la plus tardive des `D` connues.
+ */
+export interface MessageCountdownStartedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly expiresAt: string;
+}
+
+/**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  *
  * `messageId` — OPTIONNEL, DÉSORMAIS POSÉ par G-5 (#7347) sur le chemin EXACT
