@@ -68,6 +68,9 @@ struct AudioAvailabilityResolver<Content: View>: View {
             downloader.start(attachment: attachment, onShare: nil)
         }
         .task(id: attachment.fileUrl) {
+            // Branché sur le registre partagé : un téléchargement de ce fichier
+            // lancé ailleurs s'affiche ici et le rend « prêt » (#7492).
+            downloader.observe(attachment)
             resolvedAvailability = await Self.resolveStatic(attachment)
             if case .needsDownload = resolvedAvailability,
                !downloader.isDownloading,

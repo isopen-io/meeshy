@@ -66,6 +66,9 @@ export type StudioVisualAsset = {
    * vol : un document publié SANS elle laisse le lecteur cadrer sur le
    * rapport 9:16 par défaut, jamais un blocage. */
   readonly aspectRatio?: number;
+  /** La DURÉE du fichier local (vidéo), mesurée dès la sélection (#7497) —
+   * c'est elle que la règle du réel compare à ses trois secondes. */
+  readonly durationMs?: number;
   /** LA LÉGENDE de CE média (#6944) — `PostMedia.caption`. */
   readonly caption: string;
   /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène, et
@@ -78,6 +81,8 @@ export type StudioSoundAsset = {
   readonly previewUrl: string;
   readonly upload: StudioUploadState;
   readonly plane: StudioPlane;
+  /** La durée du son local (#7497) — voir `StudioVisualAsset.durationMs`. */
+  readonly durationMs?: number;
 };
 
 export type StudioDraft = {
@@ -191,6 +196,20 @@ export function withVisualAspectRatio(
   return { ...draft, [slot]: { ...asset, aspectRatio } };
 }
 
+/** La DURÉE mesurée d'un fichier local (#7497) — adoptée seulement si
+ * l'asset est toujours celui de la mesure (même garde que le rapport). */
+export function withMediaDuration(draft: StudioDraft, door: StudioDoor, previewUrl: string, durationMs: number): StudioDraft {
+  if (door === 'sound') {
+    const sound = draft.sound;
+    if (sound === null || sound.previewUrl !== previewUrl) return draft;
+    return { ...draft, sound: { ...sound, durationMs } };
+  }
+  const slot = visualSlot(door);
+  const asset = draft[slot];
+  if (asset === null || asset.previewUrl !== previewUrl) return draft;
+  return { ...draft, [slot]: { ...asset, durationMs } };
+}
+
 /** La légende est TAILLÉE à la saisie, pas seulement à l'envoi : l'auteur voit
  * immédiatement la borne du contrat plutôt que de perdre la fin de sa phrase
  * au moment de publier. */
@@ -289,6 +308,7 @@ export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDr
       ...ready,
       mediaType: asset.mediaType,
       ...(asset.aspectRatio !== undefined ? { aspectRatio: asset.aspectRatio } : {}),
+      ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}),
       ...(asset.caption !== '' ? { caption: asset.caption } : {}),
       pose: asset.pose,
     };
@@ -301,7 +321,9 @@ export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDr
     ...(draft.texts.some((layer) => layer.text.trim() !== '') ? { language } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(overlay !== undefined ? { overlay } : {}),
-    ...(sound !== null && draft.sound !== null ? { sound: { ...sound, plane: draft.sound.plane } } : {}),
+    ...(sound !== null && draft.sound !== null
+      ? { sound: { ...sound, plane: draft.sound.plane, ...(draft.sound.durationMs !== undefined ? { durationMs: draft.sound.durationMs } : {}) } }
+      : {}),
   };
 }
 
@@ -354,6 +376,7 @@ export function studioDraftFromSnapshot(
           previewUrl: resolveUrl(ref.fileUrl),
           mediaType: ref.mediaType,
           ...(ref.aspectRatio !== undefined ? { aspectRatio: ref.aspectRatio } : {}),
+          ...(ref.durationMs !== undefined ? { durationMs: ref.durationMs } : {}),
           caption: ref.caption ?? '',
           pose: poseOf('pose' in ref ? ref.pose : undefined),
           upload: {
@@ -379,6 +402,7 @@ export function studioDraftFromSnapshot(
         : {
             previewUrl: resolveUrl(snapshot.sound.fileUrl),
             plane: snapshot.sound.plane === 'foreground' ? 'foreground' : 'background',
+            ...(snapshot.sound.durationMs !== undefined ? { durationMs: snapshot.sound.durationMs } : {}),
             upload: {
               phase: 'ready',
               postMediaId: snapshot.sound.postMediaId,

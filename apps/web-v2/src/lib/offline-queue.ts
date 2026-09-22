@@ -36,6 +36,15 @@
  */
 export type OfflineQueue<T> = {
   readonly enqueue: (key: string, payload: T) => void;
+  /**
+   * LE JOB DE CETTE CLÉ EST PÉRIMÉ (revue-correction #7367) — appelé quand
+   * l'appelant a obtenu, PAR UN AUTRE CHEMIN, une issue qui rend le job en
+   * attente sans objet. Sans ce geste, un job gardé indéfiniment (une panne
+   * TRANSITOIRE ne fait basculer aucun `offline`) se rejouait au premier
+   * `online` venu et REMETTAIT une valeur périmée par-dessus une plus
+   * récente. Sur une clé absente : sans effet.
+   */
+  readonly remove: (key: string) => void;
   /** `run` rend `true` ⇒ le job est retiré ; `false` ⇒ le flush s'arrête là. */
   readonly flush: (run: (payload: T) => Promise<boolean>) => Promise<void>;
   readonly size: () => number;
@@ -48,6 +57,10 @@ export function createOfflineQueue<T>(): OfflineQueue<T> {
 
   function enqueue(key: string, payload: T): void {
     jobs.set(key, payload);
+  }
+
+  function remove(key: string): void {
+    jobs.delete(key);
   }
 
   async function flush(run: (payload: T) => Promise<boolean>): Promise<void> {
@@ -72,5 +85,5 @@ export function createOfflineQueue<T>(): OfflineQueue<T> {
     jobs.clear();
   }
 
-  return { enqueue, flush, size, clear };
+  return { enqueue, remove, flush, size, clear };
 }

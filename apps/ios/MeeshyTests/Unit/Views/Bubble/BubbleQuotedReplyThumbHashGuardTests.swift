@@ -99,7 +99,7 @@ final class BubbleQuotedReplyThumbHashGuardTests: XCTestCase {
         // propriété. La borne suit la DÉCLARATION, jamais la disposition — une
         // ancre posée sur une géographie rougit au premier déplacement, et
         // c'est ce qui vient d'arriver à sa voisine.
-        let focalThumb = try slice(of: focal, from: "private var quotedThumbnail", to: "private var authorGate")
+        let focalThumb = try slice(of: focal, from: "private var quotedThumbnail", to: "private var titleLine")
         assertServesThumbHash(focalThumb, "reference", peau: "rangée plate")
 
         let composer = try anchored(Self.composerPath, "func composerReplyAttachmentPreview", floor: 6_000)
@@ -171,9 +171,9 @@ final class BubbleQuotedReplyThumbHashGuardTests: XCTestCase {
             focal.contains("QuotedReplyPresentation.title(author: authorName)"),
             "la rangée plate doit composer son titre par la MÊME règle que la bulle."
         )
-        XCTAssertTrue(
-            focal.contains("name: authorName"),
-            "l'avatar de la rangée plate reçoit lui aussi le NOM NU."
+        XCTAssertFalse(
+            focal.contains("MeeshyAvatar("),
+            "la rangée plate (focal ET script) ne dessine plus l'avatar de l'auteur cité — le NOM seul (#7491)."
         )
 
         let composer = try anchored(Self.composerPath, "func composerReplyBanner", floor: 6_000)

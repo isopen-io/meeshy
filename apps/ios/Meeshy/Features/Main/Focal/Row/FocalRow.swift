@@ -487,7 +487,6 @@ struct FocalRow: View {
                     mentionDisplayNames: input.mentionDisplayNames,
                     onReplyTap: actions.onReplyTap,
                     onStoryReplyTap: actions.onStoryReplyTap,
-                    onQuotedAuthorTap: actions.onQuotedAuthorTap,
                     onQuotedMediaTap: actions.onQuotedMediaTap
                 )
                 // Le rail de la citation est une forme (souple en hauteur) :
