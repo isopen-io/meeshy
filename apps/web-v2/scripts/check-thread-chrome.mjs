@@ -597,12 +597,43 @@ for (const scheme of ['light', 'dark']) {
 
     await page.locator('[data-composer] textarea').fill('Do you confirm the mockup for tomorrow?');
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(500);
-    const lastLang = await page.evaluate(() => {
-      const rows = document.querySelectorAll('[data-message]');
-      const last = rows[rows.length - 1];
-      return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
-    });
+    /**
+     * ON ATTEND LE FAIT, JAMAIS UN DÉLAI (#7412). Un `waitForTimeout(500)`
+     * gardait cette lecture, et il a rendu `dev` ROUGE le 2026-09-22 à la tête
+     * `0733c4cf42` sans qu'aucune dérive du produit ne l'explique : le fil est
+     * VIRTUALISÉ (le gate voisin mesure « jamais plus de 60 cellules pour 500
+     * messages »), donc la bulle optimiste n'est LISIBLE ici qu'une fois la
+     * nouvelle dernière rangée montée et la liste recollée au bas. Tant que ce
+     * n'est pas fait, `rows[rows.length - 1]` est une rangée de fixture —
+     * toutes en `fr` (`lib/api/fixtures-catchup.ts`) — et le témoin accuse la
+     * lenteur du runner à la place du produit. Mesuré sur un runner au repos :
+     * la bulle porte `lang="en"` après 15 ms ; le pari de 500 ms ne tenait que
+     * tant que la machine n'était pas chargée.
+     *
+     * LA MESURE NE S'AFFAIBLIT PAS POUR AUTANT : à l'expiration, on relit la
+     * langue RÉELLEMENT servie et on échoue AVEC elle dans le libellé — une
+     * vraie dérive du Prisme reste rouge, avec exactement le message
+     * d'aujourd'hui. Attendre son fait n'est pas fermer les yeux : c'est
+     * refuser de trancher avant que le fait ait eu lieu.
+     */
+    const lastLangOf = () =>
+      page.evaluate(() => {
+        const rows = document.querySelectorAll('[data-message]');
+        const last = rows[rows.length - 1];
+        return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      });
+    const lastLang = await page
+      .waitForFunction(
+        () => {
+          const rows = document.querySelectorAll('[data-message]');
+          const last = rows[rows.length - 1];
+          return last?.querySelector('[lang]')?.getAttribute('lang') === 'en';
+        },
+        undefined,
+        { timeout: 5_000 },
+      )
+      .then(() => 'en')
+      .catch(() => lastLangOf());
     expect(lastLang === 'en', `${scheme} · la DERNIÈRE bulle du fil porte lang="en" (« ${lastLang} »)`);
 
     await context.close();
