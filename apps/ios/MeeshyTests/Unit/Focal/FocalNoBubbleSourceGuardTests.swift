@@ -83,18 +83,45 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
 
     // MARK: - 1. Aucune bulle nulle part
 
+    private static let bubbleNeedles = ["BubbleBackground", "BubbleStandardLayout", "cornerRadius: 18", "cornerRadius:18"]
+
+    /// Le REGISTRE des chromes de protection (#7452, #7512), seul fichier de
+    /// `Focal/**` exempté de la règle 1 — et par son CHEMIN NOMMÉ, jamais par
+    /// `Core/**` en bloc.
+    ///
+    /// `ReadingModeProtectionChrome` n'utilise aucune bulle : c'est un `switch`
+    /// exhaustif sur les cinq `ConversationReadingMode` qui dit, pour chacun,
+    /// quel fichier source rend son chrome. Pour le mode `.bubbles`, la réponse
+    /// EST le chemin de la bulle — la table ne peut pas le taire sans cesser de
+    /// répondre à la question qu'elle pose. La règle 1 cherchant le littéral en
+    /// sous-chaîne, elle attrape ici une chaîne de CHEMIN là où elle vise un
+    /// USAGE.
+    ///
+    /// C'est la même forme que les exemptions des règles 3 et 4 : `Core/` est le
+    /// domicile des types et des tables sur lesquels les autres dossiers
+    /// s'appuient, et le registre vit précisément à côté de
+    /// `ReadingModeOrchestrator.swift`, qui définit le type sur lequel il
+    /// commute. L'exemption reste NOMINATIVE : les 46 autres fichiers de
+    /// `Focal/**` — `Core/` compris — continuent d'être balayés, et un futur
+    /// fichier qui monterait une vraie bulle rougirait.
+    ///
+    /// **Ce qui a été refusé** : découper le littéral (`"Bubble" + "Standard…"`).
+    /// Une garde qu'on contourne par une astuce de chaîne ne garde plus rien, et
+    /// le prochain lecteur n'aurait aucun moyen de savoir pourquoi le code est
+    /// écrit ainsi. La RE-PREUVE ci-dessous paie le prix de l'exemption.
+    private static let chromeRegistryRelativePath = "Core/ReadingModeProtectionChrome.swift"
+
     func test_noBubbleAnywhereInFocal() throws {
-        let files = try swiftSources()
+        let files = try swiftSources(excludingRelativePaths: [Self.chromeRegistryRelativePath])
         XCTAssertGreaterThan(
             files.count, 20,
             "le balayage de Focal/** ne trouve presque aucun fichier — la garde « aucune bulle » " +
             "passerait au vert par omission (leçon 257), pas par absence réelle de bulle"
         )
 
-        let forbidden = ["BubbleBackground", "BubbleStandardLayout", "cornerRadius: 18", "cornerRadius:18"]
         var offenders: [String: [String]] = [:]
         for file in files {
-            for needle in forbidden where file.stripped.contains(needle) {
+            for needle in Self.bubbleNeedles where file.stripped.contains(needle) {
                 offenders[file.relativePath, default: []].append(needle)
             }
         }
@@ -103,6 +130,52 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
             "ces fichiers de Focal/** référencent la bulle historique — « aucune bulle nulle part » " +
             "(§WS-11) : " + offenders.map { "\($0.key) [\($0.value.joined(separator: ", "))]" }
                 .sorted().joined(separator: " ; ")
+        )
+    }
+
+    /// RE-PREUVE de l'exemption ci-dessus : le registre ne nomme la bulle que
+    /// dans une chaîne de CHEMIN (`"…/XXX.swift"`), jamais comme type, vue ou
+    /// appel.
+    ///
+    /// Sans ce témoin, l'exemption serait un trou : le jour où quelqu'un monte
+    /// un `BubbleStandardLayout(...)` dans ce fichier, la règle 1 ne le verrait
+    /// plus. Elle vérifie donc que CHAQUE ligne de CODE contenant un littéral
+    /// interdit est une ligne de chemin.
+    ///
+    /// **Sur le code, commentaires RETIRÉS — comme la règle 1.** Le doc-comment
+    /// du registre explique pourquoi la combustion d'un sticker ne passe pas par
+    /// `BubbleStandardLayout` : c'est de la prose, pas un usage, et rien ne s'en
+    /// compile. Être plus sévère ici que la règle qu'on exempte interdirait
+    /// d'EXPLIQUER l'exemption dans le fichier qu'elle vise — exactement ce que
+    /// ce dépôt demande de faire partout ailleurs.
+    ///
+    /// Leçon 257 : le témoin affirme aussi que le fichier existe ET qu'il
+    /// contient bien ce qu'il prétend exempter. Une exemption qui ne porte sur
+    /// rien — fichier déplacé, renommé, supprimé — doit rougir pour être
+    /// retirée, pas dormir au vert.
+    func test_leRegistreDesChromes_neNommeLaBulleQuEnCheminDeFichier() throws {
+        let url = focalRoot().appendingPathComponent(Self.chromeRegistryRelativePath)
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        let citingLines = code
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { line in Self.bubbleNeedles.contains { line.contains($0) } }
+
+        XCTAssertFalse(
+            citingLines.isEmpty,
+            "\(Self.chromeRegistryRelativePath) ne cite plus la bulle dans son CODE : l'exemption " +
+            "de la règle 1 ne porte plus sur rien et doit être RETIRÉE (sinon elle couvrirait en " +
+            "silence un futur usage réel)"
+        )
+
+        let offenders = citingLines.filter { !$0.contains(".swift\"") }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "le registre des chromes ne doit nommer la bulle QUE dans une chaîne de chemin " +
+            "(`\"…/XXX.swift\"`) — ces lignes la citent autrement, donc la règle 1 doit " +
+            "reprendre la main sur ce fichier : " +
+            offenders.map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ; ")
         )
     }
 
