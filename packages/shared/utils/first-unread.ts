@@ -83,18 +83,19 @@
  * que le serveur SAIT, par `unreadCount`, que des messages sont non lus.
  * Sans ce repli, l'absence locale de rang ferait passer un fil réellement
  * non lu pour lu, l'inverse de D-L2 (2026-09-21). Deux règles, dans cet
- * ordre, avant même de calculer `boundaryTime` :
- * 1. `unreadCountHint === 0` ⇒ `null` IMMÉDIATEMENT — cet aveu serveur prime
- *    sur un cursor LOCAL potentiellement périmé (cache de détail pas encore
- *    repatché après un `markCaughtUp` récent, #7351 critère 2).
- * 2. `boundaryTime === null` (ni cursor, ni `joinedAt`) et
- *    `unreadCountHint` positif ⇒ élire les DERNIERS `unreadCountHint`
+ * ordre, et SEULEMENT quand aucun rang chronologique n'existe
+ * (`boundaryTime === null`) :
+ * 1. `unreadCountHint === 0` ⇒ `null` — aucun candidat inventé.
+ * 2. `unreadCountHint` positif ⇒ élire les DERNIERS `unreadCountHint`
  *    candidats (jamais les premiers — ce serait rejouer le « 4 812 non-lus »
  *    que l'absence de repli laissait faire côté appelant). Une fenêtre plus
  *    courte que le hint rend tous les candidats chargés non lus, cohérent
  *    avec la borne déjà documentée : `unreadCount` compte la fenêtre reçue.
- * Ignoré dès qu'un rang chronologique existe : les rangs 1-3 restent seuls
- * maîtres du calcul normal.
+ * Ignoré dès qu'un rang chronologique existe, y compris À ZÉRO : les rangs
+ * 1-3 restent seuls maîtres du calcul, comme dans le miroir Swift. Un compte
+ * relu d'un cache de détail est figé à l'instant de sa dernière écriture —
+ * un message arrivé ensuite par le socket ne l'incrémente pas, alors que le
+ * curseur, lui, le laisse passer : c'est le curseur qui dit la vérité.
  *
  * La fonction trie une COPIE de `messages` (immutabilité, et les deux points
  * d'entrée possibles — page REST, page rejouée depuis un socket — ne
@@ -151,8 +152,6 @@ export function firstUnreadBoundary(
     unreadCountHint,
   } = params;
 
-  if (unreadCountHint === 0) return null;
-
   const boundaryTime = lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt ?? null;
 
   const otherMessages = messages
@@ -160,17 +159,12 @@ export function firstUnreadBoundary(
     .filter((message) => message.id !== lastReadMessageId)
     .sort(byCreatedAtThenId);
 
-  if (boundaryTime === null && unreadCountHint !== undefined && unreadCountHint > 0) {
-    const start = Math.max(0, otherMessages.length - unreadCountHint);
-    const candidates = otherMessages.slice(start);
-    const first = candidates[0];
-    if (!first) return null;
-    return { firstUnreadId: first.id, unreadCount: candidates.length };
-  }
-
-  const candidates = otherMessages.filter(
-    (message) => boundaryTime === null || message.createdAt.getTime() > boundaryTime.getTime(),
-  );
+  const candidates =
+    boundaryTime !== null
+      ? otherMessages.filter((message) => message.createdAt.getTime() > boundaryTime.getTime())
+      : unreadCountHint === undefined
+        ? otherMessages
+        : otherMessages.slice(Math.max(0, otherMessages.length - Math.max(0, unreadCountHint)));
 
   const first = candidates[0];
   if (!first) return null;

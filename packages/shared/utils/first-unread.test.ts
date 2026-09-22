@@ -259,16 +259,25 @@ describe('firstUnreadBoundary — unreadCountHint (#7351, V3)', () => {
     expect(result).toEqual({ firstUnreadId: 'm1', unreadCount: 2 });
   });
 
-  it('hint à 0 ⇒ null IMMÉDIATEMENT, même si un curseur PÉRIMÉ dirait le contraire', () => {
+  it('AUCUN rang chronologique, hint à 0 ⇒ null (rien n’est inventé comme non lu)', () => {
+    const messages = [message('m1', OTHER, '2026-09-21T09:01:00Z')];
+
+    const result = firstUnreadBoundary({ messages, viewerId: VIEWER, unreadCountHint: 0 });
+
+    expect(result).toBeNull();
+  });
+
+  it('un CURSEUR existe ⇒ un hint à 0 est IGNORÉ : le message arrivé après le curseur reste non lu', () => {
     const messages = [
       message('m1', OTHER, '2026-09-21T09:01:00Z'),
       message('m2', OTHER, '2026-09-21T09:05:00Z'),
     ];
 
-    // Un curseur qui n'a pas encore rattrapé m2 dirait normalement
-    // { firstUnreadId: 'm2', unreadCount: 1 } — le hint serveur à 0 (« le
-    // client vient de confirmer avoir tout lu ») prime, cas du cache de
-    // détail pas encore repatché après un `markCaughtUp` (#7351, critère 2).
+    // Un détail en cache relu APRÈS un `markCaughtUp` porte `unreadCount: 0`
+    // (confirmé à l'instant de la lecture) ; m2 est arrivé ENSUITE par le
+    // socket, qui ne touche que la liste. Le curseur dit la vérité, le compte
+    // est périmé : laisser le compte primer effacerait le séparateur de m2
+    // (D-L2) — et le miroir Swift, qui ne lit aucun compte, rend m2 lui aussi.
     const result = firstUnreadBoundary({
       messages,
       viewerId: VIEWER,
@@ -277,7 +286,7 @@ describe('firstUnreadBoundary — unreadCountHint (#7351, V3)', () => {
       unreadCountHint: 0,
     });
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ firstUnreadId: 'm2', unreadCount: 1 });
   });
 
   it('un rang chronologique existe (joinedAt) ⇒ le hint est IGNORÉ, la loi par curseur tranche seule', () => {

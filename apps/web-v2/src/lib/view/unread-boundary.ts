@@ -122,26 +122,6 @@ export function unreadBoundaryOf(params: {
   });
 }
 
-export type UseUnreadBoundaryInput = {
-  readonly conversationId: string;
-  readonly ready: boolean;
-  readonly conversation: Conversation | undefined;
-  readonly confirmedMessages: readonly Message[];
-  readonly viewerId: string;
-};
-
-/**
- * `useUnreadBoundary` — GLUE React autour de `nextFrozenUnreadBoundary` : un
- * seul `ref`, recalculé SYNCHRONE pendant le rendu (jamais dans un effet —
- * l'effet de défilement initial de `use-thread-open-scroll.ts` lit la
- * valeur gelée DANS LE MÊME rendu que celui où elle vient de se figer, sans
- * quoi le premier defile utiliserait une valeur `null` non encore posée).
- *
- * `conversation.currentUserJoinedAt` est typé `Date | string`
- * (`packages/shared/types/conversation.ts:374`, deux origines possibles) —
- * `toDate()` (idempotent) l'uniformise avant l'appel à `firstUnreadBoundary`,
- * qui n'accepte que `Date`.
- */
 /**
  * `resumeThreadTarget` (#7351, V3, critère de fin « Reprendre le fil cible
  * firstUnreadBoundary ») — LOI PURE, isolée de React : `routes/thread.tsx`
@@ -165,6 +145,26 @@ export function resumeThreadTarget(params: {
   return messages.find((m) => m.senderId !== viewerId)?.id ?? null;
 }
 
+export type UseUnreadBoundaryInput = {
+  readonly conversationId: string;
+  readonly ready: boolean;
+  readonly conversation: Conversation | undefined;
+  readonly confirmedMessages: readonly Message[];
+  readonly viewerId: string;
+};
+
+/**
+ * `useUnreadBoundary` — GLUE React autour de `nextFrozenUnreadBoundary` : un
+ * seul `ref`, recalculé SYNCHRONE pendant le rendu (jamais dans un effet —
+ * l'effet de défilement initial de `use-thread-open-scroll.ts` lit la
+ * valeur gelée DANS LE MÊME rendu que celui où elle vient de se figer, sans
+ * quoi le premier defile utiliserait une valeur `null` non encore posée).
+ *
+ * `conversation.currentUserJoinedAt` est typé `Date | string`
+ * (`packages/shared/types/conversation.ts:374`, deux origines possibles) —
+ * `toDate()` (idempotent) l'uniformise avant l'appel à `firstUnreadBoundary`,
+ * qui n'accepte que `Date`.
+ */
 export function useUnreadBoundary(input: UseUnreadBoundaryInput): UnreadBoundarySnapshot {
   const { conversationId, ready, conversation, confirmedMessages, viewerId } = input;
   const frozen = useRef<FrozenUnreadBoundary | undefined>(undefined);

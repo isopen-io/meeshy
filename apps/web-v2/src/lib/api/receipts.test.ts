@@ -5,6 +5,9 @@ import { describe, expect, test } from 'bun:test';
 import { fetchMessageReceiptsPeople, markCaughtUp, pushReadReceipt } from './receipts';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import { createAppQueryClient, type StorageLike } from './query-client';
+import { messagesQueryKey, upsertThreadMessage } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
+import { decodeConversation } from './decode';
 import { createHttpTransport } from './http';
 import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
 import { message, VIEWER_ID } from '@/lib/api/fixtures-base';
@@ -336,9 +339,109 @@ describe('markCaughtUp — client froid (rechargement réel, #7351)', () => {
 
     // Rechargement : un SECOND client, jamais vu la session précédente.
     const clientApres = createAppQueryClient({ storage, buster });
-    const detailRecharge = clientApres.getQueryData<Conversation>(conversationQueryKey('c-froid'));
+    // Le cache persisté porte ses dates en CHAÎNES (JSON) : l'écran le lit
+    // par `select: decodeConversation` (`conversationQuery`), le témoin aussi.
+    const brut = clientApres.getQueryData<Conversation>(conversationQueryKey('c-froid'));
+    const detailRecharge = brut === undefined ? undefined : decodeConversation(brut);
 
     expect(detailRecharge?.unreadCount).toBe(0);
     expect(unreadBoundaryOf({ conversation: detailRecharge!, messages: MESSAGES, viewerId: VIEWER_ID })).toBeNull();
+  });
+});
+
+/**
+ * **LE CLIENT CHAUD** (#7351, revue-correction) — le détail en cache survit à
+ * la lecture ; un message arrive ENSUITE par le socket (`upsertThreadMessage`,
+ * qui n'écrit ni `unreadCount` ni le curseur du détail) ; le fil se rouvre sur
+ * ce détail sans refetch (`staleTime` de 30 s, ou cache persisté). Le curseur
+ * du détail doit donc AVANCER avec la lecture : resté sur l'ancien, il
+ * rendrait non lus les messages lus ; effacé par un compte à 0, il avalerait
+ * le séparateur du message neuf — deux violations de D-L2.
+ */
+describe('markCaughtUp — client chaud (un message arrive après la lecture, #7351)', () => {
+  const at = (iso: string) => new Date(iso);
+  const MESSAGES: readonly Message[] = ['m1', 'm2'].map((id, i) =>
+    message({
+      id,
+      conversationId: 'c-chaud',
+      senderId: 'u-autrui',
+      content: `Message ${id}`,
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: at(`2026-09-21T09:0${i + 1}:00.000Z`),
+    }),
+  );
+  const LATER = message({
+    id: 'm3',
+    conversationId: 'c-chaud',
+    senderId: 'u-autrui',
+    content: 'Arrivé après la lecture',
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: at('2026-09-21T09:10:00.000Z'),
+  });
+
+  test('le séparateur se rouvre sur le message NEUF, jamais sur ce qui a été lu', async () => {
+    const detail = conversation({
+      id: 'c-chaud',
+      unreadCount: 1,
+      lastReadMessageId: 'm1',
+      lastReadMessageCreatedAt: at('2026-09-21T09:01:00.000Z'),
+    });
+    const queryClient = seededClient([detail]);
+    queryClient.setQueryData(conversationQueryKey('c-chaud'), detail);
+    queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey('c-chaud'), {
+      pages: [{ messages: MESSAGES, hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } } }),
+    });
+
+    await markCaughtUp({
+      conversationId: 'c-chaud',
+      caughtUpToMessageId: 'm2',
+      deps: { source: 'gateway', transport, store: freshStore(), queryClient },
+    });
+    upsertThreadMessage(queryClient, 'c-chaud', LATER);
+
+    const reopened = queryClient.getQueryData<Conversation>(conversationQueryKey('c-chaud'));
+    const listed = findCachedConversation(queryClient, 'c-chaud');
+    const thread = [...MESSAGES, LATER];
+
+    expect(unreadBoundaryOf({ conversation: reopened!, messages: thread, viewerId: VIEWER_ID })).toEqual({
+      firstUnreadId: 'm3',
+      unreadCount: 1,
+    });
+    expect(unreadBoundaryOf({ conversation: listed!, messages: thread, viewerId: VIEWER_ID })).toEqual({
+      firstUnreadId: 'm3',
+      unreadCount: 1,
+    });
+  });
+
+  test('message rattrapé absent du cache ⇒ la frontière chronologique suit l’heure de lecture, jamais l’ancien curseur', async () => {
+    const detail = conversation({
+      id: 'c-chaud',
+      unreadCount: 2,
+      lastReadMessageId: 'm0',
+      lastReadMessageCreatedAt: at('2026-09-21T08:00:00.000Z'),
+    });
+    const queryClient = seededClient([detail]);
+    queryClient.setQueryData(conversationQueryKey('c-chaud'), detail);
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { type: 'read', markedCount: 2, unreadCount: 0 } } }),
+    });
+
+    await markCaughtUp({
+      conversationId: 'c-chaud',
+      caughtUpToMessageId: 'm2',
+      deps: { source: 'gateway', transport, store: freshStore(), queryClient },
+    });
+
+    const reopened = queryClient.getQueryData<Conversation>(conversationQueryKey('c-chaud'));
+    expect(reopened?.lastReadMessageId).toBe('m2');
+    expect(unreadBoundaryOf({ conversation: reopened!, messages: MESSAGES, viewerId: VIEWER_ID })).toBeNull();
   });
 });
