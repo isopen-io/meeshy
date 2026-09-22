@@ -1162,3 +1162,56 @@ describe('FocalRow — la prise de langue absente retire le GESTE, pas le fait (
     expect(html).toContain('data-prism-flag');
   });
 });
+
+/**
+ * #7491 — EN FOCAL ET EN SCRIPT, UNE CITATION NE PORTE QUE LE NOM DE L'AUTEUR
+ * CITÉ, jamais son avatar (directive porteur 2026-09-22). La rangée plate pose
+ * déjà l'avatar de SON auteur : un second visage dans la citation en empilerait
+ * deux pour un seul message. Miroir de `QuotedReplyPresentation
+ * .showsAuthorAvatar(for: .focal)` côté iOS. Témoin posé avec un auteur cité
+ * qui A une photo — sans elle, une absence d'`<img>` ne prouverait rien.
+ */
+describe('FocalRow — la citation ne montre que le nom de l’auteur cité (#7491)', () => {
+  const quoted: Message = {
+    ...BASE_MESSAGE,
+    id: 'm-quoted',
+    senderId: 'u-kwame',
+    content: 'On se voit demain ?',
+    sender: {
+      ...BASE_MESSAGE.sender!,
+      id: 'p-kwame',
+      userId: 'u-kwame',
+      displayName: 'Kwame Mensah',
+      avatar: 'https://cdn.meeshy.me/kwame.jpg',
+    },
+  };
+  const reply: Message = { ...BASE_MESSAGE, id: 'm-reply', replyToId: quoted.id, replyTo: quoted };
+
+  const quoteOf = (html: string): string => {
+    const start = html.indexOf('aria-label="Aller au message de Kwame Mensah"');
+    expect(start).toBeGreaterThan(-1);
+    const open = html.lastIndexOf('<button', start);
+    return html.slice(open, html.indexOf('</button>', start));
+  };
+
+  for (const mode of ['focal', 'script'] as const) {
+    test(`${mode} : le nom est là, aucune image ni pastille d’avatar dans la citation`, () => {
+      const html = renderToStaticMarkup(
+        <FocalRow
+          mode={mode}
+          place={placeOf(reply)}
+          languages={['fr']}
+          viewerId="u-viewer"
+          ephemeralDeadline={{ state: 'none' }}
+          onJumpToMessage={() => {}}
+          onPickLanguage={() => {}}
+        />,
+      );
+      const quote = quoteOf(html);
+      expect(quote).toContain('Kwame Mensah');
+      expect(quote).not.toContain('<img');
+      expect(quote).not.toContain('kwame.jpg');
+      expect(quote).not.toContain('data-presence');
+    });
+  }
+});
