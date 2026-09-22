@@ -41,6 +41,19 @@ export const SERVER_EVENTS = {
    * apart (a toast, a distinct log line) can.
    */
   MESSAGE_EXPIRED: 'message:expired',
+  /**
+   * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
+   * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
+   * `user:<destinataire>` (pour ses autres appareils) et vers
+   * `user:<expéditeur>` (la plus tardive des échéances connues).
+   *
+   * DISTINCT de `MESSAGE_EXPIRED`, qui dit la FIN : celui-ci pose l'échéance,
+   * celui-là retire le message. Un client qui n'en reçoit aucun n'est pas
+   * démuni — il retombe sur `réception locale + ephemeralDuration`
+   * (`utils/ephemeral-deadline.ts`), et c'est le cas nominal du temps réel,
+   * `message:new` ne portant pas d'`expiresAt` pour un éphémère (point 4).
+   */
+  MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
   // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
   // `message:translation`, et sous ce nom seul. `message:translated` a été
@@ -519,13 +532,23 @@ export const SERVER_EVENTS = {
  * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
  * avait entre-temps implémenté l'émission.
  *
- * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
- * décodés côté clients et attendent le service qui les produira.
+ * Ce qui reste : le pipeline de traduction EN APPEL (les trois noms sont
+ * décodés côté clients et attendent le service qui les produira) et
+ * `message:countdown-started`, réservé par le lot web-v2 #7454.
+ *
+ * CE DERNIER EST RÉSERVÉ POUR UN LOT, PAS POUR UN SERVICE ABSENT, et c'est une
+ * différence qui doit rester lisible : le contrat du fil est arrêté dans
+ * #7451, que la session passerelle livre EN PARALLÈLE. Le nom est déclaré ICI,
+ * une seule fois, pour que les trois clients ne l'écrivent pas chacun de leur
+ * côté ; **la ligne ci-dessous sort de cette liste dans le lot qui pose
+ * l'émetteur** (`MessageReadStatusService`, à la première réception d'un
+ * destinataire) — la garde du sens inverse le rappellera d'elle-même.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
+  SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED,
 ]);
 
 // Événements du client vers le serveur
