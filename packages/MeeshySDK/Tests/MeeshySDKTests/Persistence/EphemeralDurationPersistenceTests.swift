@@ -149,4 +149,12 @@ private struct StubReceiptLedger: EphemeralReceiptRecording {
     func firstReception(of messageId: String) -> Date? { reception }
     @discardableResult
     func noteReception(of messageId: String, at date: Date) -> Date { reception }
+
+    // #7552 a ajouté la PIERRE TOMBALE au protocole, après que ce témoin ait
+    // été écrit contre la version d'avant : les deux lots étaient verts chacun
+    // sur sa base, et leur FUSION ne compilait plus. Ce stub ne grave aucune
+    // mort — ce qu'il mesure est l'aller-retour de la DURÉE en base, jamais la
+    // destruction ; rendre `nil` est donc la réponse juste et pas un raccourci.
+    func destruction(of messageId: String) -> Date? { nil }
+    func noteDestruction(of messageId: String, at date: Date) {}
 }
