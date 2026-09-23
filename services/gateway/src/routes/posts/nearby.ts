@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response';
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
+import { withoutAudienceList } from '../../services/posts/audienceList';
 import { withMentions } from '../../services/posts/postReferences';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
@@ -191,7 +192,9 @@ export async function chargerPostsProches(
     .map((id) => postsById.get(id))
     .filter((post): post is NonNullable<typeof post> => post !== undefined)
     .map((post) => ({
-      ...withMentions(hoistLocationDeep(post), reader),
+      // La découverte ne sert que du PUBLIC et ne connaît pas son lecteur ici :
+      // une liste d'audience restée d'un ancien `EXCEPT` ne part pas (#7407).
+      ...withMentions(hoistLocationDeep(withoutAudienceList(post)), reader),
       distanceMeters: distanceById.get(post.id) ?? null,
     }));
 
