@@ -514,7 +514,7 @@ class LiveActivityManager {
 
                 // End activity after successful delivery
                 if status == .delivered || status == .read {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2 seconds
+                    try? await Task.sleep(for: .seconds(2))
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
             }
@@ -560,7 +560,7 @@ class LiveActivityManager {
 
                 // End when complete
                 if progress >= 1.0 {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    try? await Task.sleep(for: .seconds(1))
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
             }

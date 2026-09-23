@@ -649,7 +649,7 @@ struct ShareContentView: View {
             resultMessage = ShareSender.outcome(of: served) == .sent
                 ? String(localized: "share.status.sent", defaultValue: "Envoyé")
                 : String(localized: "share.status.deferred", defaultValue: "Sera envoyé à la reconnexion")
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            try? await Task.sleep(for: .milliseconds(700))
             onFinish()
         }
     }
