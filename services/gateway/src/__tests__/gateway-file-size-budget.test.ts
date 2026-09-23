@@ -117,6 +117,20 @@ const MAX_LINES = 1000;
  * QUALIFIÉ, qui matche par BASENAME à toute profondeur et l'avait avalé en
  * silence : vert en local, absent du dépôt.
  *
+ * `socketio/CallEventsHandler.ts` : entrée 5181 → 4631 (#7632, 2026-09-23 ; le
+ * fichier MESURAIT 5069 avant le lot — le gel d'origine portait 112 lignes de
+ * marge, rendues au dépôt par ce rabaissement). Trois responsabilités sont
+ * parties, et le discriminant est ce que chacune SAIT : `call-recipients.ts`
+ * (dans quelle langue parler à un destinataire, depuis quel pays il décroche,
+ * son appareil sait-il recevoir un VoIP), `call-participants.ts` (par QUEL
+ * identifiant la passerelle connaît un appelant, et à quel titre il a le droit
+ * d'écrire sur CET appel — huit gardes distinctes), `call-transcription-relay.ts`
+ * (graver un segment, le faire traduire, le servir à chaque auditeur dans SA
+ * langue). Le tampon d'offres, le sursis de déconnexion et les notifications
+ * d'appel manqué restent : ils partagent des `Map` avec le constructeur, avec
+ * `destroy()` / `prepareForShutdown()`, ou sont atteints par 33 sites de
+ * témoins — leur sortie ne serait pas mécanique.
+ *
  * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
  * réservation d'appel (claim / reprise / libération) est partie vers
  * `services/calls/activeCallClaim.ts`, qui notifie la liste de conversations.
@@ -131,7 +145,7 @@ const MAX_LINES = 1000;
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
-  'socketio/CallEventsHandler.ts': 5181,
+  'socketio/CallEventsHandler.ts': 4631,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
