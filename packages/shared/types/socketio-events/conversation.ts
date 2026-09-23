@@ -305,7 +305,13 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageAttachmentCount?: number;
   readonly lastMessageIsBlurred?: boolean;
   readonly lastMessageIsViewOnce?: boolean;
-  /** Chaîne ISO — voir `lastMessageAt`, son jumeau de forme dans ce même contrat. */
+  /**
+   * Chaîne ISO — voir `lastMessageAt`, son jumeau de forme dans ce même contrat.
+   * `null` pour un ÉPHÉMÈRE (#7451) : une diffusion de room ne connaît pas
+   * l'échéance d'un lecteur ; le client décompte depuis sa réception et
+   * `message:countdown-started` lui porte l'échéance serveur. Pour un non
+   * éphémère, la grâce de vue unique.
+   */
   readonly lastMessageExpiresAt?: string | null;
   /**
    * Sous-groupe NATURE (#7545) — jumeaux des champs de `lastMessage` servis par
@@ -324,11 +330,17 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageCallSummary?: LastMessageCallSummary | null;
   readonly lastMessageAttachmentSummary?: LastMessageAttachmentSummary | null;
   /**
-   * Dernière réaction (#7545), résolue pour CE destinataire. Clé ABSENTE =
-   * « cet événement ne parle pas de réaction ». Un événement qui ne porte QUE
-   * `lastReaction` (sans `lastMessageId`) ne touche pas au groupe d'aperçu, et
-   * il ne porte `lastMessageAt` que chez l'auteur du message réagi — c'est ce
-   * champ qui remonte la conversation (décision porteur, #7546).
+   * Dernière réaction (#7545), résolue pour CE destinataire (extrait par son
+   * Prisme, borné par son plancher d'historique). Clé ABSENTE = « cet événement
+   * ne parle pas de réaction » ; `null` = « il n'y en a plus ».
+   *
+   * L'événement de réaction ne porte AUCUNE clé du groupe d'aperçu — ni
+   * `lastMessageId` ni `lastMessageAt`. La remontée est une règle de CLIENT,
+   * dérivée des données et identique pour `GET /conversations` : rang de la
+   * ligne = max(`lastMessageAt`, `lastReaction.createdAt` quand
+   * `lastReaction.targetSenderUserId` est le lecteur — `targetSenderId` = son
+   * `Participant.id` pour un anonyme). Une réaction à MON message remonte ma
+   * ligne ; une réaction entre tiers s'affiche sans réordonner (#7546).
    */
   readonly lastReaction?: ConversationLastReaction | null;
   /** Appel en cours (#7545). Clé ABSENTE = inchangé ; `null` = plus d'appel. */
