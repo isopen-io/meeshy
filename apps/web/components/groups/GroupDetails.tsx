@@ -55,6 +55,7 @@ export const GroupDetails = memo(function GroupDetails({
         <div className="flex items-center gap-3">
           {isMobile && (
             <Button
+              aria-label={tGroups('groups.community.backToCommunities')}
               size="sm"
               variant="ghost"
               onClick={onBack}
@@ -95,7 +96,7 @@ export const GroupDetails = memo(function GroupDetails({
               <UserPlus className="h-4 w-4 mr-1" />
               {tGroups('actions.invite')}
             </Button>
-            <Button variant="outline" size="sm" className="rounded-2xl" onClick={onSettingsClick}>
+            <Button aria-label={tGroups('groups.actions.settings')} variant="outline" size="sm" className="rounded-2xl" onClick={onSettingsClick}>
               <Settings className="h-4 w-4" />
             </Button>
           </div>
