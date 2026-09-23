@@ -181,6 +181,11 @@ export interface Post {
   readonly authorId: string;
   readonly type: PostType;
   readonly visibility: PostVisibility;
+  /**
+   * La liste d'audience (`ONLY` : les visés ; `EXCEPT` : les exclus). Servie à
+   * l'AUTEUR de la publication seulement — absente pour tout autre lecteur,
+   * et pour l'auteur d'une republication, qui l'hérite de sa source (#7407).
+   */
   readonly visibilityUserIds?: readonly string[];
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
@@ -202,7 +207,6 @@ export interface Post {
   readonly audioUrl?: string | null;
   readonly audioDuration?: number | null;
   readonly storyEffects?: unknown;
-  readonly reactions?: readonly PostReaction[] | null;
   readonly reactionSummary?: Record<string, number> | null;
   readonly reactionCount?: number;
   readonly currentUserReactions?: readonly string[];
@@ -258,12 +262,6 @@ export interface Post {
    * recalculé depuis `expiresAt` côté client.
    */
   readonly referenceAccess?: ReferenceAccess;
-}
-
-export interface PostReaction {
-  readonly userId: string;
-  readonly emoji: string;
-  readonly createdAt: string;
 }
 
 export interface PostView {

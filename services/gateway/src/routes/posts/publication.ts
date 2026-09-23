@@ -63,6 +63,7 @@ import {
 } from '../../services/posts/postReferences';
 import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
+import { withAudienceListFor } from '../../services/posts/audienceList';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { logError, logWarn } from '../../utils/logger.js';
 
@@ -170,6 +171,11 @@ export async function finalReferences(params: {
  * de scène suit son en-tête de version (`wireReaderFromRequest`), et le lieu est
  * hissé en racine — un client ne lit pas `metadata.location`.
  *
+ * « L'auteur » est vérifié, pas supposé : la fiche (`GET /posts/:postId`) et la
+ * republication passent aussi par ici, et la liste d'audience ne part qu'au
+ * lecteur qui a ÉCRIT la publication — jamais à celui qui la republie et en
+ * hérite la liste (#7407, `audienceList.ts`).
+ *
  * C'est la seule fonction qui compose une réponse de publication : trois
  * compositions parallèles, c'était trois corps SERVIS différents pour une même
  * ligne écrite, et c'est ce que le témoin de #4151 mesure sur le JSON.
@@ -180,8 +186,9 @@ export function servePublishedPost(params: {
   readonly request: FastifyRequest;
 }): Record<string, unknown> {
   const { post, references, request } = params;
+  const viewerId = (request as UnifiedAuthRequest).authContext?.registeredUser?.id;
   return withMentions(
-    graftReferences(hoistLocation(post), references),
+    graftReferences(hoistLocation(withAudienceListFor(post, viewerId)), references),
     wireReaderFromRequest(request as UnifiedAuthRequest)
   );
 }

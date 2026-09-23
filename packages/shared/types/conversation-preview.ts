@@ -21,6 +21,16 @@
  */
 
 import type { CallSummaryMediaType, CallSummaryOutcome } from '../utils/call-summary.js';
+import type { MessageSticker } from './message-sticker.js';
+
+/**
+ * Le sticker du dernier message (#7591, #7594), hissé de `metadata.sticker` et
+ * revalidé serveur (`parseMessageSticker`). `lastMessage.sticker` en REST,
+ * `lastMessageSticker` sur `conversation:updated`. Sa présence fait du message
+ * un sticker quel que soit son `messageType` ; `null` sans sticker ou quand le
+ * message ou sa pièce jointe est protégé.
+ */
+export type LastMessageSticker = MessageSticker;
 
 /**
  * Famille d'une pièce jointe pour le décompte de la ligne (« 3 photos »,

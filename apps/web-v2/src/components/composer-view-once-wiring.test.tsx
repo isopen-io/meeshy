@@ -7,24 +7,17 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { Composer } from './composer';
 
 /**
- * LA BASCULE « VUE UNIQUE » DE `Composer` (#7354, V6) — EXTRAIT, motif
- * `composer-top-row-wiring.test.tsx` (`composer.test.tsx` porte déjà 925
- * lignes pour un budget de 1000-1200, CLAUDE.md racine ; un fichier NEUF par
- * responsabilité plutôt qu'un ajout au plus proche du plafond).
+ * LA BASCULE « VUE UNIQUE » DE `Composer` (#7354, puis #7597).
  *
- * Décision antérieure RENVERSÉE par #7354 : `compose-protection.ts:11-19` et
- * `composer.tsx` documentaient jusqu'ici « `viewOnce` n'a AUCUN contrôle
- * dans la rangée haute d'une conversation standard » (aligné sur iOS
- * `showViewOnce: previewMode`). Le critère de fin de #7354 exige le
- * contrôle EN CONVERSATION STANDARD — même GESTE qu'iOS (capsule togglée,
- * icône + libellé conditionnel, `+Protections.swift:161-238`), pas le même
- * EMPLACEMENT (réservé côté iOS au composeur de prévisualisation de
- * notification).
+ * #7597 (retour porteur 2026-09-23) : « le composer bar n'a pas la vue
+ * unique ». Elle était câblée mais GATÉE sur une pièce jointe IMAGE en
+ * attente (#7354) : dans l'état par défaut du composeur, elle n'existait
+ * pas. #7498 a tranché depuis que la vue unique vaut pour TOUT ce qu'on
+ * envoie (texte, image, audio, vidéo, document, sticker), et iOS (#7472)
+ * pose la capsule d'un TAP, À CÔTÉ du flou, avec le « 1 » cerclé
+ * (`1.circle` / `1.circle.fill`, `UniversalComposerBar+Protections.swift`).
  *
- * GATE PRODUIT : la capsule n'existe QUE si une pièce jointe IMAGE est en
- * attente — « envoie une IMAGE à vue unique » (#7354), et un texte seul
- * marqué vue-unique n'a aucun rendu qui le dise (loi 4 : un contrôle sans
- * objet ne se rend pas).
+ * Ces témoins montent le composeur RÉEL dans son état par défaut.
  */
 describe('Composer — la bascule « vue unique » (#7354)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -92,59 +85,91 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     await flush();
   };
 
-  test('sans pièce jointe image, la capsule « vue unique » est ABSENTE', () => {
-    const el = mount(() => {});
-    expect(el.querySelector('[data-composer-view-once]')).toBeNull();
-  });
+  const toggleOf = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-composer-view-once]');
 
-  test('une image en attente fait apparaître la capsule, désarmée', async () => {
+  const typeText = (el: HTMLElement, value: string) => {
+    const field = el.querySelector<HTMLTextAreaElement>('textarea')!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      setter.call(field, value);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  test('état par défaut, sans rien en attente : la capsule « vue unique » EST là, désarmée', () => {
     const el = mount(() => {});
-    await attachImage(el);
-    const toggle = el.querySelector<HTMLButtonElement>('[data-composer-view-once]');
+    const toggle = toggleOf(el);
     expect(toggle).not.toBeNull();
     expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle?.getAttribute('aria-label')).toBe('Activer le mode vue unique');
   });
 
-  test('un tap arme la bascule (aria-pressed + libellé « Vue unique » visibles)', async () => {
+  test('elle se tient JUSTE APRÈS le flou, avec le « 1 » cerclé (contour désarmé, plein armé)', () => {
     const el = mount(() => {});
-    await attachImage(el);
+    const blur = el.querySelector('[data-composer-blur]');
+    expect(blur?.nextElementSibling).toBe(toggleOf(el));
+    expect(toggleOf(el)?.getAttribute('data-glyph')).toBe('numberCircleOne');
     act(() => {
-      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+      toggleOf(el)!.click();
     });
-    const toggle = el.querySelector('[data-composer-view-once]');
-    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
-    expect(toggle?.textContent).toContain('Vue unique');
+    expect(toggleOf(el)?.getAttribute('data-glyph')).toBe('numberCircleOneFill');
   });
 
-  test('armée puis envoyée : onSend porte protection.viewOnce === true', async () => {
-    let sent: { protection: unknown } | null = null;
-    const el = mount((p) => {
-      sent = p;
-    });
-    await attachImage(el);
+  test('un seul tap arme la bascule (aria-pressed + libellé « Vue unique » visibles)', () => {
+    const el = mount(() => {});
     act(() => {
-      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+      toggleOf(el)!.click();
+    });
+    expect(toggleOf(el)?.getAttribute('aria-pressed')).toBe('true');
+    expect(toggleOf(el)?.textContent).toContain('Vue unique');
+  });
+
+  test('un TEXTE seul, armé puis envoyé : onSend porte protection.viewOnce === true', () => {
+    let sent: { text: string; protection: { viewOnce?: boolean } } | null = null;
+    const el = mount((p) => {
+      sent = p as { text: string; protection: { viewOnce?: boolean } };
+    });
+    typeText(el, 'secret');
+    act(() => {
+      toggleOf(el)!.click();
     });
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
     expect(sent).not.toBeNull();
-    expect((sent as unknown as { protection: { viewOnce?: boolean } }).protection.viewOnce).toBe(true);
+    expect(sent!.text).toBe('secret');
+    expect(sent!.protection.viewOnce).toBe(true);
   });
 
-  test('après un envoi, la bascule redescend — un second envoi (avec une nouvelle image) part sans elle', async () => {
-    const sent: { protection: { viewOnce?: boolean } }[] = [];
+  test('une IMAGE, armée puis envoyée : onSend porte protection.viewOnce === true', async () => {
+    let sent: { protection: { viewOnce?: boolean } } | null = null;
     const el = mount((p) => {
-      sent.push(p as { protection: { viewOnce?: boolean } });
+      sent = p as { protection: { viewOnce?: boolean } };
     });
-    await attachImage(el, 'un.jpg');
+    await attachImage(el);
     act(() => {
-      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+      toggleOf(el)!.click();
     });
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
-    await attachImage(el, 'deux.jpg');
+    expect(sent!.protection.viewOnce).toBe(true);
+  });
+
+  test('après un envoi, la bascule redescend — le message suivant part sans elle', () => {
+    const sent: { protection: { viewOnce?: boolean } }[] = [];
+    const el = mount((p) => {
+      sent.push(p as { protection: { viewOnce?: boolean } });
+    });
+    typeText(el, 'un');
+    act(() => {
+      toggleOf(el)!.click();
+    });
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+    });
+    expect(toggleOf(el)?.getAttribute('aria-pressed')).toBe('false');
+    typeText(el, 'deux');
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
@@ -152,19 +177,16 @@ describe('Composer — la bascule « vue unique » (#7354)', () => {
     expect(sent[1]?.protection.viewOnce).toBeUndefined();
   });
 
-  test('retirer la DERNIÈRE image pendant que la bascule est armée la redescend — pas de fuite sans objet visible', async () => {
+  test('retirer la dernière image ne DÉSARME plus la bascule : elle vaut pour tout ce qui part', async () => {
     const el = mount(() => {});
     await attachImage(el, 'seule.jpg');
     act(() => {
-      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+      toggleOf(el)!.click();
     });
-    expect(el.querySelector('[data-composer-view-once]')?.getAttribute('aria-pressed')).toBe('true');
-
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Supprimer seule.jpg"]')!.click();
     });
-    await flush(() => el.querySelector('[data-composer-view-once]') === null);
-
-    expect(el.querySelector('[data-composer-view-once]')).toBeNull();
+    await flush();
+    expect(toggleOf(el)?.getAttribute('aria-pressed')).toBe('true');
   });
 });
