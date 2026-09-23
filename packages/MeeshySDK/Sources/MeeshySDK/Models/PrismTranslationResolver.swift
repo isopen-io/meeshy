@@ -16,33 +16,6 @@ public struct PrismTranslation: Equatable, Sendable {
     }
 }
 
-/// La descente du Prisme Linguistique, écrite UNE fois côté iOS — miroir de
-/// `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`).
-///
-/// C'est la RÉÉCRITURE de cette boucle qui a produit trois familles de
-/// résolveurs divergentes en trois cycles (aperçu de liste, audio, posts) :
-/// tout consommateur qui doit dire dans quelle langue il sert l'appelle au
-/// lieu de la réécrire. `MeeshyConversation.resolvedLastMessagePreview` en est
-/// une projection ; la citation (`APIMessageReplyTo.toReplyReference`) une
-/// autre.
-///
-/// Règles, dans l'ordre où elles se vérifient :
-/// 1. les langues du lecteur sont parcourues DANS L'ORDRE, la première servie
-///    gagne — par une traduction, ou parce que le contenu est déjà écrit dedans
-///    (la langue d'origine concourt à son RANG, jamais en court-circuit) ;
-/// 2. `nil` ⇒ servir l'ORIGINAL. JAMAIS `translations.first` : l'absence de
-///    traduction vers une langue préférée signifie que le contenu est déjà
-///    dans cette langue, ou qu'aucune traduction n'a été produite — servir une
-///    langue étrangère serait pire que l'original ;
-/// 3. une traduction VIDE n'est pas une traduction : la descente la saute
-///    (le TS : `text.trim() === '' → continue`) ;
-/// 4. chaque code comparé — langues du lecteur, langue d'origine, clés de la
-///    carte — passe par `MeeshyUser.normalizeLanguageForDedup`, sans quoi un
-///    `en-US` ne rencontre jamais le rang `en` et une traduction de rang
-///    inférieur gagne, rétrogradant la langue PRIMAIRE du lecteur ;
-/// 5. deux clés qui se canonisent pareil sont départagées par leur CONTENU et
-///    jamais par l'ordre du dictionnaire, qui n'existe pas en Swift — voir
-///    `prefers(_:over:canonical:)`.
 /// Une CANDIDATE de la descente : la clé de langue BRUTE telle que le fil l'a
 /// écrite, et ce qu'elle sert.
 ///
@@ -69,6 +42,36 @@ public struct PrismCandidate<Value> {
 extension PrismCandidate: Sendable where Value: Sendable {}
 extension PrismCandidate: Equatable where Value: Equatable {}
 
+/// La descente du Prisme Linguistique, écrite UNE fois côté iOS — miroir de
+/// `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`).
+///
+/// C'est la RÉÉCRITURE de cette boucle qui a produit trois familles de
+/// résolveurs divergentes en trois cycles (aperçu de liste, audio, posts), puis
+/// sept jumelles de plus dans le SDK — story (texte, contenu legacy aux deux
+/// signatures, piste audio, transcription) et posts (corps + badge de langue).
+/// Tout consommateur l'appelle au lieu de la réécrire.
+/// `MeeshyConversation.resolvedLastMessagePreview` en est une projection ; la
+/// citation (`APIMessageReplyTo.toReplyReference`) une autre.
+///
+/// Règles, dans l'ordre où elles se vérifient :
+/// 1. les langues du lecteur sont parcourues DANS L'ORDRE, la première servie
+///    gagne — par une traduction, ou parce que le contenu est déjà écrit dedans
+///    (la langue d'origine concourt à son RANG, jamais en court-circuit) ;
+/// 2. `nil` ⇒ servir l'ORIGINAL. JAMAIS `translations.first` : l'absence de
+///    traduction vers une langue préférée signifie que le contenu est déjà
+///    dans cette langue, ou qu'aucune traduction n'a été produite — servir une
+///    langue étrangère serait pire que l'original ;
+/// 3. une entrée VIDE n'est pas une traduction : la descente la saute, et le
+///    rang qu'elle occupait retombe sur la langue suivante (le TS :
+///    `text.trim() === '' → continue`). Ce que « vide » veut dire dépend du
+///    médium, d'où le prédicat `isServable` de la signature générique ;
+/// 4. chaque code comparé — langues du lecteur, langue d'origine, clés de la
+///    carte — passe par `MeeshyUser.normalizeLanguageForDedup`, sans quoi un
+///    `en-US` ne rencontre jamais le rang `en` et une traduction de rang
+///    inférieur gagne, rétrogradant la langue PRIMAIRE du lecteur ;
+/// 5. deux clés qui se canonisent pareil sont départagées par leur CONTENU et
+///    jamais par l'ordre du dictionnaire, qui n'existe pas en Swift — voir
+///    `prefers(_:over:canonical:)`.
 public enum PrismTranslationResolver {
     /// La descente, générique sur le MÉDIUM servi — le SITE UNIQUE de la
     /// boucle. Toutes les autres signatures de ce type en sont des
