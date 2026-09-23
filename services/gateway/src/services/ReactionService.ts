@@ -20,6 +20,9 @@ import {
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ReactionService' });
 
 /**
  * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
@@ -189,8 +192,37 @@ export class ReactionService {
     });
 
     await this.updateMessageReactionSummary(messageId);
+    await this.recordLastReaction(message.conversationId, reaction.id);
 
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
+  }
+
+  /**
+   * La dernière réaction de la conversation (#7545) — la ligne de liste la lit
+   * sans balayer les réactions. Best-effort : la réaction est déjà écrite, et
+   * une ligne de liste en retard ne vaut pas de la faire échouer.
+   */
+  private async recordLastReaction(conversationId: string, reactionId: string): Promise<void> {
+    try {
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { lastReactionId: reactionId },
+      });
+    } catch (error) {
+      logger.warn('lastReactionId not recorded', { conversationId, error });
+    }
+  }
+
+  /** Retirer LA dernière réaction l'efface ; en retirer une autre ne touche à rien. */
+  private async forgetLastReaction(conversationId: string, reactionId: string): Promise<void> {
+    try {
+      await this.prisma.conversation.updateMany({
+        where: { id: conversationId, lastReactionId: reactionId },
+        data: { lastReactionId: null },
+      });
+    } catch (error) {
+      logger.warn('lastReactionId not cleared', { conversationId, error });
+    }
   }
 
   /**
@@ -218,6 +250,11 @@ export class ReactionService {
       throw new Error('Invalid emoji format');
     }
 
+    const target = await this.prisma.reaction.findFirst({
+      where: { messageId, participantId, emoji: sanitized },
+      select: { id: true, message: { select: { conversationId: true } } }
+    });
+
     const result = await this.prisma.reaction.deleteMany({
       where: {
         messageId,
@@ -228,6 +265,8 @@ export class ReactionService {
 
     if (result.count > 0) {
       await this.updateMessageReactionSummary(messageId);
+      const conversationId = target?.message?.conversationId;
+      if (target && conversationId) await this.forgetLastReaction(conversationId, target.id);
     }
 
     return result.count > 0;

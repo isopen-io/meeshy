@@ -177,6 +177,7 @@ export const PREVIEW_MEDIA_ATTACHMENT_SELECT = {
   duration: true,
   width: true,
   height: true,
+  pageCount: true,
 } as const;
 
 export interface PreviewMediaSender {
@@ -205,6 +206,7 @@ export interface PreviewMediaAttachmentInput {
   readonly duration?: number | null;
   readonly width?: number | null;
   readonly height?: number | null;
+  readonly pageCount?: number | null;
 }
 
 export interface PreviewMediaMessage {
@@ -277,5 +279,6 @@ function normalizePreviewAttachment(attachment: PreviewMediaAttachmentInput): La
     duration: attachment.duration ?? null,
     width: attachment.width ?? null,
     height: attachment.height ?? null,
+    pageCount: attachment.pageCount ?? null,
   };
 }
