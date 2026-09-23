@@ -150,7 +150,7 @@ extension ConversationViewModel {
             let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard let self else { return }
-            for id in burning { EphemeralReceiptLedger.shared.forget(id) }
+            for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
             // Le repli des voisins est ANIMÉ : c'est la seconde moitié de
             // l'effet — la combustion montre la destruction, le repli montre
             // que la place est rendue.
