@@ -16,15 +16,42 @@ public struct PrismTranslation: Equatable, Sendable {
     }
 }
 
+/// Une CANDIDATE de la descente : la clé de langue BRUTE telle que le fil l'a
+/// écrite, et ce qu'elle sert.
+///
+/// Le Prisme s'applique à TOUT le contenu (§ Cohérence du `CLAUDE.md`), et ce
+/// contenu n'est pas toujours une chaîne : la piste audio d'une story sert un
+/// `postMediaId`, sa transcription un objet entier. Ces familles réécrivaient
+/// donc la boucle « pour chaque langue du lecteur, la première servie gagne »
+/// chez elles, parce que le résolveur ne savait parler que de texte — et
+/// chacune y perdait une règle au passage (la langue d'origine à son rang, le
+/// saut d'une traduction VIDE, le départage déterministe de deux clés qui se
+/// canonisent pareil). Générique, la descente les sert toutes.
+public struct PrismCandidate<Value> {
+    /// La clé BRUTE de la source (`"fr"`, mais aussi `"fr-CA"`), jamais sa
+    /// forme canonique : la comparaison se normalise, la valeur rendue non.
+    public let language: String
+    public let value: Value
+
+    public init(language: String, value: Value) {
+        self.language = language
+        self.value = value
+    }
+}
+
+extension PrismCandidate: Sendable where Value: Sendable {}
+extension PrismCandidate: Equatable where Value: Equatable {}
+
 /// La descente du Prisme Linguistique, écrite UNE fois côté iOS — miroir de
 /// `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`).
 ///
 /// C'est la RÉÉCRITURE de cette boucle qui a produit trois familles de
-/// résolveurs divergentes en trois cycles (aperçu de liste, audio, posts) :
-/// tout consommateur qui doit dire dans quelle langue il sert l'appelle au
-/// lieu de la réécrire. `MeeshyConversation.resolvedLastMessagePreview` en est
-/// une projection ; la citation (`APIMessageReplyTo.toReplyReference`) une
-/// autre.
+/// résolveurs divergentes en trois cycles (aperçu de liste, audio, posts), puis
+/// sept jumelles de plus dans le SDK — story (texte, contenu legacy aux deux
+/// signatures, piste audio, transcription) et posts (corps + badge de langue).
+/// Tout consommateur l'appelle au lieu de la réécrire.
+/// `MeeshyConversation.resolvedLastMessagePreview` en est une projection ; la
+/// citation (`APIMessageReplyTo.toReplyReference`) une autre.
 ///
 /// Règles, dans l'ordre où elles se vérifient :
 /// 1. les langues du lecteur sont parcourues DANS L'ORDRE, la première servie
@@ -34,8 +61,10 @@ public struct PrismTranslation: Equatable, Sendable {
 ///    traduction vers une langue préférée signifie que le contenu est déjà
 ///    dans cette langue, ou qu'aucune traduction n'a été produite — servir une
 ///    langue étrangère serait pire que l'original ;
-/// 3. une traduction VIDE n'est pas une traduction : la descente la saute
-///    (le TS : `text.trim() === '' → continue`) ;
+/// 3. une entrée VIDE n'est pas une traduction : la descente la saute, et le
+///    rang qu'elle occupait retombe sur la langue suivante (le TS :
+///    `text.trim() === '' → continue`). Ce que « vide » veut dire dépend du
+///    médium, d'où le prédicat `isServable` de la signature générique ;
 /// 4. chaque code comparé — langues du lecteur, langue d'origine, clés de la
 ///    carte — passe par `MeeshyUser.normalizeLanguageForDedup`, sans quoi un
 ///    `en-US` ne rencontre jamais le rang `en` et une traduction de rang
@@ -44,32 +73,75 @@ public struct PrismTranslation: Equatable, Sendable {
 ///    jamais par l'ordre du dictionnaire, qui n'existe pas en Swift — voir
 ///    `prefers(_:over:canonical:)`.
 public enum PrismTranslationResolver {
+    /// La descente, générique sur le MÉDIUM servi — le SITE UNIQUE de la
+    /// boucle. Toutes les autres signatures de ce type en sont des
+    /// projections ; aucune ne réécrit le parcours.
+    ///
+    /// - Parameter isServable: ce qui fait qu'une candidate COMPTE. La règle 3
+    ///   (« une traduction VIDE n'est pas une traduction ») n'est pas
+    ///   exprimable sur un `Value` opaque : chaque médium dit ce que « vide »
+    ///   veut dire chez lui. Une candidate non servable est écartée AVANT le
+    ///   parcours, donc le rang qu'elle occupait retombe sur la langue
+    ///   suivante — jamais sur un texte blanc rendu à l'écran.
+    public static func resolve<Value>(
+        originalLanguage: String?,
+        candidates: [PrismCandidate<Value>],
+        preferredLanguages: [String],
+        isServable: (Value) -> Bool
+    ) -> PrismCandidate<Value>? {
+        guard !candidates.isEmpty else { return nil }
+        let canon: (String) -> String = { MeeshyUser.normalizeLanguageForDedup($0) }
+        let preferred = preferredLanguages.filter { !Self.isBlank($0) }.map(canon)
+        guard !preferred.isEmpty else { return nil }
+        let original = originalLanguage.map(canon)
+        var byCanonicalKey: [String: PrismCandidate<Value>] = [:]
+        for candidate in candidates where isServable(candidate.value) {
+            let key = canon(candidate.language)
+            guard let held = byCanonicalKey[key] else {
+                byCanonicalKey[key] = candidate
+                continue
+            }
+            guard Self.prefers(candidate.language, over: held.language, canonical: key) else { continue }
+            byCanonicalKey[key] = candidate
+        }
+        for lang in preferred {
+            if let original, lang == original { return nil }
+            if let served = byCanonicalKey[lang] { return served }
+        }
+        return nil
+    }
+
+    /// Projection TEXTE de la descente générique : « servable » y veut dire
+    /// non blanc (règle 3), et la paire rendue est nommée `{language, text}`.
+    public static func resolve(
+        originalLanguage: String?,
+        candidates: [PrismCandidate<String>],
+        preferredLanguages: [String]
+    ) -> PrismTranslation? {
+        resolve(
+            originalLanguage: originalLanguage,
+            candidates: candidates,
+            preferredLanguages: preferredLanguages,
+            isServable: { !Self.isBlank($0) }
+        ).map { PrismTranslation(language: $0.language, text: $0.value) }
+    }
+
+    /// Projection CARTE de la descente — la forme historique, celle qu'attend
+    /// un `langue → texte` déjà dépouillé.
     public static func resolve(
         originalLanguage: String?,
         translations: [String: String],
         preferredLanguages: [String]
     ) -> PrismTranslation? {
-        guard !translations.isEmpty else { return nil }
-        let canon: (String) -> String = { MeeshyUser.normalizeLanguageForDedup($0) }
-        let isBlank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let preferred = preferredLanguages.filter { !isBlank($0) }.map(canon)
-        guard !preferred.isEmpty else { return nil }
-        let original = originalLanguage.map(canon)
-        var byCanonicalKey: [String: PrismTranslation] = [:]
-        for (language, text) in translations where !isBlank(text) {
-            let key = canon(language)
-            guard let held = byCanonicalKey[key] else {
-                byCanonicalKey[key] = PrismTranslation(language: language, text: text)
-                continue
-            }
-            guard Self.prefers(language, over: held.language, canonical: key) else { continue }
-            byCanonicalKey[key] = PrismTranslation(language: language, text: text)
-        }
-        for lang in preferred {
-            if let original, lang == original { return nil }
-            if let translated = byCanonicalKey[lang] { return translated }
-        }
-        return nil
+        resolve(
+            originalLanguage: originalLanguage,
+            candidates: translations.map { PrismCandidate(language: $0.key, value: $0.value) },
+            preferredLanguages: preferredLanguages
+        )
+    }
+
+    private static func isBlank(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Départage deux clés qui se canonisent PAREIL — `"fr"` et `"fr-CA"`
