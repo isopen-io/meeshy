@@ -80,6 +80,24 @@ final class SkeletonLoadMoreGuardTests: XCTestCase {
         }
     }
 
+    /// Cache vide et chargement en cours : l'iPhone ne rendait RIEN sous le
+    /// composer — ni carte, ni squelette. Les deux hôtes montent la même
+    /// décision (`SkeletonVisibilityResolver`) et les mêmes cartes fantômes.
+    func test_chaqueHoteDuFil_montreSesCartesFantomesAFroid() throws {
+        for host in Self.feedHosts {
+            let source = try source(host)
+            guard let rows = postRows(in: source),
+                  let debut = source.range(of: rows) else {
+                return XCTFail("\(host) : bloc des publications introuvable.")
+            }
+            let avant = String(source[..<debut.lowerBound])
+            XCTAssertTrue(avant.contains("SkeletonVisibilityResolver.shouldShowSkeleton("),
+                          "\(host) : le démarrage à froid doit décider du squelette par la loi commune.")
+            XCTAssertTrue(avant.contains("SkeletonFeedList("),
+                          "\(host) : cache vide ⇒ des cartes fantômes, jamais du fond nu.")
+        }
+    }
+
     /// Le préchargement des médias voisins (`prefetchMedia(around:)`, fenêtre
     /// −2…+6) n'était appelé que par l'hôte iPad : sur iPhone, chaque image
     /// partait au moment où sa rangée naissait.

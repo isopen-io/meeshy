@@ -733,11 +733,27 @@ struct ThemedFeedOverlay: View {
                     .padding(.horizontal, MeeshySpacing.lg)
                     .accessibilityIdentifier("feed.composer.placeholder")
 
+                    // Cache vide et chargement en cours : des cartes fantômes de
+                    // la hauteur des vraies, jamais du fond nu. Même loi que
+                    // l'hôte iPad (`FeedView`).
+                    if SkeletonVisibilityResolver.shouldShowSkeleton(
+                        isLoading: viewModel.isLoading,
+                        hasCachedData: !viewModel.posts.isEmpty
+                    ) {
+                        SkeletonFeedList()
+                            .transition(.opacity)
+                    }
+
                     // Feed posts with infinite scroll. Les Réels (`type == REEL`)
                     // rendent plein-cadre via `reelFeedCardView` ; les autres via
                     // la carte standard. Même routage que le chemin iPad
                     // (`FeedView.feedPostCardView`).
-                    ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
+                    //
+                    // Aucune apparition animée (#7657) : une rangée naît quand
+                    // elle entre dans la zone, et un fondu retardé de
+                    // `index × 60 ms` la laissait transparente — la 60e pendant
+                    // 3,6 s — au-dessus du fond de page.
+                    ForEach(viewModel.posts) { post in
                         Group {
                             if post.isReel {
                                 reelFeedCardView(for: post)
@@ -746,18 +762,17 @@ struct ThemedFeedOverlay: View {
                                     .equatable()
                             }
                         }
-                        .staggeredAppear(index: index, baseDelay: 0.06)
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
+                            viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
                         }
                     }
 
-                    // Loading indicator
+                    // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
                     if viewModel.isLoadingMore {
-                        ProgressView()
-                            .tint(MeeshyColors.brandPrimary)
-                            .padding()
+                        SkeletonFeedList(count: 2)
+                            .transition(.opacity)
                     }
                 }
                 .padding(.bottom, 100) // Clear floating button / tab bar area
