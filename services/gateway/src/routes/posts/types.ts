@@ -311,6 +311,11 @@ export const CreatePostSchema = z.object({
   // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
   discoverabilityPrecisionConfirmed: z.boolean().optional(),
 }).refine((data) => {
+  // Une republication HÉRITE la liste de sa source (`PostService.createPost`,
+  // `repostVisibilityInheritsAudienceList`) : ce que le client envoie est
+  // remplacé, et il ne peut plus la lire — elle n'est servie qu'à l'auteur de
+  // la source (#7407). L'exiger refuserait la republication qu'on autorise.
+  if (data.repostOfId?.trim()) return true;
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
   }
