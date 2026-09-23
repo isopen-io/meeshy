@@ -569,7 +569,7 @@ export default function ConversationsScreen() {
                 flags={effectiveFlagsOf(c, overrides)}
                 unreadCount={effectiveUnreadOf(c, overrides)}
                 onRowAction={rowAction}
-                typist={typists[c.id]}
+                typists={typists[c.id]}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
