@@ -270,7 +270,11 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "la MINIATURE elle-même doit être filtrée : sans cela, la vignette en clair d'une vidéo à vue " +
             "unique reste visible par tout le fil, à chaque relecture — le tap verrouillé n'y change rien."
         )
-        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var showsAuthorGate")
+        // L'ancre de fin est la déclaration SUIVANTE — `showsAuthorGate` la
+        // tenait jusqu'à ce que #7491 la retire, et la garde est alors devenue
+        // inopérante sans qu'aucune de ses assertions ne change. Une tranche
+        // bornée par le NOM d'un voisin dépend d'un lot qui ne la lira jamais.
+        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var attachmentKind")
         XCTAssertTrue(
             gateSlice.contains("quotedMediaIsProtected"),
             "la ZONE 2 ne doit pas être armée sur un média protégé : une icône de lecture au-dessus d'un verrou " +

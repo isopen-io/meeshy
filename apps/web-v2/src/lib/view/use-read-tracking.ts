@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
+import { useModalLayersOpen } from './modal-layers';
+
 /**
  * `useReadTracking` (#7201, W1) — « ouvrir un fil, le faire défiler et
  * revenir au premier plan marquent la conversation lue », EXTRAIT de
@@ -25,14 +27,30 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
  * `markCaughtUp` (`lib/api/receipts.ts`) — la discipline optimiste vit LÀ,
  * jamais ici.
  *
- * ## DEUX DÉCLENCHEURS, UNE SEULE GARDE
+ * ## DEUX DÉCLENCHEURS, UNE SEULE TENTATIVE
  *
  * 1. **`IntersectionObserver`** — la sentinelle entre dans le cadre.
  * 2. **`visibilitychange`/`focus`** — la fenêtre revient au premier plan
  *    ALORS QUE la sentinelle est DÉJÀ visible (elle n'a pas bougé pendant que
  *    l'onglet était caché, donc l'observateur ne rejoue rien tout seul).
  *
- * Les deux passent par la MÊME tentative (`attemptMark`), qui refuse tant que
+ * ## LE TROISIÈME REFUS — LA COUCHE QUI RECOUVRE (W14, #7372)
+ *
+ * La sentinelle reste « intersectante » sous une visionneuse plein écran ou
+ * une feuille : l'`IntersectionObserver` ne connaît que la géométrie du
+ * défilement, jamais ce qui est posé PAR-DESSUS. Agrandir une photo marquait
+ * donc lu le fil qu'elle cache. Le refus se lit dans le registre partagé
+ * (`modal-layers.ts`), alimenté par `useBackDismiss` — l'unique passage de
+ * toute couche modale — et NON dans un booléen que l'écran calculerait :
+ * `routes/thread.tsx` ne connaît pas l'état de la visionneuse, ouverte par
+ * `components/attachment-blocks.tsx`.
+ *
+ * Refuser n'est pas OUBLIER : la frontière n'est jamais consommée tant que le
+ * refus tient, et la fermeture de la dernière couche REJOUE la tentative —
+ * sans quoi le fil resterait non lu jusqu'au prochain geste.
+ *
+ * Les deux déclencheurs passent par la MÊME tentative (`attemptMark`), qui
+ * refuse tant que
  * `document.visibilityState === 'hidden'` (« jamais quand la fenêtre est
  * cachée », critère de fin #7201) et déduplique par FRONTIÈRE
  * (`caughtUpToMessageId`) : un ref retient la dernière frontière envoyée, une
@@ -57,6 +75,8 @@ export function useReadTracking(params: {
 }): ReadTracking {
   const { scroller, conversationId, lastMessageId, enabled, onMark } = params;
 
+  const modalLayersOpen = useModalLayersOpen();
+
   const [target, setTarget] = useState<Element | null>(null);
   const intersectingRef = useRef(false);
   const sentBoundaryRef = useRef<string | null>(null);
@@ -67,10 +87,17 @@ export function useReadTracking(params: {
   lastMessageIdRef.current = lastMessageId;
   const onMarkRef = useRef(onMark);
   onMarkRef.current = onMark;
+  // Un REF, pas une dépendance : `attemptMark` reste stable, donc
+  // l'`IntersectionObserver` n'est pas désabonné puis réarmé à chaque
+  // ouverture de couche (Zero Unnecessary Re-render). La REPRISE a son propre
+  // effet, ci-dessous.
+  const modalLayersOpenRef = useRef(modalLayersOpen);
+  modalLayersOpenRef.current = modalLayersOpen;
 
   const attemptMark = useCallback(() => {
     if (!intersectingRef.current) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (modalLayersOpenRef.current) return;
     const conversation = conversationIdRef.current;
     const boundary = lastMessageIdRef.current;
     if (conversation === undefined || boundary === undefined) return;
@@ -100,6 +127,14 @@ export function useReadTracking(params: {
   useEffect(() => {
     attemptMark();
   }, [lastMessageId, attemptMark]);
+
+  // La DERNIÈRE couche modale se referme : le fil redevient lisible, et la
+  // frontière retenue pendant le recouvrement part enfin (la sentinelle n'a
+  // pas bougé sous la couche, donc l'observateur ne rejouerait rien seul).
+  useEffect(() => {
+    if (modalLayersOpen) return;
+    attemptMark();
+  }, [modalLayersOpen, attemptMark]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;

@@ -124,6 +124,10 @@ settings:
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
   #
+  # 1.1.0 le 2026-09-22 (#7494) : la 1.0.9 est READY_FOR_SALE, et deux chantiers
+  # entiers attendent derrière elle — lecture et accusés (milestone #103),
+  # éphémère et vue unique (milestone #110).
+  #
   # 1.0.9 le 2026-09-11 (#6066) : la 1.0.8 est READY_FOR_DISTRIBUTION, et 69
   # commits d'`apps/ios` + `packages/MeeshySDK` se sont accumulés derrière elle
   # sans atteindre personne.
@@ -136,7 +140,7 @@ settings:
   # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
   # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
   # il constate alors « already reads 1.0.9 » et écrit les trois sites.
-  MARKETING_VERSION: "1.0.9"
+  MARKETING_VERSION: "1.1.0"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature

@@ -101,6 +101,10 @@ struct ConversationScrollState {
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
+    /// Les vues uniques OUVERTES dont la consommation attend la fermeture du
+    /// plein écran (#7499). État de VUE — il décrit ce qui est à l'écran, pas
+    /// une donnée du fil — donc il vit ici et non dans le ViewModel.
+    var pendingViewOnceConsumption = ViewOnceConsumption.Pending()
     var imageToPreview: UIImage? = nil
     var videoToPreview: URL? = nil
 
@@ -1282,6 +1286,11 @@ struct ConversationView: View {
                     // en avant-plan — ou le démontage de la vue.
                     scrollState.flushSeenTrigger += 1
                     persistDraftAttachmentsForBackground()
+                    // #7500 — « quitter, c'est quitter » : l'arrière-plan et le
+                    // verrouillage sont des sorties au même titre que le
+                    // retour. Les deux portes appellent le MÊME geste, qui est
+                    // idempotent — la seconde ne trouve plus rien.
+                    consumeOpenedViewOnceOnExit()
                 }
             }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
@@ -1304,6 +1313,10 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
+                // en arrière-plan ci-dessus : une vue unique lue ici ne
+                // survivra pas au retour.
+                consumeOpenedViewOnceOnExit()
                 // Rompt le cycle de rétention : `onPersistNeeded` capture une
                 // copie de cette struct, dont le wrapper State retient (via sa
                 // box de stockage) le modèle vivant — soit modèle → closure →
@@ -1676,13 +1689,35 @@ struct ConversationView: View {
                     // (`fileUrl`), sinon les deux se téléchargeaient ; puis on
                     // met la pièce jointe en scène pour la galerie.
                     GalleryPrewarm.warm(attachment)
+                    // #7499 — une vue unique s'OUVRE au toucher et se consomme
+                    // à la FERMETURE. On arme ici, la galerie consomme en se
+                    // refermant (`ConversationView+MediaGallery`). C'est le
+                    // seul endroit qui voie les deux : la bulle sait qu'on
+                    // ouvre, elle ne sait pas quand on sort.
+                    if attachment.isViewOnce {
+                        scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+                    }
                     scrollState.galleryStartAttachment = attachment
                 },
                 onConsumeViewOnce: { messageId, completion in
-                    Task {
-                        let success = await viewModel.consumeViewOnce(messageId: messageId)
-                        completion(success)
-                    }
+                    // #7500 — **on ARME, on ne détruit pas.**
+                    //
+                    // Ce canal appelait le serveur au moment de la révélation :
+                    // le contenu était consommé avant d'avoir été lu, et la
+                    // révélation dépendait d'un aller-retour pour afficher ce
+                    // que ce même aller-retour venait de détruire.
+                    //
+                    // La consommation part maintenant de la SORTIE de la
+                    // conversation — retour, arrière-plan, verrouillage :
+                    // quitter, c'est quitter. On confirme donc aussitôt, pour
+                    // que la révélation se fasse, et c'est l'hôte qui sait
+                    // quand on s'en va.
+                    //
+                    // Ce site couvre les DEUX chemins qui passaient par lui :
+                    // le TEXTE à vue unique, et l'appui long du mode Focal sur
+                    // un média — le reste nommé par #7499.
+                    scrollState.pendingViewOnceConsumption.arm(messageId)
+                    completion(true)
                 },
                 onRequestTranslation: { messageId, targetLang in
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
