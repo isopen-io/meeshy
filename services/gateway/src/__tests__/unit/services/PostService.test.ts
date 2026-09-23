@@ -375,24 +375,16 @@ describe('likePost', () => {
     await expect(sut.likePost('post-1', 'user-1')).rejects.toThrow('DB crash');
   });
 
-  it('updates post with reactions JSON and likeCount on happy path', async () => {
-    const reaction = { userId: 'user-1', emoji: '❤️', createdAt: new Date() };
-    const prisma = makePrisma({ reactionFindMany: [reaction] });
+  // #7406 — le Json legacy `Post.reactions` n'a plus de lecteur : il n'est plus
+  // réécrit. Les compteurs sont recalculés par `PostReactionService`.
+  it('does not rewrite the legacy reactions Json nor re-read every reaction on happy path (#7406)', async () => {
+    const prisma = makePrisma({ reactionFindMany: [{ userId: 'user-1', emoji: '❤️', createdAt: new Date() }] });
     const { sut } = makeSut(prisma);
 
     await sut.likePost('post-1', 'user-1');
 
-    expect(prisma.post.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'post-1' },
-        data: expect.objectContaining({
-          likeCount: 1,
-          reactions: expect.arrayContaining([
-            expect.objectContaining({ userId: 'user-1', emoji: '❤️' }),
-          ]),
-        }),
-      }),
-    );
+    expect(prisma.post.update).not.toHaveBeenCalled();
+    expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
   });
 
   it('uses the provided emoji argument', async () => {
@@ -446,7 +438,7 @@ describe('unlikePost', () => {
     expect(result?.post).toEqual(expect.objectContaining({ id: 'post-1' }));
   });
 
-  it('calls removeReaction and updates post when reactions exist', async () => {
+  it('calls removeReaction without rewriting the legacy reactions Json (#7406)', async () => {
     const reaction = { userId: 'user-1', emoji: '❤️', createdAt: new Date() };
     const prisma = makePrisma({ reactionFindMany: [reaction] });
     const { sut, reactionService } = makeSut(prisma);
@@ -456,11 +448,7 @@ describe('unlikePost', () => {
     expect(reactionService.removeReaction).toHaveBeenCalledWith(
       expect.objectContaining({ postId: 'post-1', userId: 'user-1' }),
     );
-    expect(prisma.post.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ likeCount: expect.any(Number) }),
-      }),
-    );
+    expect(prisma.post.update).not.toHaveBeenCalled();
   });
 });
 

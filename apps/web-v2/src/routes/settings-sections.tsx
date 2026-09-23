@@ -498,6 +498,18 @@ export function AppearanceSection({
 export function ToolsSection({ language, showAdmin = false }: { readonly language: InterfaceLanguage; readonly showAdmin?: boolean }) {
   return (
     <GroupedSection id="settings-tools" title={upper(language, 'settings.section.tools')} icon={SECTION_ICON({ set: 'ecran', name: 'wrench' })}>
+      {/* LES MESSAGES FAVORIS (#7286) — la PREMIÈRE rangée « Outils » d'iOS
+          (`SettingsView.swift`, `meeshyToolsSection` : `star.fill`, teinte
+          `warning`, `settings.tools.starred`), avant les publications
+          enregistrées. Le favori se pose depuis « Plus… » dans le fil
+          (#7378) ; sans cette porte, son effet resterait invisible. */}
+      <Link to="starredMessages" data-settings-starred-messages className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.starFill} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.starred')} />
+        <Chevron />
+      </Link>
       {/* LES PUBLICATIONS ENREGISTRÉES (#7286) — iOS pose cette rangée dans
           « Outils » (`SettingsView.swift`, `meeshyToolsSection`, `bookmark.fill`,
           teinte indigo), AVANT les statistiques. Le web n'avait aucune porte :

@@ -305,12 +305,20 @@ describe('les réglages ne mènent plus au legacy', () => {
     expect(hrefs).toContain('/settings/data-export');
   });
 
+  /**
+   * Le témoin mesure les LIBELLÉS DE RANGÉE, pas une sous-chaîne du texte
+   * entier (#7286) : « Messages favoris », la première rangée « Outils »,
+   * CONTIENT « Messages » — chercher la sous-chaîne faisait rougir ce témoin
+   * pour une rangée légitime, sans rien dire de la rangée masquée qu'il garde
+   * (`settings.messages`, #6724).
+   */
   test('aucune rangée masquée n’est rendue, même inerte', () => {
-    const text = everySection().textContent ?? '';
+    const rowLabels = [...everySection().querySelectorAll('a .text-body, button .text-body')].map((el) => (el.textContent ?? '').trim());
     for (const label of ['Sécurité', "Plus d'options", 'Médias', 'Messages']) {
-      expect({ label, present: text.includes(label) }).toEqual({ label, present: false });
+      expect({ label, present: rowLabels.includes(label) }).toEqual({ label, present: false });
     }
-    expect(text).toContain('Exporter mes données');
+    expect(rowLabels).toContain('Exporter mes données');
+    expect(rowLabels).toContain('Messages favoris');
   });
 });
 
@@ -339,6 +347,29 @@ describe('les outils', () => {
     const html = renderToStaticMarkup(<ToolsSection language="fr" />);
     expect(html.indexOf('/me/bookmarks')).toBeGreaterThan(-1);
     expect(html.indexOf('/me/bookmarks')).toBeLessThan(html.indexOf('/me/progression'));
+  });
+
+  /**
+   * **LA PORTE DES MESSAGES FAVORIS** (#7286) — la PREMIÈRE rangée « Outils »
+   * d'iOS (`SettingsView.swift`, `meeshyToolsSection` : `star.fill`, teinte
+   * `warning`, `settings.tools.starred`), avant les publications enregistrées.
+   * Elle MÈNE à l'écran : une rangée sans adresse serait le contrôle qui ment.
+   */
+  test('les messages favoris ont leur rangée, et elle MÈNE à l’écran', () => {
+    const rangee = linkTo(dom(<ToolsSection language="fr" />), '/me/starred-messages');
+    expect(rangee?.textContent).toContain('Messages favoris');
+    expect(rangee?.hasAttribute('data-settings-starred-messages')).toBe(true);
+  });
+
+  test('elle est la PREMIÈRE rangée des outils, avant les publications enregistrées — l’ordre d’iOS', () => {
+    const rows = [...dom(<ToolsSection language="fr" showAdmin />).querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
+    expect(rows[0]).toBe('/me/starred-messages');
+    expect(rows.indexOf('/me/starred-messages')).toBeLessThan(rows.indexOf('/me/bookmarks'));
+  });
+
+  test('son étoile porte la teinte `warning`, comme sur iOS', () => {
+    const icone = linkTo(dom(<ToolsSection language="fr" />), '/me/starred-messages')?.querySelector('svg')?.parentElement;
+    expect(icone?.getAttribute('style') ?? '').toContain('var(--color-warning)');
   });
 });
 

@@ -3,9 +3,12 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
+import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
 import { hasServerMessageId } from '@/lib/view/message-receipts';
 
+import { GlyphSvg } from './glyph';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { MessageReceiptsSheet } from './message-receipts-sheet';
 import { STATUS_LABEL } from './message-blocks';
 import type { Delivery } from '@/lib/view/message';
@@ -32,6 +35,13 @@ import { Sheet } from './sheet';
  * `deliveredCount: 0` ainsi). iOS pose exactement cette garde avant
  * `loadReadStatus()` (`MessageViewsDetailView.swift:943`).
  *
+ * « FAIRE » — LE FAVORI (#7378) : iOS ouvre sa feuille « Plus… » par les
+ * actions, et y range l'étoile juste après l'épingle
+ * (`MessageActionResolver.moreSections`). Le web n'a pas encore d'épingle :
+ * l'étoile ouvre la feuille. Elle AGIT puis REFERME, comme une action iOS de
+ * cette section. `star` nul — état inconnu, lecteur sans compte, message
+ * non favorisable — n'offre rien (`messageStarAction`).
+ *
  * SES TITRES VIENNENT DU CATALOGUE (#7555). `locale` (une prop) FORMATE la
  * date — c'est la locale de l'utilisateur, celle d'`Intl` ; la langue
  * d'INTERFACE, elle, se lit sur le document comme partout ailleurs. Les deux
@@ -51,6 +61,7 @@ export function MessageDetailSheet({
   conversationId,
   messageId,
   attachments,
+  star,
   onPickLanguage,
   onClose,
 }: {
@@ -63,6 +74,8 @@ export function MessageDetailSheet({
   readonly conversationId: string;
   readonly messageId: string;
   readonly attachments: readonly Attachment[];
+  /** Le favori du message, CONNU — `null` quand rien ne peut être offert sans mentir. */
+  readonly star: MessageStarEntry | null;
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
@@ -71,6 +84,27 @@ export function MessageDetailSheet({
 
   return (
     <Sheet title={translate(language, 'message.detail.title')} onClose={onClose}>
+      {star === null ? null : (
+        <li>
+          <button
+            type="button"
+            data-message-star={star.action}
+            onClick={() => {
+              star.onToggle();
+              onClose();
+            }}
+            className="flex w-full items-center gap-2.5 px-4 text-left text-body"
+            style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+          >
+            <GlyphSvg
+              glyph={star.action === 'star' ? THREAD_MENU_GLYPHS.star : THREAD_MENU_GLYPHS.starFill}
+              size={18}
+              style={{ color: 'var(--accent)' }}
+            />
+            <span className="flex-1">{translate(language, star.action === 'star' ? 'action.star' : 'action.unstar')}</span>
+          </button>
+        </li>
+      )}
       {choices.length > 0 ? (
         <>
           <li className="px-4 pt-3 pb-1 text-mini font-semibold uppercase" style={{ color: 'var(--color-ios-ink-3)' }}>
