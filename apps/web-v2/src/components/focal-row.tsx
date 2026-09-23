@@ -699,7 +699,6 @@ export const FocalRow = memo(function FocalRow({
             (`secondClock`) — cette rangée ne re-rend jamais pour elle. */}
         <ProtectionChrome
           deadline={ephemeralDeadline}
-          isViewOnce={message.isViewOnce}
           {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
         />
 

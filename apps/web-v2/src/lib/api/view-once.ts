@@ -4,7 +4,8 @@ import type { ConversationsDeps } from './conversations';
 import { recordViewOnceConsumption } from './fixtures';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
 import { outcomeOf } from './outcome';
-import type { Message } from './types';
+import type { Attachment, Message } from './types';
+import { sealViewOnceIn } from './view-once-seal';
 import type { Transport } from '../net/transport';
 
 /**
@@ -57,6 +58,36 @@ export function applyConsumption(
   );
 }
 
+/**
+ * LES FICHIERS D'UNE VUE UNIQUE REFERMÉE QUITTENT LES CACHES DU NAVIGATEUR
+ * (#7580). Le service worker met les médias en cache à leur premier
+ * affichage ; la purge du fil ne les atteindrait pas. `caches` absent (tests,
+ * contexte non sécurisé) ⇒ rien à faire. Une panne ne remonte jamais : la
+ * puce « Déjà ouvert » ne dépend pas de ce ménage.
+ */
+export async function purgeViewOnceMedia(urls: readonly string[]): Promise<void> {
+  const storage = (globalThis as { readonly caches?: CacheStorage }).caches;
+  if (storage === undefined || urls.length === 0) return;
+  try {
+    const names = await storage.keys();
+    await Promise.all(
+      names.map(async (name) => {
+        const cache = await storage.open(name);
+        await Promise.all(urls.map((url) => cache.delete(url, { ignoreSearch: true })));
+      }),
+    );
+  } catch {
+    return;
+  }
+}
+
+/** Les URL qu'une rangée a pu faire télécharger — le fichier et sa vignette. */
+export function viewOnceMediaUrlsOf(attachments: readonly Attachment[] | undefined): readonly string[] {
+  return (attachments ?? []).flatMap((attachment) =>
+    [attachment.fileUrl, attachment.thumbnailUrl].filter((url): url is string => typeof url === 'string' && url !== ''),
+  );
+}
+
 export type ConsumeViewOnceDeps = ConversationsDeps & { readonly queryClient: QueryClient };
 
 /**
@@ -76,16 +107,22 @@ function servedViewOnceCount(result: unknown): number | undefined {
 }
 
 /** L'écriture du compte sur LA rangée visée — `applyConsumption` est déjà
- * cette écriture (elle POSE `viewOnceCount`), elle sert donc aussi bien à
- * consommer qu'à REMETTRE la valeur d'avant : un rollback CIBLÉ, qui ne
- * réinstalle jamais un instantané entier du fil par-dessus ce qu'un message
- * arrivé entre-temps (`message:new`, `upsertThreadMessage`) y a écrit. */
+ * cette écriture (elle POSE `viewOnceCount`). */
 function writeViewOnceCount(
   deps: ConsumeViewOnceDeps,
   conversationId: string,
   event: Pick<ViewOnceConsumption, 'messageId' | 'viewOnceCount'>,
 ): void {
   patchThreadMessages(deps.queryClient, conversationId, (messages) => applyConsumption(messages, event));
+}
+
+/** Le ROLLBACK CIBLÉ d'un refus permanent : la rangée d'avant, et elle seule —
+ * jamais un instantané entier du fil par-dessus ce qu'un message arrivé
+ * entre-temps (`message:new`) y a écrit. */
+function restoreMessage(deps: ConsumeViewOnceDeps, conversationId: string, previous: Message): void {
+  patchThreadMessages(deps.queryClient, conversationId, (messages) =>
+    messages.map((message) => (message.id === previous.id ? previous : message)),
+  );
 }
 
 /**
@@ -116,9 +153,15 @@ export async function consumeViewOnceOptimistic(params: {
   readonly deps: ConsumeViewOnceDeps;
 }): Promise<boolean> {
   const { conversationId, messageId, deps } = params;
-  const previousCount = findCachedThreadMessage(deps.queryClient, conversationId, messageId)?.viewOnceCount;
+  const previous = findCachedThreadMessage(deps.queryClient, conversationId, messageId);
 
-  writeViewOnceCount(deps, conversationId, { messageId, viewOnceCount: 1 });
+  /* L'OUVERTURE EST LA CONSOMMATION, ET LA CONSOMMATION EST LA PURGE (#7580) :
+     la rangée passe « déjà ouverte » et perd son contenu AVANT l'aller-retour.
+     Ce que le lecteur regarde pendant sa fenêtre, `ProtectedContent` l'a figé
+     au toucher — la purge n'éteint pas ce qu'il est en train de lire. */
+  patchThreadMessages(deps.queryClient, conversationId, (messages) =>
+    applyConsumption(sealViewOnceIn(messages, messageId), { messageId, viewOnceCount: Math.max(1, previous?.viewOnceCount ?? 0) }),
+  );
 
   if (__FIXTURES__ && deps.source === 'fixtures') {
     recordViewOnceConsumption(messageId);
@@ -134,7 +177,7 @@ export async function consumeViewOnceOptimistic(params: {
 
   const outcome = outcomeOf(result);
   if (outcome === 'permanent') {
-    if (previousCount !== undefined) writeViewOnceCount(deps, conversationId, { messageId, viewOnceCount: previousCount });
+    if (previous !== undefined) restoreMessage(deps, conversationId, previous);
     return false;
   }
 

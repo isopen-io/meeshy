@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   BLUR_RADIUS_PX,
   REVEAL_ERROR_NOTICE_MS,
+  closeViewOnce,
+  isViewOnceKind,
+  openViewOnce,
   rendersContent,
   requiresConsume,
   reveal,
@@ -15,6 +19,8 @@ import {
 } from '@/lib/reading-mode/protection';
 import { useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
 import type { Attachment } from '@/lib/api/types';
+import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { attachmentSegments } from '@/lib/view/message-a11y-label';
@@ -87,15 +93,26 @@ export function ProtectedContent({
   readonly now?: (() => number) | undefined;
   readonly children: ReactNode;
 }) {
-  // Un message déjà `burned` À L'ARRIVÉE (viewOnceCount ≥ maxViewOnceCount,
-  // jamais localement révélé) n'a AUCUNE fenêtre à ouvrir — `consumed`
-  // d'emblée. Un message `veiled` part de `hidden`, MÊME s'il devient
-  // `burned` un instant plus tard (la consommation serveur met à jour le
-  // message AVANT que la fenêtre locale de 5 s ne s'éteigne) : c'est l'état
-  // LOCAL, pas le `kind` du dernier rendu, qui pilote l'affichage — sinon le
-  // tombstone couperait la fenêtre de révélation qu'on vient de payer
-  // (D-23 §1.4 point 4, le comportement retenu est celui de la BULLE iOS).
-  const [phase, setPhase] = useState<RevealPhase>(() => (kind === 'burned' ? { phase: 'consumed' } : { phase: 'hidden' }));
+  // Une vue unique DÉJÀ OUVERTE à l'arrivée (par moi, sur cet appareil ou un
+  // autre) n'a AUCUNE fenêtre à ouvrir — `consumed` d'emblée. Une vue unique
+  // à ouvrir part de `hidden`, MÊME si elle devient `opened` un instant plus
+  // tard (la consommation met le message à jour DÈS le toucher) : c'est l'état
+  // LOCAL, pas le `kind` du dernier rendu, qui pilote l'affichage — sinon la
+  // puce « Déjà ouvert » couperait la lecture qu'on vient de commencer.
+  const [phase, setPhase] = useState<RevealPhase>(() => (kind === 'opened' ? { phase: 'consumed' } : { phase: 'hidden' }));
+
+  /**
+   * CE QUE LE LECTEUR REGARDE EST FIGÉ AU TOUCHER (#7580). La consommation
+   * PURGE la rangée du cache (texte, traductions, pièces) avant même la
+   * réponse du serveur : l'hôte redessine alors des enfants VIDES. La fenêtre
+   * de lecture rend donc les enfants tels qu'ils étaient à l'instant du geste,
+   * et les oublie à la fermeture — plus rien ne les tient ensuite.
+   */
+  const liveChildren = useRef<ReactNode>(children);
+  liveChildren.current = children;
+  const liveAttachments = useRef<readonly Attachment[] | undefined>(attachments);
+  liveAttachments.current = attachments;
+  const [frozen, setFrozen] = useState<{ readonly children: ReactNode; readonly urls: readonly string[]; readonly media: boolean } | null>(null);
 
   /**
    * LA PHASE REMONTE (#7142) — ce composant la TIENT, et le nom accessible de
@@ -108,8 +125,8 @@ export function ProtectedContent({
    *
    * L'état publié est l'état LOCAL, celui-là même qui pilote l'affichage : la
    * rangée dit donc toujours ce qu'elle montre. Publier depuis un effet plutôt
-   * que depuis `setPhase` couvre aussi le MONTAGE — un message arrivé déjà
-   * `burned` annonce `consumed` sans qu'aucun geste n'ait eu lieu.
+   * que depuis `setPhase` couvre aussi le MONTAGE — une
+   * vue unique déjà ouverte annonce `consumed` sans qu’aucun geste n’ait eu lieu.
    */
   const publishPhase = useRevealPhasePublisher();
   useEffect(() => {
@@ -135,7 +152,7 @@ export function ProtectedContent({
   // fenêtre de fermeture (`fogging`), que le second minuteur ci-dessous
   // referme.
   useEffect(() => {
-    if (phase.phase !== 'revealed') return;
+    if (phase.phase !== 'revealed' || !Number.isFinite(phase.until)) return;
     const delay = Math.max(0, phase.until - now());
     const timer = setTimeout(() => {
       setPhase((current) => settle(current, { now: now(), isViewOnce }));
@@ -159,6 +176,11 @@ export function ProtectedContent({
   const onTap = useCallback(async () => {
     if (pending) return;
     if (requiresConsume({ isViewOnce })) {
+      const snapshot = {
+        children: liveChildren.current,
+        urls: viewOnceMediaUrlsOf(liveAttachments.current),
+        media: (liveAttachments.current?.length ?? 0) > 0,
+      };
       setPending(true);
       const ok = onConsumeViewOnce ? await onConsumeViewOnce(messageId) : false;
       setPending(false);
@@ -168,9 +190,28 @@ export function ProtectedContent({
         errorTimer.current = setTimeout(() => setRevealError(false), REVEAL_ERROR_NOTICE_MS);
         return;
       }
+      setFrozen(snapshot);
+      setPhase((current) => openViewOnce(current));
+      return;
     }
     setPhase((current) => reveal(current, { now: now() }));
   }, [pending, isViewOnce, onConsumeViewOnce, messageId, now]);
+
+  /** LA FERMETURE — un second toucher, la sortie de l'écran, ou la fermeture du plein écran. */
+  const closeOpened = useCallback(
+    (immediate: boolean) => {
+      setPhase((current) => closeViewOnce(current, { now: now(), immediate }));
+    },
+    [now],
+  );
+
+  /* UNE FOIS REFERMÉE, RIEN NE RESTE (#7580) : les enfants figés sont
+     oubliés, et les fichiers quittent les caches du navigateur. */
+  useEffect(() => {
+    if (phase.phase !== 'consumed' || frozen === null) return;
+    void purgeViewOnceMedia(frozen.urls);
+    setFrozen(null);
+  }, [phase, frozen]);
 
   if (kind === 'deleted') return <ProtectionNotice kind="deleted" surface={surface} isMine={isMine} />;
   if (kind === 'expired') return null;
@@ -210,24 +251,55 @@ export function ProtectedContent({
    * ne verraient pas (mesuré en revue : la loi était testée et n'était
    * appelée par aucun rendu).
    */
+  if (isViewOnceKind(kind)) {
+    if (rendersContent(kind, phase) && frozen !== null) {
+      if (frozen.media) {
+        return (
+          <>
+            <ViewOnceChip state="viewing" />
+            <ViewOnceStage onClose={() => closeOpened(true)}>{frozen.children}</ViewOnceStage>
+          </>
+        );
+      }
+      return (
+        <ViewOnceTextWindow fogging={phase.phase === 'fogging'} onClose={() => closeOpened(false)}>
+          {frozen.children}
+        </ViewOnceTextWindow>
+      );
+    }
+    if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    const chipLanguage = currentInterfaceLanguage();
+    return (
+      <>
+        <ViewOnceChip state="sealed" pending={pending} onTap={onTap} />
+        {revealError ? (
+          <p
+            role="status"
+            className="protected-notice-error mt-1.5 flex items-center gap-1.5 rounded-quote px-2 py-1.5 text-check font-semibold"
+          >
+            <Glyph name="warningCircle" size={12} />
+            <span>{translate(chipLanguage, 'message.veiled.error')}</span>
+          </p>
+        ) : null}
+      </>
+    );
+  }
+
+  /**
+   * LA MATRICE VIENT DE LA LOI, jamais d'un `if` recopié ici : `rendersContent`
+   * et `showsAffordance` (`reading-mode/protection.ts`) sont les DEUX seules
+   * réponses au « quand monter les enfants » et au « quand offrir le tap ».
+   */
   if (rendersContent(kind, phase)) {
     // LE BROUILLARD JOUE À LA FERMETURE, PAS À L'OUVERTURE (D-23 §1.4 point 6,
     // revue #5676 défaut 5) : `data-protected` reste `"revealed"` pendant
-    // les DEUX phases qui rendent le contenu ; seul `data-fog` bascule de
-    // `"clear"` à `"closing"` quand `fogging` s'ouvre — le nœud
-    // `.protected-fog` est déjà monté à ce moment (il ne NAÎT jamais
-    // opaque), donc la transition CSS ordinaire suffit, sans
-    // `@starting-style` ni second rendu.
+    // les DEUX phases qui rendent le contenu ; seul `data-fog` bascule.
     return (
       <div data-protected="revealed" className="protected-revealed">
         {children}
         <span className="protected-fog" data-fog={phase.phase === 'fogging' ? 'closing' : 'clear'} aria-hidden />
       </div>
     );
-  }
-
-  if (!showsAffordance(kind, phase)) {
-    return <ProtectionNotice kind="burned" surface={surface} isMine={isMine} />;
   }
 
   // L'affordance — seule surface où le contenu n'a PAS encore de raison
@@ -274,11 +346,9 @@ export function ProtectedContent({
         <span className="sr-only" id={`${messageId}-reveal-hint`}>
           {translate(veilLanguage, 'message.veiled.hint')}
         </span>
-        {attachmentCount > 0 ? (
-          <span data-masked-media aria-hidden>
-            {translate(veilLanguage, isViewOnce ? 'message.veiled.viewOnce' : 'message.veiled')}
-          </span>
-        ) : null}
+        {/* LE FLOU N'A NI PUCE NI ŒIL (#7580) : c'est la LIGNE qui est floutée.
+            Un média flouté garde sa place, sans libellé par-dessus. */}
+        {attachmentCount > 0 ? <span data-masked-media aria-hidden /> : null}
       </button>
       {/*
         LA GRAMMAIRE D'UN ÉCHEC, PAS CELLE D'UN CONTENU (revue #5676,
@@ -316,12 +386,13 @@ export function ProtectionNotice({
 }: {
   /**
    * `withheld` (#6862) — le contenu n'est pas masqué À L'AFFICHAGE : il n'est
-   * PAS DANS LA CHARGE. Distinct de `burned` (« vu et supprimé », une histoire
-   * qui s'est produite) et de `deleted` (« l'auteur l'a retiré ») : ici le
-   * message EXISTE, entier, et c'est la passerelle qui refuse de le servir.
-   * Dire l'un des deux autres raconterait un fait qui n'a pas eu lieu.
+   * PAS DANS LA CHARGE. Distinct de `deleted` (« l'auteur l'a retiré ») : ici
+   * le message EXISTE, entier, et c'est la passerelle qui refuse de le servir.
+   *
+   * Une vue unique ouverte n'est PLUS un tombstone (#7580) : elle a sa puce,
+   * `ViewOnceChip`, et ne dit jamais « supprimé ».
    */
-  readonly kind: 'deleted' | 'burned' | 'withheld';
+  readonly kind: 'deleted' | 'withheld';
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
   /**
@@ -329,9 +400,8 @@ export function ProtectionNotice({
    * sans les servir, et qu'il faut pouvoir constater.
    *
    * Lu pour le SEUL `withheld`, et c'est une frontière, pas une commodité :
-   * `deleted` et `burned` racontent une histoire où la pièce n'existe PLUS (un
-   * message retiré, une vue unique consommée) — y compter des images
-   * inventerait un fait. `withheld` dit l'inverse : le message est INTACT,
+   * `deleted` raconte une histoire où la pièce n'existe PLUS — y compter des
+   * images inventerait un fait. `withheld` dit l'inverse : le message est INTACT,
    * c'est la passerelle qui refuse de le servir, et `servedAttachment` liste
    * exprès ses pièces pour que l'administration puisse le CONSTATER.
    *
@@ -345,8 +415,7 @@ export function ProtectionNotice({
   /**
    * LES LIBELLÉS VIENNENT DU CATALOGUE (#7337) — ils étaient EN DUR, en
    * français, sur les trois tombstones que SEPT langues lisent. Les valeurs
-   * sont celles du catalogue iOS là où il en a une (`bubble.system.deleted`,
-   * `bubble.system.burned`, `bubble.system.burned.a11y`).
+   * sont celles du catalogue iOS là où il en a une (`bubble.system.deleted`).
    *
    * LA LANGUE SE LIT ICI, PAS EN PROP (même parti que `MaskedAttachment` et
    * `ViewerMaskedPage`) : ce substitut est rendu depuis CINQ chaînes
@@ -362,9 +431,8 @@ export function ProtectionNotice({
   const language = currentInterfaceLanguage();
   const LABELS = {
     deleted: { label: 'message.deleted', aria: 'message.deleted' },
-    burned: { label: 'message.burned', aria: 'message.burned.a11y' },
     withheld: { label: 'message.withheld', aria: 'message.withheld.a11y' },
-  } as const satisfies Readonly<Record<'deleted' | 'burned' | 'withheld', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
+  } as const satisfies Readonly<Record<'deleted' | 'withheld', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
   const label = translate(language, LABELS[kind].label);
   const ariaLabel = translate(language, LABELS[kind].aria);
   /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
@@ -407,16 +475,195 @@ export function ProtectionNotice({
         className={`protected-notice protected-notice--${kind} inline-flex items-center gap-1.5 rounded-chip`}
         aria-label={constat === '' ? ariaLabel : `${ariaLabel}, ${constat}`}
       >
-        <Glyph
-          name={kind === 'burned' ? 'flameFill' : 'prohibit'}
-          size={12}
-          style={{ color: kind === 'burned' ? 'var(--color-warn)' : 'var(--color-ios-ink-2)' }}
-        />
+        <Glyph name="prohibit" size={12} style={{ color: 'var(--color-ios-ink-2)' }} />
         <span className="text-title italic" style={{ color: 'var(--color-ios-ink-2)' }}>
           {label}
           {media}
         </span>
       </span>
     </div>
+  );
+}
+
+/**
+ * LA PUCE DE LA VUE UNIQUE (#7580, règle porteur du 2026-09-23) — UNE seule,
+ * à la place du contenu :
+ * - `sealed` : « (1) · Touchez pour afficher », le « 1 » cerclé PLEIN, violet
+ *   d'accent. C'est un bouton : le toucher OUVRE (et consomme).
+ * - `opened` : la même puce, fond ATTÉNUÉ, « (1) · Déjà ouvert ». Aucun geste,
+ *   et jamais un mot de suppression.
+ * - `viewing` : la puce que la rangée garde pendant qu'un média est ouvert en
+ *   plein écran — inerte, le plein écran est la seule surface active.
+ *
+ * Le « 1 » cerclé REMPLACE le mot « Vue unique » : il n'est écrit nulle part.
+ * Le libellé accessible dit la phrase complète. Tient sur UNE ligne
+ * (`whitespace-nowrap`) : le texte n'est jamais tronqué.
+ */
+export function ViewOnceChip({
+  state,
+  pending = false,
+  onTap,
+}: {
+  readonly state: 'sealed' | 'opened' | 'viewing';
+  readonly pending?: boolean;
+  readonly onTap?: () => void;
+}) {
+  const language = currentInterfaceLanguage();
+  const opened = state === 'opened';
+  const glyph = opened ? 'numberCircleOne' : 'numberCircleOneFill';
+  const label = translate(language, opened ? 'message.viewOnce.opened' : 'message.viewOnce.tap');
+  const aria = translate(language, opened ? 'message.viewOnce.opened.a11y' : 'message.viewOnce.sealed.a11y');
+  const content = (
+    <>
+      <Glyph name={glyph} size={16} />
+      <span aria-hidden className="opacity-70">
+        ·
+      </span>
+      <span>{label}</span>
+    </>
+  );
+  const className = `view-once-chip view-once-chip--${opened ? 'opened' : 'sealed'} inline-flex items-center gap-1.5 whitespace-nowrap rounded-chip text-title font-semibold`;
+
+  if (state === 'sealed') {
+    return (
+      <button
+        type="button"
+        data-protected="hidden"
+        data-view-once-chip="sealed"
+        data-glyph={glyph}
+        className={className}
+        aria-label={aria}
+        aria-busy={pending || undefined}
+        onClick={(event) => {
+          event.stopPropagation();
+          onTap?.();
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      data-protected={opened ? 'consumed' : 'revealed'}
+      data-view-once-chip={state}
+      data-glyph={glyph}
+      className={className}
+      role="img"
+      aria-label={aria}
+    >
+      {content}
+    </span>
+  );
+}
+
+/**
+ * LE TEXTE D'UNE VUE UNIQUE, OUVERT À SA PLACE (#7580). Il se referme — et la
+ * puce passe à « Déjà ouvert » — dès qu'on le RETOUCHE ou dès qu'il SORT DE
+ * L'ÉCRAN au défilement. La sortie se lit par `IntersectionObserver` : une
+ * rangée recyclée par le virtualiseur se démonte de toute façon, et remonte
+ * sur un message déjà purgé, donc « Déjà ouvert ».
+ */
+function ViewOnceTextWindow({
+  fogging,
+  onClose,
+  children,
+}: {
+  readonly fogging: boolean;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (node === null || typeof IntersectionObserver === 'undefined') return;
+    let seen = false;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          seen = true;
+          continue;
+        }
+        if (seen) onCloseRef.current();
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      data-protected="revealed"
+      data-view-once-open=""
+      className="protected-revealed"
+      onClick={(event) => {
+        event.stopPropagation();
+        onCloseRef.current();
+      }}
+    >
+      {children}
+      <span className="protected-fog" data-fog={fogging ? 'closing' : 'clear'} aria-hidden />
+    </div>
+  );
+}
+
+/**
+ * LE PLEIN ÉCRAN D'UNE VUE UNIQUE MÉDIA (#7580) — image, vidéo, audio,
+ * document ou sticker s'ouvrent ici, et la FERMETURE fait passer la puce à
+ * « Déjà ouvert ». Monté dans `document.body` : une rangée du fil est
+ * transformée (`translateY`), et un `position: fixed` y serait relatif à elle.
+ * Échap, le bouton de fermeture et le retour Android (`useBackDismiss`)
+ * ferment ; le reste de l'application est inerte pendant ce temps.
+ */
+function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; readonly children: ReactNode }) {
+  const language = currentInterfaceLanguage();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useBackDismiss(onClose);
+
+  useLayoutEffect(() => {
+    const root = document.getElementById('root');
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    root?.setAttribute('inert', '');
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      root?.removeAttribute('inert');
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={translate(language, 'message.viewOnce.sealed.a11y')}
+      data-view-once-stage=""
+      className="view-once-stage"
+    >
+      <button
+        ref={closeRef}
+        type="button"
+        className="view-once-stage-close"
+        aria-label={translate(language, 'message.viewOnce.close')}
+        onClick={onClose}
+      >
+        <Glyph name="x" size={22} />
+      </button>
+      <div className="view-once-stage-content">{children}</div>
+    </div>,
+    document.body,
   );
 }

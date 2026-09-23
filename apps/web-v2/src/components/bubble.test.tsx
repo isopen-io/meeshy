@@ -239,7 +239,7 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).toContain('Message supprimé');
   });
 
-  test('vue unique consommée : « Vu et supprimé », sans le contenu', () => {
+  test('vue unique déjà ouverte par moi : la puce « (1) · Déjà ouvert », sans le contenu ni un mot de suppression (#7580)', () => {
     const html = render({
       ...BASE_MESSAGE,
       isViewOnce: true,
@@ -248,7 +248,10 @@ describe('Bubble — protection (D-23, #5676)', () => {
       viewOnceCount: 1,
       content: 'Contenu brûlé',
     });
-    expect(html).toContain('Vu et supprimé');
+    expect(html).toContain('data-view-once-chip="opened"');
+    expect(html).toContain('Déjà ouvert');
+    expect(html).toContain('Message à vue unique, déjà ouvert');
+    expect(html).not.toContain('supprimé');
     expect(html).not.toContain('Contenu brûlé');
   });
 
@@ -281,10 +284,21 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).toContain('En attente de réception');
   });
 
-  test('une VUE UNIQUE est nommée même SANS pièce jointe', () => {
-    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true }, { state: 'none' });
-    expect(html).toContain('data-view-once');
-    expect(html).toContain('Vue unique');
+  test('une VUE UNIQUE non ouverte : UNE puce « (1) · Touchez pour afficher », sans le mot « Vue unique » ni le contenu (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true, content: 'SECRET-VU' }, { state: 'none' });
+    expect(html.match(/data-view-once-chip=/g)?.length).toBe(1);
+    expect(html).toContain('data-view-once-chip="sealed"');
+    expect(html).toContain('Touchez pour afficher');
+    expect(html).toContain('Message à vue unique, touchez pour afficher');
+    expect(html).not.toContain('Vue unique');
+    expect(html).not.toContain('SECRET-VU');
+  });
+
+  test('un FLOU n\'a ni puce ni œil : la ligne floutée seule (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-FLOU' }, { state: 'none' });
+    expect(html).toContain('data-surrogate');
+    expect(html).not.toContain('data-view-once-chip');
+    expect(html).not.toContain('SECRET-FLOU');
   });
 
   /**

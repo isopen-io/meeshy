@@ -398,7 +398,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    */
   const onMessageConsumed = (payload: unknown): void => {
     if (!isMessageConsumedEvent(payload)) return;
-    applyMessageConsumed(deps.queryClient, payload);
+    applyMessageConsumed(deps.queryClient, payload, deps.viewerId());
   };
 
   /**

@@ -10,7 +10,8 @@ import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destru
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
 
 import { expireLastMessage } from './list-preview';
-import { patchThreadMessages } from './messages';
+import { findCachedThreadMessage, patchThreadMessages } from './messages';
+import { sealViewOnceIn } from './view-once-seal';
 
 /**
  * LES DEUX PUITS DU DÉCOMPTE (#7454, travail 3) — `message:expired` et
@@ -37,6 +38,9 @@ export function isMessageCountdownStartedEvent(payload: unknown): payload is Mes
   if (!isMessageExpiredEvent(payload)) return false;
   return typeof (payload as unknown as Record<string, unknown>).expiresAt === 'string';
 }
+
+const hasEphemeralDuration = (duration: number | undefined): boolean =>
+  typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
 
 /**
  * `applyMessageExpired` — **LE MESSAGE DISPARAÎT SUR-LE-CHAMP.**
@@ -78,6 +82,16 @@ export function applyMessageExpired(
    * la combustion, et la puce repasserait « en attente » sur un message en
    * train de brûler.
    */
+  /* UNE VUE UNIQUE QUI N'EST PAS ÉPHÉMÈRE NE PART PAS (#7580, précision
+     porteur : « ni le balayage serveur … ne la retire »). L'échéance que le
+     serveur lui pose est celle de sa DESTRUCTION côté serveur, une fois tous
+     les destinataires passés (#7578) : ici, la rangée reste, « déjà ouverte »,
+     et perd seulement ce qu'elle pouvait encore porter. */
+  const cached = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
+  if (cached?.isViewOnce === true && !hasEphemeralDuration(cached.ephemeralDuration)) {
+    patchThreadMessages(queryClient, data.conversationId, (messages) => sealViewOnceIn(messages, data.messageId));
+    return;
+  }
   announceDestruction(data.messageId);
   /* LA LIGNE DE LISTE PASSE À « EXPIRÉ » SUR-LE-CHAMP (#7547) — personne n'y
      regarde brûler la bulle, et son texte n'a plus le droit de rester dans

@@ -176,10 +176,26 @@ describe('composeMessageLabel — la protection', () => {
     expect(label.includes('image')).toBe(false);
   });
 
-  test('supprimé / brûlé / expiré : le tombstone SEUL, rien de la rangée', () => {
+  test('vue unique : la phrase de sa puce, jamais son contenu ni ses pièces, jamais « supprimé » (#7580)', () => {
+    const cases = [
+      ['viewOnce', 'Bruno Bêta, Message à vue unique, touchez pour afficher, 09:02'],
+      ['opened', 'Bruno Bêta, Message à vue unique, déjà ouvert, 09:02'],
+    ] as const;
+    for (const [protection, expected] of cases) {
+      const label = composeMessageLabel({ language: 'fr',
+        message: message({ isViewOnce: true, content: SECRET, attachments: [attachment()] }),
+        isMine: false,
+        servedText: SECRET,
+        delivery: null,
+        protection,
+      });
+      expect(label).toBe(expected);
+    }
+  });
+
+  test('supprimé / expiré : le tombstone SEUL, rien de la rangée', () => {
     const cases = [
       ['deleted', 'Message supprimé'],
-      ['burned', 'Message vu et supprimé'],
       ['expired', 'Message éphémère expiré'],
     ] as const;
     for (const [protection, expected] of cases) {

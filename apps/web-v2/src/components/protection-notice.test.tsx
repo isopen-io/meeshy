@@ -14,21 +14,20 @@ import { ProtectedContent, ProtectionNotice } from './protected-content';
  *
  * `admin-conversation-reading-medias.test.tsx` mesure le CHEMIN PRODUIT (la
  * route souveraine, `ThreadModes`, `[data-row]`) et n'atteint donc que la
- * surface `row`, un seul type de pièce, et jamais `deleted`/`burned` avec des
+ * surface `row`, un seul type de pièce, et jamais `deleted` avec des
  * pièces. Ce fichier-ci mesure le CONTRAT DES COMPOSANTS eux-mêmes, sans
  * hôte : la matrice {row, bubble} × {withheld sans pièce ; withheld 1 image ;
- * withheld 2 images + 1 vidéo + 1 audio ; deleted + 2 images ; burned + 1
- * image}, texte visible EXACT et `aria-label` EXACT à chaque case.
+ * withheld 2 images + 1 vidéo + 1 audio ; deleted + 2 images}, texte visible EXACT et `aria-label` EXACT à chaque case.
  *
  * QUATRE MUTATIONS QUE CE FICHIER FAIT ROUGIR, ET QUE LE CORPUS PRÉCÉDENT
  * LAISSAIT VERTES :
  *
  * 1. `kind === 'withheld'` (le garde du constat) muté en `true` — un message
- *    `deleted`/`burned` avec des pièces peindrait alors « · 1 image », le
+ *    `deleted` avec des pièces peindrait alors « · 1 image », le
  *    fait INVENTÉ que le doc-comment de `ProtectionNotice.attachments`
- *    interdit explicitement (« `deleted` et `burned` racontent une histoire
+ *    interdit explicitement (« `deleted` raconte une histoire
  *    où la pièce n'existe PLUS… y compter des images inventerait un fait »).
- *    Les cas `deleted`/`burned` ci-dessous portent des pièces et assertent
+ *    Les cas `deleted` ci-dessous portent des pièces et assertent
  *    l'ABSENCE de `[data-withheld-media]` : ce mutant les fait apparaître.
  * 2. La surface `bubble` — jamais montée par aucun témoin avant ce fichier.
  *    Retirer `{media}` du texte OU le constat de l'`aria-label`, dans la
@@ -98,7 +97,7 @@ const noeud = (host: HTMLElement): Element | null => host.querySelector('[data-p
 
 type Cas = {
   readonly nom: string;
-  readonly kind: 'withheld' | 'deleted' | 'burned';
+  readonly kind: 'withheld' | 'deleted';
   readonly attachments: readonly Attachment[] | undefined;
   readonly texteAttendu: string;
   readonly ariaAttendu: string;
@@ -136,14 +135,6 @@ const CAS: readonly Cas[] = [
     attachments: [uneImage(), uneImage()],
     texteAttendu: 'Message supprimé',
     ariaAttendu: 'Message supprimé',
-    constatAttendu: null,
-  },
-  {
-    nom: 'burned AVEC 1 image — le constat ne doit JAMAIS parler pour une vue unique consommée',
-    kind: 'burned',
-    attachments: [uneImage()],
-    texteAttendu: 'Vu et supprimé',
-    ariaAttendu: 'Message vu et supprimé',
     constatAttendu: null,
   },
 ];

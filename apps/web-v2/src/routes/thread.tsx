@@ -1144,18 +1144,19 @@ export default function ThreadScreen() {
         const servedDetail = messageMenu.servedOf(detailFor);
         return (
           <MessageDetailSheet
-            choices={translationChoices({
-              message: detailMessage,
-              preferredLanguages: readerLanguages,
-              servedLanguage: servedDetail?.language ?? '',
-            })}
+            /* Une vue unique (#7580) : ni langues ni pièces — rien de son contenu. */
+            choices={
+              detailMessage.isViewOnce
+                ? []
+                : translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+            }
             reactions={reactionEntries(detailMessage.reactionSummary)}
             sentAt={new Date(detailMessage.createdAt)}
             delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
             locale={readerLocale}
             conversationId={conversationId}
             messageId={detailMessage.id}
-            attachments={detailMessage.attachments ?? []}
+            attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);
