@@ -563,9 +563,9 @@ describe('MessageProcessor.saveMessage', () => {
     expect(mockAssociateAttachmentsToMessage).not.toHaveBeenCalled();
   });
 
-  it('associates attachments for new message with attachmentIds', async () => {
+  it('associates attachments with the WRITTEN row, so they carry its protection (#7498)', async () => {
     await processor.saveMessage({ ...baseData, attachmentIds: ['att-1', 'att-2'] });
-    expect(mockAssociateAttachmentsToMessage).toHaveBeenCalledWith(['att-1', 'att-2'], MSG_ID);
+    expect(mockAssociateAttachmentsToMessage).toHaveBeenCalledWith(['att-1', 'att-2'], MSG_ID, await msgCreate.mock.results[0].value);
   });
 
   it('refreshes attachments in memory when attachmentIds provided', async () => {
