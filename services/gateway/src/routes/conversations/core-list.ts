@@ -588,7 +588,7 @@ export function registerConversationListRoute(
       // appel en cours, deux lectures pour la page.
       t0 = performance.now();
       const clearHistoryBeforeById = new Map(
-        conversations.map((c) => [c.id, c.userPreferences[0]?.clearHistoryBefore ?? null] as const)
+        conversations.map((c) => [c.id, c.userPreferences?.[0]?.clearHistoryBefore ?? null] as const)
       );
       const activityByConversation = await loadConversationListActivity(prisma, conversations, {
         viewerLanguages,
@@ -603,7 +603,7 @@ export function registerConversationListRoute(
       const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
       const servedEphemeralExpiry = await loadListEphemeralExpiries(
         prisma,
-        conversations.map((c) => ({ conversationId: c.id, message: c.messages[0] })),
+        conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
         (conversationId) => readerParticipantByConversation.get(conversationId)
       );
       perfTimings.listActivity = performance.now() - t0;
@@ -892,10 +892,10 @@ export function registerConversationListRoute(
               // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ;
               // la liste n'en SERT que la première en détail.
               ...resolveLastMessageNature(msg),
-              attachments: loadedAttachments.slice(0, 1),
+              attachments: (loadedAttachments ?? []).slice(0, 1),
               attachmentSummary: lastMessageProtected
                 ? null
-                : summarizeAttachments(loadedAttachments, msg._count?.attachments),
+                : summarizeAttachments(loadedAttachments ?? [], msg._count?.attachments),
               content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
               ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
               // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
