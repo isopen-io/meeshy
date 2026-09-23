@@ -21,18 +21,6 @@ const fr = {
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
-  /* LE MENU DU MESSAGE ET SA BARRE DE SÉLECTION (#5866) — les six entrées du
-     menu voyagent ENSEMBLE : ajouter « Transférer » en français seul à côté de
-     cinq libellés eux aussi écrits en dur aurait figé la surface entière dans
-     une seule langue. `messageMenuItems(ctx, language)` les lit désormais ici,
-     la barre de sélection aussi. « Copier » et « Transférer » sont PARTAGÉS
-     par les deux portes : même mot, même clé (dimension 6). */
-  'message.action.select': 'Sélectionner',
-  'message.action.translate': 'Traduire',
-  'message.action.copy': 'Copier',
-  'message.action.forward': 'Transférer',
-  'message.action.compose': 'Composer',
-  'message.action.more': 'Plus…',
   'selection.toolbar': 'Sélection de messages',
   'selection.cancel': 'Annuler',
   'selection.count': '{count} sélectionnés',
@@ -1125,19 +1113,20 @@ const fr = {
   'announce.messageNotSent': 'Message non envoyé',
   'announce.messageNotSent.reason': 'Message non envoyé — {reason}',
   'message.deleted': 'Message supprimé',
-  'message.burned': 'Vu et supprimé',
-  'message.burned.a11y': 'Message vu et supprimé',
   'message.expired.a11y': 'Message éphémère expiré',
   'message.withheld': 'Contenu retenu',
   'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
   'message.veiled': 'Contenu masqué',
   'message.veiled.hint': 'Toucher pour révéler le contenu',
-  'message.veiled.viewOnce': 'Voir une fois',
   'message.veiled.error': 'Révélation impossible pour l’instant',
   'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
   'message.ephemeral.awaiting': 'En attente de réception',
   'message.ephemeral.awaiting.a11y': 'Message éphémère de {duration}, en attente de réception',
-  'message.viewOnce.a11y': 'Vue unique, ce message ne s’affiche qu’une fois',
+  'message.viewOnce.tap': 'Touchez pour afficher',
+  'message.viewOnce.opened': 'Déjà ouvert',
+  'message.viewOnce.sealed.a11y': 'Message à vue unique, touchez pour afficher',
+  'message.viewOnce.opened.a11y': 'Message à vue unique, déjà ouvert',
+  'message.viewOnce.close': 'Fermer',
   'attachment.protected.image': 'Photo protégée',
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',

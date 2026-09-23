@@ -83,6 +83,13 @@ export type MessageMenuContext = {
    * héritant même de sa durée) alors qu'ils ne se copient ni ne se traduisent.
    */
   readonly canForward: boolean;
+  /**
+   * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
+   * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
+   * citerait. Le menu se réduit à « Plus… » (Infos) ; la suppression n'a pas
+   * encore de port web (`message-detail-sheet.tsx`, D-29).
+   */
+  readonly isViewOnce?: boolean;
 };
 
 /**
@@ -110,6 +117,7 @@ export function messageMenuContextOf(
     isProtected: kind !== 'standard',
     languageCount: 1 + translationsOf(message).length,
     canForward: forwardRefusalOf(message, input.now) === null,
+    isViewOnce: message.isViewOnce === true,
   };
 }
 
@@ -122,6 +130,7 @@ export function messageMenuContextOf(
  * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
 export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
+  if (ctx.isViewOnce === true) return [{ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' }];
   const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });

@@ -241,7 +241,7 @@ test('media-10 : le MESSAGE est standard, et c’est la PIÈCE qui porte isViewO
  * tombstone, le gate navigateur resterait VERT, et il ne mesurerait plus rien
  * de ce pour quoi il a été écrit.
  */
-test('les deux médias protégés sont VOILÉS, l’un par le flou et l’autre par la vue unique NON consommée', () => {
+test('les deux médias protégés sont MASQUÉS, l’un par le flou et l’autre par la vue unique NON consommée', () => {
   const maintenant = new Date(dayAt(0, 12, 0)).getTime();
   const floute = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_BLURRED_WITNESS_ID)!;
   const vueUnique = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_VIEW_ONCE_WITNESS_ID)!;
@@ -253,7 +253,7 @@ test('les deux médias protégés sont VOILÉS, l’un par le flou et l’autre 
   expect(vueUnique.isViewOnce).toBe(true);
   expect(vueUnique.viewOnceCount).toBe(0);
   expect(vueUnique.isBlurred).toBe(false);
-  expect(protectionOf(vueUnique, maintenant)).toBe('veiled');
+  expect(protectionOf(vueUnique, maintenant)).toBe('viewOnce');
 
   // Et chacun porte BIEN une pièce jointe image : un témoin de rétention posé
   // sur un message sans média serait vert par absence de sujet.

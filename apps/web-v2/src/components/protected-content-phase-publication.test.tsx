@@ -98,15 +98,15 @@ describe('ProtectedContent publie sa phase de révélation', () => {
   });
 
   /**
-   * LE MESSAGE DÉJÀ BRÛLÉ À L'ARRIVÉE part de `consumed` (`protected-content.tsx:97`)
-   * — un hôte qui supposerait `hidden` au montage composerait « Contenu masqué »
-   * sur une rangée qui rend son tombstone.
+   * UNE VUE UNIQUE DÉJÀ OUVERTE À L'ARRIVÉE part de `consumed` (#7580) — un
+   * hôte qui supposerait `hidden` au montage composerait « Contenu masqué »
+   * sur une rangée qui rend sa puce « Déjà ouvert ».
    */
-  test("un message déjà brûlé annonce `consumed`, jamais `hidden`", async () => {
+  test("une vue unique déjà ouverte annonce `consumed`, jamais `hidden`", async () => {
     const canal = journal();
     await mounter.mount(
       <RevealPhaseChannel publish={canal.publish}>
-        <ProtectedContent messageId="m-brule" kind="burned" isViewOnce contentLength={20} attachments={[]} surface="row">
+        <ProtectedContent messageId="m-brule" kind="opened" isViewOnce contentLength={20} attachments={[]} surface="row">
           <span>rien à lire</span>
         </ProtectedContent>
       </RevealPhaseChannel>,

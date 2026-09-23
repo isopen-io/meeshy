@@ -44,13 +44,12 @@ describe('isMessageConsumedEvent — garde de forme FAIL-CLOSED (motif isAttachm
     ).toBe(false);
   });
 
-  test('rejette un viewOnceCount qui ne serait pas un nombre', () => {
+  test('rejette une charge qui ne dit pas QUI a ouvert (#7580 : la consommation est par personne)', () => {
     expect(
       isMessageConsumedEvent({
         messageId: 'm-1',
         conversationId: 'c-a',
-        userId: 'u-b',
-        viewOnceCount: '1',
+        viewOnceCount: 1,
         maxViewOnceCount: 1,
         isFullyConsumed: true,
       }),
@@ -64,40 +63,47 @@ describe('isMessageConsumedEvent — garde de forme FAIL-CLOSED (motif isAttachm
   });
 });
 
-describe('applyMessageConsumed — la bulle SUIT le direct (#7354)', () => {
-  test('patch le viewOnceCount du message NOMMÉ, les autres rangées restent `toBe`-identiques', () => {
+const VIEWER = 'u-moi';
+const consumedBy = (userId: string, messageId = 'm-1', conversationId = 'c-a') => ({
+  messageId,
+  conversationId,
+  userId,
+  viewOnceCount: 1,
+  maxViewOnceCount: 1,
+  isFullyConsumed: false,
+});
+const cachedMessages = (client: QueryClient, conversationId = 'c-a') =>
+  client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey(conversationId))?.pages[0]?.messages;
+
+describe('applyMessageConsumed — la vue unique se consomme PAR PERSONNE (#7578, #7580)', () => {
+  test('un AUTRE participant l\'ouvre : rien ne change chez moi, pas même la référence du fil', () => {
     const client = new QueryClient();
-    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0 });
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+
+    applyMessageConsumed(client, consumedBy('u-autre'), VIEWER);
+
+    expect(cachedMessages(client)?.find((m) => m.id === 'm-1')).toBe(target);
+  });
+
+  test('je l\'ouvre sur un AUTRE appareil : la rangée passe « déjà ouverte » et son contenu est purgé', () => {
+    const client = new QueryClient();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
     const other = localMessage({ id: 'm-2', conversationId: 'c-a', createdAt: new Date('2026-09-21T09:05:00.000Z') });
     client.setQueryData(messagesQueryKey('c-a'), threadPages([target, other]));
 
-    applyMessageConsumed(client, {
-      messageId: 'm-1',
-      conversationId: 'c-a',
-      userId: 'u-b',
-      viewOnceCount: 1,
-      maxViewOnceCount: 1,
-      isFullyConsumed: true,
-    });
+    applyMessageConsumed(client, consumedBy(VIEWER), VIEWER);
 
-    const messages = client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
-    expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(1);
-    // Immuable : la rangée NON concernée garde sa référence (zéro re-rendu inutile).
-    expect(messages?.find((m) => m.id === 'm-2')).toBe(other);
+    const sealed = cachedMessages(client)?.find((m) => m.id === 'm-1');
+    expect(sealed?.consumedByMe).toBe(true);
+    expect(sealed?.content).toBe('');
+    expect(sealed?.attachments).toEqual([]);
+    expect(cachedMessages(client)?.find((m) => m.id === 'm-2')).toBe(other);
   });
 
   test('fil non ouvert (aucun cache pour cette conversation) : NO-OP, aucune exception', () => {
     const client = new QueryClient();
-    expect(() =>
-      applyMessageConsumed(client, {
-        messageId: 'm-1',
-        conversationId: 'c-inconnue',
-        userId: 'u-b',
-        viewOnceCount: 1,
-        maxViewOnceCount: 1,
-        isFullyConsumed: true,
-      }),
-    ).not.toThrow();
+    expect(() => applyMessageConsumed(client, consumedBy(VIEWER, 'm-1', 'c-inconnue'), VIEWER)).not.toThrow();
   });
 
   test('messageId absent du cache : NO-OP, ne touche aucune autre rangée', () => {
@@ -105,34 +111,18 @@ describe('applyMessageConsumed — la bulle SUIT le direct (#7354)', () => {
     const m1 = localMessage({ id: 'm-1', conversationId: 'c-a' });
     client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
 
-    applyMessageConsumed(client, {
-      messageId: 'introuvable',
-      conversationId: 'c-a',
-      userId: 'u-b',
-      viewOnceCount: 3,
-      maxViewOnceCount: 3,
-      isFullyConsumed: true,
-    });
+    applyMessageConsumed(client, consumedBy(VIEWER, 'introuvable'), VIEWER);
 
-    const messages = client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
-    expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(0);
+    expect(cachedMessages(client)?.find((m) => m.id === 'm-1')).toBe(m1);
   });
 
-  test('un événement EN RETARD ne fait jamais REDESCENDRE le compte — une vue brûlée ne se rouvre pas', () => {
+  test('viewer inconnu (session pas encore résolue) : NO-OP', () => {
     const client = new QueryClient();
-    const burned = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 2, maxViewOnceCount: 2 });
-    client.setQueryData(messagesQueryKey('c-a'), threadPages([burned]));
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0 });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
 
-    applyMessageConsumed(client, {
-      messageId: 'm-1',
-      conversationId: 'c-a',
-      userId: 'u-b',
-      viewOnceCount: 1,
-      maxViewOnceCount: 2,
-      isFullyConsumed: false,
-    });
+    applyMessageConsumed(client, consumedBy(''), '');
 
-    const messages = client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
-    expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(2);
+    expect(cachedMessages(client)?.find((m) => m.id === 'm-1')).toBe(target);
   });
 });

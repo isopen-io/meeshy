@@ -641,17 +641,22 @@ extension StoryAudioPlayerObject {
     /// Linguistique chain. Falls back to default `postMediaId` when no variant
     /// matches. Used by the reader pipeline to pick the correct language
     /// variant of a background audio track.
+    /// Projection AUDIO de `PrismTranslationResolver` : la piste à jouer est
+    /// élue par la MÊME descente que le texte, jamais par une boucle jumelle.
+    /// `nil` du résolveur ⇒ `postMediaId`, la piste d'origine.
+    ///
+    /// `sourceLanguage` — la langue RÉELLEMENT parlée par la piste d'origine —
+    /// entre ici dans la descente, ce que la boucle manuscrite ne faisait pas :
+    /// une variante générée dans la langue d'origine gagnait sur l'original
+    /// lui-même, faisant jouer un doublage synthétique là où la voix de
+    /// l'auteur disait déjà la bonne langue.
     public func resolvedPostMediaId(preferredLanguages: [String]) -> String {
-        guard let variants = backgroundAudioVariants, !variants.isEmpty,
-              !preferredLanguages.isEmpty else { return postMediaId }
-        for lang in preferredLanguages {
-            if let v = variants.first(where: { $0.language == lang }) { return v.postMediaId }
-            let target = StoryPrismeMatch.base(lang)
-            if let v = variants.first(where: { StoryPrismeMatch.base($0.language) == target }) {
-                return v.postMediaId
-            }
-        }
-        return postMediaId
+        guard let variants = backgroundAudioVariants, !variants.isEmpty else { return postMediaId }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: sourceLanguage,
+            candidates: variants.map { PrismCandidate(language: $0.language, value: $0.postMediaId) },
+            preferredLanguages: preferredLanguages
+        )?.text ?? postMediaId
     }
 }
 
@@ -1647,28 +1652,33 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// Pas de fallback implicite vers l'anglais — l'absence de traduction signifie
     /// que le contenu est deja dans la langue de l'utilisateur OU qu'aucune
     /// traduction n'a ete generee. Voir CLAUDE.md "Prisme Linguistique".
+    /// Commodité à UNE langue — PROJECTION de la chaîne, jamais une seconde
+    /// règle. Elle portait sa propre descente : une comparaison `==` BRUTE, ni
+    /// normalisée ni rang-consciente, qui ratait `"FR"` contre `"fr"` et
+    /// `"en"` contre `"en-US"` et servait alors l'original en le faisant passer
+    /// pour un « pas de traduction ».
     public func resolvedContent(preferredLanguage: String?) -> String? {
-        guard let lang = preferredLanguage,
-              let translations = translations, !translations.isEmpty else { return content }
-        return translations.first { $0.language == lang }?.content ?? content
+        resolvedContent(preferredLanguages: [preferredLanguage].compactMap { $0 })
     }
 
-    /// R10 — résolution du `content` legacy sur la CHAÎNE de langue COMPLÈTE
-    /// (parité avec les textObjects qui la parcourent déjà) : première langue
-    /// de la chaîne ayant une traduction. Aucun match → ORIGINAL (Prisme
-    /// règle n°1 : jamais `translations.first`).
+    /// R10 — le `content` legacy d'une story, résolu par
+    /// `PrismTranslationResolver` sur la chaîne COMPLÈTE. `nil` du résolveur ⇒
+    /// `content`, l'original (règle #1 : jamais `translations.first`).
+    ///
+    /// `originalLanguage: nil` n'est pas un oubli : `StoryItem` ne porte AUCUN
+    /// champ disant dans quelle langue le `content` est écrit — le fil ne le
+    /// sert pas. La langue d'origine ne peut donc pas concourir à son rang ici,
+    /// et une story déjà écrite dans la langue du lecteur peut encore lui être
+    /// servie traduite si une traduction d'un rang inférieur existe. C'est une
+    /// lacune de la CHARGE, pas de la descente : elle se solde en servant la
+    /// langue d'origine de la story, hors de ce dépôt-ci.
     public func resolvedContent(preferredLanguages: [String]) -> String? {
         guard let translations, !translations.isEmpty else { return content }
-        for lang in preferredLanguages {
-            if let hit = translations.first(where: { $0.language == lang })?.content {
-                return hit
-            }
-            let target = StoryPrismeMatch.base(lang)
-            if let hit = translations.first(where: { StoryPrismeMatch.base($0.language) == target })?.content {
-                return hit
-            }
-        }
-        return content
+        return PrismTranslationResolver.resolve(
+            originalLanguage: nil,
+            candidates: translations.map { PrismCandidate(language: $0.language, value: $0.content) },
+            preferredLanguages: preferredLanguages
+        )?.text ?? content
     }
 
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,

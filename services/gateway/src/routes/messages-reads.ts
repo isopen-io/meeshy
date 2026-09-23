@@ -9,6 +9,7 @@ import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentFullSelect } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { hoistStickerOnto } from '../services/stickers/messageSticker';
+import { loadViewOnceReaderStates, projectViewOnceForReader } from '../services/messaging/viewOnceAudience';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, loadReaderHistoryFloor, historyReaderFromAuthContext, type HistoryFloorJoin } from '../services/historyFloor';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { validatePagination } from '../utils/pagination';
@@ -265,7 +266,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
                 where: { userId: userId, isActive: true },
                 // La ligne du lecteur porte aussi son PLANCHER d'historique
                 // (`historyFloorFor`) : lue ici, dans la même requête.
-                select: { userId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+                select: { id: true, userId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
               }
             }
           },
@@ -370,7 +371,13 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // — Lot 1 : ce message est affiché en entier, sans hoist la position
       // resterait invisible même si elle a bien été validée à l'écriture.
       // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
-      return sendSuccess(reply, hoistStickerOnto(hoistLocationOnto({
+      // #7578 — qui a déjà ouvert une vue unique n'en reçoit plus que l'état.
+      const readerParticipantId = (readerRow as { id?: string }).id;
+      const viewOnceStates = await loadViewOnceReaderStates(prisma, [message], readerParticipantId, (err) =>
+        logger.warn('[MESSAGES] view-once reader state failed — served closed', err as Error)
+      );
+
+      return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         ...message,
         sender: gatedSender,
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
@@ -414,7 +421,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           readCount: summary?.readCount ?? 0,
           recipientCount: summary?.totalMembers ?? 0
         }
-      } as unknown as Record<string, unknown>)));
+      } as unknown as Record<string, unknown>)) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
+      viewOnceStates.get(messageId)));
 
     } catch (error) {
       logger.error('Error fetching message', error as Error);
@@ -445,7 +453,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           content: true,
           originalLanguage: true,
           translations: true,
-          conversationId: true
+          conversationId: true,
+          senderId: true,
+          isViewOnce: true
         }
       });
 
@@ -464,6 +474,21 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
+      }
+
+      // #7578 — ni texte ni traduction d'une vue unique déjà ouverte par ce lecteur.
+      const viewOnceState = (
+        await loadViewOnceReaderStates(prisma, [message], membership.id, (err) =>
+          logger.warn('[MESSAGES] view-once reader state failed — served closed', err as Error)
+        )
+      ).get(message.id);
+      if (viewOnceState?.consumedByMe) {
+        return sendSuccess(reply, {
+          messageId: message.id,
+          originalContent: '',
+          originalLanguage: message.originalLanguage,
+          translations: []
+        });
       }
 
       return sendSuccess(reply, {

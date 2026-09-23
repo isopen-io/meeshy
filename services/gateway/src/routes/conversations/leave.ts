@@ -13,6 +13,7 @@ import { endConversationMembership } from '../../socketio/endConversationMembers
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -90,6 +91,10 @@ export function registerLeaveRoutes(
       // sa raison : une annonce ne précède jamais la durabilité du fait
       // qu'elle annonce.
       let promotedSuccessor: { userId: string | null } | null = null
+
+      // Le départ du DERNIER créateur clôt le fil : il n'y a plus personne à
+      // qui annoncer « X a quitté la conversation » (#7593).
+      let conversationClosed = false
 
       // Le départ de l'appelant, DÉCRIT une fois et committé par chaque
       // branche AVEC son écriture jumelle — la promotion du successeur ou la
@@ -174,11 +179,20 @@ export function registerLeaveRoutes(
             deactivateShareLinksOnClose(prisma, id),
           ])
           closedAudience = (closed.participants ?? []).filter(p => p.isActive)
+          conversationClosed = true
         }
       } else {
         await prisma.participant.update(leaveSelf)
       }
       invalidateParticipantLookup(participant.id, id)
+
+      // #7593 — la ligne de liste des restants dit « X a quitté la conversation ».
+      if (!conversationClosed) {
+        await postConversationNotice(
+          { prisma, broadcast: noticeBroadcast(socketIOHandler) },
+          { conversationId: id, notice: { kind: 'member-left', actor: noticeActor(participant) } },
+        )
+      }
 
       const io = socketIOHandler?.getManager()?.getIO()
 

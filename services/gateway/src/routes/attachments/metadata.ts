@@ -119,7 +119,7 @@ export async function registerMetadataRoutes(
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
-      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true },
+      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true },
     });
     if (!message) return false;
 

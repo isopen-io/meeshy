@@ -190,15 +190,43 @@ export interface ReadStatusUpdatedEventData {
 }
 
 /**
- * Données pour l'événement de consommation d'un message view-once
+ * Une personne vient d'ouvrir une vue unique (#7578).
+ *
+ * L'événement dit QUI a ouvert — il ne retire rien à personne. Le client dont
+ * c'est l'identité (`userId`, ou `participantId` pour un invité) passe le
+ * message à l'état « ouvert » et purge son contenu local ; tous les autres ne
+ * changent RIEN à leur bulle : ce qu'une personne ouvre ne retire rien aux
+ * autres. Jamais de `message:deleted` / `message:expired` pour une vue unique
+ * ouverte : la bulle « (1) · déjà ouvert » reste chez chacun.
  */
 export interface MessageConsumedEventData {
   readonly messageId: string;
   readonly conversationId: string;
+  /** Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité). */
   readonly userId: string;
+  /** `Participant.id` de celui qui a ouvert — toujours présent, anonyme compris. */
+  readonly participantId?: string;
+  /** L'AUTEUR a ouvert son propre message : n'entre jamais dans l'audience. */
+  readonly byAuthor?: boolean;
+  /** Destinataires ACTIFS (auteur exclu) qui ont ouvert. */
   readonly viewOnceCount: number;
+  /** Destinataires ACTIFS (auteur exclu) — le dénominateur. */
   readonly maxViewOnceCount: number;
+  /** Tous les destinataires actifs ont ouvert : la purge du CONTENU est programmée. */
   readonly isFullyConsumed: boolean;
+}
+
+/**
+ * Le CONTENU d'une vue unique vient d'être purgé côté serveur (#7578) — tous
+ * les destinataires l'ont ouverte, ou son plafond de rétention est atteint.
+ *
+ * La bulle RESTE chez chacun : le client purge le contenu local (texte,
+ * traductions, média, vignette, transcription) et garde l'état « ouvert ».
+ * Ce n'est PAS un retrait.
+ */
+export interface MessageViewOncePurgedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
 }
 
 /**

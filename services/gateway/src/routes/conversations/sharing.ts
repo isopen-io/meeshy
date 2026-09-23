@@ -16,6 +16,7 @@ import { mintConversationShareLink } from '../links/utils/share-link-mint';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { noticeActor } from '../../services/conversations/conversationNotice';
 import { NEW_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import {
   resolveConversationEntry,
@@ -722,6 +723,8 @@ export function registerSharingRoutes(
               id: true,
               userId: true,
               role: true,
+              // #7593 — l'inviteur est l'ACTEUR de l'avis : « Demo a ajouté X ».
+              displayName: true,
               user: {
                 select: {
                   id: true,
@@ -896,7 +899,8 @@ export function registerSharingRoutes(
           participantId: newMember.id,
           displayName: invitedMemberFields.displayName,
           isAnonymous: false,
-          viaShareLink: false
+          viaShareLink: false,
+          addedBy: noticeActor(inviterMember)
         }
       );
 

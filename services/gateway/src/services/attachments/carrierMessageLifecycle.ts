@@ -22,13 +22,12 @@
  *
  * ─── POURQUOI L'ÉCHÉANCE SUFFIT À COUVRIR LA VUE UNIQUE ─────────────────────
  *
- * Ce prédicat ne connaît ni `isViewOnce`, ni `viewOnceCount`, ni
- * `maxViewOnceCount` — délibérément. `scheduleViewOnceBurn` écrit le budget
- * épuisé SOUS FORME d'échéance (`expiresAt = consommation + 5 min`), parce que
- * le dernier spectateur n'a pas fini de regarder au moment où il paie sa vue.
- * L'échéance EST la brûlure. Rejouer ici le calcul du budget refuserait le média
- * pendant ce sursis, c'est-à-dire exactement à la personne à qui il était
- * adressé, à l'instant où elle vient de le mériter.
+ * Ce prédicat ne connaît ni `isViewOnce`, ni l'audience — délibérément.
+ * `scheduleViewOnceBurn` écrit « tous les destinataires ont ouvert » SOUS FORME
+ * d'échéance (`viewOnceBurnAt = dernière ouverture + 5 min`, sa colonne à elle
+ * depuis #7578), et l'envoi y pose le plafond de rétention. L'échéance EST la
+ * purge. Rejouer ici le calcul de l'audience refuserait le média pendant le
+ * sursis, à la personne qui vient de l'ouvrir.
  *
  * ─── POURQUOI 404, ET NON 403 ───────────────────────────────────────────────
  *
@@ -57,10 +56,22 @@
 export interface CarrierMessageLifecycle {
   readonly deletedAt?: Date | string | null;
   /**
-   * Échéance de destruction — éphémère (cycle 92) comme brûlure de vue unique
-   * (cycle 93), les deux promesses s'écrivent dans cette même colonne.
+   * Échéance de destruction de l'éphémère (cycle 92).
    */
   readonly expiresAt?: Date | string | null;
+  /** Échéance de purge d'une vue unique (#7578) — sa colonne à elle. */
+  readonly viewOnceBurnAt?: Date | string | null;
+}
+
+/**
+ * Une échéance illisible ne doit PAS passer pour une échéance dépassée : un
+ * accident de sérialisation détruirait alors du média vivant. Elle se lit comme
+ * l'absence d'échéance, l'état que la colonne portait avant écriture.
+ */
+function deadlinePassed(deadline: Date | string | null | undefined, now: Date): boolean {
+  if (!deadline) return false;
+  const at = new Date(deadline).getTime();
+  return Number.isFinite(at) && at <= now.getTime();
 }
 
 /**
@@ -76,13 +87,5 @@ export function carrierMessageStillServesBytes(
   if (!message) return false;
   if (message.deletedAt) return false;
 
-  if (!message.expiresAt) return true;
-
-  // Une échéance illisible ne doit PAS passer pour une échéance dépassée : un
-  // accident de sérialisation détruirait alors du média vivant. Elle se lit
-  // comme l'absence d'échéance, l'état que la colonne portait avant écriture.
-  const deadline = new Date(message.expiresAt).getTime();
-  if (!Number.isFinite(deadline)) return true;
-
-  return deadline > now.getTime();
+  return !deadlinePassed(message.expiresAt, now) && !deadlinePassed(message.viewOnceBurnAt, now);
 }

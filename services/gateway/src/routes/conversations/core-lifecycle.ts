@@ -43,6 +43,7 @@ import { deactivateShareLinksOnClose } from '../../services/conversations/shareL
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
+import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -550,9 +551,14 @@ export function registerUpdateConversationRoute(
           userId: userId,
           isActive: true
         },
+        // `id`/`displayName` : l'appelant est l'ACTEUR des avis de renommage et
+        // d'image (#7593) ; `title`/`avatar` : l'état AVANT, qui décide si le
+        // geste change quelque chose à annoncer.
         select: {
+          id: true,
           role: true,
-          conversation: { select: { type: true } }
+          displayName: true,
+          conversation: { select: { type: true, title: true, avatar: true } }
         }
       });
 
@@ -743,6 +749,23 @@ export function registerUpdateConversationRoute(
             updatedAt: new Date().toISOString(),
           },
         })
+      }
+
+      // #7593 — la ligne de liste dit « Nom du groupe modifié » / « Photo du
+      // groupe modifiée ». APRÈS `conversation:updated` : l'avis porte son
+      // propre `conversation:updated` (dernier message), qui ne doit pas être
+      // devancé par le titre. Un champ réécrit à l'identique n'annonce rien.
+      if (membership) {
+        const notices = [
+          ...(title !== undefined && title !== membership.conversation?.title ? ['conversation-renamed' as const] : []),
+          ...(avatar !== undefined && avatar !== membership.conversation?.avatar ? ['conversation-image' as const] : []),
+        ];
+        for (const kind of notices) {
+          await postConversationNotice(
+            { prisma, broadcast: noticeBroadcast(fastify.socketIOHandler) },
+            { conversationId, notice: { kind, actor: noticeActor(membership) } },
+          );
+        }
       }
 
       // La route jumelle supprimée gardait la présence ; le `PUT`, jamais.
