@@ -31,7 +31,7 @@ struct BubbleFailedRetryBar: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(MeeshyColors.warning)
+                .fill(MeeshyColors.stateFailed)
                 // Steady at rest; only the active-resend blink modulates it.
                 .opacity(isRetrying && blink ? 1.0 : 0.92)
 

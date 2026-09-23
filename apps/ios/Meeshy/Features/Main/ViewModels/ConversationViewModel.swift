@@ -789,15 +789,8 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — 4 branches :
-    ///   1. ce device est déjà sur CET appel (actif ou en négociation) →
-    ///      ramener l'UI d'appel au premier plan ;
-    ///   2. ce device SONNE sur cet appel (bannière call-waiting) → laisser la
-    ///      bannière/CallKit porter le geste de réponse, pas de double-join ;
-    ///   3. l'appel est actif côté serveur (revalidé via active-call) →
-    ///      `rejoinActiveCall` (réhydratation à froid — app relancée mi-appel) ;
-    ///   4. l'appel n'existe plus → toast « L'appel est terminé » (la bulle
-    ///      sera éditée au terminal dès que le message:edited arrive).
+    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — la revalidation
+    /// (4 branches) vit dans `LiveCallJoiner`, partagé avec la ligne de liste.
     /// Internal (pas private) pour la testabilité des branches.
     func joinOngoingCall(_ summary: CallSummaryMetadata) async {
         // Same anonymity gate as `callBack(for:)` — this is also reachable
@@ -805,46 +798,16 @@ class ConversationViewModel: ObservableObject {
         // distinct code path (revalidated server round-trip) so it re-asserts
         // the guard rather than relying on the caller alone.
         guard anonymousSession == nil else { return }
-        // 1 — déjà sur cet appel : l'UI d'appel revient au premier plan.
-        if liveCallJoin.currentCallId() == summary.callId, !liveCallJoin.isIdle() {
-            liveCallJoin.bringCallUIForward()
-            return
-        }
-        // 2 — cet appel sonne en attente sur ce device : répondre reste le
-        // geste de la bannière (jamais de rejoin concurrent).
-        if liveCallJoin.hasPendingIncomingCall(summary.callId) {
-            return
-        }
-        // 3/4 — réhydratation à froid : revalider côté serveur avant tout média.
-        do {
-            let session = try await activeCallService.activeCall(conversationId: conversationId)
-            guard let session, session.id == summary.callId else {
-                FeedbackToastManager.shared.show(
-                    String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
-                    type: .info
-                )
-                return
-            }
-            let remote = session.remoteParticipant(currentUserId: currentUserId)
-            let displayName = remote?.user?.displayName
-                ?? remote?.user?.username
-                ?? resolvedPeerDisplayName
-                ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
-            let joined = liveCallJoin.rejoinActiveCall(
-                summary.callId,
-                conversationId,
-                remote?.userId ?? participantUserId ?? "",
-                displayName,
-                summary.callType == .video
+        await LiveCallJoiner(context: liveCallJoin, activeCallService: activeCallService).join(
+            LiveCallJoinRequest(
+                callId: summary.callId,
+                conversationId: conversationId,
+                isVideo: summary.callType == .video,
+                currentUserId: currentUserId,
+                fallbackRemoteUserId: participantUserId,
+                fallbackDisplayName: resolvedPeerDisplayName
             )
-            if !joined {
-                Logger.messages.warning("[ConversationVM] rejoinActiveCall refused (state non-idle) for \(summary.callId, privacy: .public)")
-            }
-        } catch {
-            FeedbackToastManager.shared.showError(
-                String(localized: "bubble.call.join.failed", defaultValue: "Impossible de rejoindre l'appel", bundle: .main)
-            )
-        }
+        )
     }
 
     /// Best-effort peer display name from the most recent received message in

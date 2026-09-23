@@ -187,21 +187,17 @@ extension ConversationViewModel {
         Task { [weak self] in
             await self?.persistMessagesUsingServerIds()
         }
-        let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
         // Facette relue sur la ligne optimiste : elle porte les pièces jointes et
         // les effets réellement envoyés. Recomposer une facette « texte nu » ici
         // effacerait de la liste la photo qu'on vient d'envoyer, une seconde
         // après que l'insert optimiste l'y a mise.
         let ackedFacet = messages.first(where: { $0.id == tempId }).map {
-            LastMessageFacet(
-                message: $0,
-                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType, location: $0.location),
-                id: serverId,
-                at: msgTime
-            )
-        } ?? LastMessageFacet(id: serverId, preview: msgContent.meeshyPreviewTruncated, senderName: sentSenderName, at: msgTime)
+            LastMessageFacet(message: $0, preview: msgContent, id: serverId, at: msgTime)
+        } ?? LastMessageFacet.sent(id: serverId, text: msgContent, at: msgTime)
         Task {
-            await ConversationSyncEngine.shared.updateConversationAfterSend(ackedFacet, conversationId: convId)
+            await ConversationSyncEngine.shared.updateConversationAfterSend(
+                ackedFacet, conversationId: convId, replacing: [tempId]
+            )
         }
 
         // Le désarmement des TROIS protections a quitté cet endroit (#7498) :
@@ -227,32 +223,6 @@ extension ConversationViewModel {
         // Détaché : la demande ouvre une alerte système qui peut rester à
         // l'écran indéfiniment, et rien de l'envoi ne doit l'attendre.
         Task { await PushPermissionPrompt.honourDeferredRequest() }
-    }
-
-    /// Preview shown in the conversation list for an OPTIMISTIC message: the
-    /// caption when present, else the media label of ``MediaKindLabel`` in its
-    /// registre APERÇU (mirrors the server's last-message preview wording).
-    /// Used to surface a just-sent message in the list before any server ACK.
-    /// `nonisolated static` so the media path can compute it for a
-    /// `Task.detached`.
-    nonisolated static func optimisticListPreview(text: String,
-                                                  messageType: Message.MessageType,
-                                                  location: SharedPlace? = nil,
-                                                  bundle: Bundle = .main,
-                                                  locale: Locale = .current) -> String {
-        if !text.isEmpty { return text }
-        // Message porteur d'un lieu sans texte : « 📍 <nom, à défaut adresse,
-        // à défaut Position> ». Sans cette branche, l'aperçu d'un message
-        // « lieu seul » (content vide, messageType .text) serait vide — la clé
-        // `media.summary.location` n'était atteinte que par le type de pièce
-        // jointe, jamais par `message.location` (lot 2, spec 2026-07-30).
-        if let location {
-            if let name = location.name, !name.isEmpty { return "📍 \(name)" }
-            if let address = location.address, !address.isEmpty { return "📍 \(address)" }
-            return MediaKindLabel.summary(.location, bundle: bundle, locale: locale)
-        }
-        guard let kind = MediaKindLabel.kind(for: messageType) else { return "" }
-        return MediaKindLabel.summary(kind, bundle: bundle, locale: locale)
     }
 
     /// Colonne `stickerJson` du record OPTIMISTE (#4823) — même mécanique que
@@ -467,10 +437,7 @@ extension ConversationViewModel {
             // just-typed message — with the correct author name — even before
             // the network returns. Without this the preview keeps the previous
             // author/content while the user waits for connectivity.
-            let offlineFacet = LastMessageFacet(
-                message: offlineMessage,
-                preview: Self.optimisticListPreview(text: text, messageType: .text, location: location)
-            )
+            let offlineFacet = LastMessageFacet(message: offlineMessage, preview: text)
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
             }
@@ -607,17 +574,16 @@ extension ConversationViewModel {
                 // appear/reorder in the list until its ACK. finalizeSuccessfulSend
                 // refreshes it with the server timestamp at ACK time.
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    LastMessageFacet(
+                    LastMessageFacet.sent(
                         id: tempId,
-                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType, location: location),
-                        senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+                        text: text,
                         at: optimisticRecord.createdAt,
                         attachments: resolvedAttachments,
-                        attachmentCount: resolvedAttachments.count,
                         isBlurred: resolvedBlur ?? false,
                         isViewOnce: resolvedIsViewOnce,
                         expiresAt: resolvedExpiresAt,
-                        originalLanguage: optimisticRecord.originalLanguage
+                        originalLanguage: optimisticRecord.originalLanguage,
+                        location: location
                     ),
                     conversationId: conversationId
                 )
@@ -1086,13 +1052,11 @@ extension ConversationViewModel {
         let attachmentCount = attachments.count
         // Captured for the conversation-list optimistic update below (computed on
         // the MainActor before the detached insert).
-        let listFacet = LastMessageFacet(
+        let listFacet = LastMessageFacet.sent(
             id: tempId,
-            preview: Self.optimisticListPreview(text: content, messageType: messageType),
-            senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+            text: content,
             at: now,
             attachments: attachments,
-            attachmentCount: attachments.count,
             originalLanguage: resolvedOriginalLanguage
         )
         Task.detached(priority: .userInitiated) {

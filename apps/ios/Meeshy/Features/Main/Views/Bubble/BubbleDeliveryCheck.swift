@@ -81,7 +81,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(MeeshyFont.relative(10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundColor(MeeshyColors.stateFailed)
                 .accessibilityLabel(Self.label(.failed))
         }
     }

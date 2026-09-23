@@ -103,7 +103,20 @@ await checkProtectionStates({ browser, BASE, expect });
  * effet »). Chaque ligne ci-dessous nomme donc ce qui CHANGE.
  */
 {
-  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  /**
+   * LA LANGUE D'INTERFACE EST ÉPINGLÉE (#5866) — `locale: 'fr-FR'`, et c'est
+   * une DÉPENDANCE, pas une décoration. Les libellés du menu du message
+   * (« Sélectionner », « Traduire », « Copier », « Transférer », « Composer »)
+   * et le nom de la barre de sélection viennent du catalogue depuis #5866 :
+   * ils suivent donc `currentInterfaceLanguage()`, qui se résout d'abord sur la
+   * langue du NAVIGATEUR. Un contexte Playwright sans `locale` hérite du défaut
+   * de Chromium (`en-US`) — ce gate cherchait alors « Copier » dans un menu qui
+   * disait « Copy », et rendait « l'entrée manque au menu » pour une interface
+   * parfaitement correcte. Tant que ces libellés étaient écrits EN DUR en
+   * français, la dépendance existait sans se voir : le gate mesurait une
+   * constante, pas une résolution.
+   */
+  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
   // `navigator.clipboard` n'existe pas sur un contexte non sécurisé (http) :
   // on le POSE avant tout script de page et on garde ce qu'on y écrit.
   await menuContext.addInitScript(() => {
@@ -125,7 +138,6 @@ await checkProtectionStates({ browser, BASE, expect });
 
   const rows = menuPage.locator('[data-row]');
   const cluster = menuPage.locator('[role="menu"]');
-  const listItems = menuPage.locator('.message-menu-list [role="menuitem"]');
 
   /**
    * L'ANCRAGE D'OUVERTURE DU FIL EST ENCORE EN VOL (#7054, découvert en
@@ -158,10 +170,21 @@ await checkProtectionStates({ browser, BASE, expect });
    * diffère de l'une à l'autre (le presse-papiers, un attribut `lang`, une
    * capsule, une barre de sélection…) — chaque APPELANT attend SON fait,
    * juste après.
+   *
+   * ON VISE L'ACTION, PLUS SON LIBELLÉ (#7141, appliqué par #7555). Cette
+   * fonction cherchait le texte FRANÇAIS de l'entrée. Depuis que le menu lit
+   * le catalogue d'interface, ce texte suit la langue du LECTEUR — et ce gate
+   * tourne en `en-US`, la locale par défaut du Chromium de Playwright, ici
+   * comme en intégration continue (mesuré, `lib/check-message-states.mjs`
+   * § #7328). Il aurait donc rendu « l'entrée « Copier » manque au menu » sur
+   * un menu parfaitement correct, en anglais. `data-action` est posé pour
+   * être trouvé et ne change avec aucune langue ; et viser l'ACTION rend ce
+   * gate PLUS fort qu'avant, puisqu'il mesure désormais l'effet de l'entrée
+   * telle qu'un lecteur anglophone la voit.
    */
-  const clickMenuItem = async (label) => {
-    const item = listItems.filter({ hasText: label }).first();
-    if ((await item.count()) === 0) return expect(false, `l'entrée « ${label} » manque au menu`);
+  const clickMenuItem = async (action) => {
+    const item = menuPage.locator(`.message-menu-list [role="menuitem"][data-action="${action}"]`).first();
+    if ((await item.count()) === 0) return expect(false, `l'entrée « ${action} » manque au menu`);
     await item.click();
     return true;
   };
@@ -170,7 +193,7 @@ await checkProtectionStates({ browser, BASE, expect });
   await openMenuOnRow(2);
   expect((await cluster.count()) === 1, 'le clic droit sur la 3e rangée ouvre UN role=menu');
   expect(
-    (await menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').count()) === 7,
+    (await menuPage.locator('[data-message-menu-rail] [role="menuitem"]').count()) === 7,
     'le rail porte 6 emojis + « Ajouter une réaction »',
   );
 
@@ -322,7 +345,7 @@ await checkProtectionStates({ browser, BASE, expect });
   // 6.4 bis — LE PARCOURS CLAVIER DU RAIL. `ArrowRight` y déplaçait le focus
   // par un événement RECOPIÉ (`{ ...event, key }`), qui perd `preventDefault`
   // — méthode de PROTOTYPE : le rail levait `TypeError` et restait inerte.
-  const railFirst = menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').first();
+  const railFirst = menuPage.locator('[data-message-menu-rail] [role="menuitem"]').first();
   await railFirst.focus();
   const focusedBefore = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label'));
   await menuPage.keyboard.press('ArrowRight');
@@ -381,7 +404,7 @@ await checkProtectionStates({ browser, BASE, expect });
 
   // 6.6 — COPIER écrit le texte SERVI dans le presse-papiers.
   const servedText = await rows.nth(0).innerText();
-  if (await clickMenuItem('Copier')) {
+  if (await clickMenuItem('copy')) {
     await awaitCondition(menuPage, () => window.__copied.length > 0);
     const copied = await menuPage.evaluate(() => window.__copied);
     expect(copied.length === 1, 'Copier écrit une fois dans le presse-papiers');
@@ -395,8 +418,8 @@ await checkProtectionStates({ browser, BASE, expect });
   const langBefore = await rows.nth(0).locator('[lang]').first().getAttribute('lang');
   const textBefore = await rows.nth(0).innerText();
   await openMenuOnRow(0);
-  if (await clickMenuItem('Traduire')) {
-    const choices = menuPage.locator('[role="group"][aria-label="Traduire"] [role="menuitemradio"]');
+  if (await clickMenuItem('translate')) {
+    const choices = menuPage.locator('[data-message-menu-languages] [role="menuitemradio"]');
     expect((await choices.count()) >= 2, 'le sous-menu Traduire offre au moins deux langues');
     // La langue NON servie — un témoin de RANG ne se pose jamais sur le rang 1.
     const unchecked = choices.and(menuPage.locator('[aria-checked="false"]'));
@@ -427,7 +450,7 @@ await checkProtectionStates({ browser, BASE, expect });
   // 6.8 — UNE RÉACTION DU RAIL pousse une capsule OPTIMISTE sous la rangée.
   const chipsBefore = await rows.nth(0).locator('.rounded-chip').count();
   await openMenuOnRow(0);
-  await menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').first().click();
+  await menuPage.locator('[data-message-menu-rail] [role="menuitem"]').first().click();
   // Le fait est la CAPSULE EN PLUS, pas une valeur qui se stabilise (§ 6.7).
   await awaitCondition(
     menuPage,
@@ -439,26 +462,28 @@ await checkProtectionStates({ browser, BASE, expect });
     'une réaction du rail ajoute une capsule tout de suite (optimiste)',
   );
 
-  // 6.9 — COMPOSER pré-adresse le composeur (la citation apparaît).
+  // 6.9 — RÉPONDRE pré-adresse le composeur (la citation apparaît). L'action
+  // s'appelait `compose` jusqu'à #7555, un mot qui dit AUTRE CHOSE sur iOS
+  // (`PrimaryAction.compose` = créer une story ou un post avec ce média).
   await openMenuOnRow(0);
-  if (await clickMenuItem('Composer')) {
+  if (await clickMenuItem('reply')) {
     await awaitFact(
       menuPage.getByRole('button', { name: /Annuler la réponse/ }).or(menuPage.locator('[data-reply-target]')).first(),
     );
     expect(
       (await menuPage.getByRole('button', { name: /Annuler la réponse/ }).count()) > 0 ||
         (await menuPage.locator('[data-reply-target]').count()) > 0,
-      'Composer pré-adresse le composeur (la citation apparaît)',
+      'Répondre pré-adresse le composeur (la citation apparaît)',
     );
   }
 
   // 6.10 — SÉLECTIONNER remplace le composeur par la barre de sélection, et la
   // coche de la rangée est un contrôle RÉEL (role=checkbox), pas un décor.
   await openMenuOnRow(0);
-  if (await clickMenuItem('Sélectionner')) {
-    await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
+  if (await clickMenuItem('select')) {
+    await awaitFact(menuPage.locator('[data-selection-toolbar]'));
     expect(
-      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
+      (await menuPage.locator('[data-selection-toolbar][role="toolbar"]').count()) === 1,
       'Sélectionner remplace le composeur par la barre de sélection',
     );
     expect(
@@ -490,6 +515,50 @@ await checkProtectionStates({ browser, BASE, expect });
     }
   }
 
+  /**
+   * 6.10 bis — « TRANSFÉRER » ARME LA SÉLECTION, ET LA BARRE OUVRE LES
+   * DESTINATAIRES (#5866, décision porteur #5989).
+   *
+   * Le porteur a tranché : la porte « Transférer » a le MÊME effet que
+   * « Sélectionner », avec ce message déjà coché — pas un sélecteur de
+   * conversations qui s'ouvre d'un coup. Ce témoin mesure LES DEUX ÉTAPES,
+   * parce que la première seule ne distingue pas le geste voulu d'un
+   * « Transférer » qui aurait simplement été câblé sur « Sélectionner » par
+   * erreur : c'est la SECONDE qui prouve que le mot mène quelque part.
+   */
+  /* ON QUITTE LA SÉLECTION PAR SON PROPRE GESTE — Échap ne la ferme pas, et
+     `openMenuFor` REFUSE d'ouvrir un menu tant qu'une sélection est armée
+     (`use-message-menu.ts`, « en sélection, un tap bascule déjà »). Sans ce
+     « Annuler », l'entrée cherchée ci-dessous manquait à un menu qui n'était
+     jamais monté — un rouge qui accusait la mauvaise chose. */
+  await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).getByRole('button', { name: 'Annuler' }).click();
+  await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }), { state: 'detached' });
+  await openMenuOnRow(0);
+  if (await clickMenuItem('Transférer')) {
+    await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
+    expect(
+      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
+      '« Transférer » arme la sélection multiple (décision #5989)',
+    );
+    expect(
+      (await menuPage.locator('[role="checkbox"][aria-checked="true"]').count()) === 1,
+      '« Transférer » coche CE message, et lui seul',
+    );
+    const forwardButton = menuPage
+      .getByRole('toolbar', { name: 'Sélection de messages' })
+      .getByRole('button', { name: 'Transférer' });
+    expect((await forwardButton.count()) === 1, 'la barre de sélection porte « Transférer »');
+    await forwardButton.click();
+    /* Le FAIT est la feuille de destinataires — pas un état qui se stabilise :
+       `useConversations` sert le cache tout de suite quand il en a, et
+       n'attend le réseau que sur un cache vide (cache-first, D-113). */
+    await awaitFact(menuPage.locator('[data-forward-target]').first());
+    expect(
+      (await menuPage.locator('[data-forward-target]').count()) > 0,
+      'valider ouvre la feuille de destinataires, avec au moins une conversation',
+    );
+  }
+
   await menuPage.close();
   await menuContext.close();
 
@@ -504,7 +573,7 @@ await checkProtectionStates({ browser, BASE, expect });
    * correctif de revue.
    */
   {
-    const leakContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const leakContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
     await leakContext.addInitScript(() => {
       const written = [];
       Object.defineProperty(window, '__copied', { get: () => written });
@@ -525,27 +594,32 @@ await checkProtectionStates({ browser, BASE, expect });
     // un menu que le premier `scroll` de convergence referme aussitôt.
     await waitForRowSettled(leakPage, BLURRED_WITNESS_ID);
 
-    // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ».
+    // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ». Visé par
+    // `data-action` et non par le libellé (#7141/#7555) : ce gate tourne en
+    // `en-US`, où « Copier » n'est écrit nulle part — l'absence du libellé
+    // français y aurait été vraie quoi qu'offre le menu.
     await rowFor(BLURRED_WITNESS_ID).click({ button: 'right' });
     await awaitFact(leakMenuList);
-    const protectedLabels = await leakPage.locator('.message-menu-list [role="menuitem"]').allInnerTexts();
-    expect(!protectedLabels.includes('Copier'), 'un message flouté n’offre pas « Copier »');
-    expect(!protectedLabels.includes('Traduire'), 'un message flouté n’offre pas « Traduire »');
+    const protectedActions = await leakPage
+      .locator('.message-menu-list [role="menuitem"]')
+      .evaluateAll((items) => items.map((item) => item.getAttribute('data-action')));
+    expect(!protectedActions.includes('copy'), 'un message flouté n’offre pas « Copier »');
+    expect(!protectedActions.includes('translate'), 'un message flouté n’offre pas « Traduire »');
     await leakPage.keyboard.press('Escape');
     await awaitFact(leakPage.locator('[role="menu"]'), { state: 'detached' });
 
     // (b) le SÉLECTIONNER + « Copier » de la barre ne fait pas sortir le secret.
     await rowFor(TRANSLATED_UNVEILED_WITNESS_ID).click({ button: 'right' });
     await awaitFact(leakMenuList);
-    await leakPage.locator('.message-menu-list [role="menuitem"]').filter({ hasText: 'Sélectionner' }).first().click();
-    await awaitFact(leakPage.getByRole('toolbar', { name: 'Sélection de messages' }));
+    await leakPage.locator('.message-menu-list [role="menuitem"][data-action="select"]').first().click();
+    await awaitFact(leakPage.locator('[data-selection-toolbar]'));
     const blurredCheckbox = rowFor(BLURRED_WITNESS_ID).getByRole('checkbox');
     if ((await blurredCheckbox.count()) === 0) {
       expect(false, 'la rangée floutée porte une coche de sélection');
     } else {
       await blurredCheckbox.first().click();
       await awaitFact(rowFor(BLURRED_WITNESS_ID).locator('[role="checkbox"][aria-checked="true"]'));
-      await leakPage.getByRole('button', { name: 'Copier' }).click();
+      await leakPage.locator('[data-selection-copy]').click();
       await awaitCondition(leakPage, () => window.__copied.length > 0);
       const leaked = await leakPage.evaluate(() => window.__copied.join('\n'));
       expect(!leaked.includes(BLURRED_CONTENT), 'le contenu flouté ne part JAMAIS dans le presse-papiers');
@@ -570,6 +644,7 @@ await checkProtectionStates({ browser, BASE, expect });
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,
+    locale: 'fr-FR',
   });
   const touchPage = await touchContext.newPage();
   await touchPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
@@ -680,7 +755,7 @@ await checkMoreSheet({ browser, BASE, expect });
  * est exigé, c'est que TOUT CE QUI EST RENDU ait un gestionnaire.
  */
 {
-  const composerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const composerContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
   const composerPage = await composerContext.newPage();
   await composerPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await composerPage.waitForSelector('[data-message]');

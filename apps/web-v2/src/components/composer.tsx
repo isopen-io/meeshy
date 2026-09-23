@@ -347,8 +347,9 @@ export const Composer = memo(function Composer({
   const showAbove = pending.length > 0 || notice !== null || locator.place !== null;
 
   /**
-   * « COMPOSER » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
-   * 8) — `useMessageMenu.onMenuAction('compose')` pose `focusTakenRef.current
+   * « RÉPONDRE » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
+   * 8 ; l'action s'appelait `compose` jusqu'à #7555) —
+   * `useMessageMenu.onMenuAction('reply')` pose `focusTakenRef.current
    * = true` sur la PROMESSE que quelqu'un prend le focus ; mesuré,
    * `document.activeElement` valait BODY après ce geste, contrairement à
    * iOS (`ConversationView+LongPressMenu.swift`,

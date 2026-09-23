@@ -380,7 +380,29 @@ public final class ConversationStoreSocketBridge {
             isAnnouncementChannel: event.isAnnouncementChannel,
             defaultWriteRole: event.defaultWriteRole,
             slowModeSeconds: event.slowModeSeconds,
-            autoTranslateEnabled: event.autoTranslateEnabled
+            autoTranslateEnabled: event.autoTranslateEnabled,
+            // #7548 — le sous-groupe média et la nature voyagent jusqu'au store :
+            // décodés sans être mappés, ils seraient aussi inertes qu'absents.
+            // Un message PROTÉGÉ arrive sans pièce jointe mais avec ses
+            // drapeaux : le groupe existe dès qu'UNE de ses clés est là.
+            media: mediaGroup(of: event),
+            nature: event.lastMessageNature,
+            lastReaction: event.lastReaction,
+            activeCall: event.activeCall
+        )
+    }
+
+    nonisolated static func mediaGroup(of event: ConversationUpdatedEvent) -> LastMessageMediaGroup? {
+        guard event.lastMessageAttachments != nil || event.lastMessageAttachmentCount != nil
+                || event.lastMessageIsBlurred != nil || event.lastMessageIsViewOnce != nil
+                || event.lastMessageExpiresAt != nil
+        else { return nil }
+        return LastMessageMediaGroup(
+            attachments: event.lastMessageAttachments ?? [],
+            attachmentCount: event.lastMessageAttachmentCount,
+            isBlurred: event.lastMessageIsBlurred ?? false,
+            isViewOnce: event.lastMessageIsViewOnce ?? false,
+            expiresAt: event.lastMessageExpiresAt
         )
     }
 

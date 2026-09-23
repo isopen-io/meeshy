@@ -363,6 +363,21 @@ export type SendMessageBody = {
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
   /**
+   * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
+   * un transfert EST un envoi qui désigne sa source, et la passerelle copie
+   * elle-même les pièces jointes du message d'origine (mêmes blobs, aucun
+   * ré-upload).
+   *
+   * **`attachmentIds` ET `forwardedFromId` SONT EXCLUSIFS** :
+   * `MessageProcessor.handleAttachments` (`MessageProcessor.ts:726-727`) est
+   * un `else if` — poser le premier DÉSACTIVE la copie. Le seul producteur de
+   * ces deux clés est `forwardBodyOf` (`api/forward.ts`), qui n'écrit jamais
+   * `attachmentIds` ; son doc-comment porte l'invariant.
+   */
+  readonly forwardedFromId?: string;
+  /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
+  readonly forwardedFromConversationId?: string;
+  /**
    * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
    * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque
    * clé est OMISE à sa valeur par défaut (`protectionBodyOf`,

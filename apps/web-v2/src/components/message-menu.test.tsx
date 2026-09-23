@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { useState } from 'react';
 
 import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { useLongPress } from '@/lib/view/long-press';
 import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -20,9 +21,14 @@ import { MessageMenu, type MessageMenuTarget } from './message-menu';
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  /* Le menu LIT son catalogue de façon synchrone (#7555) : le rendu jette si
+     la langue n'est pas chargée — c'est le contrat de `i18n-catalog.ts`, pas
+     un état à maquiller. Trois langues ici : le français des témoins
+     existants, l'anglais et l'arabe du témoin de rang. */
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
 });
 
 afterAll(async () => {
@@ -38,6 +44,9 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  /* La langue d'interface est un état GLOBAL du document : un témoin qui la
+     déplace la rend, sinon le suivant mesure la langue du précédent. */
+  document.documentElement.lang = 'fr';
 });
 
 type HarnessEvents = {
@@ -67,7 +76,7 @@ function Harness({
     onOpen: (anchor) => setTarget({ messageId: 'm2', element: anchor.element, isMine }),
   });
 
-  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2 });
+  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true });
   const choices = translationChoices({
     message: { originalLanguage: 'fr', translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'Hello', translationModel: 'medium', createdAt: new Date() }] },
     preferredLanguages: ['en'],
@@ -167,14 +176,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Composer · Plus…', () => {
+  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Plus…', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Composer', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -258,19 +267,19 @@ describe('MessageMenu — fermer (T9)', () => {
 });
 
 describe('MessageMenu — effets (T10)', () => {
-  test('Composer ⇒ onAction("compose"), puis le menu se ferme', () => {
+  test('Répondre ⇒ onAction("reply"), puis le menu se ferme', () => {
     let seen: string | undefined;
     const el = mount({ events: { onAction: (id) => (seen = id) } });
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    const composeButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
-      (b) => b.textContent === 'Composer',
+    const replyButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
+      (b) => b.textContent === 'Répondre',
     ) as HTMLButtonElement;
     act(() => {
-      composeButton.click();
+      replyButton.click();
     });
-    expect(seen).toBe('compose');
+    expect(seen).toBe('reply');
     expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
@@ -328,6 +337,71 @@ describe('MessageMenu — effets (T10)', () => {
       moreButton.click();
     });
     expect(seen).toEqual(['more']);
+  });
+});
+
+/**
+ * LE MENU DANS LA LANGUE DU LECTEUR (#7555).
+ *
+ * POURQUOI CES TÉMOINS SONT SUR `en` ET `ar`, JAMAIS SUR `fr`. Les libellés
+ * étaient EN DUR, en français : en `fr`, « le libellé codé » et « le libellé
+ * servi par le catalogue » rendent EXACTEMENT le même verdict — c'est la
+ * leçon 261 (un témoin de RANG ne se pose jamais sur le rang 1) appliquée à
+ * la langue. Seule une locale NON française sépare les deux, et l'arabe est
+ * la septième langue du produit — celle qu'un catalogue oublie en premier.
+ *
+ * CE QUE CES TÉMOINS NE DISENT PAS : le SENS D'ÉCRITURE. Mesuré sur `dist/`
+ * en `ar-SA`, `document.documentElement` porte `lang="ar"` mais AUCUN
+ * `dir="rtl"` — rien dans web-v2 ne le pose (ni le script d'amorçage, ni
+ * `interface-language.ts`). Le menu rend bien l'arabe et ses contrôles
+ * répondent ; il le rend de gauche à droite. C'est une lacune de l'écran
+ * ENTIER, antérieure à ce lot — #7563 la porte. La consigner ici plutôt que
+ * d'affirmer un `dir` que personne n'écrit.
+ *
+ * ET ON MESURE CE QUE LA RANGÉE AFFICHE, pas ce que le catalogue contient :
+ * un témoin qui relit `catalog-en.ts` serait vert sur un menu resté français.
+ */
+describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
+  const labelsOf = (): readonly string[] =>
+    Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent ?? '');
+
+  test('interface EN ⇒ le menu rendu est anglais, pas français', () => {
+    document.documentElement.lang = 'en';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'More…']);
+  });
+
+  test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
+    document.documentElement.lang = 'ar';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'المزيد…']);
+    expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
+      translate('ar', 'message.menu.react'),
+    );
+    expect(document.querySelector('[data-add-reaction]')?.getAttribute('aria-label')).toBe(
+      translate('ar', 'message.menu.addReaction'),
+    );
+  });
+
+  test('interface EN ⇒ le sous-menu Traduire s’annonce en anglais lui aussi', () => {
+    document.documentElement.lang = 'en';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const translateButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
+      (b) => b.textContent === 'Translate',
+    ) as HTMLButtonElement;
+    act(() => {
+      translateButton.click();
+    });
+    expect(document.querySelector('[role="group"][aria-label="Translate"]')).not.toBeNull();
   });
 });
 
@@ -423,7 +497,7 @@ describe('MessageMenu — garde de protection (T11, D-23)', () => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Composer', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Transférer', 'Répondre', 'Plus…']);
   });
 });
 

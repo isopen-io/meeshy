@@ -579,154 +579,21 @@ struct LentilleConversationRow: View {
         conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? ""
     }
 
-    // behaviour-matrix:L03 — « conservent leurs glyphes SF actuels (timer,
-    // eye.slash, flame) en tête de ligne 2, en italique » — les quatre
-    // glyphes ci-dessous reprennent `ThemedConversationRow` (lignes
-    // ~510/549/561/573, fichier interdit d'édition, lu seulement) : `timer`
-    // pour l'éphémère actif, `timer.badge.xmark` pour l'expiré, `eye.slash`
-    // pour le masqué, `flame` pour la vue unique — jamais réimportés
-    // (fichier interdit), reproduits ici comme `timestampColor` l'est déjà.
-    @ViewBuilder
+    /// La préview — COMPOSÉE par le SDK (`ConversationPreviewComposer`, #7548),
+    /// jamais ici. Nature, détails, protections, décompte d'un éphémère, appel
+    /// en cours et dernière réaction : la rangée ne décide plus rien de ce
+    /// qu'elle dit, elle le peint. Deux lignes en magnification, une au repos.
     private var previewLine: some View {
-        switch conversation.lastMessageSummaryKind() {
-        case .expired:
-            HStack(spacing: 4) {
-                Image(systemName: "timer.badge.xmark")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(textMuted)
-                Text(String(localized: "message.expired"))
-                    .font(LentilleMetrics.Line2.font)
-                    .italic()
-                    .foregroundColor(textMuted)
-                    .lineLimit(1)
-            }
-
-        case .hidden:
-            HStack(spacing: 4) {
-                senderLabel
-                Image(systemName: "eye.slash")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(textSecondary)
-                Text(String(localized: "conversation.summary.hidden"))
-                    .font(LentilleMetrics.Line2.font)
-                    .italic()
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
-            }
-
-        case .viewOnce:
-            HStack(spacing: 4) {
-                senderLabel
-                Image(systemName: MessageProtectionSymbols.viewOnce)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(accent)
-                Text(String(localized: "conversation.summary.view_once"))
-                    .font(LentilleMetrics.Line2.font)
-                    .italic()
-                    .foregroundColor(accent)
-                    .lineLimit(1)
-            }
-
-        case .ephemeralActive:
-            standardPreview(showEphemeralIcon: true)
-
-        case .standard:
-            standardPreview(showEphemeralIcon: false)
-        }
-    }
-
-    @ViewBuilder
-    private func standardPreview(showEphemeralIcon: Bool) -> some View {
-        let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let attachments = conversation.lastMessageAttachments
-        let totalCount = conversation.lastMessageAttachmentCount
-
-        if hasText {
-            // « Auteur : message » en UN SEUL texte (retour produit
-            // 2026-08-22 : « juste mettre l'auteur : message »), même
-            // grammaire que la carte de magnification — deux `Text` côte à
-            // côte dans un `HStack` laissaient l'auteur occuper sa propre
-            // colonne et tronquaient le message avant le bord.
-            HStack(spacing: 4) {
-                if showEphemeralIcon {
-                    Image(systemName: MessageProtectionSymbols.ephemeral)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(accent)
-                }
-                (senderPrefix + Text(resolvedPreviewText)
-                    .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary))
-                    .lineLimit(isMagnified ? 2 : 1)
-            }
-        } else if let first = attachments.first {
-            let display = AttachmentDisplay.make(for: first.mimeType)
-            HStack(spacing: 4) {
-                if showEphemeralIcon {
-                    Image(systemName: MessageProtectionSymbols.ephemeral)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(accent)
-                }
-                senderLabel
-                Image(systemName: display.icon)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(display.tintColor)
-                Text(display.shortLabel)
-                    .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
-                if totalCount > 1 {
-                    Text("+\(totalCount - 1)")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent)
-                }
-            }
-        } else if let place = conversation.lastMessageLocation {
-            HStack(spacing: 4) {
-                senderLabel
-                Image(systemName: "mappin.and.ellipse")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(accent)
-                Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))
-                    .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
-            }
-        } else {
-            Text("")
-                .font(LentilleMetrics.Line2.font)
-        }
-    }
-
-    /// « Auteur : » — la règle, pure et partagée avec la carte de
-    /// magnification (`LentilleFocusCard.senderPrefix`), pour que les deux
-    /// vues ne puissent pas dériver l'une de l'autre. `nil` quand il n'y a
-    /// personne à nommer : le message commence alors la ligne.
-    nonisolated static func authorPrefix(name: String?) -> String? {
-        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
-        return "\(trimmed) : "
-    }
-
-    /// Le préfixe, en `Text` concaténable — teinté accent, comme la carte.
-    private var senderPrefix: Text {
-        guard let prefix = Self.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
-        return Text(prefix)
-            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
-            .foregroundColor(accent)
-    }
-
-    /// Conservé pour les branches qui INTERCALENT un glyphe entre l'auteur et
-    /// le libellé (pièce jointe, localisation, masqué, vue unique) : là, la
-    /// concaténation en un seul `Text` est impossible.
-    private var senderLabel: some View {
-        Group {
-            if let name = conversation.lastMessageSenderName, !name.isEmpty {
-                Text(name)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(accent)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-            }
-        }
+        ConversationPreviewLine(
+            conversation: conversation,
+            preferredLanguages: preferredContentLanguages,
+            accent: accent,
+            isDark: isDark,
+            font: LentilleMetrics.Line2.font,
+            authorFont: MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold),
+            lineLimit: isMagnified ? 2 : 1,
+            onJoin: liveCall == nil ? onJoinLiveCall : nil
+        )
     }
 }
 

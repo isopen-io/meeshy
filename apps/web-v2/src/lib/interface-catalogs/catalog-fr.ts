@@ -21,6 +21,31 @@ const fr = {
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
+  /* LE MENU DU MESSAGE ET SA BARRE DE SÉLECTION (#5866) — les six entrées du
+     menu voyagent ENSEMBLE : ajouter « Transférer » en français seul à côté de
+     cinq libellés eux aussi écrits en dur aurait figé la surface entière dans
+     une seule langue. `messageMenuItems(ctx, language)` les lit désormais ici,
+     la barre de sélection aussi. « Copier » et « Transférer » sont PARTAGÉS
+     par les deux portes : même mot, même clé (dimension 6). */
+  'message.action.select': 'Sélectionner',
+  'message.action.translate': 'Traduire',
+  'message.action.copy': 'Copier',
+  'message.action.forward': 'Transférer',
+  'message.action.compose': 'Composer',
+  'message.action.more': 'Plus…',
+  'selection.toolbar': 'Sélection de messages',
+  'selection.cancel': 'Annuler',
+  'selection.count': '{count} sélectionnés',
+  'forward.title': 'Transférer à…',
+  'forward.empty': 'Aucune conversation',
+  'forward.search.label': 'Rechercher une conversation',
+  'forward.search.placeholder': 'Rechercher',
+  'forward.announce.sent': 'Message transféré',
+  'forward.announce.sentMany': '{count} messages transférés',
+  'forward.announce.failed': 'Le transfert a échoué',
+  'forward.refusal.viewOnce': 'Un message à vue unique ne peut pas être transféré',
+  'forward.refusal.unavailable': 'Le message d’origine n’est plus disponible : rien à transférer',
+
   'typing.named': '{name} écrit',
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
@@ -1100,6 +1125,35 @@ const fr = {
   'attachment.kind.video': 'Vidéo',
   'attachment.kind.audio': 'Audio',
   'attachment.kind.file': 'Fichier',
+
+  /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
+     Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
+     SEPT langues (`lib/view/message-actions.ts`, `components/selection-toolbar.tsx`,
+     `components/message-detail-sheet.tsx`) — pendant que les annonces VOISINES
+     du même hook (`announce.messageCopied`, …) étaient déjà traduites.
+
+     `message.menu.reply` dit « Répondre », et le mot « composer » est rendu au
+     sens qu'il a sur iOS — créer une story ou un post AVEC ce média
+     (`MessageActionResolver.swift`, `case compose`). Valeur reprise du
+     catalogue iOS : `action.reply`.
+
+     « Annuler » de la barre de sélection réutilise `common.cancel` : un seul
+     mot, une seule clé. */
+  'message.menu.select': 'Sélectionner',
+  'message.menu.translate': 'Traduire',
+  'message.menu.copy': 'Copier',
+  'message.menu.forward': 'Transférer',
+  'message.menu.reply': 'Répondre',
+  'message.menu.more': 'Plus…',
+  'message.menu.react': 'Réagir',
+  'message.menu.addReaction': 'Ajouter une réaction',
+  'message.selection.toolbar': 'Sélection de messages',
+  'message.selection.count': '{count} sélectionnés',
+  'message.detail.title': 'Détails du message',
+  'message.detail.languages': 'Langues',
+  'message.detail.reactions': 'Réactions',
+  'message.detail.sent': 'Envoyé',
+  'message.detail.language.original': '{language} (original)',
 
 } as const;
 
