@@ -57,7 +57,7 @@ function Harness() {
   const longPress = useLongPress({
     onOpen: (anchor) => setTarget({ messageId: 'm1', element: anchor.element, isMine: true }),
   });
-  const items = messageMenuItems({ hasText: true, isProtected: false, languageCount: 1 });
+  const items = messageMenuItems({ hasText: true, isProtected: false, languageCount: 1, canForward: true });
 
   return (
     <div>

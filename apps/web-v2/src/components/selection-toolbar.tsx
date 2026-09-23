@@ -7,8 +7,16 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * LA BARRE DE SÉLECTION (#5814, question 5) — REMPLACE le composeur, jamais
  * un second bandeau (miroir `ConversationView.swift:1986`). Mode MINIMAL :
  * Annuler · « N sélectionnés » (≥ 2 seulement, miroir `SelectionToolbar`
- * iOS) · Copier. Transférer/Supprimer restent une issue compagnon — aucun
- * transport serveur ce lot (loi 4, un contrôle existe s'il a un effet).
+ * iOS) · Transférer · Copier.
+ *
+ * « TRANSFÉRER » EST LA SECONDE PORTE (#5866, décision porteur #5989) : le
+ * menu du message ARME la sélection avec ce message déjà coché, et c'est ICI
+ * qu'on VALIDE vers des destinataires. Les deux portes portent le MÊME mot,
+ * depuis la MÊME clé de catalogue, parce qu'elles servent le même geste à deux
+ * étapes (dimension 6).
+ *
+ * « Supprimer » reste une issue compagnon — aucun transport serveur ce lot
+ * (loi 4, un contrôle existe s'il a un effet).
  *
  * SES TROIS TEXTES VIENNENT DU CATALOGUE (#7555) — ils étaient en dur, en
  * français, sur une barre servie en SEPT langues. Le compteur passe par un
@@ -19,10 +27,12 @@ export function SelectionToolbar({
   count,
   onEnd,
   onCopy,
+  onForward,
 }: {
   readonly count: number;
   readonly onEnd: () => void;
   readonly onCopy: () => void;
+  readonly onForward: () => void;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const language = currentInterfaceLanguage();
@@ -75,6 +85,16 @@ export function SelectionToolbar({
           ? translate(language, 'message.selection.count', { count: new Intl.NumberFormat(language).format(count) })
           : ''}
       </span>
+      <button
+        type="button"
+        onClick={onForward}
+        data-selection-forward
+        disabled={count === 0}
+        className="grid place-items-center rounded-chip px-3 text-body font-semibold disabled:opacity-40"
+        style={{ minHeight: 44, color: 'var(--accent)' }}
+      >
+        {translate(language, 'message.menu.forward')}
+      </button>
       <button
         type="button"
         onClick={onCopy}

@@ -21,17 +21,17 @@ afterEach(() => {
 
 describe('SelectionToolbar — rendu (T13)', () => {
   test('1 sélectionné ⇒ pas de compteur', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={1} onEnd={() => {}} onCopy={() => {}} />);
+    const html = renderToStaticMarkup(<SelectionToolbar count={1} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />);
     expect(html).not.toContain('sélectionnés');
   });
 
   test('2 sélectionnés ⇒ « 2 sélectionnés »', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} />);
+    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />);
     expect(html).toContain('2 sélectionnés');
   });
 
   test('`role="toolbar"` posé, cibles ≥ 44 px', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={3} onEnd={() => {}} onCopy={() => {}} />);
+    const html = renderToStaticMarkup(<SelectionToolbar count={3} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />);
     expect(html).toContain('role="toolbar"');
     expect(html).toContain('44');
   });
@@ -48,7 +48,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 describe('SelectionToolbar — les libellés viennent du catalogue (#7555)', () => {
   test('interface EN ⇒ Cancel, « 2 selected », Copy, et un rôle nommé en anglais', () => {
     document.documentElement.lang = 'en';
-    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} />);
+    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />);
     expect(html).toContain('Cancel');
     expect(html).toContain('2 selected');
     expect(html).toContain('Copy');
@@ -68,12 +68,26 @@ describe('SelectionToolbar — les libellés viennent du catalogue (#7555)', () 
    */
   test('interface AR ⇒ le verbe d’abord, le nombre ensuite', () => {
     document.documentElement.lang = 'ar';
-    const html = renderToStaticMarkup(<SelectionToolbar count={3} onEnd={() => {}} onCopy={() => {}} />);
+    const html = renderToStaticMarkup(<SelectionToolbar count={3} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />);
     const counter = /<span[^>]*>([^<]*)<\/span>/.exec(html)?.[1] ?? '';
     expect(counter.startsWith('تم تحديد')).toBe(true);
     expect(/[0-9٠-٩]$/.test(counter.trim())).toBe(true);
     expect(html).toContain('إلغاء');
     expect(html).not.toContain('Annuler');
+  });
+});
+
+describe('SelectionToolbar — « Transférer », la seconde porte (#5866)', () => {
+  // Le gate navigateur vise `data-*`, jamais le mot : la CI tourne en en-US, et
+  // un marqueur épinglé sur un libellé français rougirait sur une barre pourtant
+  // correcte (#7141). Le mot, lui, est couvert par les témoins de langue
+  // ci-dessus — celui-ci garde le MARQUEUR et la présence du bouton.
+  test('le bouton est là, et il porte le marqueur que les gates visent', () => {
+    const html = renderToStaticMarkup(
+      <SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />,
+    );
+    expect(html).toContain('data-selection-forward');
+    expect(html).toContain('Transférer');
   });
 });
 
@@ -98,7 +112,7 @@ describe('SelectionToolbar — effets (T13)', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root.render(<SelectionToolbar count={2} {...props} />);
+      root.render(<SelectionToolbar count={2} {...props} onForward={() => {}} />);
     });
     return container;
   };

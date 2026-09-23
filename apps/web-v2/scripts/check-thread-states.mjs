@@ -103,7 +103,20 @@ await checkProtectionStates({ browser, BASE, expect });
  * effet »). Chaque ligne ci-dessous nomme donc ce qui CHANGE.
  */
 {
-  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  /**
+   * LA LANGUE D'INTERFACE EST ÉPINGLÉE (#5866) — `locale: 'fr-FR'`, et c'est
+   * une DÉPENDANCE, pas une décoration. Les libellés du menu du message
+   * (« Sélectionner », « Traduire », « Copier », « Transférer », « Composer »)
+   * et le nom de la barre de sélection viennent du catalogue depuis #5866 :
+   * ils suivent donc `currentInterfaceLanguage()`, qui se résout d'abord sur la
+   * langue du NAVIGATEUR. Un contexte Playwright sans `locale` hérite du défaut
+   * de Chromium (`en-US`) — ce gate cherchait alors « Copier » dans un menu qui
+   * disait « Copy », et rendait « l'entrée manque au menu » pour une interface
+   * parfaitement correcte. Tant que ces libellés étaient écrits EN DUR en
+   * français, la dépendance existait sans se voir : le gate mesurait une
+   * constante, pas une résolution.
+   */
+  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
   // `navigator.clipboard` n'existe pas sur un contexte non sécurisé (http) :
   // on le POSE avant tout script de page et on garde ce qu'on y écrit.
   await menuContext.addInitScript(() => {
@@ -502,6 +515,50 @@ await checkProtectionStates({ browser, BASE, expect });
     }
   }
 
+  /**
+   * 6.10 bis — « TRANSFÉRER » ARME LA SÉLECTION, ET LA BARRE OUVRE LES
+   * DESTINATAIRES (#5866, décision porteur #5989).
+   *
+   * Le porteur a tranché : la porte « Transférer » a le MÊME effet que
+   * « Sélectionner », avec ce message déjà coché — pas un sélecteur de
+   * conversations qui s'ouvre d'un coup. Ce témoin mesure LES DEUX ÉTAPES,
+   * parce que la première seule ne distingue pas le geste voulu d'un
+   * « Transférer » qui aurait simplement été câblé sur « Sélectionner » par
+   * erreur : c'est la SECONDE qui prouve que le mot mène quelque part.
+   */
+  /* ON QUITTE LA SÉLECTION PAR SON PROPRE GESTE — Échap ne la ferme pas, et
+     `openMenuFor` REFUSE d'ouvrir un menu tant qu'une sélection est armée
+     (`use-message-menu.ts`, « en sélection, un tap bascule déjà »). Sans ce
+     « Annuler », l'entrée cherchée ci-dessous manquait à un menu qui n'était
+     jamais monté — un rouge qui accusait la mauvaise chose. */
+  await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).getByRole('button', { name: 'Annuler' }).click();
+  await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }), { state: 'detached' });
+  await openMenuOnRow(0);
+  if (await clickMenuItem('Transférer')) {
+    await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
+    expect(
+      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
+      '« Transférer » arme la sélection multiple (décision #5989)',
+    );
+    expect(
+      (await menuPage.locator('[role="checkbox"][aria-checked="true"]').count()) === 1,
+      '« Transférer » coche CE message, et lui seul',
+    );
+    const forwardButton = menuPage
+      .getByRole('toolbar', { name: 'Sélection de messages' })
+      .getByRole('button', { name: 'Transférer' });
+    expect((await forwardButton.count()) === 1, 'la barre de sélection porte « Transférer »');
+    await forwardButton.click();
+    /* Le FAIT est la feuille de destinataires — pas un état qui se stabilise :
+       `useConversations` sert le cache tout de suite quand il en a, et
+       n'attend le réseau que sur un cache vide (cache-first, D-113). */
+    await awaitFact(menuPage.locator('[data-forward-target]').first());
+    expect(
+      (await menuPage.locator('[data-forward-target]').count()) > 0,
+      'valider ouvre la feuille de destinataires, avec au moins une conversation',
+    );
+  }
+
   await menuPage.close();
   await menuContext.close();
 
@@ -516,7 +573,7 @@ await checkProtectionStates({ browser, BASE, expect });
    * correctif de revue.
    */
   {
-    const leakContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const leakContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
     await leakContext.addInitScript(() => {
       const written = [];
       Object.defineProperty(window, '__copied', { get: () => written });
@@ -587,6 +644,7 @@ await checkProtectionStates({ browser, BASE, expect });
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,
+    locale: 'fr-FR',
   });
   const touchPage = await touchContext.newPage();
   await touchPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
@@ -697,7 +755,7 @@ await checkMoreSheet({ browser, BASE, expect });
  * est exigé, c'est que TOUT CE QUI EST RENDU ait un gestionnaire.
  */
 {
-  const composerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const composerContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
   const composerPage = await composerContext.newPage();
   await composerPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await composerPage.waitForSelector('[data-message]');

@@ -17,24 +17,25 @@ const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext =>
   hasText: true,
   isProtected: false,
   languageCount: 2,
+  canForward: true,
   ...overrides,
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, reply, more', () => {
-    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'reply', 'more']);
+  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, more', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
   });
 
-  test('message SANS texte (m3) ⇒ select, reply, more — ni copy ni translate', () => {
-    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'reply', 'more']);
+  test('message SANS texte (m3) ⇒ select, forward, reply, more — ni copy ni translate', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
   });
 
   test('message PROTÉGÉ (D-23) ⇒ ni copy ni translate, même avec du texte', () => {
-    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'reply', 'more']);
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'reply', 'more']);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'more']);
   });
 
   /**
@@ -50,6 +51,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       select: 'message.menu.select',
       translate: 'message.menu.translate',
       copy: 'message.menu.copy',
+      forward: 'message.menu.forward',
       reply: 'message.menu.reply',
       more: 'message.menu.more',
     });
@@ -69,6 +71,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'Select',
       'Translate',
       'Copy',
+      'Forward',
       'Reply',
       'More…',
     ]);
@@ -76,6 +79,7 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
       'تحديد',
       'ترجمة',
       'نسخ',
+      'إعادة توجيه',
       'رد',
       'المزيد…',
     ]);
@@ -166,5 +170,26 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l’o
       servedLanguage: 'fr',
     });
     expect(choices).toEqual([{ code: 'fr', isOriginal: true, isServed: true }]);
+  });
+});
+
+describe('« Transférer » n\'apparaît que si la règle du serveur l\'admet (#5866)', () => {
+  test('message transférable ⇒ l\'entrée est là, entre Copier et Répondre', () => {
+    const ids = messageMenuItems(ctx()).map((i) => i.id);
+    expect(ids).toContain('forward');
+    expect(ids.indexOf('forward')).toBeGreaterThan(ids.indexOf('copy'));
+    expect(ids.indexOf('forward')).toBeLessThan(ids.indexOf('reply'));
+  });
+
+  // La garde vit côté client AVANT l'aller-retour : `admitMessageForward`
+  // refuse une vue unique côté serveur, et découvrir l'interdit après coup
+  // serait une promesse rompue, pas une protection.
+  test('message non transférable ⇒ aucune entrée, jamais une entrée grisée', () => {
+    expect(messageMenuItems(ctx({ canForward: false })).map((i) => i.id)).not.toContain('forward');
+  });
+
+  test('son libellé vient du catalogue, comme les cinq autres', () => {
+    const item = messageMenuItems(ctx()).find((i) => i.id === 'forward');
+    expect(item?.labelKey).toBe('message.menu.forward');
   });
 });
