@@ -265,7 +265,8 @@ export class ReactionService {
 
     if (result.count > 0) {
       await this.updateMessageReactionSummary(messageId);
-      if (target) await this.forgetLastReaction(target.message.conversationId, target.id);
+      const conversationId = target?.message?.conversationId;
+      if (target && conversationId) await this.forgetLastReaction(conversationId, target.id);
     }
 
     return result.count > 0;
