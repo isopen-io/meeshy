@@ -137,7 +137,12 @@ export const kindOf = (attachment: Pick<Attachment, 'mimeType'>): 'image' | 'aud
  * garde de son côté (`mergeMessageTranslations`).
  */
 export const translationsOf = (
-  message: Message,
+  /** LE CHAMP EST DÉCLARÉ OPTIONNEL ICI (#7527) — `Message.translations` est
+   * requis dans `@meeshy/shared`, mais les formes ALLÉGÉES du cache ne le
+   * portent pas. Le déclarer ici est ce qui permet aux appelants d'accepter
+   * la forme allégée SANS assertion de type : une garde annoncée par une
+   * assertion n'en est pas une. */
+  message: { readonly translations?: Message['translations'] },
 ): readonly { readonly language: string; readonly text: string }[] =>
   (message.translations ?? []).map((t) => ({ language: t.targetLanguage, text: t.translatedContent }));
 
