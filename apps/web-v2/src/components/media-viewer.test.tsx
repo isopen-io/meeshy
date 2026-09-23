@@ -18,6 +18,8 @@ import { composeSceneGalleryLot } from '@/lib/feed/gallery-lot';
 
 import type { MediaCarrier } from '@/lib/view/media';
 
+import { modalLayersOpen } from '@/lib/view/modal-layers';
+
 import MediaViewer from './media-viewer';
 
 /**
@@ -245,6 +247,28 @@ describe('MediaViewer — fermeture (critère « Escape/retour ferme »)', () =>
     });
     expect(body.querySelector('[data-media-viewer]')!.getAttribute('data-viewer-index')).toBe('1');
     expect(closed).toBe(0);
+  });
+});
+
+describe('MediaViewer — elle DÉCLARE qu’elle recouvre (W14, #7372)', () => {
+  test('montée ⇒ le registre des couches modales la compte ; démontée ⇒ il l’oublie', () => {
+    expect(modalLayersOpen()).toBe(false);
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    mount({ items, startIndex: 0, onClose: () => {} });
+    // Le suivi de lecture du fil (`use-read-tracking.ts`) lit ce registre :
+    // sans cette déclaration, agrandir une photo marquerait lu le fil qu’elle
+    // cache — le défaut que nomme le titre de #7372.
+    expect(modalLayersOpen()).toBe(true);
+
+    const mounted = { container, root };
+    act(() => {
+      mounted.root.unmount();
+    });
+    mounted.container.remove();
+    expect(modalLayersOpen()).toBe(false);
+
+    // Une seconde visionneuse rend à `afterEach` une racine vivante à démonter.
+    mount({ items, startIndex: 0, onClose: () => {} });
   });
 });
 

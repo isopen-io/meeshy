@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { openModalLayer } from './modal-layers';
+
 /**
  * LE RETOUR MATÉRIEL CONSOMME LA COUCHE MODALE, PAS L'ÉCRAN (#5555, puis
  * généralisé revue #5814, défaut majeur 6) — extrait de `components/
@@ -38,6 +40,16 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
  * en CI : `URL blank`, trois têtes de dev sur neuf). L'effet de mise en page
  * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
  * la couche sans que le retour lui appartienne.
+ *
+ * **ELLE DÉCLARE AUSSI LA COUCHE AU REGISTRE** (`modal-layers.ts`, W14
+ * #7372). Ce crochet est le seul point que TOUTE couche modale traverse —
+ * c'est ce que son titre promet depuis #5814 — donc le seul endroit d'où
+ * « quelque chose recouvre l'écran » se sait sans être recalculé par chaque
+ * hôte. Le suivi de lecture s'y abonne pour cesser de marquer lu ce qu'une
+ * visionneuse ou une feuille cache. La déclaration vit dans le MÊME effet de
+ * mise en page que l'entrée d'historique, pour la même raison : une couche
+ * visible une image avant d'être comptée est une image pendant laquelle le
+ * fil se marque lu.
  */
 let nextMarker = 0;
 
@@ -52,6 +64,7 @@ export function useBackDismiss(onClose: () => void): void {
   });
 
   useLayoutEffect(() => {
+    const releaseModalLayer = openModalLayer();
     nextMarker += 1;
     const marker = `back-dismiss-${nextMarker}`;
     window.history.pushState({ backDismiss: marker }, '');
@@ -63,6 +76,7 @@ export function useBackDismiss(onClose: () => void): void {
     window.addEventListener('popstate', onPopState);
 
     return () => {
+      releaseModalLayer();
       window.removeEventListener('popstate', onPopState);
       if (!consumedByHistory && carriesMarker(window.history.state, marker)) window.history.back();
     };

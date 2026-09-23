@@ -610,6 +610,10 @@ export default function ThreadScreen() {
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
   }, [queryClient]);
+  /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
+     modale — visionneuse plein écran comprise, que cet écran ne monte pas :
+     le registre `lib/view/modal-layers.ts` le sait, l'écran n'a rien à
+     recalculer. */
   const readTracking = useReadTracking({
     scroller,
     conversationId,
