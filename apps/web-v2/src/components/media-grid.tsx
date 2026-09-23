@@ -1,6 +1,5 @@
 import { memo, useState } from 'react';
 
-import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc, attachmentSrcSet, sizesFor } from '@/lib/api/media-url';
@@ -22,6 +21,7 @@ import { READER_LOCALE } from '@/lib/reader';
 import { Glyph } from './glyph';
 import { MaskedAttachment } from './masked-attachment';
 import { VideoTile } from './video-tile';
+import { useAttachmentMasked } from './view-once-opened';
 
 /**
  * `ImageTile` — DÉMÉNAGÉ d'`attachment-blocks.tsx:43-121` (#6221, § 5 étape
@@ -152,6 +152,7 @@ export const MediaGrid = memo(function MediaGrid({
   readonly fallbackLanguage: string;
   readonly onOpen: (index: number) => void;
 }) {
+  const maskedAttachment = useAttachmentMasked();
   if (items.length === 0) return null;
 
   if (items.length === 1) {
