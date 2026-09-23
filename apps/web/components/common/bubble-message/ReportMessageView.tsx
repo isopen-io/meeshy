@@ -141,6 +141,7 @@ export const ReportMessageView = memo(function ReportMessageView({
         <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           {/* Bouton Annuler (X) */}
           <Button
+            aria-label={t('cancel')}
             onClick={onCancel}
             disabled={isSubmitting}
             size="lg"
@@ -152,6 +153,7 @@ export const ReportMessageView = memo(function ReportMessageView({
 
           {/* Bouton Signaler (Check) */}
           <Button
+            aria-label={t('report')}
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
             size="lg"

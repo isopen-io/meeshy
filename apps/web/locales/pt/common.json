@@ -361,7 +361,20 @@
     },
     "repost": "Republicar",
     "repostAsPost": "Guardar no meu feed",
-    "storyLocationHere": "Aqui"
+    "storyLocationHere": "Aqui",
+    "a11y": {
+      "close": "Fechar",
+      "copy": "Copiar",
+      "delete": "Excluir",
+      "moreActions": "Mais ações",
+      "newConversation": "Nova conversa",
+      "nextPage": "Próxima página",
+      "openInNewTab": "Abrir em uma nova aba",
+      "openMenu": "Abrir o menu",
+      "previousPage": "Página anterior",
+      "refresh": "Atualizar",
+      "view": "Ver"
+    }
   },
   "copied": "Copiado",
   "never": "Nunca",

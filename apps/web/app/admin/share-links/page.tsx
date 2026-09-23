@@ -188,6 +188,7 @@ function RevealReasonModal({
 export default function AdminShareLinksPage() {
   const router = useRouter();
   const { t, locale } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const currentUser = useUser();
   const isSovereignReader = currentUser?.role === 'BIGBOSS';
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
@@ -578,7 +579,7 @@ export default function AdminShareLinksPage() {
                           {/* Mobile dropdown for secondary actions */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="md:hidden">
+                              <Button aria-label={tA11y('a11y.moreActions')} variant="outline" size="sm" className="md:hidden">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>

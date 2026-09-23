@@ -294,6 +294,7 @@ export const EditMessageView = memo(function EditMessageView({
           <div className="flex items-center gap-3">
             {/* Bouton Annuler (X) */}
             <Button
+              aria-label={t('cancel')}
               onClick={onCancel}
               disabled={isSaving}
               size="lg"
@@ -305,6 +306,7 @@ export const EditMessageView = memo(function EditMessageView({
 
             {/* Bouton Valider (Check) */}
             <Button
+              aria-label={t('save')}
               onClick={handleSave}
               disabled={!hasChanges || !content.trim() || isSaving}
               size="lg"
