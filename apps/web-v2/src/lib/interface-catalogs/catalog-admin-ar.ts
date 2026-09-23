@@ -13,7 +13,6 @@ const ar = {
   'admin.counters.reports': 'البلاغات',
   'admin.counters.newUsers': 'جديد (٢٤ ساعة)',
   'admin.sections.title': 'الأقسام',
-  'admin.sections.legacy': 'الواجهة السابقة',
   'admin.nav.dashboard': 'لوحة المعلومات',
   'admin.nav.users': 'الحسابات',
   'admin.nav.moderation': 'الإشراف',

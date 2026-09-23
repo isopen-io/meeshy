@@ -13,7 +13,6 @@ const en = {
   'admin.counters.reports': 'Reports',
   'admin.counters.newUsers': 'New (24 h)',
   'admin.sections.title': 'Sections',
-  'admin.sections.legacy': 'legacy interface',
   'admin.nav.dashboard': 'Dashboard',
   'admin.nav.users': 'Accounts',
   'admin.nav.moderation': 'Moderation',
