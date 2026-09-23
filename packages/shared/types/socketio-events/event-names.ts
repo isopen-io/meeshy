@@ -234,8 +234,6 @@ export const SERVER_EVENTS = {
    */
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
-  /** #7578 — le CONTENU d'une vue unique est purgé ; la bulle reste. */
-  MESSAGE_VIEW_ONCE_PURGED: 'message:view-once-purged',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   /**
    * Un hôte a modifié les droits d'un visiteur SANS COMPTE dans sa conversation.

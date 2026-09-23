@@ -5,7 +5,6 @@ import type { AttachmentUpdatedEventData } from '@meeshy/shared/types/socketio-e
 import type { ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import type {
   MessageConsumedEventData,
-  MessageViewOncePurgedEventData,
   ReadStatusUpdatedEventData,
   SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events/message';
@@ -628,19 +627,3 @@ export function applyMessageConsumed(queryClient: QueryClient, data: MessageCons
   patchThreadMessages(queryClient, data.conversationId, (messages) => sealViewOnceIn(messages, data.messageId));
 }
 
-/** Garde de FORME pour `message:view-once-purged` (#7578) — fail-closed. */
-export function isMessageViewOncePurgedEvent(payload: unknown): payload is MessageViewOncePurgedEventData {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  return typeof p.messageId === 'string' && typeof p.conversationId === 'string';
-}
-
-/**
- * `applyMessageViewOncePurged` — LE CONTENU PART, LA BULLE RESTE (#7578,
- * #7580). Le serveur a purgé une vue unique (tous les destinataires l'ont
- * ouverte, ou son plafond de rétention est atteint) : la rangée passe
- * « déjà ouverte » et perd son contenu local. Ce n'est jamais un retrait.
- */
-export function applyMessageViewOncePurged(queryClient: QueryClient, data: MessageViewOncePurgedEventData): void {
-  patchThreadMessages(queryClient, data.conversationId, (messages) => sealViewOnceIn(messages, data.messageId));
-}

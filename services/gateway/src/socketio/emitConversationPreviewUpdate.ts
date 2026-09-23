@@ -16,6 +16,7 @@ import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import type { ServerEmitIO } from './serverEmit';
 import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -36,7 +37,7 @@ export type PreviewEmitIO = ServerEmitIO;
  */
 export type PreviewPrisma = Pick<
   PrismaClient,
-  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences' | 'conversationShareLink'
+  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences' | 'conversationShareLink' | 'messageStatusEntry'
 >;
 
 /**
@@ -190,6 +191,12 @@ export interface PreviewUpdateScope {
    * sans compte ne peut ni écrire dans l'une ni figurer ici.
    */
   readonly onlyForReaderUserId?: string;
+  /**
+   * Même borne d'AUDIENCE, par `Participant.id` : c'est l'identité que porte
+   * une consommation de vue unique (`MessageStatusEntry.participantId`), et la
+   * seule qu'ait un invité de lien partagé. Voir `emitViewOnceConsumedPreview`.
+   */
+  readonly onlyForReaderParticipantId?: string;
 }
 
 /**
@@ -295,10 +302,11 @@ export async function emitConversationPreviewUpdate(
     // lequel, coûterait la question la plus large pour la réponse la plus
     // étroite. Vide ⇒ le lecteur nommé n'est plus participant actif : rien à
     // sonder, rien à émettre.
-    const targets =
-      scope?.onlyForReaderUserId != null
-        ? participants.filter((p) => p.userId === scope.onlyForReaderUserId)
-        : participants;
+    const targets = participants.filter(
+      (p) =>
+        (scope?.onlyForReaderUserId == null || p.userId === scope.onlyForReaderUserId) &&
+        (scope?.onlyForReaderParticipantId == null || p.id === scope.onlyForReaderParticipantId),
+    );
     if (targets.length === 0) return;
 
     // Le dernier message GLOBAL n'est pas le dernier message de tout le monde :
@@ -387,6 +395,19 @@ export async function emitConversationPreviewUpdate(
     // tout le monde.
     const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
 
+    // #7594 — la vue unique déjà OUVERTE, par lecteur : chaque destinataire
+    // reçoit sa propre room, donc sa propre valeur. Une lecture pour tous.
+    const ownMessageOf = (participantId: string) =>
+      overrides.has(participantId) ? overrides.get(participantId) ?? null : latest;
+    const consumed = await loadViewOnceConsumptions(
+      prisma,
+      served.flatMap((p) => {
+        const own = ownMessageOf(p.id);
+        return own?.isViewOnce ? [{ messageId: own.id, participantId: p.id }] : [];
+      }),
+      onError,
+    );
+
     for (const { room, participant } of participantUserRoomTargets(served)) {
       // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
       // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
@@ -399,8 +420,10 @@ export async function emitConversationPreviewUpdate(
       // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
       // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
       // l'aperçu global rendrait exactement à l'envers.
-      const own = overrides.has(participant.id) ? overrides.get(participant.id) ?? null : latest;
-      const group = resolveLastMessagePreviewGroup(participant, own);
+      const own = ownMessageOf(participant.id);
+      const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
+        viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
+      });
       if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...basePayload,
@@ -411,6 +434,39 @@ export async function emitConversationPreviewUpdate(
   } catch (error) {
     onError?.(error);
   }
+}
+
+export interface ViewOnceConsumedPreviewParams {
+  readonly conversationId: string;
+  /** Le message à vue unique que ce lecteur vient d'ouvrir. */
+  readonly messageId: string;
+  /** Le `Participant.id` du lecteur — celui de `recordViewOnceConsumption`. */
+  readonly readerParticipantId: string;
+  /** `updatedBy.id` : le `User.id` du lecteur, ou son `Participant.id` s'il n'a pas de compte. */
+  readonly actorUserId: string;
+}
+
+/**
+ * L'émission CIBLÉE qui suit une consommation de vue unique (#7594) : la ligne
+ * de liste du SEUL lecteur qui vient d'ouvrir passe à « 👁 Ouvert »
+ * (`lastMessageViewOnceConsumed: true`, relu dans la base).
+ *
+ * À appeler par `POST …/messages/:messageId/consume` APRÈS
+ * `recordViewOnceConsumption`, quand elle rend `firstConsumption: true`. Rien
+ * ne part si le message n'est plus le dernier de la conversation (la ligne ne
+ * le décrit plus), ni vers les autres participants : pour eux rien n'a changé.
+ * Best-effort comme `emitConversationPreviewUpdate` — ne lève jamais.
+ */
+export async function emitViewOnceConsumedPreview(
+  prisma: PreviewPrisma,
+  io: PreviewEmitIO | null | undefined,
+  params: ViewOnceConsumedPreviewParams,
+  onError?: (error: unknown) => void,
+): Promise<void> {
+  await emitConversationPreviewUpdate(prisma, io, params.conversationId, params.actorUserId, onError, {
+    onlyIfLatestIs: params.messageId,
+    onlyForReaderParticipantId: params.readerParticipantId,
+  });
 }
 
 function carriesLanguage(map: Record<string, string> | null, wantedLowercase: string): boolean {

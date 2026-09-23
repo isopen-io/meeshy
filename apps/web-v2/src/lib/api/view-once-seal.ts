@@ -10,9 +10,9 @@ import type { Message } from './types';
  * Texte, traductions et pièces jointes (URL, vignette, transcription) sortent
  * de la rangée ; `consumedByMe` y entre. Le cache du fil étant PERSISTÉ, c'est
  * aussi ce qui les retire de l'IndexedDB. UN seul site de la purge, servi à
- * quatre chemins : l'ouverture locale (`consumeViewOnceOptimistic`),
+ * trois chemins : l'ouverture locale (`consumeViewOnceOptimistic`),
  * l'ouverture sur un autre de mes appareils (`message:consumed` de MOI), la
- * destruction serveur (`message:expired` d'une vue unique non éphémère) et le
+ * destruction serveur (`message:expired` d'une vue unique non éphémère), et le
  * chargement d'une page qui arrive déjà ouverte (`loadMessages`).
  */
 export function sealViewOnce(message: Message): Message {

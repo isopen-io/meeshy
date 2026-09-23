@@ -12,12 +12,6 @@ const en = {
   'message.excerpt.protected': 'protected content',
   'a11y.message.menu.subject': 'Actions for the message from {author}: {excerpt}',
 
-  'message.action.select': 'Select',
-  'message.action.translate': 'Translate',
-  'message.action.copy': 'Copy',
-  'message.action.forward': 'Forward',
-  'message.action.compose': 'Compose',
-  'message.action.more': 'More…',
   'selection.toolbar': 'Message selection',
   'selection.cancel': 'Cancel',
   'selection.count': '{count} selected',

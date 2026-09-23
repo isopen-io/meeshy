@@ -12,12 +12,6 @@ const es = {
   'message.excerpt.protected': 'contenido protegido',
   'a11y.message.menu.subject': 'Acciones del mensaje de {author}: {excerpt}',
 
-  'message.action.select': 'Seleccionar',
-  'message.action.translate': 'Traducir',
-  'message.action.copy': 'Copiar',
-  'message.action.forward': 'Reenviar',
-  'message.action.compose': 'Redactar',
-  'message.action.more': 'Más…',
   'selection.toolbar': 'Selección de mensajes',
   'selection.cancel': 'Cancelar',
   'selection.count': '{count} seleccionados',
