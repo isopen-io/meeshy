@@ -24,7 +24,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
-import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
+import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -316,12 +316,16 @@ export function registerSearchRoutes(
         // transporte plus rien de son contenu (lieu, pièces jointes, leur
         // compte compris). Identité, horloge, type et drapeaux continuent de
         // partir — ce sont eux qui qualifient le placeholder client.
+        // #7545 — même prédicat que la liste et le socket : `ephemeralDuration`
+        // et le chiffrement compris.
         const isMsgProtected = msg
-          ? isLastMessageProtected({
-              isBlurred: (msg as { isBlurred?: boolean | null }).isBlurred,
-              isViewOnce: (msg as { isViewOnce?: boolean | null }).isViewOnce,
-              expiresAt: (msg as { expiresAt?: Date | null }).expiresAt
-            })
+          ? isPreviewWithheld(resolvePreviewProtection(msg as {
+              isBlurred?: boolean | null;
+              isViewOnce?: boolean | null;
+              isEncrypted?: boolean | null;
+              expiresAt?: Date | null;
+              ephemeralDuration?: number | null;
+            }))
           : false;
         const place = isMsgProtected
           ? null

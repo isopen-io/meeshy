@@ -319,10 +319,31 @@ export class ZmqTranslationClient extends EventEmitter {
 
     this.messageHandler.on('translationError', (event) => {
       this.stats.errors_received++;
+      this._cbRecordError();
+
+      // « pool full » est un refus TRANSITOIRE, pas un échec : le pool de
+      // workers du translator est saturé à l'instant t, et la même requête
+      // repasse quelques secondes plus tard. Le solder ici effaçait le budget
+      // de retry ET annulait le deadman — le message n'était jamais traduit, et
+      // personne ne le réessayait. Le lecteur d'une autre langue restait sur
+      // l'original, définitivement (même dommage que le cas jumeau de
+      // `ZmqTranslationClient.multiLanguageSettle.test.ts`).
+      //
+      // La machine de renvoi existe déjà : `_registerRequestTimeout` garde la
+      // requête, la renvoie avec le MÊME taskId et ses seules langues encore
+      // manquantes, jusqu'à `ZMQ_MAX_RETRIES`, puis émet l'échec une fois. Elle
+      // ne servait qu'au translator SILENCIEUX. On la laisse simplement armée
+      // plutôt que d'ouvrir une file de réessai parallèle : rien de retenu de
+      // plus, aucun compteur en double.
+      //
+      // Un refus qui arrive pour un taskId DÉJÀ soldé (dernière langue rendue,
+      // ou deadman tombé) n'a plus rien à réarmer — il s'annonce tout de suite,
+      // sinon personne ne l'apprend jamais.
       if (event.error === 'translation pool full') {
         this.stats.pool_full_rejections++;
+        if (this.requestSender.hasPendingRequest(event.taskId)) return;
       }
-      this._cbRecordError();
+
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationError', event);

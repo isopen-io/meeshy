@@ -72,7 +72,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
       viewerId: 'u-viewer',
-      onCompose: () => {},
+      onReply: () => {},
       announce: (text) => announced.push(text),
     });
     return null;

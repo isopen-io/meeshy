@@ -78,6 +78,17 @@ extension MessageRecord {
         if effectFlags > 0 {
             effects.flags = MessageEffectFlags(rawValue: effectFlags)
         }
+        // #7508 — la DURÉE remonte du cache, exactement comme
+        // `APIMessage.toMessage` la remonte du fil. Sans elle, un éphémère
+        // arrivé par `message:new` (qui ne porte AUCUNE échéance, contrat
+        // #7451 point 4) ressortait de GRDB sans la moindre horloge : le
+        // drapeau disait « éphémère », `EphemeralDeadline.resolve` rendait
+        // `.notEphemeral` faute de source, et le fil n'affichait ni flamme ni
+        // décompte tout en ne retirant jamais la bulle.
+        if let ephemeralDuration, ephemeralDuration > 0 {
+            effects.ephemeralDuration = ephemeralDuration
+            effects.flags.insert(.ephemeral)
+        }
 
         let deliveryStatus: MeeshyMessage.DeliveryStatus = {
             // Server-driven counters take priority — they're the source of

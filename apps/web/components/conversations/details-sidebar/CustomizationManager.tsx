@@ -130,6 +130,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               autoFocus
             />
             <Button
+              aria-label={t('conversationDetails.save')}
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0"
@@ -208,6 +209,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               autoFocus
             />
             <Button
+              aria-label={t('conversationDetails.save')}
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0"

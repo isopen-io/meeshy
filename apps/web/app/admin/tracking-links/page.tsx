@@ -102,6 +102,7 @@ export default function AdminTrackingLinksPage() {
   const [clicksLoading, setClicksLoading] = useState(false);
   const clicksPageSize = 50;
   const { t, locale } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
 
   // -- Load links --
   const loadLinks = useCallback(async () => {
@@ -403,7 +404,7 @@ export default function AdminTrackingLinksPage() {
               {createdLink && (
                 <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
                   <span className="text-sm font-mono text-green-700 dark:text-green-300">{createdLink}</span>
-                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(createdLink)}>
+                  <Button aria-label={tA11y('a11y.copy')} variant="ghost" size="sm" onClick={() => copyToClipboard(createdLink)}>
                     <Copy className="w-4 h-4" />
                   </Button>
                 </div>
@@ -470,6 +471,7 @@ export default function AdminTrackingLinksPage() {
                                 {link.token}
                               </code>
                               <Button
+                                aria-label={tA11y('a11y.copy')}
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0"
@@ -520,6 +522,7 @@ export default function AdminTrackingLinksPage() {
                     </span>
                     <div className="flex items-center gap-2">
                       <Button
+                        aria-label={tA11y('a11y.previousPage')}
                         variant="outline"
                         size="sm"
                         disabled={linksPage <= 1}
@@ -529,6 +532,7 @@ export default function AdminTrackingLinksPage() {
                       </Button>
                       <span className="text-sm">{linksPage} / {totalPages}</span>
                       <Button
+                        aria-label={tA11y('a11y.nextPage')}
                         variant="outline"
                         size="sm"
                         disabled={linksPage >= totalPages}
@@ -554,7 +558,7 @@ export default function AdminTrackingLinksPage() {
                   Detail: /l/{selectedLink.token}
                   {selectedLink.name && <span className="text-gray-500 font-normal">({selectedLink.name})</span>}
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedLink(null)}>
+                <Button aria-label={tA11y('a11y.close')} variant="ghost" size="sm" onClick={() => setSelectedLink(null)}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -656,6 +660,7 @@ export default function AdminTrackingLinksPage() {
                       </span>
                       <div className="flex items-center gap-2">
                         <Button
+                          aria-label={tA11y('a11y.previousPage')}
                           variant="outline"
                           size="sm"
                           disabled={clicksPage <= 1}
@@ -665,6 +670,7 @@ export default function AdminTrackingLinksPage() {
                         </Button>
                         <span className="text-xs">{clicksPage} / {clicksTotalPages}</span>
                         <Button
+                          aria-label={tA11y('a11y.nextPage')}
                           variant="outline"
                           size="sm"
                           disabled={clicksPage >= clicksTotalPages}

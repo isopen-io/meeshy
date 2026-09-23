@@ -548,7 +548,7 @@ export default function ThreadScreen() {
     readerLanguages,
     readerLocale,
     viewerId: viewer.id ?? '',
-    onCompose: (messageId) => setReplyTarget(messageId),
+    onReply: (messageId) => setReplyTarget(messageId),
     announce: announcer.announce,
   });
 

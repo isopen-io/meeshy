@@ -1,9 +1,8 @@
 import type { Message, MessageTranslation } from '@/lib/api/types';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translationsOf } from '@/lib/view/message';
 import { forwardRefusalOf } from '@/lib/view/forward';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE MENU DU MESSAGE — LA LOI (#5814) : QUELLES actions, dans quel ORDRE, et
@@ -15,16 +14,55 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * dépôt (« un contrôle existe s'il a un effet ») interdit de les lister.
  *
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
+ * Il ne porte donc AUCUN libellé : une loi PURE ne connaît pas la langue de
+ * son lecteur, elle nomme ce qu'il faut dire et laisse le rendu le dire.
  */
 
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'compose' | 'more';
+/**
+ * `reply` ARME UNE RÉPONSE, ET NE S'APPELLE PLUS `compose` (#7555).
+ *
+ * Le mot « composer » a un sens ARRÊTÉ sur iOS, et ce n'est pas celui-là :
+ * `PrimaryAction.compose` (`MessageActionResolver.swift:14`) ouvre l'atelier
+ * sur le MÉDIA d'un message pour en faire une story ou un post, quand
+ * répondre y est `MoreItem.reply`. Le même mot pour deux effets était le
+ * défaut de cohérence de positionnement (dimension 6) que ce lot ferme :
+ * web-v2 dit désormais `reply`, et le nom « composer » reste disponible pour
+ * le jour où le port web du geste iOS arrivera — sans collision.
+ *
+ * Le GLYPHE, lui, n'a pas suivi : `reply` porte encore la baguette magique
+ * choisie du temps de « Composer ». `glyphs-thread-menu.ts` est généré, et
+ * régénérer dix modules dans un lot de renommage aurait noyé un diff
+ * relisible — dette consignée, #7564.
+ * `forward` vient de #5866 et reste GARDÉ par `canForward` : la règle du
+ * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
+ * pas après coup.
+ */
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
 export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'dotsThree';
 
+/**
+ * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
+ * annotation large, même discipline que `feed-post-card.tsx` : la table est
+ * VÉRIFIÉE contre le catalogue (une clé absente des sept langues ne compile
+ * pas) tout en gardant ses littéraux, si bien que `MessageMenuLabelKey` dit
+ * QUELLES clés ce menu emploie — et pas « n'importe laquelle du catalogue ».
+ */
+const MENU_LABEL_KEYS = {
+  select: 'message.menu.select',
+  translate: 'message.menu.translate',
+  copy: 'message.menu.copy',
+  forward: 'message.menu.forward',
+  reply: 'message.menu.reply',
+  more: 'message.menu.more',
+} as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
+
+export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[MessageActionId];
+
 export type MessageMenuItem = {
   readonly id: MessageActionId;
-  readonly label: string;
+  readonly labelKey: MessageMenuLabelKey;
   readonly glyph: MessageMenuGlyph;
 };
 
@@ -78,32 +116,22 @@ export function messageMenuContextOf(
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
  * (`translate` de plus par `languageCount > 1`), `forward` gardé par
  * `canForward` (#5866 — la règle du serveur, dite AVANT l'aller-retour),
- * `compose` inconditionnel (v3.1 : « Composer » = répondre, § question 2 de
- * la spécification — toujours disponible, aucune capacité manquante ne le
- * retire).
- *
- * LES LIBELLÉS VIENNENT DU CATALOGUE (#5866), et la langue est un PARAMÈTRE —
- * jamais `currentInterfaceLanguage()` lu ici : ce fichier reste une loi PURE,
- * son hôte (`use-message-menu.ts`) sait quelle langue il sert. Les cinq
- * libellés historiques étaient écrits en dur ; ajouter « Transférer » en
- * français seul au milieu d'eux aurait figé la surface entière dans une
- * langue, alors que le produit en sert sept.
+ * `reply` inconditionnel —
+ * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
-export function messageMenuItems(ctx: MessageMenuContext, language: InterfaceLanguage): readonly MessageMenuItem[] {
-  const items: MessageMenuItem[] = [
-    { id: 'select', label: translate(language, 'message.action.select'), glyph: 'checkCircle' },
-  ];
+export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
+  const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
-    items.push({ id: 'translate', label: translate(language, 'message.action.translate'), glyph: 'globe' });
+    items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }
   if (ctx.hasText && !ctx.isProtected) {
-    items.push({ id: 'copy', label: translate(language, 'message.action.copy'), glyph: 'copy' });
+    items.push({ id: 'copy', labelKey: MENU_LABEL_KEYS.copy, glyph: 'copy' });
   }
   if (ctx.canForward) {
-    items.push({ id: 'forward', label: translate(language, 'message.action.forward'), glyph: 'arrowBendUpRight' });
+    items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
-  items.push({ id: 'compose', label: translate(language, 'message.action.compose'), glyph: 'magicWand' });
-  items.push({ id: 'more', label: translate(language, 'message.action.more'), glyph: 'dotsThree' });
+  items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
+  items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
 }
 

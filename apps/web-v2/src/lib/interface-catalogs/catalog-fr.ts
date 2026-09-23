@@ -1114,6 +1114,46 @@ const fr = {
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',
   'attachment.protected.file': 'Pièce protégée',
+  /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
+     (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
+     COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).
+     DISTINCT d'`attachment.protected.*` juste au-dessus, qui qualifie le
+     SUBSTITUT d'une piece masquee — deux etats, donc deux jeux de mots : « un
+     second vocabulaire ferait dire deux choses differentes a l'oeil et a
+     l'oreille pour un meme etat ». */
+  'attachment.kind.image': 'Photo',
+  'attachment.kind.video': 'Vidéo',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'Fichier',
+
+  /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
+     Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
+     SEPT langues (`lib/view/message-actions.ts`, `components/selection-toolbar.tsx`,
+     `components/message-detail-sheet.tsx`) — pendant que les annonces VOISINES
+     du même hook (`announce.messageCopied`, …) étaient déjà traduites.
+
+     `message.menu.reply` dit « Répondre », et le mot « composer » est rendu au
+     sens qu'il a sur iOS — créer une story ou un post AVEC ce média
+     (`MessageActionResolver.swift`, `case compose`). Valeur reprise du
+     catalogue iOS : `action.reply`.
+
+     « Annuler » de la barre de sélection réutilise `common.cancel` : un seul
+     mot, une seule clé. */
+  'message.menu.select': 'Sélectionner',
+  'message.menu.translate': 'Traduire',
+  'message.menu.copy': 'Copier',
+  'message.menu.forward': 'Transférer',
+  'message.menu.reply': 'Répondre',
+  'message.menu.more': 'Plus…',
+  'message.menu.react': 'Réagir',
+  'message.menu.addReaction': 'Ajouter une réaction',
+  'message.selection.toolbar': 'Sélection de messages',
+  'message.selection.count': '{count} sélectionnés',
+  'message.detail.title': 'Détails du message',
+  'message.detail.languages': 'Langues',
+  'message.detail.reactions': 'Réactions',
+  'message.detail.sent': 'Envoyé',
+  'message.detail.language.original': '{language} (original)',
 
 } as const;
 

@@ -72,6 +72,16 @@ export function noteServedDeadline(messageId: string, expiresAt: string | Date):
   remember(servedDeadlines, messageId, ms);
 }
 
+/** La première réception locale de ce message, ou `null` (#7547 — l'entrée du composeur de la ligne). */
+export function receptionOf(messageId: string): number | null {
+  return receptions.get(messageId) ?? null;
+}
+
+/** L'échéance servie par `message:countdown-started`, ou `null` (#7547). */
+export function servedDeadlineOf(messageId: string): number | null {
+  return servedDeadlines.get(messageId) ?? null;
+}
+
 /** Le message n'existe plus — ni son horodatage de réception, ni son échéance. */
 export function forgetEphemeral(messageId: string): void {
   receptions.delete(messageId);

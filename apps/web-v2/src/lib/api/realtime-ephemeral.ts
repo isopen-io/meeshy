@@ -9,6 +9,7 @@ import type {
 import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destruction';
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
 
+import { expireLastMessage } from './list-preview';
 import { patchThreadMessages } from './messages';
 
 /**
@@ -78,6 +79,10 @@ export function applyMessageExpired(
    * train de brûler.
    */
   announceDestruction(data.messageId);
+  /* LA LIGNE DE LISTE PASSE À « EXPIRÉ » SUR-LE-CHAMP (#7547) — personne n'y
+     regarde brûler la bulle, et son texte n'a plus le droit de rester dans
+     le cache de liste, qui est persisté. */
+  expireLastMessage(queryClient, data.conversationId, data.messageId);
   schedule(() => {
     forgetEphemeral(data.messageId);
     patchThreadMessages(queryClient, data.conversationId, (messages) =>

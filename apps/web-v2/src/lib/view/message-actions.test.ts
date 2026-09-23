@@ -1,7 +1,7 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 import { translation } from '@/lib/api/fixtures-base';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 
 import {
   EXTENDED_REACTIONS,
@@ -12,13 +12,7 @@ import {
   type MessageMenuContext,
 } from './message-actions';
 
-/** L'allemand n'est pas préchargé (`interface-catalog-preload.ts` ne charge
- * que la langue du document, `fr`) — le témoin de LANGUE le charge lui-même. */
-beforeAll(async () => {
-  await loadInterfaceCatalog('de');
-});
-
-/** Un `MessageMenuContext` de base — « rien de protégé, deux langues, transférable ». */
+/** Un `MessageMenuContext` de base — « rien de protégé, deux langues ». */
 const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext => ({
   hasText: true,
   isProtected: false,
@@ -28,81 +22,67 @@ const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext =>
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, forward, compose, more', () => {
-    expect(messageMenuItems(ctx(), 'fr').map((i) => i.id)).toEqual([
-      'select',
-      'translate',
-      'copy',
-      'forward',
-      'compose',
-      'more',
-    ]);
+  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, more', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
   });
 
-  test('message SANS texte (m3) ⇒ select, forward, compose, more — ni copy ni translate', () => {
-    expect(messageMenuItems(ctx({ hasText: false }), 'fr').map((i) => i.id)).toEqual([
-      'select',
-      'forward',
-      'compose',
-      'more',
-    ]);
+  test('message SANS texte (m3) ⇒ select, forward, reply, more — ni copy ni translate', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
   });
 
   test('message PROTÉGÉ (D-23) ⇒ ni copy ni translate, même avec du texte', () => {
-    expect(messageMenuItems(ctx({ isProtected: true }), 'fr').map((i) => i.id)).toEqual([
-      'select',
-      'forward',
-      'compose',
-      'more',
-    ]);
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 }), 'fr').map((i) => i.id)).toEqual([
-      'select',
-      'copy',
-      'forward',
-      'compose',
-      'more',
-    ]);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'more']);
   });
 
   /**
-   * #5866 — LA GARDE SERVEUR, DITE AVANT L'ALLER-RETOUR. `admitMessageForward`
-   * (`forwardAdmission.ts:216-220`) refuse une vue unique ; le menu ne doit
-   * donc pas OFFRIR le geste, sinon l'interdit se découvre après avoir choisi
-   * un destinataire.
+   * LE MENU PORTE DES CLÉS, JAMAIS DES LIBELLÉS (#7555). Cette loi est PURE :
+   * elle ne connaît ni la langue du lecteur ni le catalogue chargé — elle
+   * nomme ce qu'il faut dire, et `message-menu.tsx` le dit. Un libellé rendu
+   * ici aurait à nouveau figé le français dans une loi que les sept langues
+   * partagent.
    */
-  test('un message à VUE UNIQUE n’offre PAS « Transférer »', () => {
-    expect(messageMenuItems(ctx({ canForward: false }), 'fr').map((i) => i.id)).toEqual([
-      'select',
-      'translate',
-      'copy',
-      'compose',
-      'more',
-    ]);
-  });
-
-  test('libellés exacts', () => {
-    const labels = Object.fromEntries(messageMenuItems(ctx(), 'fr').map((i) => [i.id, i.label]));
-    expect(labels).toEqual({
-      select: 'Sélectionner',
-      translate: 'Traduire',
-      copy: 'Copier',
-      forward: 'Transférer',
-      compose: 'Composer',
-      more: 'Plus…',
+  test('chaque entrée porte une CLÉ de catalogue, jamais un libellé', () => {
+    const keys = Object.fromEntries(messageMenuItems(ctx()).map((i) => [i.id, i.labelKey]));
+    expect(keys).toEqual({
+      select: 'message.menu.select',
+      translate: 'message.menu.translate',
+      copy: 'message.menu.copy',
+      forward: 'message.menu.forward',
+      reply: 'message.menu.reply',
+      more: 'message.menu.more',
     });
   });
 
   /**
-   * LE TÉMOIN DE LANGUE (#5866) — sur une langue AUTRE que le français : en
-   * français, un libellé écrit en dur et un libellé lu au catalogue rendent le
-   * MÊME texte, donc le témoin ne peut pas tomber (leçon 261, transposée).
+   * TÉMOIN DE RANG SUR UNE LOCALE NON FRANÇAISE (leçon 261, #7555) — le
+   * français ne peut PAS trancher : un libellé EN DUR et une clé de catalogue
+   * rendent le même verdict en `fr`, exactement comme le rang 1 du Prisme
+   * rend le même verdict pour une descente juste et pour un court-circuit.
+   * L'anglais et l'arabe séparent les deux, et l'arabe est de plus la langue
+   * RTL du produit : un menu qui ne l'a jamais servie ne l'a jamais essayée.
    */
-  test('les six libellés viennent du catalogue — allemand, jamais un défaut français', () => {
-    const labels = messageMenuItems(ctx(), 'de').map((i) => i.label);
-    expect(labels).toEqual(['Auswählen', 'Übersetzen', 'Kopieren', 'Weiterleiten', 'Verfassen', 'Mehr…']);
+  test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
+    await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+    expect(messageMenuItems(ctx()).map((i) => translate('en', i.labelKey))).toEqual([
+      'Select',
+      'Translate',
+      'Copy',
+      'Forward',
+      'Reply',
+      'More…',
+    ]);
+    expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
+      'تحديد',
+      'ترجمة',
+      'نسخ',
+      'إعادة توجيه',
+      'رد',
+      'المزيد…',
+    ]);
   });
 
   test('QUICK_REACTIONS et EXTENDED_REACTIONS — miroir MessageOverlayMenu.swift:99-104', () => {
@@ -129,23 +109,12 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
     expect(result.languageCount).toBe(1);
   });
 
-  test('contenu vide (image seule) ⇒ hasText false, mais TRANSFÉRABLE (#5866)', () => {
+  test('contenu vide (image seule) ⇒ hasText false', () => {
     const result = messageMenuContextOf(
       { content: '  ', isBlurred: false, isViewOnce: false, viewOnceCount: 0, translations: [] },
       { now: 1000 },
     );
     expect(result.hasText).toBe(false);
-    /* Un média SEUL est le cas nominal du transfert : la passerelle copie ses
-       pièces jointes depuis `forwardedFromId`, sans aucun texte. */
-    expect(result.canForward).toBe(true);
-  });
-
-  test('#5866 : une VUE UNIQUE n’est pas transférable — la loi de `forward.ts`, jamais une seconde', () => {
-    const result = messageMenuContextOf(
-      { content: 'secret', isBlurred: false, isViewOnce: true, viewOnceCount: 0, translations: [] },
-      { now: 1000 },
-    );
-    expect(result.canForward).toBe(false);
   });
 
   /** LE CACHE ALLÉGÉ NE PORTE PAS LE CHAMP (#7527) — le témoin le passe donc
@@ -201,5 +170,26 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l’o
       servedLanguage: 'fr',
     });
     expect(choices).toEqual([{ code: 'fr', isOriginal: true, isServed: true }]);
+  });
+});
+
+describe('« Transférer » n\'apparaît que si la règle du serveur l\'admet (#5866)', () => {
+  test('message transférable ⇒ l\'entrée est là, entre Copier et Répondre', () => {
+    const ids = messageMenuItems(ctx()).map((i) => i.id);
+    expect(ids).toContain('forward');
+    expect(ids.indexOf('forward')).toBeGreaterThan(ids.indexOf('copy'));
+    expect(ids.indexOf('forward')).toBeLessThan(ids.indexOf('reply'));
+  });
+
+  // La garde vit côté client AVANT l'aller-retour : `admitMessageForward`
+  // refuse une vue unique côté serveur, et découvrir l'interdit après coup
+  // serait une promesse rompue, pas une protection.
+  test('message non transférable ⇒ aucune entrée, jamais une entrée grisée', () => {
+    expect(messageMenuItems(ctx({ canForward: false })).map((i) => i.id)).not.toContain('forward');
+  });
+
+  test('son libellé vient du catalogue, comme les cinq autres', () => {
+    const item = messageMenuItems(ctx()).find((i) => i.id === 'forward');
+    expect(item?.labelKey).toBe('message.menu.forward');
   });
 });
