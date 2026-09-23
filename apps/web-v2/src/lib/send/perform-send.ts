@@ -3,7 +3,8 @@ import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
-import { patchConversation, type ConversationsDeps } from '@/lib/api/conversations';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { offerLastMessage } from '@/lib/api/list-preview';
 import type { ApiFailure } from '@/lib/api/http';
 import { messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import type { Message, Participant } from '@/lib/api/types';
@@ -329,19 +330,12 @@ async function attempt(params: {
      (`api/realtime-apply.ts`) que leurs doc-comments déclaraient déjà être
      « la MÊME règle » (D-11/D-28) — sans l'être tout à fait. */
   upsertThreadMessage(deps.queryClient, conversationId, confirmed);
-  patchConversation(deps.queryClient, conversationId, (c) => {
-    // La clé RETIRÉE, jamais posée à `undefined` (`exactOptionalPropertyTypes`) —
-    // un message texte confirmé n'a pas encore de traductions connues.
-    const { lastMessageTranslations: _lastMessageTranslations, ...rest } = c;
-    return {
-      ...rest,
-      lastMessage: confirmed,
-      // `createdAt` de l'accusé reste une CHAÎNE dans le cache (D-26) — même
-      // écart de forme que `confirmedMessageOf`, même cast justifié.
-      lastMessageAt: confirmed.createdAt as unknown as Date,
-      lastMessageOriginalLanguage: confirmed.originalLanguage,
-    };
-  });
+  /* L'ACCUSÉ PASSE PAR LA GARDE D'ORDRE (#7547) : s'il revient après une
+     réponse plus récente, il ne ramène pas mon ancien message dans la ligne.
+     Même message que l'optimiste (même `clientMessageId`) ⇒ il le promeut.
+     `createdAt` de l'accusé reste une CHAÎNE (D-26), `offerLastMessage` la
+     pose telle quelle. */
+  offerLastMessage(deps.queryClient, conversationId, confirmed);
   deps.outbox.getState().remove(conversationId, message.clientMessageId);
 }
 
@@ -389,6 +383,11 @@ export async function performSend(params: {
       ? {}
       : { upload: { files: draft.attachments } }),
   });
+
+  /* L'OPTIMISTE DANS LA LIGNE (#7547) — la liste montre mon envoi à
+     l'instant du geste, avant tout accusé et même hors ligne ; l'accusé ou
+     l'écho socket le promeuvent ensuite par son `clientMessageId`. */
+  offerLastMessage(deps.queryClient, conversationId, message);
 
   if (!deps.online) return; // hors ligne (D-16) : aucun appel.
 

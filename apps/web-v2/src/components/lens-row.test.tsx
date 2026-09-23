@@ -223,7 +223,7 @@ describe("l'aperçu est un BLOC de texte, jamais une rangée flex", () => {
     );
     // Le nom précède le nœud de texte servi, DANS le même flux, mais DEHORS :
     // ce nœud-là est le seul que `lang` habillerait.
-    expect(html).toMatch(/data-line2[^>]*>Kwame : <span/);
+    expect(html).toMatch(/<span>Kwame : <\/span><span lang="en">Hello<\/span>/);
   });
 });
 
@@ -279,10 +279,10 @@ describe('la rangée de la Lentille — un dernier message SANS TEXTE (revue #58
       lastMessageOriginalLanguage: 'fr',
     });
 
-  test('un VOCAL : le libellé « Audio », jamais une ligne vide', () => {
+  test('un VOCAL : « Message vocal » (matrice #7546), jamais une ligne vide', () => {
     const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('audio/wav') })} />);
     expect(html).toContain('Kwame Mensah : ');
-    expect(html).toContain('Audio');
+    expect(html).toContain('Message vocal');
   });
 
   test('une PHOTO : le libellé « Photo »', () => {
@@ -295,10 +295,9 @@ describe('la rangée de la Lentille — un dernier message SANS TEXTE (revue #58
     expect(html).toContain('Fichier');
   });
 
-  test('trois pièces : « +2 » derrière le libellé de la première', () => {
+  test('trois photos : « 3 photos » (matrice #7546), plus jamais un « +2 » toujours nul depuis REST', () => {
     const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('image/png', 3) })} />);
-    expect(html).toContain('Photo');
-    expect(html).toContain('+2');
+    expect(html).toContain('3 photos');
   });
 
   test('un message AVEC texte garde son aperçu — la pièce ne parle jamais à sa place', () => {
@@ -326,7 +325,7 @@ describe('la rangée de la Lentille — un dernier message SANS TEXTE (revue #58
  */
 describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
   test('la frappe REMPLACE l’aperçu sur la ligne 2', () => {
-    const html = renderToStaticMarkup(<LensRow {...baseProps({ typist: 'Amina Diallo' })} />);
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ typists: ['Amina Diallo'] })} />);
     expect(html).toContain('Amina Diallo écrit');
     expect(html).not.toContain('Bonjour');
   });
@@ -344,7 +343,7 @@ describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
     const viewOnce = conversation({
       lastMessage: { id: 'm-vo', content: 'le code du coffre', createdAt: new Date('2026-01-01T10:00:00Z'), isViewOnce: true } as never,
     });
-    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: viewOnce, typist: 'Amina Diallo' })} />);
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: viewOnce, typists: ['Amina Diallo'] })} />);
     expect(html).toContain('Amina Diallo écrit');
     expect(html).not.toContain('le code du coffre');
   });
@@ -361,7 +360,7 @@ describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
       ] as never,
     });
     const atRest = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline })} />);
-    const typing = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline, typist: 'Amina Diallo' })} />);
+    const typing = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline, typists: ['Amina Diallo'] })} />);
     expect(atRest).not.toContain('data-presence');
     expect(typing).toMatch(/data-presence="online"/);
   });
@@ -371,9 +370,9 @@ describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
     // `CONVERSATIONS`, `READER_LANGUAGES` et `rowAction` sont stables) : sinon
     // le témoin mesurerait l'identité du corpus ou du callback, pas `typist`.
     const stable: Partial<LensRowProps> = { conversation: conversation({}), onRowAction: () => {} };
-    expect(sameRowProps(baseProps(stable), baseProps({ ...stable, typist: 'Amina Diallo' }))).toBe(false);
+    expect(sameRowProps(baseProps(stable), baseProps({ ...stable, typists: ['Amina Diallo'] }))).toBe(false);
     expect(
-      sameRowProps(baseProps({ ...stable, typist: 'Amina Diallo' }), baseProps({ ...stable, typist: 'Amina Diallo' })),
+      sameRowProps(baseProps({ ...stable, typists: ['Amina Diallo'] }), baseProps({ ...stable, typists: ['Amina Diallo'] })),
     ).toBe(true);
   });
 });
