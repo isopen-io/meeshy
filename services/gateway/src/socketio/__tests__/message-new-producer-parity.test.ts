@@ -469,6 +469,11 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
           width: 800,
           height: 600,
           pageCount: null,
+          // #7594 — texte alternatif (aucun ici) et protection propre de la pièce.
+          alt: null,
+          isViewOnce: false,
+          isBlurred: false,
+          effectFlags: 0,
         },
       ]);
     }
