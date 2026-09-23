@@ -149,11 +149,11 @@
       },
       "account": {
         "delete": {
-          "confirmDescription": "Introduza a sua palavra-passe para continuar a eliminação da conta.",
+          "confirmDescription": "Digite sua senha para continuar com a exclusão da conta.",
           "confirmTextLabel": "Escreva \"DELETE\" para confirmar",
           "confirmTitle": "Confirmar a eliminação da conta",
           "consequence1": "Todas as suas mensagens serão eliminadas definitivamente",
-          "consequence2": "O seu perfil e as suas definições serão eliminados",
+          "consequence2": "Seu perfil e suas configurações serão excluídos",
           "consequence3": "A sua sessão será terminada de imediato",
           "consequence4": "Esta ação é irreversível",
           "continue": "Continuar",
@@ -164,13 +164,13 @@
           "errors": {
             "confirmTextMismatch": "Escreva \"DELETE\" para confirmar",
             "deleteFailed": "Não foi possível eliminar a conta",
-            "passwordRequired": "A palavra-passe é obrigatória"
+            "passwordRequired": "A senha é obrigatória"
           },
           "finalConfirm": "Eliminar definitivamente",
           "finalConfirmTitle": "Confirmação final",
           "finalWarning": "Esta é a sua última oportunidade. Esta ação é permanente e irreversível.",
-          "passwordLabel": "A sua palavra-passe",
-          "passwordPlaceholder": "Introduza a sua palavra-passe",
+          "passwordLabel": "Sua senha",
+          "passwordPlaceholder": "Digite sua senha",
           "title": "Eliminar a conta",
           "warning": "Atenção: esta ação não pode ser anulada"
         },
@@ -1017,8 +1017,8 @@
           "label": "Movimento reduzido"
         },
         "screenReader": {
-          "description": "Otimizar a interface para leitores de ecrã",
-          "label": "Otimizado para leitor de ecrã"
+          "description": "Otimizar a interface para leitores de tela",
+          "label": "Otimizado para leitor de tela"
         },
         "title": "Acessibilidade"
       },
@@ -1135,12 +1135,12 @@
         "videoRecording": "Gravação de vídeo",
         "voiceDataConsent": "Tratamento de dados de voz"
       },
-      "legalNote": "Pode retirar estes consentimentos quando quiser nas suas definições de privacidade. Saiba mais na nossa Política de Privacidade.",
+      "legalNote": "Você pode retirar estes consentimentos quando quiser nas suas configurações de privacidade. Saiba mais na nossa Política de Privacidade.",
       "title": "Consentimento necessário",
       "violationsTitle": "As ações seguintes precisam de um consentimento adicional:"
     },
     "media": {
-      "description": "Configure as definições de áudio, vídeo e documentos",
+      "description": "Configure as configurações de áudio, vídeo e documentos",
       "sections": {
         "audio": {
           "description": "Mensagens de voz, transcrição, TTS e clonagem de voz",
@@ -1148,14 +1148,14 @@
         },
         "document": {
           "description": "Transferência, pré-visualização e armazenamento",
-          "title": "Documentos e ficheiros"
+          "title": "Documentos e arquivos"
         },
         "video": {
-          "description": "Qualidade de vídeo, efeitos e definições de chamada",
+          "description": "Qualidade de vídeo, efeitos e configurações de chamada",
           "title": "Vídeo e chamadas"
         }
       },
-      "title": "Multimédia e ficheiros"
+      "title": "Multimídia e arquivos"
     },
     "register": {
       "errors": {
@@ -1200,11 +1200,11 @@
   "emailChange": {
     "verify": {
       "backToHome": "Voltar ao início",
-      "backToSettings": "Voltar às definições",
+      "backToSettings": "Voltar às configurações",
       "error": "Erro durante a verificação",
       "errorTitle": "Erro",
       "expired": "A ligação de verificação expirou",
-      "expiredInfo": "A ligação de verificação expirou. Peça novamente a alteração do e-mail nas suas definições.",
+      "expiredInfo": "O link de verificação expirou. Solicite novamente a alteração do e-mail nas suas configurações.",
       "expiredTitle": "Ligação expirada",
       "invalid": "A ligação de verificação não é válida",
       "invalidTitle": "Ligação inválida",
