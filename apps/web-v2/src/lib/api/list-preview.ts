@@ -1,5 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type {
+  ConversationActiveCall,
+  ConversationLastReaction,
+  LastMessageAttachmentSummary,
+  LastMessageCallSummary,
+  LastMessageSystemEvent,
+} from '@meeshy/shared/types/conversation-preview';
+import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
 
 import { CONVERSATIONS_QUERY_KEY, patchConversation } from './conversations';
@@ -25,6 +33,24 @@ import type { Conversation, Message } from './types';
  * accusé d'envoi en retard ramenait mon ancien message, et `message:new`
  * gardait en clair le texte d'un vue unique dans le cache de liste.
  */
+
+/**
+ * LA LIGNE TELLE QUE LE CACHE LA TIENT — le domaine partagé (`Conversation`,
+ * `Message`) plus les champs du contrat de la ligne (#7545) qu'il ne déclare
+ * pas encore : la dernière réaction, l'appel en cours, et la NATURE du
+ * dernier message. Des types de `@meeshy/shared`, jamais redéclarés ici.
+ */
+export type ListLastMessage = Message & {
+  readonly isForwarded?: boolean;
+  readonly systemEvent?: LastMessageSystemEvent;
+  readonly callSummary?: LastMessageCallSummary;
+  readonly attachmentSummary?: LastMessageAttachmentSummary;
+};
+
+export type ListConversation = Conversation & {
+  readonly lastReaction?: ConversationLastReaction;
+  readonly activeCall?: ConversationActiveCall;
+};
 
 type WithClientId = Message & { readonly clientMessageId?: string };
 
@@ -83,12 +109,13 @@ export function listSafeLastMessage(message: Message, now: Date = new Date()): M
   if (!isListProtected(message, now)) return message;
   const {
     attachments: _attachments,
+    attachmentSummary: _summary,
     location: _location,
     sticker: _sticker,
     postReplyTo: _postReplyTo,
     replyTo: _replyTo,
     ...identity
-  } = message as Message & { location?: unknown; sticker?: unknown; postReplyTo?: unknown; replyTo?: unknown };
+  } = message as ListLastMessage & { location?: unknown; sticker?: unknown; postReplyTo?: unknown; replyTo?: unknown };
   return { ...identity, content: '', translations: [] } as Message;
 }
 
@@ -170,4 +197,66 @@ function conversationIdsDescribing(queryClient: QueryClient, messageId: string):
   );
   if (data === undefined) return [];
   return data.pages.flatMap((p) => p.conversations).filter((c) => c.lastMessage?.id === messageId).map((c) => c.id);
+}
+
+type Nature = {
+  readonly messageType?: Message['messageType'];
+  readonly effectFlags?: number;
+  readonly ephemeralDuration?: number;
+  readonly isEncrypted?: boolean;
+  readonly isForwarded?: boolean;
+  readonly systemEvent?: LastMessageSystemEvent;
+  readonly callSummary?: LastMessageCallSummary;
+  readonly attachmentSummary?: LastMessageAttachmentSummary;
+};
+
+const NATURE_KEYS = {
+  lastMessageType: 'messageType',
+  lastMessageEffectFlags: 'effectFlags',
+  lastMessageEphemeralDuration: 'ephemeralDuration',
+  lastMessageIsEncrypted: 'isEncrypted',
+  lastMessageIsForwarded: 'isForwarded',
+  lastMessageSystemEvent: 'systemEvent',
+  lastMessageCallSummary: 'callSummary',
+  lastMessageAttachmentSummary: 'attachmentSummary',
+} as const satisfies Readonly<Partial<Record<keyof ConversationUpdatedEventData, keyof Nature>>>;
+
+/**
+ * LA NATURE DU DERNIER MESSAGE (#7545) — les clés plates `lastMessage*` de
+ * `conversation:updated` rendues sous les noms que porte le message de la
+ * ligne. TRI-ÉTAT, clé par clé : absente = ne pas toucher, `null` = retirer,
+ * valeur = poser. `removed` nomme les clés à retirer.
+ */
+export function natureOf(data: ConversationUpdatedEventData): { readonly set: Nature; readonly removed: readonly (keyof Nature)[] } {
+  const entries = Object.entries(NATURE_KEYS) as [keyof typeof NATURE_KEYS, keyof Nature][];
+  const present = entries.filter(([wire]) => data[wire] !== undefined);
+  return {
+    set: Object.fromEntries(present.filter(([wire]) => data[wire] !== null).map(([wire, key]) => [key, data[wire]])) as Nature,
+    removed: present.filter(([wire]) => data[wire] === null).map(([, key]) => key),
+  };
+}
+
+export function withNature(message: Message, data: ConversationUpdatedEventData): ListLastMessage {
+  const { set, removed } = natureOf(data);
+  const kept = Object.fromEntries(Object.entries(message).filter(([key]) => !removed.includes(key as keyof Nature)));
+  return { ...kept, ...set } as ListLastMessage;
+}
+
+/**
+ * CE QUI S'EST PASSÉ DEPUIS LE DERNIER MESSAGE (#7545) — la dernière réaction
+ * et l'appel en cours, chacun TRI-ÉTAT (absent = inchangé, `null` = retiré).
+ * Ils ne touchent jamais au groupe d'aperçu : une réaction n'est pas un
+ * message, et elle ne REMONTE la conversation que par le `lastMessageAt` que
+ * le serveur choisit de lui joindre (décision porteur : à MON message).
+ */
+export function withSideband(conversation: Conversation, data: ConversationUpdatedEventData): Conversation {
+  const row = conversation as ListConversation;
+  const { lastReaction: _reaction, activeCall: _call, ...rest } = row;
+  const reaction = data.lastReaction === undefined ? row.lastReaction : (data.lastReaction ?? undefined);
+  const call = data.activeCall === undefined ? row.activeCall : (data.activeCall ?? undefined);
+  return {
+    ...rest,
+    ...(reaction === undefined ? {} : { lastReaction: reaction }),
+    ...(call === undefined ? {} : { activeCall: call }),
+  } as ListConversation;
 }
