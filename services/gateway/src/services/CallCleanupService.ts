@@ -479,8 +479,11 @@ export class CallCleanupService {
     // Release the conversation's active-call claim (CallService.initiateCall's
     // atomic race guard) so a new call can be started once this one is
     // GC-terminated. Scoped compare-and-clear: a no-op if this call never held
-    // the claim or already lost it to a newer one.
-    if (session?.conversationId) {
+    // the claim or already lost it to a newer one. Through `CallService` when
+    // it is wired, so the conversation LIST learns the call is over (#7545).
+    if (session?.conversationId && this.callService) {
+      await this.callService.releaseActiveCallClaim(session.conversationId, callId);
+    } else if (session?.conversationId) {
       await this.prisma.conversation.updateMany({
         where: { id: session.conversationId, activeCallId: callId },
         data: { activeCallId: null }

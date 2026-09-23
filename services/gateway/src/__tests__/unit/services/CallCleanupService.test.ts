@@ -51,8 +51,9 @@ const createMockPrisma = () => ({
   callParticipant: {
     updateMany: jest.fn() as MockFn
   },
-  // Active-call claim release (see CallService.releaseActiveCallClaim); GC's
-  // forceEndCall clears it directly since it isn't a CallService method.
+  // Active-call claim release when NO CallService is wired; with one, GC's
+  // forceEndCall releases through `CallService.releaseActiveCallClaim` so the
+  // conversation list learns the call is over (#7545).
   conversation: {
     updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
   },
@@ -67,7 +68,8 @@ const createMockCallService = (hasData = true) => ({
   getStaleHeartbeats: jest.fn() as MockFn,
   clearHeartbeats: jest.fn() as MockFn,
   clearRingingTimeout: jest.fn() as MockFn,
-  hasHeartbeatData: jest.fn().mockReturnValue(hasData) as MockFn
+  hasHeartbeatData: jest.fn().mockReturnValue(hasData) as MockFn,
+  releaseActiveCallClaim: jest.fn().mockResolvedValue(undefined) as MockFn
 });
 
 const createMockIo = () => {
@@ -658,6 +660,8 @@ describe('CallCleanupService', () => {
 
       expect(result.cleaned).toBe(1);
       expect(callService.clearHeartbeats).toHaveBeenCalledWith('call-hb');
+      // #7545 — la libération passe par CallService, qui prévient la liste.
+      expect(callService.releaseActiveCallClaim).toHaveBeenCalledWith('conv-hb', 'call-hb');
     });
 
     it('heartbeat timeout: does NOT force-end when stale < total participants', async () => {

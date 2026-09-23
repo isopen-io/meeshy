@@ -66,6 +66,7 @@ import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
 import { setEphemeralCountdownIOResolver } from './socketio/ephemeralCountdownAnnouncer';
+import { emitConversationActivityUpdate } from './socketio/emitConversationActivityUpdate';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
 import { ExpiredShareLinksCleanupService } from './services/ExpiredShareLinksCleanupService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
@@ -1006,6 +1007,26 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // `call:leave` handler did), leaving a departed/kicked group-call
         // member visible in every other participant's roster/video grid
         // until the ~120s GC sweep.
+        // #7545 — la liste de conversations apprend l'appel en cours : sa
+        // réservation, chaque arrivée et chaque départ, et sa fin, relus
+        // depuis `Conversation.activeCallId` par UNE unité de diffusion.
+        // `updatedBy` : l'initiateur de l'appel — un départ ou une fin par GC
+        // n'a pas d'autre auteur, et le contrat exige un `User.id`.
+        cleanupManager.getCallService().setActiveCallChangedListener((conversationId, callId) => {
+          void this.prisma.callSession
+            .findUnique({ where: { id: callId }, select: { initiatorId: true } })
+            .then((call) =>
+              call
+                ? emitConversationActivityUpdate(this.prisma, cleanupManager.getIO(), {
+                    conversationId,
+                    updatedByUserId: call.initiatorId,
+                    call: true,
+                    onError: (error) => logger.warn('conversation:updated activeCall failed', { conversationId, error }),
+                  })
+                : undefined
+            )
+            .catch((error: unknown) => logger.warn('conversation:updated activeCall rejected', { conversationId, error }));
+        });
         cleanupManager.getCallService().setParticipantLeftBroadcaster(
           (_callId, event) =>
             callEventsHandler.broadcastParticipantLeftForRest(cleanupManager.getIO(), event)

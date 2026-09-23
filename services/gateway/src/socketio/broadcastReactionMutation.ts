@@ -2,6 +2,7 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ReactionEventType, ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import type { ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
 import type { Anonymized, ServerEmitIO, ServerEmitTarget } from './serverEmit';
+import { emitConversationActivityUpdate, type ActivityPrisma } from './emitConversationActivityUpdate';
 
 /** Alias de la porte typée du contrat — voir `serverEmit.ts` (cycle 104). */
 export type ReactionEmitIO = ServerEmitIO;
@@ -65,10 +66,11 @@ function emitToConversationRoom(
  *  2. participants who are OFFLINE right now → the delivery queue, replayed by
  *     `_drainPendingMessages` on their next connection.
  *
- * Unlike `broadcastMessageMutation` there is no third, conversation-list
- * audience: a reaction changes no field of the conversation preview (last
- * message, sender, timestamp all stay put), so there is nothing for
- * `emitConversationPreviewUpdate` to refresh. Two audiences, deliberately.
+ *  3. every participant's conversation LIST → `conversation:updated` carrying
+ *     `lastReaction` (#7545). A reaction changes no field of the last-message
+ *     preview, but it IS what happened last: the row says « Alice a réagi ❤️ »
+ *     and, for the author of the reacted message only, climbs the list
+ *     (`emitConversationActivityUpdate`).
  *
  * `ReactionHandler` (the socket transport) covered both. The four REST reaction
  * routes and the agent reaction path each open-coded (1) and none of them did
@@ -97,10 +99,23 @@ export async function broadcastReactionMutation(params: {
   messageId: string;
   emoji: string;
   payload: ReactionMutationPayload;
+  /** Relit `Conversation.lastReactionId` pour la liste — audience 3. */
+  prisma: ActivityPrisma;
+  /** `User.id` de qui a réagi (`Participant.id` pour un anonyme). */
+  updatedByUserId: string;
   onError?: (error: unknown) => void;
 }): Promise<void> {
   const { manager, conversationId, actorParticipantId, eventType, messageId, emoji, payload, onError } = params;
   if (!manager) return;
+
+  // Audience 3 — la liste. Ne lève jamais (best-effort interne) ; le `.catch`
+  // garde la promesse détachée quand même (leçon 230).
+  void emitConversationActivityUpdate(params.prisma, manager.getIO(), {
+    conversationId,
+    updatedByUserId: params.updatedByUserId,
+    reaction: true,
+    onError,
+  }).catch((error: unknown) => onError?.(error));
 
   try {
     emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), eventType, payload);

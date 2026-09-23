@@ -20,6 +20,7 @@ import {
   callSummaryClientMessageId
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+import { ActiveCallClaim, type ActiveCallChangedListener } from './calls/activeCallClaim';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import {
@@ -271,6 +272,8 @@ export class CallService {
   // evict its 2s `call:signal` session cache entry. Mirrors callEndedBroadcaster.
   private signalCacheInvalidator: ((callId: string) => void) | null = null;
 
+  private readonly activeCallClaim: ActiveCallClaim;
+
   // Wired in server.ts to CallEventsHandler.broadcastParticipantLeftForRest.
   // Sibling of callEndedBroadcaster: the REST end/leave routes have no `io`,
   // so `DELETE /calls/:id/participants/:pid` (self-leave AND moderator kick)
@@ -296,6 +299,7 @@ export class CallService {
     private readonly bootedAt: Date = new Date()
   ) {
     this.turnCredentialService = new TURNCredentialService();
+    this.activeCallClaim = new ActiveCallClaim(prisma, ACTIVE_STATUSES);
   }
 
   /**
@@ -869,65 +873,12 @@ export class CallService {
    * incident 2026-07-02, conversation blocked CALL_ALREADY_ACTIVE ~5 min).
    */
   async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
-    try {
-      await this.prisma.conversation.updateMany({
-        where: { id: conversationId, activeCallId: callId },
-        data: { activeCallId: null }
-      });
-    } catch (error) {
-      logger.error('Failed to release active-call claim', { conversationId, callId, error });
-    }
+    await this.activeCallClaim.release(conversationId, callId);
   }
 
-  /**
-   * Self-heal a leaked active-call claim. A claim can outlive its call when
-   * a terminal write raced the release (prod incident 2026-07-02: ringing
-   * timeout won the missed-transition, the delegated release was skipped by
-   * markCallAsMissed's non-ringing guard, and the conversation rejected
-   * every initiateCall for minutes). When the current holder is terminal —
-   * or the claim vanished between our failed claim and this read — take the
-   * claim for `newCallId` with a single compare-and-swap, so a concurrent
-   * healthy claim can never be clobbered. Returns true when the claim is won.
-   */
-  private async reclaimFromTerminalHolder(conversationId: string, newCallId: string): Promise<boolean> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { activeCallId: true }
-    });
-    const holderId = conversation?.activeCallId;
-
-    if (!holderId) {
-      const retry = await this.prisma.conversation.updateMany({
-        where: {
-          id: conversationId,
-          OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
-        },
-        data: { activeCallId: newCallId }
-      });
-      return retry.count > 0;
-    }
-
-    const holder = await this.prisma.callSession.findUnique({
-      where: { id: holderId },
-      select: { status: true }
-    });
-    if (holder && ACTIVE_STATUSES.includes(holder.status)) {
-      return false;
-    }
-
-    const swap = await this.prisma.conversation.updateMany({
-      where: { id: conversationId, activeCallId: holderId },
-      data: { activeCallId: newCallId }
-    });
-    if (swap.count > 0) {
-      logger.warn('⚠️ Active-call claim self-healed from terminal holder', {
-        conversationId,
-        staleHolderCallId: holderId,
-        newCallId
-      });
-      return true;
-    }
-    return false;
+  /** La liste de conversations apprend chaque changement d'appel en cours (#7545) — branché dans server.ts. */
+  setActiveCallChangedListener(listener: ActiveCallChangedListener): void {
+    this.activeCallClaim.setListener(listener);
   }
 
   /**
@@ -1327,27 +1278,16 @@ export class CallService {
     // succeed on those documents and every initiateCall fails
     // CALL_ALREADY_ACTIVE (prod incident 2026-07-02: 211/211 conversations
     // lacked the field; hot-fixed by backfilling `activeCallId: null`).
-    const claim = await this.prisma.conversation.updateMany({
-      where: {
-        id: conversationId,
-        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
-      },
-      data: { activeCallId: callSession.id }
-    });
-
-    if (claim.count === 0) {
-      const healed = await this.reclaimFromTerminalHolder(conversationId, callSession.id);
-      if (!healed) {
-        logger.error('❌ Call already active (lost race to claim conversation)', {
-          conversationId,
-          orphanedCallId: callSession.id
-        });
-        await this.prisma.$transaction(async (tx) => {
-          await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
-          await tx.callSession.delete({ where: { id: callSession.id } });
-        });
-        throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
-      }
+    if (!(await this.activeCallClaim.claim(conversationId, callSession.id))) {
+      logger.error('❌ Call already active (lost race to claim conversation)', {
+        conversationId,
+        orphanedCallId: callSession.id
+      });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
+        await tx.callSession.delete({ where: { id: callSession.id } });
+      });
+      throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
     }
 
     logger.info('✅ Call initiated successfully', {
@@ -1567,6 +1507,7 @@ export class CallService {
     const iceServers = this.turnCredentialService.generateCredentials(userId);
 
     const callSession = await this.getCallSession(callId);
+    this.activeCallClaim.notifyChanged(callSession.conversationId, callId);
 
     return {
       callSession,
@@ -1936,7 +1877,9 @@ export class CallService {
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
 
-    return this.getCallSession(callId);
+    const leftSession = await this.getCallSession(callId);
+    this.activeCallClaim.notifyChanged(leftSession.conversationId, callId);
+    return leftSession;
   }
 
   /**

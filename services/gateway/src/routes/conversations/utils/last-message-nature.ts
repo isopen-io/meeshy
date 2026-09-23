@@ -23,7 +23,22 @@ export interface PreviewProtectionFlags {
   readonly isEncrypted?: boolean | null;
   readonly expiresAt?: Date | string | null;
   readonly ephemeralDuration?: number | null;
+  /**
+   * #7451 — l'échéance SERVIE à ce lecteur pour un éphémère (`D(lecteur)`, ou la
+   * plus tardive pour l'expéditeur — `servedEphemeralExpiresAt`). Seule une
+   * lecture PAR LECTEUR la connaît (`GET /conversations`) ; une diffusion de
+   * room l'ignore et laisse le client décompter depuis sa réception.
+   */
+  readonly servedExpiresAt?: Date | null;
 }
+
+/**
+ * Borne de lecture des pièces jointes d'un dernier message pour son résumé,
+ * partagée par `GET /conversations` et le socket. Le COMPTE reste exact
+ * (`_count`) au-delà ; seuls les familles et le poids se lisent sur ces
+ * premières-ci.
+ */
+export const PREVIEW_ATTACHMENT_SUMMARY_LIMIT = 50;
 
 const WITHHOLDING: ReadonlySet<PreviewProtection> = new Set(['expired', 'view-once', 'blurred', 'encrypted']);
 
@@ -50,12 +65,17 @@ export function resolvePreviewProtection(
     },
     now,
   );
-  if (kind === 'expired') return 'expired';
+  if (kind === 'expired' || readerEphemeralExpired(flags, now)) return 'expired';
   if (flags.isViewOnce === true) return 'view-once';
   if (flags.isBlurred === true) return 'blurred';
   if (flags.isEncrypted === true) return 'encrypted';
   if (kind === 'ephemeralActive') return 'ephemeral';
   return null;
+}
+
+function readerEphemeralExpired(flags: PreviewProtectionFlags, now: Date): boolean {
+  const isEphemeral = typeof flags.ephemeralDuration === 'number' && flags.ephemeralDuration > 0;
+  return isEphemeral && flags.servedExpiresAt != null && flags.servedExpiresAt.getTime() <= now.getTime();
 }
 
 /** `true` quand ni le texte, ni les traductions, ni les pièces jointes ne doivent partir. */
@@ -160,4 +180,30 @@ export function systemEventFromMessage(message: SystemEventSource): LastMessageS
     return { key: 'system.encryption-enabled', params: { mode: raw.mode } };
   }
   return { key: 'system.generic', params: {} };
+}
+
+export interface NatureSource extends SystemEventSource {
+  readonly isEncrypted?: boolean | null;
+  readonly forwardedFromId?: string | null;
+}
+
+export interface LastMessageNature {
+  readonly isEncrypted: boolean;
+  readonly isForwarded: boolean;
+  readonly systemEvent: LastMessageSystemEvent | null;
+  readonly callSummary: LastMessageCallSummary | null;
+}
+
+/**
+ * Ce que la ligne dit du message au-delà de son texte — identique en REST
+ * (`lastMessage.*`) et sur le socket (`lastMessage*`), et indépendant de la
+ * protection : un appel ou un avis système n'a pas de contenu à retenir.
+ */
+export function resolveLastMessageNature(message: NatureSource): LastMessageNature {
+  return {
+    isEncrypted: message.isEncrypted === true,
+    isForwarded: message.forwardedFromId != null,
+    systemEvent: systemEventFromMessage(message),
+    callSummary: callSummaryFromMetadata(message.metadata),
+  };
 }
