@@ -279,6 +279,30 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertNil(ReelPrewarmWindow.next(after: "absent", in: [frame("a", midY: 100)]))
     }
 
+    // MARK: - #7625 — le lecteur plein écran garde ses deux voisins chauds
+
+    /// Le pager plein écran (`ReelsPlayerView`) ne préparait RIEN : sa pile est
+    /// paresseuse, la page N+1 n'était montée qu'au moment où elle entrait à
+    /// l'écran, et c'est seulement là que son téléchargement partait — le swipe
+    /// montrait le poster et un indicateur à la place de la vidéo. Le suivant
+    /// passe EN PREMIER (geste majoritaire), le précédent ensuite (retour).
+    func test_neighbours_auMilieu_rendLeSuivantPuisLePrecedent() {
+        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "b", in: ["a", "b", "c"]), ["c", "a"])
+    }
+
+    func test_neighbours_auDernier_rendSeulementLePrecedent() {
+        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "c", in: ["a", "b", "c"]), ["b"])
+    }
+
+    func test_neighbours_auPremier_rendSeulementLeSuivant() {
+        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "a", in: ["a", "b", "c"]), ["b"])
+    }
+
+    func test_neighbours_sansCourantOuInconnu_neRendRien() {
+        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: nil, in: ["a", "b"]), [])
+        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "z", in: ["a", "b"]), [])
+    }
+
     // MARK: - #7010 — `FeedView` n'OBSERVE pas le coordinateur
 
     /// `@StateObject` / `@ObservedObject` abonnent la vue à `objectWillChange`
