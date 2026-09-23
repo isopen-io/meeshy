@@ -742,10 +742,12 @@ final class ConversationSocketHandler {
                     }
                 }
                 StarredMessagesStore.shared.remove(messageId: event.messageId)
-                // Le registre des réceptions n'a plus rien à dire sur un
-                // message détruit : le garder ferait grossir un magasin dont
-                // aucune entrée ne resservira.
-                EphemeralReceiptLedger.shared.forget(event.messageId)
+                // **La mort se GRAVE, elle ne s'oublie pas** (#7552). Ce site
+                // EFFAÇAIT la réception ; mais la ligne ne quitte le fil qu'au
+                // tour suivant, et entre les deux la projection retrouvait un
+                // registre VIDE et stampait une réception NEUVE — une fenêtre
+                // entière repartait. On oubliait avant d'avoir retiré.
+                EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
                 // #7453 — le troisième chemin du balayage. Il est le seul à
                 // savoir qu'un message PRÉCIS vient de mourir, y compris
                 // pendant que l'application est à l'écran : ni la NSE (qui
