@@ -29,7 +29,8 @@ public extension MeeshyMessage {
         ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
         now: Date = Date()
     ) -> MessageProtectionDescriptor {
-        let declaresEphemeral = effects.flags.contains(.ephemeral)
+        let flags = protectionFlags
+        let declaresEphemeral = flags.contains(.ephemeral)
             || expiresAt != nil
             || (effects.ephemeralDuration ?? 0) > 0
 
@@ -46,7 +47,7 @@ public extension MeeshyMessage {
         // serveur) ne peut pas prolonger d'une seconde la vie du message.
         if declaresEphemeral, let destroyedAt = ledger.destruction(of: id) {
             return MessageProtectionDescriptor.resolve(
-                flags: effects.flags,
+                flags: flags,
                 servedExpiresAt: min(destroyedAt, now),
                 ephemeralDuration: effects.ephemeralDuration,
                 localReceivedAt: nil,
@@ -71,7 +72,7 @@ public extension MeeshyMessage {
             : nil
 
         return MessageProtectionDescriptor.resolve(
-            flags: effects.flags,
+            flags: flags,
             servedExpiresAt: expiresAt,
             ephemeralDuration: effects.ephemeralDuration,
             localReceivedAt: localReceivedAt,
