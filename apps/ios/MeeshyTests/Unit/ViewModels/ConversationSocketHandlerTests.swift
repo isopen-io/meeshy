@@ -1499,6 +1499,25 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(socket.typingStartConversationIds.contains(conversationId))
     }
 
+    func test_onTextChanged_continuousTyping_reemitsTypingStartOnSchedule() async throws {
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket
+        )
+
+        sut.onTextChanged("H")
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        sut.onTextChanged("He")
+        try await Task.sleep(nanoseconds: 1_900_000_000)
+        sut.onTextChanged("Hel")
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertGreaterThanOrEqual(socket.typingStartConversationIds.count, 2)
+        sut.stopTypingEmission()
+    }
+
     func test_stopTypingEmission_emitsTypingStop() {
         let socket = MockMessageSocket()
         let sut = ConversationSocketHandler(

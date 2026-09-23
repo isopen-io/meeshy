@@ -314,6 +314,7 @@ struct UniversalComposerBar: View {
     /// ou pose un cadre. Un index borné par l'ancienne longueur aurait pointé
     /// hors du nouveau tour.
     @State var stickerRotationStep = 0
+    @State var stickerRotationTimer = Timer.publish(every: UniversalComposerBar.stickerRotationPeriod, on: .main, in: .common).autoconnect()
     @FocusState var isFocused: Bool
     @State var sendBounce = false
     @State var focusBounce = false

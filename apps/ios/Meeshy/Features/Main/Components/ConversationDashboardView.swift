@@ -1087,7 +1087,7 @@ struct ConversationDashboardView: View {
 
         let textMessages = messages.filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let sampled = textMessages.count > 200
-            ? Array(textMessages.shuffled().prefix(200))
+            ? Array(textMessages.suffix(200))
             : textMessages
 
         for msg in sampled {

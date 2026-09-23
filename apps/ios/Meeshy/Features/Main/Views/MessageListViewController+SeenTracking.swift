@@ -138,7 +138,8 @@ extension MessageListViewController {
     /// de lecture jusqu'au relâchement.
     func startSeenTracking() {
         seenTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] firing in
+            guard self != nil else { return firing.invalidate() }
             Task { @MainActor in
                 guard let self else { return }
                 // F-086bis (WS-2) : RÉUTILISE ce timer de suivi de lecture,
