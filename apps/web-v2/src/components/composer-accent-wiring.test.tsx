@@ -77,7 +77,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
   });
 
-  test('éphémère armé ⇒ `--accent` de la racine devient `var(--ios-state-ephemeral)`, et REVIENT à rien une fois désarmé', () => {
+  test('éphémère armé ⇒ `--accent` de la racine devient `var(--color-error)`, et REVIENT à rien une fois désarmé', () => {
     const el = mount(() => {});
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
@@ -87,7 +87,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
       buttons[1]!.click(); // « 30s »
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-ephemeral)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
 
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click(); // désarme.
@@ -108,7 +108,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
       buttons[1]!.click();
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-ephemeral)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
   });
 
   test('après un envoi, la substitution retombe — la protection est remise à zéro', () => {

@@ -5,18 +5,19 @@ import type { ComposerAccentState } from './compose-protection';
 /**
  * L'ACCENT SUBSTITUÉ DU COMPOSEUR, POSÉ EN CSS (#6175, puis #7667).
  *
- * UNE PROTECTION A UNE COULEUR PARTOUT (#7667) — la barre prend le jeton
- * d'ÉTAT que le fil peint sur la capsule de la même protection (#7599,
- * `thread-protection.css`) : `--ios-state-ephemeral` (orange, la flamme),
+ * LA PROTECTION LA PLUS FORTE COLORE LA BARRE (#7667), miroir
+ * `ComposerProtection.tintHex` (iOS). Vue unique et flou prennent le jeton
+ * d'ÉTAT que le fil peint sur leur capsule (#7599, `thread-protection.css`) :
  * `--ios-state-view-once` (violet, le « 1 » cerclé), `--ios-state-concealed`
- * (gris, le flou). Tous trois DÉRIVÉS de `MeeshyColors.swift`
- * (`packages/design-tokens/ios.css`) : ce module ne fait QUE choisir lequel
- * `--accent` reçoit, jamais une teinte inventée. L'effet en attente garde
- * `--color-ios-brand` (indigo500, `brandPrimaryHex`).
+ * (gris). L'éphémère prend `--color-error`, le ROUGE d'alerte — directive
+ * porteur « la barre sera rouge pour éphémère » ; le fil le peint en orange,
+ * et laquelle unifier est la décision #7677. Tous DÉRIVÉS de
+ * `MeeshyColors.swift` (`packages/design-tokens/ios.css`) : ce module ne fait
+ * QUE choisir lequel `--accent` reçoit, jamais une teinte inventée. L'effet en
+ * attente garde `--color-ios-brand` (indigo500, `brandPrimaryHex`).
  *
- * Jusqu'au #7667, l'éphémère substituait le ROUGE D'ERREUR et le flou
- * l'indigo de traçage — deux teintes qui ne disaient pas la protection
- * ailleurs dans l'app — et la vue unique ne substituait rien du tout.
+ * Jusqu'au #7667, le flou substituait l'indigo de traçage et la vue unique ne
+ * substituait rien du tout.
  *
  * CE QUI N'EST PAS FAIT ICI, ET POURQUOI — `--accent-ink` reste
  * INTENTIONNELLEMENT NON SUBSTITUÉ : le calculer exigerait un hex écrit à la
@@ -26,7 +27,7 @@ import type { ComposerAccentState } from './compose-protection';
  * de n'importe laquelle de ces teintes.
  */
 const SUBSTITUTED_ACCENT_VAR: Readonly<Record<Exclude<ComposerAccentState, null>, string>> = {
-  ephemeral: '--ios-state-ephemeral',
+  ephemeral: '--color-error',
   viewOnce: '--ios-state-view-once',
   blur: '--ios-state-concealed',
   effects: '--color-ios-brand',

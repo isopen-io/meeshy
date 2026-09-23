@@ -15,10 +15,11 @@ import MeeshyUI
 /// média) ne substituaient rien. La décision vit désormais ICI, lue par la
 /// barre elle-même depuis ses propres bascules : aucun hôte ne peut l'oublier.
 ///
-/// **Une protection a UNE couleur partout** : la teinte est le jeton d'état
-/// que le fil peint sur la capsule de la même protection
-/// (`MessageProtectionChrome.presentation`, #7599) — orange éphémère, violet
-/// vue unique, gris flou.
+/// Vue unique et flou prennent le jeton d'état que le fil peint sur la capsule
+/// de la même protection (`MessageProtectionChrome.presentation`, #7599) —
+/// violet vue unique, gris flou. L'éphémère prend le ROUGE d'alerte
+/// (`MeeshyColors.error`) sur directive porteur ; le fil le peint en orange,
+/// et laquelle unifier est la décision #7677.
 enum ComposerProtection: Equatable, CaseIterable {
     case ephemeral
     case viewOnce
@@ -32,9 +33,12 @@ enum ComposerProtection: Equatable, CaseIterable {
         return nil
     }
 
+    /// L'éphémère prend le ROUGE d'alerte, pas l'orange du fil : directive
+    /// porteur explicite (« la barre sera rouge pour éphémère », #7667). Les
+    /// deux couleurs de l'éphémère sont une décision ouverte (#7677).
     var tintHex: String {
         switch self {
-        case .ephemeral: return MeeshyColors.stateEphemeralHex
+        case .ephemeral: return MeeshyColors.errorHex
         case .viewOnce: return MeeshyColors.stateViewOnceHex
         case .blurred: return MeeshyColors.stateConcealedHex
         }
@@ -42,7 +46,7 @@ enum ComposerProtection: Equatable, CaseIterable {
 
     var tint: Color {
         switch self {
-        case .ephemeral: return MeeshyColors.stateEphemeral
+        case .ephemeral: return MeeshyColors.error
         case .viewOnce: return MeeshyColors.stateViewOnce
         case .blurred: return MeeshyColors.stateConcealed
         }

@@ -52,16 +52,22 @@ final class ComposerProtectionToneTests: XCTestCase {
 
     // MARK: - Une protection a UNE couleur partout
 
-    /// La teinte de la barre est celle que le fil peint sur la capsule de la
-    /// même protection (`MessageProtectionChrome.presentation`, #7599) — pas
-    /// une seconde table qui divergerait au premier réglage.
-    func test_teinte_estCelleDuChromeDuFil() {
-        XCTAssertEqual(ComposerProtection.ephemeral.tintHex,
-                       MessageProtectionChrome.presentation(for: .ephemeral(.awaitingReception(duration: 60))).tintHex)
+    /// Vue unique et flou : la teinte de la barre est celle que le fil peint
+    /// sur la capsule de la même protection (`MessageProtectionChrome`,
+    /// #7599) — pas une seconde table qui divergerait au premier réglage.
+    func test_teinte_vueUniqueEtFlou_sontCellesDuChromeDuFil() {
         XCTAssertEqual(ComposerProtection.viewOnce.tintHex,
                        MessageProtectionChrome.presentation(for: .viewOnce).tintHex)
         XCTAssertEqual(ComposerProtection.blurred.tintHex,
                        MessageProtectionChrome.presentation(for: .blurred).tintHex)
+    }
+
+    /// Directive porteur (#7667) : « la barre sera rouge pour éphémère ». Le
+    /// rouge d'alerte, pas l'orange du fil — l'écart est la décision #7677.
+    func test_teinte_ephemere_estLeRougeDAlerte() {
+        XCTAssertEqual(ComposerProtection.ephemeral.tintHex, MeeshyColors.errorHex)
+        XCTAssertNotEqual(ComposerProtection.ephemeral.tintHex,
+                          MessageProtectionChrome.presentation(for: .ephemeral(.awaitingReception(duration: 60))).tintHex)
     }
 
     func test_teinte_lesTroisProtectionsSontDistinctes() {

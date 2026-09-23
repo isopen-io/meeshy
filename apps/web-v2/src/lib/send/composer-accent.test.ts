@@ -7,8 +7,8 @@ describe('composerChromeAccentStyle — le jeton d’ÉTAT de la protection, auc
     expect(composerChromeAccentStyle(null)).toBeUndefined();
   });
 
-  test('éphémère armé ⇒ --accent pointe sur --ios-state-ephemeral (la flamme du fil)', () => {
-    expect(composerChromeAccentStyle('ephemeral')).toEqual({ '--accent': 'var(--ios-state-ephemeral)' });
+  test('éphémère armé ⇒ --accent pointe sur --color-error (le rouge d’alerte, directive porteur #7667 ; décision #7677)', () => {
+    expect(composerChromeAccentStyle('ephemeral')).toEqual({ '--accent': 'var(--color-error)' });
   });
 
   test('vue unique ⇒ --accent pointe sur --ios-state-view-once (le « 1 » cerclé du fil)', () => {

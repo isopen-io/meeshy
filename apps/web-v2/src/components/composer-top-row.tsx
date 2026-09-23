@@ -136,7 +136,7 @@ export function ComposerTopRow({
           role="group"
           aria-label="Durée avant disparition du message"
           className="mx-2 mb-1 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--ios-state-ephemeral) 8%, var(--color-ios-surface))' }}
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
         >
           {/* CIBLES ≥ 44 (dimension 5, revue-correction #6175) — `min-h-11`
               sur chaque capsule : la première forme mesurait 32 px de haut au
@@ -167,9 +167,9 @@ export function ComposerTopRow({
                 className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
                 style={
                   active
-                    ? armedStyle('var(--ios-state-ephemeral)', 32, 100)
+                    ? armedStyle('var(--color-error)', 32, 100)
                     : {
-                        backgroundColor: 'color-mix(in srgb, var(--ios-state-ephemeral) 10%, transparent)',
+                        backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
                         color: 'var(--color-ios-ink)',
                       }
                 }
@@ -196,7 +196,7 @@ export function ComposerTopRow({
           aria-expanded={ephemeralPickerOpen}
           data-composer-ephemeral
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--ios-state-ephemeral)') : { color: 'var(--color-ios-ink-2)' }}
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={
             ephemeralSeconds === undefined
               ? 'Activer le mode éphémère'
@@ -225,9 +225,10 @@ export function ComposerTopRow({
         </button>
 
         {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Chaque
-            protection porte SON jeton d'état, celui du fil (#7599, #7667) :
-            flamme orange, « 1 » violet, flou gris — et le flou et la vue
-            unique sont exclusifs (`toggledVeil`). */}
+            protection porte SA couleur (#7667) : flamme rouge d'alerte
+            (directive porteur ; décision #7677), « 1 » violet et flou gris
+            du fil (#7599) — et le flou et la vue unique sont exclusifs
+            (`toggledVeil`). */}
         <button
           type="button"
           onClick={onToggleViewOnce}
