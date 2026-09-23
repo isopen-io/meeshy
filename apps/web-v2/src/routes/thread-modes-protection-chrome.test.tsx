@@ -223,18 +223,30 @@ for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
     expect(badge?.getAttribute('data-ephemeral')).toBe('awaiting');
   });
 
-  test('NOMME la vue unique même SANS pièce jointe', async () => {
+  test('pose UNE seule puce « (1) · Touchez pour afficher » sur une vue unique, même SANS pièce jointe (#7580)', async () => {
     const message = messageOf({ id: 'm-vue-unique', isViewOnce: true });
     const host = await monte(mode, [message]);
 
-    const mention = host.querySelector('[data-view-once]');
-    expect(mention).not.toBeNull();
-    expect(mention?.textContent ?? '').toContain('Vue unique');
+    const puces = host.querySelectorAll('[data-view-once-chip]');
+    expect(puces.length).toBe(1);
+    expect(puces[0]?.getAttribute('data-view-once-chip')).toBe('sealed');
+    expect(puces[0]?.textContent ?? '').toContain('Touchez pour afficher');
+    expect(host.textContent ?? '').not.toContain('Vue unique');
+  });
+
+  test('une vue unique déjà ouverte garde sa bulle : « (1) · Déjà ouvert », jamais « supprimé » (#7580)', async () => {
+    const message = messageOf({ id: 'm-vue-unique', isViewOnce: true, consumedByMe: true });
+    const host = await monte(mode, [message]);
+
+    const puce = host.querySelector('[data-view-once-chip]');
+    expect(puce?.getAttribute('data-view-once-chip')).toBe('opened');
+    expect(puce?.textContent ?? '').toContain('Déjà ouvert');
+    expect(host.textContent ?? '').not.toContain('supprimé');
   });
 
   test('donne à la vue unique un pictogramme DISTINCT de celui de l’éphémère', async () => {
     const vueUnique = await monte(mode, [messageOf({ id: 'm-vue-unique', isViewOnce: true })]);
-    const glypheVueUnique = vueUnique.querySelector('[data-view-once]')?.getAttribute('data-glyph');
+    const glypheVueUnique = vueUnique.querySelector('[data-view-once-chip]')?.getAttribute('data-glyph');
 
     noteEphemeralReception('m-ephemere', Date.now());
     const ephemere = await monte(mode, [messageOf({ id: 'm-ephemere', ephemeralDuration: 600 })]);

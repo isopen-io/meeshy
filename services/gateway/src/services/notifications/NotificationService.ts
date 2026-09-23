@@ -41,7 +41,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
 import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
-import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
+import { recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -70,10 +70,7 @@ import {
   protectedPreview,
   buildMessageNotificationBodyI18n,
   truncateMessage,
-  buildOwnerSubtitleWithDetail,
-  targetPreviewBody,
 } from './notification-preview';
-import { resolvePostMedia } from './post-media-thumbnail';
 import type { FanoutDependencies } from './fanout/dependencies';
 import {
   getStoryNotificationRecipients,
@@ -97,6 +94,27 @@ import {
   createMemberJoinedNotification,
   createMemberJoinedNotificationsBatch,
 } from './fanout/member-joined';
+import type { NotificationBuilderDependencies } from './builders/dependencies';
+import {
+  createPostLikeNotification,
+  createPostCommentNotification,
+  createPostRepostNotification,
+  createCommentReplyNotification,
+  createCommentLikeNotification,
+} from './builders/social-engagement';
+import {
+  createConversationInviteNotification,
+  createAddedToConversationNotification,
+  createRemovedFromConversationNotification,
+  createMemberRemovedNotification,
+  createMemberRoleChangedNotification,
+  createMemberLeftNotification,
+} from './builders/conversation-membership';
+import {
+  createPasswordChangedNotification,
+  createTwoFactorNotification,
+  createLoginNewDeviceNotification,
+} from './builders/account-security';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -719,6 +737,19 @@ export class NotificationService {
       resolveRecipientLangs: (ids) => this.resolveRecipientLangs(ids),
       shouldCreateMentionNotification: (s, r) => this.shouldCreateMentionNotification(s, r),
       isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
+    };
+  }
+
+  /** Ce qu'un BÂTISSEUR (`builders/*.ts`) emprunte à l'instance — même loi que `fanoutDependencies()` : fermé sur `this` à CHAQUE appel. */
+  private builderDependencies(): NotificationBuilderDependencies {
+    return {
+      prisma: this.prisma,
+      createNotification: (params) => this.createNotification(params),
+      resolveRecipientLang: (userId) => this.resolveRecipientLang(userId),
+      canNotifyAboutPost: (postId, recipientId) => this.canNotifyAboutPost(postId, recipientId),
+      shouldCreateReactionNotification: (s, r) => this.shouldCreateReactionNotification(s, r),
+      isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
+      truncateMessage: (message, maxWords) => this.truncateMessage(message, maxWords),
     };
   }
 
@@ -2641,845 +2672,102 @@ export class NotificationService {
   }
 
   // ==============================================
-  // SOCIAL — POST_LIKE / STORY_REACTION / STATUS_REACTION
+  // SOCIAL — engagement sur un post / un commentaire
+  // (`builders/social-engagement.ts`)
   // ==============================================
 
-  async createPostLikeNotification(params: {
-    actorId: string;
-    postId: string;
-    postAuthorId: string;
-    emoji: string;
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Aperçu du contenu réagi (≤ ~80 chars) — identifie QUELLE entité. */
-    postPreview?: string;
-    /** Date de publication ISO du contenu réagi (contexte expiry côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-  }): Promise<Notification | null> {
-    // Don't notify yourself
-    if (params.actorId === params.postAuthorId) return null;
+  async createPostLikeNotification(
+    params: Parameters<typeof createPostLikeNotification>[1]
+  ): Promise<Notification | null> {
+    return createPostLikeNotification(this.builderDependencies(), params);
+  }
 
-    // Anti-spam: throttle reaction notifications per sender→recipient pair
-    if (!this.shouldCreateReactionNotification(params.actorId, params.postAuthorId)) {
-      return null;
-    }
+  async createPostCommentNotification(
+    params: Parameters<typeof createPostCommentNotification>[1]
+  ): Promise<Notification | null> {
+    return createPostCommentNotification(this.builderDependencies(), params);
+  }
 
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.actorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
+  async createPostRepostNotification(
+    params: Parameters<typeof createPostRepostNotification>[1]
+  ): Promise<Notification | null> {
+    return createPostRepostNotification(this.builderDependencies(), params);
+  }
 
-    // Map postType to the right notification type
-    const type = params.postType === 'STORY'
-      ? 'story_reaction'
-      : params.postType === 'STATUS'
-        ? 'status_reaction'
-        : 'post_like';
+  async createCommentReplyNotification(
+    params: Parameters<typeof createCommentReplyNotification>[1]
+  ): Promise<Notification | null> {
+    return createCommentReplyNotification(this.builderDependencies(), params);
+  }
 
-    const lang = await this.resolveRecipientLang(params.postAuthorId);
-    const subtitlePostType = params.postType ?? 'POST';
-
-    // Détail du contenu réagi : extrait texte si présent, sinon vignette/résumé
-    // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
-    // contenu sans ouvrir l'app, et le push iOS attache la miniature.
-    const trimmedPreview = params.postPreview?.trim() ?? '';
-    const media = await resolvePostMedia(this.prisma, params.postId);
-    // Le sous-titre nomme la cible, le corps la MONTRE : le détail (texte /
-    // média) descend dans le corps, que la phrase d'action n'occupe plus.
-    const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
-
-    return this.createNotification({
-      userId: params.postAuthorId,
-      type,
-      priority: 'normal',
-      content: targetPreviewBody(lang, subtitlePostType, {
-        textPreview: trimmedPreview,
-        mediaType: media?.mediaType,
-      }),
-      subtitle,
-      lang,
-
-      actor: {
-        id: params.actorId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-
-      context: {
-        postId: params.postId,
-        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-        ...(media?.thumbnailUrl
-          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-          : {}),
-      },
-
-      metadata: {
-        action: 'view_post',
-        postId: params.postId,
-        emoji: params.emoji,
-        postType: params.postType || 'POST',
-        ...(trimmedPreview !== ''
-          ? { postPreview: this.truncateMessage(trimmedPreview) }
-          : {}),
-        ...(media ? { mediaType: media.mediaType } : {}),
-        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-      },
-    });
+  async createCommentLikeNotification(
+    params: Parameters<typeof createCommentLikeNotification>[1]
+  ): Promise<Notification | null> {
+    return createCommentLikeNotification(this.builderDependencies(), params);
   }
 
   // ==============================================
-  // SOCIAL — POST_COMMENT
+  // APPARTENANCE — invitation, ajout, exclusion, rôle, départ
+  // (`builders/conversation-membership.ts`)
   // ==============================================
 
-  async createPostCommentNotification(params: {
-    actorId: string;
-    postId: string;
-    postAuthorId: string;
-    commentId: string;
-    commentPreview: string;
-    /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
-    postPreview?: string;
-    /** Date de publication ISO du post (le client en dérive « du JJ/MM/AAAA HH:MM »). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-  }): Promise<Notification | null> {
-    if (params.actorId === params.postAuthorId) return null;
+  async createConversationInviteNotification(
+    params: Parameters<typeof createConversationInviteNotification>[1]
+  ): Promise<Notification | null> {
+    return createConversationInviteNotification(this.builderDependencies(), params);
+  }
 
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.actorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
+  async createAddedToConversationNotification(
+    params: Parameters<typeof createAddedToConversationNotification>[1]
+  ): Promise<Notification | null> {
+    return createAddedToConversationNotification(this.builderDependencies(), params);
+  }
 
-    // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
-    // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
-    // ouvrir l'app. Libellé localisé (Prisme-first) — plus de français codé en dur.
-    const lang = await this.resolveRecipientLang(params.postAuthorId);
-    const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    // Cible du commentaire : extrait texte du post si présent, sinon résumé
-    // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
-    const media = await resolvePostMedia(this.prisma, params.postId);
-    const subtitle = buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
-      textPreview: trimmedPostPreview,
-      mediaType: media?.mediaType,
-    });
+  async createRemovedFromConversationNotification(
+    params: Parameters<typeof createRemovedFromConversationNotification>[1]
+  ): Promise<Notification | null> {
+    return createRemovedFromConversationNotification(this.builderDependencies(), params);
+  }
 
-    return this.createNotification({
-      userId: params.postAuthorId,
-      type: 'post_comment',
-      priority: 'normal',
-      content: this.truncateMessage(params.commentPreview),
-      subtitle,
-      lang,
+  async createMemberRemovedNotification(
+    params: Parameters<typeof createMemberRemovedNotification>[1]
+  ): Promise<Notification | null> {
+    return createMemberRemovedNotification(this.builderDependencies(), params);
+  }
 
-      actor: {
-        id: params.actorId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
+  async createMemberRoleChangedNotification(
+    params: Parameters<typeof createMemberRoleChangedNotification>[1]
+  ): Promise<Notification | null> {
+    return createMemberRoleChangedNotification(this.builderDependencies(), params);
+  }
 
-      context: {
-        postId: params.postId,
-        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-        ...(media?.thumbnailUrl
-          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-          : {}),
-      },
-
-      metadata: {
-        action: 'view_post',
-        postId: params.postId,
-        commentId: params.commentId,
-        commentPreview: this.truncateMessage(params.commentPreview),
-        postType: params.postType ?? 'POST',
-        ...(trimmedPostPreview !== ''
-          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
-          : {}),
-        ...(media ? { mediaType: media.mediaType } : {}),
-        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-      },
-    });
+  async createMemberLeftNotification(
+    params: Parameters<typeof createMemberLeftNotification>[1]
+  ): Promise<Notification | null> {
+    return createMemberLeftNotification(this.builderDependencies(), params);
   }
 
   // ==============================================
-  // SOCIAL — POST_REPOST
+  // SÉCURITÉ DU COMPTE — mot de passe, second facteur, nouvel appareil
+  // (`builders/account-security.ts`)
   // ==============================================
 
-  async createPostRepostNotification(params: {
-    actorId: string;
-    originalPostId: string;
-    postAuthorId: string;
-    repostId: string;
-    /** Type du post partagé — pilote le wording. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Extrait du post partagé pour identifier LE contenu repris. */
-    postPreview?: string;
-    /** Date de publication ISO du contenu partagé (contexte expiry côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-  }): Promise<Notification | null> {
-    if (params.actorId === params.postAuthorId) return null;
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.actorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const lang = await this.resolveRecipientLang(params.postAuthorId);
-    const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    const media = await resolvePostMedia(this.prisma, params.originalPostId);
-    // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
-    // détail du contenu partagé descend donc dans le corps.
-    const subtitle = notificationString(lang, 'comment.subtitleOwner', {
-      postType: params.postType ?? 'POST',
-    });
-
-    return this.createNotification({
-      userId: params.postAuthorId,
-      type: 'post_repost',
-      priority: 'normal',
-      content: targetPreviewBody(lang, params.postType ?? 'POST', {
-        textPreview: trimmedPostPreview,
-        mediaType: media?.mediaType,
-      }),
-      subtitle,
-      lang,
-
-      actor: {
-        id: params.actorId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-
-      context: {
-        postId: params.originalPostId,
-        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-        ...(media?.thumbnailUrl
-          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-          : {}),
-      },
-
-      metadata: {
-        action: 'view_post',
-        originalPostId: params.originalPostId,
-        repostId: params.repostId,
-        postType: params.postType ?? 'POST',
-        ...(trimmedPostPreview !== ''
-          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
-          : {}),
-        ...(media ? { mediaType: media.mediaType } : {}),
-        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-      },
-    });
+  async createPasswordChangedNotification(
+    params: Parameters<typeof createPasswordChangedNotification>[1]
+  ): Promise<Notification | null> {
+    return createPasswordChangedNotification(this.builderDependencies(), params);
   }
 
-  // ==============================================
-  // SOCIAL — COMMENT_REPLY
-  // ==============================================
-
-  async createCommentReplyNotification(params: {
-    actorId: string;
-    postId: string;
-    commentAuthorId: string;
-    commentId: string;
-    /** Identifiant du commentaire parent — permet au client de déplier le fil
-     *  parent puis de défiler/surligner la réponse (`commentId`). */
-    parentCommentId?: string;
-    replyPreview: string;
-    /** Extrait du commentaire parent — identifie À QUOI on répond. */
-    parentCommentPreview?: string;
-    /** Type du contenu portant le commentaire — précise « sur votre story/réel ». Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Date de publication ISO du contenu (le client en dérive « du JJ/MM/AAAA HH:MM »). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-  }): Promise<Notification | null> {
-    if (params.actorId === params.commentAuthorId) return null;
-
-    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.actorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    // Le titre « X a répondu à votre commentaire » est calculé par le builder
-    // (source unique localisée). Le subtitle précise l'ENTITÉ portant le
-    // commentaire (« Story », « Réel »…) — pas « publication » générique ; le
-    // client y append la date locale (« · 23/06/2026 14:30 ») depuis postCreatedAt.
-    const lang = await this.resolveRecipientLang(params.commentAuthorId);
-    const trimmedParent = params.parentCommentPreview?.trim() ?? '';
-    // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
-    const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
-    // Vignette du contenu portant le commentaire → attachée au push iOS.
-    const media = await resolvePostMedia(this.prisma, params.postId);
-
-    return this.createNotification({
-      userId: params.commentAuthorId,
-      type: 'comment_reply',
-      priority: 'normal',
-      content: this.truncateMessage(params.replyPreview),
-      subtitle,
-      lang,
-
-      actor: {
-        id: params.actorId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-
-      context: {
-        postId: params.postId,
-        commentId: params.commentId,
-        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
-        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-        ...(media?.thumbnailUrl
-          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-          : {}),
-      },
-
-      metadata: {
-        action: 'view_post',
-        postId: params.postId,
-        commentId: params.commentId,
-        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
-        commentPreview: this.truncateMessage(params.replyPreview),
-        postType: params.postType ?? 'POST',
-        ...(trimmedParent !== ''
-          ? { parentCommentPreview: this.truncateMessage(trimmedParent) }
-          : {}),
-        ...(media ? { mediaType: media.mediaType } : {}),
-        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-      },
-    });
+  async createTwoFactorNotification(
+    params: Parameters<typeof createTwoFactorNotification>[1]
+  ): Promise<Notification | null> {
+    return createTwoFactorNotification(this.builderDependencies(), params);
   }
 
-  // ==============================================
-  // SOCIAL — COMMENT_LIKE
-  // ==============================================
-
-  async createCommentLikeNotification(params: {
-    actorId: string;
-    postId: string;
-    commentId: string;
-    commentAuthorId: string;
-    emoji: string;
-    /** Extrait du commentaire liké — identifie QUEL commentaire reçoit la réaction. */
-    commentPreview?: string;
-    /**
-     * Type de l'entité PORTANT le commentaire liké. Sans lui, le client ne peut
-     * pas choisir la bonne surface (lecteur de réel / viewer éphémère / détail
-     * de post) et retombe sur une heuristique de cache. Défaut POST.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-  }): Promise<Notification | null> {
-    if (params.actorId === params.commentAuthorId) return null;
-
-    if (!(await this.canNotifyAboutPost(params.postId, params.commentAuthorId))) return null;
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.actorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const lang = await this.resolveRecipientLang(params.commentAuthorId);
-    const trimmedPreview = params.commentPreview?.trim() ?? '';
-    // Vignette du post portant le commentaire → attachée au push iOS.
-    const media = await resolvePostMedia(this.prisma, params.postId);
-    // La cible est LE COMMENTAIRE : son extrait est ce que le corps doit
-    // montrer, la phrase d'action étant déjà portée par le titre et la
-    // bannière. Sans extrait, le corps nomme l'entité.
-    const commentBody = trimmedPreview !== ''
-      ? `« ${this.truncateMessage(trimmedPreview)} »`
-      : notificationString(lang, 'comment.reply');
-
-    return this.createNotification({
-      userId: params.commentAuthorId,
-      type: 'comment_like',
-      priority: 'low',
-      content: commentBody,
-      lang,
-
-      actor: {
-        id: params.actorId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-
-      context: {
-        postId: params.postId,
-        ...(media?.thumbnailUrl
-          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-          : {}),
-      },
-
-      metadata: {
-        action: 'view_post',
-        postId: params.postId,
-        commentId: params.commentId,
-        emoji: params.emoji,
-        postType: params.postType ?? 'POST',
-        ...(trimmedPreview !== ''
-          ? { commentPreview: this.truncateMessage(trimmedPreview) }
-          : {}),
-        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-      },
-    });
-  }
-
-  // ==============================================
-  // CONVERSATION_INVITE / ADDED_TO_CONVERSATION
-  // ==============================================
-
-  async createConversationInviteNotification(params: {
-    invitedUserId: string;
-    inviterId: string;
-    inviterUsername?: string;
-    inviterAvatar?: string;
-    conversationId: string;
-    conversationTitle?: string;
-    conversationType: 'direct' | 'group' | 'public' | 'global' | 'broadcast' | string;
-  }): Promise<Notification | null> {
-    const type = params.conversationType === 'direct' ? 'new_conversation_direct' : 'new_conversation_group';
-
-    // Si on n'a pas les infos de l'inviteur, on les récupère
-    let actor = {
-      id: params.inviterId,
-      username: params.inviterUsername || 'User',
-      displayName: params.inviterUsername || 'User',
-      avatar: params.inviterAvatar
-    };
-
-    if (!params.inviterUsername) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: params.inviterId },
-        select: { username: true, displayName: true, avatar: true }
-      });
-      if (user) {
-        actor.username = user.username;
-        actor.displayName = user.displayName || user.username;
-        actor.avatar = user.avatar || undefined;
-      }
-    }
-
-    const lang = await this.resolveRecipientLang(params.invitedUserId);
-    const content = params.conversationType === 'direct'
-      ? notificationString(lang, 'invitation.direct', { actor: actor.displayName })
-      : notificationString(lang, 'invitation.group', { title: params.conversationTitle || '' });
-
-    return this.createNotification({
-      userId: params.invitedUserId,
-      type: type as any,
-      priority: 'normal',
-      content,
-      actor,
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: params.conversationTitle,
-        conversationType: params.conversationType as any,
-      },
-      metadata: { action: 'view_conversation' },
-    });
-  }
-
-  async createAddedToConversationNotification(params: {
-    recipientUserId: string;
-    addedByUserId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.addedByUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    const lang = await this.resolveRecipientLang(params.recipientUserId);
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'added_to_conversation',
-      priority: 'normal',
-      content: conversation?.type === 'direct'
-        ? notificationString(lang, 'group.newContact')
-        : notificationString(lang, 'group.added', { title: conversation?.title || '' }),
-      actor: {
-        id: params.addedByUserId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-      },
-      metadata: { action: 'view_conversation' },
-    });
-  }
-
-  // ==============================================
-  // REMOVED_FROM_CONVERSATION
-  // ==============================================
-
-  async createRemovedFromConversationNotification(params: {
-    recipientUserId: string;
-    removedByUserId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.removedByUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'removed_from_conversation',
-      priority: 'normal',
-      content: '',
-      actor: {
-        id: params.removedByUserId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-      },
-      metadata: { action: 'view_details' },
-    });
-  }
-
-  // ==============================================
-  // MEMBER_REMOVED (notifie les autres membres)
-  // ==============================================
-
-  async createMemberRemovedNotification(params: {
-    recipientUserId: string;
-    removedByUserId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    // Exclusion d'un TIERS — ambiant. À ne pas confondre avec
-    // `createRemovedFromConversationNotification`, qui annonce au destinataire
-    // sa PROPRE exclusion et perce donc le mute.
-    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_removed')) {
-      return null;
-    }
-
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.removedByUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'member_removed',
-      priority: 'normal',
-      content: '',
-      actor: {
-        id: params.removedByUserId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-      },
-      metadata: { action: 'view_conversation' },
-    });
-  }
-
-  // ==============================================
-  // MEMBER_ROLE_CHANGED / PROMOTED / DEMOTED
-  // ==============================================
-
-  async createMemberRoleChangedNotification(params: {
-    recipientUserId: string;
-    changedByUserId: string;
-    conversationId: string;
-    newRole: 'ADMIN' | 'MODERATOR' | 'MEMBER';
-    previousRole: string;
-  }): Promise<Notification | null> {
-    const actor = await this.prisma.user.findUnique({
-      where: { id: params.changedByUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!actor) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    const roleHierarchy: Record<string, number> = { MEMBER: 0, MODERATOR: 1, ADMIN: 2, CREATOR: 3 };
-    const oldLevel = roleHierarchy[params.previousRole] ?? 0;
-    const newLevel = roleHierarchy[params.newRole] ?? 0;
-    const type = newLevel > oldLevel ? 'member_promoted' : newLevel < oldLevel ? 'member_demoted' : 'member_role_changed';
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type,
-      priority: 'normal',
-      content: '',
-      actor: {
-        id: params.changedByUserId,
-        username: actor.username,
-        displayName: actor.displayName,
-        avatar: actor.avatar,
-      },
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-      },
-      metadata: {
-        action: 'view_conversation',
-        newRole: params.newRole,
-        previousRole: params.previousRole,
-      },
-    });
-  }
-
-  // ==============================================
-  // MEMBER_LEFT
-  // ==============================================
-
-  async createMemberLeftNotification(params: {
-    recipientUserId: string;
-    memberUserId: string;
-    conversationId: string;
-  }): Promise<Notification | null> {
-    // Départ d'un TIERS — ambiant, comme l'arrivée et l'exclusion.
-    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_left')) {
-      return null;
-    }
-
-    const member = await this.prisma.user.findUnique({
-      where: { id: params.memberUserId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-    if (!member) return null;
-
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: { title: true, type: true },
-    });
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'member_left',
-      priority: 'low',
-      content: '',
-      actor: {
-        id: params.memberUserId,
-        username: member.username,
-        displayName: member.displayName,
-        avatar: member.avatar,
-      },
-      context: {
-        conversationId: params.conversationId,
-        conversationTitle: conversation?.title,
-        conversationType: conversation?.type as any,
-      },
-      metadata: { action: 'view_conversation' },
-    });
-  }
-
-  // ==============================================
-  // SECURITY — PASSWORD_CHANGED
-  // ==============================================
-
-  async createPasswordChangedNotification(params: {
-    recipientUserId: string;
-  }): Promise<Notification | null> {
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'password_changed',
-      priority: 'high',
-      content: '',
-      context: {},
-      metadata: { action: 'view_details' },
-    });
-  }
-
-  // ==============================================
-  // SECURITY — TWO_FACTOR_ENABLED / DISABLED
-  // ==============================================
-
-  async createTwoFactorNotification(params: {
-    recipientUserId: string;
-    enabled: boolean;
-  }): Promise<Notification | null> {
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: params.enabled ? 'two_factor_enabled' : 'two_factor_disabled',
-      priority: 'high',
-      content: '',
-      context: {},
-      metadata: { action: 'view_details' },
-    });
-  }
-
-  // ==============================================
-  // SECURITY — LOGIN_NEW_DEVICE
-  // ==============================================
-
-  async createLoginNewDeviceNotification(params: {
-    recipientUserId: string;
-    deviceInfo?: {
-      type?: string;
-      vendor?: string | null;
-      model?: string | null;
-      os?: string | null;
-      osVersion?: string | null;
-      browser?: string | null;
-      browserVersion?: string | null;
-    } | null;
-    ipAddress?: string;
-    geoData?: {
-      country?: string | null;
-      countryName?: string | null;
-      city?: string | null;
-      location?: string | null;
-      timezone?: string | null;
-      latitude?: number | null;
-      longitude?: number | null;
-    } | null;
-    revokeToken?: string;
-  }): Promise<Notification | null> {
-    const device = params.deviceInfo;
-    const geo = params.geoData;
-
-    const deviceName = [device?.vendor, device?.model].filter(Boolean).join(' ') || null;
-    const deviceOS = device?.os
-      ? (device.osVersion ? `${device.os} ${device.osVersion}` : device.os)
-      : null;
-    const appOrBrowser = device?.browser
-      ? (device.browserVersion ? `${device.browser} ${device.browserVersion}` : device.browser)
-      : null;
-    const location = geo?.location || [geo?.city, geo?.countryName].filter(Boolean).join(', ') || null;
-
-    const apiBase = process.env.API_PUBLIC_URL || 'https://gate.meeshy.me';
-    const revokeAllUrl = params.revokeToken
-      ? `${apiBase}/api/v1/auth/revoke-all-sessions?token=${params.revokeToken}`
-      : `${apiBase}`;
-
-    let previousDeviceName: string | null = null;
-    let previousLocation: string | null = null;
-    let previousLoginTime: Date | null = null;
-
-    try {
-      const { getUserSessions } = await import('../SessionService');
-      const sessions = await getUserSessions(params.recipientUserId);
-      const previous = sessions.find(s => !s.isCurrentSession);
-      if (previous) {
-        previousDeviceName = [previous.browserName, previous.osName].filter(Boolean).join(' - ');
-        previousLocation = previous.location || null;
-        previousLoginTime = previous.lastActivityAt ? new Date(previous.lastActivityAt) : null;
-      }
-    } catch {
-      // Non-blocking — previous session is optional
-    }
-
-    const loginAlertData = {
-      deviceName,
-      deviceOS,
-      appOrBrowser,
-      location,
-      ip: params.ipAddress || null,
-      loginTime: new Date(),
-      timezone: geo?.timezone || null,
-      latitude: geo?.latitude ?? null,
-      longitude: geo?.longitude ?? null,
-      previousDeviceName,
-      previousLocation,
-      previousLoginTime,
-      revokeAllUrl,
-    };
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: params.recipientUserId },
-      select: this.LANG_SELECT
-    });
-    const lang = recipientLanguage(user, 'fr');
-    // Cycle 125 — l'horodatage se lit DANS la notification, donc dans la langue
-    // de la notification. `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` était un
-    // binaire codé en dur : un lecteur allemand recevait « Neue Anmeldung
-    // erkannt » — `notificationString` normalise, lui — daté à la française.
-    const locale = recipientDateLocale(user, 'fr');
-
-    const bodyParts: string[] = [];
-    if (location) bodyParts.push(location);
-    if (params.ipAddress) bodyParts.push(`IP : ${params.ipAddress}`);
-    if (deviceName) bodyParts.push(deviceName);
-    else if (deviceOS) bodyParts.push(deviceOS);
-    const now = new Date();
-    bodyParts.push(now.toLocaleString(locale, { timeZone: geo?.timezone || 'UTC', dateStyle: 'short', timeStyle: 'short' }));
-    const content = bodyParts.join(' — ');
-
-    const title = notificationString(lang, 'login.newDevice.title');
-
-    return this.createNotification({
-      userId: params.recipientUserId,
-      type: 'login_new_device',
-      priority: 'high',
-      content,
-      title,
-      context: {},
-      metadata: {
-        action: 'view_details' as const,
-        deviceName,
-        deviceVendor: device?.vendor || null,
-        deviceOS,
-        deviceOSVersion: device?.osVersion || null,
-        deviceType: device?.type || null,
-        ipAddress: params.ipAddress || null,
-        country: geo?.country || null,
-        countryName: geo?.countryName || null,
-        city: geo?.city || null,
-        location,
-      },
-      _loginAlertData: loginAlertData,
-    } as any);
+  async createLoginNewDeviceNotification(
+    params: Parameters<typeof createLoginNewDeviceNotification>[1]
+  ): Promise<Notification | null> {
+    return createLoginNewDeviceNotification(this.builderDependencies(), params);
   }
 
   // ==============================================

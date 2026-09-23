@@ -46,6 +46,11 @@ export interface GestionnaireDeConversation extends DepartedMemberEphemeralState
    */
   getIO(): ConversationRoomEmitter & MembershipRoomReader;
   joinUserToConversationRoom(userId: string, conversationId: string): Promise<void>;
+  /**
+   * `MeeshySocketIOManager.broadcastMessage` — la diffusion d'un avis de vie du
+   * groupe (#7593). Optionnel : un noyau qui n'annonce rien n'en a pas besoin.
+   */
+  broadcastMessage?(message: never, conversationId: string): Promise<void>;
 }
 
 export interface PasserelleSocketDeConversation {

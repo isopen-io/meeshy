@@ -168,6 +168,10 @@ export interface Message {
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
   readonly viewOnceCount: number;
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi. */
+  readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte. Ne retire jamais la bulle. */
+  readonly isFullyConsumed?: boolean;
   readonly isBlurred: boolean;
   /**
    * Le LECTEUR a déjà ouvert ce message à vue unique (#7594). Servi par
@@ -425,6 +429,13 @@ export interface Conversation {
   // ===== MESSAGES =====
   readonly lastMessage?: Message;
   readonly lastMessageAt?: Date;
+  /**
+   * Rang de la ligne POUR CE LECTEUR (#7592), chaîne ISO : max(`lastMessageAt`,
+   * dernière réaction quand elle vise un message du lecteur). `GET
+   * /conversations` trie dessus ; les clients trient sur cette valeur servie
+   * (`conversationListRank`, `utils/conversation-list-rank.ts`).
+   */
+  readonly listRankAt?: string | null;
   readonly messageCount?: number;
   readonly unreadCount?: number;
 

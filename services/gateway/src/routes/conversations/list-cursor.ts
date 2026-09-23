@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 
 /**
  * **LE CURSEUR DE `GET /conversations`, RÉSOLU DANS LE SCOPE DU LECTEUR**
@@ -46,8 +47,12 @@ export type CurseurDeListe =
   | { readonly genre: 'absent' }
   /** Curseur irrecevable — inexistant OU hors du scope du lecteur. Les deux rendent la MÊME chose, sans quoi ils se distinguent. */
   | { readonly genre: 'refus' }
-  /** Curseur résolu : borne stricte sur `lastMessageAt`. */
-  | { readonly genre: 'borne'; readonly lastMessageAt: Date }
+  /**
+   * Curseur résolu : borne stricte sur le RANG du lecteur (#7592) —
+   * max(`lastMessageAt`, dernière réaction à un message du lecteur), la clé du
+   * tri de la liste.
+   */
+  | { readonly genre: 'borne'; readonly rang: Date }
   /** Curseur sur une conversation du lecteur qui n'a jamais eu de message : elle est en queue du tri, rien ne la suit. */
   | { readonly genre: 'queue' };
 
@@ -67,11 +72,10 @@ export async function resolveListCursor({
   // pas continuer à paginer la conversation qu'il a quittée.
   const conversation = await prisma.conversation.findFirst({
     where: { id: beforeCursor, participants: { some: { userId, isActive: true } } },
-    select: { lastMessageAt: true }
+    select: { lastMessageAt: true, lastReactionAt: true, lastReactionTargetKey: true }
   });
 
   if (conversation === null) return { genre: 'refus' };
-  return conversation.lastMessageAt === null
-    ? { genre: 'queue' }
-    : { genre: 'borne', lastMessageAt: conversation.lastMessageAt };
+  const rang = listRankFromColumns(conversation, userId);
+  return rang === null ? { genre: 'queue' } : { genre: 'borne', rang };
 }

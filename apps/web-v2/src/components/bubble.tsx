@@ -487,7 +487,6 @@ export function Bubble({
             l'éphémère et désignation de la vue unique, une seule écriture. */}
         <ProtectionChrome
           deadline={ephemeralDeadline}
-          isViewOnce={message.isViewOnce}
           align={isMine ? 'end' : 'start'}
           {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
         />

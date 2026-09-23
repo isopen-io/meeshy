@@ -105,7 +105,17 @@ const MAX_LINES = 1000;
  * `fanout/*.ts`, dans le même dossier — la mesure descend, jamais un fichier
  * ne quitte la classe elle-même. Puis 4494 → 4477 (#7342, 2026-09-21) : la
  * carte `data` du push reproduit est partie vers `reproducedNotificationPush.ts`
- * avant d'y recevoir son marqueur — le fichier mesurait 4490.
+ * avant d'y recevoir son marqueur — le fichier mesurait 4490. Puis 4477 → 3761
+ * (#7632, 2026-09-23) : les quatorze BÂTISSEURS à destinataire NOMMÉ sont
+ * partis vers `builders/`, en trois responsabilités — l'engagement sur un post
+ * ou un commentaire (`social-engagement.ts`), l'appartenance à une conversation
+ * (`conversation-membership.ts`) et la sécurité du compte
+ * (`account-security.ts`). Le fichier MESURAIT 4473 avant le lot : la marge de
+ * 4 lignes que le gel d'origine portait est rendue au dépôt par ce
+ * rabaissement, comme au découpage précédent. Le premier module ne s'appelle
+ * PAS `post-engagement.ts` — le `.gitignore` racine porte un `post-*` NON
+ * QUALIFIÉ, qui matche par BASENAME à toute profondeur et l'avait avalé en
+ * silence : vert en local, absent du dépôt.
  *
  * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
  * réservation d'appel (claim / reprise / libération) est partie vers
@@ -120,7 +130,7 @@ const MAX_LINES = 1000;
  * et le retrait ne réécrivent plus le Json legacy `Post.reactions`.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
-  'services/notifications/NotificationService.ts': 4477,
+  'services/notifications/NotificationService.ts': 3761,
   'socketio/CallEventsHandler.ts': 5181,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,

@@ -399,8 +399,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    */
   const onMessageConsumed = (payload: unknown): void => {
     if (!isMessageConsumedEvent(payload)) return;
-    applyMessageConsumed(deps.queryClient, payload);
+    applyMessageConsumed(deps.queryClient, payload, deps.viewerId());
   };
+
 
   /**
    * L'ÉCHÉANCE D'UN ÉPHÉMÈRE, DES DEUX CÔTÉS (#7454) — `message:expired` la

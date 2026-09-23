@@ -55,9 +55,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 const PROTECTED_LABEL_KEY = {
   deleted: 'message.deleted',
-  burned: 'message.burned.a11y',
   expired: 'message.expired.a11y',
   veiled: 'message.veiled',
+  /** La vue unique (#7580) — les DEUX phrases de sa puce, jamais son contenu. */
+  viewOnce: 'message.viewOnce.sealed.a11y',
+  opened: 'message.viewOnce.opened.a11y',
   /** Le contenu N'EST PAS dans la charge — voir `ProtectedContent.revealable`
    * (#6862). Distinct de `veiled`, où le texte est là et se révèle : annoncer
    * « masqué » ferait attendre un geste qui n'existe pas. */
@@ -206,7 +208,7 @@ export function composeMessageLabel({
    * est le tombstone SEUL : ni auteur, ni heure, ni pièce jointe — rien de ce
    * que la rangée ne montre pas.
    */
-  if (protection === 'deleted' || protection === 'burned' || protection === 'expired') {
+  if (protection === 'deleted' || protection === 'expired') {
     return translate(language, PROTECTED_LABEL_KEY[protection]);
   }
 
@@ -248,7 +250,11 @@ export function composeMessageLabel({
   if (contentWithheld) {
     segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
   } else if (!rendersContent(protection, phase)) {
-    segments.push(translate(language, PROTECTED_LABEL_KEY.veiled));
+    /* LA VUE UNIQUE SE NOMME PAR SA PUCE (#7580) — « Message à vue unique,
+       touchez pour afficher » ou « … déjà ouvert » ; le flou reste « Contenu
+       masqué ». Jamais le texte, jamais l'inventaire des pièces. */
+    const key = protection === 'viewOnce' || protection === 'opened' ? protection : 'veiled';
+    segments.push(translate(language, PROTECTED_LABEL_KEY[key]));
   } else {
     /**
      * LA CITATION EST UN ENFANT DE LA RANGÉE, DONC ELLE SUIT SA MATRICE

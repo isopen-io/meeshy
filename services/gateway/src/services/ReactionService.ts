@@ -13,6 +13,7 @@ import type {
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { reactionTargetKey } from '@meeshy/shared/utils/conversation-list-rank';
 import {
   resolveParticipantAvatar,
   resolveParticipantDisplayName
@@ -91,6 +92,7 @@ export class ReactionService {
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
+        sender: { select: { userId: true } },
         conversation: {
           include: {
             participants: { where: { isActive: true } }
@@ -192,21 +194,39 @@ export class ReactionService {
     });
 
     await this.updateMessageReactionSummary(messageId);
-    await this.recordLastReaction(message.conversationId, reaction.id);
+    await this.recordLastReaction(message.conversationId, {
+      id: reaction.id,
+      createdAt: reaction.createdAt,
+      targetKey: reactionTargetKey({
+        targetSenderUserId: message.sender?.userId ?? null,
+        targetSenderId: message.senderId ?? null,
+      }),
+    });
 
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
   }
 
   /**
    * La dernière réaction de la conversation (#7545) — la ligne de liste la lit
-   * sans balayer les réactions. Best-effort : la réaction est déjà écrite, et
-   * une ligne de liste en retard ne vaut pas de la faire échouer.
+   * sans balayer les réactions. Son heure et la clé de l'auteur réagi voyagent
+   * avec elle (#7592) : c'est sur elles que `GET /conversations` remonte la
+   * ligne de CET auteur (`utils/conversation-list-rank.ts`), et l'écriture fait
+   * avancer `updatedAt`, donc la page delta de l'auteur la ramène.
+   * Best-effort : la réaction est déjà écrite, et une ligne de liste en retard
+   * ne vaut pas de la faire échouer.
    */
-  private async recordLastReaction(conversationId: string, reactionId: string): Promise<void> {
+  private async recordLastReaction(
+    conversationId: string,
+    reaction: { readonly id: string; readonly createdAt: Date; readonly targetKey: string | null },
+  ): Promise<void> {
     try {
       await this.prisma.conversation.update({
         where: { id: conversationId },
-        data: { lastReactionId: reactionId },
+        data: {
+          lastReactionId: reaction.id,
+          lastReactionAt: reaction.createdAt,
+          lastReactionTargetKey: reaction.targetKey,
+        },
       });
     } catch (error) {
       logger.warn('lastReactionId not recorded', { conversationId, error });
@@ -218,7 +238,7 @@ export class ReactionService {
     try {
       await this.prisma.conversation.updateMany({
         where: { id: conversationId, lastReactionId: reactionId },
-        data: { lastReactionId: null },
+        data: { lastReactionId: null, lastReactionAt: null, lastReactionTargetKey: null },
       });
     } catch (error) {
       logger.warn('lastReactionId not cleared', { conversationId, error });
