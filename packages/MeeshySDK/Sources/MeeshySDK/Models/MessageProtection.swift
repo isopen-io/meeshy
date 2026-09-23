@@ -81,6 +81,13 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
         badges.contains(.viewOnce) || badges.contains(.blurred)
     }
 
+    /// Le chrome d'un message dont la vue unique se dit DÉJÀ par sa puce
+    /// (`ViewOnceChip`, #7619) : un état se dit une fois. L'éphémère et le
+    /// flou restent.
+    public var withoutViewOnce: MessageProtectionDescriptor {
+        MessageProtectionDescriptor(badges: badges.filter { $0 != .viewOnce }, ephemeralState: ephemeralState)
+    }
+
     /// Aucune protection — le cas de l'écrasante majorité des messages.
     /// Nommé `unprotected` plutôt que `none` : `none` entrerait en collision de
     /// lecture avec `Optional.none` sur chaque site de comparaison.

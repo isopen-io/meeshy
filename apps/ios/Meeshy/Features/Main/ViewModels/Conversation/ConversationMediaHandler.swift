@@ -27,9 +27,18 @@ final class ConversationMediaHandler {
     /// prefetch so a rapid burst of socket updates only triggers the last
     /// snapshot. Caller is expected to debounce upstream (the legacy
     /// `ConversationViewModel` adds a 300 ms debounce).
+    /// Les messages dont le préchargement a le DROIT de récupérer les médias.
+    ///
+    /// #7618 — une vue unique ne se télécharge qu'à son OUVERTURE : le
+    /// préchargement ne la sautait pas, et l'ouverture du fil récupérait le
+    /// fichier d'un sticker à vue unique avant tout geste (recette staging).
+    static func prefetchCandidates(_ messages: [Message]) -> [Message] {
+        Array(messages.suffix(30).filter { !$0.attachments.isEmpty && !$0.holdsViewOnce })
+    }
+
     func prefetchRecentMedia() {
         inFlightTask?.cancel()
-        let snapshot = Array(state.messages.suffix(30).filter { !$0.attachments.isEmpty })
+        let snapshot = Self.prefetchCandidates(state.messages)
         guard !snapshot.isEmpty else { return }
         // Respect the user's auto-download policy. The bubble views already gate
         // their network fetch on it; prefetching the full media regardless was

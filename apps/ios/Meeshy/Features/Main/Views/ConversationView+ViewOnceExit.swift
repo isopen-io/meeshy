@@ -23,6 +23,27 @@ import MeeshySDK
 /// donc que les deux appels, à l'endroit où les sorties se lisent déjà.
 extension ConversationView {
 
+    /// **Le toucher de la puce d'une vue unique** (#7618), dans les cinq modes.
+    ///
+    /// Le média s'ouvre en PLEIN ÉCRAN et se consomme à la fermeture (#7499) ;
+    /// le texte se révèle à sa place et se consomme à la sortie (#7500). Dans
+    /// les deux cas on ARME, on ne détruit pas. Rend `true` quand un texte vient
+    /// d'être révélé sur place.
+    func openViewOnce(messageId: String) -> Bool {
+        switch viewModel.openViewOnce(messageId: messageId) {
+        case .fullscreen(let attachment):
+            GalleryPrewarm.warm(attachment)
+            scrollState.pendingViewOnceConsumption.arm(messageId)
+            scrollState.galleryStartAttachment = attachment
+            return false
+        case .inPlace:
+            scrollState.pendingViewOnceConsumption.arm(messageId)
+            return true
+        case .unavailable:
+            return false
+        }
+    }
+
     /// Consomme, côté serveur, les vues uniques révélées pendant la visite.
     ///
     /// `takeAll()` VIDE dans le même geste : la seconde porte ne trouve plus

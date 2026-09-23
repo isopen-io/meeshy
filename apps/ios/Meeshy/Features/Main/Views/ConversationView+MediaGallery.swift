@@ -38,7 +38,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         content.fullScreenCover(item: $scrollState.galleryStartAttachment,
                                 onDismiss: handleGalleryDismiss) { startAttachment in
             ConversationMediaGalleryView(
-                allAttachments: viewModel.allVisualAttachments,
+                allAttachments: Self.galleryAttachments(start: startAttachment, all: viewModel.allVisualAttachments),
                 startAttachmentId: startAttachment.id,
                 accentColor: accentColor,
                 captionMap: viewModel.mediaCaptionMap,
@@ -50,6 +50,12 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                 onReactToMedia: reactToMedia
             )
         }
+    }
+
+    /// Ce que le plein écran fait défiler (#7618) : la conversation sans ses
+    /// vues uniques, ou la SEULE vue unique qu'on vient d'ouvrir par sa puce.
+    static func galleryAttachments(start: MessageAttachment, all: [MessageAttachment]) -> [MessageAttachment] {
+        all.contains(where: { $0.id == start.id }) ? all : [start]
     }
 
     /// **Armer, puis fermer** — jamais présenter tout de suite.

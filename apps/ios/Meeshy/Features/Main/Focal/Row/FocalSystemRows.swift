@@ -152,7 +152,7 @@ enum FocalSystemRows {
             } else {
                 EmptyView()
             }
-        case .standard, .ephemeralExpired:
+        case .standard, .viewOnceSealed, .ephemeralExpired:
             EmptyView()
         }
     }

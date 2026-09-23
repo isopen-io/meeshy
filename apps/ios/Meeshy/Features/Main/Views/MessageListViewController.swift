@@ -1261,10 +1261,11 @@ final class MessageListViewController: UIViewController {
             cell.tag = 0
 
             guard case .message(let localId) = item,
-                  let message = self.store.domainMessage(for: localId, currentUserId: self.currentUserId) else {
+                  var message = self.store.domainMessage(for: localId, currentUserId: self.currentUserId) else {
                 cell.contentConfiguration = nil
                 return
             }
+            message.isViewOnceRevealed = self.conversationViewModel?.revealedViewOnceIds[message.id] == true
             let accent = self.accentColor
             let dark = self.isDark
             let direct = self.isDirect
@@ -2420,6 +2421,7 @@ final class MessageListViewController: UIViewController {
         // re-renders with the fresh snapped inputs (the Equatable gate sees
         // them change and lets the body re-run).
         observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
+        observePerMessageDictionary(vm.$revealedViewOnceIds, initial: vm.revealedViewOnceIds)
 
         // Séparateur de premier non-lu (D-L1..3, #7222) — voir
         // `MessageListViewController+UnreadSeparator.swift`.
