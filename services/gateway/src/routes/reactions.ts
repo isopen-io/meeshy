@@ -216,6 +216,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji,
           payload: updateEvent,
+          prisma,
+          updatedByUserId: userId,
           onError: (error) => logError(fastify.log, 'REST reaction broadcast failed', error),
         });
       }
@@ -398,6 +400,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji: decodedEmoji,
           payload: updateEvent,
+          prisma,
+          updatedByUserId: userId,
           onError: (error) => logError(fastify.log, 'REST reaction removal broadcast failed', error),
         });
       }
