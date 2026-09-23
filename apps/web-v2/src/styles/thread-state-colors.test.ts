@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 
 /**
@@ -10,7 +9,7 @@ import { describe, expect, test } from 'bun:test';
  * atténué une fois ouverte, orange pour l'éphémère — jamais le rouge de
  * l'échec d'envoi.
  */
-const css = readFileSync(join(import.meta.dir, 'thread-protection.css'), 'utf8');
+const css = readFileSync(new URL('./thread-protection.css', import.meta.url).pathname, 'utf8');
 
 const ruleOf = (selector: string): string => {
   const start = css.indexOf(`${selector} {`);
