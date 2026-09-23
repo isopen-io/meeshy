@@ -373,15 +373,15 @@ class ConversationListViewModel: ObservableObject {
         persistTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(debounce))
             guard !Task.isCancelled else { return }
-            // Cache .save() est devenu throwing (Wave 1 Local-First) :
-            // utilise try? pour preserver le comportement historique
-            // best-effort. Une defaillance d'ecriture (encryption, disque
-            // plein) est loggee par GRDBCacheStore et ne doit pas casser
-            // le persist debounce.
-            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
-            await CacheCoordinator.shared.conversations.saveCursor(
-                nextCursor: cursor, hasMore: more, for: "list"
-            )
+            // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
+            // voir `ConversationListLastMessage.persisting`.
+            let store = CacheCoordinator.shared.conversations
+            if await store.load(for: "list").snapshot() == nil {
+                try? await store.savePreservingFreshness(snapshot, for: "list")
+            } else {
+                await store.update(for: "list") { ConversationListLastMessage.persisting(snapshot, over: $0) }
+            }
+            await store.saveCursor(nextCursor: cursor, hasMore: more, for: "list")
             #if DEBUG
             await MainActor.run { self?.persistCallCount += 1 }
             #endif
@@ -2545,11 +2545,11 @@ class ConversationListViewModel: ObservableObject {
     }
 
     /// Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
-    /// (#6921). La clé est celle du fil (`focal.row.you`) et non une clé neuve :
-    /// c'est le MÊME mot produit, déjà traduit dans les sept langues — en créer
-    /// une seconde n'aurait ajouté qu'une occasion de la laisser partiellement
-    /// traduite, et le français serait alors servi aux six autres.
-    static let youAuthorLabel = String(localized: "focal.row.you", bundle: .main)
+    /// (#6921) — « Vous : », clé `message.author.self` de la matrice validée
+    /// (#7548), traduite dans les sept langues. Le fil garde son « Toi »
+    /// (`focal.row.you`) : la liste vouvoie, comme ses autres libellés.
+    /// Posé dans le SDK au démarrage (`MeeshyApp`), qui le relaie partout.
+    static let youAuthorLabel = String(localized: "message.author.self", defaultValue: "Vous", bundle: .main)
 
     /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
     /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`

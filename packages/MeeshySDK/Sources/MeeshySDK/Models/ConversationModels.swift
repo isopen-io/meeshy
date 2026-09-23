@@ -388,7 +388,11 @@ extension APIConversation {
         // Conversely, a server `_count` that lags behind a fresh payload
         // (optimistic insert just landed locally) must not erase what we see.
         let lastMsgAttCount = max(lastMessage?._count?.attachments ?? 0, lastMsgAttachments.count)
-        let lastMsgSenderName = lastMessage?.sender?.name
+        let lastMsgSenderName = ConversationListAuthor.name(
+            senderId: lastMessage?.sender?.resolvedUserId ?? lastMessage?.sender?.id ?? lastMessage?.senderId,
+            senderName: lastMessage?.sender?.name,
+            readerId: currentUserId
+        )
 
         let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in
             let sName = msg.sender?.name ?? "?"

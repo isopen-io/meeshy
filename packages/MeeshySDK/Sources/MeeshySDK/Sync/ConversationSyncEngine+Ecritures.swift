@@ -266,17 +266,27 @@ extension ConversationSyncEngine {
     /// serveur. La ligne montre donc immédiatement l'auteur, la pièce jointe et
     /// les effets du message réellement envoyé — et non ceux du précédent.
     public func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
+        await updateConversationAfterSend(facet, conversationId: conversationId, replacing: [])
+    }
+
+    /// - Parameter aliases: les noms que l'accusé REMPLACE — le `cid_…` de
+    ///   l'optimiste. Sous la garde d'ordre commune (#7548), un accusé ne
+    ///   régresse pas une ligne qu'un message plus récent a déjà remontée,
+    ///   mais remplace toujours son propre optimiste, même quand l'horloge
+    ///   serveur précède celle de l'appareil.
+    public func updateConversationAfterSend(
+        _ facet: LastMessageFacet, conversationId: String, replacing aliases: [String]
+    ) async {
         await cache.conversations.update(for: "list") { conversations in
-            var updated = conversations
+            var updated = ConversationListLastMessage.applying(
+                facet, conversationId: conversationId, aliases: aliases, to: conversations
+            ) ?? conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
                 // Envoyer, c'est avoir lu : la frontière avance au-delà du
                 // message qu'on vient de poser, sinon `reconcileUnread` la
                 // trouverait périmée face au nouveau `lastMessageAt`.
                 updated[idx].userState.lastReadAt = Date()
-                let conv = updated.remove(at: idx)
-                updated.insert(conv, at: 0)
             }
             return updated
         }

@@ -353,7 +353,7 @@ extension ConversationView {
         // `insertOptimisticMediaMessage` n'a de « Media » que le nom : avec
         // `attachments: []` et `messageType: .text` il construit un
         // `MessageRecord` texte ordinaire (`attachmentsJson` reste nil) et
-        // `optimisticListPreview` gère déjà `.text`.
+        // `LastMessageFacet.sent` porte déjà sa légende.
         let textGroupPlan = plan.first(where: { $0.kind == .text })
         let textTempId: String? = {
             let hasText = !(textGroupPlan?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
