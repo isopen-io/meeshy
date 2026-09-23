@@ -1,0 +1,1696 @@
+{
+  "$comment": "Cas communs de la ligne d’aperçu d’une conversation (#7546). Joués par packages/shared (vitest) et par le SDK Swift (#7548). `input` est l’entrée de composeConversationPreview() ; `expected` la valeur STRUCTURÉE rendue ; `text` sa mise à plat (renderConversationPreviewText). Les dates sont en ISO 8601 UTC, les durées de pièce jointe en MILLISECONDES, ephemeralDuration et durationSec en SECONDES.",
+  "version": 1,
+  "cases": [
+    {
+      "id": "empty",
+      "matrix": "Vide",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z"
+      },
+      "text": "Nouvelle conversation"
+    },
+    {
+      "id": "text-member",
+      "matrix": "Texte",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "Alice : Bonjour"
+    },
+    {
+      "id": "text-self",
+      "matrix": "Texte — mes messages",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "Vous : Bonjour"
+    },
+    {
+      "id": "text-unknown-sender",
+      "matrix": "Texte — auteur sans nom",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": null,
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Salut"
+        }
+      },
+      "text": "Quelqu’un : Salut"
+    },
+    {
+      "id": "prism-rank-2",
+      "matrix": "Prisme au rang 2",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "de",
+          "fr"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "en",
+          "content": "Hello",
+          "translations": {
+            "fr": "Bonjour",
+            "es": "Hola"
+          }
+        }
+      },
+      "text": "Alice : Bonjour"
+    },
+    {
+      "id": "prism-original-at-its-rank",
+      "matrix": "Prisme — la langue d’origine concourt à son rang",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "en",
+          "content": "Hello",
+          "translations": {
+            "es": "Hola"
+          }
+        }
+      },
+      "text": "Alice : Hello"
+    },
+    {
+      "id": "prism-rank-1-beats-original-rank-2",
+      "matrix": "Prisme — le rang 1 bat l’origine au rang 2",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "en",
+          "content": "Hello",
+          "translations": {
+            "fr": "Bonjour"
+          }
+        }
+      },
+      "text": "Alice : Bonjour"
+    },
+    {
+      "id": "forwarded",
+      "matrix": "Transféré",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Regarde ça",
+          "isForwarded": true
+        }
+      },
+      "text": "Alice : ↪ Regarde ça"
+    },
+    {
+      "id": "voice",
+      "matrix": "Vocal",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "content": "",
+          "attachment": {
+            "mimeType": "audio/webm",
+            "duration": 12000,
+            "fileSize": 49152
+          }
+        }
+      },
+      "text": "Alice : 🎤 Message vocal · 0:12 · 48 Ko"
+    },
+    {
+      "id": "audio-named",
+      "matrix": "Audio",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "audio/mpeg",
+            "originalName": "nom.mp3",
+            "duration": 185000,
+            "fileSize": 4404019
+          }
+        }
+      },
+      "text": "Alice : 🎵 nom.mp3 · 3:05 · 4,2 Mo"
+    },
+    {
+      "id": "video",
+      "matrix": "Vidéo",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "video",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "video/mp4",
+            "duration": 45000,
+            "width": 1920,
+            "height": 1080,
+            "fileSize": 12582912
+          }
+        }
+      },
+      "text": "Alice : 🎬 Vidéo · 0:45 · 1920×1080 · 12 Mo"
+    },
+    {
+      "id": "photo",
+      "matrix": "Photo",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "width": 450,
+            "height": 456,
+            "fileSize": 239616
+          }
+        }
+      },
+      "text": "Alice : 📷 Photo · 450×456 · 234 Ko"
+    },
+    {
+      "id": "photo-without-size",
+      "matrix": "Photo — détails partiels (pas de taille)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "width": 450,
+            "height": 456,
+            "fileSize": null
+          }
+        }
+      },
+      "text": "Alice : 📷 Photo · 450×456"
+    },
+    {
+      "id": "photo-without-any-detail",
+      "matrix": "Photo — aucun détail",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/png"
+          }
+        }
+      },
+      "text": "Alice : 📷 Photo"
+    },
+    {
+      "id": "photo-with-caption",
+      "matrix": "Photo — légende",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "Au bord du lac",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "width": 450,
+            "height": 456,
+            "fileSize": 239616
+          }
+        }
+      },
+      "text": "Alice : 📷 Au bord du lac"
+    },
+    {
+      "id": "file",
+      "matrix": "Fichier",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/pdf",
+            "originalName": "contrat.pdf",
+            "pageCount": 12,
+            "fileSize": 2097152
+          }
+        }
+      },
+      "text": "Alice : 📄 contrat.pdf · 12 pages · 2 Mo"
+    },
+    {
+      "id": "file-without-name",
+      "matrix": "Fichier — détails partiels (pas de nom, pas de pages)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/zip",
+            "fileSize": 2097152
+          }
+        }
+      },
+      "text": "Alice : 📄 Fichier · 2 Mo"
+    },
+    {
+      "id": "file-one-page",
+      "matrix": "Fichier — une page",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/pdf",
+            "originalName": "reçu.pdf",
+            "pageCount": 1
+          }
+        }
+      },
+      "text": "Alice : 📄 reçu.pdf · 1 page"
+    },
+    {
+      "id": "location",
+      "matrix": "Position",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "location",
+          "originalLanguage": "fr",
+          "content": "Place de la Bastille"
+        }
+      },
+      "text": "Alice : 📍 Position · Place de la Bastille"
+    },
+    {
+      "id": "location-without-place",
+      "matrix": "Position — sans lieu",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "location",
+          "originalLanguage": "fr",
+          "content": ""
+        }
+      },
+      "text": "Alice : 📍 Position"
+    },
+    {
+      "id": "sticker",
+      "matrix": "Sticker",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "sticker",
+          "originalLanguage": "fr",
+          "content": ""
+        }
+      },
+      "text": "Alice : Sticker"
+    },
+    {
+      "id": "photos-same-kind",
+      "matrix": "Plusieurs pièces jointes — même type",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "fileSize": 400000
+          },
+          "attachmentSummary": {
+            "count": 3,
+            "kinds": {
+              "image": 3
+            },
+            "totalSize": 1468006
+          }
+        }
+      },
+      "text": "Alice : 📷 3 photos · 1,4 Mo"
+    },
+    {
+      "id": "attachments-mixed",
+      "matrix": "Plusieurs pièces jointes — mixte",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          },
+          "attachmentSummary": {
+            "count": 4,
+            "kinds": {
+              "image": 2,
+              "file": 1,
+              "audio": 1
+            },
+            "totalSize": null
+          }
+        }
+      },
+      "text": "Alice : 📎 4 pièces jointes"
+    },
+    {
+      "id": "attachments-with-caption",
+      "matrix": "Plusieurs pièces jointes — avec légende",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "Nos vacances",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          },
+          "attachmentSummary": {
+            "count": 3,
+            "kinds": {
+              "image": 3
+            },
+            "totalSize": 1468006
+          }
+        }
+      },
+      "text": "Alice : 📷 Nos vacances"
+    },
+    {
+      "id": "effect-one",
+      "matrix": "Effet comportemental — un effet",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "effectFlags": 512
+        }
+      },
+      "text": "Alice : ✨ Surprise · Zoom"
+    },
+    {
+      "id": "effect-two",
+      "matrix": "Effet comportemental — deux effets",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "effectFlags": 131584
+        }
+      },
+      "text": "Alice : ✨ Surprise · 2 effets"
+    },
+    {
+      "id": "view-once",
+      "matrix": "Vue unique",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "isViewOnce": true,
+          "effectFlags": 4
+        }
+      },
+      "text": "Alice : 👁 Vue unique"
+    },
+    {
+      "id": "view-once-opened",
+      "matrix": "Vue unique — consommé",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "isViewOnce": true,
+          "viewOnceConsumed": true
+        }
+      },
+      "text": "Alice : 👁 Ouvert"
+    },
+    {
+      "id": "view-once-attachment",
+      "matrix": "Vue unique — portée par la pièce jointe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "width": 450,
+            "height": 456,
+            "fileSize": 239616,
+            "isViewOnce": true
+          }
+        }
+      },
+      "text": "Alice : 👁 Vue unique"
+    },
+    {
+      "id": "ephemeral-live",
+      "matrix": "Éphémère — compteur vivant",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Rendez-vous à 18h",
+          "ephemeralDuration": 300,
+          "effectFlags": 1
+        }
+      },
+      "text": "Alice : 🔥 4 min · Rendez-vous à 18h"
+    },
+    {
+      "id": "ephemeral-served-deadline",
+      "matrix": "Éphémère — échéance servie la plus proche",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:50.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Vite",
+          "ephemeralDuration": 3600,
+          "expiresAt": "2026-09-23T10:00:25.000Z"
+        }
+      },
+      "text": "Alice : 🔥 25 s · Vite"
+    },
+    {
+      "id": "ephemeral-expired",
+      "matrix": "Éphémère — bascule seule en expiré",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:53:20.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Rendez-vous à 18h",
+          "ephemeralDuration": 300
+        }
+      },
+      "text": "Alice : ⏱ Message expiré"
+    },
+    {
+      "id": "ephemeral-awaiting-reception",
+      "matrix": "Éphémère — mon envoi, personne ne l’a encore reçu",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "À tout de suite",
+          "ephemeralDuration": 300
+        }
+      },
+      "text": "Vous : 🔥 5 min · À tout de suite"
+    },
+    {
+      "id": "expired-legacy",
+      "matrix": "Expiré — échéance absolue passée",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Vieux secret",
+          "expiresAt": "2026-09-23T09:59:59.000Z"
+        }
+      },
+      "text": "Alice : ⏱ Message expiré"
+    },
+    {
+      "id": "blurred",
+      "matrix": "Flou",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Spoiler",
+          "isBlurred": true,
+          "translations": {
+            "en": "Spoiler"
+          }
+        }
+      },
+      "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
+    },
+    {
+      "id": "encrypted",
+      "matrix": "Chiffré",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "AAECAwQ=",
+          "isEncrypted": true
+        }
+      },
+      "text": "Alice : 🔒 Message chiffré"
+    },
+    {
+      "id": "cumul-view-once-beats-blur-ephemeral-effect",
+      "matrix": "Cumul — vue unique > flou > éphémère, sans effet",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Secret",
+          "isViewOnce": true,
+          "isBlurred": true,
+          "ephemeralDuration": 300,
+          "effectFlags": 519
+        }
+      },
+      "text": "Alice : 👁 Vue unique"
+    },
+    {
+      "id": "cumul-expired-beats-view-once",
+      "matrix": "Cumul — expiré > vue unique",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:53:20.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Secret",
+          "isViewOnce": true,
+          "ephemeralDuration": 300
+        }
+      },
+      "text": "Alice : ⏱ Message expiré"
+    },
+    {
+      "id": "cumul-blur-beats-encrypted",
+      "matrix": "Cumul — flou > chiffré",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "AAECAwQ=",
+          "isBlurred": true,
+          "isEncrypted": true
+        }
+      },
+      "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
+    },
+    {
+      "id": "cumul-ephemeral-hides-effect",
+      "matrix": "Cumul — éphémère + effet : l’effet ne s’affiche pas",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Surprise",
+          "ephemeralDuration": 300,
+          "effectFlags": 513
+        }
+      },
+      "text": "Alice : 🔥 4 min · Surprise"
+    },
+    {
+      "id": "call-completed-incoming",
+      "matrix": "Appel terminé — vocal entrant",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio · 04:12",
+          "callSummary": {
+            "kind": "audio",
+            "outcome": "completed",
+            "durationSec": 252
+          }
+        }
+      },
+      "text": "📞 Appel vocal · 4:12"
+    },
+    {
+      "id": "call-video-outgoing",
+      "matrix": "Appel terminé — vidéo sortant, sans durée",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel vidéo",
+          "callSummary": {
+            "kind": "video",
+            "outcome": "completed",
+            "durationSec": null
+          }
+        }
+      },
+      "text": "📹 Appel vidéo"
+    },
+    {
+      "id": "call-missed",
+      "matrix": "Appel manqué",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio manqué",
+          "callSummary": {
+            "kind": "audio",
+            "outcome": "missed",
+            "durationSec": 0
+          }
+        }
+      },
+      "text": "📞 Appel manqué"
+    },
+    {
+      "id": "call-declined",
+      "matrix": "Appel refusé",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel refusé",
+          "callSummary": {
+            "kind": "video",
+            "outcome": "declined",
+            "durationSec": 0
+          }
+        }
+      },
+      "text": "📹 Appel refusé"
+    },
+    {
+      "id": "system-member-added",
+      "matrix": "Système",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Alice a ajouté Bob",
+          "systemEvent": {
+            "key": "member.added",
+            "params": {
+              "actor": "Alice",
+              "target": "Bob"
+            }
+          }
+        }
+      },
+      "text": "Alice a ajouté Bob"
+    },
+    {
+      "id": "system-renamed",
+      "matrix": "Système — nom du groupe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "x",
+          "systemEvent": {
+            "key": "conversation.renamed",
+            "params": {}
+          }
+        }
+      },
+      "text": "Nom du groupe modifié"
+    },
+    {
+      "id": "system-unknown-key",
+      "matrix": "Système — clé inconnue",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "x",
+          "systemEvent": {
+            "key": "conversation.something-new",
+            "params": {}
+          }
+        }
+      },
+      "text": "Conversation mise à jour"
+    },
+    {
+      "id": "active-call",
+      "matrix": "Priorité 1 — appel en cours",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "activeCall": {
+          "id": "c-1",
+          "kind": "audio",
+          "participantCount": 3,
+          "startedAt": "2026-09-23T09:58:00.000Z"
+        },
+        "typing": [
+          "Alice"
+        ],
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "📞 Appel en cours · 3 participants"
+    },
+    {
+      "id": "typing-one",
+      "matrix": "Priorité 2 — frappe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "typing": [
+          "Alice"
+        ],
+        "draft": "Je pensais",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "Alice écrit…"
+    },
+    {
+      "id": "typing-two",
+      "matrix": "Priorité 2 — frappe à deux",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "typing": [
+          "Alice",
+          "Bob"
+        ]
+      },
+      "text": "Alice et Bob écrivent…"
+    },
+    {
+      "id": "typing-many",
+      "matrix": "Priorité 2 — frappe à plusieurs",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "typing": [
+          "Alice",
+          "Bob",
+          "Chloé"
+        ]
+      },
+      "text": "3 personnes écrivent…"
+    },
+    {
+      "id": "draft",
+      "matrix": "Priorité 3 — mon brouillon",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "draft": "Je pensais que…",
+        "lastReaction": {
+          "emoji": "❤️",
+          "reactorId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "u-me",
+          "excerpt": "Bonjour…",
+          "createdAt": "2026-09-23T09:59:59.000Z"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "Brouillon : Je pensais que…"
+    },
+    {
+      "id": "reaction-member",
+      "matrix": "Priorité 4 — réaction plus récente",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "emoji": "❤️",
+          "reactorId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "u-me",
+          "excerpt": "Bonjour…",
+          "createdAt": "2026-09-23T09:59:59.000Z"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour tout le monde"
+        }
+      },
+      "text": "Alice a réagi ❤️ à « Bonjour… »"
+    },
+    {
+      "id": "reaction-self",
+      "matrix": "Priorité 4 — ma réaction",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "emoji": "👍",
+          "reactorId": "u-me",
+          "reactorName": "Moi",
+          "messageId": "m-1",
+          "targetSenderId": "u-alice",
+          "excerpt": "On se voit demain",
+          "createdAt": "2026-09-23T09:59:59.000Z"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "On se voit demain"
+        }
+      },
+      "text": "Vous avez réagi 👍 à « On se voit demain »"
+    },
+    {
+      "id": "reaction-without-excerpt",
+      "matrix": "Priorité 4 — réaction sans extrait",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "emoji": "😂",
+          "reactorId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "u-me",
+          "excerpt": null,
+          "createdAt": "2026-09-23T09:59:59.000Z"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          }
+        }
+      },
+      "text": "Alice a réagi 😂"
+    },
+    {
+      "id": "reaction-older-than-message",
+      "matrix": "Priorité 4 — réaction plus ancienne que le message",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "emoji": "❤️",
+          "reactorId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-0",
+          "targetSenderId": "u-me",
+          "excerpt": "Salut",
+          "createdAt": "2026-09-23T09:00:00.000Z"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        }
+      },
+      "text": "Alice : Bonjour"
+    },
+    {
+      "id": "en-voice",
+      "matrix": "Anglais — vocal",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "audio/mp4",
+            "duration": 12000,
+            "fileSize": 49152
+          }
+        }
+      },
+      "text": "You: 🎤 Voice message · 0:12 · 48 KB"
+    },
+    {
+      "id": "en-audio-size",
+      "matrix": "Anglais — séparateur décimal",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "audio/mpeg",
+            "originalName": "nom.mp3",
+            "duration": 185000,
+            "fileSize": 4404019
+          }
+        }
+      },
+      "text": "Alice: 🎵 nom.mp3 · 3:05 · 4.2 MB"
+    },
+    {
+      "id": "en-view-once-placeholder-not-translated",
+      "matrix": "Anglais — un placeholder protégé ne se traduit pas",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code est 4242",
+          "translations": {
+            "en": "The code is 4242"
+          },
+          "isViewOnce": true
+        }
+      },
+      "text": "Alice: 👁 View once"
+    },
+    {
+      "id": "de-photos",
+      "matrix": "Allemand — plusieurs photos",
+      "input": {
+        "viewerId": "u-me",
+        "language": "de",
+        "preferredLanguages": [
+          "de"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          },
+          "attachmentSummary": {
+            "count": 3,
+            "kinds": {
+              "image": 3
+            },
+            "totalSize": 1468006
+          }
+        }
+      },
+      "text": "Alice: 📷 3 Fotos · 1,4 MB"
+    },
+    {
+      "id": "es-typing",
+      "matrix": "Espagnol — frappe",
+      "input": {
+        "viewerId": "u-me",
+        "language": "es",
+        "preferredLanguages": [
+          "es"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "typing": [
+          "Alice"
+        ]
+      },
+      "text": "Alice está escribiendo…"
+    },
+    {
+      "id": "pt-empty",
+      "matrix": "Portugais — vide",
+      "input": {
+        "viewerId": "u-me",
+        "language": "pt",
+        "preferredLanguages": [
+          "pt"
+        ],
+        "now": "2026-09-23T10:00:00.000Z"
+      },
+      "text": "Nova conversa"
+    },
+    {
+      "id": "it-call-missed",
+      "matrix": "Italien — appel manqué",
+      "input": {
+        "viewerId": "u-me",
+        "language": "it",
+        "preferredLanguages": [
+          "it"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio manqué",
+          "callSummary": {
+            "kind": "audio",
+            "outcome": "missed",
+            "durationSec": 0
+          }
+        }
+      },
+      "text": "📞 Chiamata persa"
+    },
+    {
+      "id": "ar-voice-self",
+      "matrix": "Arabe — mon vocal",
+      "input": {
+        "viewerId": "u-me",
+        "language": "ar",
+        "preferredLanguages": [
+          "ar"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "audio/mp4",
+            "duration": 12000,
+            "fileSize": 49152
+          }
+        }
+      },
+      "text": "أنت: 🎤 رسالة صوتية · 0:12 · 48 KB"
+    }
+  ]
+}
