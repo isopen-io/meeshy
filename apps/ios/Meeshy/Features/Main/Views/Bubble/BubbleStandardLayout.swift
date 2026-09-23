@@ -252,10 +252,6 @@ struct BubbleStandardLayout: View {
         content.translation?.secondaryContent
     }
 
-    private var hasTextOrNonMediaContent: Bool {
-        content.hasTextOrNonMediaContent
-    }
-
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
     /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
@@ -593,7 +589,7 @@ struct BubbleStandardLayout: View {
                     if hasOverflowingOverlay {
                         reactionsOverlay
                             .padding(isMe ? .leading : .trailing, -4)
-                            .offset(y: 8)
+                            .offset(y: BubbleReactionsOverlay.restingOffset)
                     }
                 }
 
@@ -973,12 +969,6 @@ struct BubbleStandardLayout: View {
                 Text(message.content)
                         .font(MeeshyFont.relative(emojiFontSize))
                     .fixedSize(horizontal: false, vertical: true)
-                    .overlay(alignment: .topLeading) {
-                        if content.editedAt != nil {
-                            editedIndicator
-                                .offset(y: -14)
-                        }
-                    }
 
                 compactInlineFooter
             }
@@ -1029,15 +1019,8 @@ struct BubbleStandardLayout: View {
                 }
         }
 
-        // Edited badge — inline, directly BELOW the quoted reply (when present)
-        // and above the body. Was a `.topLeading` overlay offset by a hardcoded
-        // `reply ? 52` value that mis-fired whenever the quote was taller than
-        // 52pt (sender name + 2 preview lines), overlapping the quote. Inline
-        // placement tracks the real reply height with no magic numbers.
-        if content.editedAt != nil {
-            editedIndicator
-        }
-
+        // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé
+        // ici, le crayon tombait dans le coin arrondi que le clip rogne.
         if hasBubbleBodyContent {
             VStack(alignment: .leading, spacing: 8) {
                 // Lieu porté par `message.location` (voie serveur actuelle).
@@ -1155,13 +1138,13 @@ struct BubbleStandardLayout: View {
     ///   and the translate button are omitted — the audio widget owns its own
     ///   per-language switcher, so rendering both would compete.
     func resolvedFooter(includesTranslationControls: Bool = true, retryBandShown: Bool = false) -> (BubbleFooterModel, BubbleFooterActions) {
-        // Le bouton translate s'affiche toujours pour les contenus traductibles
-        // — texte ou audio (la transcription est traductible) — même si aucune
-        // traduction n'existe encore : l'utilisateur peut alors la demander
-        // depuis le MessageDetailSheet. Image / vidéo seules et emoji-only
-        // restent exclus tant qu'on n'a pas de pipeline texte associé.
-        let isTranslatableContent = !isEmojiOnly
-            && (hasTextOrNonMediaContent || !audioAttachments.isEmpty)
+        // Traduisible = un TEXTE ou un audio (sa transcription) ; une position,
+        // un fichier, un média seul ou un émoji n'ont rien à traduire (#7620).
+        let isTranslatableContent = BubbleFooterModel.offersTranslation(
+            hasText: !(content.text?.raw.isEmpty ?? true),
+            isEmojiOnly: isEmojiOnly,
+            hasAudio: !audioAttachments.isEmpty
+        )
         let showTranslation = includesTranslationControls && isTranslatableContent
         // Les drapeaux n'apparaissent que quand au moins une traduction est
         // déjà disponible (sinon il n'y a rien à montrer côté flag strip).
@@ -1188,7 +1171,8 @@ struct BubbleStandardLayout: View {
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
             showsTranslate: showTranslation,
-            sendStartedAt: message.createdAt, retryBandShown: retryBandShown
+            sendStartedAt: message.createdAt, retryBandShown: retryBandShown,
+            edit: BubbleEditMark.resolve(editedAt: content.editedAt, isSaving: content.isEditSaving)
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1242,17 +1226,6 @@ struct BubbleStandardLayout: View {
     /// the resend silently never fired.
     private func performManualRetry() {
         onRetry?(message.id)
-    }
-
-    // MARK: - Edited indicator
-
-    private var editedIndicator: some View {
-        BubbleEditedIndicator(
-            isMe: content.isMe,
-            isSaving: content.isEditSaving,
-            hasEditHistory: content.hasEditHistory,
-            isDark: isDark
-        )
     }
 
     // MARK: - Expandable text

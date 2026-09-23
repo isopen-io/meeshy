@@ -34,6 +34,7 @@ struct BubbleFooter: View, Equatable {
         // message envoye). Le tout dans un HStack tres serre pour rester
         // visuellement attache a l'emoji.
         HStack(spacing: 3) {
+            editMark
             if let timestamp = model.timestamp {
                 Text(timestamp)
                     .font(.caption.weight(.medium))
@@ -151,19 +152,17 @@ struct BubbleFooter: View, Equatable {
     /// rendait l'affordance instable.
     @ViewBuilder
     private var metaLeading: some View {
-        // Toujours afficher le contrôleur translate quand un callback est
-        // fourni, même si aucune langue alternative n'est encore disponible :
-        // c'est l'entrée vers la demande de traduction (sheet langue / ajout).
-        if let onTranslate = actions.onTranslate {
+        // #7599 / #7620 — l'icône n'est la porte vers la demande que là où
+        // AUCUN drapeau ne dit déjà la traduction. La règle est celle du
+        // MODÈLE : la vue ne la redécide pas à partir du seul rappel.
+        if model.showsTranslateGlyph, let onTranslate = actions.onTranslate {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.showsTranslate
-                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Traduction disponible", bundle: .main)
-                                : String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
         }
         if !model.flags.isEmpty {
             HStack(spacing: 2) {
@@ -177,6 +176,7 @@ struct BubbleFooter: View, Equatable {
     /// Trailing meta: timestamp + delivery check (or retry button on failure).
     @ViewBuilder
     private var metaTrailing: some View {
+        editMark
         if let timestamp = model.timestamp {
             Text(timestamp)
                 .font(.caption.weight(.medium))
@@ -198,6 +198,16 @@ struct BubbleFooter: View, Equatable {
             } else {
                 deliveryView(tint: metaColor, readTint: readColor)
             }
+        }
+    }
+
+    /// #7620 — « modifié » se dit ICI, juste avant l'heure, comme la rangée
+    /// plate (`FocalMetaRow`) le fait déjà. En tête de bulle, le crayon
+    /// tombait dans le coin arrondi que le `clipShape` de la bulle rogne.
+    @ViewBuilder
+    private var editMark: some View {
+        if let edit = model.edit {
+            BubbleEditedIndicator(isMe: model.isMe, isSaving: edit == .saving, hasEditHistory: false, isDark: isDark)
         }
     }
 

@@ -14,18 +14,12 @@ import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
-import {
-  buildLastMessagePreviewTranslations,
-  truncateMessagePreview
-} from './utils/last-message-preview';
+import { buildLastMessagePreviewTranslations } from './utils/last-message-preview';
 import { loadConversationListActivity } from './utils/list-activity';
 import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
-import {
-  isPreviewWithheld,
-  resolveLastMessageNature,
-  resolvePreviewProtection,
-  summarizeAttachments,
-} from './utils/last-message-nature';
+import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { projectListLastMessageBody } from './utils/list-last-message-body';
+import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -38,7 +32,6 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import {
@@ -600,11 +593,23 @@ export function registerConversationListRoute(
       });
       // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
       const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
-      const servedEphemeralExpiry = await loadListEphemeralExpiries(
-        prisma,
-        conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
-        (conversationId) => readerParticipantByConversation.get(conversationId)
-      );
+      const [servedEphemeralExpiry, consumedViewOnce] = await Promise.all([
+        loadListEphemeralExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
+        ),
+        // #7594 — la vue unique déjà OUVERTE par ce lecteur (« 👁 Ouvert »).
+        loadViewOnceConsumptions(
+          prisma,
+          conversations.flatMap((c) => {
+            const message = c.messages?.[0];
+            const participantId = readerParticipantByConversation.get(c.id);
+            return message?.isViewOnce && participantId ? [{ messageId: message.id, participantId }] : [];
+          }),
+          (error) => logger.warn('view-once consumption read failed', { error })
+        )
+      ]);
       perfTimings.listActivity = performance.now() - t0;
 
       // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
@@ -861,49 +866,19 @@ export function registerConversationListRoute(
           lastMessage: (() => {
             const msg = conversation.messages[0];
             if (!msg) return null;
-            // `translations` (JSON brut, potentiellement chiffré, une entrée par
-            // langue de la conversation) et `originalLanguage` sont consommés
-            // ci-dessus pour construire la carte d'aperçu ; les laisser fuiter
-            // dans le spread renverrait le blob complet à chaque ligne.
-            const { translations: _rawTranslations, originalLanguage: _originalLanguage, ...msgRest } =
-              msg as typeof msg & { translations?: unknown; originalLanguage?: string | null };
+            const readerParticipantId = readerParticipantByConversation.get(conversation.id);
             const sender = msg.sender as ConversationListPreviewSender | null;
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
             const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
-            // Lot 3 : hisser metadata.location en `location` top-level. Un
-            // message géolocalisé SANS légende a un `content` vide — hisser
-            // la position ne fabrique aucun texte de repli ; c'est au client
-            // de décider comment rendre l'aperçu (ex. via `messageType` ou la
-            // seule présence de `location`), pas au serveur.
-            //
-            // #6111 — un aperçu PROTÉGÉ (vue unique, flouté, éphémère périmé)
-            // ne calcule ni ne sert le lieu : la métadonnée brute peut aussi
-            // bien porter un lieu qu'un sticker ou un résumé — rien de ce
-            // qu'elle transporte n'a le droit de sortir.
-            const place = lastMessageProtected ? null : sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
-            const { attachments: loadedAttachments, ...msgWithoutAttachments } = msgRest;
             return {
-              ...msgWithoutAttachments,
-              // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ;
-              // la liste n'en SERT que la première en détail.
-              ...resolveLastMessageNature(msg),
-              attachments: (loadedAttachments ?? []).slice(0, 1),
-              attachmentSummary: lastMessageProtected
-                ? null
-                : summarizeAttachments(loadedAttachments ?? [], msg._count?.attachments),
-              content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
-              ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
-              // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
-              // continuent de partir : ce sont eux qui qualifient le
-              // placeholder que le client compose (« Message à vue unique »).
-              // Tout le reste du contenu — métadonnée brute, pièces jointes,
-              // leur compte — est retiré pour un aperçu protégé.
-              ...(lastMessageProtected
-                ? { metadata: null, attachments: null, _count: { attachments: 0 } }
-                : {}),
-              ...(place ? { location: place } : {}),
+              ...projectListLastMessageBody(msg, {
+                withheld: lastMessageProtected,
+                servedExpiresAt,
+                viewOnceConsumed: readerParticipantId !== undefined
+                  && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
+              }),
               sender: sender && senderVis ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
