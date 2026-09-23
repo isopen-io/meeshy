@@ -45,8 +45,8 @@ import { pageÀInstantFigé } from './instant.mjs';
  *      nœud de texte du paragraphe est soit masqué, soit à l'intérieur d'un
  *      `<a>` — jamais que le `<p>` porte l'attribut.
  *
- *   b. Un témoin de RANG ≠ 1 (CLAUDE.md racine, leçon 261) : cliquer la
- *      pastille du Prisme sur `m1` (original anglais, traduction française)
+ *   b. Un témoin de RANG ≠ 1 (CLAUDE.md racine, leçon 261) : toucher le
+ *      drapeau de langue sur `m1` (original anglais, traduction française)
  *      change le texte SERVI (`p[lang]`) — et le libellé de LA MÊME rangée
  *      SUIT ce changement, puisque les deux sont composés depuis la même
  *      base servie (`rowServed`, `thread-modes.tsx`).
@@ -254,8 +254,12 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
        intégration continue, ce gate rendait « m1 porte la pastille du Prisme »
        en échec alors que la pastille était là, correcte, en anglais.
        `data-prism-toggle` ne change avec aucune langue. */
-    const pastille = page.locator('main li [data-row="m1"] button[data-prism-toggle]').first();
-    expect((await pastille.count()) > 0, `m1 porte la pastille du Prisme (${scheme})`);
+    /* LE DRAPEAU PORTE LE GESTE (#7599) — la pastille 🌐 se tait devant les
+       drapeaux. `m1` (original `en`, servi `fr`) porte UN drapeau : `en`, puis,
+       une fois l'anglais servi, `fr`. Le premier drapeau bascule donc, et le
+       premier drapeau suivant ramène. */
+    const pastille = page.locator('main li [data-row="m1"] button[data-prism-flag]').first();
+    expect((await pastille.count()) > 0, `m1 porte son drapeau de langue (${scheme})`);
     const snapshotM1 = () =>
       page.evaluate(() => {
         const row = document.querySelector('main li [data-row="m1"]');

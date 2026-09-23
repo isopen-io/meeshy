@@ -11,7 +11,7 @@ import { Badges, Check, EditedMark } from './message-blocks';
  */
 
 describe('Badges', () => {
-  test('épinglé + transféré, dans cet ordre — glyphe tourné, teinte dédiée, texte italique', () => {
+  test('épinglé + transféré, dans cet ordre — l’épingle seule et droite (#7599), teinte dédiée, texte italique', () => {
     const html = renderToStaticMarkup(
       <Badges
         badges={[
@@ -21,8 +21,8 @@ describe('Badges', () => {
       />,
     );
     expect(html).toContain('data-badge="pinned"');
-    expect(html).toContain('rotate(45deg)');
-    expect(html).toContain('épinglé');
+    expect(html).not.toContain('rotate(45deg)');
+    expect(html).not.toContain('épinglé<');
     expect(html.indexOf('data-badge="pinned"')).toBeLessThan(html.indexOf('data-badge="forwarded"'));
     expect(html).toContain('<em');
     expect(html).toContain('Transféré depuis Salon');
@@ -54,14 +54,14 @@ describe('Badges', () => {
 });
 
 describe('EditedMark', () => {
-  test('« modifié » avec le glyphe crayon, masqué du lecteur d’écran (déjà dans rowLabel), teinte selon la SURFACE', () => {
+  test('« modifié » : le glyphe crayon SEUL (#7599), masqué du lecteur d’écran (déjà dans rowLabel), teinte selon la SURFACE', () => {
     const onBubble = renderToStaticMarkup(<EditedMark onBrandBubble />);
     expect(onBubble).toContain('data-badge="edited"');
     /* `aria-hidden` (revue #5936, défaut majeur 8), pas `aria-label` — le mot
        est déjà dans `rowLabel` (`composeMessageLabel`), le doubler ferait
        entendre « modifié » deux fois. */
     expect(onBubble).toContain('aria-hidden="true"');
-    expect(onBubble).toContain('modifié');
+    expect(onBubble).not.toContain('modifié');
     expect(onBubble).toContain('var(--color-meta-mine)');
 
     /* HORS de la boîte colorée — rangée plate, ou corps NU d'un emoji seul /

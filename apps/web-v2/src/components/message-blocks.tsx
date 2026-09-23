@@ -480,8 +480,9 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
             style={{ color: 'var(--ios-pinned)' }}
             aria-label="Message épinglé"
           >
-            <Glyph name="pushPin" size={11} style={{ transform: 'rotate(45deg)' }} />
-            épinglé
+            {/* L'ÉPINGLE SEULE, DROITE (#7599, miroir iOS #7603) — le mot vit
+                dans le nom accessible de la rangée. */}
+            <Glyph name="pushPin" size={11} />
           </span>
         ) : (
           <em
@@ -542,8 +543,9 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
           : { color: 'var(--color-ios-ink-2)', opacity: META_TEXT_OPACITY }
       }
     >
+      {/* LE CRAYON SEUL (#7599) — le mot « modifié » vit dans le nom
+          accessible de la rangée ; à l'écran, l'état se dit une fois. */}
       <GlyphSvg glyph={THREAD_STATES_GLYPHS.pencilSimple} size={11} />
-      modifié
     </span>
   );
 }
