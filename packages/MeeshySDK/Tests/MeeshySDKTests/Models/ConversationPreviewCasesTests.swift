@@ -157,6 +157,8 @@ final class ConversationPreviewCasesTests: XCTestCase {
             "encrypted": ["AAECAwQ="],
             "cumul-view-once-beats-blur-ephemeral-effect": ["Secret", "Zoom"],
             "en-view-once-placeholder-not-translated": ["4242", "code"],
+            "sticker-text-view-once": ["4242", "Code"],
+            "sticker-text-blurred-attachment": ["Spoiler"],
         ]
         for entry in cases {
             guard let secrets = protected[entry.id] else { continue }

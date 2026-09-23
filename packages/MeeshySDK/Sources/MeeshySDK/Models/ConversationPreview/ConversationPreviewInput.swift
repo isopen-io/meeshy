@@ -20,11 +20,14 @@ public struct ConversationPreviewAttachment: Sendable, Hashable, Decodable {
     public let isViewOnce: Bool?
     public let isBlurred: Bool?
     public let effectFlags: Int?
+    /// Texte alternatif (`MessageAttachment.alt`). Pour un sticker de texte,
+    /// c'est la phrase tapée, dessinée dans l'image (décision porteur 2026-09-23).
+    public let alt: String?
 
     public init(mimeType: String? = nil, originalName: String? = nil, fileSize: Double? = nil,
                 duration: Double? = nil, width: Double? = nil, height: Double? = nil,
                 pageCount: Double? = nil, isViewOnce: Bool? = nil, isBlurred: Bool? = nil,
-                effectFlags: Int? = nil) {
+                effectFlags: Int? = nil, alt: String? = nil) {
         self.mimeType = mimeType
         self.originalName = originalName
         self.fileSize = fileSize
@@ -35,6 +38,19 @@ public struct ConversationPreviewAttachment: Sendable, Hashable, Decodable {
         self.isViewOnce = isViewOnce
         self.isBlurred = isBlurred
         self.effectFlags = effectFlags
+        self.alt = alt
+    }
+}
+
+/// Le sticker hissé de `metadata.sticker` : sa PRÉSENCE fait du message un
+/// sticker, quel que soit son `messageType`.
+public struct ConversationPreviewSticker: Sendable, Hashable, Decodable {
+    public let templateId: String?
+    public let emoji: String?
+
+    public init(templateId: String? = nil, emoji: String? = nil) {
+        self.templateId = templateId
+        self.emoji = emoji
     }
 }
 
@@ -75,6 +91,7 @@ public struct ConversationPreviewMessage: Sendable, Hashable, Decodable {
     public let isForwarded: Bool?
     public let systemEvent: LastMessageSystemEvent?
     public let callSummary: LastMessageCallSummary?
+    public let sticker: ConversationPreviewSticker?
     public let location: ConversationPreviewPlace?
     public let attachment: ConversationPreviewAttachment?
     public let attachmentSummary: LastMessageAttachmentSummary?
@@ -99,6 +116,7 @@ public struct ConversationPreviewMessage: Sendable, Hashable, Decodable {
         isForwarded: Bool? = nil,
         systemEvent: LastMessageSystemEvent? = nil,
         callSummary: LastMessageCallSummary? = nil,
+        sticker: ConversationPreviewSticker? = nil,
         location: ConversationPreviewPlace? = nil,
         attachment: ConversationPreviewAttachment? = nil,
         attachmentSummary: LastMessageAttachmentSummary? = nil
@@ -122,6 +140,7 @@ public struct ConversationPreviewMessage: Sendable, Hashable, Decodable {
         self.isForwarded = isForwarded
         self.systemEvent = systemEvent
         self.callSummary = callSummary
+        self.sticker = sticker
         self.location = location
         self.attachment = attachment
         self.attachmentSummary = attachmentSummary

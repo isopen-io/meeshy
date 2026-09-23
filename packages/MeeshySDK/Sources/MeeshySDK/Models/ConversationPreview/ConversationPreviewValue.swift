@@ -36,6 +36,7 @@ public enum ConversationPreviewIcon: String, Sendable, Hashable, CaseIterable {
     case photo
     case file
     case location
+    case sticker
     case attachments
     case effect
     case forward
@@ -57,6 +58,7 @@ public enum ConversationPreviewIcon: String, Sendable, Hashable, CaseIterable {
         case .photo: return "📷"
         case .file: return "📄"
         case .location: return "📍"
+        case .sticker: return "🏷"
         case .attachments: return "📎"
         case .effect: return "✨"
         case .forward: return "↪"

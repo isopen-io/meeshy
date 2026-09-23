@@ -196,6 +196,7 @@ struct ConversationPreviewLine: View {
         case .photo?: return "photo"
         case .file?: return "doc"
         case .location?: return "mappin.and.ellipse"
+        case .sticker?: return "face.smiling"
         case .attachments?: return "paperclip"
         case .effect?: return "sparkles"
         case .forward?: return "arrowshape.turn.up.right"

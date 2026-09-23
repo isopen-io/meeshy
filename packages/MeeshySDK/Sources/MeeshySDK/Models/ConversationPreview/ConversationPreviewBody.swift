@@ -203,9 +203,12 @@ struct ConversationPreviewBody {
             let segments = [ConversationPreviewSegment.label(strings(.attachmentLocation))] + place
             return ConversationPreviewBody(icon: .location, segments: segments, labelled: segments)
         }
-        if message.messageType == "sticker" {
-            let segments = [ConversationPreviewSegment.label(strings(.attachmentSticker))]
-            return ConversationPreviewBody(icon: nil, segments: segments, labelled: segments)
+        if message.messageType == "sticker" || message.sticker != nil {
+            let segments = attachment?.alt
+                .flatMap { ConversationPreviewComposer.hasText($0) ? $0 : nil }
+                .map { [ConversationPreviewSegment.text(ConversationPreviewComposer.trimmed($0), language: nil)] }
+                ?? [ConversationPreviewSegment.label(strings(.attachmentSticker))]
+            return ConversationPreviewBody(icon: .sticker, segments: segments, labelled: segments)
         }
         if count == 0 {
             let segments = text.map { [$0] } ?? []
