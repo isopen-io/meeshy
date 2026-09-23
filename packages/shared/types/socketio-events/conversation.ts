@@ -19,6 +19,7 @@ import type {
   ConversationLastReaction,
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
+  LastMessageSticker,
   LastMessageSystemEvent,
 } from '../conversation-preview.js';
 
@@ -172,6 +173,22 @@ export interface LastMessagePreviewAttachment {
   readonly height: number | null;
   /** Pages d'un document (#7545) — `null` si inconnu. */
   readonly pageCount?: number | null;
+  /**
+   * Texte alternatif (`MessageAttachment.alt`, #7594) — pour un sticker de
+   * texte, la phrase tapée et dessinée dans l'image. `null` quand la pièce
+   * n'en a pas, et TOUJOURS `null` quand le message ou la pièce est protégé
+   * (vue unique, flou, chiffré, expiré) : c'est du contenu.
+   */
+  readonly alt?: string | null;
+  /**
+   * La protection déclarée sur la PIÈCE elle-même (`AttachmentProtectionFlags`,
+   * #7594) — indépendante de celle du message. Ce sont des drapeaux, pas du
+   * contenu : ils partent pour que le composeur dessine « 👁 Vue unique » ou
+   * « 🙈 Message masqué » au lieu de « 📷 Photo ».
+   */
+  readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
+  readonly effectFlags?: number | null;
 }
 
 export interface ConversationUpdatedEventData {
@@ -329,6 +346,27 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageSystemEvent?: LastMessageSystemEvent | null;
   readonly lastMessageCallSummary?: LastMessageCallSummary | null;
   readonly lastMessageAttachmentSummary?: LastMessageAttachmentSummary | null;
+  /**
+   * Sticker du message nommé (#7594), hissé de `metadata.sticker` — jumeau de
+   * `lastMessage.sticker` en REST. Sa présence fait du message un sticker quel
+   * que soit `lastMessageType` (un sticker part en `messageType: "image"`).
+   * `null` : pas de sticker, OU message / pièce jointe protégé (les `slots`
+   * d'un gabarit portent du texte). Même règle de groupe que `location`.
+   */
+  readonly lastMessageSticker?: LastMessageSticker | null;
+  /**
+   * Le LECTEUR de cet événement a déjà ouvert ce message à vue unique (#7594),
+   * lu dans `MessageStatusEntry.viewedOnceAt`. Jumeau de
+   * `lastMessage.viewOnceConsumed` en REST.
+   *
+   * Chaque `conversation:updated` part dans la room PERSONNELLE de son
+   * destinataire : la valeur est donc bien PAR LECTEUR. Les émetteurs d'un
+   * message NEUF (envoi) posent `false` — personne ne peut avoir consommé un
+   * message avant sa diffusion ; le recalcul (`emitConversationPreviewUpdate`,
+   * dont l'émission ciblée qui suit une consommation) lit la base. `false`
+   * aussi pour un message qui n'est pas à vue unique, et pour son expéditeur.
+   */
+  readonly lastMessageViewOnceConsumed?: boolean;
   /**
    * Dernière réaction (#7545), résolue pour CE destinataire (extrait par son
    * Prisme, borné par son plancher d'historique). Clé ABSENTE = « cet événement
