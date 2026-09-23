@@ -91,7 +91,6 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
   const summary = message.attachmentSummary ?? summaryOf(attachments);
   const served = context.servedDeadline ?? null;
   const expiresAt = served ?? message.expiresAt ?? null;
-  const max = message.maxViewOnceCount;
 
   return {
     id: message.id,
@@ -109,7 +108,11 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
     isEncrypted: message.isEncrypted ?? null,
     isViewOnce: message.isViewOnce ?? null,
     isBlurred: message.isBlurred ?? null,
-    viewOnceConsumed: typeof max === 'number' && max > 0 ? (message.viewOnceCount ?? 0) >= max : null,
+    /* PAR LECTEUR (#7594, #7671) — `lastMessage.viewOnceConsumed` REST,
+       `lastMessageViewOnceConsumed` socket. L'ancien compteur GLOBAL
+       (`viewOnceCount >= maxViewOnceCount`) disait « ouvert » dès qu'un AUTRE
+       l'ouvrait, et la liste ne le sert plus : il ne décide plus rien. */
+    viewOnceConsumed: typeof message.viewOnceConsumed === 'boolean' ? message.viewOnceConsumed : null,
     isForwarded: message.isForwarded ?? (typeof message.forwardedFromId === 'string' && message.forwardedFromId !== ''),
     systemEvent: message.systemEvent ?? null,
     callSummary: message.callSummary ?? null,

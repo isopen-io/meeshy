@@ -141,8 +141,15 @@ describe('previewInputOf (#7547)', () => {
     expect(line(c)).toBe('Alice : 🏷 Bonjour à tous');
   });
 
-  test('un vue unique brûlé se lit « Ouvert »', () => {
-    const c = conversation({ lastMessage: message({ content: '', isViewOnce: true, viewOnceCount: 1, maxViewOnceCount: 1 }) });
+  test('une vue unique que J\'AI ouverte se lit « Ouvert » — le champ servi PAR LECTEUR, sans compteurs (#7594, #7671)', () => {
+    const c = conversation({ lastMessage: message({ content: '', isViewOnce: true, viewOnceConsumed: true }) });
     expect(line(c)).toBe('Alice : 👁 Ouvert');
+  });
+
+  test('une vue unique ouverte par un AUTRE reste « à ouvrir » chez moi : l\'ancien compteur global ne décide plus (#7578, #7671)', () => {
+    const c = conversation({
+      lastMessage: message({ content: '', isViewOnce: true, viewOnceCount: 1, maxViewOnceCount: 1, viewOnceConsumed: false }),
+    });
+    expect(line(c)).not.toContain('Ouvert');
   });
 });

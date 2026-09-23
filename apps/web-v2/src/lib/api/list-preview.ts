@@ -5,6 +5,7 @@ import type {
   ConversationLastReaction,
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
+  LastMessageSticker,
   LastMessageSystemEvent,
 } from '@meeshy/shared/types/conversation-preview';
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
@@ -247,6 +248,9 @@ type Nature = {
   readonly systemEvent?: LastMessageSystemEvent;
   readonly callSummary?: LastMessageCallSummary;
   readonly attachmentSummary?: LastMessageAttachmentSummary;
+  readonly sticker?: LastMessageSticker;
+  readonly viewOnceConsumed?: boolean;
+  readonly location?: unknown;
 };
 
 const NATURE_KEYS = {
@@ -258,6 +262,13 @@ const NATURE_KEYS = {
   lastMessageSystemEvent: 'systemEvent',
   lastMessageCallSummary: 'callSummary',
   lastMessageAttachmentSummary: 'attachmentSummary',
+  /* #7671 — ce que la passerelle sert pour un sticker, une position et une
+     vue unique déjà ouverte PAR CE LECTEUR (#7643, #7645, #7594). Sans eux,
+     une ligne adoptée par cet événement lisait « 📷 Photo », perdait
+     « 📍 Position · lieu » et ne disait jamais « 👁 Ouvert ». */
+  lastMessageSticker: 'sticker',
+  lastMessageViewOnceConsumed: 'viewOnceConsumed',
+  location: 'location',
 } as const satisfies Readonly<Partial<Record<keyof ConversationUpdatedEventData, keyof Nature>>>;
 
 /**
