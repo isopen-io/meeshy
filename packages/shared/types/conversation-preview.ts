@@ -9,7 +9,7 @@
  *
  * Trois règles valent pour tout ce fichier :
  * - **Rien de protégé ne voyage.** Un dernier message à vue unique, flouté,
- *   éphémère, chiffré ou expiré (`isLastMessageProtected`) part SANS texte,
+ *   chiffré ou expiré (`isLastMessageProtected` + `isEncrypted`) part SANS texte,
  *   SANS traduction et SANS pièce jointe : seuls voyagent les drapeaux qui
  *   permettent au client de dessiner son placeholder, et l'`attachmentSummary`
  *   réduit à `null`.
@@ -24,11 +24,14 @@ import type { CallSummaryMediaType, CallSummaryOutcome } from '../utils/call-sum
 
 /**
  * Famille d'une pièce jointe pour le décompte de la ligne (« 3 photos »,
- * « 📎 4 pièces jointes »). Dérivée du `mimeType` par
- * `previewAttachmentKind()` — `voice` quand un audio porte la marque d'un
- * enregistrement au micro (`metadata.isVoiceNote` / `metadata.source === 'voice'`).
+ * « 📎 4 pièces jointes »). Dérivée du `mimeType` seul (`image/*`, `video/*`,
+ * `audio/*`, le reste `file`).
+ *
+ * PAS de famille `voice` : aucune colonne ni métadonnée ne distingue
+ * aujourd'hui un vocal enregistré d'un fichier audio importé — la publier
+ * serait promettre un signal que rien ne pose.
  */
-export type PreviewAttachmentKind = 'image' | 'video' | 'audio' | 'voice' | 'file';
+export type PreviewAttachmentKind = 'image' | 'video' | 'audio' | 'file';
 
 /**
  * Le résumé de TOUTES les pièces jointes du dernier message — la liste n'en
@@ -93,7 +96,12 @@ export interface LastMessageSystemEvent {
 /**
  * Pourquoi un contenu est retenu. L'ORDRE est celui du cumul d'effets validé
  * par le porteur (#7546) : la sécurité l'emporte — `expired` > `view-once` >
- * `blurred` > `encrypted` > `ephemeral`. `null` = rien n'est retenu.
+ * `blurred` > `encrypted` > `ephemeral`.
+ *
+ * `ephemeral` ne RETIENT rien : le texte d'un éphémère encore actif reste
+ * servi (« 🔥 4 min · texte ») et son décompte part de la réception de chaque
+ * lecteur (#7451). Les quatre autres retiennent texte, traductions et pièces
+ * jointes.
  */
 export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted' | 'ephemeral';
 

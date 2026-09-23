@@ -12,12 +12,11 @@ export const attachmentSummarySchema = {
     count: { type: 'integer', description: 'Nombre total de pièces jointes' },
     kinds: {
       type: 'object',
-      description: 'Décompte par famille (image, video, audio, voice, file) — une famille absente vaut 0',
+      description: 'Décompte par famille (image, video, audio, file) — une famille absente vaut 0',
       properties: {
         image: { type: 'integer' },
         video: { type: 'integer' },
         audio: { type: 'integer' },
-        voice: { type: 'integer' },
         file: { type: 'integer' }
       }
     },
