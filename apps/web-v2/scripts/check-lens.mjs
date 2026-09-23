@@ -95,6 +95,8 @@
  */
 import { join } from 'node:path';
 
+import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
+
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { INSTANT } from './lib/instant.mjs';
@@ -151,8 +153,16 @@ constate(
 /**
  * §5.9 de la spécification #5676 (D-23) — l'aperçu de liste de la Salle
  * sécurisée (`c-protection`) NE SERT JAMAIS son sujet flouté : la rangée
- * annonce « 1 message caché », jamais le texte protégé.
+ * annonce le placeholder du flou, jamais le texte protégé.
+ *
+ * #7547 — la ligne 2 est composée par `composeConversationPreview` dans la
+ * langue d'INTERFACE résolue (celle du navigateur du gate, ici) : l'attendu se
+ * lit dans le catalogue partagé, dans la langue que la page déclare, jamais un
+ * libellé français recopié.
  */
+const pageLanguage = await page.evaluate(() => document.documentElement.lang || 'fr');
+const HIDDEN_LABEL = conversationPreviewString(pageLanguage, 'protection.hidden');
+const EMPTY_LABEL = conversationPreviewString(pageLanguage, 'conversation.empty');
 const protectedRow = await page.evaluate(() => {
   const li = document.querySelector('[data-row="c-protection"]');
   return li === null ? null : li.textContent ?? '';
@@ -163,8 +173,8 @@ constate(
   `la rangée « c-protection » fuit le sujet du message flouté : ${JSON.stringify(protectedRow)}`,
 );
 constate(
-  protectedRow !== null && protectedRow.includes('1 message caché'),
-  `la rangée « c-protection » ne dit pas « 1 message caché » : ${JSON.stringify(protectedRow)}`,
+  protectedRow !== null && protectedRow.includes(HIDDEN_LABEL),
+  `la rangée « c-protection » ne dit pas « ${HIDDEN_LABEL} » : ${JSON.stringify(protectedRow)}`,
 );
 
 /**
@@ -180,8 +190,8 @@ const nouvelleRow = await page.evaluate(() => {
 });
 constate(nouvelleRow !== null, 'la rangée « c-nouvelle » (conversation sans historique) est introuvable dans la Lentille');
 constate(
-  nouvelleRow !== null && nouvelleRow.text.includes('Nouvelle conversation'),
-  `la rangée « c-nouvelle » ne dit pas « Nouvelle conversation » : ${JSON.stringify(nouvelleRow?.text)}`,
+  nouvelleRow !== null && nouvelleRow.text.includes(EMPTY_LABEL),
+  `la rangée « c-nouvelle » ne dit pas « ${EMPTY_LABEL} » : ${JSON.stringify(nouvelleRow?.text)}`,
 );
 constate(
   nouvelleRow !== null && nouvelleRow.hasTime,
