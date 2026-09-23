@@ -33,9 +33,31 @@ nonisolated enum MessageListCellSizingLaw {
 }
 
 /// La cellule de toutes les rangées du fil (messages, séparateurs, frappe) :
-/// un `UICollectionViewCell` dont la seule différence est de ne jamais
-/// demander une correction self-sizing pour un bruit de mesure.
+/// un `UICollectionViewCell` qui ne demande jamais une correction self-sizing
+/// pour un bruit de mesure, ni pour l'endroit de l'écran qu'il traverse.
 class MessageListCell: UICollectionViewCell {
+
+    /// **Une rangée du fil n'a pas de zone non sûre** (#7660).
+    ///
+    /// Le fil s'étend sous la bande de l'îlot et sous l'indicateur d'accueil,
+    /// et ses réserves y sont posées À LA MAIN (`applyTopInset`,
+    /// `applyBottomInset` ; `contentInsetAdjustmentBehavior = .never`). Une
+    /// cellule qui traverse ces bandes recevait pourtant leur `safeAreaInsets`,
+    /// que le contenu `UIHostingConfiguration` AJOUTE à sa taille : sa
+    /// hauteur suivait sa position à l'écran, pixel par pixel.
+    ///
+    /// Mesuré au simulateur (fil « Meeshy Global », série de flings) : un
+    /// séparateur de jour de 36 pt re-mesuré à 98 pt sous l'îlot (36 + 62),
+    /// 1 362 redimensionnements réels, dont 817 joués dans une passe animée
+    /// de 0,44 s — 154 une fois la zone neutralisée, estimations comprises.
+    ///
+    /// Seules les bandes HAUTE et BASSE sont neutralisées : ce sont celles que
+    /// le défilement fait traverser. Les bords latéraux (encoche en paysage)
+    /// ne dépendent pas de la position de la rangée et restent respectés.
+    override var safeAreaInsets: UIEdgeInsets {
+        let inherited = super.safeAreaInsets
+        return UIEdgeInsets(top: 0, left: inherited.left, bottom: 0, right: inherited.right)
+    }
 
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: UICollectionViewLayoutAttributes

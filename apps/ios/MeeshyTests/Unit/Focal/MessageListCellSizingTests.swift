@@ -2,6 +2,7 @@
 
 import XCTest
 import UIKit
+import SwiftUI
 @testable import Meeshy
 
 /// #7624 — une cellule du fil ne redemande JAMAIS une taille pour un bruit
@@ -63,5 +64,47 @@ final class MessageListCellSizingTests: XCTestCase {
         let preferred = cell.preferredLayoutAttributesFitting(attributes)
 
         XCTAssertEqual(preferred.frame.height, 36.333_333, "aucune correction pour un bruit de flottant")
+    }
+
+    /// #7660 — la hauteur d'une rangée ne dépend pas de l'ENDROIT de l'écran
+    /// où elle passe.
+    ///
+    /// Le fil s'étend sous la bande de l'îlot et sous l'indicateur d'accueil ;
+    /// une cellule qui y passe reçoit un `safeAreaInsets` non nul, et le
+    /// contenu `UIHostingConfiguration` l'AJOUTE à sa taille. Mesuré au
+    /// simulateur : un séparateur de jour de 36 pt re-mesuré à 98 pt sous
+    /// l'îlot (36 + 62), et 1 362 redimensionnements réels par série de
+    /// flings, chacun joué en passe de mise à jour animée, pendant que la
+    /// rangée traverse la bande.
+    func test_preferredLayoutAttributesFitting_underTheUnsafeBand_measuresAsInTheMiddle() throws {
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+            "la suite tourne dans l'app hôte : une scène existe"
+        )
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let host = UIViewController()
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        func measuredHeight(atY y: CGFloat) -> CGFloat {
+            let cell = MessageListCell(frame: CGRect(x: 0, y: y, width: 402, height: 36))
+            cell.contentConfiguration = UIHostingConfiguration {
+                MessageDaySeparator(label: "Aujourd'hui", isDark: false)
+            }
+            .margins(.all, 0)
+            host.view.addSubview(cell)
+            host.view.layoutIfNeeded()
+            defer { cell.removeFromSuperview() }
+            let attributes = UICollectionViewLayoutAttributes(forCellWith: IndexPath(item: 0, section: 0))
+            attributes.frame = cell.frame
+            return cell.preferredLayoutAttributesFitting(attributes).frame.height
+        }
+
+        let inTheMiddle = measuredHeight(atY: 400)
+        XCTAssertEqual(measuredHeight(atY: 0), inTheMiddle, "sous la bande de l'îlot, la rangée garde sa hauteur")
+        XCTAssertEqual(measuredHeight(atY: 874 - 36), inTheMiddle, "sur l'indicateur d'accueil, la rangée garde sa hauteur")
     }
 }
