@@ -277,6 +277,7 @@ extension BubbleContent {
         let protection = message.protection()
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
         self.isBurning = message.isBurning
+        self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred

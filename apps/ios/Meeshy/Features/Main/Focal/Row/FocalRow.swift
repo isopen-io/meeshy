@@ -306,7 +306,7 @@ struct FocalRow: View {
                     contentSections
                 }
             } else {
-                contentSections
+                contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             }
 
             failedRetrySection

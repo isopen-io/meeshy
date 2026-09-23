@@ -80,6 +80,9 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique scellée (#7618) ou déjà ouverte (#7579) : la bulle ne porte
     /// QUE la puce, `text` est vide par la projection, jamais masqué par la vue.
     let viewOnceChip: ViewOnceChip.State?
+    /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
+    /// de l'écran, la fait passer à « déjà ouvert ».
+    let isViewOnceRevealed: Bool
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -104,6 +107,7 @@ struct RiverBubbleContent: Equatable {
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
+        isViewOnceRevealed: Bool = false,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -121,6 +125,7 @@ struct RiverBubbleContent: Equatable {
         self.protection = protection
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
+        self.isViewOnceRevealed = isViewOnceRevealed
     }
 }
 
@@ -542,6 +547,13 @@ struct RiverBubbleView: View, Equatable {
                 }
             } else {
                 riverText
+                    .viewOnceRetouch(isActive: content.isViewOnceRevealed) {
+                        onConsumeViewOnce?(content.bubble.messageId) { _ in }
+                    }
+                    .onDisappear {
+                        guard content.isViewOnceRevealed else { return }
+                        onConsumeViewOnce?(content.bubble.messageId) { _ in }
+                    }
             }
 
             // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »

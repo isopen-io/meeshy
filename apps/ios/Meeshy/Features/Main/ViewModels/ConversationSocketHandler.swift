@@ -53,7 +53,6 @@ protocol ConversationSocketDelegate: AnyObject {
     /// ViewModel : ne vider que ce que le handler voit (`messageTranslations`)
     /// laisserait l'hydratation réinjecter le texte d'avant l'édition.
     func invalidateTranslations(for messageId: String)
-    func markMessageAsConsumed(messageId: String)
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
     /// Re-fetch messages this reader had hidden for themselves and has just

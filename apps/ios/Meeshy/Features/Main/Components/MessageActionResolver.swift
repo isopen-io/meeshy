@@ -112,6 +112,12 @@ struct MessageMenuContext: Equatable {
     /// Le résolveur reçoit le verdict, jamais le drapeau brut : la règle n'a
     /// qu'un seul site d'énonciation, et ce résolveur reste une logique pure.
     var isForwardable: Bool = true
+    /// **Le message est une vue unique** — scellée, lue sur place ou déjà
+    /// ouverte (#7579). Son appui long ne montre AUCUN contenu : ni copie, ni
+    /// traduction, ni transfert, ni partage, ni réponse citée. Le menu se réduit
+    /// à ce qui a un sens — Supprimer et Infos. Verdict posé au point d'usage
+    /// par `MeeshyMessage.holdsViewOnce`.
+    var isViewOnce: Bool = false
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -250,6 +256,7 @@ enum MessageActionResolver {
     /// actions clés + `.more` toujours en fin. `pin`/`star`/`delete` sont
     /// routés vers « Plus… » (`moreSections`), jamais affichés ici.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
+        guard !ctx.isViewOnce else { return [.more] }
         var out: [PrimaryAction] = []
         if ctx.hasCallSummary { out.append(.callDetail) }
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
@@ -276,6 +283,7 @@ enum MessageActionResolver {
     /// Accueille les actions sorties du menu compact : pin/star (toggles) et
     /// la suppression du message. `.language` n'y figure jamais.
     static func moreSections(_ ctx: MessageMenuContext) -> [MoreSection] {
+        if ctx.isViewOnce { return viewOnceSections(ctx) }
         var sections: [MoreSection] = []
 
         // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
@@ -312,6 +320,16 @@ enum MessageActionResolver {
         sections.append(.info(info))
 
         sections.append(.moderation([.report]))
+        return sections
+    }
+
+    /// Le menu d'une vue unique (#7579) : Supprimer (pour moi, et pour tous
+    /// si j'en suis l'auteur — la feuille de suppression en décide), et les
+    /// Infos, qui ne disent rien du contenu.
+    private static func viewOnceSections(_ ctx: MessageMenuContext) -> [MoreSection] {
+        var sections: [MoreSection] = []
+        if ctx.canDelete { sections.append(.actions([.delete])) }
+        if ctx.showReadReceipts { sections.append(.info([.views])) }
         return sections
     }
 }

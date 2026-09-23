@@ -280,6 +280,7 @@ nonisolated enum RiverConversationMapping {
                 protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
+                isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),

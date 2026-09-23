@@ -174,21 +174,25 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.kind, .deleted)
     }
 
-    func test_burnedViewOnce_routesToBurnedKind() {
+    /// #7579 — le compteur GLOBAL du serveur ne dit rien de CE lecteur : un
+    /// destinataire qui n'a rien ouvert voyait « Vu et supprimé » dès qu'un
+    /// autre (l'auteur compris) avait ouvert la vue unique. Ce témoin gardait
+    /// l'ancien défaut ; il garde désormais la propriété.
+    func test_viewOnceConsumedBySomeoneElse_staysSealedForMe() {
         let msg = makeMessage(content: "secret", isViewOnce: true, viewOnceCount: 1)
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
-        XCTAssertEqual(content.kind, .burned)
+        XCTAssertEqual(content.kind, .viewOnceSealed)
     }
 
-    /// Legacy `ThemedMessageBubble.isViewOnceBurned` does NOT exclude `isMe`:
-    /// the sender also sees the "Vu et efface" state once their view-once
-    /// message has been consumed. BubbleContent.kind must mirror that.
-    func test_burnedViewOnce_includesSenderSide() {
-        let msg = makeMessage(content: "secret", isMe: true, isViewOnce: true, viewOnceCount: 1)
+    /// L'état « déjà ouvert » vaut pour l'auteur comme pour les autres : il
+    /// vient de SA colonne, jamais d'un compteur partagé.
+    func test_viewOnceOpenedByMe_includesSenderSide() {
+        var msg = makeMessage(content: "secret", isMe: true, isViewOnce: true, viewOnceCount: 1)
+        msg.viewOnceOpenedAt = Date()
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
-        XCTAssertEqual(content.kind, .burned)
+        XCTAssertEqual(content.kind, .viewOnceOpened)
     }
 
     /// P3 — call-summary messages arrive with `messageSource == .system` and
@@ -1024,8 +1028,8 @@ final class BubbleContentMatrixTests: XCTestCase {
     func test_doubleTap_estRefuseParToutCeQuiNaRienAReagir() {
         XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .deleted),
                        "un message supprimé n'a plus de contenu")
-        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .burned),
-                       "une vue unique consommée ne se réagit pas après coup")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .viewOnceOpened),
+                       "une vue unique déjà ouverte n'a plus de contenu")
         XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .ephemeralExpired),
                        "un éphémère expiré n'est plus là")
         XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .system),
@@ -1039,7 +1043,7 @@ final class BubbleContentMatrixTests: XCTestCase {
     /// Condition de levée : si `BubbleContent.Kind` gagne un cas, trancher
     /// dans `QuickReactionGesture` puis monter ce compte, jamais l'inverse.
     func test_laRegleCouvreTousLesKinds() {
-        let tous: [BubbleContent.Kind] = [.standard, .deleted, .burned, .viewOnceSealed, .ephemeralExpired, .system]
+        let tous: [BubbleContent.Kind] = [.standard, .deleted, .viewOnceOpened, .viewOnceSealed, .ephemeralExpired, .system]
         XCTAssertEqual(tous.count, 6,
                        "BubbleContent.Kind a changé — trancher le nouveau cas dans QuickReactionGesture")
         XCTAssertEqual(tous.filter(QuickReactionGesture.acceptsDoubleTap(kind:)).count, 1,

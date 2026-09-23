@@ -2961,6 +2961,8 @@ extension MessageListViewController: UICollectionViewDelegate {
         let now = Self.nowMs()
         lastSeenActivityMs = now
         seenAccumulator.disappeared(serverId, at: now)
+        // #7579 — un texte à vue unique qui SORT de l'écran passe à « déjà ouvert ».
+        conversationViewModel?.closeViewOnce(messageId: serverId)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

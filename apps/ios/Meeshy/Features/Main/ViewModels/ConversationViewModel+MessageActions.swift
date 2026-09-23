@@ -446,13 +446,6 @@ extension ConversationViewModel {
         }
     }
 
-    func markMessageAsConsumed(messageId: String) {
-        // Write through persistence; the store observation will surface the
-        // updated effectFlags (blurred) and cleared content to the view.
-        Task { [weak self] in
-            try? await self?.messagePersistence.markConsumed(localId: messageId)
-        }
-    }
 
     // MARK: - Edit Message
 

@@ -383,6 +383,9 @@ struct ThemedMessageBubble: View {
                 // sur la bulle comme sur le sticker : un éphémère détruit sous
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
                 .ephemeralBurn(isBurning: content.isBurning)
+                .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
+                    onConsumeViewOnce?(messageId) { _ in }
+                }
                 .onAppear {
                     applyBlurRevealDurationFromPrefs()
                 }

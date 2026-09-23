@@ -116,7 +116,7 @@ final class ViewOnceSealedRenderingTests: XCTestCase {
         )
 
         XCTAssertEqual(bubbles.first?.text, "", "la rivière rendait le texte sous un voile")
-        XCTAssertEqual(bubbles.first?.isViewOnceSealed, true)
+        XCTAssertEqual(bubbles.first?.viewOnceChip, .sealed)
     }
 
     func test_riverContentsKey_changesWhenTheViewOnceIsOpened() {
