@@ -211,7 +211,10 @@ describe('GET /sync — un lieu partagé voyage hissé, et la protection voyage 
    */
   it('prend le bloc de protection à sa SOURCE UNIQUE — jamais trois champs recopiés sur six', () => {
     const attendus = Object.keys(MESSAGE_PROTECTION_SELECT);
-    expect(attendus).toHaveLength(6);
+    // 6 → 7 (#7451) : `ephemeralDuration` a rejoint le bloc. C'est elle, et non
+    // `expiresAt`, qui dit à un client qu'un message décompte — l'échéance est
+    // désormais résolue PAR LECTEUR et ne voyage plus dans un `select`.
+    expect(attendus).toHaveLength(7);
 
     const select = syncMessageSelect as unknown as Record<string, unknown>;
     attendus.forEach((cle) => expect(select[cle]).toBe(true));

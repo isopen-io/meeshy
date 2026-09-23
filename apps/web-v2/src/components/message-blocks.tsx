@@ -5,14 +5,15 @@ import type { Delivery } from '@/lib/view/message';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { activeDecorativeEffects } from '@/lib/effects';
+import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
 
-import { Glyph, GlyphSvg } from './glyph';
-import type { GlyphName } from './glyphs';
+import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
+import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
@@ -267,6 +268,7 @@ export function Check({
   status,
   isMine,
   sendStartedAt,
+  onOpen,
 }: {
   status: Delivery;
   isMine: boolean;
@@ -274,6 +276,22 @@ export function Check({
    * `status === 'pending'` en tient compte (§5 étape 9 de la spécification
    * #5813) : sous ce seuil, aucune horloge ne clignote. */
   sendStartedAt?: number;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — `undefined` ⇒ comportement
+   * INCHANGÉ, un glyphe NU (`role="img"`, `title` pour nom accessible),
+   * exactement comme avant ce lot. Fourni ⇒ le glyphe devient DÉCORATIF
+   * (`aria-hidden`, `Glyph` sans `title`) À L'INTÉRIEUR d'un vrai
+   * `<button>` nommé par son EFFET (`message-detail.open`, catalogue des
+   * sept langues — Prisme Linguistique, jamais une chaîne en dur), pas par
+   * le statut — même dispositif
+   * que `ReactionChip` (capsule voisine de la même ligne méta,
+   * `tap-target-chip`). SEUL `Bubble` (mode `bulles`) le câble
+   * aujourd'hui : `FocalRow` (`focal`/`script`, le défaut, D-7) garde sa
+   * ligne méta `aria-hidden` INCONDITIONNEL (revue #5935) — y poser ce
+   * bouton reproduirait l'anti-motif WCAG que cette revue a fermé
+   * (`V4.md` § 1).
+   */
+  onOpen?: () => void;
 }) {
   if (!isMine) return null;
   const check = CHECKS[status];
@@ -282,14 +300,30 @@ export function Check({
     <Glyph
       name={check.name}
       size={check.size}
-      title={STATUS_LABEL[status]}
+      {...(onOpen === undefined ? { title: STATUS_LABEL[status] } : {})}
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
+  const node =
+    onOpen === undefined ? (
+      glyph
+    ) : (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+        aria-label={translate(currentInterfaceLanguage(), 'message-detail.open')}
+        className="tap-target-chip inline-flex items-center"
+      >
+        {glyph}
+      </button>
+    );
   if (status === 'pending' && sendStartedAt !== undefined) {
-    return <SendingClock startedAt={sendStartedAt}>{glyph}</SendingClock>;
+    return <SendingClock startedAt={sendStartedAt}>{node}</SendingClock>;
   }
-  return glyph;
+  return node;
 }
 
 /**
@@ -459,7 +493,7 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
             style={{ color: 'var(--color-ios-ink-3)' }}
           >
             <GlyphSvg glyph={THREAD_STATES_GLYPHS.arrowBendUpRight} size={11} />
-            {forwardLabelOf(badge.attribution)}
+            {forwardLabelOf(badge.attribution, currentInterfaceLanguage())}
           </em>
         ),
       )}
@@ -564,13 +598,42 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
   );
 }
 
+/**
+ * LE GLYPHE D'UN GENRE CITÉ — miroir `previewGlyph`
+ * (`BubbleQuotedReply.swift:452-476`), qui nomme un TYPE. Décoratif ici (le
+ * bouton entier SAUTE au message cité, il n'ouvre aucun média) : `GlyphSvg`
+ * sans `title` pose donc `aria-hidden`, et le genre reste dit à l'oreille par
+ * `inventory` sur le nom accessible du bouton.
+ */
+const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
+  image: GLYPHS.image,
+  video: THREAD_STATES_GLYPHS.videoCamera,
+  audio: GLYPHS.microphone,
+  file: GLYPHS.file,
+};
+
+/** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */
+const QUOTE_THUMBNAIL_PX = 36;
+
 export function Quote({
   quote,
   isMine,
+  languages,
   onJump,
 }: {
   quote: NonNullable<Message['replyTo']>;
   isMine: boolean;
+  /**
+   * LE PRISME DU LECTEUR (#7556) — celui que la rangée hôte a déjà reçu. Sans
+   * lui, `Quote` rendait `quote.content` BRUT : le même message cité
+   * s'affichait traduit dans le bandeau du composeur (`use-reply-preview.ts`,
+   * qui descendait le Prisme) et en langue d'ORIGINE une fois gravé dans la
+   * bulle.
+   *
+   * La langue EXPLORÉE au geste (`displayLanguage`) n'entre PAS ici : elle
+   * appartient au message qui PORTE la citation, pas au message CITÉ.
+   */
+  languages: readonly string[];
   /**
    * SAUTE au message cité et le met en évidence — absent QUE lorsque l'hôte
    * n'a pas encore la liste complète des messages à portée (rare, jamais le
@@ -581,13 +644,30 @@ export function Quote({
    */
   onJump: () => void;
 }) {
+  /* SITE UNIQUE (`lib/view/quoted-preview.ts`) — ce composant DESSINE, il ne
+     RÉSOUT pas : une seconde descente ici servirait une autre langue que le
+     bandeau du composeur, qui lit la même fonction. */
+  const preview = quotedPreviewOf({
+    quoted: quote,
+    readerLanguages: languages,
+    interfaceLanguage: currentInterfaceLanguage(),
+  });
+  const media = preview.media;
+  const ink = isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)';
+  /* L'INVENTAIRE REJOINT LE NOM ACCESSIBLE — `attachmentSegments`, le MÊME
+     vocabulaire que `composeMessageLabel` (le bouton porte un `aria-label`,
+     donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
+     annoncée nulle part). */
+  const label = [`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`, ...preview.inventory].join(', ');
+
   return (
     <button
       type="button"
       onClick={onJump}
       className="mb-1.5 flex w-full rounded-quote text-left"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
-      aria-label={`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`}
+      {...(media === null ? {} : { 'data-quote-media': media.kind })}
+      aria-label={label}
     >
       <span
         className="w-1 shrink-0 rounded-full"
@@ -596,6 +676,32 @@ export function Quote({
         }}
         aria-hidden
       />
+      {/* LA VIGNETTE (#7556) — `quotedThumbnail` (`BubbleQuotedReply.swift:
+          382-411`). Le flou ThumbHash tient la case AVANT la requête réseau ;
+          `alt=""` + `aria-hidden` parce que le bouton porte déjà son nom. */}
+      {media !== null && media.thumbnailSrc !== null ? (
+        <span
+          className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
+          style={{
+            width: QUOTE_THUMBNAIL_PX,
+            height: QUOTE_THUMBNAIL_PX,
+            ...(media.placeholderSrc === null
+              ? {}
+              : { backgroundImage: `url("${media.placeholderSrc}")`, backgroundSize: 'cover' }),
+          }}
+          aria-hidden
+        >
+          <img
+            data-quote-thumb={media.kind}
+            src={media.thumbnailSrc}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover"
+          />
+          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
+        </span>
+      ) : null}
       {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
           iOS #5103) : deux lignes separees feraient de la citation un bloc
           aussi haut que le message, et c'est le message qu'on vient lire. */}
@@ -603,9 +709,33 @@ export function Quote({
         <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
           {quote.sender?.displayName ?? ''}{' '}
         </span>
-        <span className="line-clamp-2" style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)' }}>
-          {quote.content}
+        {media !== null && media.thumbnailSrc === null && !preview.isProtected ? (
+          <GlyphSvg
+            glyph={QUOTE_GLYPH[media.kind]}
+            size={11}
+            className="mr-1 inline-block align-baseline"
+            style={{ color: ink }}
+          />
+        ) : null}
+        <span
+          className="line-clamp-2"
+          style={{ color: ink }}
+          {...(preview.language === '' ? {} : { lang: preview.language })}
+        >
+          {preview.text}
         </span>
+        {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
+            .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
+            qu'un « 0:00 » qu'on croirait. */}
+        {media !== null && media.durationLabel !== null ? (
+          <span
+            data-quote-duration={media.durationLabel}
+            className="block text-check tabular-nums"
+            style={{ color: ink, opacity: META_TEXT_OPACITY }}
+          >
+            {media.durationLabel}
+          </span>
+        ) : null}
       </span>
     </button>
   );
@@ -641,7 +771,17 @@ export function FailedSendBand({
   readonly onRetry?: () => void;
   readonly textColor: string;
 }) {
-  const label = reason === undefined ? 'Non envoyé' : `Non envoyé — ${reason}`;
+  /* LES TROIS LIBELLÉS VIENNENT DU CATALOGUE (#7337) — « Non envoyé »,
+     « Non envoyé — {reason} » et « Réessayer » étaient EN DUR, en français,
+     sur la bande que SEPT langues lisent. La RAISON, elle, reste telle que
+     l'appelant la sert : elle vient du refus (`lib/api/outcome.ts`), pas du
+     catalogue, et sa place dans la phrase est décidée par la LANGUE
+     (`{reason}`), jamais par une concaténation ici. */
+  const language = currentInterfaceLanguage();
+  const label =
+    reason === undefined
+      ? translate(language, 'message.send.failed')
+      : translate(language, 'message.send.failed.reason', { reason });
   const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
   const style = {
     backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
@@ -650,20 +790,23 @@ export function FailedSendBand({
   };
   const titleProp = reason === undefined ? {} : { title: reason };
 
+  /* `data-send-failed` / `-label` / `data-send-retry` : les POIGNÉES des
+     gates (#7337). Ils désignaient la bande par son texte français, et ne
+     pouvaient donc la trouver que tant qu'elle n'était pas traduite. */
   if (onRetry === undefined) {
     return (
-      <div className={className} style={style} {...titleProp}>
+      <div data-send-failed="permanent" className={className} style={style} {...titleProp}>
         <Glyph name="warningCircle" size={12} />
-        <span className="flex-1">{label}</span>
+        <span data-send-failed-label className="flex-1">{label}</span>
       </div>
     );
   }
 
   return (
-    <button type="button" onClick={onRetry} {...titleProp} className={className} style={style}>
+    <button type="button" data-send-failed="retryable" onClick={onRetry} {...titleProp} className={className} style={style}>
       <Glyph name="warningCircle" size={12} />
-      <span className="flex-1">{label}</span>
-      <span style={{ textDecoration: 'underline' }}>Réessayer</span>
+      <span data-send-failed-label className="flex-1">{label}</span>
+      <span data-send-retry style={{ textDecoration: 'underline' }}>{translate(language, 'message.send.retry')}</span>
     </button>
   );
 }

@@ -4,9 +4,12 @@ import MeeshySDK
 /// Point d'entrée UNIQUE de la lecture LOCALE d'une conversation.
 ///
 /// « Lue localement » veut dire : l'utilisateur a consommé la conversation sur
-/// CET appareil, maintenant. C'est vrai à l'ouverture de l'écran, au geste
-/// « Marquer comme lu » de la liste, à la quick-action d'une bannière push et à
-/// l'action du widget. Le serveur reste autoritatif sur le COMPTE exact — il
+/// CET appareil, maintenant. C'est vrai à une lecture RÉELLEMENT rattrapée
+/// (`sendReadReceipt`, quand le lot vu contient le message le plus récent —
+/// #7350, I-2 : la simple ouverture de l'écran n'en est plus la preuve, voir
+/// `ConversationViewModel+Lifecycle.swift`), au geste « Marquer comme lu » de
+/// la liste, à la quick-action d'une bannière push et à l'action du widget.
+/// Le serveur reste autoritatif sur le COMPTE exact — il
 /// nous le rendra par `conversation:unread-updated` / `read-status:updated` —
 /// mais aucun de ses allers-retours ne doit se voir : la pastille tombe ici,
 /// dans le tour de boucle du geste.

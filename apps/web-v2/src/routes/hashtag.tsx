@@ -46,7 +46,12 @@ export default function HashtagScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare } = usePostGesture();
+  /* COMMENTER DEPUIS UN HASHTAG (#7113) — cet écran montait la MÊME carte que
+     le Flux sans jamais porter `onComment` : son compteur de commentaires y
+     retombait en `<span>` inerte, ce que la loi 4 rend correct et ce qui fait
+     qu'aucun témoin ne rougissait. Le rappel vient du seul hôte des gestes
+     d'une publication, comme les deux autres de la rangée. */
+  const { announcement, onGesture, onShare, onComment, menu } = usePostGesture();
 
   const page = useInfiniteQuery(hashtagInfiniteOptions({ ...apiDeps, tag: canonical }));
 
@@ -117,6 +122,8 @@ export default function HashtagScreen() {
                 model={model}
                 onGesture={onGesture}
                 onShare={onShare}
+                onComment={onComment}
+                menu={menu}
                 preferredLanguages={readerLanguages}
               />
             ))}

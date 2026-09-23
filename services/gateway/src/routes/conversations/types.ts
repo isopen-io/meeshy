@@ -57,6 +57,8 @@ export interface SendMessageBody {
   // Ephemeral/blurred/view-once message fields
   isBlurred?: boolean;
   expiresAt?: string;
+  /** Durée d'un éphémère, en secondes (#7451) — le décompte part de la RÉCEPTION. */
+  ephemeralDuration?: number;
   effectFlags?: number;
   isViewOnce?: boolean;
   maxViewOnceCount?: number;

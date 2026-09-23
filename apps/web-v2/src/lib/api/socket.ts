@@ -7,20 +7,30 @@ import type {
   AuthTokenExpiredEventData,
 } from '@meeshy/shared/types/socketio-events/auth';
 import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketio-events/presence';
+import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
+import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
-import { FEED_QUERY_KEY } from './feed';
-import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
-import type { FeedInfiniteData } from './feed-pages';
+import { messagesQueryKey } from './messages';
+import {
+  applyMediaCaptionTranslation,
+  applyPostCreated,
+  applyPostDeleted,
+  applyPostReactionEvent,
+  applyPostTranslation,
+  applyPostUpdated,
+  applyServedBookmark,
+  applyServedLike,
+} from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
+import { bindPublicationRoomTransport } from './publication-rooms';
 import {
   applyNotificationCounts,
   applyNotificationDeleted,
@@ -33,14 +43,25 @@ import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
   applyMessageAttachmentUpdated,
+  applyMessageConsumed,
   applyMessageNew,
   applyMessageTranslation,
+  applyReadStatusUpdated,
   isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
+  isMessageConsumedEvent,
   isMessageTranslationEvent,
+  isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import {
+  applyMessageCountdownStarted,
+  applyMessageExpired,
+  isMessageCountdownStartedEvent,
+  isMessageExpiredEvent,
+  noteEphemeralDelivery,
+} from './realtime-ephemeral';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
@@ -56,6 +77,10 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * `AuthHandler._joinUserConversations` (`AuthHandler.ts:855-890`) rejoint
  * TOUTES les rooms de participation à l'authentification elle-même — aucun
  * événement client n'est nécessaire (§ 1.4 point 3 de la spécification).
+ *
+ * Ce qu'il FAIT à la place pour les PUBLICATIONS : `post:join` / `post:leave`
+ * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
+ * passerelle ne peut pas deviner ce qu'un écran montre.
  */
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
@@ -76,6 +101,24 @@ function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
   return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
 }
 
+/**
+ * `message:pending-delivered` (#7223) — charge INLINE, aucun type exporté
+ * (`packages/shared/types/socketio-events/event-maps.ts:382` : `{ count:
+ * number; conversationIds: string[] }`), motif `PostLikeEvent` ci-dessous :
+ * une garde LOCALE plutôt qu'un import qui n'existe pas dans `@meeshy/shared`.
+ */
+type PendingMessagesDeliveredEvent = { readonly count: number; readonly conversationIds: readonly string[] };
+
+function isPendingMessagesDeliveredEvent(payload: unknown): payload is PendingMessagesDeliveredEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    isFiniteNumber(p.count) &&
+    Array.isArray(p.conversationIds) &&
+    p.conversationIds.every((id) => typeof id === 'string')
+  );
+}
+
 /** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
  * du geste), donc `bookmarked` décrit toujours le lecteur. */
 type PostBookmarkEvent = { readonly postId: string; readonly bookmarked: boolean; readonly bookmarkCount?: number };
@@ -90,26 +133,16 @@ function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
   );
 }
 
-/** `MediaCaptionTranslationUpdatedEventData` (`@meeshy/shared/types/post`,
- * #6280), réduite aux champs que `applyMediaCaptionTranslation` consomme —
- * `postId`/`commentId` ne servent qu'au ROUTAGE serveur (ZMQ, audience) :
- * la fusion côté cache retrouve le média par `mediaId`, quel que soit le
- * document (post ou commentaire) qui le porte. `commentId` n'est donc PAS
- * relu ici : un média de commentaire n'a jamais d'entrée dans `FEED_QUERY_KEY`,
- * `applyMediaCaptionTranslation` ne trouve rien à fusionner et ne modifie
- * rien, sans lever. */
-function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCaptionTranslationUpdate {
+/** `AttachmentStatusUpdatedEventData` (`@meeshy/shared/types/socketio-events/
+ * attachment.ts`), réduite au SEUL champ que la feuille « Infos du message »
+ * (#7226) doit router : `attachmentId`, qui nomme la query à invalider. Les
+ * autres champs (`action`, `playPositionMs`…) sont déjà dans la ligne que le
+ * REFETCH ramènera — les relire ici doublerait la source de vérité. */
+type AttachmentStatusEvent = { readonly attachmentId: string };
+
+function isAttachmentStatusEvent(payload: unknown): payload is AttachmentStatusEvent {
   if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  if (typeof p.mediaId !== 'string' || typeof p.language !== 'string') return false;
-  if (typeof p.translation !== 'object' || p.translation === null) return false;
-  const t = p.translation as Record<string, unknown>;
-  return (
-    typeof t.text === 'string' &&
-    typeof t.translationModel === 'string' &&
-    typeof t.createdAt === 'string' &&
-    (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
-  );
+  return typeof (payload as Record<string, unknown>).attachmentId === 'string';
 }
 
 export type RealtimeSessionInfo = {
@@ -184,6 +217,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     auth: { token: session.token, sessionToken: session.sessionToken },
   });
 
+  /**
+   * LES SALLES DE PUBLICATION (#7395) — `publication-rooms.ts` tient le COMPTE (quels
+   * écrans tiennent quelle salle) ; la connexion ÉMET. Rien ne part sur un
+   * socket COUPÉ : `socket.io-client` tamponnerait l'émission et la viderait
+   * dès la reconnexion, AVANT que la passerelle ait réauthentifié le socket —
+   * `handleJoinPost` la refuserait (« User not authenticated ») et la salle
+   * resterait perdue. Le rejeu d'`onAuthenticated` s'en charge ; un `leave`
+   * sur un socket coupé n'a rien à quitter, la passerelle a déjà vidé ses
+   * salles.
+   */
+  const emitPostRoom = (event: typeof CLIENT_EVENTS.JOIN_POST | typeof CLIENT_EVENTS.LEAVE_POST, postId: string): void => {
+    if (!socket.connected) return;
+    const body: PostRoomActionData = { postId };
+    socket.emit(event, body);
+  };
+  const publicationRooms = bindPublicationRoomTransport({
+    join: (postId) => emitPostRoom(CLIENT_EVENTS.JOIN_POST, postId),
+    leave: (postId) => emitPostRoom(CLIENT_EVENTS.LEAVE_POST, postId),
+  });
+
   /** Un minuteur de SÉCURITÉ par (conversation, frappeur) — REMIS À ZÉRO à
    * chaque `typing:start` du MÊME frappeur (miroir iOS, doc-comment ci-
    * dessus), ANNULÉ dès que `typing:stop` arrive en premier. */
@@ -234,6 +287,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+    /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
+       fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
+    noteEphemeralDelivery(payload, now());
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -302,6 +358,85 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU MESSAGE »
+   * SUIT UNE OUVERTURE/UN TÉLÉCHARGEMENT/UNE ÉCOUTE EN DIRECT.
+   *
+   * Émis par `services/gateway/src/routes/messages-writes.ts:717` après
+   * `listened`/`watched`/`viewed`/`downloaded`. La feuille lit
+   * `GET /attachments/:id/status-details` via `useQuery`
+   * (`attachmentStatusDetailsQueryKey`, `api/attachments.ts`) ; ce module ne
+   * FUSIONNE rien dans la ligne (la forme paginée, par participant, ne se
+   * met pas à jour champ par champ sans risquer de désynchroniser `Nx` et la
+   * barre de progression) — il INVALIDE la query, même idiome que
+   * `onUnreadUpdated`/`onFriendshipChanged` plus bas : le prochain rendu de
+   * la feuille OUVERTE refetch, une feuille FERMÉE ne refetch rien (React
+   * Query n'interroge que les observateurs actifs).
+   */
+  const onAttachmentStatusUpdated = (payload: unknown): void => {
+    if (!isAttachmentStatusEvent(payload)) return;
+    void deps.queryClient.invalidateQueries({ queryKey: attachmentStatusDetailsQueryKey(payload.attachmentId) });
+  };
+
+  /**
+   * `read-status:updated` (#7223, #7348) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
+   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle (cible le
+   * message que `summary.messageId` NOMME ; à défaut de nom — passerelle
+   * pré-G-5/#7347 — le dernier message du fil ; tous-ou-rien en groupe
+   * conservé) vit dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onReadStatusUpdated = (payload: unknown): void => {
+    if (!isReadStatusUpdated(payload)) return;
+    applyReadStatusUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `message:consumed` (#7354, V6) — L'ÉVÉNEMENT PAIR DE
+   * `consumeViewOnceOptimistic` (`view-once.ts:20-26`), diffusé par la
+   * passerelle à TOUTE la room de conversation au PREMIER visionnage d'une
+   * vue unique (`messages-view-once.ts:158-167`). La règle vit dans
+   * `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onMessageConsumed = (payload: unknown): void => {
+    if (!isMessageConsumedEvent(payload)) return;
+    applyMessageConsumed(deps.queryClient, payload);
+  };
+
+  /**
+   * L'ÉCHÉANCE D'UN ÉPHÉMÈRE, DES DEUX CÔTÉS (#7454) — `message:expired` la
+   * CONSOMME (le message quitte l'écran sur-le-champ), `message:countdown-
+   * started` la POSE. Les deux étaient absents : un message détruit par le
+   * serveur restait affiché jusqu'au prochain chargement du fil.
+   *
+   * Les deux puits vivent dans `realtime-ephemeral.ts` ; ici, seule la
+   * reconnaissance de la charge et le branchement — motif de tous les autres
+   * gestionnaires de ce fichier.
+   */
+  const onMessageExpired = (payload: unknown): void => {
+    if (!isMessageExpiredEvent(payload)) return;
+    applyMessageExpired(deps.queryClient, payload);
+  };
+
+  const onMessageCountdownStarted = (payload: unknown): void => {
+    if (!isMessageCountdownStartedEvent(payload)) return;
+    applyMessageCountdownStarted(payload);
+  };
+
+  /**
+   * `message:pending-delivered` (#7223) — la charge ne porte AUCUN compteur
+   * par message (`{count, conversationIds}`) : ce puits INVALIDE les fils
+   * NOMMÉS plutôt que d'inventer des compteurs qu'elle ne transporte pas
+   * (doc-comment `MeeshySocketIOManager.ts:826-846` — « invalider les
+   * messages des conversations nommées »). La prochaine lecture de
+   * `GET …/messages` sert les compteurs réels.
+   */
+  const onPendingMessagesDelivered = (payload: unknown): void => {
+    if (!isPendingMessagesDeliveredEvent(payload)) return;
+    for (const conversationId of payload.conversationIds) {
+      void deps.queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+    }
+  };
+
+  /**
    * `comment:added` (#7151) — LA LISTE DES COMMENTAIRES SUIT LE FIL EN DIRECT.
    *
    * L'événement existait depuis toujours côté passerelle ; mesuré avant ce lot,
@@ -329,6 +464,69 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `comment:updated` / `comment:deleted` / `comment:liked` / `comment:unliked`
+   * (#7227, W8) — LE FIL DE COMMENTAIRES SUIT LA PASSERELLE EN DIRECT, même
+   * motif que `comment:added` juste au-dessus : la règle (garde de forme,
+   * réécriture pure sur `commentsQueryKey`) vit dans `publication-comments.ts`
+   * (D-40), ces lignes ne font que BRANCHER, par `import()` (D-98, chunk
+   * `realtime` plafonné à 5 Ko).
+   */
+  const onCommentUpdated = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentUpdated }) => {
+      applyCommentUpdated(deps.queryClient, payload);
+    });
+  };
+
+  const onCommentDeleted = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentDeleted }) => {
+      applyCommentDeleted(deps.queryClient, payload);
+    });
+  };
+
+  const onCommentLikeChanged =
+    (liked: boolean) =>
+    (payload: unknown): void => {
+      void import('./publication-comments').then(({ applyCommentLikeEvent }) => {
+        applyCommentLikeEvent(deps.queryClient, payload, deps.viewerId(), liked);
+      });
+    };
+  const onCommentLiked = onCommentLikeChanged(true);
+  const onCommentUnliked = onCommentLikeChanged(false);
+
+  /**
+   * `comment:translation-updated` (#7394) — LE PRISME SUIT LE PIPELINE EN
+   * DIRECT SUR UN COMMENTAIRE, jumeau de `post:translation-updated` (#7383).
+   * Il n'était écouté NULLE PART : un commentaire écrit hors de la langue du
+   * lecteur restait dans celle de son auteur jusqu'à la relecture du fil. La
+   * loi (garde de forme, fusion par langue, caisse du fil) vit avec le cache
+   * dans `publication-comments.ts` ; cette ligne ne fait que BRANCHER, par
+   * `import()` comme ses quatre voisines (D-98).
+   */
+  const onCommentTranslationUpdated = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentTranslation }) => {
+      applyCommentTranslation(deps.queryClient, payload);
+    });
+  };
+
+  /**
+   * `story:reacted` / `story:unreacted` (#7227, W8) — LE RAIL SUIT LES
+   * RÉACTIONS EN DIRECT. La règle (compte ABSOLU, garde « jamais le cœur
+   * d'un autre ») vit dans `reaction-realtime.ts` — SÉPARÉ de
+   * `story-reactions.ts` (le port du GESTE, importé STATIQUEMENT par le
+   * lecteur, chunk `story_reader` déjà serré) — ; `import()`, même motif que
+   * `comment:added`.
+   */
+  const onStoryReactionChanged =
+    (plan: 'add' | 'remove') =>
+    (payload: unknown): void => {
+      void import('./reaction-realtime').then(({ applyStoryReactionEvent }) => {
+        applyStoryReactionEvent(deps.queryClient, payload, { viewerId: deps.viewerId(), plan });
+      });
+    };
+  const onStoryReacted = onStoryReactionChanged('add');
+  const onStoryUnreacted = onStoryReactionChanged('remove');
+
+  /**
    * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
    * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
    * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
@@ -349,24 +547,27 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * remplace l'estimation ; « aimé par moi » ne bascule que pour un geste du
    * LECTEUR (un autre de ses appareils) — le « j'aime » d'un autre ne remplit
    * jamais son cœur. Miroir `FeedView.swift:1331-1357`.
+   *
+   * **ET LES RÉELS, ET LA FICHE (#7227, W8)** — la MÊME carte, servie par un
+   * fil de Réels (`ReelsViewModel.swift:117-128` : SEULS les likes et la
+   * suppression y sont câblés, jamais `postCreated`/`postUpdated`) ou par
+   * `/post/$post`. Les caisses vivent au registre (`card-caches.ts`, #7341 :
+   * le hashtag, le profil et les enregistrées aussi), atteint par
+   * `feed-realtime.ts#applyServedLike`, site UNIQUE partagé avec
+   * `post:reaction-added`/`post:reaction-removed` : cet écouteur ne tient que
+   * le branchement (D-98), et deux boucles recopiées ne peuvent plus diverger
+   * d'une caisse.
    */
-  const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
-    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
-  };
-
   const onPostLikeChanged =
     (on: boolean) =>
     (payload: unknown): void => {
       if (!isPostLikeEvent(payload)) return;
-      const { postId, likeCount } = payload;
-      const byViewer = payload.userId === deps.viewerId();
-      updateFeed((data) =>
-        applyServedCount(byViewer ? applyPostToggle(data, { postId, kind: 'like', on }) : data, {
-          postId,
-          kind: 'like',
-          count: likeCount,
-        }),
-      );
+      applyServedLike(deps.queryClient, {
+        postId: payload.postId,
+        on,
+        byViewer: payload.userId === deps.viewerId(),
+        likeCount: payload.likeCount,
+      });
     };
   const onPostLiked = onPostLikeChanged(true);
   const onPostUnliked = onPostLikeChanged(false);
@@ -397,28 +598,58 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyPostDeleted(deps.queryClient, payload);
   };
 
+  /**
+   * `post:bookmarked` — **ET LES RÉELS, ET LA FICHE (#7227, W8)**. Cet écho
+   * n'écrivait que le Flux pendant que le geste LOCAL tenait plusieurs
+   * caisses (`feed-gestures.ts#performPostGesture`) et qu'iOS réconcilie son
+   * pager (`ReelsViewModel.swift:139-163`) : un favori posé depuis un AUTRE
+   * appareil n'atteignait ni le pager ni la fiche. Les caisses vivent au
+   * registre (`card-caches.ts`, #7341), atteint par
+   * `feed-realtime.ts#applyServedBookmark`, à côté de ses jumelles du cœur —
+   * cet écouteur ne tient que le branchement (D-98).
+   */
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
-    const { postId, bookmarked, bookmarkCount } = payload;
-    updateFeed((data) => {
-      const toggled = applyPostToggle(data, { postId, kind: 'bookmark', on: bookmarked });
-      return bookmarkCount === undefined ? toggled : applyServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
+    applyServedBookmark(deps.queryClient, {
+      postId: payload.postId,
+      on: payload.bookmarked,
+      bookmarkCount: payload.bookmarkCount,
     });
   };
 
   /**
-   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
-   * FIL SUIT LE PIPELINE ZMQ EN DIRECT, même motif que `post:liked` ci-dessus :
-   * une fonction pure (`applyMediaCaptionTranslation`, `lib/feed/interactions.ts`)
-   * appliquée à `FEED_QUERY_KEY`. `updateFeed` retrouve le média par id, quelle
-   * que soit la page qui le porte (`flattenFeedPages` garde la PREMIÈRE
-   * occurrence d'un post servi deux fois — la fusion doit donc viser TOUTES
-   * les pages, pas seulement la première, ce que `applyMediaCaptionTranslation`
-   * fait déjà via `mapPosts`).
+   * `post:reaction-added` / `post:reaction-removed` (#7227, W8) — GARDÉS au
+   * ❤️, miroir EXACT d'iOS (`FeedView.swift:1307-1325`). Le ❤️ sur un
+   * POST/REEL part en pratique par `post:liked`/`post:unliked`
+   * (`PostReactionHandler.ts:106-123`) ; les emojis NON-❤️ n'ont AUCUN champ
+   * côté `FeedPost` — la règle (garde + application, feed/reels/détail) vit
+   * dans `feed-realtime.ts`, importé STATIQUEMENT (D-98 mesure déjà le coût
+   * de ce module dans le chunk `realtime` pour `post:created/updated/deleted`,
+   * un `import()` de plus n'ajouterait rien).
    */
+  const onPostReactionChanged = (payload: unknown): void => {
+    applyPostReactionEvent(deps.queryClient, payload, deps.viewerId());
+  };
+
+  /**
+   * `post:translation-updated` (#7383) et `media:caption-translation-updated`
+   * (#6280, #7382) — LE PRISME SUIT LE PIPELINE EN DIRECT, sur CHAQUE écran
+   * qui montre la carte. Le texte d'une publication n'était écouté NULLE PART
+   * (iOS l'écoute sur le Flux, la fiche, le profil et les stories), et la
+   * légende d'un média n'atteignait que le Flux (`updateFeed`, disparu) : sa
+   * charge porte pourtant `postId` depuis sa naissance — c'est la garde locale
+   * qui ne le lisait pas.
+   *
+   * Les lois vivent dans `feed-realtime.ts` (validation, fusion par langue,
+   * registre des caisses) ; ces écouteurs ne tiennent que le branchement
+   * (D-98). Deux contenus, deux cartes de traduction, jamais mélangées.
+   */
+  const onPostTranslationUpdated = (payload: unknown): void => {
+    applyPostTranslation(deps.queryClient, payload);
+  };
+
   const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
-    if (!isMediaCaptionTranslationEvent(payload)) return;
-    updateFeed((data) => applyMediaCaptionTranslation(data, payload));
+    applyMediaCaptionTranslation(deps.queryClient, payload);
   };
 
   /**
@@ -514,9 +745,16 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * La PREMIÈRE authentification ne rejoue rien : il n'y a pas de trou à
    * combler au démarrage, et invalider y doublerait la requête que l'écran
    * vient d'émettre.
+   *
+   * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
+   * authentification, la première comprise : un écran ouvert avant que la
+   * connexion ait fini de s'établir a demandé sa salle à un socket qui ne
+   * pouvait pas encore l'accepter, et une coupure a vidé côté passerelle
+   * toutes celles du socket précédent.
    */
   let authenticatedOnce = false;
   const onAuthenticated = (): void => {
+    publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
       return;
@@ -562,17 +800,33 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
+  socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
+  socket.on<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
   socket.on<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
   socket.on<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
   socket.on<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
@@ -606,6 +860,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.emit(isTyping ? CLIENT_EVENTS.TYPING_START : CLIENT_EVENTS.TYPING_STOP, body);
     },
     destroy: () => {
+      publicationRooms.detach();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
       windowTarget?.removeEventListener('online', onOnline);
@@ -617,7 +872,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
+      socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
       socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
@@ -625,9 +891,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
+      socket.off<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);

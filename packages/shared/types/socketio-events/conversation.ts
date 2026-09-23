@@ -13,6 +13,15 @@ import type { ConversationJoinErrorReason } from '../../utils/conversation-join-
 // Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
 import type { ConversationBridge } from '../conversation-bridge.js';
 
+// Le contrat de la ligne d'aperçu (#7545)
+import type {
+  ConversationActiveCall,
+  ConversationLastReaction,
+  LastMessageAttachmentSummary,
+  LastMessageCallSummary,
+  LastMessageSystemEvent,
+} from '../conversation-preview.js';
+
 /**
  * Données pour l'événement de participation à une conversation
  */
@@ -161,6 +170,8 @@ export interface LastMessagePreviewAttachment {
   readonly duration: number | null;
   readonly width: number | null;
   readonly height: number | null;
+  /** Pages d'un document (#7545) — `null` si inconnu. */
+  readonly pageCount?: number | null;
 }
 
 export interface ConversationUpdatedEventData {
@@ -294,8 +305,46 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageAttachmentCount?: number;
   readonly lastMessageIsBlurred?: boolean;
   readonly lastMessageIsViewOnce?: boolean;
-  /** Chaîne ISO — voir `lastMessageAt`, son jumeau de forme dans ce même contrat. */
+  /**
+   * Chaîne ISO — voir `lastMessageAt`, son jumeau de forme dans ce même contrat.
+   * `null` pour un ÉPHÉMÈRE (#7451) : une diffusion de room ne connaît pas
+   * l'échéance d'un lecteur ; le client décompte depuis sa réception et
+   * `message:countdown-started` lui porte l'échéance serveur. Pour un non
+   * éphémère, la grâce de vue unique.
+   */
   readonly lastMessageExpiresAt?: string | null;
+  /**
+   * Sous-groupe NATURE (#7545) — jumeaux des champs de `lastMessage` servis par
+   * `GET /conversations`, même règle de groupe que le sous-groupe média :
+   * **qui porte `lastMessageId` porte ces champs pour le message qu'il nomme.**
+   * Un message protégé (`isLastMessageProtected`) part avec ses drapeaux mais
+   * SANS `lastMessagePreview`, sans traductions, sans pièce jointe et avec
+   * `lastMessageAttachmentSummary: null`.
+   */
+  readonly lastMessageType?: string | null;
+  readonly lastMessageEffectFlags?: number | null;
+  readonly lastMessageEphemeralDuration?: number | null;
+  readonly lastMessageIsEncrypted?: boolean;
+  readonly lastMessageIsForwarded?: boolean;
+  readonly lastMessageSystemEvent?: LastMessageSystemEvent | null;
+  readonly lastMessageCallSummary?: LastMessageCallSummary | null;
+  readonly lastMessageAttachmentSummary?: LastMessageAttachmentSummary | null;
+  /**
+   * Dernière réaction (#7545), résolue pour CE destinataire (extrait par son
+   * Prisme, borné par son plancher d'historique). Clé ABSENTE = « cet événement
+   * ne parle pas de réaction » ; `null` = « il n'y en a plus ».
+   *
+   * L'événement de réaction ne porte AUCUNE clé du groupe d'aperçu — ni
+   * `lastMessageId` ni `lastMessageAt`. La remontée est une règle de CLIENT,
+   * dérivée des données et identique pour `GET /conversations` : rang de la
+   * ligne = max(`lastMessageAt`, `lastReaction.createdAt` quand
+   * `lastReaction.targetSenderUserId` est le lecteur — `targetSenderId` = son
+   * `Participant.id` pour un anonyme). Une réaction à MON message remonte ma
+   * ligne ; une réaction entre tiers s'affiche sans réordonner (#7546).
+   */
+  readonly lastReaction?: ConversationLastReaction | null;
+  /** Appel en cours (#7545). Clé ABSENTE = inchangé ; `null` = plus d'appel. */
+  readonly activeCall?: ConversationActiveCall | null;
   /**
    * `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de la
    * base, par opposition à une poussée de message (`bump-to-top`) qui ne fait

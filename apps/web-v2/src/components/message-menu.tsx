@@ -3,8 +3,11 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { flag, languageName } from '@/lib/languages';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
 import { safeAreaInsets } from '@/lib/view/safe-area';
+import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import {
@@ -114,6 +117,10 @@ export function MessageMenu({
   readonly onPickLanguage: (code: string) => void;
 }) {
   const [panel, setPanel] = useState<'actions' | 'translate'>('actions');
+  /* LA LANGUE D'INTERFACE, LUE UNE FOIS PAR RENDU (#7555) — `message-actions.ts`
+     rend des CLÉS, ce composant les DIT. Même porte que le reste de l'écran
+     (`currentInterfaceLanguage()`), jamais une seconde résolution. */
+  const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
   const listRows = panel === 'actions' ? items.length : choices.length;
 
@@ -156,10 +163,41 @@ export function MessageMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
 
+  /**
+   * LE FIL QUI SE RÉ-ANCRE TOUT SEUL NE FERME PAS CE MENU (#7242).
+   *
+   * Un `scroll` du LECTEUR emporte la rangée sous le cluster : on ferme.
+   * Un `scroll` que l'APPLICATION vient d'écrire — l'ancrage bas quand un
+   * correspondant se met à écrire (`use-thread-typing.ts`), l'ancrage
+   * d'ouverture du fil (`routes/thread.tsx`) — n'est l'intention de
+   * personne, et le menu disparaissait pendant qu'on visait une entrée.
+   * Mesuré sur `/c/c-deploiement` : treize millisecondes de vie sous charge,
+   * `check-thread-states.mjs` § 6.2 rouge (« aucun cluster »).
+   *
+   * La distinction n'est pas devinée ici : `pinToBottom` DÉCLARE la position
+   * qu'il vient d'écrire (`markProgrammaticScroll`), et la lecture la
+   * CONSOMME — un seul `scroll` par écriture, donc le geste d'après referme
+   * bien le menu.
+   *
+   * L'ÉVÉNEMENT ARRIVE DÉJÀ FILTRÉ (#7293) : `useRovingMenu` ne transmet que
+   * les `scroll` qui ont RÉELLEMENT déplacé l'ancre, ce qui écarte ceux qui
+   * étaient en vol au moment où le menu s'est ouvert. Restent ici les
+   * défilements qui bougent la rangée — et parmi eux, ceux que
+   * l'application a écrits elle-même.
+   */
+  const onScrollAway = (event: Event) => {
+    if (isProgrammaticScroll(event.target)) return;
+    onClose();
+  };
+
   const roving = useRovingMenu({
     itemCount: RAIL_ITEM_COUNT + listRows,
     returnFocusTo: () => target.element,
-    onScroll: onClose,
+    /* L'ANCRE DU MENU EST LA RANGÉE, pas un bouton déclencheur : c'est elle
+       que `useRovingMenu` interroge pour savoir si un `scroll` a réellement
+       bougé quelque chose (#7293, § « un défilement déjà acquis »). */
+    anchor: () => target.element,
+    onScroll: onScrollAway,
     onResize: onClose,
     initialOpen: true,
   });
@@ -328,7 +366,14 @@ export function MessageMenu({
       >
         <div
           role="group"
-          aria-label="Réagir"
+          aria-label={translate(language, 'message.menu.react')}
+          /* UN GATE N'ÉPINGLE PAS UNE CHAÎNE TRADUISIBLE (#7141, appliqué ici
+             par #7555) — depuis que ce cluster lit le catalogue, son nom
+             accessible suit la langue du LECTEUR, et la CI tourne en `en-US`.
+             Ces marqueurs sont posés POUR être trouvés et ne changent avec
+             aucune langue ; le nom accessible, lui, reste ce que le lecteur
+             d'écran entend. */
+          data-message-menu-rail
           className="message-menu-rail"
           style={{
             position: 'fixed',
@@ -351,7 +396,8 @@ export function MessageMenu({
                 type="button"
                 role="menuitem"
                 tabIndex={index === roving.activeIndex ? 0 : -1}
-                aria-label={isPlus ? 'Ajouter une réaction' : tile}
+                aria-label={isPlus ? translate(language, 'message.menu.addReaction') : tile}
+                data-add-reaction={isPlus ? '' : undefined}
                 className="tap-target-34 grid place-items-center rounded-full"
                 style={{ width: RAIL_TILE, height: RAIL_TILE, fontSize: 22 }}
                 onClick={() => {
@@ -447,13 +493,14 @@ export function MessageMenu({
                   }}
                   type="button"
                   role="menuitem"
+                  data-action={item.id}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-left text-title font-medium"
                   style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onListItemChosen(item)}
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
-                  <span className="flex-1">{item.label}</span>
+                  <span className="flex-1">{translate(language, item.labelKey)}</span>
                   {item.id === 'more' ? (
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
@@ -476,7 +523,8 @@ export function MessageMenu({
              sous-menu. */
           <div
             role="group"
-            aria-label="Traduire"
+            aria-label={translate(language, 'message.menu.translate')}
+            data-message-menu-languages
             className="message-menu-list"
             style={{
               position: 'fixed',

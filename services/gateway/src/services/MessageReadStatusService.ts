@@ -14,34 +14,37 @@
  */
 
 import { PrismaClient } from "@meeshy/shared/prisma/client";
-import { MessageMediaConsumptionService } from './MessageMediaConsumptionService';
+import { MessageMediaConsumptionService, type MediaConsumptionServed } from './MessageMediaConsumptionService';
 // `withRetry` a suivi ses cinq appelants dans le module de consommation média
 // (#4605) ; le sixième, ici, l'importe. Le helper n'a pas de domaine — il
 // rejoue une transaction sur conflit d'écriture — donc il vit là où il sert le
 // plus, jamais dupliqué.
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { unsetOrNull } from '../utils/prisma-unset';
 import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
   NO_PERSONAL_HIDING,
   applyPersonalHistoryHiding,
-  exclusiveFloorMsFor,
   loadPersonalHistoryHiding,
   loadPersonalHistoryHidingByConversation,
   loadPersonalHistoryHidingByUser,
 } from './personalHistoryFilter';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+// Le calcul de non-lu, UNE fois (#7199) : `getUnreadCountsForParticipants` et
+// `getUnreadCountsForUser` en sont deux orchestrateurs autour du MÊME cœur —
+// voir le doc-comment du module.
+import { computeUnreadCounts, unreadFloorFor } from './unreadCountsCore';
+import {
+  freezeMessageStatus,
+  type FreezeMessageStatusParams,
+} from './messaging/freezeMessageStatus';
 import {
   parsePlaybackTrace,
   traceCoverage,
 } from '../utils/playback-trace';
-import {
-  mergeViewedLanguages,
-  languageBreakdown,
-  MAX_VIEWED_LANGUAGES,
-} from '../utils/viewed-languages';
+import { languageBreakdown } from '../utils/viewed-languages';
 import { coveredDurationMs } from '../utils/playback-segments';
 // #4179 — le plancher d'historique borne déjà `GET /conversations/:id/status`
 // (messages-advanced.ts) ; les trois autres lecteurs d'accusés de CE service ne
@@ -91,6 +94,16 @@ const CREATED_AT_FIELD_FOR: Record<CursorIdField, CursorCreatedAtField> = {
  * ObjectId hex order (which is only second-accurate and diverges across gateway
  * processes; see `OBJECT_ID_RE`).
  *
+ * « Rien d'enregistré » s'écrit `unsetOrNull`, jamais `{ champ: null }`.
+ * `_advanceCursor` CRÉE la ligne de curseur avec les seules colonnes de la
+ * moitié qu'il avance : un curseur né d'un accusé de REMISE n'a aucune clé
+ * `lastReadMessageId` ni `lastReadMessageCreatedAt`, et sur MongoDB une égalité
+ * à `null` n'apparie pas une colonne ABSENTE (`utils/prisma-unset.ts`). Les
+ * trois branches manquaient alors toutes les trois — la troisième aussi, un
+ * `lt` n'appariant jamais une absence — et l'avance de lecture était rejetée
+ * comme PÉRIMÉE sur un curseur qui n'avait jamais rien lu : `lastReadMessageId`
+ * restait vide et le badge ne retombait pas (#7345, mesuré sur staging).
+ *
  * Returns `null` when no guard applies (the caller then matches on
  * participant+conversation alone):
  *   - non-ObjectId ids (tests / legacy data), preserving the historical
@@ -108,16 +121,16 @@ export function buildCursorFreshnessGuard(params: {
   if (!OBJECT_ID_RE.test(messageId)) return null;
 
   if (!messageCreatedAt) {
-    return { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] };
+    return { OR: [unsetOrNull(idField), { [idField]: { lt: messageId } }] };
   }
 
   return {
     OR: [
       // Brand-new cursor: nothing recorded yet.
-      { [createdAtField]: null, [idField]: null },
+      { AND: [unsetOrNull(createdAtField), unsetOrNull(idField)] },
       // Legacy cursor written before createdAt was tracked: fall back to the
       // ObjectId order it was recorded under, until this advance upgrades it.
-      { [createdAtField]: null, [idField]: { lt: messageId } },
+      { AND: [unsetOrNull(createdAtField), { [idField]: { lt: messageId } }] },
       // The recorded message is strictly older (correct to the millisecond). A
       // same-instant sibling from another process is left for the next later
       // receipt to carry — a transient stall, never a rollback.
@@ -285,43 +298,21 @@ export class MessageReadStatusService {
    * Batched variant for multiple participants in the same conversation.
    *
    * Fires on the hottest path — `_updateUnreadCounts` calls this on EVERY `message:new`
-   * for every recipient. Each participant's unread count shares the SAME shape — messages
-   * after their read floor that they did NOT send themselves — so the only per-participant
-   * variance is the `createdAt` floor and the "exclude my own messages" cut. Collapsed into
-   * **1 cursor batch + 1 `message.findMany`** (index-backed by
-   * `[conversationId, deletedAt, createdAt]`) + in-memory upper-bound binary searches.
-   *
-   * Semantics match the canonical single-participant `getUnreadCount` and
-   * `getUnreadCountsForUser`: exclude **the participant's own** messages (`senderId ≠ p.id`),
-   * NOT the new message's sender. (The previous `senderId ≠ <message sender>` predicate
-   * under-reported — in a 1:1 it pushed 0 unread on every incoming message — and diverged
-   * from the authoritative `getUnreadCountsForUser`. See iter 46 / F23b.)
-   *
-   * Counting floor per participant: `cursor.lastReadMessageCreatedAt (position)
-   * → cursor.lastReadAt (legacy) → joinedAt → null` (no floor). The chronological
-   * position — not the wall-clock `lastReadAt` — keeps messages skipped by an
-   * exact partial-prefix read counted (design lecture-exacte §3).
-   * The `findMany` lower bound is the OLDEST floor across participants, so only the
-   * messages any participant could count are fetched once; a `null` floor (never read,
-   * no `joinedAt`) drops the bound entirely.
+   * for every recipient. Thin orchestrator around the ONE shared calculation
+   * (`computeUnreadCounts`, `./unreadCountsCore` — #7199): this method's only job is to
+   * batch-load what is specific to ITS axis — cursors + personal hiding keyed by
+   * PARTICIPANT, since every participant here shares the same conversation — into
+   * `UnreadFloor[]` (via `unreadFloorFor`), then hand them to the same counting core
+   * `getUnreadCountsForUser` also calls. Before #7199 the two methods computed this
+   * independently (a `findMany` + binary search here, N `message.count()` there);
+   * see the module doc-comment of `unreadCountsCore.ts` for why that mattered — this
+   * method feeds `conversation:unread-updated`, the live push, while
+   * `getUnreadCountsForUser` feeds the list, and a badge that changes value depending
+   * on which path last spoke is worse than either alone.
    *
    * Personal hiding is loaded IN PARALLEL with the cursors (2 extra indexed queries,
    * zero extra latency, and none at all for a conversation whose participants are all
-   * anonymous — the normal shape behind a share link). It then splits in two, because
-   * the two halves of the hiding cost very differently:
-   *
-   *   - a **history cut-off** is just a stricter floor. It folds into the participant's
-   *     own `floorMs` via `exclusiveFloorMsFor`, so those participants stay on the shared
-   *     binary search AND raise the query's lower bound — strictly less work than before;
-   *   - **individually hidden messages** cannot be expressed as a bound, so those
-   *     participants — and only those — take a linear pass over the rows, and only they
-   *     make the query select message ids.
-   *
-   * Applying the hiding HERE and not only on the list path is what keeps the two badges
-   * from contradicting each other: this method feeds `conversation:unread-updated`, the
-   * live push, while `getUnreadCountsForUser` feeds the list. Fixing one alone would
-   * replace a wrong-but-stable badge with a badge that changes value depending on which
-   * path last spoke.
+   * anonymous — the normal shape behind a share link).
    *
    * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
    * (id + userId + joinedAt) to avoid redundant participant lookups.
@@ -355,117 +346,15 @@ export class MessageReadStatusService {
         cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
       );
 
-      // Per-participant counting floor (ms). `cursor position → joinedAt → null`
-      // — identical reduction to the single-participant
-      // `(lastReadMessageCreatedAt ?? lastReadAt) ?? p.joinedAt ?? null` — then
-      // raised by the reader's own history cut-off, which is nothing but a
-      // stricter floor once restated as an exclusive bound.
-      const floors = participants.map((p) => {
-        const hiding = (p.userId ? hidingByUser.get(p.userId) : undefined) ?? NO_PERSONAL_HIDING;
-        const readFloorMs = ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null;
-        const cutoffMs = exclusiveFloorMsFor(hiding);
-        const floorMs =
-          cutoffMs === null ? readFloorMs : readFloorMs === null ? cutoffMs : Math.max(readFloorMs, cutoffMs);
-        return {
-          id: p.id,
-          floorMs,
-          hiddenMessageIds: hiding.hiddenMessageIds.length > 0 ? new Set(hiding.hiddenMessageIds) : null,
-        };
-      });
-
-      // Only a reader who hid INDIVIDUAL messages needs the rows to carry their ids.
-      // Everyone else — the overwhelming majority — keeps the exact projection this
-      // method has always fetched.
-      const needsMessageIds = floors.some((f) => f.hiddenMessageIds !== null);
-
-      // A null floor counts every candidate message (no lower bound). If ANY participant
-      // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
-      // Reduce (not `Math.min(...spread)`): this fires on the hottest path
-      // (`_updateUnreadCounts` on EVERY `message:new`) and `floors` has one entry per
-      // participant. A public/global conversation at the platform's 100k+ scale can exceed
-      // V8's argument-spread ceiling (~131k), where `Math.min(...arr)` throws
-      // `RangeError: Maximum call stack size exceeded` — swallowed by the catch below,
-      // silently zeroing unread counts for the whole conversation. `reduce` is O(n) with no
-      // per-argument stack cost, so it holds for any group size.
-      const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
-      const minFloorMs = hasUnboundedFloor
-        ? null
-        : floors.reduce(
-            (min, f) => ((f.floorMs as number) < min ? (f.floorMs as number) : min),
-            Infinity
-          );
-
-      // ONE query for all participants. No `senderId` filter here — the "exclude my own
-      // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
-      // walks the index in order, so per-sender buckets stay ascending.
-      const rows = (await this.prisma.message.findMany({
-        where: {
-          conversationId,
-          deletedAt: null,
-          ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
-        },
-        select: needsMessageIds
-          ? { id: true, createdAt: true, senderId: true }
-          : { createdAt: true, senderId: true },
-        orderBy: { createdAt: "asc" },
-      })) as Array<{ id?: string; createdAt: Date; senderId: string }>;
-
-      // All candidate timestamps (ascending) + per-sender buckets, so each participant's
-      // own messages can be subtracted. `countAbove` is a binary search that assumes
-      // ascending order and runs on BOTH `allTimestamps` AND every `bySender` bucket, so
-      // BOTH must be sorted. The DB already returns index order (`orderBy createdAt asc`),
-      // but sorting both is a defensive net that keeps the result correct regardless of
-      // source ordering — sorting only the total while leaving the per-sender subtrahend
-      // in raw row order would miscount the own-message cut (yielding a bogus, even
-      // negative, unread count) the moment rows ever arrived unordered.
-      const allTimestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
-      const bySender = new Map<string, number[]>();
-      for (const r of rows) {
-        const bucket = bySender.get(r.senderId);
-        if (bucket) bucket.push(r.createdAt.getTime());
-        else bySender.set(r.senderId, [r.createdAt.getTime()]);
-      }
-      for (const bucket of bySender.values()) bucket.sort((a, b) => a - b);
-
-      // countAbove(ts, F) = number of timestamps strictly > F. Upper-bound binary search on
-      // an ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors
-      // `createdAt: { gt: floor }` (a message at exactly the floor is not counted). `null`
-      // floor counts the whole array.
-      const countAbove = (sorted: number[], floorMs: number | null): number => {
-        if (floorMs === null) return sorted.length;
-        let lo = 0;
-        let hi = sorted.length;
-        while (lo < hi) {
-          const mid = (lo + hi) >>> 1;
-          if (sorted[mid] > floorMs) hi = mid;
-          else lo = mid + 1;
-        }
-        return sorted.length - lo;
-      };
-
-      // unread(p) = (all messages after p's floor) − (p's OWN messages after p's floor).
-      // Both `allTimestamps` and each bucket are sorted ascending above, so the same
-      // binary search is valid on either.
-      //
-      // A reader who hid individual messages cannot be counted by a bound — set
-      // membership is not an interval — so they fall to a linear pass over the same
-      // rows. `hiddenMessageIds !== null` implies `needsMessageIds`, so `r.id` is
-      // present exactly where it is read.
-      const countExcludingHidden = (f: (typeof floors)[number], hidden: Set<string>): number =>
-        rows.filter(
-          (r) =>
-            r.senderId !== f.id &&
-            (f.floorMs === null || r.createdAt.getTime() > f.floorMs) &&
-            !hidden.has(r.id as string)
-        ).length;
-
-      return new Map(
-        floors.map((f) => {
-          if (f.hiddenMessageIds !== null) return [f.id, countExcludingHidden(f, f.hiddenMessageIds)];
-          const own = bySender.get(f.id) ?? [];
-          return [f.id, countAbove(allTimestamps, f.floorMs) - countAbove(own, f.floorMs)];
-        })
+      const floors = participants.map((p) =>
+        unreadFloorFor(
+          p,
+          cursorMap.get(p.id) ?? null,
+          (p.userId ? hidingByUser.get(p.userId) : undefined) ?? NO_PERSONAL_HIDING
+        )
       );
+
+      return await computeUnreadCounts(this.prisma, conversationId, floors);
     } catch (error) {
       logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
       return new Map(participants.map((p) => [p.id, 0]));
@@ -474,16 +363,23 @@ export class MessageReadStatusService {
 
   /**
    * Calcule le unreadCount pour plusieurs conversations d'un utilisateur.
-   * Version optimisée iter-4 : 2 + N requêtes au lieu de 4 × N.
-   *   1. participant.findMany  — résout les Participants du user (1 query)
-   *   2. cursor.findMany       — batch tous les cursors (1 query)
-   *   3. message.count × N    — comptage en parallèle (N queries)
-   * Returns 0 for any conversation in which the participant cannot be resolved.
    *
-   * Le masquage personnel est chargé PAR CONVERSATION (2 requêtes batchées) :
-   * une coupure d'historique appartient à un couple (utilisateur, conversation),
-   * jamais à l'utilisateur seul. Appliquer la coupure d'une conversation aux
-   * autres viderait des badges qui n'ont rien à se reprocher.
+   * Orchestrateur symétrique de `getUnreadCountsForParticipants` autour du MÊME calcul
+   * partagé (`computeUnreadCounts` — #7199) : ici l'axe batché est la CONVERSATION (un
+   * utilisateur, N conversations) plutôt que le PARTICIPANT (une conversation, N
+   * participants). Curseurs et masquage personnel restent chargés PAR CONVERSATION —
+   * ce que `loadPersonalHistoryHidingByConversation` sait déjà faire en 2 requêtes
+   * batchées, contrat inchangé — puis chaque conversation appelle le calcul séparément
+   * (en parallèle, `Promise.all`) : `computeUnreadCounts` porte sur UNE conversation à
+   * la fois, sa borne `message.findMany` ne se partage pas entre conversations
+   * différentes.
+   *
+   * Le masquage personnel est chargé PAR CONVERSATION : une coupure d'historique
+   * appartient à un couple (utilisateur, conversation), jamais à l'utilisateur seul.
+   * Appliquer la coupure d'une conversation aux autres viderait des badges qui n'ont
+   * rien à se reprocher.
+   *
+   * Returns 0 for any conversation in which the participant cannot be resolved.
    */
   async getUnreadCountsForUser(
     userId: string,
@@ -533,23 +429,31 @@ export class MessageReadStatusService {
         cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
       );
 
-      // 3. Parallel message counts — one per participant (= one per conversation)
+      // 3. Un participant par conversation dans ce chemin (résolution ci-dessus,
+      // OR id/userId) — grouper reste correct si jamais deux lignes visaient la
+      // même conversation (la dernière conversation calculée gagne, comme l'ancien
+      // `unreadCounts.set` appelé en boucle).
+      const byConversation = new Map<string, typeof participants>();
+      for (const p of participants) {
+        const bucket = byConversation.get(p.conversationId);
+        if (bucket) bucket.push(p);
+        else byConversation.set(p.conversationId, [p]);
+      }
+
+      // 4. Une conversation = un appel au calcul partagé, tous en parallèle.
       await Promise.all(
-        participants.map(async (p) => {
-          const cursorFloor = cursorMap.get(p.id) ?? null;
-          const floor: Date | null = cursorFloor ?? p.joinedAt ?? null;
-          const count = await this.prisma.message.count({
-            where: applyPersonalHistoryHiding(
-              {
-                conversationId: p.conversationId,
-                deletedAt: null,
-                senderId: { not: p.id },
-                ...(floor ? { createdAt: { gt: floor } } : {}),
-              },
+        Array.from(byConversation.entries()).map(async ([conversationId, group]) => {
+          const floors = group.map((p) =>
+            unreadFloorFor(
+              p,
+              cursorMap.get(p.id) ?? null,
               hidingByConversation.get(p.conversationId) ?? NO_PERSONAL_HIDING
-            ),
-          });
-          unreadCounts.set(p.conversationId, count);
+            )
+          );
+          const counts = await computeUnreadCounts(this.prisma, conversationId, floors);
+          for (const p of group) {
+            unreadCounts.set(conversationId, counts.get(p.id) ?? 0);
+          }
         })
       );
 
@@ -1309,155 +1213,18 @@ export class MessageReadStatusService {
    * ouverture). Résilient : ne jette jamais — une erreur ici ne doit pas faire
    * échouer le marquage du curseur.
    */
-  private async freezeMessageStatus(params: {
-    participantId: string;
-    conversationId: string;
-    since: Date | null;
-    at: Date;
-    field: "readAt" | "deliveredAt";
-    /**
-     * Restreint le gel aux messages réellement affichés. Une liste VIDE est
-     * significative — « rien n'a été affiché » — et ne retombe donc pas sur la
-     * fenêtre. Seule l'absence du paramètre déclenche le repli historique.
-     * Réservé à `readAt` : un message récupéré est livré même s'il n'a jamais
-     * été affiché, donc la fenêtre reste correcte pour `deliveredAt`.
-     */
-    messageIds?: readonly string[];
-    /**
-     * Version linguistique affichée au lecteur. Contrairement à l'horodatage,
-     * elle n'est PAS write-once : un lecteur qui bascule sur la traduction a
-     * réellement consulté les deux versions, et les deux doivent apparaître.
-     * Ignorée pour `deliveredAt` — une livraison n'a pas de langue.
-     */
-    language?: string | null;
-    /**
-     * EXCEPTIONS à `language`, par message. La langue rendue n'est pas toujours
-     * celle que le lecteur préfère : sans traduction disponible, c'est
-     * l'ORIGINAL qui s'affiche. Le client ne déclare que ce qui diffère.
-     */
-    messageLanguages?: Readonly<Record<string, string>>;
-    /** @returns nombre d'entrées RÉELLEMENT figées par cet appel. */
-  }): Promise<number> {
-    const { participantId, conversationId, since, at, field, messageIds } = params;
-    const defaultLanguage =
-      field === "readAt" ? normalizeLanguageCode(params.language) : undefined;
-    const perMessage = field === "readAt" ? params.messageLanguages : undefined;
-    const languageFor = (messageId: string): string | undefined =>
-      normalizeLanguageCode(perMessage?.[messageId]) ?? defaultLanguage;
-    const anyLanguage = Boolean(defaultLanguage) || Boolean(perMessage && Object.keys(perMessage).length);
-    try {
-      const messages = await this.prisma.message.findMany({
-        where: {
-          // Ces trois gardes tiennent dans les deux modes : une liste d'ids
-          // forgée par un client ne permet pas de marquer lu un message d'une
-          // autre conversation, supprimé, ou émis par le participant lui-même.
-          conversationId,
-          deletedAt: null,
-          senderId: { not: participantId },
-          ...(messageIds
-            ? { id: { in: [...messageIds] } }
-            : { createdAt: { lte: at, ...(since ? { gt: since } : {}) } }),
-        },
-        select: { id: true },
-      });
-
-      if (messages.length === 0) return 0;
-      const ids = messages.map((m) => m.id);
-
-      const existing = await this.prisma.messageStatusEntry.findMany({
-        where: { messageId: { in: ids }, participantId },
-        select: {
-          messageId: true,
-          deliveredAt: true,
-          readAt: true,
-          viewedLanguages: true,
-        },
-      });
-      const existingIds = new Set(existing.map((e) => e.messageId));
-      const toCreate = ids.filter((id) => !existingIds.has(id));
-
-      let frozen = 0;
-      if (toCreate.length > 0) {
-        const created = await this.prisma.messageStatusEntry.createMany({
-          data: toCreate.map((messageId) =>
-            field === "readAt"
-              ? {
-                  messageId,
-                  conversationId,
-                  participantId,
-                  readAt: at,
-                  ...(languageFor(messageId)
-                    ? { viewedLanguages: [languageFor(messageId) as string] }
-                    : {}),
-                }
-              : {
-                  messageId,
-                  conversationId,
-                  participantId,
-                  deliveredAt: at,
-                  receivedAt: at,
-                }
-          ),
-        });
-        frozen += created?.count ?? toCreate.length;
-      }
-
-      // Write-once: ne renseigne le champ que sur les entrées où il est encore
-      // nul (ex: une entrée créée par la livraison reçoit ensuite son `readAt`).
-      const toUpdate = existing
-        .filter((e) => (field === "readAt" ? e.readAt === null : e.deliveredAt === null))
-        .map((e) => e.messageId);
-
-      if (toUpdate.length > 0) {
-        const updated = await this.prisma.messageStatusEntry.updateMany({
-          where:
-            field === "readAt"
-              ? { messageId: { in: toUpdate }, participantId, readAt: null }
-              : { messageId: { in: toUpdate }, participantId, deliveredAt: null },
-          data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
-        });
-        frozen += updated?.count ?? toUpdate.length;
-      }
-
-      // La langue s'UNIONNE, là où l'horodatage se fige. Seules les entrées qui
-      // ne la connaissent pas encore sont réécrites : sur le chemin courant — le
-      // lecteur ne change pas de langue entre deux lots — cette passe n'écrit
-      // rien du tout. Les entrées créées ci-dessus l'ont déjà reçue.
-      if (anyLanguage) {
-        // Regroupé par langue : un lot lu d'une traite n'en compte qu'une, donc
-        // un seul `updateMany`. Les exceptions (message resté dans sa langue
-        // d'origine faute de traduction) forment les groupes suivants.
-        const byLanguage = new Map<string, string[]>();
-        for (const entry of existing) {
-          const code = languageFor(entry.messageId);
-          if (!code) continue;
-          // Re-normalise l'existant via le SSOT avant la dédup : une locale
-          // complète héritée (`fr-FR`) désigne la même version que `fr`, et ne
-          // doit ni rouvrir un push doublon ni gonfler le plafond.
-          const known = mergeViewedLanguages(entry.viewedLanguages, []);
-          if (known.includes(code)) continue;
-          if (known.length >= MAX_VIEWED_LANGUAGES) continue;
-          byLanguage.set(code, [...(byLanguage.get(code) ?? []), entry.messageId]);
-        }
-
-        for (const [code, ids] of byLanguage) {
-          await this.prisma.messageStatusEntry.updateMany({
-            where: { messageId: { in: ids }, participantId },
-            data: { viewedLanguages: { push: code } },
-          });
-        }
-      }
-
-      return frozen;
-    } catch (error) {
-      logger.error(
-        `[MessageReadStatus] freezeMessageStatus(${field}) failed for participant ${participantId} in conversation ${conversationId}:`,
-        error
-      );
-      // Ne jette jamais : une erreur de gel ne doit pas faire échouer le
-      // marquage du curseur. Rien n'a été figé, le compte est donc nul.
-      return 0;
-    }
+  /**
+   * Le gel per-message vit désormais dans `messaging/freezeMessageStatus.ts`
+   * (#7451) — ce service pèse deux fois le plafond de 1 200 lignes, et le lot du
+   * décompte éphémère devait précisément ajouter ICI : c'est la première
+   * RÉCEPTION d'un message qui démarre le décompte, et cette fonction est le
+   * seul point du dépôt qui la connaisse (les cinq chemins de réception
+   * convergent tous sur `markMessagesAsReceived`, donc sur elle).
+   *
+   * Ce relais garde les deux appelants internes inchangés.
+   */
+  private async freezeMessageStatus(params: FreezeMessageStatusParams): Promise<number> {
+    return freezeMessageStatus(this.prisma, params);
   }
 
   /**
@@ -2055,7 +1822,7 @@ export class MessageReadStatusService {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { createdAt: true, conversationId: true },
+        select: { createdAt: true, conversationId: true, senderId: true },
       });
 
       if (!message) throw new Error("Message not found");
@@ -2069,7 +1836,10 @@ export class MessageReadStatusService {
       // See `getMessageReadStatus` for the rationale: avoid `include` to
       // prevent Prisma from crashing on orphan cursors.
       const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: { conversationId: message.conversationId },
+        where: {
+          conversationId: message.conversationId,
+          participantId: { not: message.senderId },
+        },
         select: {
           participantId: true,
           lastDeliveredAt: true,
@@ -2100,10 +1870,16 @@ export class MessageReadStatusService {
       // `cleanupObsoleteCursors` ne doit pas effacer un reçu de livraison/lecture
       // figé. Les rows participant sont résolues sur l'union — pas seulement sur
       // les ids de curseurs — sinon l'info d'affichage (displayName/avatar) du
-      // participant figé-seul manquerait.
+      // participant figé-seul manquerait. L'expéditeur est exclu DES DEUX
+      // sources (curseurs filtrés ci-dessus, entrées figées filtrées ici) :
+      // il ne figure ni dans ses propres « Reçu par » ni « Vu par » — même
+      // règle que `getMessageReadStatus` (§ « Denominator = active recipients
+      // EXCLUDING the sender »).
       const evaluatedParticipantIds = Array.from(new Set([
         ...cursors.map(c => c.participantId),
-        ...frozenEntries.map(e => e.participantId),
+        ...frozenEntries
+          .filter(e => e.participantId !== message.senderId)
+          .map(e => e.participantId),
       ]));
 
       const allParticipants = evaluatedParticipantIds.length
@@ -2266,6 +2042,13 @@ export class MessageReadStatusService {
        * disparaissent, y compris le demandeur.
        */
       viewerUserId?: string;
+      /**
+       * #7357 — plancher d'historique du lecteur. Un attachment antérieur
+       * au plancher n'existe pas pour ce lecteur — même erreur que
+       * l'absence, pour que les deux cas restent indiscernables de
+       * l'extérieur.
+       */
+      historyFloor?: Date | null;
     } = {}
   ): Promise<{
     statuses: Array<{
@@ -2312,9 +2095,21 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all", viewerUserId } = options;
+    const { offset = 0, limit = 20, filter = "all", viewerUserId, historyFloor = null } = options;
 
     try {
+      // #7357 — même garde que `getMessageStatusDetails` (#4179). Un attachment
+      // orphelin (`messageId` nul) n'a pas d'historique à ouvrir : refusé.
+      const attachment = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { message: { select: { createdAt: true } } },
+      });
+
+      if (!attachment?.message) throw new Error("Attachment not found");
+      if (historyFloor && attachment.message.createdAt < historyFloor) {
+        throw new Error("Attachment not found");
+      }
+
       const whereClause: any = { attachmentId };
       if (filter === "viewed") whereClause.viewedAt = { not: null };
       else if (filter === "downloaded")
@@ -2462,14 +2257,13 @@ export class MessageReadStatusService {
     attachmentId: string,
     options?: {
       playPositionMs?: number;
-      listenDurationMs?: number;
       complete?: boolean;
       /** Écoutes réellement continues depuis le dernier rapport. */
       stretches?: readonly unknown[];
       /** Version linguistique consommée (piste traduite, transcription). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     return this.media.markAudioAsListened(participantId, attachmentId, options);
   }
 
@@ -2478,14 +2272,13 @@ export class MessageReadStatusService {
     attachmentId: string,
     options?: {
       watchPositionMs?: number;
-      watchDurationMs?: number;
       complete?: boolean;
       /** Visionnages réellement continus depuis le dernier rapport. */
       stretches?: readonly unknown[];
       /** Version linguistique consommée (sous-titres, piste doublée). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     return this.media.markVideoAsWatched(participantId, attachmentId, options);
   }
 

@@ -40,7 +40,7 @@ export function useTypists(conversationId: string, viewerId: string): readonly T
  * est borné par `sameRowProps` (`components/lens-row.tsx`) : une rangée dont le
  * `typist` reste `undefined` ne se re-rend PAS, même si l'écran l'a fait.
  */
-export function useTypistNames(viewerId: string): Readonly<Record<string, string>> {
+export function useTypistNames(viewerId: string): Readonly<Record<string, readonly string[]>> {
   const byConversation = useStore(typingStore, (s) => s.byConversation);
   return useMemo(() => typistNamesOf({ byConversation }, viewerId, Date.now()), [byConversation, viewerId]);
 }

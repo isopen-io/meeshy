@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
 
 /**
@@ -35,6 +35,18 @@ import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
  *     RE-MESURER au redimensionnement. Options `onScroll`/`onResize`.
  */
 
+/** Le coin haut-gauche d'une ancre, en coordonnées de fenêtre — la seule
+ *  grandeur qu'un défilement change et qu'un événement en vol laisse
+ *  INCHANGÉE. `null` quand il n'y a pas d'ancre : le menu se ferme alors
+ *  comme avant, sans rien deviner. */
+type Corner = { readonly top: number; readonly left: number };
+
+function cornerOf(element: HTMLElement | null | undefined): Corner | null {
+  if (element === null || element === undefined) return null;
+  const rect = element.getBoundingClientRect();
+  return { top: rect.top, left: rect.left };
+}
+
 /**
  * Prochain index ATTEIGNABLE à partir de `start`, dans `direction` — jamais
  * un index désactivé. Boucle jusqu'à `count` tentatives avant d'abandonner
@@ -63,8 +75,20 @@ export type RovingMenuOptions = {
   readonly isDisabledAt?: (index: number) => boolean;
   /** L'index de départ à l'ouverture — défaut : la première ligne ATTEIGNABLE. */
   readonly computeInitialIndex?: () => number;
-  /** `RowActions` referme ; `ReadingModeChip` remesure. Ni l'un ni l'autre par défaut. */
-  readonly onScroll?: () => void;
+  /** `RowActions` referme ; `ReadingModeChip` remesure. Ni l'un ni l'autre par défaut.
+   * Reçoit l'ÉVÉNEMENT : le menu du message a besoin de sa CIBLE pour
+   * distinguer le défilement du lecteur de celui que l'application vient
+   * d'écrire (`programmatic-scroll.ts`).
+   *
+   * N'EST APPELÉ QUE SI L'ANCRE A BOUGÉ (#7293, voir `anchor`). */
+  readonly onScroll?: (event: Event) => void;
+  /**
+   * CE QUI ANCRE LE MENU À L'ÉCRAN — le déclencheur (`buttonRef`) par
+   * défaut, la RANGÉE pour le menu du message. `useRovingMenu` la mesure au
+   * commit qui ouvre le menu, et ne transmet un `scroll` que lorsqu'elle a
+   * RÉELLEMENT bougé depuis (#7293).
+   */
+  readonly anchor?: () => HTMLElement | null;
   readonly onResize?: () => void;
   /**
    * OÙ REND LE FOCUS À LA FERMETURE (#5814) — `RowActions`/`ReadingModeChip`
@@ -129,20 +153,49 @@ export type RovingMenu = {
 };
 
 export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
-  const { itemCount, isDisabledAt = () => false, computeInitialIndex, onScroll, onResize, returnFocusTo } = options;
+  const { itemCount, isDisabledAt = () => false, computeInitialIndex, onScroll, onResize, returnFocusTo, anchor } = options;
   const [open, setOpen] = useState(options.initialOpen ?? false);
   const [activeIndex, setActiveIndex] = useState(0);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
+  /** LE COIN DE L'ANCRE tel que le menu l'a placé — voir `cornerOf`. */
+  const placedAt = useRef<Corner | null>(null);
 
   const closeAndFocusButton = () => {
     setOpen(false);
     (returnFocusTo?.() ?? buttonRef.current)?.focus();
   };
 
-  // Échap + clic/appui hors du menu.
-  useEffect(() => {
+  /**
+   * LES SORTIES SONT POSÉES DANS LE COMMIT QUI INSÈRE LE MENU (#7293) —
+   * `useLayoutEffect`, jamais `useEffect`.
+   *
+   * Un effet PASSIF les posait APRÈS la peinture : sous `preact/compat` — le
+   * runtime que le `dist` servi embarque — un effet passif est différé par un
+   * `requestAnimationFrame`, avec un `setTimeout` de 100 ms pour seule
+   * garantie. Entre le commit et cette image, le menu est DANS le document,
+   * visible et focalisé, et ni Échap ni un appui hors du menu ne trouvent le
+   * moindre écouteur : la touche n'est pas différée, elle est PERDUE, et le
+   * menu reste ouvert pour toujours.
+   *
+   * Mesuré au navigateur sur `/c/c-deploiement` : `contextmenu` sur une
+   * rangée, puis `Escape` dans la MÊME tâche que le montage (attente du
+   * portail par `MutationObserver`, donc en microtâches, aucune image
+   * intercalée) ⇒ le menu survit et le focus ne revient jamais à la rangée —
+   * les DEUX témoins « Échap » de `check-thread-states.mjs` § 6.3 bis, ceux
+   * que la CI rendait rouges sur `dev` lui-même pendant que le banc local
+   * restait vert (son image arrive en 14 ms, avant les allers-retours du
+   * témoin).
+   *
+   * C'est la leçon de #6319, tirée douze lignes plus bas dans le même
+   * composant : `useBackDismiss` pose son entrée d'historique en
+   * `useLayoutEffect` « pour qu'aucune image ne montre la couche sans que le
+   * retour lui appartienne ». La même phrase vaut pour Échap et pour le clic
+   * hors du menu — une couche modale est INSÉPARABLE de ses sorties, et le
+   * correctif est un ORDRE, jamais un délai de grâce.
+   */
+  useLayoutEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -155,7 +208,39 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
-    const scrollTarget = onScroll;
+    /**
+     * UN DÉFILEMENT QUI N'A PAS BOUGÉ L'ANCRE N'EST PAS UN DÉFILEMENT CONTRE
+     * CE MENU (#7293).
+     *
+     * Un `scroll` n'est pas livré à l'écriture qui le provoque : le
+     * navigateur l'émet à l'image suivante. Amener le déclencheur en vue
+     * (`.focus()`, un clic sur une rangée hors fenêtre) PUIS ouvrir le menu
+     * pose donc un événement EN VOL qui atterrit APRÈS le commit — et qui
+     * refermait aussitôt un menu que personne n'avait touché.
+     *
+     * Mesuré au navigateur, journal de la page : `scroll top=239` (mise en
+     * vue) · `scroll top=351` (ancrage bas) · commit du menu · **`scroll
+     * top=239`** treize millisecondes plus tard, pour une écriture
+     * ANTÉRIEURE au menu.
+     *
+     * La question n'est donc pas « un défilement est-il arrivé ? » mais
+     * « l'ancre a-t-elle bougé ? » — c'est déjà la raison d'être de cette
+     * fermeture : « un panneau immobile qui suit un défilement désignerait
+     * la mauvaise rangée ». Un événement en vol rapporte la position que le
+     * placement a DÉJÀ prise en compte : rien n'a bougé, il n'y a rien à
+     * fermer. Une comparaison de POSITIONS, jamais un délai de grâce.
+     */
+    placedAt.current = cornerOf(anchor?.() ?? buttonRef.current);
+    const scrollTarget =
+      onScroll === undefined
+        ? undefined
+        : (event: Event) => {
+            const before = placedAt.current;
+            const now = cornerOf(anchor?.() ?? buttonRef.current);
+            placedAt.current = now;
+            if (before !== null && now !== null && Math.abs(now.top - before.top) < 1 && Math.abs(now.left - before.left) < 1) return;
+            onScroll(event);
+          };
     const resizeTarget = onResize;
     if (scrollTarget) document.addEventListener('scroll', scrollTarget, true);
     if (resizeTarget) window.addEventListener('resize', resizeTarget);

@@ -47,49 +47,6 @@ nonisolated enum ComposerPublishMenuRule {
         case unsupported
     }
 
-    /// **Plus d'une image OU au moins une vidéo** — la directive, au mot près.
-    ///
-    /// Ce n'est pas `ReelComposition.qualifiesAsReel` : celui-là exige 3 s de
-    /// vidéo et compte le son. Une vidéo d'une seconde ouvre le menu ; un son
-    /// seul ne l'ouvre pas.
-    static func offersMenu(mediaKinds: [FeedMediaType]) -> Bool {
-        mediaKinds.filter { $0 == .image }.count > 1 || mediaKinds.contains(.video)
-    }
-
-    /// **Les médias visuels de la composition, toutes slides confondues.**
-    ///
-    /// Un média du meuble vit à DEUX endroits dès qu'il est posé sur la scène :
-    /// `documentLocalMedia` et un objet de slide. Le pont `URL source → objet`
-    /// (`bridgedSources`) dit lesquels sont déjà comptés par les slides — sans
-    /// lui, une seule photo ouvrirait le menu. L'image de FOND de l'atelier ne
-    /// vit pas dans `effects` ; elle compte comme l'image qu'elle est.
-    static func mediaKinds(slides: [StorySlide],
-                           slideImageIds: Set<String>,
-                           documentMedia: [ComposerDocumentMedia],
-                           bridgedSources: Set<URL>) -> [FeedMediaType] {
-        let objets: [FeedMediaType] = slides.flatMap { slide in
-            (slide.effects.mediaObjects ?? []).compactMap { objet -> FeedMediaType? in
-                switch objet.kind {
-                case .image: return .image
-                case .video: return .video
-                case nil: return nil
-                }
-            }
-        }
-        let fonds = slides.filter { slideImageIds.contains($0.id) }.map { _ in FeedMediaType.image }
-        let meuble: [FeedMediaType] = documentMedia
-            .filter { !bridgedSources.contains($0.url) }
-            .map { media in
-                switch ComposerIngestRouter.route(mime: media.mimeType) {
-                case .image: return .image
-                case .video: return .video
-                case .audio: return .audio
-                case .file: return .document
-                }
-            }
-        return objets + fonds + meuble
-    }
-
     /// **Le canal document porte-t-il tous les fichiers du canevas ?**
     ///
     /// Il ne téléverse que `localMedia`. Un objet posé par l'ATELIER — ou son
@@ -126,16 +83,20 @@ nonisolated enum ComposerPublishMenuRule {
             }
     }
 
-    /// **Le menu, ou son absence.** `nil` sans la matière qui l'appelle, et
-    /// `nil` quand il n'offrirait qu'un geste : une entrée unique sans
-    /// sous-menu est une affordance sans choix (loi 4).
-    static func menu(mediaKinds: [FeedMediaType],
-                     candidates: [ComposerFormat],
+    /// **Le chevron, ou son absence** (#7497, directive porteur 2026-09-22 :
+    /// « [publier story/réel/post | v] — la flèche permet de choisir le type ;
+    /// si on n'y touche pas, on publie comme indiqué »).
+    ///
+    /// Il ne dépend plus de la matière (#6502 l'ouvrait à partir de deux
+    /// images ou d'une vidéo) : le TYPE se choisit toujours, et la partie
+    /// principale de la capsule publie au format de la porte. `nil` quand il
+    /// n'offrirait qu'un geste : une entrée unique sans sous-menu est une
+    /// affordance sans choix (loi 4) — le mood, qui n'offre que lui-même.
+    static func menu(candidates: [ComposerFormat],
                      offered: [ComposerFormat],
                      carriesMoreThanText: Bool,
                      slideCount: Int,
                      layoutsTravel: Bool) -> [Entry]? {
-        guard offersMenu(mediaKinds: mediaKinds) else { return nil }
         let menu = entries(candidates: candidates, offered: offered,
                            carriesMoreThanText: carriesMoreThanText,
                            slideCount: slideCount, layoutsTravel: layoutsTravel)
@@ -173,6 +134,22 @@ nonisolated enum ComposerPublishMenuCopy {
                defaultValue: "Ouvre le choix du format et de la disposition", bundle: .main)
     }
 
+    /// **Ce que dit la partie principale de la capsule** (#7497) — le format
+    /// qui partira si l'auteur ne touche pas au chevron. `nil` pour le mood :
+    /// son en-tête dit « Publier », il n'a aucun autre format à nommer.
+    static func publishTitle(_ format: ComposerFormat) -> String? {
+        switch format {
+        case .story:
+            return String(localized: "composer.publish.as.story", defaultValue: "Publier la story", bundle: .main)
+        case .post:
+            return String(localized: "composer.publish.as.post", defaultValue: "Publier le post", bundle: .main)
+        case .reel:
+            return String(localized: "composer.publish.as.reel", defaultValue: "Publier le réel", bundle: .main)
+        case .status:
+            return nil
+        }
+    }
+
     /// Un `SwiftUI.Menu` n'expose pas de sous-titre : le refus porte sa raison
     /// dans le libellé, sinon il dit « non » sans dire quoi faire.
     static func entryTitle(_ entry: ComposerPublishMenuRule.Entry) -> String {
@@ -182,7 +159,7 @@ nonisolated enum ComposerPublishMenuCopy {
     }
 }
 
-/// **La flèche Publier devenue menu.** `Menu` natif : le système le rend en
+/// **Le chevron de la capsule Publier** (#7497). `Menu` natif : le système le rend en
 /// verre liquide sur iOS 26 et garde sa forme sur iOS 16 à 25 ; un `Menu` dans
 /// un `Menu` donne le sous-menu dépliable. VoiceOver et Dynamic Type suivent
 /// sans rien réécrire.

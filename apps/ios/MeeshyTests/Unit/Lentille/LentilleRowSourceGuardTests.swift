@@ -420,40 +420,33 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         }
     }
 
-    /// Les huit chemins, nommés un par un — pour que l'échec DÉSIGNE la
-    /// branche perdue plutôt qu'un « la structure a changé » global. Chacun
-    /// doit vivre à l'intérieur du mux (`line2`) ou d'une fonction que le
-    /// mux appelle (`previewLine`/`standardPreview`) : c'est ce point de
-    /// passage unique qui garantit qu'aucune branche rare ne diverge.
-    func test_allEightPreviewBranches_liveInsideTheLine2Mux() throws {
+    /// Les quatre chemins du mux, nommés un par un — pour que l'échec DÉSIGNE
+    /// la branche perdue. La préview, elle, n'a plus de branches ICI : sa
+    /// nature, ses détails et ses protections sont COMPOSÉS par le SDK
+    /// (`ConversationPreviewComposer`, #7548), qui rejoue le fichier de cas
+    /// commun au web. Une rangée qui relirait les champs bruts du dernier
+    /// message recomposerait à côté, et la ligne iOS divergerait de la ligne
+    /// web sans qu'aucun cas commun ne rougisse.
+    func test_theLine2Mux_keepsItsFourBranches_andThePreviewIsComposedBySDK() throws {
         let code = normalizedCode(try rowSource())
         guard let muxStart = code.range(of: "private var line2: some View {") else {
             XCTFail("le mux `line2` est introuvable — la garde doit être re-pointée")
             return
         }
-        guard let senderStart = code.range(of: "private var senderLabel: some View {", range: muxStart.upperBound..<code.endIndex) else {
-            XCTFail("borne de fin (senderLabel) introuvable — la garde doit être re-pointée")
-            return
-        }
-        let muxThroughPreview = String(code[muxStart.lowerBound..<senderStart.lowerBound])
-
-        let branches = [
+        let mux = String(code[muxStart.lowerBound...])
+        for (label, needle) in [
             ("typing", "case .typing:"),
             ("brouillon", "case .draft:"),
             ("pont ✦", "case .bridge:"),
-            ("aperçu (racine)", "case .preview:"),
-            ("expiré", "case .expired:"),
-            ("masqué", "case .hidden:"),
-            ("vue unique", "case .viewOnce:"),
-            ("éphémère actif", "case .ephemeralActive:"),
-            ("standard", "case .standard:"),
-        ]
-        for (label, needle) in branches {
-            XCTAssertTrue(
-                muxThroughPreview.contains(needle),
-                "La branche « \(label) » (\(needle)) n'est plus dans la région couverte par le " +
-                "mux `line2` — elle divergerait alors du rendu commun sans qu'aucun autre " +
-                "témoin ne rougisse."
+            ("aperçu", "case .preview:"),
+        ] {
+            XCTAssertTrue(mux.contains(needle), "La branche « \(label) » (\(needle)) a quitté le mux `line2`.")
+        }
+        XCTAssertTrue(code.contains("ConversationPreviewLine("), "la préview doit être peinte par ConversationPreviewLine")
+        for relic in ["lastMessageSummaryKind()", "lastMessageAttachments", "lastMessageLocation", "AttachmentDisplay.make(", "lastMessageSenderName"] {
+            XCTAssertFalse(
+                code.contains(relic),
+                "La rangée relit `\(relic)` : elle recompose la préview à côté du composeur (#7548)."
             )
         }
     }

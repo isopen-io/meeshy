@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { Avatar } from './avatar';
+import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
+import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
 import { FeedMediaSurface } from './feed-media-surface';
@@ -239,7 +242,22 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
   );
 }
 
-function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
+/**
+ * **L'HEURE RELATIVE EST LA PORTE DE LA PUBLICATION** (#7284) — l'horodatage
+ * comme lien permanent est la convention de tous les fils du web, et l'élément
+ * était INERTE : on lui donne un effet plutôt que d'en inventer un.
+ *
+ * Elle porte le nom accessible de sa DESTINATION (« Ouvrir la publication de
+ * X »), jamais l'heure : « il y a 2 h » ne dit pas où l'on va, et c'est le
+ * seul contrôle du fil qui y mène pour qui n'y voit pas.
+ *
+ * ELLE EST LA PORTE DE 44, et c'est ce qui rend le calque du corps possible :
+ * `check-profile.mjs` exempte un petit contrôle dont l'adresse a DÉJÀ une
+ * grande porte (`grandesPortes`, dérivée du relevé). Le calque du texte peut
+ * donc faire une ligne de haut sans que rien ne devienne inatteignable.
+ */
+function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail: boolean; readonly hosts: CardHosts }) {
+  const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
       {/* L'AVATAR OUVRE LE PROFIL (#6396). Posé ICI et pas sur la variante
@@ -252,17 +270,43 @@ function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
         name={model.author.name}
         {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
         {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
+        {...(storyRing === undefined ? {} : { storyRing })}
+        {...(mood === undefined ? {} : { mood })}
       />
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
             `FeedPostCard+Header.swift:51-60`. */}
-        <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {model.author.name}
-          </span>
-          <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {model.relativeTime}
-          </span>
+        {/* `items-center` et non `items-baseline` : la porte de 44 ne s'aligne pas
+            sur une ligne de base sans creuser la rangée. L'heure reste sur la
+            LIGNE DU NOM — c'est ce que la vue `1h` prescrit, pas son mode
+            d'alignement. */}
+        <div className="flex items-center gap-1.5">
+          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — y compris l'anneau de
+              story, qui PRIME sur le profil : c'est `identityTarget` qui le
+              tranche, une fois, pour les deux moitiés de l'identité. */}
+          <PersonName
+            name={model.author.name}
+            username={model.author.username}
+            {...(storyRing === undefined ? {} : { storyRing })}
+            className="truncate text-body font-semibold"
+            style={{ color: 'var(--color-ios-ink)' }}
+          />
+          {isDetail ? (
+            <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
+              {model.relativeTime}
+            </span>
+          ) : (
+            <Link
+              to="post"
+              params={{ post: model.id }}
+              aria-label={translate(language, 'feed.post.open', { author: model.author.name })}
+              data-feed-post-open="heure"
+              className="inline-flex shrink-0 items-center text-check focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: 'var(--color-ios-ink-3)', minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+            >
+              {model.relativeTime}
+            </Link>
+          )}
         </div>
         {model.repostOfHandle !== undefined ? (
           <span className="text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
@@ -270,6 +314,9 @@ function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
           </span>
         ) : null}
       </div>
+      {/* LE « ⋯ » EN HAUT À DROITE (#7533) — miroir
+          `FeedPostCard+Header.swift:164-241`, après le `Spacer()`. */}
+      <CardMenu model={model} isDetail={isDetail} tone="card" hosts={hosts} />
     </div>
   );
 }
@@ -360,15 +407,41 @@ function FeedPostText({
 /** Le RÉEL — plein cadre, identité et actions SUR le média, scrim bas (miroir
  * `ReelFeedCard.swift`). Rendu en AFFICHE IMMOBILE : la lecture reste hors
  * tranche (D-42), le média est son propre repli (poster/placeholder). */
-type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler; readonly onComment?: CommentHandler };
+type CardHosts = {
+  readonly onGesture?: GestureHandler;
+  readonly onShare?: ShareHandler;
+  readonly onComment?: CommentHandler;
+  /** Le menu « ⋯ » (#7533) — absent, le bouton ne se monte pas (loi 4). */
+  readonly menu?: PostMenuHost;
+};
 
 /** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
  * refuse de poser une clé optionnelle à `undefined`. */
-const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): CardHosts => ({
+const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): Omit<CardHosts, 'menu'> => ({
   ...(onGesture !== undefined ? { onGesture } : {}),
   ...(onShare !== undefined ? { onShare } : {}),
   ...(onComment !== undefined ? { onComment } : {}),
 });
+
+/** LE « ⋯ » D'UNE CARTE (#7533) — la MÊME pose pour les deux natures, seul le
+ * fond change (`tone`). `null` sans hôte de menu. */
+function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardModel; readonly isDetail: boolean; readonly tone: 'card' | 'overlay'; readonly hosts: CardHosts }) {
+  if (hosts.menu === undefined) return null;
+  return (
+    <FeedPostMenu
+      postId={model.id}
+      authorId={model.author.id}
+      authorName={model.author.name}
+      text={model.text?.full}
+      bookmarked={model.viewer.bookmarked}
+      isDetail={isDetail}
+      tone={tone}
+      menu={hosts.menu}
+      onShare={hosts.onShare}
+      onGesture={hosts.onGesture}
+    />
+  );
+}
 
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
@@ -424,6 +497,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       >
         {translate(language, 'feed.post.reel.chip')}
       </span>
+      {/* LE « ⋯ » EN HAUT À DROITE, AU-DESSUS du lien qui couvre la carte —
+          miroir `ReelFeedCard.swift:297-325` (disque sombre sur le média). */}
+      <div className="absolute top-1 right-1">
+        <CardMenu model={model} isDetail={false} tone="overlay" hosts={hosts} />
+      </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
@@ -462,6 +540,103 @@ type SceneHosts = {
   readonly onOpenScene?: (postId: string, sceneIndex: number) => void;
   readonly registerScene?: (id: string, node: Element | null) => void;
 };
+
+/**
+ * **LE CALQUE QUI OUVRE LA PUBLICATION** (#7284) — LE TEXTE, et le texte seul.
+ *
+ * La fiche `/post/$post` existait, complète et routée, et RIEN dans le fil n'y
+ * menait : le seul lien du dépôt vivait dans `notification-row.tsx`. Une liste
+ * sans son lien rend sa fiche inatteignable, et aucun gate ne le voit — les
+ * témoins de la route passent, ceux de la carte passent, et le produit est
+ * cassé entre les deux.
+ *
+ * **ÉCART ASSUMÉ AVEC iOS, ET IL SE CONSIGNE ICI.** `FeedPostCard.swift`
+ * enferme l'EN-TÊTE *et* le texte dans sa zone tapable
+ * (`.contentShape(Rectangle()).onTapGesture`) ; le web n'enferme que le TEXTE.
+ * Ce n'est pas une infidélité, c'est une contrainte de plateforme :
+ * `contentShape` donne à SwiftUI une zone qui n'entre pas en concurrence avec
+ * les gestes de ses enfants, là où un calque CSS est un CONTRÔLE parmi les
+ * autres. `check-profile.mjs` exige qu'un contrôle POSSÈDE SON CENTRE — ce qui
+ * fait qu'un doigt visant le milieu d'une cible atteint cette cible — et un
+ * calque étiré ne peut pas posséder le sien quand d'autres contrôles vivent
+ * dans sa région. L'en-tête porte l'avatar et le nom, deux `<Link>` : mesuré,
+ * le centre du calque tombait sur le nom de l'auteur (320x568 et 390x844,
+ * pile `A(/u/...)` au-dessus de `A[open](/post/...)`). L'identité SORT donc de
+ * la région couverte, et l'heure relative devient la porte de l'en-tête.
+ * **Ne pas « corriger » cet écart en réétendant le calque à l'en-tête : il
+ * rouvrirait ce défaut.**
+ *
+ * **CE QUI RESTE DEHORS, ET POURQUOI.** iOS sort déjà chaque autre surface du
+ * geste, en l'écrivant : la scène ouvre le PLEIN ÉCRAN (directive porteur
+ * 2026-09-05 — « la scène EST le contenu : la toucher demande à la voir en
+ * grand, pas à lire ses commentaires »), le média a « its own fullscreen
+ * gesture », la rangée d'actions est « not inside the tap target ».
+ *
+ * **LE CALQUE PASSE SOUS, LE TEXTE LAISSE TRAVERSER.** Un `<a>` englobant est
+ * exclu : les mentions, les hashtags et les URL du corps sont DÉJÀ des liens,
+ * et un `<a>` imbriqué se rend sans s'activer — le défaut que #7251 vient de
+ * corriger sur la rangée de conversation. Le calque couvre donc le texte SOUS
+ * lui ; le texte est `pointer-events-none` et ses cibles internes ré-arment le
+ * clic.
+ *
+ * **ET « SOUS » EST UNE QUESTION D'ORDRE DE PEINTURE, PAS D'ORDRE DU DOCUMENT.**
+ * `pointer-events-auto` rend une cible HITTABLE, il ne la REMONTE pas : un
+ * élément ré-armé qu'un calque recouvre reste inatteignable. Un
+ * `position: absolute` peint à l'étape 8 de l'ordre de peinture CSS, le
+ * contenu en flux normal aux étapes 4 à 7. D'où `relative z-[1]` sur
+ * l'enveloppe : elle passe AU-DESSUS du calque avec tous ses descendants tout
+ * en restant TRANSPARENTE au doigt, si bien que le texte tombe toujours sur le
+ * calque et que les mentions gagnent. UN seul élément positionné plutôt qu'un
+ * par cible.
+ *
+ * **LE CALQUE EST LE DOUBLON, L'HEURE EST LE CONTRÔLE.** Deux liens de même
+ * destination se liraient deux fois et prendraient deux tours de clavier : le
+ * calque sort donc de l'arbre d'accessibilité et du parcours (`aria-hidden`,
+ * `tabIndex={-1}`), exactement comme le lien d'avatar dupliqué de
+ * `lens-row.tsx`. Il est GÉNÉREUX au doigt, jamais annoncé ; l'heure est
+ * annoncée, focusable, et fait 44.
+ *
+ * `isDetail` — **LA FICHE NE MÈNE PAS À ELLE-MÊME.** `routes/post.tsx` monte
+ * cette même carte sur le détail. Le défaut par DÉFAUT est le geste PRÉSENT :
+ * un hôte qui arrive demain l'obtient sans rien câbler, là où un rappel à
+ * passer se serait oublié — ce qui est arrivé deux fois à `onComment` (#7113,
+ * `routes/post-card-hosts.test.ts`).
+ */
+function FeedPostOpenZone({
+  postId,
+  isDetail,
+  children,
+}: {
+  readonly postId: string;
+  readonly isDetail: boolean;
+  readonly children: ReactNode;
+}) {
+  if (isDetail) {
+    return <div data-feed-post-open-zone>{children}</div>;
+  }
+  return (
+    <div className="relative" data-feed-post-open-zone>
+      <Link
+        to="post"
+        params={{ post: postId }}
+        aria-hidden
+        tabIndex={-1}
+        draggable={false}
+        data-feed-post-open="corps"
+        className="absolute inset-0"
+        style={{ borderRadius: 12 }}
+      >
+        {null}
+      </Link>
+      <div
+        data-feed-post-open-through
+        className="pointer-events-none relative z-[1] [&_a]:pointer-events-auto [&_button]:pointer-events-auto"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * LE VISUEL D'UN POST (D-78, #6898) — LA SCÈNE d'abord (`model.scene`), le
@@ -557,13 +732,13 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, ...hosts }: { readonly model: FeedCardModel } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
   const active = useIsActiveScene(model.id);
 
-  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
+  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
   // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
   // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
@@ -585,8 +760,12 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} />
-      {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
+      <FeedPostHeader model={model} isDetail={isDetail} hosts={hosts} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
+      {bodyText !== undefined ? (
+        <FeedPostOpenZone postId={model.id} isDetail={isDetail}>
+          <FeedPostText text={bodyText} mentions={model.validatedMentions} />
+        </FeedPostOpenZone>
+      ) : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : la condition porte donc
           sur `model.scene` autant que sur `model.media.length`. */}

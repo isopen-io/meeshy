@@ -200,6 +200,9 @@ struct ReelFeedVideoSurface: View {
         }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(attachment.currentUserConsumption, for: media.id)
         }
         updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`

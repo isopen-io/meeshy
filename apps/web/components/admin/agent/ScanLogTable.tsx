@@ -28,6 +28,7 @@ type ScanLogTableProps = {
 
 export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps) {
   const { t } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [logs, setLogs] = useState<ScanLogSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -153,10 +154,10 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps)
                 {(page - 1) * limit + 1}-{Math.min(page * limit, total)} / {total}
               </span>
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <Button aria-label={tA11y('a11y.previousPage')} variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                   <ChevronLeft className="h-3 w-3" />
                 </Button>
-                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)}>
+                <Button aria-label={tA11y('a11y.nextPage')} variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)}>
                   <ChevronRight className="h-3 w-3" />
                 </Button>
               </div>

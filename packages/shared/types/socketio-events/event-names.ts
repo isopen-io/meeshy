@@ -41,6 +41,29 @@ export const SERVER_EVENTS = {
    * apart (a toast, a distinct log line) can.
    */
   MESSAGE_EXPIRED: 'message:expired',
+  /**
+   * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
+   * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
+   * `user:<destinataire>` (pour ses autres appareils) et vers
+   * `user:<expéditeur>` (la plus tardive des échéances connues).
+   *
+   * Il existe parce que `MESSAGE_NEW` ne PEUT PAS porter l'échéance d'un
+   * éphémère : c'est une diffusion en room, et l'échéance est résolue par
+   * lecteur — `D(u) = réception(u) + ephemeralDuration`. Un message de cinq
+   * minutes reçu quatre minutes après son envoi doit vivre cinq minutes chez
+   * son destinataire, pas une.
+   *
+   * DISTINCT de `MESSAGE_EXPIRED`, qui dit la FIN : celui-ci pose l'échéance,
+   * celui-là retire le message. Un client qui n'en reçoit aucun n'est pas
+   * démuni — il retombe sur `réception locale + ephemeralDuration`
+   * (`utils/ephemeral-deadline.ts`), et c'est le cas nominal du temps réel,
+   * `message:new` ne portant pas d'`expiresAt` pour un éphémère (point 4).
+   *
+   * Un client ne REMPLACE jamais son échéance locale par celle-ci : les deux
+   * concourent et la plus PROCHE gagne. C'est une règle de sécurité — aucune
+   * des deux sources n'a le droit de PROLONGER la vie d'un message protégé.
+   */
+  MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
   // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
   // `message:translation`, et sous ce nom seul. `message:translated` a été
@@ -386,6 +409,16 @@ export const SERVER_EVENTS = {
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
 
+  /**
+   * Étoile PERSONNELLE posée ou retirée sur un message (#7377) — émis par
+   * `PUT`/`DELETE /me/starred-messages/:messageId` vers la room `user:<id>` du
+   * lecteur SEULEMENT, pour que ses autres appareils suivent. Motif de
+   * `post:bookmarked` : un nom, un booléen. Ne porte AUCUN contenu du message :
+   * un appareil qui le reçoit recharge sa liste, qui applique les règles de
+   * ce qui a le droit d'être servi.
+   */
+  MESSAGE_STARRED: 'message:starred',
+
   // --- Delivery queue ---
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
 
@@ -511,6 +544,14 @@ export const SERVER_EVENTS = {
  *
  * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
  * décodés côté clients et attendent le service qui les produira.
+ *
+ * `message:countdown-started` y a figuré le temps d'UN lot : le lot web-v2
+ * #7454 l'a déclaré et réservé pour que les trois clients n'écrivent pas le nom
+ * chacun de leur côté, en annonçant que la réservation tomberait dans le lot qui
+ * poserait l'émetteur. C'est celui-ci (#7451) : la passerelle l'émet depuis
+ * `socketio/ephemeralCountdownAnnouncer.ts`, à la première réception d'un
+ * destinataire — la garde du sens inverse (« keeps the reserved list free of
+ * channels the gateway now emits ») rougirait si la ligne y restait.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,

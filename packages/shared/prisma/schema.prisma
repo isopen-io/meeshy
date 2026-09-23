@@ -402,6 +402,7 @@ model User {
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
+  messageStars       MessageStar[]     @relation("UserMessageStars")
   postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")
   postEngagements    PostEngagement[]  @relation("UserPostEngagements")
 
@@ -577,6 +578,13 @@ model Conversation {
   /// for the same conversation could each pass the "no active call" read
   /// check before either had committed its `CallSession`.
   activeCallId String? @db.ObjectId
+
+  /// La DERNIÈRE réaction posée sur un message de cette conversation (#7545) —
+  /// écrite par `ReactionService.addReaction`, point de convergence des quatre
+  /// transports de réaction, et remise à null quand cette réaction est retirée.
+  /// La ligne de liste la résout en `lastReaction` (auteur, emoji, extrait
+  /// protégé) sans balayer les réactions de la conversation.
+  lastReactionId String? @db.ObjectId
 
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
@@ -936,6 +944,9 @@ model Message {
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
 
+  // Étoiles PERSONNELLES posées sur ce message (#7377) — voir `MessageStar`.
+  stars MessageStar[]
+
   // Phase 4 §6.2 — compound index on (conversationId, clientMessageId)
   // for the dedup `findFirst` query path. The unique-ness constraint
   // itself lives in the partial unique MongoDB index created by
@@ -1232,6 +1243,30 @@ model MessageStatusEntry {
   /// Whether view-once content was revealed/unblurred
   revealedAt   DateTime?
 
+  // ===== DÉCOMPTE ÉPHÉMÈRE (#7451) =====
+  /// `D(u)` — l'échéance de CE destinataire pour un message éphémère,
+  /// `première réception + Message.ephemeralDuration`, gravée write-once au
+  /// premier accusé de réception (directive porteur 2026-09-22 : « les messages
+  /// avec temps décompté ne doivent décompter que lorsque l'utilisateur l'a
+  /// reçu »).
+  ///
+  /// DÉNORMALISÉE alors qu'elle se dérive de `receivedAt` + la colonne du
+  /// message : c'est la clé de balayage. Sans elle, trouver les décomptes échus
+  /// demanderait de joindre `Message` pour CHAQUE entrée, à la minute. Le
+  /// CALCUL, lui, reste unique — `recipientEphemeralDeadline()`
+  /// (`packages/shared/utils/ephemeral-countdown.ts`) est son seul producteur.
+  ///
+  /// Nulle sur tout message non éphémère, et sur tout destinataire qui n'a
+  /// encore rien reçu.
+  ephemeralExpiresAt DateTime?
+  /// Quand l'échéance ci-dessus a été ANNONCÉE à ce destinataire —
+  /// `message:expired` vers sa room personnelle et retrait de ses notifications.
+  ///
+  /// Marqueur d'idempotence du balayage, jamais une échéance : les deux disent
+  /// des choses différentes (ce qui est PRÉVU / ce qui est FAIT) et un balayage
+  /// qui les confondrait rejouerait l'annonce à chaque passe.
+  ephemeralExpiredAt DateTime?
+
   // ===== LANGUE CONSULTÉE =====
   /// Codes des versions linguistiques dans lesquelles ce message a été lu.
   /// Union de la langue résolue au moment de la lecture et des bascules
@@ -1255,6 +1290,10 @@ model MessageStatusEntry {
   @@index([deliveredAt])
   @@index([conversationId, participantId, readAt]) // Comptage non-lus par participant dans une conversation
   @@index([participantId, conversationId]) // Historique lecture d'un participant toutes conversations
+  // #7451 — la clé du balayage des décomptes éphémères échus : « échéance
+  // passée ET annonce pas encore faite ». Sans elle, la passe à la minute
+  // balaierait toute la collection, dont 100 % des entrées non éphémères.
+  @@index([ephemeralExpiresAt, ephemeralExpiredAt])
 }
 
 /// Per-attachment status entry for each user
@@ -3859,6 +3898,35 @@ model PostEngagement {
   @@index([postId])
   @@index([userId])
   @@index([postId, createdAt])
+}
+
+/// Étoile PERSONNELLE d'un lecteur sur un message (#7377) — le favori de
+/// message, jamais l'épingle (`Message.pinnedAt`, commune à la conversation).
+///
+/// Calque de `PostBookmark`. `conversationId` est une COPIE immuable de
+/// `Message.conversationId`, écrite par le serveur depuis la ligne du message
+/// (un message ne change jamais de conversation) : elle permet à la liste de
+/// filtrer la participation COURANTE dans la requête. L'étoile survit au départ
+/// de la conversation ; c'est la LECTURE qui la retire (voir
+/// `services/gateway/decisions.md`, § « Le favori de message »).
+model MessageStar {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  conversationId String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserMessageStars", fields: [userId], references: [id])
+
+  @@unique([userId, messageId])
+  // La liste trie par `(createdAt desc, id desc)` : l'index couvre le keyset
+  // entier, départage compris.
+  @@index([userId, createdAt, id])
+  // La cascade émulée de `onDelete: Cascade` (Prisma sur Mongo) retrouve les
+  // étoiles d'un message par `messageId` seul — sans cet index, chaque
+  // suppression de message balaie la collection.
+  @@index([messageId])
 }
 
 /// Bookmark/sauvegarde d'un post

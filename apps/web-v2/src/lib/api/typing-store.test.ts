@@ -77,15 +77,15 @@ describe('typing-store (#5793) — le réducteur pur de la frappe reçue', () =>
  * 2 de la Lentille, précédence `typing > … > aperçu`
  * (`targets/lentille.md:502-511`). */
 describe('typistNamesOf (#5793) — qui écrit, par conversation', () => {
-  test('rend le nom du PREMIER frappeur vivant de chaque conversation', () => {
+  test('rend TOUS les frappeurs vivants de chaque conversation, dans l’ordre (#7547 — « Alice et Bob écrivent… »)', () => {
     const store = createTypingStore();
     store.getState().start('c-1', { userId: 'u-amina', displayName: 'Amina Diallo' }, 1_000);
     store.getState().start('c-1', { userId: 'u-kwame', displayName: 'Kwame Mensah' }, 1_000);
     store.getState().start('c-2', { userId: 'u-fatou', displayName: 'Fatou Ba' }, 1_000);
 
     expect(typistNamesOf(store.getState(), 'u-viewer', 1_000)).toEqual({
-      'c-1': 'Amina Diallo',
-      'c-2': 'Fatou Ba',
+      'c-1': ['Amina Diallo', 'Kwame Mensah'],
+      'c-2': ['Fatou Ba'],
     });
   });
 

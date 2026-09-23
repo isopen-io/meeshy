@@ -7,7 +7,9 @@ import { useEffect, useState } from 'react';
  * effacer une recherche ne doit pas laisser ses résultats une demi-seconde.
  *
  * Un seul site pour les écrans qui cherchent (communautés, découverte) :
- * deux copies auraient divergé au premier réglage de délai.
+ * deux copies auraient divergé au premier réglage de délai. Le lecteur de
+ * Réels s'en sert aussi pour le réel POSÉ, dont il tient la salle (#7395) :
+ * la même règle — la valeur qui a cessé de bouger — sur un identifiant.
  */
 export function useSettled(value: string, delayMs: number): string {
   const [settled, setSettled] = useState(value);

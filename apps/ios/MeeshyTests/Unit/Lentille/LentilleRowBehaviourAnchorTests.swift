@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -116,75 +117,66 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    // MARK: - L03 — glyphes SF des kinds (expired/hidden/viewOnce) : FERMÉ (V3ter)
+    // MARK: - L03 / L04 / L05 — la préview composée (#7548)
+    //
+    // Les trois ancres lisaient le CODE de branches que la rangée ne porte
+    // plus : la préview est composée par le SDK (`ConversationPreviewComposer`,
+    // qui rejoue le fichier de cas commun au web) et peinte par
+    // `ConversationPreviewLine`. Elles vérifient désormais ce que la ligne
+    // DIT, sur une conversation construite.
+
+    private func composed(_ configure: (inout MeeshyConversation) -> Void) -> ConversationPreview {
+        var row = MeeshyConversation(id: "c", identifier: "c", type: .group,
+                                     lastMessageAt: Date(timeIntervalSince1970: 1_790_000_000),
+                                     lastMessagePreview: "", lastMessageId: "m")
+        row.lastMessageSenderName = "Alice"
+        configure(&row)
+        return ConversationPreviewLine.preview(
+            for: row, viewerId: "u-me", preferredLanguages: ["fr"],
+            now: Date(timeIntervalSince1970: 1_790_000_060)
+        )
+    }
 
     // behaviour-matrix:L03
-    /// FERMÉ (REV-3/V3ter). `ThemedConversationRow.swift` porte les glyphes
-    /// SF `timer`/`eye.slash`/`flame` pour ces branches (lignes ~510/561/573,
-    /// lu seulement, fichier interdit d'édition) — `LentilleConversationRow
-    /// .previewLine` les reproduit désormais (branches `.expired` via
-    /// `timer.badge.xmark`, `.hidden` via `eye.slash`, `.viewOnce` via
-    /// `flame`, `.ephemeralActive` via `timer` dans `standardPreview`) : la
-    /// matrice exige « conservent leurs glyphes SF actuels », le rang plat
-    /// les a retrouvés.
-    func test_L03_previewKindGlyphs_areRestoredToTheFlatRow() throws {
-        let code = normalizedCode(try rowSource())
-        XCTAssertTrue(
-            code.contains("systemName: \"timer\"")
-                || code.contains("systemName: \"eye.slash\"")
-                || code.contains("systemName: \"flame\""),
-            "behaviour-matrix:L03 : « conservent leurs glyphes SF actuels " +
-            "(timer, eye.slash, flame) » — LentilleConversationRow.swift doit rendre au moins " +
-            "un de ces trois glyphes dans previewLine (expired/hidden/viewOnce/ephemeral) : les " +
-            "branches italiques doivent porter leur icône, comme ThemedConversationRow.swift."
-        )
-    }
+    /// Les protections portent le vocabulaire de `MessageProtectionSymbols`
+    /// (#7452) — celui du composeur, où l'utilisateur choisit la protection.
+    func test_L03_protectionGlyphs_comeFromMessageProtectionSymbols() {
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: .viewOnce), MessageProtectionSymbols.viewOnce)
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: .ephemeral), MessageProtectionSymbols.ephemeral)
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: .hidden), MessageProtectionSymbols.blurred)
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: .expired), "timer.badge.xmark")
 
-    // MARK: - L04 — pièces jointes sans texte : icône + méta + « +N », Prisme non appliqué (réel)
+        let viewOnce = composed { $0.lastMessagePreview = "4242"; $0.lastMessageIsViewOnce = true }
+        XCTAssertEqual(viewOnce.icon, .viewOnce)
+        XCTAssertTrue(ConversationPreviewLine.isItalic(viewOnce), "un placeholder de protection se lit en italique")
+        XCTAssertFalse(viewOnce.segments.map(\.text).joined().contains("4242"), "une vue unique ne dit jamais son texte")
+    }
 
     // behaviour-matrix:L04
-    /// Réel. `standardPreview` (branche attachements, aucun texte) rend
-    /// l'icône + le libellé COURT de `AttachmentDisplay` (type figé, SDK
-    /// `MeeshyUI`, jamais résolu par le Prisme — c'est `display.shortLabel`,
-    /// jamais `resolvedPreviewText`), et le compteur « +N » teinté accent
-    /// SEULEMENT au-delà d'une pièce jointe.
-    func test_L04_attachmentOnlyBranch_rendersIconMetaPlusN_neverThroughThePrisme() throws {
-        let code = normalizedCode(try rowSource())
-        XCTAssertTrue(
-            code.contains("let display = AttachmentDisplay.make(for: first.mimeType)"),
-            "L04 : la branche pièces jointes sans texte doit résoudre l'affichage via " +
-            "AttachmentDisplay.make(for:) — icône + méta, jamais du texte libre."
-        )
-        XCTAssertTrue(
-            code.contains("Text(display.shortLabel)"),
-            "L04 : le libellé de la pièce jointe doit venir de display.shortLabel (SDK figé) " +
-            "— jamais de resolvedPreviewText : « le Prisme ne s'applique toujours pas à cette branche »."
-        )
-        XCTAssertTrue(
-            code.contains(#"if totalCount > 1 { Text("+\(totalCount - 1)") .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)) .foregroundColor(accent) }"#),
-            "L04 : le compteur « +N » doit être teinté accent et n'apparaître qu'au-delà " +
-            "d'une pièce jointe."
-        )
+    /// Plusieurs pièces jointes sans texte : la ligne dit leur NOMBRE et leur
+    /// famille (« 2 photos »), jamais un « +N » sans nom.
+    func test_L04_severalAttachmentsWithoutText_sayTheirCountAndFamily() {
+        let preview = composed {
+            $0.lastMessageAttachments = [
+                MeeshyMessageAttachment(id: "a", mimeType: "image/jpeg", fileSize: 1000),
+                MeeshyMessageAttachment(id: "b", mimeType: "image/png", fileSize: 1000),
+            ]
+            $0.lastMessageAttachmentCount = 2
+        }
+        XCTAssertEqual(preview.icon, .photo)
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: preview.icon), "photo")
+        XCTAssertTrue(preview.segments.first?.text.contains("2") ?? false, "\(preview.segments)")
     }
 
-    // MARK: - L05 — fallback de localisation : mappin + nom du lieu (réel)
-
     // behaviour-matrix:L05
-    /// Réel. La branche de repli localisation (`lastMessageLocation`) rend
-    /// `mappin.and.ellipse` teinté accent, suivi du nom du lieu (ou du
-    /// libellé générique de repli) — identique au rang historique.
-    func test_L05_locationFallbackBranch_rendersMappinAndPlaceName() throws {
-        let code = normalizedCode(try rowSource())
-        XCTAssertTrue(
-            code.contains(#"} else if let place = conversation.lastMessageLocation { HStack(spacing: 4) { senderLabel Image(systemName: "mappin.and.ellipse")"#),
-            "L05 : le fallback de localisation doit rester `mappin.and.ellipse`, sur la branche " +
-            "lastMessageLocation — identique au rang historique."
-        )
-        XCTAssertTrue(
-            code.contains(#"Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))"#),
-            "L05 : le nom du lieu (ou son repli générique) doit être affiché — jamais une " +
-            "chaîne vide."
-        )
+    /// Un message position-seule dit « Position » et le nom du lieu, sous
+    /// `mappin.and.ellipse`.
+    func test_L05_locationOnlyMessage_saysThePlaceName() {
+        let preview = composed {
+            $0.lastMessageLocation = SharedPlace(latitude: 48.8, longitude: 2.3, name: "Gare de Lyon")
+        }
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: preview.icon), "mappin.and.ellipse")
+        XCTAssertTrue(preview.segments.contains(.label("Gare de Lyon")), "\(preview.segments)")
     }
 
     // MARK: - L06 — timestamp rouge sur non-lu : FERMÉ, V3ter (le badge, lui, était déjà retiré — voir LentilleFlatRowTests)

@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { uploadAttachments } from './attachments';
+import { fetchAttachmentStatusDetails, reportAttachmentStatus, uploadAttachments } from './attachments';
 import { createHttpTransport } from './http';
 import { resetUploadedAttachmentsForTests } from './fixtures';
+import { apiDeps } from './deps';
 
 beforeAll(() => {
   ensureHappyDomRegistered();
@@ -114,6 +115,80 @@ describe('uploadAttachments — gateway', () => {
  * Ce port pose donc SON délai, et le témoin le mesure par le SIGNAL composé —
  * un transport réglé à 1 ms devrait avoir avorté l'appel, il ne l'a pas.
  */
+describe('fetchAttachmentStatusDetails — gateway', () => {
+  test('GET /api/v1/attachments/:id/status-details, data = tableau, pagination À LA RACINE', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: {
+        success: true,
+        data: [
+          {
+            participantId: 'p1',
+            username: 'Alice',
+            avatar: null,
+            viewedAt: null,
+            downloadedAt: null,
+            listenedAt: '2026-09-21T10:00:00.000Z',
+            watchedAt: null,
+            listenCount: 2,
+            watchCount: 0,
+            listenedComplete: false,
+            watchedComplete: false,
+            lastPlayPositionMs: 4000,
+            lastWatchPositionMs: null,
+            viewCount: 0,
+            viewedLanguages: [],
+          },
+        ],
+        pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+      },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await fetchAttachmentStatusDetails({ source: 'gateway', transport, attachmentId: 'att-1' });
+
+    // `limit` PART TOUJOURS, au plafond de la route : la feuille somme les
+    // lignes servies, une page de vingt fausserait « ouvertures » /
+    // « téléchargements » dès le vingt-et-unième consommateur.
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details?limit=100');
+    expect(calls[0]?.init.method).toBe('GET');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]?.listenCount).toBe(2);
+      expect(result.pagination?.total).toBe(1);
+    }
+  });
+
+  test('offset/limit/filter partent en querystring quand fournis', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [], pagination: { total: 0, limit: 5, offset: 10, hasMore: false } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await fetchAttachmentStatusDetails({ source: 'gateway', transport, attachmentId: 'att-1', offset: 10, limit: 5, filter: 'listened' });
+
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details?offset=10&limit=5&filter=listened');
+  });
+});
+
+describe('fetchAttachmentStatusDetails — fixtures', () => {
+  test('dérivée déterministe de attachmentId, aucun appel réseau', async () => {
+    let called = false;
+    const impl = (async () => {
+      called = true;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const first = await fetchAttachmentStatusDetails({ source: 'fixtures', transport, attachmentId: 'att-voix-1' });
+    const second = await fetchAttachmentStatusDetails({ source: 'fixtures', transport, attachmentId: 'att-voix-1' });
+
+    expect(called).toBe(false);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) expect(first.data).toEqual(second.data);
+  });
+});
+
 describe('uploadAttachments — le délai de garde', () => {
   test('le délai du transport (ici 1 ms) NE s’applique pas au téléversement', async () => {
     const { impl, calls } = fakeFetch({
@@ -124,5 +199,108 @@ describe('uploadAttachments — le délai de garde', () => {
     await uploadAttachments({ source: 'gateway', transport, pending: [{ file: file('a.png', 'image/png') }] });
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(calls[0]?.init.signal?.aborted).toBe(false);
+  });
+});
+
+/**
+ * `reportAttachmentStatus` — LE PORT DU RAPPORT DE CONSOMMATION (#7225).
+ *
+ * Route RÉELLE, citée : `POST /api/v1/attachments/:attachmentId/status`
+ * (`services/gateway/src/routes/messages-writes.ts:588-608`), corps validé
+ * par `AttachmentStatusBodySchema`
+ * (`services/gateway/src/validation/messages-schemas.ts:212-251`).
+ */
+describe('reportAttachmentStatus — le port serveur (#7225)', () => {
+  test('POST /api/v1/attachments/:id/status, corps EXACT — action, positions, durée, complétion, segments', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await reportAttachmentStatus({
+      source: 'gateway',
+      transport,
+      attachmentId: 'att-1',
+      report: {
+        action: 'listened',
+        playPositionMs: 4200,
+        durationMs: 12000,
+        complete: false,
+        stretches: [{ startMs: 0, endMs: 4200, endedBy: 'pause' }],
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status');
+    expect(calls[0]?.init.method).toBe('POST');
+    const body = JSON.parse(String(calls[0]?.init.body));
+    expect(body).toEqual({
+      action: 'listened',
+      playPositionMs: 4200,
+      durationMs: 12000,
+      complete: false,
+      stretches: [{ startMs: 0, endMs: 4200, endedBy: 'pause' }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  test('source fixtures : aucun appel réseau', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const result = await reportAttachmentStatus({
+      source: 'fixtures',
+      transport,
+      attachmentId: 'att-1',
+      report: { action: 'watched', complete: true },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  /**
+   * `action: 'viewed'` (#7363, W6) — le SERVEUR l'accepte depuis toujours
+   * (`AttachmentStatusBodySchema`, `messages-schemas.ts:212`) ; seul le type
+   * CLIENT était resté étroit à `'listened' | 'watched'`.
+   */
+  test('action "viewed" (ouverture d’une image/d’un document) atteint le même port', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await reportAttachmentStatus({
+      source: 'gateway',
+      transport,
+      attachmentId: 'att-2',
+      report: { action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true },
+    });
+
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-2/status');
+    const body = JSON.parse(String(calls[0]?.init.body));
+    expect(body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+    expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * L'INVARIANT DU CORPUS (revue #7363) — `viewCount > 0` ⟺ `viewedAt !== null`.
+ *
+ * La passerelle pose les deux dans la MÊME transaction
+ * (`MessageMediaConsumptionService.markImageAsViewed` : `viewedAt: now,
+ * viewCount: 1` à la création, les deux incrémentés ensuite) : une ligne qui
+ * compte des ouvertures sans en dater aucune n'existe pas en base. Le corpus
+ * de fixtures les tirait SÉPARÉMENT, et ses deux tirages étaient exactement
+ * inverses — la fiche affichait alors « 1 ouverture » ET « Pas encore
+ * ouvert » sur la même pièce. Le témoin balaie un ÉVENTAIL d'identifiants
+ * (le seed dépend des caractères) pour que la propriété tienne sur le
+ * corpus, pas sur un cas heureux.
+ */
+describe('attachmentStatusFixtureOf — le corpus ne contredit pas la passerelle (#7363)', () => {
+  const ids = ['att-fixture-2', 'att-test-6', 'att-doc-1', 'att-1', 'att-2', 'att-3', 'att-4', 'att-5'];
+
+  test('une ligne compte des ouvertures si et seulement si elle en DATE une', async () => {
+    for (const attachmentId of ids) {
+      const result = await fetchAttachmentStatusDetails({ ...apiDeps, attachmentId });
+      if (!result.ok) throw new Error(`la fixture « ${attachmentId} » doit répondre \`ok\``);
+      for (const row of result.data) {
+        expect(`${attachmentId}: viewCount=${row.viewCount} viewedAt=${row.viewedAt === null ? 'null' : 'date'}`).toBe(
+          `${attachmentId}: viewCount=${row.viewCount} viewedAt=${row.viewCount > 0 ? 'date' : 'null'}`,
+        );
+      }
+    }
   });
 });

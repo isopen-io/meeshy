@@ -1,4 +1,4 @@
-import type { FriendRequestBucket, FriendRequestRecord } from '@/lib/api/friend-requests';
+import type { FriendRequestRecord, PersonSummary } from '@/lib/api/friend-requests';
 import type { ServedRelation } from '@/lib/api/public-profile';
 
 /**
@@ -29,16 +29,13 @@ import type { ServedRelation } from '@/lib/api/public-profile';
  * qui interdit le panier `accepted` deux paragraphes plus haut le condamnait,
  * et il n'a tenu que faute d'alternative servie.
  *
- * **CE QUE LA PASSERELLE NE DIT TOUJOURS PAS, ET CE QU'ON N'INVENTE PAS.**
- *
- *  - *L'identifiant de la demande en cours* : `relationAvec` lit
- *    `{ status, senderId }` et jette `id` (`person.ts:81-92`). Accepter,
- *    refuser, annuler en ont besoin. Tant que l'issue gateway compagnon
- *    (`relationRequestId` sur `expand=relation`) n'est pas livrée, l'écran
- *    charge le SEUL panier utile — et seulement quand la relation est en
- *    attente (`bucketNeededFor`). Coût nominal (`none` / `friend` / `self`) :
- *    ZÉRO requête de plus. Tant que l'identifiant manque, le geste est
- *    ANNONCÉ en attente : jamais un bouton mort (loi 4).
+ * **L'IDENTIFIANT DE LA DEMANDE EST SERVI, LUI AUSSI** (#7122). `relationAvec`
+ * lisait `{ status, senderId }` et jetait `id` : accepter, refuser et annuler
+ * n'avaient rien à envoyer, et l'écran chargeait le panier correspondant pour
+ * retrouver la ligne — trois gestes désarmés le temps du vol, pour une colonne
+ * que la passerelle avait déjà en main. Elle sert désormais
+ * `relationRequestId` sur le MÊME fil (`person.ts`), `pendingRequestFrom` en
+ * bâtit la ligne, et il ne reste plus un seul panier derrière cette fiche.
  *
  * L'ordre de résolution est celui d'`UserRelationshipResolver.resolve` puis de
  * `FriendshipCache.status`, repris de `relationshipOf` : soi, bloqué, contact,
@@ -48,10 +45,11 @@ import type { ServedRelation } from '@/lib/api/public-profile';
 /**
  * Le SURENSEMBLE de `Relationship` (`lib/discover/view.ts:27-33`) : même
  * vocabulaire de `kind`, à ceci près qu'une demande en attente peut ne PAS
- * encore porter sa ligne. « Découvrir » bâtit l'état DEPUIS les paniers et a
- * donc toujours la ligne ; le profil bâtit l'état depuis le FIL, qui ne la
- * porte pas. Un type qui l'exigerait forcerait à mentir — rendre « Ajouter »
- * à quelqu'un dont la demande est bien en attente.
+ * porter sa ligne. Le cas nominal la porte depuis #7122 ; ce qui reste est une
+ * passerelle qui ne sert pas encore `relationRequestId`. Exiger la ligne dans
+ * le type forcerait alors à mentir — rendre « Ajouter » à quelqu'un dont la
+ * demande est bien en attente. `actionsFor` répond autrement : sans la ligne,
+ * les gestes qui l'exigent ne sont pas OFFERTS.
  */
 export type ProfileRelation =
   | { readonly kind: 'self' }
@@ -61,7 +59,11 @@ export type ProfileRelation =
   | { readonly kind: 'pendingReceived'; readonly request: FriendRequestRecord | null }
   | { readonly kind: 'none' };
 
-export const PROFILE_ACTION_KINDS = ['add', 'accept', 'reject', 'cancel', 'write', 'block', 'unblock'] as const;
+/* `report` est entré au 2026-09-21 (#7187) — le port `POST /api/v1/reports`
+   existait côté passerelle et n'avait AUCUN appelant. Il se range ici plutôt
+   qu'à côté : la fiche a UNE loi qui décide de ses actions, et un bouton posé
+   hors d'elle serait le doublon qu'elle existe pour empêcher. */
+export const PROFILE_ACTION_KINDS = ['add', 'accept', 'reject', 'cancel', 'write', 'block', 'unblock', 'report'] as const;
 export type ProfileActionKind = (typeof PROFILE_ACTION_KINDS)[number];
 
 export function relationFromServed(params: {
@@ -77,12 +79,42 @@ export function relationFromServed(params: {
   return { kind: 'none' };
 }
 
-/** Le panier à charger pour retrouver la LIGNE de la demande — `null` dans le
- * cas nominal, qui ne paie donc aucune requête de plus. */
-export function bucketNeededFor(served: ServedRelation): FriendRequestBucket | null {
-  if (served === 'pending_received') return 'received';
-  if (served === 'pending_sent') return 'sent';
-  return null;
+/**
+ * **LA LIGNE DE LA DEMANDE, BÂTIE DEPUIS LE FIL** (#7122) — `null` hors
+ * attente, et `null` sans identifiant.
+ *
+ * Les gestes relationnels parlent en `FriendRequestRecord` parce qu'ils
+ * écrivent aussi les PANIERS que « Découvrir » lit (`friend-actions.ts`) ;
+ * la fiche, elle, ne reçoit que l'identifiant et le SUJET. Le sens de la
+ * demande se lit sur `served` : reçue ⇒ l'autre est l'expéditeur, envoyée ⇒
+ * c'est le lecteur.
+ *
+ * **`createdAt` n'est pas sur le fil, et c'est assumé.** Il ne sert qu'à
+ * l'insertion OPTIMISTE dans le panier des acceptées, que la réponse de la
+ * passerelle remplace aussitôt (`performRespondToRequest`) — le même arbitrage
+ * que la ligne provisoire de `performSendRequest`, qui l'horodate déjà ainsi.
+ */
+export function pendingRequestFrom(params: {
+  readonly served: ServedRelation;
+  readonly requestId: string | null;
+  readonly person: PersonSummary;
+  readonly viewerId: string | null;
+}): FriendRequestRecord | null {
+  const { served, requestId, person, viewerId } = params;
+  if (requestId === null) return null;
+  if (served !== 'pending_received' && served !== 'pending_sent') return null;
+  const recue = served === 'pending_received';
+  const moi = viewerId ?? '';
+  return {
+    id: requestId,
+    senderId: recue ? person.id : moi,
+    receiverId: recue ? moi : person.id,
+    status: 'pending',
+    message: null,
+    createdAt: new Date().toISOString(),
+    sender: recue ? person : null,
+    receiver: recue ? null : person,
+  };
 }
 
 /**
@@ -101,18 +133,29 @@ export function bucketNeededFor(served: ServedRelation): FriendRequestBucket | n
  *    ses huit motifs, pas un bouton de plus. Issue compagnon.
  */
 export function actionsFor(relation: ProfileRelation): readonly ProfileActionKind[] {
+  /* SANS SA LIGNE, UN GESTE N'EST PAS OFFERT (#7122) — il l'était, DÉSACTIVÉ,
+     le temps qu'un panier arrive ; le panier a disparu, et ce qui reste est
+     une passerelle qui ne sert pas encore `relationRequestId`. Un bouton qui
+     ne pourrait QUE échouer ment (loi 4) ; la bannière de contexte, elle, dit
+     toujours de quoi il s'agit. */
+  const sansLigne =
+    (relation.kind === 'pendingReceived' || relation.kind === 'pendingSent') && relation.request === null;
+  if (sansLigne) return ['write', 'block', 'report'];
   switch (relation.kind) {
+    /* SIGNALER EST OFFERT PARTOUT SAUF SUR SOI (#7187) — y compris sur un
+       compte qu'on a BLOQUÉ : bloquer met fin au contact, signaler prévient la
+       modération, et l'un n'a jamais valu l'autre. */
     case 'self':
       return [];
     case 'blocked':
-      return ['unblock'];
+      return ['unblock', 'report'];
     case 'friend':
-      return ['write', 'block'];
+      return ['write', 'block', 'report'];
     case 'pendingSent':
-      return ['cancel', 'write', 'block'];
+      return ['cancel', 'write', 'block', 'report'];
     case 'pendingReceived':
-      return ['accept', 'reject', 'write', 'block'];
+      return ['accept', 'reject', 'write', 'block', 'report'];
     case 'none':
-      return ['add', 'write', 'block'];
+      return ['add', 'write', 'block', 'report'];
   }
 }

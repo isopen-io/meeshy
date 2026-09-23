@@ -4,6 +4,7 @@ import type { Message, Participant } from '@/lib/api/types';
 import type { SentMessageAck } from '@/lib/api/messages';
 import { attachmentPreviewOf, type PendingAttachment } from './attachments';
 import { protectionFieldsOf, type ComposeProtection } from './compose-protection';
+import type { SharedPlace } from './shared-place';
 
 /**
  * LE MESSAGE LOCAL (#5813, étape 3) — la forme optimiste, avant confirmation.
@@ -18,7 +19,31 @@ import { protectionFieldsOf, type ComposeProtection } from './compose-protection
  * l'identifiant SERVEUR et `clientMessageId` reste le local, pour la même
  * raison.
  */
-export type LocalMessage = Message & { readonly clientMessageId: string };
+export type LocalMessage = Message & {
+  readonly clientMessageId: string;
+  /**
+   * LE LIEU, SUR LE MESSAGE (#7328) — le champ que la passerelle HISSE sur
+   * tout message qui en porte un (`messages-list.ts:687-692` en REST,
+   * `MessageHandler.ts:1354` et `MeeshySocketIOManager.ts:3010-3019` en temps
+   * réel), et que `placeOf` (`lib/view/message-body.ts`) lit pour les DEUX
+   * peaux. Il n'est pas déclaré sur le `Message` de `@meeshy/shared` — voir
+   * § « ce qui reste » de #7328 : le fil le porte, le type ne le dit pas
+   * encore, et ce lot n'a pas le droit d'y toucher.
+   *
+   * #7280 le rangeait sur l'ENTRÉE d'outbox et non ici, avec un motif écrit :
+   * « un client ne compose pas le champ du domaine ». Le motif était juste sur
+   * ce qui PART (le corps du POST porte un `location` DÉDIÉ, que le serveur
+   * seul valide) et faux sur ce qui S'AFFICHE : la bulle optimiste est rendue
+   * depuis ce `LocalMessage`, et un lieu qu'elle ne porte pas est un lieu que
+   * son expéditeur n'a AUCUN moyen de voir — ni avant l'accusé, ni après,
+   * `confirmedMessageOf` n'étalant que le local.
+   *
+   * C'est donc le même statut que `clientMessageId` ci-dessus : porté À CÔTÉ,
+   * pour que ce que l'on voit et ce qui part viennent d'UNE seule source
+   * (`bodyOf`, `perform-send.ts`, le relit plutôt que de recomposer).
+   */
+  readonly location?: SharedPlace;
+};
 
 export function localMessageOf(input: {
   readonly clientMessageId: string;
@@ -66,6 +91,10 @@ export function localMessageOf(input: {
    * historiques : tout à `false`/`0`, comme avant ce lot).
    */
   readonly protection?: ComposeProtection;
+  /** LE LIEU ATTACHÉ (#7328) — `undefined` ⇒ clé `location` ABSENTE, jamais
+   * `null` posé (`exactOptionalPropertyTypes`, même discipline que
+   * `replyToId`). */
+  readonly place?: SharedPlace;
   readonly now: Date;
 }): LocalMessage {
   const protection = protectionFieldsOf(input.protection ?? {}, input.now.getTime());
@@ -97,6 +126,7 @@ export function localMessageOf(input: {
     ...(input.attachments === undefined || input.attachments.length === 0
       ? {}
       : { attachments: input.attachments.map(attachmentPreviewOf) }),
+    ...(input.place === undefined ? {} : { location: input.place }),
     createdAt: input.now,
     timestamp: input.now,
   };

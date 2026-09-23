@@ -1,9 +1,10 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { ReelPage } from '@/components/reel-page';
+import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
@@ -14,24 +15,28 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, shouldLoadMoreReels } from '@/lib/reels/thread';
-import { useSearch } from '@/lib/router';
+import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { useRoute } from '@/lib/router';
+import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useSettled } from '@/lib/view/use-settled';
 import { href, navigate } from '@/routes/route-table';
 
 /**
  * LES RÉELS (#6457) — miroir de `ReelsPlayerView` et `ReelsViewModel` (iOS) :
  * un pager VERTICAL plein écran, un réel à la fois.
  *
- * - **Ouverture instantanée** : les réels déjà reçus par le Flux (et la graine,
- *   si le détail d'une publication l'a déjà lue) se peignent au premier rendu,
- *   sans requête ; le fil de la passerelle (`scope=reels`, affinité à la graine)
- *   s'ajoute DERRIÈRE. Un squelette n'apparaît qu'à cache vide, ou le temps de
- *   lire une graine inconnue (lien profond) — la poser après coup en tête
- *   déplacerait le réel regardé.
+ * - **Ouverture instantanée** : les réels déjà reçus par le Flux, et la graine
+ *   dès qu'une caisse du registre la porte (`card-caches.ts` : hashtag, profil,
+ *   enregistrées, fiche — #7384), se peignent au premier rendu ; le fil de la
+ *   passerelle (`scope=reels`, affinité à la graine) s'ajoute DERRIÈRE. Un
+ *   squelette n'apparaît qu'à cache vide, ou le temps de lire une graine
+ *   inconnue (lien profond) — la poser après coup en tête déplacerait le réel
+ *   regardé.
  * - **Le défilement est celui du navigateur** : `scroll-snap` obligatoire, un
  *   arrêt par réel (`snap-always`). Le geste reste sur le compositeur — aucun
  *   suivi du doigt réécrit en JavaScript, aucune transition qui l'amortit. Le
@@ -51,8 +56,23 @@ import { href, navigate } from '@/routes/route-table';
  *   cet écran s'y superposait (mesuré à la capture, 320 × 568) : un même état
  *   ne se dit qu'une fois, au même endroit que partout ailleurs. Seul le cache
  *   FROID a son état dessiné ici, parce qu'il n'y a alors rien d'autre à voir.
+ * - **UNE salle de publication, celle du réel où le lecteur S'ARRÊTE** (#7395,
+ *   #6485) — miroir de `ReelsViewModel.currentId` (iOS : quitter l'ancienne,
+ *   rejoindre la nouvelle, aucune pour les voisins préchargés). C'est elle qui
+ *   apporte au lecteur non ami de l'auteur la traduction du texte et les
+ *   comptes en direct. Un défilement d'un trait traverse plusieurs pages sans
+ *   s'y poser (`scroll-snap`, une image par page lue) : la salle attend que le
+ *   réel visible soit POSÉ (`REEL_ROOM_SETTLE_MS`). Chaque `post:join` et
+ *   `post:leave` puise dans le seau par utilisateur de la passerelle
+ *   (`PostReactionHandler`, 30 par minute, partagé avec les réactions) —
+ *   rejoindre les réels traversés le viderait pour rien.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
+
+/** Assez long pour qu'un défilement d'un trait ne se pose sur aucune des pages
+ * qu'il traverse, assez court pour que la salle soit tenue bien avant la fin
+ * d'un réel. */
+const REEL_ROOM_SETTLE_MS = 400;
 
 const KEY_DIRECTION: Readonly<Record<string, 'next' | 'previous'>> = {
   ArrowDown: 'next',
@@ -73,8 +93,6 @@ function hasUserActivation(): boolean {
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-
-const nonEmpty = (value: string | null): string | undefined => (value !== null && value !== '' ? value : undefined);
 
 export function ReelsBackButton({ language, onBack }: { readonly language: InterfaceLanguage; readonly onBack: () => void }) {
   return (
@@ -150,8 +168,12 @@ export function ReelsFailure({ language, online, onRetry }: { readonly language:
 
 export default function ReelsScreen() {
   const language = currentInterfaceLanguage();
-  const [search] = useSearch();
-  const seed = nonEmpty(search.get('seed'));
+  /* DEUX ADRESSES, UNE GRAINE (#7298) — `/reels?seed=<id>` (le Flux) et
+     `/reel/<id>` (le lien que la passerelle grave à chaque partage) ouvrent le
+     MÊME écran ; `reelSeedOf` est le seul endroit qui décide laquelle nomme le
+     réel d'entrée. */
+  const { params, search } = useRoute();
+  const seed = reelSeedOf({ params, search });
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
@@ -160,13 +182,21 @@ export default function ReelsScreen() {
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
      et ses bascules (aimer, enregistrer) s'y reflètent. */
+  const queryClient = useQueryClient();
   const feed = useInfiniteQuery({ ...feedQuery(apiDeps), enabled: false });
   const feedPosts = feed.data ?? EMPTY_POSTS;
   const [entryIds] = useState(() => entryReelIds({ ...(seed !== undefined ? { seedId: seed } : {}), feedPosts }));
-  const seedCached = seed !== undefined && feedPosts.some((post) => post.id === seed);
+  /* LA GRAINE EST CONNUE DE TOUTE CAISSE QUI LA PEINT (#7384) — le Flux, un
+     hashtag, un profil, les enregistrées, la fiche : la MÊME recherche que la
+     fiche (`cachedCardSeed`), datée de sa caisse. La requête naît alors
+     réussie, et sa fraîcheur (`PUBLICATION_STALE_TIME`) juge l'âge RÉEL de la
+     carte : récente, aucune relecture ; ancienne, une relecture en fond, sous
+     le réel déjà peint. Une graine qu'aucune caisse ne porte (lien profond) se
+     lit, et le squelette tient le temps de la lire. */
   const seedPost = useQuery({
     ...postQueryOptions({ ...apiDeps, postId: seed ?? '' }),
-    enabled: seed !== undefined && !seedCached,
+    ...cachedCardSeed(queryClient, seed ?? ''),
+    enabled: seed !== undefined,
     retry: false,
   });
   const reels = useInfiniteQuery(reelsQuery(apiDeps, seed));
@@ -187,6 +217,7 @@ export default function ReelsScreen() {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
+  usePublicationRoom(useSettled(models[active]?.id ?? '', REEL_ROOM_SETTLE_MS));
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -302,12 +333,24 @@ export function ReelsFrame({
   readonly children: React.ReactNode;
 }) {
   return (
-    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
-      {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
-          absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
-          document — après le fil, il fallait traverser chaque réel monté. */}
-      <ReelsBackButton language={language} onBack={onBack} />
-      {children}
+    <div data-reels className="h-dvh overflow-hidden bg-black text-white">
+      {/* LA COLONNE DES RÉELS (#7449) — `REEL_COLUMN_STYLE`
+          (`lib/view/reading-column.ts`) : un réel est en 9:16, sa largeur utile
+          est donc `hauteur × 9/16` et tout le reste n'est que du noir — du noir
+          qui éloigne le rail d'actions du regard et du pouce. Elle porte le
+          `relative` : le bouton « Retour » et les états plein cadre
+          (`StateFrame`, `ReelsSkeleton`) s'ancrent à la COLONNE, pas à la
+          fenêtre, sinon les contrôles partiraient au bord opposé.
+
+          Aux deux gabarits que les gates mesurent, elle ne retire rien :
+          844 × 9/16 = 474 (> 390) et 568 × 9/16 = 319,5 (≈ 320). */}
+      <div data-reels-column className="relative h-full" style={REEL_COLUMN_STYLE}>
+        {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
+            absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
+            document — après le fil, il fallait traverser chaque réel monté. */}
+        <ReelsBackButton language={language} onBack={onBack} />
+        {children}
+      </div>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

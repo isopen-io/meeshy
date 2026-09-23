@@ -373,15 +373,15 @@ class ConversationListViewModel: ObservableObject {
         persistTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(debounce))
             guard !Task.isCancelled else { return }
-            // Cache .save() est devenu throwing (Wave 1 Local-First) :
-            // utilise try? pour preserver le comportement historique
-            // best-effort. Une defaillance d'ecriture (encryption, disque
-            // plein) est loggee par GRDBCacheStore et ne doit pas casser
-            // le persist debounce.
-            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
-            await CacheCoordinator.shared.conversations.saveCursor(
-                nextCursor: cursor, hasMore: more, for: "list"
-            )
+            // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
+            // voir `ConversationListLastMessage.persisting`.
+            let store = await CacheCoordinator.shared.conversations
+            if await store.load(for: "list").snapshot() == nil {
+                try? await store.savePreservingFreshness(snapshot, for: "list")
+            } else {
+                await store.update(for: "list") { ConversationListLastMessage.persisting(snapshot, over: $0) }
+            }
+            await store.saveCursor(nextCursor: cursor, hasMore: more, for: "list")
             #if DEBUG
             await MainActor.run { self?.persistCallCount += 1 }
             #endif
@@ -755,7 +755,7 @@ class ConversationListViewModel: ObservableObject {
                 isPinned: conversation.userState.isPinned && conversation.userState.sectionId == nil,
                 categoryId: conversation.userState.sectionId,
                 orderInCategory: conversation.userState.orderInCategory.map { Double($0) },
-                lastMessageAt: conversation.lastMessageAt,
+                lastMessageAt: conversation.listActivityAt,
                 updatedAt: conversation.updatedAt,
                 liveCall: nil
             )
@@ -791,8 +791,8 @@ class ConversationListViewModel: ObservableObject {
     /// Ordre total de la liste de conversations. Épinglées d'abord ; parmi les
     /// non-épinglées, les conversations avec un brouillon actif flottent en
     /// tête (brouillon le plus récemment édité d'abord) ; le reste retombe sur
-    /// `lastMessageAt` décroissant. Les épinglées conservent leur tri
-    /// `lastMessageAt` — la priorité brouillon ne s'applique qu'aux
+    /// `listActivityAt` décroissant (une réaction à MON message compte, #7548).
+    /// Les épinglées aussi — la priorité brouillon ne s'applique qu'aux
     /// non-épinglées.
     nonisolated static func conversationsAreInOrder(
         _ a: Conversation,
@@ -800,14 +800,14 @@ class ConversationListViewModel: ObservableObject {
         draftSummaries: [String: DraftSummary]
     ) -> Bool {
         if a.userState.isPinned != b.userState.isPinned { return a.userState.isPinned }
-        if a.userState.isPinned && b.userState.isPinned { return a.lastMessageAt > b.lastMessageAt }
+        if a.userState.isPinned && b.userState.isPinned { return a.listActivityAt > b.listActivityAt }
         let aHasDraft = draftSummaries[a.id] != nil
         let bHasDraft = draftSummaries[b.id] != nil
         if aHasDraft != bHasDraft { return aHasDraft }
         if let aDraft = draftSummaries[a.id], let bDraft = draftSummaries[b.id] {
             return aDraft.updatedAt > bDraft.updatedAt
         }
-        return a.lastMessageAt > b.lastMessageAt
+        return a.listActivityAt > b.listActivityAt
     }
 
     // MARK: - Sync Engine Observation
@@ -2145,7 +2145,7 @@ class ConversationListViewModel: ObservableObject {
     /// `ConversationReadSignal` : le compteur affiché doit rester la propriété
     /// de `store.apply(.markAsRead)`, qui le remet à sa valeur d'avant sur un
     /// 4xx. Passer par le bus poserait un zéro hors du store, que le rollback
-    /// ne saurait plus reprendre. Les autres surfaces (ouverture d'écran,
+    /// ne saurait plus reprendre. Les autres surfaces (rattrapage du fil,
     /// quick-action push, widget) ne mutent rien côté serveur par ce chemin et
     /// utilisent le signal partagé.
     func markAsRead(conversationId: String) async {
@@ -2497,7 +2497,7 @@ class ConversationListViewModel: ObservableObject {
                 self.clearUnreadLocally(cid)
                 // Corrige le `ConversationStore` (RAM, tiers) : ce store
                 // n'apprend autrement jamais qu'une
-                // conversation vient d'être lue par CE chemin (ouverture,
+                // conversation vient d'être lue par CE chemin (rattrapage,
                 // quick-action push, widget — tous postent `.conversationMarkedRead`,
                 // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
                 // prochaine republication — déclenchée par N'IMPORTE QUELLE
@@ -2545,11 +2545,11 @@ class ConversationListViewModel: ObservableObject {
     }
 
     /// Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
-    /// (#6921). La clé est celle du fil (`focal.row.you`) et non une clé neuve :
-    /// c'est le MÊME mot produit, déjà traduit dans les sept langues — en créer
-    /// une seconde n'aurait ajouté qu'une occasion de la laisser partiellement
-    /// traduite, et le français serait alors servi aux six autres.
-    static let youAuthorLabel = String(localized: "focal.row.you", bundle: .main)
+    /// (#6921) — « Vous : », clé `message.author.self` de la matrice validée
+    /// (#7548), traduite dans les sept langues. Le fil garde son « Toi »
+    /// (`focal.row.you`) : la liste vouvoie, comme ses autres libellés.
+    /// Posé dans le SDK au démarrage (`MeeshyApp`), qui le relaie partout.
+    static let youAuthorLabel = String(localized: "message.author.self", defaultValue: "Vous", bundle: .main)
 
     /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
     /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`

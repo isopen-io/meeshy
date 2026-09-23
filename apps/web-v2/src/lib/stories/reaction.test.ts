@@ -84,3 +84,8 @@ describe('hasReactedToStory — ce que le cœur du rail peint', () => {
     expect(hasReactedToStory(undefined, '❤️')).toBe(false);
   });
 });
+
+/* `applyServedStoryReaction` (#7227, W8) — la jumelle SERVIE de
+ * `toggleStoryReaction` — est testée dans `lib/api/reaction-realtime.test.ts`,
+ * PAS ici : elle vit dans un module SÉPARÉ pour ne pas peser sur le chunk
+ * `story_reader` (voir le doc-comment de tête de `reaction-realtime.ts`). */

@@ -1,10 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
 import { badgesOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText } from './message-badges';
 
-const NOW = new Date('2026-09-10T10:00:00.000Z').getTime();
+/* Les trois libellés de transfert viennent du catalogue (#7337) ; `translate()`
+   LÈVE sur un catalogue non chargé, par contrat (`i18n-catalog.ts`). */
+beforeAll(async () => {
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en')]);
+});
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -36,9 +42,7 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
         forwardedFromId: 'm-far',
         forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
         isEdited: true,
-      }),
-      NOW,
-    );
+      }));
 
     expect(badges).toEqual([
       { kind: 'pinned' },
@@ -48,10 +52,10 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
   });
 
   test('un message nu ne porte aucun badge', () => {
-    expect(badgesOf(message(), NOW)).toEqual([]);
+    expect(badgesOf(message())).toEqual([]);
   });
 
-  test('un `expiresAt` futur place l’éphémère en 3ᵉ position, AVANT « modifié »', () => {
+  test('l’ORDRE tient sans l’éphémère, qui a quitté cette loi (#7454)', () => {
     const badges = badgesOf(
       message({
         pinnedAt: new Date('2026-09-10T09:30:00.000Z'),
@@ -59,16 +63,22 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
         forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
         expiresAt: new Date('2026-09-10T11:00:00.000Z'),
         isEdited: true,
-      }),
-      NOW,
-    );
+      }));
 
-    expect(badges.map((b) => b.kind)).toEqual(['pinned', 'forwarded', 'ephemeral', 'edited']);
+    expect(badges.map((b) => b.kind)).toEqual(['pinned', 'forwarded', 'edited']);
   });
 
-  test('un `expiresAt` déjà échu ne pose aucun badge éphémère', () => {
-    const badges = badgesOf(message({ expiresAt: new Date('2026-09-10T09:00:00.000Z') }), NOW);
-    expect(badges.some((b) => b.kind === 'ephemeral')).toBe(false);
+  /**
+   * `expiresAt` NE DIT PLUS qu'un message décompte (#7454) : sur `message:new`
+   * il est absent pour un éphémère, et l'échéance qui vaut se compose depuis la
+   * RÉCEPTION locale (`resolveEphemeralDeadline`). Cette loi ne doit donc plus
+   * en produire aucun badge — sinon la présence du badge et le calcul du
+   * décompte reposeraient sur deux conditions différentes.
+   */
+  test('aucun `expiresAt`, futur ou échu, ne pose de badge ici', () => {
+    for (const expiresAt of [new Date('2026-09-10T11:00:00.000Z'), new Date('2026-09-10T09:00:00.000Z')]) {
+      expect(badgesOf(message({ expiresAt })).map((b) => b.kind)).toEqual([]);
+    }
   });
 });
 
@@ -145,13 +155,28 @@ describe('forwardAttributionOf — la liste blanche iOS', () => {
 
 describe('forwardLabelOf', () => {
   test('anonymous ⇒ « Transféré »', () => {
-    expect(forwardLabelOf({ kind: 'anonymous' })).toBe('Transféré');
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'fr')).toBe('Transféré');
   });
   test('group("Salon") ⇒ « Transféré depuis Salon »', () => {
-    expect(forwardLabelOf({ kind: 'group', name: 'Salon' })).toBe('Transféré depuis Salon');
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'fr')).toBe('Transféré depuis Salon');
   });
   test('person("Bruno") ⇒ « Transféré de Bruno »', () => {
-    expect(forwardLabelOf({ kind: 'person', name: 'Bruno' })).toBe('Transféré de Bruno');
+    expect(forwardLabelOf({ kind: 'person', name: 'Bruno' }, 'fr')).toBe('Transféré de Bruno');
+  });
+
+  /**
+   * LE TÉMOIN QUI NE POUVAIT PAS EXISTER AVANT (#7337) — le libellé était EN
+   * DUR : `forwardLabelOf` rendait du français quelle que soit la langue du
+   * lecteur, et aucune assertion française ne pouvait le dire. Celle-ci
+   * varie la SEULE dimension qui change, et asserte un TEXTE anglais — qu'une
+   * clé absente ne peut pas produire (elle rendrait `message.forwarded`).
+   *
+   * Le NOM du fixture reste le nom : « Salon » est une donnée, pas un
+   * libellé, donc identique dans les sept catalogues.
+   */
+  test('la LANGUE change le libellé — anglais, jamais une recopie du français', () => {
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'en')).toBe('Forwarded');
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'en')).toBe('Forwarded from Salon');
   });
 });
 

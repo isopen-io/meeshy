@@ -9,6 +9,8 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { boundApnsPayload } from './boundApnsPayload';
+import { ephemeralPushFields } from './ephemeralPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { AttachmentTranslationTrack } from '@meeshy/shared/types/attachment-audio';
 import type {
@@ -45,8 +47,10 @@ import { sanitizeNotificationInputs, persistedNotificationTitle } from './saniti
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
+import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
+import { reproducedPushData } from './reproducedNotificationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -287,15 +291,18 @@ export class NotificationService {
           originalLanguage: true,
           createdAt: true,
           messageType: true,
+          ephemeralDuration: true,
+          effectFlags: true,
           deletedAt: true,
-          expiresAt: true,
-        },
+          expiresAt: true },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
         originalLanguage: message?.originalLanguage ?? null,
         createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
         messageType: message?.messageType ?? null,
+        ephemeralDuration: message?.ephemeralDuration ?? null,
+        effectFlags: message?.effectFlags ?? null,
         liveness: this.messageLiveness(message, messageId),
       };
     } catch (error) {
@@ -622,10 +629,16 @@ export class NotificationService {
   private messageClockFields(source: {
     readonly createdAt: Date | null;
     readonly messageType: string | null;
-  }): { messageCreatedAt?: string; messageType?: string } {
+    readonly ephemeralDuration?: number | null;
+    readonly effectFlags?: number | null;
+  }): { messageCreatedAt?: string; messageType?: string; ephemeralDuration?: number; effectFlags?: number } {
     return {
       messageCreatedAt: source.createdAt ? source.createdAt.toISOString() : undefined,
       messageType: source.messageType ?? undefined,
+      // #7451 — même famille, même raison : ce qui QUALIFIE la bulle voyage AVEC
+      // son horloge, parce que ni l'un ni l'autre ne compose la moindre chaîne.
+      ...(source.ephemeralDuration ? { ephemeralDuration: source.ephemeralDuration } : {}),
+      ...(source.ephemeralDuration ? { effectFlags: source.effectFlags ?? 0 } : {}),
     };
   }
 
@@ -1026,18 +1039,14 @@ export class NotificationService {
             ? truncateByCodePoints(params.content, 200)
             : notificationString(await recipientLang(), 'push.private');
 
-          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
-          // par le payload push : embarquer le même compte unread que
-          // `notification:counts` (même source → même sémantique, pas de
-          // flicker au recale foreground). `badge` pilote `aps.badge`
-          // nativement ; `data.unreadCount` (string) alimente le miroir App
-          // Group écrit par la NSE pour le widget. Best-effort : sur échec
-          // du count, le push part sans badge (comportement historique).
+          // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
+          // muettes), comme iOS/web-v2 ; `computeConversationUnreadBadge`.
+          // La cloche (`notification:counts`) reste sur les notifications.
+          // `data.unreadCount` alimente le miroir App Group de la NSE.
+          // Best-effort : échec ⇒ push sans badge (comportement historique).
           let unreadBadge: number | undefined;
           try {
-            const count = await this.prisma.notification.count({
-              where: visibleNotificationsWhere({ userId: params.userId, unreadOnly: true }),
-            });
+            const count = await computeConversationUnreadBadge(this.prisma, params.userId);
             if (typeof count === 'number') unreadBadge = count;
           } catch {
             unreadBadge = undefined;
@@ -1130,6 +1139,11 @@ export class NotificationService {
                 // de message.
                 ...(params.context.messageCreatedAt ? { createdAt: params.context.messageCreatedAt } : {}),
                 ...(params.context.messageType ? { messageType: params.context.messageType } : {}),
+                // #7451 — de quoi recomposer un décompte LOCAL côté NSE. La
+                // DURÉE voyage (elle est la même pour tout le monde) ; jamais
+                // l'échéance, qui est par destinataire. `effectFlags` dit à la
+                // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
+                ...ephemeralPushFields(params.context),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis
                 // encryptedContent et attache le média d'attachmentUrl — les
@@ -1191,31 +1205,8 @@ export class NotificationService {
               },
             };
 
-          // GW5 — budget APNs 4KB (rejet silencieux PayloadTooLarge sinon, et
-          // handleFailedToken compterait un strike sur un token sain).
-          // Dégradation par étages avec RE-VÉRIFICATION après chaque coupe :
-          // la traduction Prisme d'abord, puis encryptedContent — un banner
-          // générique délivré (la NSE retombe sur le body serveur) vaut mieux
-          // qu'un push rejeté qui ne s'affiche jamais.
-          const APNS_SAFE_PAYLOAD_BYTES = 3800;
-          const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
-          const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
-          // `content` part avec `encryptedContent` : les deux portent le texte
-          // du message, et un push REJETÉ ne pré-enregistre rien du tout. Ils
-          // sont de toute façon exclusifs — un message chiffré n'a pas d'aperçu
-          // de base `message-content`, donc jamais de `content`.
-          const {
-            encryptedContent: _ec,
-            content: _mc,
-            originalLanguage: _ol,
-            ...dataWithoutContentFields
-          } = dataWithoutTranslation;
-          const boundedPayload = [
-            pushPayload,
-            { ...pushPayload, data: dataWithoutTranslation },
-            { ...pushPayload, data: dataWithoutContentFields },
-          ].find(candidate => payloadBytes(candidate) <= APNS_SAFE_PAYLOAD_BYTES)
-            ?? { ...pushPayload, data: dataWithoutContentFields };
+          // GW5 — budget APNs 4 Ko, dégradation par étages : `boundApnsPayload`.
+          const boundedPayload = boundApnsPayload(pushPayload);
 
           this.pushService.sendToUser({
             userId: params.userId,
@@ -1471,7 +1462,8 @@ export class NotificationService {
     // en amont par `protectedPreview`, qui ne laisse partir qu'un placeholder.
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
+      // `ephemeralDuration`/`effectFlags` (#7451) : cf. `messageClockFields`.
+      select: { deletedAt: true, expiresAt: true, createdAt: true, messageType: true, translations: true, originalLanguage: true, ephemeralDuration: true, effectFlags: true },
     });
     // La ligne ABSENTE est la politique PROPRE à ce lot, et elle lui reste :
     // `messageLiveness` ne se prononce que sur ce qu'une ligne PROUVE (cf.
@@ -1627,6 +1619,8 @@ export class NotificationService {
         ...this.messageClockFields({
           createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
           messageType: liveMessage.messageType ?? null,
+          ephemeralDuration: liveMessage.ephemeralDuration,
+          effectFlags: liveMessage.effectFlags,
         }),
         // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
         ...prePersisted,
@@ -4276,11 +4270,6 @@ export class NotificationService {
   private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<void> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
-    const context = (row.context ?? {}) as Record<string, unknown>;
-    const contextString = (key: string): string => {
-      const value = context[key];
-      return typeof value === 'string' ? value : '';
-    };
 
     // GW7 — mêmes substitutions de confidentialité que le push de création :
     // `showPreview:false` remplace le corps par un libellé générique localisé,
@@ -4293,21 +4282,21 @@ export class NotificationService {
       ? truncateByCodePoints((row.content as string | null) ?? '', 200)
       : notificationString(await this.resolveRecipientLang(userId), 'push.private');
 
-    const conversationId = contextString('conversationId');
-    const messageId = contextString('messageId');
-    const link = conversationId
-      ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
-      : undefined;
-
+    // D-L1 (#7218) — même projection que le push de création (conversations
+    // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
     let unreadBadge: number | undefined;
     try {
-      const count = await this.prisma.notification.count({
-        where: visibleNotificationsWhere({ userId, unreadOnly: true }),
-      });
+      const count = await computeConversationUnreadBadge(this.prisma, userId);
       if (typeof count === 'number') unreadBadge = count;
     } catch {
       unreadBadge = undefined;
     }
+
+    const data = reproducedPushData(row, unreadBadge);
+    const { conversationId, messageId } = data;
+    const link = conversationId
+      ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
+      : undefined;
 
     const category = pushCategoryForNotificationType(row.type as NotificationType);
     const results = await this.pushService!.sendToUser({
@@ -4327,16 +4316,7 @@ export class NotificationService {
         ...(conversationId ? { threadId: conversationId } : {}),
         ...(category ? { category } : {}),
         ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
-        data: {
-          notificationId: row.id as string,
-          ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
-          type: String(row.type ?? ''),
-          conversationId,
-          messageId,
-          postId: contextString('postId'),
-          commentId: contextString('commentId'),
-          parentCommentId: contextString('parentCommentId'),
-        },
+        data,
       },
     });
 

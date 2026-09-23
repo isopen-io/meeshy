@@ -1,11 +1,12 @@
-import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
+import type { FeedPost } from '@/lib/api/feed-pages';
 
 /**
- * LES GESTES DU FIL, CÔTÉ CACHE (#6278) — PURS : `applyPostToggle` rend le
- * cache paginé du fil (`FEED_QUERY_KEY`) avec UN post basculé, et rien
- * d'autre. L'écriture optimiste, le rollback ET la réconciliation temps réel
- * passent tous par cette fonction : il n'existe qu'une façon de dire
- * « ce post est aimé ».
+ * LES GESTES DU FIL, CÔTÉ CACHE (#6278) — PURS : `togglePost` rend UNE carte
+ * basculée, et rien d'autre ; `mapCardPosts` la porte à travers les pages de
+ * n'importe quelle caisse de cartes. L'écriture optimiste, le rollback ET la
+ * réconciliation temps réel passent tous par ces deux fonctions : il n'existe
+ * qu'une façon de dire « ce post est aimé ». D'OÙ on l'écrit — quelles
+ * caisses — se lit dans le registre (`lib/api/card-caches.ts`, #7341).
  *
  * LE COMPTE NE BOUGE QUE SI L'ÉTAT BASCULE — un double tap, ou une
  * confirmation qui arrive après un optimiste déjà posé, ne compte jamais deux
@@ -42,7 +43,26 @@ export function togglePost(post: FeedPost, change: PostToggle): FeedPost {
   return { ...post, isBookmarkedByMe: change.on, bookmarkCount: shifted(post.bookmarkCount, change.on) };
 }
 
-function mapPosts(data: FeedInfiniteData | undefined, update: (post: FeedPost) => FeedPost): FeedInfiniteData | undefined {
+/**
+ * **LA FORME COMMUNE DES CAISSES DE CARTES** (#7341) — ce que le Flux, les
+ * Réels, les enregistrées, un hashtag et un profil ont en commun : des pages
+ * qui portent des `posts`. Le RESTE d'une page diffère (le hashtag pagine par
+ * décalage, `nextCursor: number | null` ; les autres par curseur keyset,
+ * `pagination`) et n'est jamais lu ici — il est RÉPANDU tel quel. Typer ces
+ * lois sur `FeedInfiniteData` les aurait fait mentir sur deux caisses sur
+ * cinq.
+ */
+export type CardPage = { readonly posts: readonly FeedPost[] };
+export type CardPages = { readonly pages: readonly CardPage[] };
+
+/**
+ * LE PARCOURS UNIQUE DES PAGES D'UNE CAISSE DE CARTES. La MÊME référence
+ * revient quand rien ne change — c'est ce qui permet au registre
+ * (`lib/api/card-caches.ts`) de ne RÉÉCRIRE aucune caisse qui ne montre pas
+ * la publication, et à l'écran de ne pas se repeindre (§ Zero Unnecessary
+ * Re-render).
+ */
+export function mapCardPosts<T extends CardPages>(data: T | undefined, update: (post: FeedPost) => FeedPost): T | undefined {
   if (data === undefined) return data;
   const pages = data.pages.map((page) => {
     const posts = page.posts.map(update);
@@ -51,8 +71,16 @@ function mapPosts(data: FeedInfiniteData | undefined, update: (post: FeedPost) =
   return pages.every((page, i) => page === data.pages[i]) ? data : { ...data, pages };
 }
 
-export function applyPostToggle(data: FeedInfiniteData | undefined, change: PostToggle): FeedInfiniteData | undefined {
-  return mapPosts(data, (post) => togglePost(post, change));
+/** RETIRER une carte de TOUTES les pages : un curseur qui chevauche peut
+ * servir la même publication deux fois, et n'en ôter qu'une la ferait
+ * réapparaître au premier aplatissement. Même référence si elle n'y est pas. */
+export function dropCardPost<T extends CardPages>(data: T | undefined, postId: string): T | undefined {
+  if (data === undefined) return data;
+  const pages = data.pages.map((page) => {
+    const posts = page.posts.filter((post) => post.id !== postId);
+    return posts.length === page.posts.length ? page : { ...page, posts };
+  });
+  return pages.every((page, i) => page === data.pages[i]) ? data : { ...data, pages };
 }
 
 /** LE COMPTE ABSOLU SERVI remplace l'estimation optimiste — la passerelle le
@@ -68,82 +96,22 @@ export function withServedCount(post: FeedPost, served: ServedCount): FeedPost {
   return post.id !== served.postId || post[field] === served.count ? post : { ...post, [field]: served.count };
 }
 
-export function applyServedCount(data: FeedInfiniteData | undefined, served: ServedCount): FeedInfiniteData | undefined {
-  return mapPosts(data, (post) => withServedCount(post, served));
-}
-
 /**
  * LE COMPTEUR DE COMMENTAIRES (#7135) — écrire ou retirer un commentaire bouge
  * le compte de la PUBLICATION, et ce compte se lit sur plusieurs écrans : la
  * rangée de statistiques d'une carte du Flux, la même carte servie par un fil
  * de Réels, la fiche `/post/$post`, la pastille du rail d'une story. La règle
- * vit donc ICI, à côté de `applyPostToggle`, et non dans le port des
+ * vit donc ICI, à côté de `togglePost`, et non dans le port des
  * commentaires : une règle recopiée diverge, et celle-ci avait déjà commencé à
  * le faire — seuls la fiche et le rail bougeaient, si bien qu'on supprimait son
  * commentaire et que la carte du fil gardait l'ancien chiffre.
  *
- * `mapPosts` n'opère que sur des pages EXISTANTES : une publication qu'une
- * racine n'a jamais servie n'y apparaît pas.
+ * `mapCardPosts` n'opère que sur des pages EXISTANTES : une publication
+ * qu'une racine n'a jamais servie n'y apparaît pas.
  */
 export type CommentCountDelta = { readonly postId: string; readonly delta: 1 | -1 };
 
 export function withCommentCount(post: FeedPost, change: CommentCountDelta): FeedPost {
   if (post.id !== change.postId) return post;
   return { ...post, commentCount: shiftedCount(post.commentCount, change.delta) };
-}
-
-export function applyCommentCount(
-  data: FeedInfiniteData | undefined,
-  change: CommentCountDelta,
-): FeedInfiniteData | undefined {
-  return mapPosts(data, (post) => withCommentCount(post, change));
-}
-
-/**
- * `media:caption-translation-updated` CÔTÉ CACHE (#6280) — LE FIL SUIT LE
- * PIPELINE ZMQ EN DIRECT, même motif que `applyServedCount` ci-dessus : une
- * fonction PURE, appliquée à `FEED_QUERY_KEY`. La charge porte UNE traduction
- * (`{ language, translation }`), jamais la carte entière — on la FUSIONNE
- * dans `captionTranslations` par langue, remplace l'existante, ajoute la
- * nouvelle, jamais un doublon après un second passage du pipeline (miroir
- * `mergeMessageTranslations`, `api/realtime-apply.ts`).
- *
- * `mediaId` est l'identité de fusion, pas `postId` : un média de COMMENTAIRE
- * (`commentId` présent sur l'événement) vit dans le même `PostMedia`, jamais
- * dans le cache du fil — cette fonction balaie `post.media` par id sans
- * jamais lire `commentId`, donc un événement dont le média n'est pas au fil
- * (commentaire, post non chargé) ne modifie rien, sans lever.
- */
-export type MediaCaptionTranslationUpdate = {
-  readonly mediaId: string;
-  readonly language: string;
-  readonly translation: {
-    readonly text: string;
-    readonly translationModel: string;
-    readonly confidenceScore?: number;
-    readonly createdAt: string;
-  };
-};
-
-function withMediaCaptionTranslation(post: FeedPost, update: MediaCaptionTranslationUpdate): FeedPost {
-  const media = post.media;
-  if (media === null || media === undefined) return post;
-  const index = media.findIndex((m) => m.id === update.mediaId);
-  if (index === -1) return post;
-
-  const existing = media[index]?.captionTranslations;
-  const record =
-    existing !== null && typeof existing === 'object' && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : {};
-  const nextTranslations = { ...record, [update.language]: update.translation };
-  const nextMedia = media.map((m, i) => (i === index ? { ...m, captionTranslations: nextTranslations } : m));
-  return { ...post, media: nextMedia };
-}
-
-export function applyMediaCaptionTranslation(
-  data: FeedInfiniteData | undefined,
-  update: MediaCaptionTranslationUpdate,
-): FeedInfiniteData | undefined {
-  return mapPosts(data, (post) => withMediaCaptionTranslation(post, update));
 }

@@ -13,6 +13,11 @@ import { createRouter } from '@/lib/router';
 /* LE DÉTAIL D'UNE PUBLICATION (#6278) — UN seul `import()` pour ses DEUX
    adresses, pour qu'elles ne puissent jamais diverger d'écran. */
 const publicationScreen = () => import('@/routes/post');
+/* LE LECTEUR DE RÉELS (#7298) — UN seul `import()` pour ses DEUX adresses, la
+   liste (`/reels`) et le réel NOMMÉ (`/reel/:postId`), pour qu'elles ne
+   puissent jamais diverger d'écran. Même discipline que la publication
+   ci-dessus. */
+const reelsScreen = () => import('@/routes/reels');
 
 /* L'ADMINISTRATION DE LA v2 — UN seul `import()` pour ses DEUX adresses
    (`/adm` et, le temps du pont, `/admin`), pour qu'elles ne puissent jamais
@@ -81,6 +86,19 @@ export const ROUTES = {
   progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — miroir `Route.bookmarks`
+     (`Router.swift`), atteinte depuis Réglages › Outils comme sur iOS.
+
+     Sous `/me`, l'espace du profil, pour la même raison que `/me/progression`
+     ci-dessus : c'est un corpus qui n'existe QUE pour le lecteur connecté
+     (`scope=bookmarks` rend 401 sans session), d'où `bookmarks` dans
+     `PRIVATE_ROUTES` (`session-guard.ts`).
+
+     Adresse NEUVE : le legacy ne sert aucun écran de favoris, il n'y a donc
+     pas de nomenclature à reprendre (D-5). L'ORDRE est sans danger — le motif
+     est littéral et aucune adresse paramétrée à deux segments n'existe sous
+     `/me`. */
+  bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
   /* LES STORIES (#6080) — le rail de la liste ouvre ces DEUX adresses, et
      c'est ce qui en fait des contrôles plutôt que des promesses. Jusqu'ici
      chaque tuile du rail pointait vers un FIL sous un anneau de story, faute
@@ -90,13 +108,22 @@ export const ROUTES = {
      voir » et « voir les siennes », parce que c'est le même écran avec un
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
-  storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/story-compose') },
+  /* LE COMPOSER UNIQUE (#7497) — `/stories/new` et `/posts/new` montent le
+     MÊME studio ; le format d'entrée est celui que la capsule
+     `[Publier … | ▾]` publie si l'auteur ne touche pas au chevron. */
+  storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.StoryComposeRoute })) },
   /* MON HUMEUR (#6150) — la SECONDE porte de ma cellule du rail. Adresse
      PROPRE, pas un mode de `/stories/new` : une humeur n'est pas une story
      (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
      `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
      « retour » doit refermer la composition d'humeur seule. */
   statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
+  /* PUBLIER DANS LE FIL (#7449, composer unique depuis #7497) — la porte de
+     création de l'en-tête du Flux : `/posts/new` ouvre le studio au format
+     post, `/posts/new?type=reel` au format réel. PLURIEL, comme
+     `/conversations/new`, et SANS collision avec le détail, qui est au
+     SINGULIER (`/post/$post`). */
+  postCompose: { pattern: '/posts/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.PostComposeRoute })) },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
@@ -107,6 +134,16 @@ export const ROUTES = {
   /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
      (`welcomeStore`), miroir `WelcomeView.swift`. */
   welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },
+  /* L'INVITATION REÇUE PAR SMS (#7297) — `/download` est l'adresse que l'app
+     PUBLIÉE envoie à quelqu'un qui ne connaît pas encore Meeshy
+     (`DiscoverViewModel.swift:285`, `PhonebookViewModel.swift:282`). Elle vit
+     dans un binaire déjà distribué : elle ne se corrige que d'ici, et jusqu'à
+     ce lot elle rendait « adresse inconnue » — le premier contact avec le
+     produit était une page d'erreur.
+
+     PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble, et c'est
+     tout le sujet — celui qui l'ouvre n'a pas de compte. */
+  download: { pattern: '/download', screen: () => import('@/routes/download') },
   /* LE LIEN MAGIQUE (#5816) — même adresse pour la SAISIE (`?token=` absent)
      et la VALIDATION du lien reçu par e-mail (`MagicLinkService.ts:548-549`
      vise exactement `/auth/magic-link?token=`) : `magic-link.tsx` distingue
@@ -167,7 +204,22 @@ export const ROUTES = {
      (un réel touché dans le Flux, `?seed=<id>`) et `presentFresh()` (le bouton
      de l'en-tête du Flux, sans graine). Une seule adresse pour les deux
      intentions, comme `/stories`. Adresse NEUVE : le legacy n'a pas de Réels. */
-  reels: { pattern: '/reels', screen: () => import('@/routes/reels') },
+  reels: { pattern: '/reels', screen: reelsScreen },
+  /* UN RÉEL PARTAGÉ (#7298) — `/reel/:postId` est l'adresse que la PASSERELLE
+     grave dans chaque lien de partage de réel (`PostService.shareWithTrackingLink`,
+     `originalUrl = <base>/reel/<id>`) et que le legacy sert déjà
+     (`apps/web/app/reel/[postId]`, D-5). La v2 ne la servait pas : `/l/:token`
+     y envoyait le lecteur par un `location.replace`, et TOUS les liens de réel
+     déjà émis — comme chaque nouveau partage — tombaient sur « adresse
+     inconnue ».
+
+     C'est une ADRESSE, pas une redirection vers `/reels?seed=`. Un réel
+     partagé a la même dignité qu'une story partagée, son adresse se recopie
+     telle quelle, et le lecteur s'ouvre sans la seconde navigation qu'une
+     redirection ajouterait sur le premier écran que voit le destinataire.
+     `reelSeedOf` (`lib/reels/thread.ts`) lit la graine du CHEMIN comme il lit
+     `?seed=` — un seul site pour les deux portes. */
+  reel: { pattern: '/reel/$post', screen: reelsScreen },
   /* LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` est
      l'adresse que la passerelle range dans ses liens suivis
      (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
@@ -181,6 +233,21 @@ export const ROUTES = {
      plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
+  /* UNE HUMEUR PARTAGÉE (#7313) — la TROISIÈME porte du même écran, et la
+     DERNIÈRE des quatre adresses que `PostService.shareWithTrackingLink`
+     compose (`{ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' }`).
+     `/post` et `/story` étaient servies, `/reel` l'est par #7298 ; `/mood` ne
+     l'était pas, et `/l/:token` y envoyait le destinataire par un
+     `location.replace` — chaque partage d'humeur fabriquait un lien mort.
+
+     UN ALIAS, pas un écran, et le legacy le déclare en toutes lettres :
+     `apps/web/app/mood/[postId]/page.tsx` est un `export { default } from
+     '@/app/feeds/post/[postId]/page'`. Le client de la v2 le confirme de son
+     côté — il « ne distingue que REEL du reste » (`lib/api/feed-pages.ts`), et
+     le détail d'une publication n'a aucune branche sur `type`. Une humeur EST
+     une publication ; lui écrire un second lecteur en ferait une jumelle à
+     faire diverger. D'où le MÊME `import()` que ses deux sœurs. */
+  mood: { pattern: '/mood/$post', screen: publicationScreen },
   /* LE PROFIL PUBLIC DE QUELQU'UN et LES PUBLICATIONS D'UN MOT-CLÉ (#7032) —
      les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
      liens qui les visent : une mention qui tomberait sur « adresse inconnue »

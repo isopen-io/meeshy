@@ -125,7 +125,9 @@ describe('ComposerTray — la bande d’avertissement (#5668, revue-correction)'
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root.render(<ComposerTray variant="above" pending={[]} onRemove={() => {}} notice={notice} />);
+      root.render(
+        <ComposerTray variant="above" pending={[]} onRemove={() => {}} notice={notice} place={null} onRemovePlace={() => {}} />,
+      );
     });
     return container;
   };

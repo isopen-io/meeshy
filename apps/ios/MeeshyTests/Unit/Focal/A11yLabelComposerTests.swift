@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// F-080 (WS-1) — `MessageAccessibilityLabelComposer` : réplique fidèle,
@@ -23,7 +24,7 @@ final class A11yLabelComposerTests: XCTestCase {
         location: SharedPlace? = nil,
         editedAt: Date? = nil,
         isPinned: Bool = false,
-        ephemeral: BubbleContent.Ephemeral? = nil,
+        protection: MessageProtectionDescriptor = .unprotected,
         reactions: [MeeshyReactionSummary] = [],
         deliveryStatus: MeeshyMessage.DeliveryStatus? = nil
     ) -> BubbleContent {
@@ -40,7 +41,7 @@ final class A11yLabelComposerTests: XCTestCase {
             reply: reply,
             attachments: attachments,
             location: location,
-            ephemeral: ephemeral,
+            protection: protection,
             isBlurred: false,
             isViewOnce: false,
             isPinned: isPinned,
@@ -110,10 +111,32 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }
 
-    func test_compose_ephemeralMessage_includesEphemeralLabel() {
-        let expected = String(localized: "a11y.message.ephemeral", bundle: .main)
-        let content = makeContent(text: "Salut", ephemeral: BubbleContent.Ephemeral(expiresAt: Date()))
-        XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
+    /// #7452 — le libellé dit désormais l'ÉCHÉANCE (« disparaît dans 4
+    /// minutes »), et il vient du site unique partagé avec la capsule. Le
+    /// libellé précédent (`a11y.message.ephemeral`) disait « Message
+    /// éphémère » sans jamais dire quand.
+    func test_compose_ephemeralMessage_includesEphemeralDeadlineLabel() {
+        let deadline = Date().addingTimeInterval(240)
+        let descriptor = MessageProtectionDescriptor(
+            badges: [.ephemeral(.running(deadline: deadline))],
+            ephemeralState: .running(deadline: deadline)
+        )
+        let content = makeContent(text: "Salut", protection: descriptor)
+        let expected = MessageProtectionChrome.accessibilityLabels(for: descriptor)
+        XCTAssertFalse(expected.isEmpty)
+        let composed = MessageAccessibilityLabelComposer.compose(content)
+        XCTAssertTrue(expected.allSatisfy(composed.contains))
+    }
+
+    /// Une vue unique n'était annoncée NULLE PART au lecteur d'écran : la
+    /// protection la plus forte du produit était la seule invisible.
+    func test_compose_viewOnceMessage_includesViewOnceLabel() {
+        let descriptor = MessageProtectionDescriptor(badges: [.viewOnce], ephemeralState: .notEphemeral)
+        let content = makeContent(text: "Salut", protection: descriptor)
+        XCTAssertTrue(
+            MessageAccessibilityLabelComposer.compose(content)
+                .contains(MessageProtectionChrome.viewOnceA11y)
+        )
     }
 
     /// The literal « lu » these two asserted on until 270i was doubly wrong. It only

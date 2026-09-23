@@ -2,20 +2,20 @@ import { memo } from 'react';
 
 import type { Conversation } from '@/lib/api/types';
 import type { ConversationFlags } from '@/lib/api/preferences';
-import { served } from '@/lib/api/prism';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import type { RowActionId } from '@/lib/view/row-actions';
-import { avatarOf, initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
-import { kindOf } from '@/lib/view/message';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
+import { useConversationPreview } from '@/lib/view/use-conversation-preview';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
+import { LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { RowActions } from './row-actions';
-import { TypingDots } from './typing-dots';
 
 /**
  * LA LIGNE DE LA LENTILLE — plate, et c'est tout le sujet.
@@ -47,21 +47,6 @@ import { TypingDots } from './typing-dots';
  */
 
 /** La case de mise en page. Elle ne change JAMAIS. */
-/**
- * LE LIBELLÉ D'UN DERNIER MESSAGE SANS TEXTE (revue #5805) — les MOTS et les
- * GLYPHES d'iOS, un pour un : `AttachmentKind.shortLabel`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Models/AttachmentKind.swift:140-154`)
- * pour « Photo » / « Vidéo » / « Audio » / « Fichier ». `kindOf`
- * (`view/message.ts`) classe la pièce par son MIME — la MÊME fonction que le
- * fil, jamais un second classement.
- */
-const MEDIA_PREVIEW = {
-  image: { glyph: 'image', label: 'Photo' },
-  video: { glyph: 'image', label: 'Vidéo' },
-  audio: { glyph: 'microphone', label: 'Audio' },
-  file: { glyph: 'file', label: 'Fichier' },
-} as const;
-
 export const ROW_HEIGHT = 84;
 
 /** Le conteneur visuel, qui déborde de 8 de chaque côté. */
@@ -103,21 +88,25 @@ export type LensRowProps = {
    */
   onRowAction: (conversationId: string, id: RowActionId) => void;
   /**
-   * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793) — le nom du premier
-   * frappeur vivant qui n'est pas le lecteur, distribué par l'écran
+   * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793, #7547) — les noms
+   * des frappeurs vivants qui ne sont pas le lecteur, distribués par l'écran
    * (`useTypistNames`, `lib/api/use-typists.ts`) : une rangée est rendue dans un
    * `.map`, elle ne peut pas s'abonner elle-même.
    *
    * `undefined` ⇒ personne n'écrit : la ligne 2 retombe sur sa précédence
    * normale, et rien n'est inventé. Deux effets, ceux d'iOS :
-   *  - la ligne 2 devient « X écrit » (`Line2Kind.resolve`, `typing` en TÊTE de
-   *    la précédence, `targets/lentille.md:502-511`) ;
+   *  - la ligne 2 devient « X écrit… », « X et Y écrivent… » (le composeur
+   *    partagé met la frappe en tête de la précédence, après l'appel en cours) ;
    *  - la présence est FORCÉE en ligne, au niveau du RANG et jamais dans
    *    l'avatar (`LentilleConversationRow.swift:125-127`) — la frappe EST une
    *    preuve d'activité (`CLAUDE.md` § « User Presence » : « une personne qui
    *    écrit est TOUJOURS verte »).
    */
-  typist?: string | undefined;
+  typists?: readonly string[] | undefined;
+  /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
+  interfaceLanguage?: string | undefined;
+  /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
+  now?: (() => number) | undefined;
 };
 
 function LensRowImpl({
@@ -128,7 +117,9 @@ function LensRowImpl({
   flags,
   unreadCount,
   onRowAction,
-  typist,
+  typists,
+  interfaceLanguage,
+  now,
 }: LensRowProps) {
   const unread = unreadCount > 0;
   /**
@@ -156,30 +147,21 @@ function LensRowImpl({
   const group = isGroup(conversation);
   const title = titleOf(conversation, viewerId);
   const photo = avatarOf(conversation, viewerId);
+  /**
+   * LE PSEUDO DU PAIR (#7241) — dérivé ICI, à côté de `photo` et pour la même
+   * raison : `peerOf` ne rend l'autre que sur un DIRECT (§ doc-comment), donc
+   * un GROUPE n'a pas de personne à ouvrir, et un participant ANONYME n'a pas
+   * de compte (`Participant.user` absent). `identityTarget` range ces deux
+   * absences sous la même cible nulle ; on la calcule une fois plutôt que de
+   * la redemander dans le rendu.
+   */
+  const peerHandle = ((): string | undefined => {
+    const handle = peerOf(conversation, viewerId)?.user?.username;
+    return typeof handle === 'string' && handle !== '' ? handle : undefined;
+  })();
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
 
-  /**
-   * LA FORME DE L'APERÇU (D-23, #5676) — `previewKindOf` décide AVANT tout
-   * appel du Prisme : un aperçu `hidden`/`view-once`/`expired` ne descend
-   * JAMAIS `served()`, donc jamais `lastMessage.content` ni
-   * `lastMessageTranslations` — le contenu protégé ne traverse pas la ligne
-   * de liste (miroir `LastMessageSummaryKind.swift:22-36`).
-   */
-  const previewKind = previewKindOf(conversation);
-  const showsServedPreview = previewKind === 'standard' || previewKind === 'ephemeral';
-  /**
-   * SANS HISTORIQUE (#5780) — `previewKindOf` rend `standard` pour une
-   * conversation qui n'a jamais reçu de message (`lastMessage` absent, `null`
-   * comme `undefined` — #5650) : rien à protéger, mais rien à SERVIR non plus.
-   * `served()` reçoit alors un original vide et aucune traduction, donc
-   * `preview.text === ''` — sans ce cas, la ligne 2 se rendait comme un
-   * `<span>` VIDE, pas comme un état. `lastMessageAt` reste servi
-   * inconditionnellement par la passerelle (`schema.prisma:495`, sans `?`) :
-   * l'heure de création s'affiche déjà (voir `at` ci-dessus) ; seul le texte
-   * manquait un état à dire.
-   */
-  const hasNoHistory = conversation.lastMessage === undefined || conversation.lastMessage === null;
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
    * point de suspension), `line-clamp-2` magnifié (deux lignes, point de
@@ -187,59 +169,16 @@ function LensRowImpl({
    * `data-line2` plus bas.
    */
   const previewText = status.magnified ? 'line-clamp-2' : 'truncate';
-  const senderName = group ? conversation.lastMessage?.sender?.displayName : undefined;
-  /**
-   * Le nom de l'expéditeur reste HORS du nœud qui porte `lang` — le Prisme
-   * n'a rien à dire du nom d'une personne — mais dans le MÊME flux de texte
-   * que l'aperçu : c'est une seule phrase, qui se tronque d'un seul point de
-   * suspension, comme le `Text` concaténé d'iOS.
-   */
-  const senderPrefix = senderName === undefined ? null : `${senderName} : `;
-
-  /**
-   * LA LIGNE DESCEND LA CARTE PRÉCALCULÉE PAR LE SERVEUR
-   * (`lastMessageTranslations`), pas les traductions du message. C'est ce que
-   * sert `GET /conversations`, déjà restreint aux langues du lecteur et tronqué
-   * au plafond d'aperçu : lire `lastMessage.translations` ferait descendre une
-   * carte que la liste n'a pas reçue, donc servir l'original en croyant servir
-   * le Prisme.
-   */
-  const preview = showsServedPreview
-    ? served({
-        preferredLanguages: languages,
-        originalLanguage: conversation.lastMessageOriginalLanguage,
-        translations: conversation.lastMessageTranslations,
-        original: conversation.lastMessage?.content ?? '',
-      })
-    : null;
-
-  /**
-   * UN DERNIER MESSAGE SANS TEXTE — une photo, un vocal, un fichier (revue
-   * #5805). `served()` rend alors une chaîne VIDE, et la ligne 2 se rendait
-   * comme un `<span>` vide : la rangée « Médias » affichait « Kwame Mensah : »
-   * suivi de RIEN (mesuré sur la coque Android, la liste étant l'écran phare).
-   * Ce n'était pas visible avant ce lot — aucun corpus n'avait de message
-   * média-seul en dernier.
-   *
-   * iOS compose exactement ce libellé quand l'aperçu est vide
-   * (`LentilleConversationRow.standardPreview`,
-   * `apps/ios/.../Lentille/Row/LentilleConversationRow.swift:635-676`) :
-   * `senderLabel` + le glyphe de la pièce + son `shortLabel`
-   * (`AttachmentKind.shortLabel` — « Photo », « Vidéo », « Audio »,
-   * « Fichier ») + `+N` au-delà d'une pièce. Les mêmes mots, les mêmes
-   * glyphes (déjà dans le socle : la liste ne paie rien de plus).
-   *
-   * Le COMPTE vient du tableau servi. La passerelle expose aussi
-   * `lastMessageAttachmentCount` sur la charge d'aperçu socket
-   * (`services/gateway/src/socketio/utils/lastMessagePreviewPrism.ts:228-263`,
-   * qui ne remet QUE la première pièce) — à lire le jour où la liste vit sur
-   * le réseau, sans quoi « +N » sous-comptera un message à plusieurs pièces.
-   */
-  const previewAttachments = conversation.lastMessage?.attachments ?? [];
-  const previewMedia =
-    preview !== null && preview.text === '' && previewAttachments.length > 0
-      ? { first: previewAttachments[0]!, extra: previewAttachments.length - 1 }
-      : null;
+  const language = interfaceLanguage ?? currentInterfaceLanguage();
+  const preview = useConversationPreview({
+    conversation,
+    viewerId,
+    languages,
+    typists,
+    interfaceLanguage: language,
+    now,
+  });
+  const typing = typists !== undefined && typists.length > 0;
 
   return (
     <li
@@ -267,9 +206,22 @@ function LensRowImpl({
        */
       style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative' }}
     >
-      <Link
-        to="thread"
-        params={{ conversation: conversation.id }}
+      {/*
+        **L'ENVELOPPE N'EST PLUS UN LIEN** (#7241, directive porteur du
+        2026-09-21 : « même comportement quand on touche un pseudo ou un
+        avatar »). Un `<a>` ne peut pas en contenir un autre, et l'avatar doit
+        désormais porter sa propre destination — la rangée ENTIÈRE ne pouvait
+        donc plus être le lien vers le fil. Le lien descend d'un cran, sur la
+        COLONNE DE TEXTE ; l'avatar devient son frère.
+
+        C'est l'arbitrage d'iOS, pas une invention de ce lot :
+        `LentilleConversationRow.swift:843` pose
+        `onTap: isDirect ? onViewProfile : onViewConversationInfo` — sur un
+        DIRECT, toucher l'avatar ouvre la FICHE de l'autre ; ailleurs, il
+        continue d'ouvrir la conversation. La rangée garde son geste dominant
+        (le fil) sur toute la surface du texte, qui en est l'essentiel.
+      */}
+      <div
         /*
          * `pr-12` (48px) et non `px-3` des deux côtés : `RowActions`
          * (frère ci-dessous, `position: absolute`, ancré `right-2` sur le
@@ -311,17 +263,50 @@ function LensRowImpl({
             `resolveParticipantAvatar`. Cette rangée appelait déjà
             `peerOf(...)` juste en dessous pour la PRÉSENCE : la donnée était
             là, sur la même ligne, et la photo n'était pas servie. */}
-        <Avatar
-          initials={initialsOf(title)}
-          color={accent}
-          size={44}
-          name={title}
-          opacity={chromeFade}
-          {...(photo === undefined ? {} : { src: photo })}
-          {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
-        />
+        {/* LE PSEUDO DU PAIR, quand il y en a un : `peerOf` ne rend l'autre
+            que sur un DIRECT, et un participant ANONYME n'a pas de compte —
+            `identityTarget` range les deux cas sous la même absence de cible,
+            et l'avatar ne paraît alors pas tapable (loi 4). */}
+        {peerHandle === undefined ? (
+          /* GROUPE (ou pair sans compte) : l'avatar garde EXACTEMENT le geste
+             d'avant — il ouvre le fil. Le lien est un DOUBLON de celui du
+             texte, donc il sort de l'ordre de lecture et du parcours clavier :
+             deux liens de même nom à la file se lisent deux fois. */
+          <Link
+            to="thread"
+            params={{ conversation: conversation.id }}
+            className="flex shrink-0"
+            aria-hidden
+            tabIndex={-1}
+          >
+            <Avatar
+              initials={initialsOf(title)}
+              color={accent}
+              size={44}
+              name={title}
+              opacity={chromeFade}
+              {...(photo === undefined ? {} : { src: photo })}
+              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+            />
+          </Link>
+        ) : (
+          <Avatar
+            initials={initialsOf(title)}
+            color={accent}
+            size={44}
+            name={title}
+            opacity={chromeFade}
+            profileUsername={peerHandle}
+            {...(photo === undefined ? {} : { src: photo })}
+            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+          />
+        )}
 
-        <span className="flex min-w-0 flex-1 flex-col justify-center">
+        <Link
+          to="thread"
+          params={{ conversation: conversation.id }}
+          className="flex min-w-0 flex-1 flex-col justify-center"
+        >
           {/*
             LE SUPPLÉMENT, premier volet : la catégorie et les étiquettes. Il est
             RENDU en permanence et masqué par l'opacité — le monter et le
@@ -452,79 +437,20 @@ function LensRowImpl({
           <span
             data-line2
             className={`block min-w-0 text-title ${previewText}`}
-            style={{ color: previewKind === 'view-once' && typist === undefined ? accent : 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--color-ios-ink-2)' }}
           >
-            {/* LA FRAPPE PREND LA TÊTE DE LA PRÉCÉDENCE (#5793) —
-                `Line2Kind.resolve(hasTyping:hasDraft:showsBridge:)` met
-                `typing` AVANT tout, y compris avant un aperçu PROTÉGÉ
-                (`targets/lentille.md:502-511`) : elle ne dit rien du CONTENU,
-                donc elle ne peut rien en laisser fuir — un message à vue unique
-                dont l'auteur écrit encore montre « X écrit », jamais son texte.
-
-                L'ENCRE RESTE `ink-2`, pas l'accent d'iOS : l'accent d'une
-                conversation ne franchit pas le plancher AA sur cette ligne dans
-                les deux schémas (mesuré par `checkRowInkMeetsAA`,
-                `scripts/check-list-actions.mjs`, la même dette de palette que
-                `focal-row.tsx:353` documente déjà). L'ITALIQUE et les trois
-                points pulsés — eux, à l'accent, car décoratifs et
-                `aria-hidden` — portent la distinction. */}
-            {/* LES APERÇUS PROTÉGÉS (D-23, #5676) : aucune langue à annoncer,
-                aucun texte du message — mais le NOM de l'expéditeur reste,
-                comme iOS le sert (`senderLabel` précède le glyphe dans
-                `LentilleConversationRow.swift:600-624`) : un nom n'est pas le
-                contenu protégé, et le retirer faisait perdre en groupe la
-                seule information qui restait. Les glyphes suivent iOS un par
-                un — `eye.slash` masqué, `flame` vue unique, `timer` éphémère
-                actif, `timer` estompé pour l'expiré (`timer.badge.xmark`
-                n'ayant pas d'équivalent phosphor, le muet de la couleur porte
-                la nuance). */}
-            {typist !== undefined ? (
-              <>
-                <span className="italic">{`${typist} écrit`}</span>
-                <TypingDots color={accent} className="ml-1" />
-              </>
-            ) : previewKind === 'hidden' ? (
-              <>
-                {senderPrefix}
-                <Glyph name="eyeSlash" size={13} className="mr-1 inline-block align-[-2px]" />
-                <span className="italic">1 message caché</span>
-              </>
-            ) : previewKind === 'view-once' ? (
-              <>
-                {senderPrefix}
-                <Glyph name="flame" size={13} className="mr-1 inline-block align-[-2px]" />
-                <span className="italic">1 message vue unique</span>
-              </>
-            ) : previewKind === 'expired' ? (
-              <>
-                <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" />
-                <span className="italic">Message expiré</span>
-              </>
-            ) : hasNoHistory ? (
-              <span className="italic">Nouvelle conversation</span>
-            ) : (
-              <>
-                {senderPrefix}
-                {previewKind === 'ephemeral' ? <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" /> : null}
-                {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
-                    document : un lecteur d'écran doit prononcer un aperçu traduit
-                    avec la voix de sa langue, jamais avec celle de l'expéditeur.
-                    L'attribut est OMIS quand la langue est inconnue (une
-                    conversation sans historique sert un original vide, sans
-                    `originalLanguage`) : `lang=""` signifie « langue indéterminée »
-                    et fait quitter au lecteur d'écran la voix du document — dire
-                    « je ne sais pas » est ici pire que se taire. */}
-                {previewMedia === null ? (
-                  <span {...(preview?.language ? { lang: preview.language } : {})}>{preview?.text ?? ''}</span>
-                ) : (
-                  <>
-                    <Glyph name={MEDIA_PREVIEW[kindOf(previewMedia.first)].glyph} size={13} className="mr-1 inline-block align-[-2px]" />
-                    <span>{MEDIA_PREVIEW[kindOf(previewMedia.first)].label}</span>
-                    {previewMedia.extra > 0 ? <span className="ml-1 font-semibold" style={{ color: accent }}>{`+${previewMedia.extra}`}</span> : null}
-                  </>
-                )}
-              </>
-            )}
+            {/* LA LIGNE 2 EST CELLE DU COMPOSEUR PARTAGÉ (#7547) —
+                `composeConversationPreview` (#7546) tranche la priorité (appel
+                en cours, frappe, brouillon, réaction, dernier message), la
+                nature, les détails, la protection et le Prisme ; le web la
+                dessine (`LensPreviewLine`) et n'y compose RIEN. iOS rejoue le
+                même fichier de cas (#7548). */}
+            <LensPreviewLine
+              preview={preview}
+              interfaceLanguage={language}
+              accent={accent}
+              originalLanguage={conversation.lastMessageOriginalLanguage ?? conversation.lastMessage?.originalLanguage}
+            />
           </span>
 
           {/*
@@ -570,8 +496,8 @@ function LensRowImpl({
               </span>
             )}
           </span>
-        </span>
-      </Link>
+        </Link>
+      </div>
 
       <RowActions
         flags={flags}
@@ -607,13 +533,14 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.viewerId !== next.viewerId) return false;
   if (prev.unreadCount !== next.unreadCount) return false;
   if (prev.onRowAction !== next.onRowAction) return false;
-  /* `typist` (#5793) — une CHAÎNE, donc comparable par valeur : l'écran
+  /* `typists` (#5793, #7547) — comparés par VALEUR (les noms joints) : l'écran
      redistribue une carte d'identité neuve à chaque `typing:start`/`stop` de
      n'importe quelle conversation, et sans cette ligne la rangée concernée
      n'aurait PAS bougé (le reste de ses props étant identique) tandis que
      toutes les autres se seraient re-rendues pour rien. C'est ce que le
      doc-comment de `useTypistNames` promet de borner. */
-  if (prev.typist !== next.typist) return false;
+  if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
+  if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
 
   const s1 = prev.status ?? AT_REST;
   const s2 = next.status ?? AT_REST;

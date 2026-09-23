@@ -29,7 +29,6 @@ export function RegisterForm({
   onJoinSuccess,
   formPrefix = 'register'
 }: RegisterFormProps) {
-  console.log('[RegisterForm] Component render', { linkId, formPrefix });
   const { t } = useI18n('auth');
   const {
     formData,

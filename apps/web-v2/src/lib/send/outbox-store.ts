@@ -38,6 +38,10 @@ export type OutboxEntry = {
     readonly files: readonly PendingAttachment[];
     readonly attachmentIds?: readonly string[];
   };
+  /* LE LIEU N'EST PLUS ICI (#7328) — il vit sur `message.location`, là où la
+     bulle le rend et d'où `bodyOf` l'envoie. Posé sur l'entrée À CÔTÉ du
+     message (#7280), il partait bien et restait invisible à son expéditeur :
+     la bulle optimiste est rendue depuis `message`, pas depuis l'entrée. */
 };
 
 export type OutboxState = {

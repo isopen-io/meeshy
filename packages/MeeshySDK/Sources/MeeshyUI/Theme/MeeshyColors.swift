@@ -99,6 +99,31 @@ public nonisolated struct MeeshyColors {
     public static let communityAccent = warning
     public static let communityAccentHex = warningHex
 
+    // MARK: - États d'un message dans le fil (#7599)
+    //
+    // UN code couleur pour les deux plateformes : l'état se lit par sa teinte
+    // avant tout texte, et le texte ne sert plus qu'au lecteur d'écran. Dérivé
+    // vers `packages/design-tokens/ios.css` (`--ios-state-*`) : web-v2 lit la
+    // même table au lieu de la recopier. Chaque teinte ne dit qu'UN état — le
+    // rouge d'erreur ne peint plus un éphémère, l'indigo ne peint plus un flou.
+
+    /// Vue unique pas encore ouverte — pictogramme PLEIN.
+    public static let stateViewOnce = Color(hex: "6366F1")
+    /// Vue unique ouverte — pictogramme en CONTOUR, atténué (#7579).
+    public static let stateOpened = Color(hex: "9CA3AF")
+    /// Éphémère : la flamme, et le décompte de la dernière minute.
+    public static let stateEphemeral = Color(hex: "F97316")
+    /// Flou, masqué.
+    public static let stateConcealed = Color(hex: "6B7280")
+    /// Échec d'envoi.
+    public static let stateFailed = Color(hex: "EF4444")
+
+    public static let stateViewOnceHex = "6366F1"
+    public static let stateOpenedHex = "9CA3AF"
+    public static let stateEphemeralHex = "F97316"
+    public static let stateConcealedHex = "6B7280"
+    public static let stateFailedHex = "EF4444"
+
     // MARK: - Monnaie (#6427)
     //
     // L'ARGENT de la pièce Meesh. Une Meesh est une monnaie : son glyphe dit

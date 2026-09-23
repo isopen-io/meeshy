@@ -4,8 +4,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest } from '../../utils/response';
-import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
+import { postInclude, NOT_DELETED, type PostPayload } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
+import { withViewerPostState } from '../../services/posts/viewerPostState';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
@@ -60,6 +61,10 @@ export type HashtagFeedResult = {
  * Visibilité volontairement PLUS ÉTROITE que le feed personnalisé complet —
  * PUBLIC + COMMUNITY (co-membre) + soi-même, jamais FRIENDS-only (doc-comment
  * de tête de fichier, spec §Décisions) — inchangée par cette extraction.
+ *
+ * L'ÉTAT DU LECTEUR (`isLikedByMe`, `currentUserReactions`, `isBookmarkedByMe`,
+ * `isRepostedByMe`) est posé par `withViewerPostState`, la fonction des listes
+ * du fil — sur la PAGE servie seulement, en trois requêtes groupées (#7396).
  */
 export async function chargerPostsParHashtag(
   prisma: PrismaClient,
@@ -94,7 +99,7 @@ export async function chargerPostsParHashtag(
   const TAILLE_LOT = Math.max(limit * 4, 20);
   const LOTS_MAX = 5;
 
-  const servis: Array<{ readonly post: unknown; readonly decalageApres: number }> = [];
+  const servis: Array<{ readonly post: PostPayload; readonly decalageApres: number }> = [];
   let decalage = cursor;
   let lotsLus = 0;
   let restentDesLiens = true;
@@ -129,10 +134,7 @@ export async function chargerPostsParHashtag(
     for (const [index, lien] of links.entries()) {
       const post = postsById.get(lien.postId);
       if (!post) continue;
-      servis.push({
-        post: withMentions(hoistLocationDeep(post), reader),
-        decalageApres: decalage + index + 1,
-      });
+      servis.push({ post, decalageApres: decalage + index + 1 });
       if (servis.length > limit) break;
     }
     decalage += links.length;
@@ -151,7 +153,12 @@ export async function chargerPostsParHashtag(
     ? null
     : String(pageComplete && page.length > 0 ? page[page.length - 1].decalageApres : decalage);
 
-  return { data: page.map((s) => s.post), pagination: { limit, hasMore, nextCursor } };
+  const avecEtat = await withViewerPostState(prisma, viewerUserId, page.map((s) => s.post));
+
+  return {
+    data: avecEtat.map((post) => withMentions(hoistLocationDeep(post), reader)),
+    pagination: { limit, hasMore, nextCursor },
+  };
 }
 
 // #4346 — `/posts/hashtag/:tag` devient un ALIAS déprécié de `scope=hashtag`.

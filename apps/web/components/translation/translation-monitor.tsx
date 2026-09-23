@@ -63,6 +63,7 @@ export function TranslationMonitor({
   refreshInterval = 5000
 }: TranslationMonitorProps) {
   const { t, locale } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [metrics, setMetrics] = useState<TranslationMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +132,7 @@ export function TranslationMonitor({
           {t('admin.translationMonitor.title')}
         </CardTitle>
         <Button
+          aria-label={tA11y('a11y.refresh')}
           variant="outline"
           size="sm"
           onClick={handleRefresh}

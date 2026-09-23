@@ -3,10 +3,11 @@
 import { useMemo } from 'react';
 import type { BubbleTranslation } from '@meeshy/shared/types';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
-import { mentionsToLinks } from '@meeshy/shared/types/mention';
+import { mentionsToLinks, type MentionedUser } from '@meeshy/shared/types/mention';
 import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { buildTranslationRecord } from '@/utils/translation-record';
+import { buildMentionDisplayMap } from '@/utils/mention-display';
 
 interface UseMessageDisplayProps {
   message: {
@@ -16,6 +17,12 @@ interface UseMessageDisplayProps {
     originalLanguage?: string;
     translations?: BubbleTranslation[];
     validatedMentions?: string[];
+    /**
+     * Résolution serveur des `@pseudo` — présente sur les DEUX chemins d'arrivée
+     * (REST `meta.mentionedUsers`, socket `message:new`). Absente ⇒ le handle
+     * reste le libellé.
+     */
+    mentionedUsers?: readonly MentionedUser[];
     replyTo?: {
       id: string;
       content: string;
@@ -57,11 +64,20 @@ export function useMessageDisplay({
     return message.content;
   }, [currentDisplayLanguage, message.originalLanguage, message.originalContent, message.content, message.translations]);
 
-  // Contenu avec mentions converties en liens
+  // Contenu avec mentions converties en liens, LIBELLÉES par le nom de la
+  // personne quand le serveur nous l'a donné — ce que rend iOS depuis toujours
+  // (`MessageTextRenderer.render(…, mentionDisplayNames:)`). La carte ne touche
+  // qu'au libellé : la cible reste le handle canonique, seul segment qui désigne
+  // une route (#7458).
+  const mentionDisplayNames = useMemo(
+    () => buildMentionDisplayMap(message.mentionedUsers ?? []),
+    [message.mentionedUsers],
+  );
+
   const displayContentWithMentions = useMemo(() => {
     const validUsernames = message.validatedMentions || [];
-    return mentionsToLinks(displayContent, '/u/{username}', [...validUsernames]);
-  }, [displayContent, message.validatedMentions]);
+    return mentionsToLinks(displayContent, '/u/{username}', [...validUsernames], mentionDisplayNames);
+  }, [displayContent, message.validatedMentions, mentionDisplayNames]);
 
   // Contenu traduit du message de réponse (replyTo). C'est un contenu DISTINCT du
   // principal : ses propres traductions, sa propre langue d'origine. On descend le

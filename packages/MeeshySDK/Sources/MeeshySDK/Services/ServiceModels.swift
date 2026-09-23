@@ -549,7 +549,10 @@ public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendab
 /// Historically this struct used `userId`, which caused `JSONDecoder` to fail
 /// silently against the real payload, leaving the "Écouté" / "Vu" tabs empty
 /// even when stats existed in MongoDB.
-public struct AttachmentStatusUser: Decodable, Identifiable {
+/// `Sendable` : la struct n'est faite que de `let` de types valeur, et la
+/// fiche « Vu par » charge désormais les statuts de TOUTES les pièces jointes
+/// en parallèle (#7228) — les lignes franchissent donc une frontière de tâche.
+public struct AttachmentStatusUser: Decodable, Identifiable, Sendable {
     public let participantId: String
     public let username: String
     public let avatar: String?
@@ -559,6 +562,17 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public let watchedAt: Date?
     public let listenCount: Int?
     public let watchCount: Int?
+    /// Nombre d'OUVERTURES de la pièce jointe par ce participant — l'équivalent
+    /// de `listenCount` / `watchCount` pour ce qui n'a pas de piste (image,
+    /// PDF, tableur, présentation, archive, texte).
+    ///
+    /// La passerelle le SERT depuis toujours (`MessageReadStatusService
+    /// .getAttachmentStatusDetails`, `viewCount: s.viewCount ?? 0`) ; cette
+    /// struct ne le déclarait pas, donc le décodeur le jetait en silence et la
+    /// fiche « Vu par » ne pouvait afficher aucun « Nx » pour une image (#7228).
+    /// Optionnel : une charge écrite avant ce champ décode en `nil` — « on ne
+    /// sait pas », jamais « zéro ouverture ».
+    public let viewCount: Int?
     public let listenedComplete: Bool?
     public let watchedComplete: Bool?
     public let lastPlayPositionMs: Int?

@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { useState } from 'react';
 
 import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { useLongPress } from '@/lib/view/long-press';
+import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu, type MessageMenuTarget } from './message-menu';
@@ -19,9 +21,14 @@ import { MessageMenu, type MessageMenuTarget } from './message-menu';
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  /* Le menu LIT son catalogue de façon synchrone (#7555) : le rendu jette si
+     la langue n'est pas chargée — c'est le contrat de `i18n-catalog.ts`, pas
+     un état à maquiller. Trois langues ici : le français des témoins
+     existants, l'anglais et l'arabe du témoin de rang. */
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
 });
 
 afterAll(async () => {
@@ -37,6 +44,9 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  /* La langue d'interface est un état GLOBAL du document : un témoin qui la
+     déplace la rend, sinon le suivant mesure la langue du précédent. */
+  document.documentElement.lang = 'fr';
 });
 
 type HarnessEvents = {
@@ -66,7 +76,7 @@ function Harness({
     onOpen: (anchor) => setTarget({ messageId: 'm2', element: anchor.element, isMine }),
   });
 
-  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2 });
+  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true });
   const choices = translationChoices({
     message: { originalLanguage: 'fr', translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'Hello', translationModel: 'medium', createdAt: new Date() }] },
     preferredLanguages: ['en'],
@@ -166,14 +176,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Composer · Plus…', () => {
+  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Plus…', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Composer', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -257,19 +267,19 @@ describe('MessageMenu — fermer (T9)', () => {
 });
 
 describe('MessageMenu — effets (T10)', () => {
-  test('Composer ⇒ onAction("compose"), puis le menu se ferme', () => {
+  test('Répondre ⇒ onAction("reply"), puis le menu se ferme', () => {
     let seen: string | undefined;
     const el = mount({ events: { onAction: (id) => (seen = id) } });
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    const composeButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
-      (b) => b.textContent === 'Composer',
+    const replyButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
+      (b) => b.textContent === 'Répondre',
     ) as HTMLButtonElement;
     act(() => {
-      composeButton.click();
+      replyButton.click();
     });
-    expect(seen).toBe('compose');
+    expect(seen).toBe('reply');
     expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
@@ -327,6 +337,71 @@ describe('MessageMenu — effets (T10)', () => {
       moreButton.click();
     });
     expect(seen).toEqual(['more']);
+  });
+});
+
+/**
+ * LE MENU DANS LA LANGUE DU LECTEUR (#7555).
+ *
+ * POURQUOI CES TÉMOINS SONT SUR `en` ET `ar`, JAMAIS SUR `fr`. Les libellés
+ * étaient EN DUR, en français : en `fr`, « le libellé codé » et « le libellé
+ * servi par le catalogue » rendent EXACTEMENT le même verdict — c'est la
+ * leçon 261 (un témoin de RANG ne se pose jamais sur le rang 1) appliquée à
+ * la langue. Seule une locale NON française sépare les deux, et l'arabe est
+ * la septième langue du produit — celle qu'un catalogue oublie en premier.
+ *
+ * CE QUE CES TÉMOINS NE DISENT PAS : le SENS D'ÉCRITURE. Mesuré sur `dist/`
+ * en `ar-SA`, `document.documentElement` porte `lang="ar"` mais AUCUN
+ * `dir="rtl"` — rien dans web-v2 ne le pose (ni le script d'amorçage, ni
+ * `interface-language.ts`). Le menu rend bien l'arabe et ses contrôles
+ * répondent ; il le rend de gauche à droite. C'est une lacune de l'écran
+ * ENTIER, antérieure à ce lot — #7563 la porte. La consigner ici plutôt que
+ * d'affirmer un `dir` que personne n'écrit.
+ *
+ * ET ON MESURE CE QUE LA RANGÉE AFFICHE, pas ce que le catalogue contient :
+ * un témoin qui relit `catalog-en.ts` serait vert sur un menu resté français.
+ */
+describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
+  const labelsOf = (): readonly string[] =>
+    Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent ?? '');
+
+  test('interface EN ⇒ le menu rendu est anglais, pas français', () => {
+    document.documentElement.lang = 'en';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'More…']);
+  });
+
+  test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
+    document.documentElement.lang = 'ar';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'المزيد…']);
+    expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
+      translate('ar', 'message.menu.react'),
+    );
+    expect(document.querySelector('[data-add-reaction]')?.getAttribute('aria-label')).toBe(
+      translate('ar', 'message.menu.addReaction'),
+    );
+  });
+
+  test('interface EN ⇒ le sous-menu Traduire s’annonce en anglais lui aussi', () => {
+    document.documentElement.lang = 'en';
+    const el = mount();
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const translateButton = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).find(
+      (b) => b.textContent === 'Translate',
+    ) as HTMLButtonElement;
+    act(() => {
+      translateButton.click();
+    });
+    expect(document.querySelector('[role="group"][aria-label="Translate"]')).not.toBeNull();
   });
 });
 
@@ -422,7 +497,7 @@ describe('MessageMenu — garde de protection (T11, D-23)', () => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Composer', 'Plus…']);
+    expect(labels).toEqual(['Sélectionner', 'Transférer', 'Répondre', 'Plus…']);
   });
 });
 
@@ -478,5 +553,151 @@ describe('MessageMenu — le sujet est nommé, le clone est neutralisé (revue #
     });
     const host = document.querySelector('[data-message-menu-preview-host]')!;
     expect(host.hasAttribute('inert')).toBe(true);
+  });
+});
+
+/**
+ * LE FIL SE RÉ-ANCRE TOUT SEUL, ET LE MENU DOIT TENIR (#7242).
+ *
+ * Mesuré au navigateur sur `/c/c-deploiement`, menu ouvert : la cellule de
+ * frappe apparaît (`use-thread-typing.ts`, un `typing:start` suffit), le fil
+ * grandit de 30 px, `pinToBottom` le ré-ancre en bas — et le `scroll` NATIF
+ * que cette écriture provoque démontait le portail, treize millisecondes
+ * après l'ouverture. Le lecteur visait une entrée ; le menu disparaissait
+ * sans qu'il ait rien fait.
+ *
+ * Le témoin FORCE la fenêtre : il ouvre le menu D'ABORD, puis joue l'image
+ * d'ancrage et le `scroll` que le navigateur livre ENSUITE — jamais les deux
+ * dans le même tour de rendu, où le défaut est invisible.
+ *
+ * happy-dom n'émet aucun `scroll` pour une écriture de `scrollTop` : le
+ * témoin le DISPATCHE, exactement comme le navigateur le livre (en capture,
+ * cible = le défileur). C'est la SEULE chose qu'il simule — la déclaration,
+ * elle, vient du VRAI `pinToBottom`.
+ */
+describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu', () => {
+  /** `requestAnimationFrame` bouchonné — même patron que `pin-to-bottom.test.ts` :
+   * les images se jouent À LA MAIN, l'écriture devient observable. */
+  const frameQueue = () => {
+    const pending = new Map<number, FrameRequestCallback>();
+    let next = 1;
+    return {
+      requestFrame: (callback: FrameRequestCallback) => {
+        const id = next;
+        next += 1;
+        pending.set(id, callback);
+        return id;
+      },
+      cancelFrame: (id: number) => {
+        pending.delete(id);
+      },
+      run: () => {
+        const entries = [...pending.entries()];
+        pending.clear();
+        for (const [, callback] of entries) callback(0);
+      },
+    };
+  };
+
+  const openMenu = (el: HTMLDivElement) => {
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+
+  /** Le défileur du fil, HORS du portail — `useRovingMenu` écoute `scroll`
+   * en CAPTURE sur `document`, exactement comme le navigateur le livre. */
+  const threadScroller = (): HTMLElement => {
+    const element = document.createElement('main');
+    document.body.appendChild(element);
+    return element;
+  };
+
+  /**
+   * LE DÉPLACEMENT DE L'ANCRE SE POSE (#7293) — happy-dom rend un rectangle
+   * NUL pour tout élément, donc la grandeur que la règle LIT ne varie jamais
+   * toute seule ici. Un défilement du lecteur emporte la rangée : le témoin
+   * doit donc le DIRE, sinon il mesure une immobilité de banc plutôt que le
+   * geste qu'il nomme. C'est la même discipline que `frameQueue` au-dessus —
+   * ce que le navigateur fournit, le banc le fournit à la main.
+   */
+  const anchorAt = (el: HTMLDivElement, top: number) => {
+    row(el).getBoundingClientRect = () =>
+      ({ top, bottom: top + 40, left: 0, right: 200, width: 200, height: 40, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  };
+
+  test('l’ancrage bas (quelqu’un se met à écrire) laisse le menu MONTÉ', () => {
+    const el = mount();
+    anchorAt(el, 400);
+    openMenu(el);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+
+    const scroller = threadScroller();
+    const queue = frameQueue();
+    act(() => {
+      pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+      queue.run();
+      // L'ancrage EMPORTE la rangée : sans ce déplacement, le témoin
+      // passerait par immobilité et non par la déclaration qu'il mesure.
+      anchorAt(el, 280);
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+    scroller.remove();
+  });
+
+  test('un défilement du LECTEUR, lui, ferme le menu', () => {
+    const el = mount();
+    anchorAt(el, 400);
+    openMenu(el);
+    const scroller = threadScroller();
+    act(() => {
+      anchorAt(el, 120);
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+    scroller.remove();
+  });
+
+  test('la déclaration se CONSOMME — le geste d’APRÈS referme bien le menu', () => {
+    const el = mount();
+    anchorAt(el, 400);
+    openMenu(el);
+    const scroller = threadScroller();
+    const queue = frameQueue();
+    act(() => {
+      pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+      queue.run();
+      anchorAt(el, 280);
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+
+    act(() => {
+      anchorAt(el, 160);
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+    scroller.remove();
+  });
+
+  /**
+   * #7293 — L'ÉVÉNEMENT EN VOL. Amener une rangée en vue PUIS l'ouvrir pose
+   * un `scroll` que le navigateur livre à l'image SUIVANTE, donc APRÈS le
+   * commit du menu. Il ne vient pas de l'application (rien à déclarer) et il
+   * ne dit rien de neuf : l'ancre est déjà là où le placement l'a mesurée.
+   * Le fermer là-dessus faisait disparaître le cluster avant d'être regardé.
+   */
+  test('un défilement EN VOL, qui ne déplace pas l’ancre, laisse le menu MONTÉ', () => {
+    const el = mount();
+    anchorAt(el, 400);
+    openMenu(el);
+    const scroller = threadScroller();
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+    scroller.remove();
   });
 });

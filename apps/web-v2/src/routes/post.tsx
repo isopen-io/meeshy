@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
@@ -13,8 +13,11 @@ import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
 import { useSceneGallery } from '@/lib/feed/use-scene-gallery';
 import { useOnline } from '@/lib/net/online';
 import { useParams, useSearch } from '@/lib/router';
+import { COMMENTS_ANCHOR, revealComments, useCommentsReveal } from '@/lib/view/comments-anchor';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link } from '@/routes/route-table';
 
@@ -32,6 +35,16 @@ import { FeedSkeleton } from './feed';
  * `components/comment-thread.tsx`), la surface que le lecteur de stories
  * partage. C'est là que mène le compteur de commentaires de TOUTE carte du
  * fil : il était un `<span>` inerte, il conduit désormais à ce fil.
+ *
+ * **ET L'ANCRE ARRIVE VRAIMENT** (#7113) — `/post/$post#commentaires` était
+ * l'adresse que le compteur visait, mais le routeur ne lit pas le fragment et
+ * ce `<main>`-ci défile pour son compte : le lecteur atterrissait EN HAUT
+ * d'une carte pleine hauteur. `useCommentsReveal` l'honore à l'arrivée, une
+ * fois la publication SERVIE — un refus n'ouvre aucun fil (D-6), donc révéler
+ * plus tôt viserait le vide.
+ *
+ * Le compteur de CETTE carte ne navigue pas — le fil est déjà sous elle. Il
+ * révèle, par la même fonction : un hôte de moins qui réécrit le geste.
  *
  * **AIMER, MODIFIER ET SUPPRIMER UN COMMENTAIRE** sont livrés (#7135,
  * `lib/api/comment-gestures.ts`) : chaque geste a un effet immédiat, et le
@@ -114,6 +127,11 @@ const isRefusal = (error: unknown): boolean => error instanceof ApiError && (err
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
   const post = usePost(postId);
+  /* LA SALLE DE LA PUBLICATION (#7395) — la seule audience par laquelle le
+     lecteur qui n'est pas ami de l'auteur reçoit la traduction du texte et les
+     commentaires en direct. Tenue dès l'ouverture : un refus (403/404) est
+     refusé aussi par `post:join`, indistinctement (D-6). */
+  usePublicationRoom(postId);
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
@@ -126,6 +144,12 @@ export default function PostDetailScreen() {
   const sceneGallery = useSceneGallery();
   const [search] = useSearch();
   const commentsTitle = translate(currentInterfaceLanguage(), 'comments.title');
+  const commentsAnchor = useRef<HTMLDivElement | null>(null);
+  /* LE FRAGMENT D'ARRIVÉE, lu UNE fois : c'est l'adresse par laquelle ce
+     lecteur est entré, pas celle où il en sera dans dix gestes. */
+  const arrivalHash = useRef(typeof window === 'undefined' ? '' : window.location.hash).current;
+  useCommentsReveal({ anchor: commentsAnchor, ready: post.data !== undefined, hash: arrivalHash });
+  const onComment = useCallback(() => revealComments(commentsAnchor.current), []);
 
   const model = useMemo(
     () => (post.data === undefined ? undefined : resolveFeedCardModel(post.data, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -157,12 +181,25 @@ export default function PostDetailScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
+      {/* LA MÊME COLONNE QUE LE FIL (#7449) — cet écran EST la destination du
+          geste d'ouverture d'une carte : laissé pleine largeur, il aurait
+          étiré, à UN tap du fil borné, la carte que le fil venait de borner.
+          Elle est ici sur le SCROLLPORT et non sur les cartes, parce que cet
+          écran n'a aucun chrome à l'intérieur de son défilement — pas de
+          plateau de stories à laisser courir de bord à bord. L'en-tête, lui,
+          prend la fenêtre, comme celui du fil. */}
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe" style={READING_COLUMN_STYLE}>
         {model !== undefined ? (
           <FeedPostCard
             model={model}
+            /* LA FICHE NE MÈNE PAS À ELLE-MÊME (#7284) — cet écran EST la
+               destination du geste d'ouverture ; l'y poser ajouterait un tour
+               de clavier vers la page courante. C'est le SEUL hôte de la carte
+               qui le déclare, et `routes/post-card-hosts.test.ts` le garde. */
+            isDetail
             onGesture={onGesture}
             onShare={onShare}
+            onComment={onComment}
             preferredLanguages={readerLanguages}
             onOpenScene={sceneGallery.onOpenScene}
             registerScene={registerScene}
@@ -180,7 +217,7 @@ export default function PostDetailScreen() {
             refus (D-6) dirait que la publication existe. Le même argument que
             la carte elle-même, appliqué à ce qui la suit. */}
         {model !== undefined ? (
-          <div id="commentaires" className="flex flex-col pt-2">
+          <div id={COMMENTS_ANCHOR} ref={commentsAnchor} className="flex flex-col pt-2">
             <h2 className="text-body font-semibold px-1 pb-1" style={{ color: 'var(--color-ios-ink)' }}>
               {commentsTitle}
             </h2>

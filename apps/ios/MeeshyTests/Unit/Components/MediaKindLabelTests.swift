@@ -6,8 +6,7 @@ import MeeshySDK
 ///
 /// Les libellés se résolvent par `String(localized:)`, donc depuis la langue du
 /// simulateur : chaque test qui juge un TEXTE fixe la table française, sinon il
-/// serait vert en local `fr` et rouge sur une CI `en` (même précaution que
-/// `ConversationViewModelTests.test_optimisticListPreview_captionlessMedia…`).
+/// serait vert en local `fr` et rouge sur une CI `en`.
 ///
 /// `@MainActor` sur la classe : `MediaKindLabel` est `nonisolated`, mais
 /// `ComposerAttachment` ne l'est pas — la cible app compile sous

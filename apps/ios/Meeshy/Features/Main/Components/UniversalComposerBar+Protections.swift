@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 import AVFoundation
 import Combine
@@ -41,7 +42,7 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isActive ? "flame.fill" : "timer.circle")
+                Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? MeeshyColors.error : mutedColor)
 
@@ -109,7 +110,7 @@ extension UniversalComposerBar {
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
+                            Image(systemName: MessageProtectionSymbols.ephemeralFilled)
                                 .font(.caption2)
                             Text(duration.label)
                                 .font(.caption).fontWeight(.semibold)
@@ -160,7 +161,7 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isActive ? "eye.slash.fill" : "eye.slash")
+                Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
 
@@ -208,7 +209,7 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: isActive ? "1.circle.fill" : "1.circle")
+                Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
 

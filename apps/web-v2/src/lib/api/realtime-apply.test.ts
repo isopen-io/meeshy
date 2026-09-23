@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import { served } from './prism';
+import { deliveryOf } from '@/lib/view/message';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { conversationStore } from '@/lib/conversation-store';
@@ -20,8 +21,10 @@ import {
   applyConversationUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  applyReadStatusUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
+  isReadStatusUpdated,
   isSocketMessage,
   neutralLastMessageFromPreview,
 } from './realtime-apply';
@@ -588,9 +591,11 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
 
     const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(new Date(patched?.lastMessageAt as unknown as string).toISOString()).toBe('2026-09-12T10:05:00.000Z');
-    // L'ADOPTION, elle, s'applique — miroir iOS, qui adopte dans la branche
-    // « pas de bump » et ne garde QUE le rang.
-    expect(patched?.lastMessage?.id).toBe('m-1');
+    // L'ADOPTION NON PLUS (#7547, matrice validée 2026-09-23) : un AUTRE
+    // message plus ancien sans `previewRecalculated` est une diffusion
+    // désordonnée, et « tout le groupe est jeté » — contenu compris.
+    expect(patched?.lastMessage?.id).toBe('m-2');
+    expect(patched?.lastMessage?.content).toBe('le plus récent');
   });
 
   test('adopter un AUTRE message JETTE la carte de l’ancien — jamais une traduction périmée sur un original neuf', () => {
@@ -819,5 +824,477 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
     applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
     expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
   });
+
+  test('#7526 — message sans champ translations fusionné par message:translation ne jette pas', () => {
+    const client = new QueryClient();
+    const messageWithoutTranslationsField = localMessage({ id: 'm-1' });
+    const { translations: _translations, ...messageWithoutField } = messageWithoutTranslationsField;
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([messageWithoutField as Message]));
+
+    expect(() => {
+      applyMessageTranslation(client, {
+        messageId: 'm-1',
+        translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })],
+      });
+    }).not.toThrow();
+
+    const page = threadOf(client, 'c-a');
+    const patched = page?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.translations).toHaveLength(1);
+    expect(patched?.translations[0]?.targetLanguage).toBe('fr');
+  });
 });
 
+/**
+ * `isReadStatusUpdated` (#7223) — garde de FORME pour `read-status:updated`,
+ * motif `isConversationUnreadUpdated` : ne valide QUE les champs que
+ * `applyReadStatusUpdated` lit (`conversationId`, `summary.{totalMembers,
+ * deliveredCount, readCount}`), jamais `participantId`/`userId`/`type` que ce
+ * puits ignore (§ 2 de `W2.md` — les deux audiences de `broadcastReadStatus`
+ * partagent ces quatre champs).
+ *
+ * Le second témoin fixe le vrai nom des trois compteurs
+ * (`ReadStatusSummary`, `packages/shared/types/socketio-events/message.ts:31-37`)
+ * contre le libellé — inexact — du critère de fin du lot
+ * (`receivedCount`/`deliveredToAllAt`/`readByAllAt`) : une charge qui ne
+ * porte QUE ces trois noms-là est REJETÉE.
+ */
+describe('isReadStatusUpdated (#7223) — décodage FAIL-CLOSED', () => {
+  test('la forme RÉELLE de ReadStatusSummary est reconnue', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        participantId: 'p-1',
+        userId: 'u-1',
+        type: 'read',
+        updatedAt: '2026-09-21T10:00:00.000Z',
+        summary: { totalMembers: 3, deliveredCount: 2, readCount: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  test('une charge qui ne porte que le libellé du critère de fin (FAUX) est rejetée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { receivedCount: 2, deliveredToAllAt: null, readByAllAt: null },
+      }),
+    ).toBe(false);
+  });
+
+  test('conversationId absent ⇒ rejetée', () => {
+    expect(isReadStatusUpdated({ summary: { totalMembers: 1, deliveredCount: 0, readCount: 0 } })).toBe(false);
+  });
+
+  /* #7348 — `messageId` optionnel (contrat G-5 codé par anticipation, § doc-
+     comment `applyReadStatusUpdated`) : présent et bien formé ⇒ acceptée,
+     présent et mal formé ⇒ rejetée FAIL-CLOSED (motif du reste de la garde,
+     jamais un champ non validé qui traverserait silencieusement). */
+  test('`summary.messageId` bien formé (contrat #7348/G-5) est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 'm-1' },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.messageId` mal formé (nombre) ⇒ rejetée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 42 },
+      }),
+    ).toBe(false);
+  });
+
+  /* `messageId: ''` — la forme que le TYPE seul ne distingue pas (#7348,
+     revue-correction). Elle est mal formée au même titre qu'un nombre : aucun
+     `Message.id` n'est vide. Laissée passer, elle ne tombait pas dans le REPLI
+     « la charge ne nomme aucun message » — elle prenait la branche NOMMÉE,
+     n'appariait rien, et se taisait : le puits devenait un no-op SILENCIEUX
+     sur un événement cassé, exactement ce que le doc-comment de cette garde
+     dit ne jamais faire. Une garde qui ANNONCE fail-closed doit l'être. */
+  test('`summary.messageId` VIDE ⇒ rejetée, jamais un no-op silencieux', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: '' },
+      }),
+    ).toBe(false);
+  });
+
+  /* #7347 (G-5) — `summary.readByAllAt` : maintenant CONSOMMÉ par
+     `applyReadStatusUpdated`, donc VALIDÉ ici, même motif que `messageId`
+     ci-dessus. `null` (pas encore tout le monde) et l'ISO 8601 réelle
+     (`updatedAt` ci-dessus le montre : une `Date` voyage en CHAÎNE sur le
+     fil) sont acceptées ; une forme qui n'est ni l'un ni l'autre ⇒ rejetée. */
+  test('`summary.readByAllAt` ABSENT (repli legacy) est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt: null` est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, readByAllAt: null },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt` en ISO 8601 (forme réelle sur le fil) est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: {
+          totalMembers: 1,
+          deliveredCount: 1,
+          readCount: 1,
+          readByAllAt: '2026-09-22T08:00:00.000Z',
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt` mal formé (nombre) ⇒ rejetée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, readByAllAt: 42 },
+      }),
+    ).toBe(false);
+  });
+});
+
+/**
+ * `applyReadStatusUpdated` (#7223, #7348) — LA FONCTION PURE qui applique
+ * `read-status:updated` au cache TanStack du fil.
+ *
+ * **#7348 (G-5 en amont, contrat codé par anticipation — la branche
+ * `lot/g5-7347` n'existe pas encore à l'écriture de ce lot) :** `summary`
+ * porte désormais `messageId?: string` (`ReadStatusSummary`,
+ * `packages/shared/types/socketio-events/message.ts`), optionnel pour ne
+ * rien casser côté passerelle tant que G-5 n'a pas basculé
+ * `broadcastReadStatus.ts`/`getLatestMessageSummary` sur un résumé PAR
+ * message. Présent ⇒ la fonction cible CE message par id
+ * (`findCachedThreadMessage`), qu'il soit ou non le dernier du fil — c'est
+ * la correction du défaut relevé le 2026-09-21 (une rafale M1 M2 M3 de
+ * trois auteurs différents ne faisait bouger que le dernier confirmé).
+ * ABSENT (gateway pré-G5) ⇒ repli sur `latestCachedThreadMessage`, le
+ * comportement `#7223` d'origine — la charge ne nommait alors aucun
+ * message, il fallait bien en désigner un.
+ */
+describe('applyReadStatusUpdated (#7223, #7348) — le puits de read-status:updated', () => {
+  test('#7348 — REPLI sans `messageId` (gateway pré-G5) : patch le DERNIER message du fil', () => {
+    const client = new QueryClient();
+    const older = localMessage({ id: 'm-1', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const newest = localMessage({ id: 'm-2', createdAt: new Date('2026-09-21T09:05:00.000Z') });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([older, newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 2 },
+    });
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    const patched = messages?.find((m) => m.id === 'm-2');
+    expect(patched?.deliveredCount).toBe(2);
+    expect(patched?.readCount).toBe(2);
+    expect(patched?.recipientCount).toBe(2);
+    /* LE MESSAGE PLUS ANCIEN N'EST PAS TOUCHÉ — sans `messageId`, `summary`
+       ne décrit QUE le dernier message de la conversation. */
+    const untouched = messages?.find((m) => m.id === 'm-1');
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  test('#7348 — AVEC `messageId` : patch CE message-là, même s\'il n\'est pas le plus récent', () => {
+    const client = new QueryClient();
+    const older = localMessage({ id: 'm-1', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const newest = localMessage({ id: 'm-2', createdAt: new Date('2026-09-21T09:05:00.000Z') });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([older, newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 1, readCount: 1, messageId: 'm-1' },
+    });
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    /* LE MESSAGE NOMMÉ EST PATCHÉ — bien qu'il ne soit PAS le plus récent du
+       fil, ce que le repli § précédent aurait ciblé à tort. */
+    const patched = messages?.find((m) => m.id === 'm-1');
+    expect(patched?.deliveredCount).toBe(1);
+    expect(patched?.readCount).toBe(1);
+    expect(patched?.recipientCount).toBe(2);
+    /* LE PLUS RÉCENT N'EST PAS TOUCHÉ. */
+    const untouched = messages?.find((m) => m.id === 'm-2');
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  test('#7348 — RAFALE DE TROIS, RÉSUMÉ DE TROIS ⇒ TROIS LIGNES CHANGENT (critère de fin)', () => {
+    const client = new QueryClient();
+    const m1 = localMessage({ id: 'm-1', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const m2 = localMessage({ id: 'm-2', createdAt: new Date('2026-09-21T09:01:00.000Z') });
+    const m3 = localMessage({ id: 'm-3', createdAt: new Date('2026-09-21T09:02:00.000Z') });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1, m2, m3]));
+
+    const readEvent = (messageId: string, readCount: number) => ({
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read' as const,
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 3, deliveredCount: 3, readCount, messageId },
+    });
+
+    /* La rafale : trois événements `read-status:updated` DISTINCTS, un par
+       message, comme G-5 les émettra (un résumé PAR message plutôt qu'un
+       agrégat unique — critère de fin de #7347 : « trois résumés, pas un »). */
+    applyReadStatusUpdated(client, readEvent('m-1', 1));
+    applyReadStatusUpdated(client, readEvent('m-2', 2));
+    applyReadStatusUpdated(client, readEvent('m-3', 3));
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    expect(messages?.find((m) => m.id === 'm-1')?.readCount).toBe(1);
+    expect(messages?.find((m) => m.id === 'm-2')?.readCount).toBe(2);
+    expect(messages?.find((m) => m.id === 'm-3')?.readCount).toBe(3);
+  });
+
+  test('#7347 (G-5) — `readByAllAt` PRÉSENT sur le résumé est posé sur le message ciblé', () => {
+    const client = new QueryClient();
+    const m1 = localMessage({ id: 'm-1' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+    const readByAllAt = new Date('2026-09-22T08:00:00.000Z');
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 'm-1', readByAllAt },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toEqual(readByAllAt);
+  });
+
+  test('#7347 (G-5) — `readByAllAt: null` (pas encore tout le monde) EFFACE une valeur déjà connue', () => {
+    const client = new QueryClient();
+    const m1 = localMessage({
+      id: 'm-1',
+      readByAllAt: new Date('2026-09-20T00:00:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 1, messageId: 'm-1', readByAllAt: null },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toBeUndefined();
+  });
+
+  test('#7347 (G-5) — `readByAllAt` ABSENT du résumé (repli legacy) ne touche PAS la valeur déjà connue', () => {
+    const client = new QueryClient();
+    const existing = new Date('2026-09-20T00:00:00.000Z');
+    const m1 = localMessage({ id: 'm-1', readByAllAt: existing });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 'm-1' },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toEqual(existing);
+  });
+
+  test('#7348 — `messageId` absent DU CACHE (fil incomplet) ⇒ NO-OP, aucune autre ligne n\'est touchée', () => {
+    const client = new QueryClient();
+    const only = localMessage({ id: 'm-2' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([only]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 1, readCount: 1, messageId: 'm-1-pas-en-cache' },
+    });
+
+    const untouched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  test('TOUS-OU-RIEN EN GROUPE CONSERVÉ — une lecture partielle rend `delivered`, jamais `read`', () => {
+    const client = new QueryClient();
+    const newest = localMessage({ id: 'm-2' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 3, deliveredCount: 3, readCount: 1 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(patched).toBeDefined();
+    expect(deliveryOf(patched as Message)).toBe('delivered');
+  });
+
+  test('le fil n’est pas OUVERT (aucune page en cache) ⇒ NO-OP', () => {
+    const client = new QueryClient();
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-inconnue',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+    expect(threadOf(client, 'c-inconnue')).toBeUndefined();
+  });
+
+  test('le fil est ouvert mais VIDE ⇒ NO-OP (aucun message à cibler)', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-vide'), threadPages([]));
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-vide',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+    expect(threadOf(client, 'c-vide')?.messages).toEqual([]);
+  });
+});
+
+/**
+ * #7223, revue-correction W2 — LES DEUX CHARGES QUE `applyReadStatusUpdated`
+ * NE DOIT PAS PEINDRE, et le palier qui doit atteindre le PIXEL.
+ */
+describe('applyReadStatusUpdated (#7223, revue W2) — ce qui atteint le pixel, et ce qui ne doit rien toucher', () => {
+  /**
+   * LE CRITÈRE DU LOT, jusqu'au pixel : un message DÉJÀ distribué à tous —
+   * l'état de tout message servi par `GET /conversations/:id/messages` après
+   * sa distribution — doit passer à « lu » quand le destinataire lit. La
+   * règle vit dans `deliveryOf` (`lib/view/message.ts`), ce témoin prouve
+   * que le puits l'y conduit.
+   */
+  test('un message DÉJÀ « distribué à tous » passe à LU quand le résumé dit lu', () => {
+    const client = new QueryClient();
+    const newest = localMessage({
+      id: 'm-2',
+      deliveredCount: 1,
+      readCount: 0,
+      recipientCount: 1,
+      deliveredToAllAt: new Date('2026-09-21T09:00:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(deliveryOf(patched as Message)).toBe('read');
+  });
+
+  /**
+   * LA BULLE OPTIMISTE N'EST PAS LE MESSAGE QUE LE SERVEUR DÉCRIT. `summary`
+   * porte le dernier message NON SUPPRIMÉ EN BASE
+   * (`MessageReadStatusService.getLatestMessageSummary`) — une rangée que le
+   * serveur n'a pas encore reçue (`id === clientMessageId`,
+   * `send/local-message.ts:73-74`) ne peut pas être celle-là. L'estamper
+   * posait `readCount >= recipientCount` sur un envoi qui n'est pas parti,
+   * et `confirmedMessageOf` (`send/local-message.ts:120-128`) garde
+   * `local.readCount` quand l'accusé ne porte pas ce champ : la coche ✓✓
+   * « lu » pouvait survivre à la confirmation d'un message que PERSONNE
+   * n'avait lu.
+   */
+  test('la bulle OPTIMISTE non confirmée n’est jamais estampillée — le message SERVEUR juste avant l’est', () => {
+    const client = new QueryClient();
+    const server = localMessage({ id: 'm-serveur', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const pending = localMessage({
+      id: 'tmp-1',
+      clientMessageId: 'tmp-1',
+      createdAt: new Date('2026-09-21T09:05:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([server, pending]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 2 },
+    });
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    expect(messages?.find((m) => m.id === 'tmp-1')?.readCount).toBe(0);
+    expect(messages?.find((m) => m.id === 'm-serveur')?.readCount).toBe(2);
+  });
+
+  /**
+   * `getLatestMessageSummary` rend `{0, 0, 0}` sur SON chemin d'erreur
+   * (`MessageReadStatusService.ts:2623-2625`, `catch` ⇒ zéros) comme sur une
+   * conversation sans message. Appliquer ces zéros ÉCRASE des compteurs
+   * servis par `GET …/messages` et fait RÉGRESSER la coche — un résumé qui
+   * n'affirme aucun destinataire n'affirme rien du tout.
+   */
+  test('un résumé sans destinataire (totalMembers 0) ne fait RIEN régresser', () => {
+    const client = new QueryClient();
+    const newest = localMessage({ id: 'm-2', deliveredCount: 2, readCount: 0, recipientCount: 3 });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 0, deliveredCount: 0, readCount: 0 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(patched?.deliveredCount).toBe(2);
+    expect(patched?.recipientCount).toBe(3);
+    expect(deliveryOf(patched as Message)).toBe('delivered');
+  });
+});

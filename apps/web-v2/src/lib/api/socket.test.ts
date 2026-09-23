@@ -11,6 +11,7 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
+import { attachmentStatusDetailsQueryKey } from './attachments';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
@@ -934,6 +935,55 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
   });
 
   /**
+   * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU
+   * MESSAGE » OUVERTE REFETCH SANS QU'ON LA ROUVRE.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, …)` doit le faire
+   * TOMBER.
+   */
+  test('`attachment-status:updated` est ÉCOUTÉ : la query de la pièce est invalidée', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+      attachmentId: 'att-1',
+      messageId: 'm-1',
+      conversationId: 'c-a',
+      userId: 'u-autre',
+      action: 'listened',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+    });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  test('`attachment-status:updated` — un payload SANS `attachmentId` n’invalide rien', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, { messageId: 'm-1' });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
+  test('`destroy` démonte AUSSI `attachment-status:updated`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, { attachmentId: 'att-1' });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
+  /**
    * **`comment:added` EST ÉCOUTÉ** (#7151) — et ce témoin est la moitié qui
    * manquait au lot.
    *
@@ -1095,5 +1145,91 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts.map((post) => post.id)).toEqual([
       'p-1',
     ]);
+  });
+
+  /**
+   * `read-status:updated` (#7223) — LES COCHES ✓✓ BOUGENT EN DIRECT.
+   *
+   * La règle (garde de forme, cible le dernier message, tous-ou-rien) est
+   * PROUVÉE en isolation dans `realtime-apply.test.ts` ; ce témoin prouve
+   * qu'elle est BRANCHÉE (motif `comment:added` ci-dessus, § doc-comment).
+   */
+  test('`read-status:updated` est ÉCOUTÉ : la coche du dernier message avance', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ ...socketMessage({ id: 'm-1' }), deliveredCount: 0, readCount: 0 } as unknown as Message]),
+    );
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.READ_STATUS_UPDATED, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-other',
+      type: 'read',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const patched = threadOf(queryClient, 'c-a')?.messages[0];
+    expect(patched?.deliveredCount).toBe(1);
+    expect(patched?.readCount).toBe(1);
+  });
+
+  test('`destroy` démonte AUSSI `read-status:updated`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ ...socketMessage({ id: 'm-1' }), deliveredCount: 0, readCount: 0 } as unknown as Message]),
+    );
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.READ_STATUS_UPDATED, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-other',
+      type: 'read',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const untouched = threadOf(queryClient, 'c-a')?.messages[0];
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  /**
+   * `message:pending-delivered` (#7223) — la charge ne porte PAS de compteur
+   * par message (`{count, conversationIds}`,
+   * `packages/shared/types/socketio-events/event-maps.ts:382`) : ce puits
+   * INVALIDE les fils nommés plutôt que d'inventer des compteurs qu'elle ne
+   * transporte pas (§ 2 de `W2.md`, doc-comment
+   * `MeeshySocketIOManager.ts:826-846`) — la prochaine lecture sert les
+   * compteurs réels.
+   */
+  test('`message:pending-delivered` invalide les fils NOMMÉS', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([socketMessage({ id: 'm-1' }) as unknown as Message]));
+    queryClient.setQueryData(messagesQueryKey('c-b'), threadPages([socketMessage({ id: 'm-2' }) as unknown as Message]));
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 1, conversationIds: ['c-a'] });
+
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(true);
+    /* SEULE la conversation NOMMÉE est invalidée — une conversation absente
+       de `conversationIds` n'a rien à relire. */
+    expect(queryClient.getQueryState(messagesQueryKey('c-b'))?.isInvalidated).toBe(false);
+  });
+
+  test('`destroy` démonte AUSSI `message:pending-delivered`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([socketMessage({ id: 'm-1' }) as unknown as Message]));
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 1, conversationIds: ['c-a'] });
+
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(false);
   });
 });

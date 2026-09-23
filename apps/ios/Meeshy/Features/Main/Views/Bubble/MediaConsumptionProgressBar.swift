@@ -15,9 +15,21 @@ import MeeshyUI
 struct MediaConsumptionProgressBar: View {
     let attachmentId: String
     let accentHex: String
+    /// La consommation SERVIE par la passerelle pour cette pièce jointe — elle
+    /// comble l'ABSENCE locale (#7212) : une vidéo regardée à 80 % sur l'iPhone
+    /// teinte sa barre à 80 % sur l'iPad, qui ne l'a jamais ouverte. Le local,
+    /// dès qu'il porte une valeur, garde la main.
+    var servedConsumption: MeeshyMediaConsumption? = nil
+    /// Durée de la pièce jointe (secondes) — sans elle, une position servie ne
+    /// peut pas devenir une fraction.
+    var totalDuration: TimeInterval = 0
 
     private var fraction: Double {
-        MediaConsumptionStore.shared.fraction(for: attachmentId) ?? 0
+        MediaResumeResolver.restingFraction(
+            localFraction: MediaConsumptionStore.shared.fraction(for: attachmentId),
+            servedConsumption: servedConsumption,
+            medium: .video,
+            totalDuration: totalDuration)
     }
 
     var body: some View {

@@ -45,11 +45,20 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
     // l'atteindre. Symptôme : les avis d'arrivée rendus comme des paroles,
     // avec le texte de repli du gateway en guise de bulle.
     let kindAndSource = a.messageSource == b.messageSource && a.messageType == b.messageType
+    // **L'HORLOGE d'un éphémère fait partie de ce qui change** (#7508). Ses
+    // deux porteurs arrivent par des chemins différents — la DURÉE par
+    // `message:new`, l'ÉCHÉANCE servie par REST — donc la revalidation qui
+    // apporte le second ne touche QUE lui. Absents de cette comparaison, ils
+    // rendaient la ligne « inchangée » : l'écriture était sautée et l'horloge
+    // n'atteignait jamais la base.
+    let ephemeralClock = a.expiresAt == b.expiresAt
+        && a.ephemeralDuration == b.ephemeralDuration
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
         && a.callSummaryJson == b.callSummaryJson && a.joinNoticeJson == b.joinNoticeJson
         && a.effectFlags == b.effectFlags
         && a.locationJson == b.locationJson
         && a.stickerJson == b.stickerJson
+        && ephemeralClock
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras && kindAndSource
 }

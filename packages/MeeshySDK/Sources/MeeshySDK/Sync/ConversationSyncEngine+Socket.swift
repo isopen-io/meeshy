@@ -307,19 +307,16 @@ extension ConversationSyncEngine {
         let conversationExists = cachedList.snapshot()?.contains(where: { $0.id == msg.conversationId }) ?? false
 
         if conversationExists {
+            // Garde d'ordre PARTAGÉE (#7548) : un `message:new` plus ancien que
+            // l'aperçu en place ne le régresse pas, mais le MÊME message le
+            // complète — `conversation:updated` a pu le devancer avec
+            // l'identité et le texte seuls. `clientMessageId` est l'autre nom
+            // de mon propre envoi, posé en `cid_…` par l'optimiste.
+            let aliases = apiMessage.clientMessageId.map { [$0] } ?? []
             await cache.conversations.update(for: "list") { conversations in
-                var updated = conversations
-                if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
-                    // Monotone guard: a REST send racing the socket broadcast
-                    // (or any other out-of-order `message:new`) must not
-                    // regress the row to older content/position once a
-                    // newer message has already been applied.
-                    guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].applyLastMessage(facet)
-                    let conv = updated.remove(at: idx)
-                    updated.insert(conv, at: 0)
-                }
-                return updated
+                ConversationListLastMessage.applying(
+                    facet, conversationId: msg.conversationId, aliases: aliases, to: conversations
+                ) ?? conversations
             }
         } else {
             // First time this device sees the conversation (brand-new
@@ -474,11 +471,10 @@ extension ConversationSyncEngine {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard list.first(where: { $0.id == conversationId })?.lastMessageId == deletedMessageId else { return }
         let messages = await cache.messages.load(for: conversationId).snapshot() ?? []
-        let newLast = Self.mostRecentSurvivor(in: messages, excluding: deletedMessageId)
-        await cache.conversations.update(for: "list") { conversations in
-            var updated = conversations
-            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                if let newLast {
+        if let newLast = Self.mostRecentSurvivor(in: messages, excluding: deletedMessageId) {
+            await cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                     // Le survivant est ici TOUT ENTIER : la facette s'écrit donc
                     // en bloc, plutôt que quatre champs à la main. Les sept
                     // autres décrivaient encore le message SUPPRIMÉ — sa
@@ -490,22 +486,25 @@ extension ConversationSyncEngine {
                         message: newLast,
                         preview: newLast.content
                     ))
-                } else {
-                    // The deleted message was the conversation's ONLY message — there
-                    // is no survivor to surface. Clear the stale preview so the list
-                    // row stops showing the deleted message's text (displayed ≠ real).
-                    //
-                    // Même geste que celui qu'applique `ConversationStore.merging`
-                    // quand le SERVEUR annonce « plus aucun message visible »
-                    // (`LastMessageIdentity.replaced(nil)`) : c'est le même fait,
-                    // découvert localement au lieu d'être reçu. Le vidage à la main
-                    // qui vivait ici ne touchait que le texte et l'id, laissant la
-                    // pastille de pièce jointe, l'épingle de position et le libellé
-                    // « Message expiré » décrire le message supprimé.
-                    updated[idx].clearLastMessage()
                 }
+                return updated
             }
-            return updated
+            _conversationsDidChange.send()
+            return
+        }
+        // Aucun survivant EN CACHE ne veut pas dire aucun message : une
+        // conversation jamais ouverte n'a aucun message chargé. La vider ici
+        // effaçait la ligne alors que le message PRÉCÉDENT existe (#7548,
+        // décision porteur : y revenir). Le serveur le connaît — il filtre
+        // `deletedAt: null` — donc on lui relit la ligne. Seul l'échec de
+        // cette lecture vide encore la ligne : sans remplaçant connu, un
+        // aperçu vide vaut mieux que le texte d'un message supprimé.
+        let userId = await currentUserId()
+        let server = try? await conversationService.getById(conversationId).toConversation(currentUserId: userId)
+        await cache.conversations.update(for: "list") { conversations in
+            ConversationListLastMessage.revertingDeletion(
+                of: deletedMessageId, conversationId: conversationId, server: server, in: conversations
+            ) ?? conversations
         }
         _conversationsDidChange.send()
     }
@@ -590,6 +589,14 @@ extension ConversationSyncEngine {
         // client overrides it to 0 for the open conversation because the
         // user IS reading it. This avoids the "11 → 75 then back to 0"
         // visual flicker when a stale server count momentarily lands.
+        //
+        // Ce zéro est un AFFICHAGE, pas une lecture (#7350) : le compte servi
+        // est ce qui reste vraiment non lu — un message arrivé sans être vu,
+        // ou l'arriéré après un accusé partiel. Il est retenu pour la
+        // fermeture, qui le rend à la ligne (`restoreUnreadOnClose`) ; sans
+        // lui, la liste redisait 0 pendant que le badge, qui suit le serveur,
+        // comptait la conversation. Ignoré si elle n'est pas ouverte.
+        noteUnreadRemaining(event.conversationId, event.unreadCount)
         let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
             ? 0
             : event.unreadCount

@@ -219,13 +219,71 @@ extension ConversationViewModel {
             return
         }
 
-        // Calculate first unread message position
-        if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
-            let unreadStartIndex = messages.count - initialUnreadCount
-            let candidate = messages[unreadStartIndex]
-            if !candidate.isMe {
-                firstUnreadMessageId = candidate.id
-            }
+        // La frontière du premier non-lu (#7198/#7222, correctif #7525) — la
+        // LOI partagée (`FirstUnreadBoundary.resolve`, miroir de
+        // `packages/shared/utils/first-unread.ts`), jamais la position
+        // ARITHMÉTIQUE `count - unreadCount` qu'elle remplace : celle-ci
+        // ignorait le curseur SERVEUR, comptait les messages de l'AUTEUR et
+        // se déréglait dès qu'un message était supprimé de la fenêtre.
+        // `firstUnreadMessageId` et `unreadSeparatorCount` sont gelés
+        // ENSEMBLE, dans le MÊME geste — jamais l'un sans l'autre, sinon le
+        // séparateur affiche un compte qui ne décrit plus sa position.
+        //
+        // #7525 — la loi ne fournit plus que la POSITION (`firstUnreadId`).
+        // Le COMPTE ANNONCÉ est `initialUnreadCount`, le SERVEUR (même champ
+        // `conversation.userState.unreadCount` que la ligne de liste,
+        // capturé une fois à l'ouverture — voir son doc-comment et son usage
+        // en I-2, `ConversationViewModel+Lifecycle.swift`), jamais
+        // `boundary.unreadCount` : dans une conversation chargée de messages
+        // supprimés, le curseur serveur n'avance que sur le PRÉFIXE CONTIGU
+        // vu (`MessageReadStatusService`, mode exact) et peut laisser, dans
+        // la fenêtre PAGINÉE locale, des candidats postérieurs à la
+        // frontière connue alors que le serveur les a déjà comptés lus — le
+        // compte fenêtré grossissait alors indépendamment du compte
+        // autoritatif (relevé : séparateur 8/9/10/12 quand la ligne de liste,
+        // elle, disait 5/1/2/0). `initialUnreadCount == 0` ferme le
+        // séparateur INCONDITIONNELLEMENT, quoi que la fenêtre locale
+        // calcule : le compte du séparateur et celui de la ligne de liste ne
+        // peuvent plus diverger, puisqu'ils lisent désormais le MÊME champ.
+        //
+        // CE QUE CE VERROU FERME EN PLUS, et qui est VOULU : un fil dont
+        // AUCUN compte serveur n'est connu — la conversation STUB que
+        // `GuestConversationContainer` construit pour un invité de lien
+        // partagé (ni `userState`, ni curseur de lecture, ni `joinedAt`) —
+        // n'affiche plus de séparateur du tout. `initialUnreadCount` y vaut 0
+        // par DÉFAUT et non parce qu'un serveur l'a dit ; le type ne
+        // distingue pas les deux, et c'est ASSUMÉ ici : sans curseur, la loi
+        // fenêtrée élisait le premier message de tout l'historique et
+        // annonçait la fenêtre entière à quelqu'un qui n'avait encore rien
+        // lu. Un invité n'a pas de ligne de liste, donc rien à ne pas faire
+        // diverger — le silence est la bonne réponse, et il est gardé par
+        // `test_loadMessages_guestStubConversationWithoutServerCount_showsNoSeparator`.
+        //
+        // `messageStore.domainMessages(currentUserId:)`, PAS `messages` : le
+        // `@Published var messages` de ce ViewModel n'est peuplé que par
+        // `subscribeToMessageStore()`, qui DIFFÈRE la mutation d'un tour de
+        // boucle (`DispatchQueue.main.async`, pour ne jamais publier au
+        // milieu d'un rendu SwiftUI). Ici, aucun `await` ne sépare
+        // `messageStore.apply(records:)` (plus haut) de cette ligne sur le
+        // chemin « GRDB non vide, revalidation en tâche de fond » — lire
+        // `messages` y verrait encore la fenêtre d'AVANT cette ouverture.
+        // `domainMessages` est la source SYNCHRONE que cette même
+        // souscription projette : la lire directement élimine la course.
+        if initialUnreadCount > 0, let boundary = FirstUnreadBoundary.resolve(
+            messages: messageStore.domainMessages(currentUserId: currentUserId).map {
+                FirstUnreadCandidateMessage(id: $0.id, senderId: $0.senderId, createdAt: $0.createdAt)
+            },
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: memberJoinedAt,
+            viewerId: currentUserId
+        ) {
+            firstUnreadMessageId = boundary.firstUnreadId
+            unreadSeparatorCount = initialUnreadCount
+        } else {
+            firstUnreadMessageId = nil
+            unreadSeparatorCount = 0
         }
 
         // Arm socket subscriptions now that messages are loaded — deferred

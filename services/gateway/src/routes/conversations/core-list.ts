@@ -18,7 +18,14 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
-import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
+import { loadConversationListActivity } from './utils/list-activity';
+import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
+import {
+  isPreviewWithheld,
+  resolveLastMessageNature,
+  resolvePreviewProtection,
+  summarizeAttachments,
+} from './utils/last-message-nature';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -40,6 +47,11 @@ import {
 } from '../../services/ConversationBridgeService';
 import { AgentHttpClient } from '../../services/AgentHttpClient';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import {
+  loadReadCursorBoundaries,
+  projectReadCursorBoundary,
+  type ReadCursorBoundary
+} from './read-cursor-projection';
 import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
@@ -381,7 +393,7 @@ export function registerConversationListRoute(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+            select: { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
@@ -487,7 +499,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -497,7 +509,24 @@ export function registerConversationListRoute(
         conversationIds.length > 0
           ? readStatusService.getUnreadCountsForUser(userId, conversationIds)
           : Promise.resolve(new Map<string, number>()),
+
+        // La frontière de lecture du lecteur (#7198) — lastReadMessageId /
+        // lastReadAt / lastReadMessageCreatedAt, batchés pour TOUTE la page,
+        // pas seulement les conversations à non-lus : c'est elle qui gouverne
+        // où un fil s'ouvre (D-L2) et son séparateur (D-L3), indépendamment
+        // du pont ✦ ci-dessous (qui en réutilise le résultat — R6-6).
+        currentUserParticipantIdMap.size > 0
+          ? loadReadCursorBoundaries(prisma, [...currentUserParticipantIdMap.values()])
+          : Promise.resolve(new Map<string, ReadCursorBoundary>()),
       ]);
+
+      // Par CONVERSATION plutôt que par participant — c'est la clé que la
+      // réponse et le pont (orchestratorInputs) consomment tous les deux.
+      const readCursorByConversation = new Map<string, ReadCursorBoundary>();
+      for (const [convId, participantId] of currentUserParticipantIdMap) {
+        const boundary = readCursorBoundaries.get(participantId);
+        if (boundary) readCursorByConversation.set(convId, boundary);
+      }
 
       perfTimings.parallelQueries = performance.now() - t0;
 
@@ -555,6 +584,29 @@ export function registerConversationListRoute(
           })
         : [];
 
+      // #7545 — dernière réaction (plancher de l'aperçu) et appel en cours.
+      t0 = performance.now();
+      const clearHistoryBeforeById = new Map(
+        conversations.map((c) => [c.id, c.userPreferences?.[0]?.clearHistoryBefore ?? null] as const)
+      );
+      const activityByConversation = await loadConversationListActivity(prisma, conversations, {
+        viewerLanguages,
+        historyFloorFor: (conversationId) => {
+          if (unreadableFloors.has(conversationId)) return new Date(8.64e15);
+          const floors = [historyFloors.get(conversationId), clearHistoryBeforeById.get(conversationId)]
+            .filter((d): d is Date => d instanceof Date);
+          return floors.length === 0 ? null : new Date(Math.max(...floors.map((d) => d.getTime())));
+        }
+      });
+      // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
+      const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
+      const servedEphemeralExpiry = await loadListEphemeralExpiries(
+        prisma,
+        conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+        (conversationId) => readerParticipantByConversation.get(conversationId)
+      );
+      perfTimings.listActivity = performance.now() - t0;
+
       // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
       // Attaché DANS cette passe, jamais dans une passe séparée : `buildBridgeData`
       // a besoin d'`unreadCountMap`, qui vient d'être calculé ci-dessus — le
@@ -599,36 +651,27 @@ export function registerConversationListRoute(
           // Le service retombe alors sur sa branche par défaut pour CETTE
           // conversation — dégradation prévue, jamais une fabrication.
           const bridgeConvIds = new Set(bridgeCandidates.map((c) => c.conversationId));
-          const viewerParticipantIds = [...currentUserParticipantIdMap.entries()]
-            .filter(([convId]) => bridgeConvIds.has(convId))
-            .map(([, participantId]) => participantId);
 
           const lastOpenedAtByConversation = new Map<string, Date | null>();
+          for (const [convId, boundary] of readCursorByConversation) {
+            if (bridgeConvIds.has(convId)) lastOpenedAtByConversation.set(convId, boundary.lastReadAt);
+          }
+
           // R6-6 — mutualisée avec `ConversationBridgeService.buildBridgeData` :
-          // cette lecture couvre les MÊMES participants que sa propre requête
-          // `conversationReadCursor` interne (même conversations, même
-          // lecteur) ; `lastReadMessageCreatedAt` est lu en plus, pour rien de
-          // plus, afin que la map ci-dessous puisse servir aux DEUX besoins.
+          // dérivée de la MÊME lecture batchée que la frontière de lecture
+          // servie au lecteur (#7198, `readCursorBoundaries` au-dessus), pas
+          // d'une requête à part — la page entière ne paie plus qu'UNE lecture
+          // de `conversationReadCursor`, pour les DEUX besoins (le pont et la
+          // frontière servie inconditionnellement).
           const cursorsByParticipant = new Map<
             string,
             { lastReadAt: Date | null; lastReadMessageCreatedAt: Date | null }
           >();
-          if (viewerParticipantIds.length > 0) {
-            const participantToConversation = new Map(
-              [...currentUserParticipantIdMap.entries()].map(([convId, participantId]) => [participantId, convId])
-            );
-            const cursors = await prisma.conversationReadCursor.findMany({
-              where: { participantId: { in: viewerParticipantIds } },
-              select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true }
+          for (const [participantId, boundary] of readCursorBoundaries) {
+            cursorsByParticipant.set(participantId, {
+              lastReadAt: boundary.lastReadAt,
+              lastReadMessageCreatedAt: boundary.lastReadMessageCreatedAt
             });
-            for (const cursor of cursors) {
-              cursorsByParticipant.set(cursor.participantId, {
-                lastReadAt: cursor.lastReadAt ?? null,
-                lastReadMessageCreatedAt: cursor.lastReadMessageCreatedAt ?? null
-              });
-              const convId = participantToConversation.get(cursor.participantId);
-              if (convId) lastOpenedAtByConversation.set(convId, cursor.lastReadAt ?? null);
-            }
           }
 
           const now = new Date();
@@ -759,18 +802,23 @@ export function registerConversationListRoute(
                  sérialisée selon le chemin — un cast trop étroit décrit mal ce
                  qu'on lit, et `isLastMessageProtected` accepte les deux. */
               expiresAt?: Date | string | null;
+              ephemeralDuration?: number | null;
+              isEncrypted?: boolean | null;
             }
           | undefined;
         // #6111 — un dernier message à vue unique, flouté ou éphémère périmé
         // ne transporte plus rien de son contenu, carte du Prisme comprise :
         // masquer `lastMessage.content` sans y toucher aurait laissé partir
         // la traduction du même message sous un autre nom.
+        //
+        // #7545 — le prédicat est celui du socket (`resolvePreviewProtection`),
+        // `ephemeralDuration` compris : sans elle, l'heure interne de
+        // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
+        // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
+        const firstId = conversation.messages[0]?.id;
+        const servedExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
         const lastMessageProtected = latestMessage
-          ? isLastMessageProtected({
-              isBlurred: latestMessage.isBlurred,
-              isViewOnce: latestMessage.isViewOnce,
-              expiresAt: latestMessage.expiresAt
-            })
+          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt }))
           : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
@@ -835,9 +883,18 @@ export function registerConversationListRoute(
             // bien porter un lieu qu'un sticker ou un résumé — rien de ce
             // qu'elle transporte n'a le droit de sortir.
             const place = lastMessageProtected ? null : sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
+            const { attachments: loadedAttachments, ...msgWithoutAttachments } = msgRest;
             return {
-              ...msgRest,
+              ...msgWithoutAttachments,
+              // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ;
+              // la liste n'en SERT que la première en détail.
+              ...resolveLastMessageNature(msg),
+              attachments: (loadedAttachments ?? []).slice(0, 1),
+              attachmentSummary: lastMessageProtected
+                ? null
+                : summarizeAttachments(loadedAttachments ?? [], msg._count?.attachments),
               content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
+              ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
               // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
               // continuent de partir : ce sont eux qui qualifient le
               // placeholder que le client compose (« Message à vue unique »).
@@ -864,13 +921,19 @@ export function registerConversationListRoute(
             };
           })(),
           unreadCount,
+          lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
+          activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
           // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
           // quand `unreadCount === 0` ou que la passe n'a rien à annoncer
-          // (contrat gelé §3.2). `lastReadAt` voyage À CÔTÉ du pont et reste
-          // ABSENT sans curseur (arbitrage REV-4 : une absence ne s'affirme
-          // jamais).
+          // (contrat gelé §3.2).
           ...(bridgeEntry ? { bridge: bridgeEntry.bridge } : {}),
-          ...(bridgeEntry?.lastReadAt ? { lastReadAt: bridgeEntry.lastReadAt } : {}),
+          // La frontière de lecture du lecteur (#7198) — lastReadMessageId /
+          // lastReadAt / lastReadMessageCreatedAt, servie INCONDITIONNELLEMENT
+          // (pas seulement quand le pont s'affiche) : une conversation
+          // ENTIÈREMENT lue en a autant besoin qu'une conversation à
+          // non-lus — c'est elle qui gouverne où un fil s'ouvre (D-L2) et son
+          // séparateur (D-L3). ABSENTE sans curseur, jamais fabriquée (REV-4).
+          ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null
         };

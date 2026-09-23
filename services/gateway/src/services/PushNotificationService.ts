@@ -16,6 +16,7 @@ import {
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
+import { webPushConfig } from './web-push-config';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -655,20 +656,7 @@ export class PushNotificationService {
               },
             };
       } else if (tokenRecord.platform === 'web' && !dataOnly) {
-        const link = payload.link || (payload.data?.conversationId ? `/conversations/${payload.data.conversationId}` : undefined);
-        message.webpush = {
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            icon: '/android-chrome-192x192.png',
-            badge: '/badge-72x72.png',
-          },
-          ...(link && {
-            fcmOptions: {
-              link
-            }
-          })
-        };
+        message.webpush = webPushConfig(payload);
       }
 
       if (payload.collapseId) {

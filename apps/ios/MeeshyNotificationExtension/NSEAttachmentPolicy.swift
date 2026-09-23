@@ -84,13 +84,48 @@ nonisolated enum NSEAttachmentPolicy {
         return base.hasPrefix("image/") || base.hasPrefix("audio/")
     }
 
+    /// **Ce message DÉCLARE-T-IL une protection de contenu ?** (#7453)
+    ///
+    /// Le serveur ne pose déjà plus d'URL de média pour un message protégé
+    /// (`mediaMayTravel`, cycle 125) : une photo à VUE UNIQUE s'affichait
+    /// ENTIÈRE sur l'écran verrouillé sous une bannière qui disait « 👁️ 🖼️ ».
+    /// Ce prédicat est le SECOND VERROU, côté client — la leçon 275 du dépôt :
+    /// « une protection de contenu se mesure sur tout ce que la charge
+    /// TRANSPORTE, jamais sur sa seule chaîne », et un champ de service qui
+    /// DÉCLARE une restriction ne la fait pas respecter.
+    ///
+    /// Deux déclarations, lues ensemble parce qu'aucune n'est garantie :
+    /// `effectFlags` porte les bits de cycle de vie (éphémère, flouté, vue
+    /// unique) ; `notificationLocKey` est posé par `protectedPreview`, son
+    /// unique producteur côté passerelle — sa PRÉSENCE est une déclaration de
+    /// protection, jamais un indice.
+    static func declaresProtection(userInfo: [AnyHashable: Any]) -> Bool {
+        if let key = userInfo["notificationLocKey"] as? String,
+           !key.trimmingCharacters(in: .whitespaces).isEmpty {
+            return true
+        }
+        guard let flags = declaredInt(userInfo["effectFlags"]) else { return false }
+        return flags & lifecycleFlagsMask != 0
+    }
+
+    /// Masque des bits de cycle de vie de `MessageEffectFlags` — éphémère (0),
+    /// flouté (1), vue unique (2). Écrit ici plutôt qu'importé : ce fichier ne
+    /// dépend que de Foundation, et c'est cette absence de dépendance qui le
+    /// met à portée de `MeeshyTests`.
+    private static let lifecycleFlagsMask = 0b111
+
     /// La taille telle qu'elle voyage sur le fil APNs. Le gateway sérialise les
     /// nombres de sa charge `data` en CHAÎNES (cf. `attachmentDurationMs`) ;
     /// une charge de test ou une version future peut porter un nombre. Les deux
     /// formes se lisent ici, à un seul endroit, plutôt que d'être devinées au
     /// site d'appel — une taille mal lue vaut une taille absente, et une taille
     /// absente ouvre le pré-vol.
-    static func declaredFileSize(_ raw: Any?) -> Int? {
+    static func declaredFileSize(_ raw: Any?) -> Int? { declaredInt(raw) }
+
+    /// Un entier de la charge `data`, qu'il voyage en nombre ou en chaîne.
+    /// `declaredFileSize` en est le nom MÉTIER ; `declaresProtection` lit des
+    /// drapeaux, pas une taille, et appelle donc celui-ci.
+    private static func declaredInt(_ raw: Any?) -> Int? {
         if let number = raw as? NSNumber { return number.intValue }
         guard let text = raw as? String else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespaces)

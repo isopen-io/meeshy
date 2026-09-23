@@ -33,6 +33,28 @@ public struct MessageExpiredEvent: Decodable, Sendable {
     }
 }
 
+/// `message:countdown-started` — le gateway a enregistré la PREMIÈRE réception
+/// d'un destinataire et sert désormais une échéance pour ce lecteur (contrat du
+/// fil #7451, point 5).
+///
+/// L'événement existe parce que `message:new` ne PEUT PAS porter l'échéance
+/// d'un éphémère : c'est une diffusion en room, et l'échéance est résolue par
+/// LECTEUR (`D(u) = réception(u) + ephemeralDuration`). Il part donc vers la
+/// room `user:<destinataire>` — pour ses AUTRES appareils, qui n'ont pas vu
+/// l'arrivée — et vers `user:<expéditeur>`, avec la plus tardive des échéances
+/// connues, qui est la seule horloge qu'un envoi puisse afficher.
+public struct MessageCountdownStartedEvent: Decodable, Sendable {
+    public let messageId: String
+    public let conversationId: String
+    public let expiresAt: Date
+
+    public init(messageId: String, conversationId: String, expiresAt: Date) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+        self.expiresAt = expiresAt
+    }
+}
+
 /// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
 ///
 /// Le couple, jamais le seul `messageId` : un lot de masquage traverse
@@ -702,74 +724,21 @@ public struct TranscriptionFailedEvent: Codable, Sendable {
     public let taskId: String?
 }
 
-public struct ReadStatusSummary: Decodable, Sendable {
-    public let totalMembers: Int
-    public let deliveredCount: Int
-    public let readCount: Int
-}
+/// `message:pending-delivered` — la file hors-ligne d'un utilisateur vient
+/// d'être rejouée au reconnect. `count` ne compte que ce qui est réellement
+/// reparti ; `conversationIds` nomme les fils TOUCHÉS par le drain (rejeu
+/// réussi ou entrée perdue), pour qu'un client aille les resynchroniser.
+/// I3 (#7349) : iOS ne l'écoutait pas du tout (vérifié : aucune occurrence
+/// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que web-v2
+/// l'utilise déjà pour invalider ses listes de messages
+/// (`apps/web-v2/src/lib/api/socket.ts`).
+public struct PendingMessagesDeliveredEvent: Decodable, Sendable {
+    public let count: Int
+    public let conversationIds: [String]
 
-public struct ReadStatusUpdateEvent: Decodable, Sendable {
-    public let conversationId: String
-    public let participantId: String
-    /// `User.id` of the actor, or `nil` when the actor is an ANONYMOUS
-    /// participant — they have no `User` row, so `participantId` is their only
-    /// identity. Expected on the automatic delivery receipt of a share-link
-    /// conversation, where anonymous participants are the dominant population.
-    /// Consumers comparing this against the current user (multi-device read
-    /// cursor sync) need no change: `nil` matches nobody, which is correct.
-    public let userId: String?
-    public let type: String
-    public let updatedAt: Date
-    public let summary: ReadStatusSummary
-    /// Read frontier of the ACTOR at broadcast time. Lets the actor's OTHER
-    /// devices sync their own read cursor (multi-device read sync). `nil` from
-    /// a pre-rollout gateway or when the actor has no cursor yet. A recipient
-    /// who is not the actor MUST ignore it. Read receipts are monotone, so a
-    /// client applies it only when strictly newer than its local cursor.
-    ///
-    /// The actor is `userId ?? participantId`, in that order. `userId` alone is
-    /// `nil` for a share-link guest, whose devices could then never recognise
-    /// themselves; `participantId` is non-nil for the whole population and
-    /// shared by every device of one identity. Same rule that names the
-    /// personal room. This client has no accountless session, so it matches on
-    /// `userId` only — the second branch stays unused here, and
-    /// `ConversationStoreSocketBridge` is correct as written.
-    ///
-    /// **Delivered ONLY in the copy addressed to the actor.** This field and
-    /// `unreadCount` describe a person, not the conversation — how far behind
-    /// they are on this thread, and when they last caught up. The gateway
-    /// therefore emits a `read` TWICE: one copy without them to the
-    /// conversation fan-out, one complete copy to the actor's personal room
-    /// (`user:<userId ?? participantId>`), which the fan-out excludes so no
-    /// socket receives both. Nothing changes for this client: a device of the
-    /// actor still joins that room at authentication and still receives the
-    /// pair. A device that is NOT the actor now simply never sees the values
-    /// its `event.userId == me` gate was already discarding.
-    public let lastReadAt: Date?
-    /// Server-authoritative unread count for the ACTOR after the action.
-    /// Same `userId ?? participantId` scoping as `lastReadAt`, and the same
-    /// addressing scope: the actor's copy, never the fan-out. `nil` from a
-    /// pre-rollout gateway.
-    public let unreadCount: Int?
-
-    public init(
-        conversationId: String,
-        participantId: String,
-        userId: String?,
-        type: String,
-        updatedAt: Date,
-        summary: ReadStatusSummary,
-        lastReadAt: Date? = nil,
-        unreadCount: Int? = nil
-    ) {
-        self.conversationId = conversationId
-        self.participantId = participantId
-        self.userId = userId
-        self.type = type
-        self.updatedAt = updatedAt
-        self.summary = summary
-        self.lastReadAt = lastReadAt
-        self.unreadCount = unreadCount
+    public init(count: Int, conversationIds: [String]) {
+        self.count = count
+        self.conversationIds = conversationIds
     }
 }
 
@@ -888,254 +857,6 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
 
 public struct SocketEventUser: Decodable, Sendable {
     public let id: String
-}
-
-/// Tri-état du Prisme Linguistique de la ligne de liste, porté par
-/// `conversation:updated`.
-///
-/// `Optional` ne suffit pas : il confond « la clé était ABSENTE du payload »
-/// (une mise à jour de métadonnées — renommage, avatar — qui ne parle pas du
-/// dernier message) et « la clé valait `null` » (le serveur DIT que la carte
-/// est périmée). Les deux demandent des actions opposées.
-///
-/// C'est exactement ce qu'une ÉDITION produit : le gateway remet
-/// `Message.translations` à null dans la même écriture que le nouveau contenu,
-/// tout en gardant le MÊME `lastMessageId`. Aucune heuristique client ne peut
-/// trancher ce cas — « vider quand l'id change » le laisse passer, et vider
-/// inconditionnellement effacerait la carte que `message:new` vient
-/// d'installer sur le chemin d'envoi. Seul ce `null` REÇU le peut.
-public enum LastMessagePreviewTranslations: Sendable, Hashable {
-    /// Clé absente : la carte du cache n'est pas concernée par cet événement.
-    case unchanged
-    /// Clé présente : la carte du cache est REMPLACÉE par celle-ci — vide
-    /// comprise, et c'est tout l'intérêt.
-    case replaced([String: String])
-}
-
-/// Tri-état de l'IDENTITÉ du dernier message de la ligne de liste, portée par
-/// `conversation:updated`.
-///
-/// Même raison d'être que `LastMessagePreviewTranslations`, appliquée au champ
-/// qui NOMME le message : `Optional` confond « la clé était ABSENTE » (un
-/// renommage, un changement d'avatar — cet événement ne parle pas du dernier
-/// message) et « la clé valait `null` » (le serveur DIT que ce lecteur n'a plus
-/// AUCUN message visible ici).
-///
-/// Le second cas n'est pas théorique : un lecteur qui masque pour lui-même —
-/// suppression pour soi, purge d'historique — le dernier message qui lui restait
-/// vide sa propre vue sans rien changer pour les autres.
-/// `emitConversationPreviewUpdate` lui sert alors un payload dont TOUT le groupe
-/// d'aperçu vaut `null`. Lu à travers des `Optional`, ce payload ne dit rien du
-/// tout : chaque `if let` le jette, et la ligne de liste continue d'afficher
-/// l'aperçu de ce que le lecteur vient de masquer — définitivement, puisque plus
-/// rien ne bougera dans cette conversation.
-public enum LastMessageIdentity: Sendable, Hashable {
-    /// Clé absente : cet événement ne parle pas du dernier message.
-    case unchanged
-    /// Clé présente. `nil` = plus AUCUN message visible pour ce lecteur.
-    case replaced(String?)
-}
-
-/// L'AUTEUR du dernier message, tel que la ligne de liste le préfixe
-/// (« `<Auteur>` : `<message>` »).
-///
-/// Même distinction à trois états que `LastMessageIdentity`, et pour la même
-/// raison — mais elle vaut ici davantage, parce que la fusion EFFACE l'auteur
-/// par défaut : un `Optional` nu ne saurait pas séparer « cet événement ne
-/// parle pas de l'auteur » (ne touche à rien) de « il n'y a pas d'auteur à
-/// afficher » (efface), et les deux se produisent.
-///
-/// La passerelle sert ce champ depuis toujours (`lastMessageSenderName`,
-/// `socketio-events/conversation.ts`, calculé par `lastMessagePreviewPrism`) ;
-/// ce décodeur ne le déclarait pas, donc le client JETAIT une donnée qu'il
-/// recevait déjà, puis reposait l'aperçu sans son auteur. D'où le symptôme :
-/// le texte est là, l'auteur a disparu.
-public enum LastMessageSenderName: Sendable, Hashable {
-    /// Clé absente : cet événement ne dit rien de l'auteur.
-    case unchanged
-    /// Clé présente. `nil` = aucun auteur à afficher.
-    case replaced(String?)
-}
-
-public struct ConversationUpdatedEvent: Decodable, Sendable {
-    public let conversationId: String
-    public let title: String?
-    public let description: String?
-    public let avatar: String?
-    public let banner: String?
-    public let defaultWriteRole: String?
-    public let isAnnouncementChannel: Bool?
-    public let slowModeSeconds: Int?
-    public let autoTranslateEnabled: Bool?
-    /// New as of the conversation-list bump-to-top work: the gateway emits
-    /// this on every message broadcast (handlers/MessageHandler.ts) so the
-    /// client can re-sort the conversation list in real time without a
-    /// delta sync round-trip. Optional for retro-compatibility with
-    /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
-    /// etc.) that don't advance lastMessageAt.
-    public let lastMessageAt: Date?
-    /// Le message que cette ligne de liste doit désormais désigner. Tri-état —
-    /// voir `LastMessageIdentity` : `.unchanged` (clé absente) et
-    /// `.replaced(nil)` (« plus aucun message visible ici ») demandent des
-    /// actions opposées, et `String?` les confondait.
-    ///
-    /// Renseigné par le chemin message-driven (`MessageHandler.ts`) pour que le
-    /// client mette à jour l'aperçu sans requête séparée, et par
-    /// `emitConversationPreviewUpdate` sur les recalculs.
-    public let lastMessage: LastMessageIdentity
-    public let lastMessagePreview: String?
-    /// L'auteur du dernier message, pour le préfixe de la ligne de liste.
-    public let lastMessageSenderName: LastMessageSenderName
-    /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
-    /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
-    /// résolveur PRÉFÈRE la traduction hydratée par `GET /conversations` à
-    /// `lastMessagePreview`, et rien sur le fil ne disait qu'elle était périmée.
-    public let lastMessageTranslations: LastMessagePreviewTranslations
-    public let lastMessageOriginalLanguage: String?
-    /// Position du dernier message, hissée par le chemin message-driven
-    /// (`MessageHandler.ts`) et par `emitConversationPreviewUpdate`. Un message
-    /// position-seule a un `lastMessagePreview` vide — c'est ce champ qui
-    /// permet à la ligne d'aperçu de composer son libellé.
-    public let location: SharedPlace?
-    public let senderId: String?
-    /// Optional because the gateway's message-driven CONVERSATION_UPDATED
-    /// payload (handlers/MessageHandler.ts on every new message) only
-    /// carries `{ conversationId, lastMessageAt, lastMessageId,
-    /// lastMessagePreview, senderId, updatedAt }` — no `updatedBy`. Decoding
-    /// it as required would silently fail with `keyNotFound` on every
-    /// inbound message, which is the entire signal that drives bumpToTop.
-    /// Metadata-driven updates (rename, avatar change, etc.) keep emitting
-    /// `updatedBy` and continue to populate this field.
-    public let updatedBy: SocketEventUser?
-    public let updatedAt: String
-    /// `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de sa
-    /// base, par opposition à une poussée du message qu'on vient d'écrire.
-    ///
-    /// C'est la seule chose qui autorise le groupe d'aperçu à RECULER dans le
-    /// temps. `ConversationStore.merging` tient ce groupe pour monotone — un
-    /// `lastMessageAt` plus ancien y désigne un message périmé — parce que du
-    /// seul contenu, une diffusion arrivée dans le désordre et un recalcul
-    /// autoritatif sont indiscernables : les deux reculent, les deux nomment un
-    /// autre message. Supprimer le dernier message pour tous, ou masquer son
-    /// propre dernier message visible, produit pourtant un aperçu légitimement
-    /// PLUS ANCIEN.
-    ///
-    /// Absent des payloads message-driven, et absent de tout gateway antérieur
-    /// à ce champ : `false` par défaut conserve alors exactement l'ancienne
-    /// règle.
-    public let previewRecalculated: Bool
-
-    private enum CodingKeys: String, CodingKey {
-        case conversationId, title, description, avatar, banner
-        case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
-        case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
-        case lastMessageSenderName
-        case location
-        case lastMessageTranslations, lastMessageOriginalLanguage
-        case previewRecalculated
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        conversationId = try container.decode(String.self, forKey: .conversationId)
-        title = try container.decodeIfPresent(String.self, forKey: .title)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
-        banner = try container.decodeIfPresent(String.self, forKey: .banner)
-        defaultWriteRole = try container.decodeIfPresent(String.self, forKey: .defaultWriteRole)
-        isAnnouncementChannel = try container.decodeIfPresent(Bool.self, forKey: .isAnnouncementChannel)
-        slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
-        autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
-        lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
-        // `contains`, comme pour la carte du Prisme juste en dessous et pour la
-        // même raison : c'est la PRÉSENCE de la clé qui sépare « cet événement
-        // ne parle pas du dernier message » de « il n'y en a plus aucun ».
-        if container.contains(.lastMessageId) {
-            lastMessage = .replaced(try container.decodeIfPresent(String.self, forKey: .lastMessageId))
-        } else {
-            lastMessage = .unchanged
-        }
-        lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
-        // `contains`, comme l'identité du dernier message ci-dessus : la
-        // PRÉSENCE de la clé sépare « cet événement ne dit rien de l'auteur »
-        // de « il n'y a pas d'auteur à afficher ».
-        if container.contains(.lastMessageSenderName) {
-            lastMessageSenderName = .replaced(try container.decodeIfPresent(String.self, forKey: .lastMessageSenderName))
-        } else {
-            lastMessageSenderName = .unchanged
-        }
-        // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
-        // distingue « cet événement ne parle pas d'aperçu » de « la carte est
-        // périmée ». `decodeIfPresent` rend `nil` dans les deux cas et perdrait
-        // précisément le signal que le serveur envoie.
-        if container.contains(.lastMessageTranslations) {
-            let map = try container.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
-            lastMessageTranslations = .replaced(map ?? [:])
-        } else {
-            lastMessageTranslations = .unchanged
-        }
-        lastMessageOriginalLanguage = try container.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
-        location = try container.decodeIfPresent(SharedPlace.self, forKey: .location)
-        senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
-        updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
-        updatedAt = try container.decode(String.self, forKey: .updatedAt)
-        previewRecalculated = try container.decodeIfPresent(Bool.self, forKey: .previewRecalculated) ?? false
-    }
-
-    public init(
-        conversationId: String,
-        title: String? = nil,
-        description: String? = nil,
-        avatar: String? = nil,
-        banner: String? = nil,
-        defaultWriteRole: String? = nil,
-        isAnnouncementChannel: Bool? = nil,
-        slowModeSeconds: Int? = nil,
-        autoTranslateEnabled: Bool? = nil,
-        lastMessageAt: Date? = nil,
-        lastMessage: LastMessageIdentity = .unchanged,
-        lastMessagePreview: String? = nil,
-        lastMessageSenderName: LastMessageSenderName = .unchanged,
-        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
-        lastMessageOriginalLanguage: String? = nil,
-        location: SharedPlace? = nil,
-        senderId: String? = nil,
-        updatedBy: SocketEventUser? = nil,
-        updatedAt: String,
-        previewRecalculated: Bool = false
-    ) {
-        self.conversationId = conversationId
-        self.title = title
-        self.description = description
-        self.avatar = avatar
-        self.banner = banner
-        self.defaultWriteRole = defaultWriteRole
-        self.isAnnouncementChannel = isAnnouncementChannel
-        self.slowModeSeconds = slowModeSeconds
-        self.autoTranslateEnabled = autoTranslateEnabled
-        self.lastMessageAt = lastMessageAt
-        self.lastMessage = lastMessage
-        self.lastMessagePreview = lastMessagePreview
-        self.lastMessageSenderName = lastMessageSenderName
-        self.lastMessageTranslations = lastMessageTranslations
-        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
-        self.location = location
-        self.senderId = senderId
-        self.updatedBy = updatedBy
-        self.updatedAt = updatedAt
-        self.previewRecalculated = previewRecalculated
-    }
-
-    /// L'id porté, `nil` quand la clé était absente OU nulle.
-    ///
-    /// Réservé aux appelants pour qui les deux se valent — typiquement la
-    /// construction d'une facette décrivant un message NEUF, chemin qu'un
-    /// vidage n'atteint jamais (il n'avance aucun horodatage). Partout où le
-    /// vidage compte, c'est `lastMessage` qu'il faut lire.
-    public var lastMessageIdValue: String? {
-        guard case .replaced(let id) = lastMessage else { return nil }
-        return id
-    }
 }
 
 /// `conversation:participant-joined` — quelqu'un a été AJOUTÉ à la conversation.
@@ -1683,6 +1404,11 @@ public protocol MessageSocketProviding: Sendable {
     /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
+    /// `message:countdown-started` — l'échéance SERVIE d'un éphémère, résolue
+    /// pour CE lecteur. Dans le protocole pour la même raison que ses voisins :
+    /// le consommateur (`ConversationSocketHandler`) ne détient qu'un
+    /// `MessageSocketProviding`.
+    var messageCountdownStarted: PassthroughSubject<MessageCountdownStartedEvent, Never> { get }
     /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
@@ -1706,6 +1432,8 @@ public protocol MessageSocketProviding: Sendable {
     /// sans attendre une transition d'état spontanée.
     var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    /// `message:pending-delivered` — voir `PendingMessagesDeliveredEvent`.
+    var pendingMessagesDelivered: PassthroughSubject<PendingMessagesDeliveredEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     /// `message:attachment-updated` — delta émis par le gateway après un
     /// enrichissement async (transcription Whisper, traduction audio NLLB+TTS).
@@ -2000,6 +1728,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    public let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -2023,6 +1752,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    public let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
 
     // Combine publishers — attachment status
     public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
@@ -3271,6 +3001,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // L'échéance SERVIE d'un éphémère (#7451 point 5). Elle ne REMPLACE pas
+        // l'échéance locale : les deux concourent et la plus PROCHE gagne
+        // (`EphemeralDeadline.resolve`). C'est ce qui rend le client correct
+        // avant comme après la fusion du lot gateway — sans cet événement, il
+        // décompte depuis sa propre réception ; avec lui, il ne peut que
+        // raccourcir.
+        socket.on("message:countdown-started") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageCountdownStartedEvent.self, from: data) { [weak self] event in
+                self?.messageCountdownStarted.send(event)
+            }
+        }
+
         // Le canal de visibilité PERSONNELLE. La room est celle de
         // l'UTILISATEUR, pas du socket : l'appareil qui a émis la requête reçoit
         // l'événement lui aussi, et le retrait y est idempotent (il a déjà
@@ -3495,6 +3238,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(AttachmentStatusUpdatedEvent.self, from: data) { [weak self] event in
                 self?.attachmentStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("message:pending-delivered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(PendingMessagesDeliveredEvent.self, from: data) { [weak self] event in
+                self?.pendingMessagesDelivered.send(event)
             }
         }
 

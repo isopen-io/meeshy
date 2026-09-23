@@ -4,6 +4,8 @@ import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
+import type { SharedPlace } from '@/lib/send/shared-place';
+
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
@@ -124,9 +126,20 @@ export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId:
 
 /** FABRIQUE (F3) — la même forme que `conversationsQuery`. `select` reste une
  * fonction de MODULE (`threadWindowOf`), jamais une lambda écrite en ligne :
- * le doc-comment de `flattenMessagePages` porte la mesure. */
+ * le doc-comment de `flattenMessagePages` porte la mesure.
+ *
+ * **`staleTime: 0` (#7353)** — un fil n'est PAS une famille quasi-immuable
+ * (`query-freshness.test.ts`, #6974) : c'est la donnée la plus VIVANTE de
+ * l'application. Le défaut de `createAppQueryClient` (30 s) laissait un
+ * rechargement qui suit une absence COURTE dans la fenêtre de fraîcheur :
+ * le cache restauré était servi et rien ne revalidait, alors que le serveur
+ * avait avancé (recette staging 2026-09-21). Cache-first reste entier (D-2,
+ * aucun spinner sur un cache non vide) : la valeur ne gouverne QUE la
+ * revalidation de fond — la MÊME doctrine que `useStoryFeed` / `usePost`.
+ * Posée ICI, dans la fabrique que `useMessages` consomme telle quelle, pour
+ * que le témoin `thread-reload-freshness.test.ts` mesure ce que l'écran sert. */
 export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
-  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf };
+  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf, staleTime: 0 };
 }
 
 export type { HttpTransport };
@@ -134,10 +147,11 @@ export type { HttpTransport };
 /* ───────────────────────── LE CACHE DU FIL ─────────────────────────────── */
 
 /**
- * **LES QUATRE ACCÈS AU CACHE DU FIL** (#6972, étape 1) — deux pour LIRE, deux
- * pour ÉCRIRE, et rien d'autre ne connaît la forme de la page.
+ * **LES ACCÈS AU CACHE DU FIL** (#6972, étape 1 ; CINQUIÈME accès #7223) —
+ * deux pour ÉCRIRE, trois pour LIRE, et rien d'autre ne connaît la forme de
+ * la page.
  *
- * Avant ce lot, SIX sites l'écrivaient en direct : `realtime-apply.ts`
+ * Avant #6972, SIX sites l'écrivaient en direct : `realtime-apply.ts`
  * (`applyMessageNew`, `applyMessageTranslation`), `reactions.ts`
  * (`applyDelta`), `send/perform-send.ts` (l'accusé), `routes/thread.tsx`
  * (la consommation d'une vue unique). Chacun recopiait `{ ...page, messages:
@@ -150,6 +164,19 @@ export type { HttpTransport };
  * pas OUVERT n'a rien à peindre localement, et fabriquer une page ici
  * inventerait un historique dont on ne connaît ni le curseur ni les bornes
  * (la prochaine ouverture le chargera par `GET …/messages`).
+ *
+ * `latestCachedThreadMessage` (#7223) rejoint les lectures pour la MÊME
+ * raison que les quatre premiers accès : `applyReadStatusUpdated`
+ * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — et ne
+ * doit pas réapprendre que `pages[0]` est la page la plus récente,
+ * ASCENDANTE en interne.
+ *
+ * **CE REPLI N'EST PLUS LA RÈGLE NOMINALE (#7348).** `ReadStatusSummary`
+ * porte désormais `messageId?` : quand la charge NOMME son message, le puits
+ * cible `findCachedThreadMessage` ci-dessus, pas cette lecture-ci. Elle ne
+ * sert plus qu'à la passerelle qui ne pose pas encore ce champ (G-5/#7347 —
+ * `MessageReadStatusService.getLatestMessageSummary` décrit alors le dernier
+ * message non supprimé de la conversation, et il faut bien en désigner un).
  */
 
 /**
@@ -270,6 +297,45 @@ export function findCachedThreadMessage(
 }
 
 /**
+ * Une rangée que le SERVEUR n'a jamais vue — la bulle optimiste, tant que
+ * l'accusé n'a pas remplacé son identifiant local par l'identifiant serveur
+ * (`localMessageOf` pose `id === clientMessageId`, `send/local-message.ts`).
+ * Un message du serveur ne porte pas de `clientMessageId`, et `undefined` ne
+ * peut égaler aucun `id` : la comparaison est donc juste dans les deux sens.
+ */
+const isUnconfirmedLocalMessage = (message: Message): boolean =>
+  (message as { readonly clientMessageId?: string }).clientMessageId === message.id;
+
+/**
+ * `latestCachedThreadMessage` (#7223) — le message le plus récent d'un fil en
+ * cache que le SERVEUR connaît, ou `undefined` si le fil n'est pas ouvert, n'a
+ * aucun message, ou n'en porte que des optimistes.
+ *
+ * `pages[0]` est la page la plus RÉCENTE (doc-comment `MessagesPage`,
+ * `messages-pages.ts`) et chaque page est ASCENDANTE en interne
+ * (§ `upsertThreadMessage` ci-dessus, « APPEND SUR `pages[0]` ») — le dernier
+ * élément de `pages[0].messages` est donc le plus récent de tout le fil, sans
+ * balayer les autres pages. Un `pages[0]` VIDE (page en cours de remplacement)
+ * retombe correctement sur `undefined`.
+ *
+ * **LES BULLES OPTIMISTES SONT SAUTÉES (revue-correction W2).** L'unique
+ * appelant applique un résumé qui décrit le dernier message NON SUPPRIMÉ EN
+ * BASE (`MessageReadStatusService.getLatestMessageSummary`) : une rangée que
+ * le serveur n'a pas encore reçue ne peut pas être celle-là, et l'estamper
+ * posait des compteurs d'un AUTRE message sur un envoi en vol — que
+ * `confirmedMessageOf` conserve quand l'accusé ne porte pas `readCount`.
+ * On descend donc jusqu'à la rangée CONFIRMÉE la plus récente, qui est bien
+ * celle que le résumé décrit.
+ */
+export function latestCachedThreadMessage(queryClient: QueryClient, conversationId: string): Message | undefined {
+  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  if (data === undefined || !Array.isArray(data.pages)) return undefined;
+  const newest = data.pages[0];
+  if (newest === undefined) return undefined;
+  return [...newest.messages].reverse().find((m) => !isUnconfirmedLocalMessage(m));
+}
+
+/**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
  * `POST /api/v1/conversations/:id/messages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,
@@ -297,6 +363,21 @@ export type SendMessageBody = {
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
   /**
+   * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
+   * un transfert EST un envoi qui désigne sa source, et la passerelle copie
+   * elle-même les pièces jointes du message d'origine (mêmes blobs, aucun
+   * ré-upload).
+   *
+   * **`attachmentIds` ET `forwardedFromId` SONT EXCLUSIFS** :
+   * `MessageProcessor.handleAttachments` (`MessageProcessor.ts:726-727`) est
+   * un `else if` — poser le premier DÉSACTIVE la copie. Le seul producteur de
+   * ces deux clés est `forwardBodyOf` (`api/forward.ts`), qui n'écrit jamais
+   * `attachmentIds` ; son doc-comment porte l'invariant.
+   */
+  readonly forwardedFromId?: string;
+  /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
+  readonly forwardedFromConversationId?: string;
+  /**
    * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
    * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque
    * clé est OMISE à sa valeur par défaut (`protectionBodyOf`,
@@ -307,6 +388,16 @@ export type SendMessageBody = {
   readonly expiresAt?: string;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
+  /**
+   * LE LIEU PARTAGÉ (#7280) — champ DÉDIÉ, jamais fusionné dans un
+   * `metadata` brut : cette enveloppe porte des champs à autorité serveur
+   * qu'un passthrough permettrait de forger (`MessageRequest.location`,
+   * `packages/shared/types/messaging.ts:171-175`). La validation STRICTE
+   * (bornes des coordonnées, longueur des textes) vit côté passerelle
+   * (`services/gateway/src/services/location/sharedPlace.ts`), jamais ici —
+   * ce port n'en produit que la forme acceptée (`send/shared-place.ts`).
+   */
+  readonly location?: SharedPlace;
 };
 
 /**

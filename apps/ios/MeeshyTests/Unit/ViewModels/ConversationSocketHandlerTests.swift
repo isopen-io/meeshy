@@ -1006,8 +1006,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         sut.persistence = actor
         _ = delegate
 
-        // Seed two own-messages in `.sent` state — bufferBatchDelivery only
-        // applies to rows in .sending or .sent states (per actor implementation).
+        // Seed two own-messages in `.sent` state — bufferBatchDelivery applies
+        // to rows in .sending/.sent/.delivered (I3, #7349: .delivered stayed
+        // in scope so a message can still advance to .read after a prior
+        // delivered batch — see MessagePersistenceActorDeliveryChainTests for
+        // the delivered-then-read regression this used to miss).
         let msgDate = Date()
         var record1 = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "First")
         record1.state = .sent
@@ -1215,6 +1218,45 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
+    }
+
+    // MARK: - pendingMessagesDelivered (I3, #7349)
+    //
+    // `message:pending-delivered` announces that the offline queue for the
+    // current user was just replayed. iOS had no listener at all (verified:
+    // no occurrence anywhere under apps/ios or packages/MeeshySDK before this
+    // lot) — web-v2 already reacts to it by resyncing the named conversations
+    // (`apps/web-v2/src/lib/api/socket.ts`). The handler mirrors the existing
+    // reconnect/foreground resync path (`triggerSyncIfNeeded` →
+    // `delegate.syncMissedMessages()`), scoped to the currently open
+    // conversation.
+
+    func test_pendingMessagesDelivered_forOpenConversation_triggersSyncMissedMessages() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.pendingMessagesDelivered.send(
+            PendingMessagesDeliveredEvent(count: 1, conversationIds: [conversationId])
+        )
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.syncMissedCalled,
+            "message:pending-delivered for the open conversation must resync missed messages")
+    }
+
+    func test_pendingMessagesDelivered_forOtherConversation_doesNotTriggerSync() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.pendingMessagesDelivered.send(
+            PendingMessagesDeliveredEvent(count: 1, conversationIds: ["some-other-conversation"])
+        )
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(delegate.syncMissedCalled,
+            "a drain that never touched the open conversation must not resync it")
     }
 
     // MARK: - attachmentStatusUpdated — media consumption tracking

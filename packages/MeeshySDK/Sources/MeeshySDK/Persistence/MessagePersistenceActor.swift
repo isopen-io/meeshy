@@ -23,7 +23,7 @@ public extension Notification.Name {
 /// mistakes early (see fix 6c6270d1 + the 15-method follow-up) and
 /// no-op in release rather than emit the misleading wildcard notif
 /// the previous implementation produced.
-fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
+func postMessageStoreRefresh(conversationIds: Set<String>) {
     assert(!conversationIds.isEmpty,
            "postMessageStoreRefresh called with empty Set<String> — every mutation method on MessagePersistenceActor must scope its refresh to the affected conversationId. Otherwise MessageStore observers drop the notification and the UI freezes on its last cached state.")
     guard !conversationIds.isEmpty else { return }
@@ -39,7 +39,7 @@ fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
 }
 
 public actor MessagePersistenceActor {
-    private let dbWriter: any DatabaseWriter
+    let dbWriter: any DatabaseWriter
 
     private let writeStream: AsyncStream<WriteOperation>
     private let writeContinuation: AsyncStream<WriteOperation>.Continuation
@@ -670,23 +670,47 @@ public actor MessagePersistenceActor {
             }
         }()
         return try dbWriter.write { db -> Bool in
+            // I3 (#7349) — `.delivered` MUST stay in this list. `MessageStateMachine`
+            // supports `.delivered → .read` on `.readBy` (a message is routinely
+            // delivered-to-all before it is read-by-all), but a query that only
+            // looked at `.sending`/`.sent` could never SEE a row once the first
+            // (delivered) batch had already advanced it — the row fell out of
+            // every future call, and a second, later "everyone has read it" event
+            // had nothing left to act on. The bubble stayed on a single grey check
+            // forever, with no gesture able to unstick it. `.read` is excluded on
+            // purpose: it is terminal, and `MessageStateMachine.apply` has no
+            // transition out of it anyway.
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
-                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
+                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue,
+                         MessageState.delivered.rawValue]
                     .contains(Column("state")))
                 .fetchAll(db)
 
             var didChange = false
             for var record in records {
                 if let frontier, record.createdAt > frontier { continue }
+                // Les horodatages déjà gravés sont SEMÉS dans la machine, et
+                // réassignés en repli — exactement comme le chemin à un seul
+                // message (`applyEvent`, plus haut dans ce fichier). Tant que
+                // la requête s'arrêtait à `.sending`/`.sent`, aucune ligne
+                // portant déjà un `deliveredAt` ne lui parvenait et la
+                // divergence entre les deux jumeaux ne coûtait rien ; en
+                // ouvrant `.delivered`, le second événement (`.readBy`)
+                // rendait une machine dont `deliveredAt` est nil et EFFAÇAIT
+                // l'instant de distribution d'une ligne qui venait de
+                // l'obtenir. C'est ce qui part À CÔTÉ du palier qu'on corrige.
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
-                    serverId: record.serverId
+                    serverId: record.serverId,
+                    lastError: record.lastError,
+                    deliveredAt: record.deliveredAt,
+                    readAt: record.readAt
                 )
                 if let _ = machine.apply(event) {
                     record.state = machine.state
-                    record.deliveredAt = machine.deliveredAt
-                    record.readAt = machine.readAt
+                    record.deliveredAt = machine.deliveredAt ?? record.deliveredAt
+                    record.readAt = machine.readAt ?? record.readAt
                     // The caller (ConversationSocketHandler) only feeds this batch
                     // a delivered/read event once the WHOLE group has received /
                     // read (all-or-nothing). This path advances `state` but does
@@ -1978,6 +2002,14 @@ public actor MessagePersistenceActor {
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.effectFlags = effectFlags
+                    // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
+                    // porteurs arrivent par des chemins différents et jamais
+                    // ensemble : la DURÉE par `message:new` (sans échéance,
+                    // contrat #7451 point 4), `D(lecteur)` par REST. Le temps
+                    // réel écrivant la ligne en premier, la revalidation tombe
+                    // ici — et cette branche n'en touchait AUCUN.
+                    existing.expiresAt = api.expiresAt ?? existing.expiresAt
+                    existing.ephemeralDuration = api.ephemeralDuration ?? existing.ephemeralDuration
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
                     // or the server reports a newer `updatedAt` (it may bump
@@ -2071,7 +2103,9 @@ public actor MessagePersistenceActor {
                         joinNoticeJson: joinNoticeJson,
                         recipientCount: api.recipientCount ?? 0,
                         locationJson: locationJson,
-                        stickerJson: stickerJson
+                        stickerJson: stickerJson,
+                        // #7508 — le seul porteur d'horloge du temps réel.
+                        ephemeralDuration: api.ephemeralDuration
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

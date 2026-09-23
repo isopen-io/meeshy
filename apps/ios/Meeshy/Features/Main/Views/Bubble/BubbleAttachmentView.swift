@@ -104,7 +104,8 @@ struct BubbleAttachmentView: View {
                 DocumentViewerView(
                     attachment: attachment,
                     context: .messageBubble,
-                    accentColor: accentHex
+                    accentColor: accentHex,
+                    isMe: isMe
                 )
             }
 

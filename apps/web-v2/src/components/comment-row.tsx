@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
+import { PersonName } from '@/components/person-name';
 import { GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import type {
@@ -494,9 +495,14 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
       />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-check font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {name}
-          </span>
+          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même pseudo, même loi
+              (`identityTarget`), jamais une seconde décision à faire dériver. */}
+          <PersonName
+            name={name}
+            username={handleOf(comment.author)}
+            className="truncate text-check font-semibold"
+            style={{ color: 'var(--color-ios-ink)' }}
+          />
           <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
             {comment.pending === true
               ? translate(language, 'comments.row.pending')

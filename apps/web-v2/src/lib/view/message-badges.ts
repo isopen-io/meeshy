@@ -1,6 +1,8 @@
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 
 import type { Message } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { metadataOf } from './message-metadata';
 
 /**
@@ -28,7 +30,6 @@ export type ForwardAttribution =
 export type MessageBadge =
   | { readonly kind: 'pinned' }
   | { readonly kind: 'forwarded'; readonly attribution: ForwardAttribution }
-  | { readonly kind: 'ephemeral'; readonly expiresAt: Date }
   | { readonly kind: 'edited' };
 
 /**
@@ -139,15 +140,30 @@ export function forwardAttributionOf(
   return name === null ? { kind: 'anonymous' } : { kind: 'group', name };
 }
 
-/** `BubbleMetaBadges.swift:126-135` — libellés français (la prose du dépôt reste en français, D-13). */
-export function forwardLabelOf(attribution: ForwardAttribution): string {
+/**
+ * `BubbleMetaBadges.swift:126-135` — LE LIBELLÉ VIENT DU CATALOGUE (#7337).
+ *
+ * Il était EN DUR, en français, sous un doc-comment qui invoquait D-13 à
+ * CONTRESENS : « la prose du dépôt reste en français, D-13 ». D-13 dit
+ * l'inverse (`apps/web-v2/decisions.md`, § D-13) — la prose qui reste en
+ * français, ce sont « commentaires, messages de gate, documents de décision,
+ * messages de commit », et la phrase se termine par « — et les textes
+ * affichés à l'utilisateur, QUI RELÈVENT DE L'INTERNATIONALISATION, pas du
+ * nommage ». La décision EXCLUT ce cas ; le commentaire l'appelait à son
+ * secours. Sans cette correction, la règle se re-justifiait toute seule au
+ * lot suivant.
+ *
+ * Les trois valeurs sont celles du catalogue iOS — `bubble.meta.forwarded`,
+ * `bubble.meta.forwarded.fromGroup`, `bubble.meta.forwarded.from`.
+ */
+export function forwardLabelOf(attribution: ForwardAttribution, language: InterfaceLanguage): string {
   switch (attribution.kind) {
     case 'group':
-      return `Transféré depuis ${attribution.name}`;
+      return translate(language, 'message.forwarded.fromGroup', { name: attribution.name });
     case 'person':
-      return `Transféré de ${attribution.name}`;
+      return translate(language, 'message.forwarded.fromPerson', { name: attribution.name });
     case 'anonymous':
-      return 'Transféré';
+      return translate(language, 'message.forwarded');
   }
 }
 
@@ -164,7 +180,7 @@ type BadgeFields = Pick<
  * décide de l'ordre complet d'un message — chaque peau choisit ensuite où
  * elle rend chaque élément.
  */
-export function badgesOf(message: BadgeFields, now: number): readonly MessageBadge[] {
+export function badgesOf(message: BadgeFields): readonly MessageBadge[] {
   const badges: MessageBadge[] = [];
 
   if (message.pinnedAt !== undefined) badges.push({ kind: 'pinned' });
@@ -172,27 +188,33 @@ export function badgesOf(message: BadgeFields, now: number): readonly MessageBad
   const attribution = forwardAttributionOf(message);
   if (attribution !== null) badges.push({ kind: 'forwarded', attribution });
 
-  if (message.expiresAt !== undefined && new Date(message.expiresAt).getTime() > now) {
-    badges.push({ kind: 'ephemeral', expiresAt: new Date(message.expiresAt) });
-  }
-
   if (message.isEdited) badges.push({ kind: 'edited' });
 
   return badges;
 }
 
 /**
- * L'ENTRÉE « ÉPHÉMÈRE » DE LA LOI, PAS UNE SECONDE LECTURE DE
- * `message.expiresAt` (revue #5936, défaut majeur 1) — `EphemeralBadge`
- * (`protected-content.tsx`) tient SON PROPRE minuteur (`ephemeralOf`, qui
- * distingue `running`/`expired`), mais la PRÉSENCE du badge et la `Date`
- * qu'il porte viennent d'ICI : les deux peaux ne relisent plus
- * `message.expiresAt` pour DÉCIDER de monter le badge, seulement pour
- * calculer son COMPTE À REBOURS — le même écart que `editedOf` ci-dessous.
+ * L'ÉPHÉMÈRE A QUITTÉ CETTE LOI (#7454) — et l'absence mérite d'être écrite,
+ * puisque #5936 l'y avait délibérément mis pour que l'ORDRE complet d'un
+ * message se décide à un seul site.
+ *
+ * La raison est que `expiresAt` ne DIT PLUS si un message décompte : pour un
+ * éphémère, `message:new` ne le porte pas du tout (contrat #7451, point 4), et
+ * l'échéance qui vaut est celle que compose `resolveEphemeralDeadline`
+ * (`lib/view/ephemeral-reception.ts`) depuis la RÉCEPTION locale. Garder ici
+ * une seconde lecture de `expiresAt` aurait fait exactement la jumelle
+ * divergente que le doc-comment d'origine voulait empêcher — un badge monté
+ * sur une condition, un décompte calculé sur une autre.
+ *
+ * Ce que cette loi ordonne reste vrai : le chrome de protection
+ * (`protection-chrome.tsx`) se peint entre les badges de tête et le corps,
+ * là où `ephemeral` se rangeait.
+ *
+ * `badgesOf` a perdu son paramètre `now` du même mouvement : l'éphémère était
+ * la seule entrée qui lisait une horloge. Le garder aurait été un paramètre
+ * mort, que `noUnusedParameters` refuse — et une invitation à recomposer ici
+ * une décision temporelle qui n'y vit plus.
  */
-export function ephemeralBadgeOf(badges: readonly MessageBadge[]): Extract<MessageBadge, { kind: 'ephemeral' }> | undefined {
-  return badges.find((badge): badge is Extract<MessageBadge, { kind: 'ephemeral' }> => badge.kind === 'ephemeral');
-}
 
 /**
  * « MODIFIÉ » EST-IL DANS LA SORTIE DE LA LOI ? (revue #5936, défaut majeur

@@ -39,10 +39,28 @@ export type RouteKey =
   | 'thread'
   | 'conversationsNew'
   | 'progression'
+  /**
+   * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
+   * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
+   * DU LECTEUR et rend 401 sans session, bien que `optionalAuth` garde la
+   * porte. Non déclarée ici, elle serait PUBLIQUE par défaut : un visiteur
+   * sans compte y verrait un écran qui se peint puis reçoit un 401 en silence
+   * — la classe de défaut que les trois entrées voisines décrivent.
+   */
+  | 'bookmarks'
   | 'stories'
   | 'storyCompose'
   | 'story'
   | 'feed'
+  /**
+   * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
+   * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
+   * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
+   * défaut (voir `routeKey` plus bas) : un visiteur sans compte composerait
+   * une publication entière — texte, médias montés — avant de se faire
+   * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
+   */
+  | 'postCompose'
   /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
@@ -202,10 +220,15 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'thread',
   'conversationsNew',
   'progression',
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
+     `RouteKey` plus haut. */
+  'bookmarks',
   'stories',
   'storyCompose',
   'story',
   'feed',
+  /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
+  'postCompose',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',

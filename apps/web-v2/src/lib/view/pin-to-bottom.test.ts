@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { pinToBottom } from './pin-to-bottom';
+import { isProgrammaticScroll } from './programmatic-scroll';
 
 /**
  * `requestAnimationFrame` bouchonné : les images se jouent À LA MAIN, ce qui
@@ -102,5 +103,44 @@ describe('pinToBottom — le bas EXACT du défileur, pas la fin du dernier item'
     queue.run();
     queue.run();
     expect(announced).toBe(1);
+  });
+});
+
+/**
+ * L'ANCRAGE DÉCLARE CE QU'IL ÉCRIT (`programmatic-scroll.ts`) — c'est cette
+ * déclaration qui empêche le menu d'un message de se fermer tout seul quand
+ * le fil se ré-ancre sous lui (`message-menu.tsx`, § 6.2 de
+ * `check-thread-states.mjs`).
+ */
+describe('pinToBottom — chaque image DÉCLARE la position qu’elle vient d’écrire', () => {
+  test('le `scroll` qui suit l’écriture est reconnu comme PROGRAMMATIQUE', () => {
+    const queue = frameQueue();
+    const el = scroller(2000, 700);
+    pinToBottom(el, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+    queue.run();
+    expect(isProgrammaticScroll(el)).toBe(true);
+  });
+
+  test('la déclaration porte la position CLAMPÉE, pas `scrollHeight`', () => {
+    const queue = frameQueue();
+    const el = scroller(2000, 700);
+    pinToBottom(el, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+    queue.run();
+    el.scrollTop = 400;
+    expect(isProgrammaticScroll(el)).toBe(false);
+  });
+
+  test('un défileur JAMAIS ancré n’a rien déclaré', () => {
+    const el = scroller(2000, 700);
+    expect(isProgrammaticScroll(el)).toBe(false);
+  });
+
+  test('la déclaration se CONSOMME — une écriture couvre UN `scroll`, pas tous', () => {
+    const queue = frameQueue();
+    const el = scroller(2000, 700);
+    pinToBottom(el, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+    queue.run();
+    expect(isProgrammaticScroll(el)).toBe(true);
+    expect(isProgrammaticScroll(el)).toBe(false);
   });
 });

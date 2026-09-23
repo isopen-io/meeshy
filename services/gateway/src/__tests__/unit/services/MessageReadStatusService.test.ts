@@ -85,6 +85,10 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrisma)
 }));
 
+// `n` messages d'autrui après `floor` — la forme que le calcul partagé (#7199) lit.
+const unreadRows = (floor: Date, n: number) =>
+  Array.from({ length: n }, (_, i) => ({ createdAt: new Date(floor.getTime() + (i + 1) * 1000), senderId: 'other' }));
+
 // Mock console methods
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -384,7 +388,8 @@ describe('MessageReadStatusService', () => {
     it('should compute fresh counts per conversation using batch queries (iter-4)', async () => {
       const lastReadAt = new Date('2026-05-21T10:00:00Z');
       const joinedAt = new Date('2026-04-01');
-      // iter-4 batch path: participant.findMany (1 query) + cursor.findMany (1 query) + message.count × N
+      // iter-4 batch path : participant.findMany + cursor.findMany + message.findMany × N
+      // conversations — le calcul partagé (#7199) compte en mémoire, pas par `message.count`.
       mockPrisma.participant.findMany.mockResolvedValueOnce([
         { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
         { id: testParticipantId, conversationId: conversationIds[1], joinedAt },
@@ -393,45 +398,21 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
         { participantId: testParticipantId, lastReadAt },
       ]);
-      mockPrisma.message.count
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(3);
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) =>
+        unreadRows(lastReadAt, where.conversationId === conversationIds[0] ? 5 : where.conversationId === conversationIds[1] ? 3 : 0)
+      );
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
       expect(result.get(conversationIds[2])).toBe(0);
+      expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
 
-    // Même régression que getUnreadCount, sur le chemin batch de la liste de
-    // conversations : le plancher est la position chronologique du curseur, pas
-    // l'horloge murale `lastReadAt`. Sinon le badge de chaque conversation
-    // ouverte en préfixe partiel tombe à 0.
-    it('floors the batch count on the cursor position (lastReadMessageCreatedAt), not lastReadAt', async () => {
-      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z');
-      const lastReadAt = new Date('2026-05-21T18:00:00Z');
-      const joinedAt = new Date('2026-04-01');
-      mockPrisma.participant.findMany.mockResolvedValueOnce([
-        { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
-      ]);
-      mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
-        { participantId: testParticipantId, lastReadAt, lastReadMessageCreatedAt },
-      ]);
-      mockPrisma.message.count.mockResolvedValueOnce(4);
-
-      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
-
-      expect(result.get(conversationIds[0])).toBe(4);
-      expect(mockPrisma.message.count).toHaveBeenCalledWith({
-        where: {
-          conversationId: conversationIds[0],
-          deletedAt: null,
-          senderId: { not: testParticipantId },
-          createdAt: { gt: lastReadMessageCreatedAt },
-        },
-      });
-    });
+    // Le plancher chronologique du chemin batch (`lastReadMessageCreatedAt`, jamais
+    // `lastReadAt`) est désormais une propriété du calcul PARTAGÉ : son témoin vit
+    // dans `unreadCountsParity.test.ts`, avec la requête qu'il produit (#7199).
 
     it('should return map of zeros on database error', async () => {
       // iter-4 batch path: participant.findMany throws → catch returns zeros
@@ -466,7 +447,9 @@ describe('MessageReadStatusService', () => {
         where: {
           participantId: testParticipantId,
           conversationId: testConversationId,
-          OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { lt: testMessageId } }]
+          // « Rien d'enregistré » = ABSENT ou `null` : une ligne de curseur née de
+          // l'autre moitié n'a pas la colonne du tout (#7345, `utils/prisma-unset.ts`).
+          OR: [{ OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { isSet: false } }] }, { lastDeliveredMessageId: { lt: testMessageId } }]
         },
         data: expect.objectContaining({
           lastDeliveredMessageId: testMessageId,
@@ -611,11 +594,13 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
         if (!row) return { count: 0 };
-        const guardPasses: boolean = where.OR?.some((clause: any) =>
-          clause.lastDeliveredMessageId === null
-            ? false
-            : row!.lastDeliveredMessageId < clause.lastDeliveredMessageId.lt
-        ) ?? true;
+        const guardPasses: boolean = where.OR?.some((clause: any) => {
+          // Une clause « rien d'enregistré » porte son PROPRE `OR`
+          // (`unsetOrNull` : `null` OU colonne absente). Ici la ligne existe et
+          // porte toujours son id, donc cette branche ne passe jamais.
+          if (clause.OR) return false;
+          return row!.lastDeliveredMessageId < clause.lastDeliveredMessageId.lt;
+        }) ?? true;
         if (!guardPasses) return { count: 0 };
         row = { lastDeliveredMessageId: data.lastDeliveredMessageId };
         return { count: 1 };
@@ -655,8 +640,8 @@ describe('MessageReadStatusService', () => {
         })
       ).toEqual({
         OR: [
-          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: null },
-          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: { lt: objectIdA } },
+          { AND: [{ OR: [{ lastDeliveredMessageCreatedAt: null }, { lastDeliveredMessageCreatedAt: { isSet: false } }] }, { OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { isSet: false } }] }] },
+          { AND: [{ OR: [{ lastDeliveredMessageCreatedAt: null }, { lastDeliveredMessageCreatedAt: { isSet: false } }] }, { lastDeliveredMessageId: { lt: objectIdA } }] },
           { lastDeliveredMessageCreatedAt: { lt: createdAt } },
         ],
       });
@@ -671,7 +656,7 @@ describe('MessageReadStatusService', () => {
           messageCreatedAt: null,
         })
       ).toEqual({
-        OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: objectIdA } }],
+        OR: [{ OR: [{ lastReadMessageId: null }, { lastReadMessageId: { isSet: false } }] }, { lastReadMessageId: { lt: objectIdA } }],
       });
     });
 
@@ -792,7 +777,7 @@ describe('MessageReadStatusService', () => {
         where: {
           participantId: testParticipantId,
           conversationId: testConversationId,
-          OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: testMessageId } }]
+          OR: [{ OR: [{ lastReadMessageId: null }, { lastReadMessageId: { isSet: false } }] }, { lastReadMessageId: { lt: testMessageId } }]
         },
         data: expect.objectContaining({
           lastReadMessageId: testMessageId,
@@ -1445,7 +1430,9 @@ describe('MessageReadStatusService', () => {
       // No create (entry exists); update only the null readAt field.
       expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
       expect(mockPrisma.messageStatusEntry.updateMany).toHaveBeenCalledWith({
-        where: { messageId: { in: [testMessageId] }, participantId: testParticipantId, readAt: null },
+        // Le write-once apparie l'ABSENCE autant que le `null` : l'entrée vient
+        // de la livraison, qui n'a jamais nommé `readAt` (#7345).
+        where: { messageId: { in: [testMessageId] }, participantId: testParticipantId, ...{ OR: [{ readAt: null }, { readAt: { isSet: false } }] } },
         data: { readAt: expect.any(Date) }
       });
     });
@@ -2889,7 +2876,7 @@ describe('MessageReadStatusService', () => {
       // 1. First listen (partial)
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 5000,
-        listenDurationMs: 5000,
+        stretches: [{ startMs: 0, endMs: 5000, endedBy: 'pause' }],
         complete: false
       });
 
@@ -2905,7 +2892,7 @@ describe('MessageReadStatusService', () => {
       // 2. Second listen (complete)
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 10000,
-        listenDurationMs: 10000,
+        stretches: [{ startMs: 5000, endMs: 10000, endedBy: 'completed' }],
         complete: true
       });
 
@@ -3277,10 +3264,11 @@ describe('MessageReadStatusService', () => {
         participantId: testParticipantId, lastReadAt
       }));
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce(cursorRows);
-      // message.count called once per participant (20 parallel calls)
-      conversationIds.forEach((_, i) => {
-        mockPrisma.message.count.mockResolvedValueOnce(i < 10 ? (i + 1) : 0);
-      });
+      // message.findMany appelé une fois par conversation (20 appels parallèles) — le calcul
+      // partagé (#7199) compte en mémoire ; la conversation pilote le nombre de lignes rendues.
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) =>
+        unreadRows(lastReadAt, expected[where.conversationId] ?? 0)
+      );
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
@@ -3288,6 +3276,7 @@ describe('MessageReadStatusService', () => {
       for (const id of conversationIds) {
         expect(result.get(id)).toBe(expected[id]);
       }
+      expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
   });
 

@@ -7,6 +7,7 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
+import { UnreadSeparator } from '@/components/unread-separator';
 import type { RevealPhase } from '@/lib/reading-mode/protection';
 import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import type { ListPaginationState } from '@/lib/lens/pagination';
@@ -15,16 +16,21 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { useLongPress } from '@/lib/view/long-press';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
+import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
+import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
+import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
+import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -35,6 +41,10 @@ import type { ThreadScene } from '@/lib/reading-mode/scene';
  * rendu en mode Résumé, exactement comme avant l'extraction.
  */
 const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
+
+/** Aucune annonce de destruction — identité STABLE, pour ne pas refaire un
+ *  ensemble à chaque rendu de la liste. */
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 /**
  * LE MONTAGE DES MODES — extrait de `routes/thread.tsx` (#5878) : au-delà de
@@ -129,6 +139,7 @@ export function ThreadModes({
   group,
   highlightedId,
   expiredIds,
+  destroyingIds = EMPTY_IDS,
   jumpToMessage,
   consume,
   onEphemeralExpired,
@@ -145,10 +156,15 @@ export function ThreadModes({
   longPress,
   onPickLanguage,
   onReact,
+  onOpenDetail,
+  storyRingOf,
   typists,
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
   older,
+  readTrackingSentinelRef,
+  unreadSeparatorMessageId = null,
+  unreadCount = 0,
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
@@ -169,6 +185,17 @@ export function ThreadModes({
   readonly group: boolean;
   readonly highlightedId: string | null;
   readonly expiredIds: ReadonlySet<string>;
+  /**
+   * LES RANGÉES EN TRAIN DE BRÛLER (#7468) — une destruction ANNONCÉE, par le
+   * chrome qui vient d'atteindre l'échéance ou par `message:expired` reçu
+   * pendant l'affichage (`useEphemeralDestruction`). Elles se peignent ENCORE,
+   * le temps de l'effet ; c'est `expiredIds` qui les retire ensuite.
+   *
+   * ABSENTE ⇒ aucune annonce : la fenêtre sans état (`destructionPhaseOf`)
+   * suffit à faire brûler une échéance atteinte sous les yeux du lecteur, et
+   * une surface en lecture pure (l'administration) n'a rien à animer.
+   */
+  readonly destroyingIds?: ReadonlySet<string>;
   readonly jumpToMessage: (messageId: string) => void;
   /**
    * ## LES CAPACITÉS SONT OPTIONNELLES, ET UNE CAPACITÉ ABSENTE EST ABSENTE
@@ -210,6 +237,22 @@ export function ThreadModes({
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact?: (messageId: string, emoji: string) => void;
+  /**
+   * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé UNIQUEMENT sur `<Bubble>`
+   * (mode `bulles`), jamais sur `<FocalRow>` : sa ligne méta reste
+   * `aria-hidden` INCONDITIONNEL (revue #5935, `focal-row.tsx`), et y poser
+   * un bouton reproduirait l'anti-motif WCAG que cette revue a fermé —
+   * décision consignée dans `.cache/lecture-workflow/V4.md` § 1. Dans
+   * `focal`/`script` (le DÉFAUT, D-7), la fiche reste atteignable par le
+   * chemin déjà mûr : appui long sur la rangée → « Plus… » (2 gestes).
+   */
+  readonly onOpenDetail?: (messageId: string) => void;
+  /**
+   * L'ANNEAU DE STORY D'UN EXPÉDITEUR (#7528) — son avatar et son nom ouvrent
+   * sa story quand il en a une, son profil sinon (`identityTarget`), dans
+   * les TROIS peaux. Absent (l'administration) ⇒ l'identité mène au profil.
+   */
+  readonly storyRingOf?: StoryRingOf;
   /** LE ROSTER ENTIER (#6171, G1) — `[]` ⇒ aucun frappeur connu ⇒ aucune
    * cellule (`useThreadTyping`, `lib/view/use-thread-typing.ts`). Jamais
    * tronqué à un seul frappeur : `typingAnnouncement`/`typingLead`
@@ -242,6 +285,26 @@ export function ThreadModes({
     readonly state: ListPaginationState;
     readonly sentinelRef: Ref<HTMLDivElement>;
   };
+  /**
+   * LE MARQUAGE-LU (#7201, W1) — la sentinelle de PIED, symétrique
+   * d'`OlderHead` : une prise d'un pixel après la dernière rangée, dont
+   * l'intersection dit « le bas du fil est dans le cadre » à
+   * `useReadTracking` (`lib/view/use-read-tracking.ts`). `undefined` ⇒
+   * aucune sentinelle montée — la lecture souveraine de l'administration ne
+   * doit accuser la lecture de PERSONNE.
+   */
+  readonly readTrackingSentinelRef?: (node: Element | null) => void;
+  /**
+   * LE SÉPARATEUR DE NON-LUS (#7202, D-L2/D-L3) — l'id du message qui OUVRE
+   * la frontière (`firstUnreadBoundary().firstUnreadId`, gelé pour la
+   * session par `useUnreadBoundary`, `lib/view/unread-boundary.ts`) : `null`
+   * ⇒ aucun séparateur, même patron « capacité absente ⇒ rien monté » que
+   * `older`/`readTrackingSentinelRef` ci-dessus — la lecture souveraine de
+   * l'administration ne doit exposer la frontière de lecture de PERSONNE.
+   */
+  readonly unreadSeparatorMessageId?: string | null;
+  /** Le compte affiché par le séparateur — sans effet si `unreadSeparatorMessageId` est `null`. */
+  readonly unreadCount?: number;
 }) {
   const viewerId = viewer.id ?? '';
 
@@ -284,7 +347,37 @@ export function ThreadModes({
     });
   }, []);
 
+  /**
+   * UNE LECTURE D'HORLOGE PAR RENDU DE LISTE — jamais une par rangée : la
+   * protection, l'échéance et le verdict d'expiration doivent tous trois
+   * répondre du MÊME instant, sans quoi une rangée pourrait se déclarer échue
+   * pour son chrome et vivante pour son voile.
+   *
+   * Déclarée AVANT le retour anticipé du mode Résumé, qui la lit aussi.
+   */
+  const renderNow = Date.now();
+
   if (mode === 'summary' && summary !== undefined) {
+    /**
+     * **UN ÉPHÉMÈRE N'Y SURVIT PAS À SON ÉCHÉANCE** (#7454, la moitié de la
+     * règle qui revient au Résumé). Ce mode ne rend aucune rangée de message :
+     * il rend un DIGEST — des comptes, des visages, des épisodes — et un texte
+     * DÉRIVÉ d'un message échu le garderait en vie après sa disparition du
+     * fil, sur le même écran, à un tap de distance.
+     *
+     * Le corpus est donc filtré AVANT d'entrer dans le résumé, par la MÊME
+     * règle que les rangées (`resolveEphemeralDeadline`) — pas par une seconde
+     * lecture de `expiresAt`.
+     */
+    const summaryMessages = summary.messages.filter(
+      (message) =>
+        destructionPhaseOf({
+          deadline: resolveEphemeralDeadline({ message, isMine: isMineOf(message, viewerId), now: renderNow }),
+          now: renderNow,
+          destroying: destroyingIds.has(message.id),
+          expired: expiredIds.has(message.id),
+        }) !== 'gone',
+    );
     return (
       /*
         LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
@@ -298,7 +391,7 @@ export function ThreadModes({
       <Suspense fallback={<SummarySkeleton />}>
         <SummaryHost
           conversationId={summary.conversation.id}
-          messages={summary.messages}
+          messages={summaryMessages}
           participants={summary.conversation.participants}
           viewer={viewer}
           windowCoversUnread={summary.windowCoversUnread}
@@ -311,6 +404,13 @@ export function ThreadModes({
       </Suspense>
     );
   }
+
+  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
+     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
+     son badge de transfert, et une virtualisation en rend des dizaines. C'est
+     une lecture de `document.documentElement.lang`, pas un abonnement — la
+     racine redessine déjà l'arbre quand la langue change. */
+  const interfaceLanguage = currentInterfaceLanguage();
 
   return (
     <RevealPhaseChannel publish={publishRevealPhase}>
@@ -389,6 +489,7 @@ export function ThreadModes({
              message), « la mienne » (réactions), et l'état de sélection. */
           const rowDisplayLanguage = displayLanguageOf?.(p.message.id);
           const rowMyReactions = myReactionsOf?.(p.message.id);
+          const rowStoryRing = storyRingOf?.(p.message.sender?.userId ?? p.message.sender?.user?.id);
           const rowSelected =
             selection === null || selection === undefined ? undefined : selection.ids.includes(p.message.id);
           /* Le verdict SERVI, jamais recalculé (voir la prop). */
@@ -415,7 +516,35 @@ export function ThreadModes({
              (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
              elle, `aria-label` annonçait EN CLAIR le texte que la rangée
              floute ou remplace par un tombstone. */
-          const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
+          /**
+           * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée ICI, une fois par
+           * rangée, et descendue aux deux peaux. C'est le SEUL site du
+           * chantier qui appelle la règle : une peau qui la recalculerait
+           * serait la jumelle que `ephemeral-reception.ts` existe pour
+           * empêcher.
+           *
+           * Le VERDICT de retrait, lui, a changé au lot #7468 : ce n'est plus
+           * « l'échéance est passée » mais la PHASE, qui insère une fenêtre de
+           * destruction entre les deux (voir juste dessous).
+           */
+          const rowIsMine = isMineOf(p.message, viewerId);
+          const rowDeadline = resolveEphemeralDeadline({ message: p.message, isMine: rowIsMine, now: renderNow });
+          /**
+           * TROIS PHASES, UNE LOI (#7468) — `destructionPhaseOf` tranche entre
+           * « visible », « en destruction » et « partie », et elle le fait sans
+           * état : la fenêtre se lit de l'échéance et de `renderNow`, si bien
+           * qu'un rendu déclenché par n'importe quoi d'autre (une frappe, un
+           * défilement) rend le même verdict que le tic du chrome. C'est ce qui
+           * empêche la rangée d'être coupée net entre l'échéance et l'annonce.
+           */
+          const rowPhase = destructionPhaseOf({
+            deadline: rowDeadline,
+            now: renderNow,
+            destroying: destroyingIds.has(p.message.id),
+            expired: expiredIds.has(p.message.id),
+          });
+          const rowExpired = rowPhase === 'gone';
+          const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
           /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
              nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
              pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
@@ -432,10 +561,11 @@ export function ThreadModes({
              occupe aucune entrée. */
           const rowLabel = composeMessageLabel({
             message: p.message,
-            isMine: isMineOf(p.message, viewerId),
+            isMine: rowIsMine,
             servedText: rowServed.text,
             delivery: checkStatusOf(p.message, rowDelivery),
             protection: rowProtection,
+            language: interfaceLanguage,
             contentWithheld: rowWithheld,
             phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
           });
@@ -474,6 +604,9 @@ export function ThreadModes({
                     {dayLabel(p.message.createdAt, { locale: readerLocale })}
                   </span>
                 </div>
+              ) : null}
+              {p.message.id === unreadSeparatorMessageId ? (
+                <UnreadSeparator label={unreadSeparatorLabel(currentInterfaceLanguage(), unreadCount)} />
               ) : null}
               {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
                   rangée plate, `bubbles` reste la bulle historique — D-7,
@@ -521,7 +654,16 @@ export function ThreadModes({
                   chaque rangée pour ne rien pouvoir faire. `data-row` reste
                   posé sans eux : c'est aussi le CANDIDAT d'élection de la
                   scène, qui n'a besoin d'aucun geste. */}
+              {/* L'EFFET DE DESTRUCTION SE POSE ICI (#7468), sur le nœud qui
+                  enveloppe LES DEUX peaux — jamais dans `FocalRow` ni dans
+                  `Bubble`, qui l'auraient alors câblé chacune et laissé le mode
+                  suivant sans rien. `.ephemeral-destroying` porte la combustion
+                  ET le repli de la hauteur (`grid-template-rows: 1fr → 0fr`),
+                  que le virtualiseur suit par son `ResizeObserver` : les
+                  voisins se resserrent à mesure, sans saut de liste. Avec
+                  `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
               <div
+                {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
@@ -540,7 +682,8 @@ export function ThreadModes({
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     elected={isElected}
-                    expired={expiredIds.has(p.message.id)}
+                    expired={rowExpired}
+                    ephemeralDeadline={rowDeadline}
                     revealable={!rowWithheld}
                     {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
                     {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
@@ -549,6 +692,7 @@ export function ThreadModes({
                       ? {}
                       : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
                     {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
                     {...(rowSelected === undefined || onRowTap === undefined
                       ? {}
@@ -563,7 +707,8 @@ export function ThreadModes({
                     viewerId={viewerId}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
-                    expired={expiredIds.has(p.message.id)}
+                    expired={rowExpired}
+                    ephemeralDeadline={rowDeadline}
                     revealable={!rowWithheld}
                     {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
                     {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
@@ -572,10 +717,12 @@ export function ThreadModes({
                       ? {}
                       : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
                     {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
                     {...(rowSelected === undefined || onRowTap === undefined
                       ? {}
                       : { selected: rowSelected, onToggleSelect: onRowTap })}
+                    {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
                     {...sendProps}
                   />
                 )}
@@ -584,6 +731,15 @@ export function ThreadModes({
           );
         })}
       </ol>
+
+      {/* LA SENTINELLE DE PIED (#7201, W1) — symétrique d'`OlderHead` : un
+          pixel APRÈS la dernière rangée, jamais dans le flux typographique
+          (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
+          une rangée — même garde que la tête : une sentinelle qui intersecte
+          IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
+      {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
+        <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
+      )}
 
       {/* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
           pas un overlay : il pousse le fil comme le ferait un message, donc

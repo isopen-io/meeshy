@@ -2,6 +2,9 @@ import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, flattenFeedPages, nextFeedCursor, type FeedPage, type FeedPageParam, type FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
+import { reelsQueryKey } from './reels-query-key';
+
+export { REELS_QUERY_ROOT, reelsQueryKey } from './reels-query-key';
 
 /**
  * LE PORT DES RÉELS (#6457) — miroir de `PostService.getReels(seedReelId:)`
@@ -19,10 +22,11 @@ import type { ApiResult, HttpTransport } from './http';
  *
  * `source` résolue ICI, jamais dans l'écran : les fixtures passent par le MÊME
  * chemin (motif `feed.ts`).
+ *
+ * `REELS_QUERY_ROOT` / `reelsQueryKey` vivent dans `reels-query-key.ts` (une
+ * raison de POIDS, pas de sens — voir son doc-comment) et sont RÉ-EXPORTÉS
+ * ci-dessus pour que ce module en reste la référence de lecture.
  */
-export const REELS_QUERY_ROOT = ['reels'] as const;
-
-export const reelsQueryKey = (seed?: string) => [...REELS_QUERY_ROOT, seed ?? ''] as const;
 
 /** `limit: 20` — la valeur qu'iOS demande (`ReelsViewModel.fetch`). */
 export const REELS_PAGE_SIZE = 20;

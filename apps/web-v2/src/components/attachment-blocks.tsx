@@ -4,6 +4,10 @@ import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
+import { reportAttachmentStatus } from '@/lib/api/attachments';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
+import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
@@ -73,8 +77,30 @@ function VoiceAttachment({
   // `tracksTime` est OPT-IN : sans lui `position`/`duration` restent à 0 et une
   // tuile du fil ne paie rien. Le vocal en a besoin — le karaoké et le parcours
   // au doigt lisent tous deux la position.
-  const { status, progress, toggle, bind, position, duration, seek, rate, setRate } =
-    useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  //
+  // `report` (#7225, W6) : REPRISE au montage depuis la consommation SERVIE
+  // (`currentUserConsumption`), et RAPPORT au serveur à la pause, au saut, à
+  // la fin et au démontage — le hook porte la reprise, le throttle 5 s et le
+  // tracker de segments, ce widget ne fait que lui donner ce qu'il connaît.
+  const consumption = attachment.currentUserConsumption;
+  const { status, progress, toggle, bind, position, duration, seek, rate, setRate, reportedFraction } =
+    useMediaPlayback({
+      attachmentId: attachment.id,
+      tracksTime: true,
+      report: {
+        kind: 'listened',
+        // LA PISTE ÉLUE EST CE QUI A ÉTÉ ÉCOUTÉ (revue #7225) — une piste
+        // traduite est une écoute d'une AUTRE version du contenu, et le
+        // serveur la stocke comme telle. Sans ce champ, une écoute en
+        // français était comptée sur l'original anglais (Prisme : « qu'est-ce
+        // qui part À CÔTÉ de ce qu'on vient de résoudre ? »).
+        language: track.language,
+        ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
+        ...(consumption != null
+          ? { resume: { positionMs: consumption.lastPlayPositionMs, complete: consumption.listenedComplete } }
+          : {}),
+      },
+    });
   const uiLanguage = currentInterfaceLanguage();
 
   /*
@@ -108,18 +134,23 @@ function VoiceAttachment({
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
   const seconds = Math.round((attachment.duration ?? 0) / 1000);
-  const consumption = attachment.currentUserConsumption;
   const servedFraction =
     consumption?.listenedComplete === true
       ? 1
       : consumption?.lastPlayPositionMs != null && attachment.duration
         ? consumption.lastPlayPositionMs / attachment.duration
         : 0;
+  // LA BARRE AU REPOS REFLÈTE CE QUI EST RAPPORTÉ (#7225) — `reportedFraction`
+  // grandit dès qu'un rapport PART (optimistic update, CLAUDE.md § Instant
+  // App), SANS attendre qu'un nouvel `attachment` revienne du serveur. `Math.max`
+  // avec la valeur SERVIE : jamais de recul, l'une ou l'autre source peut être
+  // la plus fraîche selon qui a parlé en dernier.
+  const restingFraction = Math.max(servedFraction, reportedFraction);
   // La teinte de l'onde AU REPOS suit la fraction SERVIE ; EN LECTURE, la
   // progression VIVANTE prend le relais — jamais l'inverse (miroir
   // `MediaConsumptionStore`, `:1445-1451`).
-  const tintFraction = Math.max(progress, servedFraction);
-  const consumptionPercent = consumptionPercentOf(servedFraction);
+  const tintFraction = Math.max(progress, restingFraction);
+  const consumptionPercent = consumptionPercentOf(restingFraction);
   // Masquée sous 1 % (`MediaConsumptionProgressBar.swift:26`).
   const showsConsumptionBar = consumptionPercent >= 1;
 
@@ -317,6 +348,51 @@ function VoiceAttachment({
   );
 }
 
+/**
+ * LA RANGÉE D'UN DOCUMENT (#7363, W6) — avant ce lot, un `<div>` STATIQUE
+ * (aucun `href`, aucun `onClick`) : un document reçu n'était PAS ouvrable du
+ * tout. `<a target="_blank">` : le navigateur RESTITUE le fichier (un PDF
+ * s'affiche inline, le reste télécharge selon son propre `Content-
+ * Disposition`) — l'équivalent web de la fiche plein écran
+ * `DocumentViewerView.swift`. Le clic rapporte IMMÉDIATEMENT (`attachment
+ * OpenReport`, miroir `DocumentViewerView.onAppear { reportDocumentOpened()
+ * }`) — `isMine` ferme le rapport pour sa propre pièce, jamais l'ouverture
+ * elle-même.
+ */
+function FileAttachmentRow({
+  attachment,
+  isMine,
+  deps,
+}: {
+  readonly attachment: Attachment;
+  readonly isMine: boolean;
+  readonly deps?: ConversationsDeps;
+}) {
+  const lang = currentInterfaceLanguage();
+  const name = attachment.originalName;
+
+  return (
+    <a
+      href={attachmentSrc(attachment.fileUrl)}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={translate(lang, 'message-detail.attachment.open', { name })}
+      data-attachment-file={attachment.id}
+      className="flex items-center gap-2 py-1"
+      style={{ minHeight: 44 }}
+      onClick={() => {
+        const report = attachmentOpenReport({ isMine });
+        if (report === null) return;
+        void reportAttachmentStatus({ ...(deps ?? apiDeps), attachmentId: attachment.id, report });
+      }}
+    >
+      <Glyph name="file" size={24} />
+      <span className="min-w-0 flex-1 truncate text-title">{name}</span>
+      <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+    </a>
+  );
+}
+
 export function Attachments({
   attachments,
   languages,
@@ -324,6 +400,8 @@ export function Attachments({
   fallbackLanguage,
   carrier,
   mediaFrame,
+  isMine = false,
+  deps,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -336,6 +414,14 @@ export function Attachments({
   readonly carrier?: MediaCarrier;
   /** La forme de la grille, DÉCLARÉE par l'hôte (revue #6169) : `box` en bulle, `tiles` en rangée plate. Obligatoire — un défaut muet ferait porter à l'une des peaux la forme de l'autre. */
   readonly mediaFrame: MediaGridFrame;
+  /** CE MESSAGE EST-IL LE MIEN ? (#7363, W6) — gouverne le rapport d'OUVERTURE
+   * (image/document) : un expéditeur qui rouvre son propre envoi ne
+   * s'auto-déclare pas destinataire (`attachmentOpenReport`). Défaut `false`
+   * — comportement historique inchangé pour les appelants qui ne connaissent
+   * pas encore la propriété (miroir `DocumentViewerView.isMe`, même défaut). */
+  readonly isMine?: boolean;
+  /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut. */
+  readonly deps?: ConversationsDeps;
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -371,11 +457,7 @@ export function Attachments({
         maskedAttachment(attachment) ? (
           <MaskedAttachment key={`file-${i}`} attachment={attachment} />
         ) : (
-          <div key={`file-${i}`} className="flex items-center gap-2 py-1">
-            <Glyph name="file" size={24} />
-            <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
-            <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
-          </div>
+          <FileAttachmentRow key={`file-${i}`} attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />
         ),
       )}
 
@@ -387,8 +469,10 @@ export function Attachments({
             onClose={() => setOpenIndex(null)}
             languages={languages}
             fallbackLanguage={fallbackLanguage}
+            isMine={isMine}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
             {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
           />
         </Suspense>
       ) : null}

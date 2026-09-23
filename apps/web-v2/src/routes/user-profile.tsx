@@ -20,17 +20,19 @@ import {
   type FriendActionDeps,
   type FriendActionOutcome,
 } from '@/lib/api/friend-actions';
-import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
+import type { PersonSummary } from '@/lib/api/friend-requests';
 import { publicProfileQueryOptions } from '@/lib/api/public-profile';
+import { sharedConversationsQueryOptions } from '@/lib/api/shared-conversations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/profile/failure';
 import { filterPosts, showsEmptyState, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
-import { actionsFor, bucketNeededFor, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
+import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -38,8 +40,17 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
+import { ReportSheet } from '@/components/report-sheet';
+import { reportUser, type ReportReason } from '@/lib/api/reports';
+import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { ProfileHero } from '@/routes/user-profile-header';
-import { ProfileBlockedCard, ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from '@/routes/user-profile-sections';
+import {
+  ProfileBlockedCard,
+  ProfileRelationSection,
+  ProfileSelfSection,
+  ProfileStatsBand,
+  ProfileStatsSection,
+} from '@/routes/user-profile-sections';
 import {
   ProfileNotice,
   ProfileOfflineBanner,
@@ -66,12 +77,11 @@ import {
  * (`PostFeedService.ts:869`), et elle est donc gardée par `enabled` plutôt que
  * lancée sur un identifiant fabriqué depuis l'adresse.
  *
- * **ZÉRO REQUÊTE DE PLUS DANS LE CAS NOMINAL** : le panier des demandes n'est
- * chargé que si la relation est EN ATTENTE (`bucketNeededFor`) — la passerelle
- * ne sert pas l'identifiant de la demande, et Accepter / Refuser / Annuler en
- * ont besoin. Issue gateway compagnon : `relationRequestId` sur
- * `expand=relation`. **Le panier des BLOQUÉS, lui, n'est plus chargé du tout**
- * (#7125) : `blockedByViewer` arrive sur le même fil que l'identité.
+ * **PLUS AUCUN PANIER DERRIÈRE CETTE FICHE** (#7125 puis #7122). Le panier des
+ * BLOQUÉS avait disparu le premier — `blockedByViewer` arrive sur le fil de
+ * l'identité. Celui des DEMANDES a suivi : `relationRequestId` porte
+ * l'identifiant qu'Accepter / Refuser / Annuler doivent envoyer, si bien que
+ * les trois gestes sont armés au premier rendu au lieu d'attendre une ligne.
  *
  * **MÊME CARTE QUE LE FIL, MÊME MODÈLE** — `resolveFeedCardModel` et
  * `FeedPostCard`, jamais une seconde peau : le Prisme, l'accent et la géométrie
@@ -113,6 +123,10 @@ const ANNOUNCE = {
   block: { done: 'userProfile.announce.blocked', failed: 'userProfile.announce.blockFailed' },
   unblock: { done: 'discover.announce.unblocked', failed: 'discover.announce.unblockFailed' },
   write: { done: null, failed: 'userProfile.announce.writeFailed' },
+  /* SIGNALER a ses PROPRES annonces (#7187) : « envoyé » n'est pas « ajouté »,
+     et son refus le plus fréquent — le DÉBIT — n'est pas un échec. Les trois
+     issues sont distinctes chez le port (`ReportOutcome`) et le restent ici. */
+  report: { done: 'report.done', failed: 'report.failed' },
 } as const satisfies Readonly<Record<ProfileActionKind, { readonly done: InterfaceCatalogKey | null; readonly failed: InterfaceCatalogKey }>>;
 
 function ProfileHeaderBar({ title }: { readonly title: string }) {
@@ -171,12 +185,30 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const online = useOnline();
   const minute = useMinute();
   const { languages: readerLanguages } = useReaderLanguages();
-  const { announcement: gestureAnnouncement, onGesture, onShare } = usePostGesture();
+  /* COMMENTER UNE PUBLICATION DE LA FICHE (#7188, #7113) — le MÊME hôte que
+     le Flux, jamais une seconde mécanique : `onComment` conduit à la page de
+     la publication, à son ancre de commentaires. L'adresse vivait ici en
+     copie ; elle vit désormais avec les deux autres gestes de la rangée. */
+  const { announcement: gestureAnnouncement, onGesture, onShare, onComment, menu } = usePostGesture();
   const { text: actionAnnouncement, tone: actionTone, announce } = useLiveAnnouncer();
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
   const [busy, setBusy] = useState(false);
 
   const viewerId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  /**
+   * **LE LECTEUR DE LA LIGNE, PAS CELUI DU GESTE** (#7124). `titleOf` a besoin
+   * d'un identifiant pour savoir QUI est « l'autre » dans un direct ; lui
+   * passer la chaîne vide fait de la première partie l'autre — et une rangée
+   * qui porte « Vous » là où elle devrait porter le nom du pair (MESURÉ au
+   * navigateur avant ce correctif : `VOVous` sur `/c/c-direct-kwame`).
+   *
+   * `resolveViewer` est le site UNIQUE qui rend cette identité, fixtures
+   * comprises — le MÊME que la Lentille (`conversations.tsx:427`) et le fil.
+   * `viewerId` ci-dessus reste ce qu'il est : l'identité de COMPTE, qui
+   * gouverne les gestes et ne doit rien inventer sous fixtures.
+   */
+  const session = useStore(sessionStore, (state) => state.session);
+  const rowViewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
   /* Sous fixtures il n'y a pas de session : les gestes y restent mesurables,
      exactement comme `/me` le fait (`profile.tsx:132`). */
   const signedIn = apiDeps.source === 'fixtures' || viewerId !== null;
@@ -208,16 +240,25 @@ export function UserProfileView({ username }: { readonly username: string }) {
    */
   const blocked = view.data?.blockedByViewer === true;
 
-  const bucket = bucketNeededFor(served);
-  const requests = useInfiniteQuery(
-    { ...friendRequestsQueryOptions(apiDeps, bucket ?? 'received'), enabled: signedIn && bucket !== null },
-    appQueryClient,
+  /**
+   * **LA LIGNE SE BÂTIT DEPUIS LE FIL** (#7122) — elle se CHERCHAIT dans le
+   * panier des demandes, chargé dès que la relation était en attente, et les
+   * trois gestes restaient désarmés tant qu'il était en vol. La passerelle
+   * sert l'identifiant avec l'identité ; le reste de la ligne se déduit du
+   * SENS de la demande et du sujet de l'écran (`pendingRequestFrom`).
+   */
+  const pendingRequest = useMemo(
+    () =>
+      person === undefined
+        ? null
+        : pendingRequestFrom({
+            served,
+            requestId: view.data?.relationRequestId ?? null,
+            person: { id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar },
+            viewerId,
+          }),
+    [person, served, view.data?.relationRequestId, viewerId],
   );
-  const pendingRequest = useMemo(() => {
-    if (person === undefined || bucket === null) return null;
-    const rows = flattenFriendRequests(requests.data);
-    return rows.find((row) => (bucket === 'received' ? row.senderId === person.id : row.receiverId === person.id)) ?? null;
-  }, [bucket, person, requests.data]);
 
   const relation = relationFromServed({ served, blocked, request: pendingRequest });
   const actions = actionsFor(relation);
@@ -227,6 +268,27 @@ export function UserProfileView({ username }: { readonly username: string }) {
     {
       ...authorPostsInfiniteOptions({ ...apiDeps, authorId: person?.id ?? '' }),
       enabled: person !== undefined && showsContent,
+    },
+    appQueryClient,
+  );
+
+  /**
+   * **CE QUE VOUS PARTAGEZ DÉJÀ** (#7124) — `?withUserId=<id>`, le filtre que
+   * la passerelle sert depuis le premier jour d'iOS
+   * (`listSharedWith`, `UserProfileSheet.swift:325`). La question porte le
+   * SUJET : elle est gardée par `enabled` comme le listing des publications,
+   * parce qu'elle prend un `User.id` et non le pseudo de l'adresse.
+   *
+   * **Elle ne part PAS pour un lecteur sans session** (la route est en
+   * authentification requise pour le scope du lecteur) ni **sur sa propre
+   * fiche** — « les conversations en commun avec soi-même » n'est pas une
+   * question — ni **sur un compte bloqué**, dont la fiche ne rend aucun
+   * contenu.
+   */
+  const shared = useQuery(
+    {
+      ...sharedConversationsQueryOptions({ ...apiDeps, userId: person?.id ?? '' }),
+      enabled: person !== undefined && showsContent && signedIn && view.data?.isSelf !== true,
     },
     appQueryClient,
   );
@@ -266,6 +328,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     [announce, language],
   );
 
+
   const onAction = useCallback(
     (kind: ProfileActionKind) => {
       if (person === undefined || busy) return;
@@ -284,6 +347,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
         });
         return;
       }
+      if (kind === 'report') {
+        setBusy(false);
+        setReporting(true);
+        return;
+      }
       if (kind === 'add') return void performSendRequest({ person: summary, deps }).then(settle);
       if (kind === 'block') return void performBlock({ person: summary, deps }).then(settle);
       if (kind === 'unblock') return void performUnblock({ person: summary, deps }).then(settle);
@@ -295,6 +363,39 @@ export function UserProfileView({ username }: { readonly username: string }) {
       void performRespondToRequest({ request: pendingRequest, action, deps }).then(settle);
     },
     [busy, deps, pendingRequest, person, report],
+  );
+
+  /**
+   * SIGNALER OUVRE UNE FEUILLE, IL N'ENVOIE PAS (#7187) — choisir un motif EST
+   * la confirmation, et il n'y en a pas de seconde : un « êtes-vous sûr ? »
+   * par-dessus ferait payer deux gestes pour une action qu'on abandonne déjà
+   * en fermant la feuille.
+   *
+   * L'issue `throttled` a son PROPRE message, distinct de l'échec : la
+   * passerelle pose trois limiteurs sur cette route, et dire « échoué » à
+   * quelqu'un qui vient de signaler un harcèlement l'enverrait recommencer —
+   * le limiteur le refuserait encore.
+   */
+  const [reporting, setReporting] = useState(false);
+
+  const onPickReason = useCallback(
+    (reason: ReportReason) => {
+      const cible = person;
+      if (cible === null || cible === undefined) return;
+      setBusy(true);
+      void reportUser({ userId: cible.id, reason, deps: apiDeps }).then((outcome) => {
+        setBusy(false);
+        setReporting(false);
+        /* LES TROIS ISSUES SE DISENT DIFFÉREMMENT, et le TON suit : seul un
+           succès est « neutre ». Un débit annoncé comme une erreur laisserait
+           croire à un échec ce qui n'est qu'un « pas maintenant ». */
+        if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), 'error');
+        if (outcome === 'throttled') return announce(translate(language, 'report.throttled'), 'error');
+        if (outcome === 'done') return announce(translate(language, 'report.done'), 'neutral');
+        announce(translate(language, 'report.failed'), 'error');
+      });
+    },
+    [announce, language, person],
   );
 
   const onFilter = useCallback((tap: ProfilePostsFilterTap) => setFilter((current) => toggledFilter(current, tap)), []);
@@ -358,8 +459,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
        alors aucune. */
   }, [announce, cardsNow, language, models, posts.isFetchingNextPage]);
 
-  const awaitingRequest = bucket !== null && pendingRequest === null;
-
   return (
     /* L'ATTRIBUT NE PORTE QUE CE QUI EST SERVI (#7083, D-6) — il portait le
        handle DEMANDÉ, donc un profil refusé le répétait dans le document :
@@ -379,7 +478,16 @@ export function UserProfileView({ username }: { readonly username: string }) {
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
               <>
-                {view.data?.isSelf === true ? null : (
+                {view.data?.isSelf === true ? (
+                  /* SA PROPRE FICHE N'OFFRAIT AUCUN GESTE (#7188). Masquer les
+                     actions relationnelles sur soi est juste — miroir iOS
+                     (`UserProfileSheet+DetailsTab.swift:23`) — mais rien
+                     n'était mis à la place : aucun chemin vers `/me` depuis
+                     cette adresse, donc aucune façon d'éditer ce qu'on y voit.
+                     Un écran qui montre son propre profil sans mener à son
+                     édition est un cul-de-sac. */
+                  <ProfileSelfSection language={language} />
+                ) : (
                   <ProfileRelationSection
                     language={language}
                     relation={relation}
@@ -387,7 +495,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     name={name}
                     signedIn={signedIn}
                     online={online}
-                    awaitingRequest={awaitingRequest}
                     busy={busy}
                     onAction={onAction}
                     onSignIn={onSignIn}
@@ -418,7 +525,15 @@ export function UserProfileView({ username }: { readonly username: string }) {
                       <ProfilePostsEmpty language={language} filter={filter} />
                     ) : models.length === 0 ? null : (
                       models.map((model) => (
-                        <FeedPostCard key={model.id} model={model} onGesture={onGesture} onShare={onShare} preferredLanguages={readerLanguages} />
+                        <FeedPostCard
+                          key={model.id}
+                          model={model}
+                          onGesture={onGesture}
+                          onShare={onShare}
+                          onComment={onComment}
+                          menu={menu}
+                          preferredLanguages={readerLanguages}
+                        />
                       ))
                     )}
                     {/* LA SUITE SE CHARGE SOUS UN FILTRE AUSSI (revue #7083) — le
@@ -434,6 +549,16 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     ) : null}
                   </div>
                 </GroupedSection>
+                {view.data?.isSelf === true || !signedIn ? null : (
+                  <ProfileConversationsSection
+                    language={language}
+                    conversations={shared.data ?? []}
+                    viewerId={rowViewerId}
+                    loading={shared.isPending}
+                    failed={shared.isError}
+                    onRetry={() => void shared.refetch()}
+                  />
+                )}
                 <ProfileStatsSection
                   language={language}
                   stats={view.data?.stats ?? null}
@@ -460,6 +585,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
         tone={actionAnnouncement === '' ? 'neutral' : actionTone}
         marker="profile"
       />
+      {reporting && person !== null ? (
+        <ReportSheet name={name} busy={busy} onPick={onPickReason} onClose={() => setReporting(false)} />
+      ) : null}
     </div>
   );
 }

@@ -5,7 +5,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { authorPostsQueryKey } from '@/lib/api/author-posts';
 import { BLOCKED_USERS_QUERY_KEY } from '@/lib/api/blocks';
+import { VIEWER_ID } from '@/lib/api/fixtures';
+import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
+import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -86,7 +89,13 @@ describe('les trois blocs arrivent ensemble', () => {
   test('chaque bloc est une SECTION nommée par son titre — l’idiome de `/me`', async () => {
     const el = await mount('kwame-mensah');
     const titles = [...el.querySelectorAll('#contenu section h2')].map((node) => text(node));
-    expect(titles).toEqual(['CONNEXION', 'PUBLICATIONS', 'STATISTIQUES']);
+    /* AMENDÉ PAR #7124 — la QUATRIÈME section est arrivée, et l'ordre porte
+       une décision : « ce que vous partagez déjà » se lit APRÈS ce que la
+       personne publie et AVANT ses compteurs, parce que c'est la réponse à
+       « où nous sommes-nous déjà parlé ? » — une question de RELATION, pas de
+       mesure. Le témoin reste EXHAUSTIF et ORDONNÉ : c'est ce qui lui permet
+       de dire qu'une section a disparu, ou qu'une s'est glissée sans décision. */
+    expect(titles).toEqual(['CONNEXION', 'PUBLICATIONS', 'CONVERSATIONS', 'STATISTIQUES']);
   });
 
   test('le bandeau porte les comptes SERVIS, et le listing les publications de CET auteur', async () => {
@@ -95,10 +104,13 @@ describe('les trois blocs arrivent ensemble', () => {
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
-  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer', async () => {
+  /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
+     appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
+     qu'une action a disparu, ou qu'une s'est glissée sans décision. */
+  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer, Signaler', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 });
 
@@ -153,8 +165,73 @@ describe('une demande REÇUE', () => {
       'reject',
       'write',
       'block',
+      'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
+  });
+});
+
+/**
+ * **CE QUE VOUS PARTAGEZ DÉJÀ** (#7124) — l'onglet Conversations d'iOS
+ * (`listSharedWith`, `UserProfileSheet.swift:325`), rendu en SECTION empilée.
+ * Ce qui se mesure ici est le CÂBLAGE : que la question porte le SUJET, et
+ * qu'elle ne parte PAS là où elle n'a pas de sens.
+ */
+describe('les conversations en commun', () => {
+  test('la section est peinte, et chaque rangée mène à son fil', async () => {
+    const el = await mount('kwame-mensah');
+    const rangees = [...el.querySelectorAll('[data-profile-conversation] a')];
+    expect(rangees.length).toBeGreaterThan(0);
+    expect(rangees.every((a) => (a.getAttribute('href') ?? '').startsWith('/c/'))).toBe(true);
+  });
+
+  test('sur SA PROPRE fiche, la section n’est pas montée — et la question ne part pas', async () => {
+    const el = await mount('vous');
+    expect(el.querySelector('[data-profile-conversations]')).toBeNull();
+    /* L'observateur EXISTE — un hook ne se monte pas sous condition — mais la
+       question n'est jamais POSÉE : `dataUpdateCount` à 0 et `fetchStatus` au
+       repos, la forme exacte que le témoin des publications d'un compte bloqué
+       emploie déjà. */
+    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey(VIEWER_ID));
+    expect(etat?.dataUpdateCount ?? 0).toBe(0);
+    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
+  });
+
+  test('sur un compte BLOQUÉ, aucune conversation n’est servie', async () => {
+    const el = await mount('yann.legoff');
+    expect(el.querySelector('[data-profile-conversations]')).toBeNull();
+    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey('u-yann'));
+    expect(etat?.dataUpdateCount ?? 0).toBe(0);
+    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
+  });
+});
+
+/**
+ * **L'IDENTIFIANT DE LA DEMANDE ARRIVE AVEC L'IDENTITÉ** (#7122) — la fiche
+ * chargeait le panier `GET /directory/friend-requests?direction=…` pour
+ * retrouver la ligne que « Accepter » doit patcher, et désarmait ses trois
+ * gestes tant qu'il était en vol. La passerelle sert `relationRequestId` sur
+ * `expand=relation` : il n'y a plus de panier, plus de fenêtre, et les gestes
+ * sont armés au premier rendu.
+ *
+ * C'est la forme EXACTE du lot #7125 une dimension plus loin — le blocage
+ * avait quitté son panier, la ligne de demande quitte le sien.
+ */
+describe('la ligne de la demande, lue sur le FIL', () => {
+  test('les gestes sont armés d’emblée — aucun n’attend sa ligne', async () => {
+    const el = await mount('amina.diallo');
+    const accept = el.querySelector('[data-profile-action="accept"]');
+    expect(accept).not.toBeNull();
+    expect((accept as HTMLButtonElement | null)?.disabled).toBe(false);
+  });
+
+  test('aucune page du panier des demandes n’a été servie', async () => {
+    await mount('amina.diallo');
+    /* Sans observateur, TanStack ne crée même pas l'entrée : l'ABSENCE d'état
+       est la preuve, là où un compteur de pages mesurerait le drainage plutôt
+       que sa disparition (même témoin que pour le panier des bloqués). */
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('received'))).toBeUndefined();
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('sent'))).toBeUndefined();
   });
 });
 
@@ -389,3 +466,105 @@ describe('« Charger plus »', () => {
   });
 });
 
+/**
+ * **LES DEUX GESTES QUI MANQUAIENT À LA FICHE** (#7188).
+ *
+ * Le relevé d'ouverture avait trouvé la fiche SAINE — aucun contrôle inerte,
+ * la loi 4 tenue partout, et même mieux que sur iOS (la tuile « Stories » y est
+ * un bouton mort, ici un `<span>`). Ce qui manquait n'était donc pas à
+ * réparer, mais à AJOUTER.
+ */
+describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
+  /**
+   * COMMENTER — le compteur retombait en `<span>` muet parce que l'hôte ne
+   * passait pas `onComment` (`feed-post-card.tsx:154-162`) : conforme à la
+   * loi 4, un bouton sans effet mentirait — mais la fonction MANQUAIT, alors
+   * que le Flux la sert depuis toujours et que `/post/$post` est routé.
+   *
+   * Le témoin interroge le BOUTON plutôt que le handler : c'est l'effet qui
+   * compte, et le dépôt a déjà payé une zone cliquable sans effet (cycle 123).
+   */
+  test('le compteur de commentaires d’une publication est un bouton', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-feed-gesture="comment"]')).not.toBe(null);
+  });
+
+  /**
+   * SA PROPRE FICHE MÈNE À SON ÉDITION. Masquer les gestes relationnels sur soi
+   * est juste — on ne s'ajoute pas en ami — mais rien n'était mis à la place :
+   * aucun chemin vers `/me`, donc un cul-de-sac.
+   */
+  test('sur sa propre fiche, un chemin mène à l’édition', async () => {
+    const el = await mount('vous');
+
+    const lien = el.querySelector('[data-profile-self] a');
+    expect(lien).not.toBe(null);
+    expect(lien?.getAttribute('href')).toBe('/me');
+    expect(text(lien)).toBe('Modifier mon profil');
+  });
+
+  /**
+   * LE CONTRE-TÉMOIN — sans lui, on pourrait poser l'entrée d'édition sur
+   * TOUTES les fiches, et proposer à chacun de modifier le profil d'un autre.
+   */
+  test('sur la fiche d’un tiers, aucune entrée d’édition', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-profile-self]')).toBe(null);
+  });
+});
+
+/**
+ * **LE BOUTON OUVRE VRAIMENT LA FEUILLE** (#7187).
+ *
+ * Les témoins du port (`lib/api/reports.test.ts`) prouvent que la RÈGLE est
+ * juste ; les inventaires d'actions prouvent que le bouton EXISTE. Aucun des
+ * deux ne prouve que le bouton OUVRE quelque chose — et c'est précisément la
+ * distance que ce dépôt a payée cinq fois cette semaine : un mécanisme écrit,
+ * testé, et que rien n'active.
+ *
+ * Ce témoin a été ajouté APRÈS coup, en relisant le lot : il manquait, et rien
+ * ne l'aurait dit.
+ */
+describe('signaler ouvre la feuille des motifs (#7187)', () => {
+  test('aucune feuille tant qu’on n’a pas demandé à signaler', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-report-reason]')).toBe(null);
+  });
+
+  test('le bouton « Signaler » la fait apparaître, avec les HUIT motifs', async () => {
+    const el = await mount('kwame-mensah');
+
+    const bouton = el.querySelector<HTMLButtonElement>('[data-profile-action="report"]');
+    expect(bouton).not.toBe(null);
+    await act(async () => bouton?.click());
+    await settle();
+
+    const motifs = [...document.querySelectorAll('[data-report-reason]')].map((n) =>
+      n.getAttribute('data-report-reason'),
+    );
+    expect(motifs).toEqual([
+      'spam',
+      'inappropriate',
+      'harassment',
+      'violence',
+      'hate_speech',
+      'fake_profile',
+      'impersonation',
+      'other',
+    ]);
+  });
+
+  /** ET ELLE EXPLIQUE CE QU'ELLE FAIT : une liste de motifs sans phrase laisse
+      deviner à qui va le signalement, et ce qu'il déclenche. */
+  test('elle dit à qui le signalement s’adresse', async () => {
+    const el = await mount('kwame-mensah');
+
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-action="report"]')?.click());
+    await settle();
+
+    expect(text(document.querySelector('[data-report-body]'))).toContain('modération');
+  });
+});

@@ -32,6 +32,14 @@ const SCREENS = [
   { name: 'thread-protected', path: '/c/c-protection' },
   /** LE RÉSUMÉ VIVANT (#5695, D-21) — le SEUL corpus qui ATTEINT `summary`. */
   { name: 'thread-summary', path: '/c/c-rattrapage' },
+  /**
+   * LE SÉPARATEUR DE NON-LUS (#7202, W3, D-L2/D-L3) — corpus DÉDIÉ, HORS
+   * LISTE (`c-non-lus`, `fixtures-unread.ts`) : `c-deploiement` porte un
+   * `unreadCount` mais aucune frontière de lecture, et lui en poser une
+   * romprait `check-thread-virtualization.mjs` §2 (« le fil s'ouvre EN
+   * BAS », mesuré sur cette conversation précise).
+   */
+  { name: 'thread-unread-separator', path: '/c/c-non-lus' },
   /** LES QUATRE PORTES D'ENTRÉE (#5816) — capturées SANS session : `/welcome`
       renvoie vers `/` dès qu'il y en a une, et c'est précisément l'écran du
       visiteur qu'on veut voir. `/auth/magic-link` est ici dans son état de
@@ -446,7 +454,9 @@ for (const scheme of ['dark', 'light']) {
     const page = await openThread('focal');
     await page.locator('[data-row]').nth(0).click({ button: 'right' });
     await page.waitForTimeout(300);
-    await page.getByRole('menuitem', { name: 'Traduire' }).click();
+    // Vise l'ACTION, plus son libelle (#7141/#7555) : le menu lit desormais le
+    // catalogue d'interface, donc son texte suit la langue du navigateur.
+    await page.locator('[role="menuitem"][data-action="translate"]').click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUTPUT}thread-message-menu-translate.${scheme}.png` });
     console.log(`  thread-message-menu-translate · ${scheme}`);
@@ -458,7 +468,7 @@ for (const scheme of ['dark', 'light']) {
     const page = await openThread('focal');
     await page.locator('[data-row]').nth(0).click({ button: 'right' });
     await page.waitForTimeout(300);
-    await page.getByRole('menuitem', { name: 'Sélectionner' }).click();
+    await page.locator('[role="menuitem"][data-action="select"]').click();
     await page.waitForTimeout(300);
     await page.locator('[data-row]').nth(3).click();
     await page.waitForTimeout(200);

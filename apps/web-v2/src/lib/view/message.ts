@@ -3,6 +3,7 @@ import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audi
 
 import { servedTranscript, type Served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 
 /**
  * CE QUE LA VUE DÉRIVE D'UN MESSAGE.
@@ -42,15 +43,32 @@ export const isMineOf = (message: Message, viewerId: string): boolean => message
  *
  * `recipientCount` ABSENT (charge construite par socket) ⇒ on retombe sur les
  * horloges dénormalisées, seule source qui ne suppose pas de dénominateur.
+ *
+ * **L'ORDRE EST CELUI DES PALIERS, PAS CELUI DES SOURCES (#7223).** Chaque
+ * palier consulte SES DEUX preuves — l'horloge « à tous » et les compteurs —
+ * avant que le palier du dessous soit seulement regardé, exactement comme le
+ * résolveur qui fait foi (D-1, `DeliveryStatusResolver.resolve`,
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/DeliveryStatusResolver.swift` :
+ * `readByAllAt != nil || readCount >= recipientCount`, PUIS `deliveredToAllAt
+ * != nil || delivered >= recipientCount`).
+ *
+ * Ranger `deliveredToAllAt` avant tout compteur — ce que faisait ce site —
+ * COURT-CIRCUITAIT la lecture : `GET /conversations/:id/messages` sert cette
+ * horloge CALCULÉE dès que la distribution est complète
+ * (`routes/conversations/messages-list-query.ts:663`), donc tout message du
+ * fil la porte bien avant d'être lu, et les compteurs qu'un
+ * `read-status:updated` vient de poser n'atteignaient plus aucun pixel. Les
+ * deux sources ne se contredisent jamais quand elles viennent de la même
+ * lecture REST ; quand elles divergent, c'est que les compteurs sont les plus
+ * FRAIS — ce sont eux que le temps réel rafraîchit.
  */
 export const deliveryOf = (message: Message): Delivery => {
-  if (message.readByAllAt !== undefined) return 'read';
-  if (message.deliveredToAllAt !== undefined) return 'delivered';
+  const recipients = message.recipientCount ?? 0;
+  const countsAreConclusive = recipients > 0;
 
-  const recipients = message.recipientCount;
-  if (recipients !== undefined && recipients > 0) {
-    if (message.readCount >= recipients) return 'read';
-    if (message.deliveredCount >= recipients) return 'delivered';
+  if (message.readByAllAt !== undefined || (countsAreConclusive && message.readCount >= recipients)) return 'read';
+  if (message.deliveredToAllAt !== undefined || (countsAreConclusive && message.deliveredCount >= recipients)) {
+    return 'delivered';
   }
   return message.deliveredCount > 0 ? 'delivered' : 'sent';
 };
@@ -75,20 +93,58 @@ export const checkStatusOf = (message: Message, local: LocalDelivery | undefined
 };
 
 /**
+ * LE TYPE D'UNE PIÈCE → SA CLÉ DE CATALOGUE (#7337) — le libellé d'un
+ * substitut de pièce protégée. SITE UNIQUE, partagé par la tuile
+ * (`MaskedAttachment`) et par la page plein cadre (`ViewerMaskedPage`,
+ * `media-viewer.tsx`) : les deux disaient la même chose en dur, en français,
+ * et « un second vocabulaire ferait dire deux choses différentes à l'œil et à
+ * l'oreille pour un même état » (doc-comment de `PROTECTED_LABEL_KEY`).
+ *
+ * Il vit ICI, à côté de `kindOf` qui l'indexe, et non chez l'un des deux
+ * composants : un `import` de l'un vers l'autre ferait entrer la tuile et ses
+ * dépendances dans le chunk de la visionneuse, pour une table de quatre
+ * chaînes.
+ */
+export const PROTECTED_ATTACHMENT_KEY = {
+  image: 'attachment.protected.image',
+  video: 'attachment.protected.video',
+  audio: 'attachment.protected.audio',
+  file: 'attachment.protected.file',
+} as const satisfies Readonly<Record<'image' | 'audio' | 'video' | 'file', InterfaceCatalogKey>>;
+
+/**
  * La CATÉGORIE d'une pièce jointe, déduite de son type MIME par la fonction du
  * dépôt — la même que celle qui décide du `messageType` à l'envoi. La déduire
  * ici avec un `startsWith('image/')` de plus produirait deux classements pour
  * une même pièce, et c'est le genre d'écart qui ne se voit que sur un format
  * rare.
  */
-export const kindOf = (attachment: Attachment): 'image' | 'audio' | 'video' | 'file' =>
+export const kindOf = (attachment: Pick<Attachment, 'mimeType'>): 'image' | 'audio' | 'video' | 'file' =>
   messageTypeFromMimeTypes([attachment.mimeType]) ?? 'file';
 
-/** Les traductions d'un message, ramenées à ce qu'une puce de langue affiche. */
+/**
+ * Les traductions d'un message, ramenées à ce qu'une puce de langue affiche —
+ * et LE SEUL LECTEUR de `Message.translations` de cette couche (#7526).
+ *
+ * La garde `?? []` tient MALGRÉ le type `required`, pour la raison que
+ * `decodeMessage` porte déjà (`api/decode.ts`, #5650) : `@meeshy/shared`
+ * décrit le message COMPLET de `GET …/messages`, pas les formes ALLÉGÉES que
+ * la passerelle sert ailleurs, et le cache du fil tient ce que chaque
+ * écrivain y pose. Ici la conséquence n'est pas un champ manquant mais un
+ * `TypeError` à la PEINTURE : `bubble.tsx` et `focal-row.tsx` appellent
+ * `translatedLanguagesOf` sur CHAQUE rangée, donc le fil entier tombe avant
+ * qu'un `message:translation` n'arrive — le symptôme que `realtime-apply.ts`
+ * garde de son côté (`mergeMessageTranslations`).
+ */
 export const translationsOf = (
-  message: Message,
+  /** LE CHAMP EST DÉCLARÉ OPTIONNEL ICI (#7527) — `Message.translations` est
+   * requis dans `@meeshy/shared`, mais les formes ALLÉGÉES du cache ne le
+   * portent pas. Le déclarer ici est ce qui permet aux appelants d'accepter
+   * la forme allégée SANS assertion de type : une garde annoncée par une
+   * assertion n'en est pas une. */
+  message: { readonly translations?: Message['translations'] },
 ): readonly { readonly language: string; readonly text: string }[] =>
-  message.translations.map((t) => ({ language: t.targetLanguage, text: t.translatedContent }));
+  (message.translations ?? []).map((t) => ({ language: t.targetLanguage, text: t.translatedContent }));
 
 /**
  * Une onde de vocal DÉTERMINISTE, dérivée de l'identifiant de la pièce.
@@ -127,7 +183,11 @@ export const translatedLanguagesOf = (message: Message): readonly string[] => {
     languages.push(language);
   };
 
-  for (const t of message.translations) push(t.targetLanguage);
+  // `translationsOf`, jamais une seconde lecture du champ (#7526) : un
+  // deuxième `message.translations` ici serait une deuxième réponse à « ce
+  // champ peut-il manquer ? », et c'est cette duplication qui laisse un site
+  // en arrière au lot suivant.
+  for (const t of translationsOf(message)) push(t.language);
   for (const attachment of message.attachments ?? []) {
     // AUDIO SEULEMENT — `translatedAudios`, jamais « toute pièce traduite »
     // (revue #5805). `buildAvailableFlags` prend DEUX sources et deux

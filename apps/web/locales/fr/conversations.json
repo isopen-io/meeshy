@@ -520,7 +520,8 @@
       "noResults": "Aucun résultat"
     },
     "pinnedBanner": {
-      "close": "Fermer le message épinglé"
+      "close": "Fermer le message épinglé",
+      "next": "Épingle suivante"
     },
     "links": {
       "noDescription": "Aucune description",

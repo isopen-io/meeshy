@@ -71,6 +71,9 @@ struct FocalRow: View {
                 standardBody
             }
         }
+        // #7467 — la destruction se VOIT, dans la rangée plate comme dans la
+        // bulle : même modificateur, même durée, même repli.
+        .ephemeralBurn(isBurning: content.isBurning)
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
         .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
@@ -154,12 +157,12 @@ struct FocalRow: View {
     /// `.bottom` est la forme exacte demandée : la date se pose au niveau de la
     /// DERNIÈRE ligne de la bulle, jamais de la première.
     ///
-    /// **Les modificateurs terminaux vivent ICI, sur les deux colonnes**, et
-    /// pas sur la seule colonne de contenu : la carte de focus est le fond de
-    /// la rangée ENTIÈRE, et `.messageEffects` doit garder « exactement le même
-    /// périmètre que la bulle historique » — identité, citation, média, texte
-    /// **et méta**. Les laisser sur `contentColumn` aurait sorti la date de la
-    /// carte et de l'effet, sans qu'aucun test de valeur ne tombe.
+    /// **La carte de focus vit ICI, sur les deux colonnes** : elle est le fond
+    /// de la rangée ENTIÈRE, méta comprise. `.messageEffects`, lui, a quitté ce
+    /// niveau le 2026-09-23 — il épouse désormais `contentColumn`, comme le
+    /// chemin bulle épouse sa bulle. Le garder ici étirait le liseré
+    /// arc-en-ciel sur toute la largeur de l'écran : 355 pt de cadre pour
+    /// 174 pt de message, mesuré en recette.
     @ViewBuilder
     private var standardBody: some View {
         HStack(alignment: .bottom, spacing: FocalMetrics.MetaColumn.spacing) {
@@ -171,7 +174,7 @@ struct FocalRow: View {
             FocalMetaColumn(
                 isMe: content.isMe,
                 timeString: content.meta.timeString,
-                deliveryStatus: content.meta.deliveryStatus,
+                deliveryStatus: BubbleFooterModel.glyphStatus(content.meta.deliveryStatus, retryBandShown: isFailedOutgoing),
                 isDark: input.isDark,
                 editedAt: content.editedAt,
                 isEditSaving: content.isEditSaving,
@@ -210,14 +213,16 @@ struct FocalRow: View {
                 .offset(y: FocalMetrics.FocusStrip.overhang)
             }
         }
-        // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
-        // contenu » — même overlay que le chemin bulle
-        // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
-        // §1.3 réutilisé tel quel via `View.messageEffects(_:)`, PAS
-        // réimplémenté). Posé sur les DEUX colonnes (identité + citation +
-        // média + texte + méta), exactement le même périmètre que la bulle
-        // historique applique à `BubbleStandardLayout(...)`.
-        .messageEffects(input.effects)
+        // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
+        // Il a vécu ici au nom d'un « même périmètre que la bulle » citant
+        // `ThemedMessageBubble.swift:317` — référence PÉRIMÉE, qui dit
+        // aujourd'hui l'inverse : le chemin bulle a déplacé l'effet sur la
+        // bulle elle-même parce qu'« il encadrait du vide ». Focal gardait
+        // l'ancien périmètre en le justifiant par le correctif qui le dément.
+        // Mesuré en recette le 2026-09-23 (Arc-en-ciel) : 355 pt de liseré
+        // pour 174 pt de message. La méta reste dehors — en Focal c'est une
+        // colonne détachée au bord opposé, et l'inclure était la cause.
+        
     }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
@@ -281,10 +286,18 @@ struct FocalRow: View {
             // l'écrasante majorité des messages n'a pas de flou et ne paie ni
             // le `@StateObject` ni le modificateur. `isBlurred` est stable
             // sur la vie du message, la branche ne bascule pas au recyclage.
-            if content.isBlurred {
+            //
+            // #7452 — **le voile couvre aussi la VUE UNIQUE, pas seulement le
+            // flou.** Un texte à vue unique s'affichait EN CLAIR, sans même
+            // une mention : le masquage ne lisait que `isBlurred`, et
+            // « Voir une fois » n'existait que sur les médias. Un message
+            // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
+            // jusqu'au toucher qui le consomme.
+            if content.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
                     isViewOnce: content.isViewOnce,
+                    isDark: input.isDark,
                     messageId: content.messageId,
                     onConsumeViewOnce: actions.onConsumeViewOnce
                 ) {
@@ -336,6 +349,13 @@ struct FocalRow: View {
                     .accessibilityHidden(true)
             }
         }
+        // L'effet se pose ICI : AVANT l'étirement ci-dessous, donc sur la
+        // largeur NATURELLE du contenu. Posé après, il épousait la laisse et
+        // non le message — 355 pt de liseré arc-en-ciel pour 174 pt de texte,
+        // mesuré en recette le 2026-09-23. `.frame(maxWidth:)` ÉTEND, il ne
+        // borne pas : tout modificateur visuel monté après lui hérite de
+        // l'écran, pas du contenu.
+        .messageEffects(input.effects)
         // La bulle prend toute la laisse que la colonne lui laisse : sans cela
         // une rangée courte se rétracterait sur son texte et sa date viendrait
         // se coller au mot, au lieu de tenir la marge droite comme les autres.
@@ -350,7 +370,7 @@ struct FocalRow: View {
     private var mountsBottomLine: Bool {
         FocalMetaColumn.mountsBottomLine(
             hasTranslation: content.translation != nil,
-            isBlurred: content.isBlurred,
+            isBlurred: content.requiresVeil,
             isLastInGroup: input.isLastInGroup,
             hasReactions: mountsReactions
         )
@@ -375,7 +395,7 @@ struct FocalRow: View {
 
     // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
 
-    /// `content.isPinned`/`content.isForwarded`/`content.ephemeral` LUS et
+    /// `content.isPinned`/`content.isForwarded`/`content.protection` LUS et
     /// RENDUS (jusqu'ici seul le libellé VoiceOver les portait, F-080) —
     /// réutilise `BubblePinnedIndicator`/`BubbleForwardedIndicator` (§1.3,
     /// `internal`, vérifiés non `fileprivate`) TELS QUELS, et
@@ -402,9 +422,11 @@ struct FocalRow: View {
         if let attribution = content.forwardAttribution {
             BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: attribution)
         }
-        if let ephemeral = content.ephemeral {
-            FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)
-        }
+        // #7452 — LE chrome de protection, partagé avec la bulle, la rivière
+        // et le résumé. `FocalEphemeralBadge` était une seconde implémentation
+        // du même badge, avec son propre minuteur de cellule.
+        MessageProtectionChrome(descriptor: content.protection, isDark: input.isDark)
+            .equatable()
     }
 
     // MARK: - F-083ter (F05) — réactions live en pilule plate méta
@@ -474,7 +496,6 @@ struct FocalRow: View {
                     mentionDisplayNames: input.mentionDisplayNames,
                     onReplyTap: actions.onReplyTap,
                     onStoryReplyTap: actions.onStoryReplyTap,
-                    onQuotedAuthorTap: actions.onQuotedAuthorTap,
                     onQuotedMediaTap: actions.onQuotedMediaTap
                 )
                 // Le rail de la citation est une forme (souple en hauteur) :
@@ -809,7 +830,7 @@ struct FocalRow: View {
             // (`onSetActiveDisplayLanguageForGroup`) ; changer la langue d'UN
             // message précis du groupe reste possible via la magnification
             // (`focusStrip`, `onSetActiveDisplayLanguage`) ou le long-press.
-            if let translation = content.translation, !content.isBlurred, input.isLastInGroup {
+            if let translation = content.translation, !content.requiresVeil, input.isLastInGroup {
                 plainLanguageFlags(translation)
             }
             if mountsReactions {
@@ -906,7 +927,7 @@ struct FocalRow: View {
     /// hauteur réservée, donc affichage instantané au tick d'élection.
     private var focusStrip: some View {
         HStack(alignment: .center, spacing: 4) {
-            if let translation = content.translation, !content.isBlurred {
+            if let translation = content.translation, !content.requiresVeil {
                 Button {
                     actions.onShowTranslationDetail?(content.messageId)
                 } label: {
@@ -1166,25 +1187,5 @@ struct FocalRow: View {
                     LanguageData.info(for: translation.originalLangCode.lowercased())?.nativeName ?? translation.originalLangCode
                 ))
         }
-    }
-}
-
-// MARK: - EquatableFocalRow — le gate de re-render
-
-/// Enveloppe la rangée pour le gate `.equatable()` — même topologie que
-/// `EquatableMessageBubble` (`ThemedMessageBubble.swift:481-491`, lue jamais
-/// modifiée). Le gate ne se pose JAMAIS sur `FocalRow` lui-même (contrat
-/// §WS-4 : régression documentée du 2026-05-25) — `FocalRow` n'est donc PAS
-/// `Equatable` ; seule cette enveloppe l'est, en comparant `row.input`
-/// (`FocalRowActions` en est exclu par construction, comme `FocalRowInput.==`
-/// ne le compare jamais).
-struct EquatableFocalRow: View {
-    let row: FocalRow
-    var body: some View { row }
-}
-
-extension EquatableFocalRow: @MainActor Equatable {
-    static func == (lhs: EquatableFocalRow, rhs: EquatableFocalRow) -> Bool {
-        lhs.row.input == rhs.row.input
     }
 }

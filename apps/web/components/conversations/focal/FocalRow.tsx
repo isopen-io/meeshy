@@ -64,6 +64,7 @@ import { useEffect, useMemo, memo } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message } from '@meeshy/shared/types';
 import { mentionsToLinks } from '@meeshy/shared/types/mention';
+import { buildMentionDisplayMap } from '@/utils/mention-display';
 import { useI18n } from '@/hooks/use-i18n';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { ExpandableMessageText } from '@/components/common/bubble-message/ExpandableMessageText';
@@ -168,9 +169,19 @@ export const FocalRow = memo(function FocalRow({
   // (`mentionsToLinks`, `packages/shared/types/mention.ts`), appliquée au
   // texte DÉJÀ résolu par le Prisme. Ce n'est pas une loi de langue, c'est une
   // décoration de handles — le Prisme reste unique.
+  //
+  // La carte de noms passe par le MÊME argument que dans la bulle : cette
+  // rangée est une seconde surface de rendu, et une surface qui rend le handle
+  // pendant que l'autre rend le nom est pire qu'aucune des deux — l'écart se
+  // lit comme un bug d'affichage, pas comme une feature absente (#7458).
+  const mentionDisplayNames = useMemo(
+    () => buildMentionDisplayMap(message.mentionedUsers ?? []),
+    [message.mentionedUsers]
+  );
+
   const textWithMentions = useMemo(
-    () => (text ? mentionsToLinks(text, '/u/{username}', [...(message.validatedMentions ?? [])]) : ''),
-    [text, message.validatedMentions]
+    () => (text ? mentionsToLinks(text, '/u/{username}', [...(message.validatedMentions ?? [])], mentionDisplayNames) : ''),
+    [text, message.validatedMentions, mentionDisplayNames]
   );
 
   const callMetadata = useMemo(() => resolveFocalCallMetadata(message), [message]);

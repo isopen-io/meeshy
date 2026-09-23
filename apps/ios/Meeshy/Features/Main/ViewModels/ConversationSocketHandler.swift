@@ -86,7 +86,11 @@ protocol ConversationSocketDelegate: AnyObject {
 
 @MainActor
 final class ConversationSocketHandler {
-    private var cancellables = Set<AnyCancellable>()
+    // Internal (not `private`), not `fileprivate` : `ConversationSocketHandler
+    // +MediaEvents.swift` (I4, #7360) stores its own subscriptions into this
+    // SAME set from another file — the split that keeps this file under the
+    // repo's 1200-line budget. Still invisible outside the module.
+    var cancellables = Set<AnyCancellable>()
     private let conversationId: String
     private let currentUserId: String
     private let messageSocket: MessageSocketProviding
@@ -738,6 +742,40 @@ final class ConversationSocketHandler {
                     }
                 }
                 StarredMessagesStore.shared.remove(messageId: event.messageId)
+                // **La mort se GRAVE, elle ne s'oublie pas** (#7552). Ce site
+                // EFFAÇAIT la réception ; mais la ligne ne quitte le fil qu'au
+                // tour suivant, et entre les deux la projection retrouvait un
+                // registre VIDE et stampait une réception NEUVE — une fenêtre
+                // entière repartait. On oubliait avant d'avoir retiré.
+                EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
+                // #7453 — le troisième chemin du balayage. Il est le seul à
+                // savoir qu'un message PRÉCIS vient de mourir, y compris
+                // pendant que l'application est à l'écran : ni la NSE (qui
+                // n'agit qu'à l'arrivée d'un push) ni le retour au premier
+                // plan ne couvrent ce cas.
+                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
+            }
+            .store(in: &cancellables)
+
+        // **L'échéance SERVIE d'un éphémère** (`message:countdown-started`,
+        // contrat du fil #7451 point 5).
+        //
+        // Elle ne REMPLACE pas l'échéance locale : les deux concourent, et
+        // `EphemeralDeadline.resolve` retient la plus PROCHE. Poser la valeur
+        // servie sur `expiresAt` suffit donc — elle ne peut que raccourcir la
+        // vie du message, jamais l'allonger, ce qui est la seule direction
+        // qu'une protection ait le droit de prendre.
+        //
+        // C'est aussi ce qui donne une horloge à l'EXPÉDITEUR, dont l'envoi ne
+        // compte pas comme une réception : tant que cet événement n'est pas
+        // arrivé, il lit « en attente de réception ».
+        socketManager.messageCountdownStarted
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let delegate = self.delegate else { return }
+                guard let index = delegate.messageIndex(for: event.messageId) else { return }
+                delegate.messages[index].expiresAt = event.expiresAt
             }
             .store(in: &cancellables)
 
@@ -926,26 +964,11 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // BUG2 A' — réactions par-image : le delta porte le reactionSummary
-        // autoritaire ; on remplace les comptes in-memory (currentUserReactions
-        // reste géré optimiste côté VM, comme message-level).
-        socketManager.attachmentReactionAdded
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
-                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
-            }
-            .store(in: &cancellables)
-
-        socketManager.attachmentReactionRemoved
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let delegate = self.delegate, let summary = event.reactionSummary else { return }
-                delegate.applyAttachmentReactionDelta(attachmentId: event.attachmentId, reactionSummary: summary)
-            }
-            .store(in: &cancellables)
+        // Réactions par-pièce-jointe, statut de consommation, enrichissements
+        // (transcription / traduction audio) — extraits par responsabilité
+        // dans `ConversationSocketHandler+MediaEvents.swift` (I4, #7360) :
+        // ce fichier dépassait le plafond de 1200 lignes du dépôt.
+        subscribeToMediaEvents(socketManager: socketManager, convId: convId, userId: userId)
 
         // Typing started (with safety timeout). The client picks the name to show —
         // `preferredDisplayName` is displayName-first, username-fallback — but the
@@ -1011,6 +1034,20 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // I3 (#7349) — `message:pending-delivered`: this user's offline queue
+        // was just replayed by the gateway. iOS had no listener at all before
+        // this lot. Mirrors the existing reconnect/foreground resync path
+        // (`triggerSyncIfNeeded` → `delegate.syncMissedMessages()`), scoped to
+        // the conversation this handler owns — the same signal web-v2 uses to
+        // invalidate its own message list cache for the named conversations.
+        socketManager.pendingMessagesDelivered
+            .filter { $0.conversationIds.contains(convId) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.triggerSyncIfNeeded()
+            }
+            .store(in: &cancellables)
+
         // Participant role updated
         socketManager.participantRoleUpdated
             .filter { $0.conversationId == convId }
@@ -1026,249 +1063,6 @@ final class ConversationSocketHandler {
                     newRole: event.newRole
                 )
             }
-            .store(in: &cancellables)
-
-        // Attachment status updated (listened, watched, viewed, downloaded)
-        socketManager.attachmentStatusUpdated
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                // At-rest consumption tint (waveform/progress bar) : only OUR OWN
-                // playback echo (multi-device sync) may feed this store — it is
-                // documented and purged as single-local-user state, so another
-                // participant's progress must never tint MY bubble.
-                if event.userId == self.currentUserId,
-                   let playPositionMs = event.playPositionMs,
-                   let durationMs = event.durationMs, durationMs > 0 {
-                    let fraction = Double(playPositionMs) / Double(durationMs)
-                    MediaConsumptionStore.shared.record(
-                        fraction: fraction, complete: fraction >= 1, for: event.attachmentId)
-                }
-                guard let persistence = self.persistence else { return }
-                // Touch the record so the store observation fires and
-                // bubbles re-render with the updated attachment status.
-                Task {
-                    do {
-                        try await persistence.touchUpdatedAt(localId: event.messageId)
-                    } catch {
-                        Logger.messages.error("Persistence touchUpdatedAt failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Attachment payload enriched server-side (transcription finalized,
-        // audio translation finalized for one language). Delegate handles
-        // the metadata dictionaries injection atomically + GRDB upsert ;
-        // the same atomic rule as `loadInitialSnapshot` ensures no
-        // intermediate frame ever renders the message without its enriched
-        // transcription / translated audios.
-        socketManager.attachmentUpdated
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.delegate?.applyAttachmentUpdate(event)
-            }
-            .store(in: &cancellables)
-
-        // View-once consumed
-        socketManager.messageConsumed
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                // Capture the current message snapshot for eviction BEFORE
-                // the persistence write updates the record and the store
-                // observation refreshes delegate.messages.
-                let messageForEviction: Message? = event.isFullyConsumed
-                    ? delegate.messages.first(where: { $0.id == event.messageId })
-                    : nil
-                if let persistence = self.persistence {
-                    // Write through persistence; store observation surfaces the count update.
-                    Task {
-                        do {
-                            try await persistence.updateViewOnceCount(
-                                localId: event.messageId,
-                                count: event.viewOnceCount
-                            )
-                        } catch {
-                            Logger.messages.error("Persistence updateViewOnceCount failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
-                        }
-                    }
-                }
-                // Eviction is media-cache housekeeping; not a messages array mutation.
-                if event.isFullyConsumed {
-                    if let msg = messageForEviction {
-                        delegate.evictViewOnceMedia(message: msg)
-                    }
-                    delegate.markMessageAsConsumed(messageId: event.messageId)
-                }
-            }
-            .store(in: &cancellables)
-
-        // Translation received — coalesce bursts (the server can fire 5+
-        // language translations for the same message within ~50ms when the
-        // recipient ring is fanned out). Collecting via `.collect(.byTime)`
-        // means a single `@Published` write fires instead of N, cutting
-        // ConversationView body re-evals by ~80% on multilingual groups.
-        socketManager.translationReceived
-            .collect(.byTime(DispatchQueue.main, .milliseconds(80)))
-            .filter { !$0.isEmpty }
-            .sink { [weak self] events in
-                guard let delegate = self?.delegate else { return }
-                var buckets: [String: [MessageTranslation]] = [:]
-                for event in events {
-                    guard delegate.containsMessage(id: event.messageId) else { continue }
-                    let mapped = event.translations.map { t in
-                        MessageTranslation(
-                            id: t.id,
-                            messageId: t.messageId,
-                            sourceLanguage: t.sourceLanguage,
-                            targetLanguage: t.targetLanguage,
-                            translatedContent: t.translatedContent,
-                            translationModel: t.translationModel,
-                            confidenceScore: t.confidenceScore
-                        )
-                    }
-                    var merged = buckets[event.messageId] ?? delegate.messageTranslations[event.messageId] ?? []
-                    for translation in mapped {
-                        if let idx = merged.firstIndex(where: { $0.targetLanguage == translation.targetLanguage }) {
-                            merged[idx] = translation
-                        } else {
-                            merged.append(translation)
-                        }
-                    }
-                    buckets[event.messageId] = merged
-                }
-                // Single assignment so SwiftUI publishes once per burst
-                // regardless of how many messages/languages came in.
-                for (msgId, merged) in buckets {
-                    delegate.messageTranslations[msgId] = merged
-                }
-
-                // Persist translations via actor
-                if let persistence = self?.persistence {
-                    let capturedEvents = events
-                    Task {
-                        for event in capturedEvents {
-                            for t in event.translations {
-                                let record = TranslationRecord(
-                                    id: t.id,
-                                    messageLocalId: t.messageId,
-                                    messageServerId: t.messageId,
-                                    targetLanguage: t.targetLanguage,
-                                    translatedContent: t.translatedContent,
-                                    translationModel: t.translationModel,
-                                    confidenceScore: t.confidenceScore,
-                                    sourceLanguage: t.sourceLanguage,
-                                    receivedAt: Date()
-                                )
-                                do {
-                                    try await persistence.saveTranslation(record)
-                                } catch {
-                                    Logger.messages.error("Persistence saveTranslation failed: \(error, privacy: .public) messageId=\(t.messageId, privacy: .public) lang=\(t.targetLanguage, privacy: .public)")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Transcription ready
-        socketManager.transcriptionReady
-            .filter { $0.conversationId == convId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let delegate = self?.delegate else { return }
-                let segments = (event.transcription.segments ?? []).map { s in
-                    MessageTranscriptionSegment(
-                        text: s.text,
-                        startTime: s.startTime,
-                        endTime: s.endTime,
-                        speakerId: s.speakerId
-                    )
-                }
-                let transcription = MessageTranscription(
-                    attachmentId: event.attachmentId,
-                    text: event.transcription.text,
-                    language: event.transcription.language,
-                    confidence: event.transcription.confidence,
-                    durationMs: event.transcription.durationMs,
-                    segments: segments,
-                    speakerCount: event.transcription.speakerCount
-                )
-                // Per-message dict (single-audio backward compat)
-                delegate.messageTranscriptions[event.messageId] = transcription
-                // Per-attachment dict (multi-audio karaoke realtime fix):
-                // mirrors how all 3 VM hydration sites populate both dicts.
-                delegate.messageTranscriptionsByAttachment[event.attachmentId] = transcription
-            }
-            .store(in: &cancellables)
-
-        // Audio translation (all 3 events use same handler)
-        let audioHandler: (AudioTranslationEvent) -> Void = { [weak self] event in
-            guard let delegate = self?.delegate else { return }
-            guard event.conversationId == convId else { return }
-            let msgId = event.messageId
-            let segments = (event.translatedAudio.segments ?? []).map { s in
-                MessageTranscriptionSegment(
-                    text: s.text,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    speakerId: s.speakerId
-                )
-            }
-            let audio = MessageTranslatedAudio(
-                id: event.translatedAudio.id,
-                attachmentId: event.attachmentId,
-                targetLanguage: event.translatedAudio.targetLanguage,
-                url: event.translatedAudio.url,
-                transcription: event.translatedAudio.transcription,
-                durationMs: event.translatedAudio.durationMs,
-                format: event.translatedAudio.format,
-                cloned: event.translatedAudio.cloned,
-                quality: event.translatedAudio.quality,
-                voiceModelId: event.translatedAudio.voiceModelId,
-                ttsModel: event.translatedAudio.ttsModel,
-                segments: segments
-            )
-            // Per-message dict (single-audio backward compat): dedup by
-            // targetLanguage only.
-            var existing = delegate.messageTranslatedAudios[msgId] ?? []
-            if let idx = existing.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
-                existing[idx] = audio
-            } else {
-                existing.append(audio)
-            }
-            delegate.messageTranslatedAudios[msgId] = existing
-            // Per-attachment dict (multi-audio Prisme realtime fix): dedup
-            // scoped to (attachmentId, targetLanguage) so each track keeps its
-            // own language buttons. Mirrors how the transcription handler
-            // populates `messageTranscriptionsByAttachment`.
-            var existingForAttachment = delegate.messageTranslatedAudiosByAttachment[event.attachmentId] ?? []
-            if let idx = existingForAttachment.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
-                existingForAttachment[idx] = audio
-            } else {
-                existingForAttachment.append(audio)
-            }
-            delegate.messageTranslatedAudiosByAttachment[event.attachmentId] = existingForAttachment
-        }
-
-        socketManager.audioTranslationReady
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
-            .store(in: &cancellables)
-
-        socketManager.audioTranslationProgressive
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
-            .store(in: &cancellables)
-
-        socketManager.audioTranslationCompleted
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: audioHandler)
             .store(in: &cancellables)
 
         // Live location started

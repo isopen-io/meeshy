@@ -10,8 +10,27 @@ describe('sceneTextAppearance — ce qu’un texte de scène porte SANS téléch
     expect(look.textShadow).toBe('0 1px 4px rgba(0,0,0,0.5)');
   });
 
-  test('les cinq familles SERVIES n’exigent aucune police embarquée', () => {
-    expect([...SERVED_TEXT_STYLES]).toEqual(['bold', 'neon', 'classic', 'italic', 'typewriter']);
+  test('les DIX-HUIT familles d’iOS sont servies, dans l’ordre de ses pickers', () => {
+    expect([...SERVED_TEXT_STYLES]).toEqual([
+      'bold',
+      'neon',
+      'typewriter',
+      'handwriting',
+      'classic',
+      'calligraphy',
+      'cartoon',
+      'futuristic',
+      'fantasy',
+      'curve',
+      'tag',
+      'italic',
+      'retro',
+      'elegant',
+      'poster',
+      'bubble',
+      'note',
+      'brush',
+    ]);
   });
 
   test('`classic` est Georgia, `typewriter` une chasse fixe, `italic` penche', () => {
@@ -20,11 +39,25 @@ describe('sceneTextAppearance — ce qu’un texte de scène porte SANS téléch
     expect(sceneTextAppearance({ textStyle: 'italic' }).fontStyle).toBe('italic');
   });
 
-  test('une famille NON servie (police embarquée) ne fabrique pas une typo au hasard', () => {
-    // `zapfino`, `papyrus`… exigent un WOFF2 que ce lot ne charge pas : le
-    // texte reste sur la police système plutôt que de retomber sur un serif
-    // qui ferait croire à la bonne famille.
-    expect(sceneTextAppearance({ textStyle: 'calligraphy' }).fontFamily).toBeUndefined();
+  test('une famille à police embarquée porte SA pile, jamais un générique', () => {
+    // `calligraphy` (Zapfino côté iOS) est peinte par le substitut redistribuable
+    // que `story-fonts.ts` déclare ; derrière lui vient la pile NATIVE, pour
+    // qu'un fichier qui n'arrive pas rende la police système plutôt qu'un
+    // serif qui ferait croire à la bonne famille.
+    expect(sceneTextAppearance({ textStyle: 'calligraphy' }).fontFamily).toBe("'Italianno', var(--font-native)");
+    expect(sceneTextAppearance({ textStyle: 'fantasy' }).fontFamily).toBe("'Metamorphous', var(--font-native)");
+  });
+
+  test('la graisse d’une famille substituée est celle que le FICHIER porte', () => {
+    // Déclarer 700 sur un fichier qui n'a que du 400 ferait graisser le glyphe
+    // par le navigateur — un faux gras, que personne n'a dessiné.
+    expect(sceneTextAppearance({ textStyle: 'brush' }).fontWeight).toBe(700);
+    expect(sceneTextAppearance({ textStyle: 'note' }).fontWeight).toBe(400);
+    expect(sceneTextAppearance({ textStyle: 'poster' }).fontWeight).toBe(400);
+  });
+
+  test('un `textStyle` inconnu reste sur la police système', () => {
+    expect(sceneTextAppearance({ textStyle: 'licorne' }).fontFamily).toBeUndefined();
   });
 
   test('`fontWeight` du payload gagne sur la graisse de la famille', () => {

@@ -6,7 +6,7 @@ import type { Attachment } from '@/lib/api/types';
 
 import { served } from '@/lib/api/prism';
 
-import { checkStatusOf, deliveryOf, servedRowLanguage, translatedLanguagesOf } from './message';
+import { checkStatusOf, deliveryOf, servedRowLanguage, translatedLanguagesOf, translationsOf } from './message';
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -59,6 +59,59 @@ describe('checkStatusOf — l’accusé qu’une peau a le droit de peindre', ()
 
   test('un échec LOCAL ne peut pas être masqué par un accusé SERVI — le local prime', () => {
     expect(checkStatusOf(message({ deliveredCount: 5, recipientCount: 5 }), 'failed')).toBeNull();
+  });
+});
+
+/**
+ * `deliveryOf` — L'ORDRE DES PALIERS EST CELUI D'iOS (#7223, revue-correction
+ * W2 ; D-1 : `apps/ios` et `packages/MeeshySDK` font foi).
+ *
+ * `DeliveryStatusResolver.resolve`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Models/DeliveryStatusResolver.swift`)
+ * tranche le palier LU EN ENTIER avant de regarder le palier DISTRIBUÉ —
+ * `readByAllAt != nil || readCount >= recipientCount`, PUIS `deliveredToAllAt
+ * != nil || delivered >= recipientCount`. Le web lisait `deliveredToAllAt`
+ * AVANT tout compteur : une horloge « distribué à tous » servie par
+ * `GET /conversations/:id/messages`
+ * (`services/gateway/src/routes/conversations/messages-list-query.ts:663`)
+ * COURT-CIRCUITAIT donc la lecture, et les compteurs qu'un
+ * `read-status:updated` vient de poser n'atteignaient AUCUN pixel — la coche
+ * restait grise sur un message lu par tout le monde.
+ *
+ * C'est le cas NOMINAL du lot W2, pas un cas de bord : tout message chargé par
+ * la liste après sa distribution porte cette horloge, et c'est précisément
+ * celui dont la coche doit bouger quand le destinataire LIT.
+ */
+describe('deliveryOf (#7223) — le palier LU se tranche avant le palier DISTRIBUÉ', () => {
+  test('une horloge « distribué à tous » ne court-circuite plus des compteurs qui disent LU', () => {
+    expect(
+      deliveryOf(
+        message({
+          deliveredToAllAt: new Date('2026-09-21T09:00:00.000Z'),
+          deliveredCount: 1,
+          readCount: 1,
+          recipientCount: 1,
+        }),
+      ),
+    ).toBe('read');
+  });
+
+  test('une lecture PARTIELLE en groupe reste « distribué » — tous-ou-rien conservé', () => {
+    expect(
+      deliveryOf(
+        message({
+          deliveredToAllAt: new Date('2026-09-21T09:00:00.000Z'),
+          deliveredCount: 3,
+          readCount: 1,
+          recipientCount: 3,
+        }),
+      ),
+    ).toBe('delivered');
+  });
+
+  test('sans dénominateur, les deux horloges restent la seule source', () => {
+    expect(deliveryOf(message({ readByAllAt: new Date('2026-09-21T09:00:00.000Z') }))).toBe('read');
+    expect(deliveryOf(message({ deliveredToAllAt: new Date('2026-09-21T09:00:00.000Z') }))).toBe('delivered');
   });
 });
 
@@ -131,6 +184,35 @@ describe('translatedLanguagesOf — le texte ET les pièces jointes (#5805)', ()
       ],
     });
     expect(translatedLanguagesOf(m)).toEqual([]);
+  });
+});
+
+/**
+ * #7526 — LA FABRIQUE `message()` POSE TOUJOURS `translations: []`, donc
+ * aucun témoin ci-dessus ne fait VARIER l'absence du champ : ils restent tous
+ * verts sur le défaut. Ces deux-là retirent la clé, la seule dimension que la
+ * fabrique ne bouge pas, et mesurent le COMPORTEMENT rendu — pas la présence
+ * d'un `??` dans la source, qui reverdirait sur un correctif annulé.
+ *
+ * L'enjeu est la PEINTURE : `bubble.tsx:222` et `focal-row.tsx:315` appellent
+ * `translatedLanguagesOf` sur chaque rangée, donc un seul message de cette
+ * forme abattait le fil entier AVANT qu'un `message:translation` n'arrive.
+ */
+describe('#7526 — un message dont la copie en cache ne porte pas `translations`', () => {
+  const sansChampTranslations = (partial: Partial<Message> = {}): Message => {
+    const { translations: _absent, ...reste } = message(partial);
+    return reste as Message;
+  };
+
+  test('`translationsOf` lit l’absence comme une liste vide, sans jeter', () => {
+    expect(translationsOf(sansChampTranslations())).toEqual([]);
+  });
+
+  test('`translatedLanguagesOf` monte quand même la bande d’un vocal traduit', () => {
+    const m = sansChampTranslations({
+      attachments: [voiceAttachment({ de: { type: 'audio', transcription: 'Hallo', createdAt: new Date() } })],
+    });
+    expect(translatedLanguagesOf(m)).toEqual(['de']);
   });
 });
 

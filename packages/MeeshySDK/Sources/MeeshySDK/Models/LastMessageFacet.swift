@@ -34,6 +34,9 @@ public struct LastMessageFacet: Sendable {
     /// même raison que les autres : écrite à part, une pastille du message
     /// PRÉCÉDENT survivrait au texte tout neuf qui la remplace.
     public let location: SharedPlace?
+    /// Nature du message (#7545) — type, effets, chiffrement, transfert,
+    /// appel, événement système, résumé des pièces jointes.
+    public let nature: LastMessageNature?
 
     public init(
         id: String?,
@@ -47,7 +50,8 @@ public struct LastMessageFacet: Sendable {
         expiresAt: Date? = nil,
         translations: [String: String]? = nil,
         originalLanguage: String? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        nature: LastMessageNature? = nil
     ) {
         self.id = id
         self.preview = preview
@@ -61,6 +65,7 @@ public struct LastMessageFacet: Sendable {
         self.translations = (translations?.isEmpty ?? true) ? nil : translations
         self.originalLanguage = originalLanguage
         self.location = location
+        self.nature = (nature?.isEmpty ?? true) ? nil : nature
     }
 
     /// Facette complète dérivée d'un message reçu ou envoyé — le chemin normal.
@@ -78,17 +83,22 @@ public struct LastMessageFacet: Sendable {
     /// - Parameters id, at: identité SERVEUR, quand elle diffère de celle de la
     ///   ligne locale — à l'accusé d'envoi, le message optimiste porte encore son
     ///   `cid_…` et l'horodatage de l'appareil.
+    /// - Parameter youLabel: le mot qui désigne le LECTEUR quand le message est
+    ///   le sien. « Vous » vaut sur TOUS les chemins (#7548) : REST,
+    ///   `conversation:updated`, `message:new`, envoi optimiste et accusé —
+    ///   jamais le nom d'affichage du lecteur sur l'un et « Vous » sur l'autre.
     public init(
         message: MeeshyMessage,
         preview: String,
         id: String? = nil,
         at: Date? = nil,
-        translations: [String: String]? = nil
+        translations: [String: String]? = nil,
+        youLabel: String = ConversationListAuthor.readerLabel
     ) {
         self.init(
             id: id ?? message.id,
             preview: preview.meeshyPreviewTruncated,
-            senderName: message.senderName ?? message.senderUsername,
+            senderName: message.isMe ? youLabel : (message.senderName ?? message.senderUsername),
             at: at ?? message.createdAt,
             attachments: message.attachments,
             attachmentCount: message.attachments.count,
@@ -97,7 +107,66 @@ public struct LastMessageFacet: Sendable {
             expiresAt: message.expiresAt,
             translations: translations,
             originalLanguage: message.originalLanguage,
-            location: message.location
+            location: message.location,
+            nature: LastMessageNature(message: message)
+        )
+    }
+
+    /// Facette de MON envoi, avant tout écho serveur (#7548).
+    ///
+    /// L'aperçu ne porte que la LÉGENDE : un média sans texte n'y écrit plus
+    /// de libellé (« 📷 Photo ») figé dans la langue de l'expéditeur au moment
+    /// de l'envoi. La ligne rend ce libellé depuis la NATURE du message — les
+    /// pièces jointes et la position voyagent dans la facette —, donc dans la
+    /// langue du lecteur, et de la même façon que pour un média reçu.
+    public static func sent(
+        id: String,
+        text: String,
+        at date: Date,
+        attachments: [MeeshyMessageAttachment] = [],
+        isBlurred: Bool = false,
+        isViewOnce: Bool = false,
+        expiresAt: Date? = nil,
+        originalLanguage: String? = nil,
+        location: SharedPlace? = nil,
+        youLabel: String = ConversationListAuthor.readerLabel
+    ) -> LastMessageFacet {
+        LastMessageFacet(
+            id: id,
+            preview: text.meeshyPreviewTruncated,
+            senderName: youLabel,
+            at: date,
+            attachments: attachments,
+            attachmentCount: attachments.count,
+            isBlurred: isBlurred,
+            isViewOnce: isViewOnce,
+            expiresAt: expiresAt,
+            originalLanguage: originalLanguage,
+            location: location,
+            nature: LastMessageNature(
+                attachmentSummary: LastMessageAttachmentSummary(attachments: attachments)
+            )
+        )
+    }
+
+    /// Le groupe « dernier message » d'une ligne, tel qu'elle le porte — pour
+    /// le recopier EN BLOC sur une autre ligne (retour au message précédent
+    /// après une suppression, écriture qui ne possède pas ce groupe).
+    public init(conversation: MeeshyConversation) {
+        self.init(
+            id: conversation.lastMessageId,
+            preview: conversation.lastMessagePreview,
+            senderName: conversation.lastMessageSenderName,
+            at: conversation.lastMessageAt,
+            attachments: conversation.lastMessageAttachments,
+            attachmentCount: conversation.lastMessageAttachmentCount,
+            isBlurred: conversation.lastMessageIsBlurred,
+            isViewOnce: conversation.lastMessageIsViewOnce,
+            expiresAt: conversation.lastMessageExpiresAt,
+            translations: conversation.lastMessageTranslations,
+            originalLanguage: conversation.lastMessageOriginalLanguage,
+            location: conversation.lastMessageLocation,
+            nature: conversation.lastMessageNature
         )
     }
 
@@ -137,6 +206,28 @@ public extension MeeshyConversation {
         lastMessageTranslations = facet.translations
         lastMessageOriginalLanguage = facet.originalLanguage
         lastMessageLocation = facet.location
+        lastMessageNature = facet.nature
+    }
+
+    /// **La garde d'ordre du groupe « dernier message »** (#7548) — la même
+    /// sur `message:new` et sur l'accusé d'envoi.
+    ///
+    /// Un événement plus ANCIEN que l'aperçu en place ne le remplace jamais.
+    /// Mais un événement sur le MÊME message n'est pas plus ancien : il le
+    /// complète. C'est la course `conversation:updated` puis `message:new` —
+    /// le premier pose l'identité, le texte et l'horodatage et remet à neutre
+    /// le reste (`adoptLastMessage`) ; le second, qui porte les pièces
+    /// jointes et les drapeaux, tombait sur un `>` strict contre son propre
+    /// horodatage et était jeté. La ligne perdait son icône et ses effets
+    /// jusqu'à la synchronisation complète suivante.
+    ///
+    /// - Parameter aliases: les autres noms du message en place — l'identifiant
+    ///   `cid_…` d'un envoi optimiste, que l'accusé remplace par l'identifiant
+    ///   serveur sous une horloge serveur qui peut précéder celle de l'appareil.
+    public func admitsLastMessage(id: String?, at date: Date, aliases: [String] = []) -> Bool {
+        if let id, id == lastMessageId { return true }
+        if let current = lastMessageId, aliases.contains(current) { return true }
+        return date > lastMessageAt
     }
 
     /// Fait décrire à la ligne un AUTRE message que celui qu'elle décrivait.
@@ -180,6 +271,7 @@ public extension MeeshyConversation {
         lastMessageIsViewOnce = false
         lastMessageExpiresAt = nil
         lastMessageLocation = nil
+        lastMessageNature = nil
         return true
     }
 }

@@ -297,6 +297,15 @@ jobs:
           # le disque » était annoncée par `vite.config.ts` sans être appliquée
           # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
           node scripts/check-sw-api-cache.mjs
+          # #7305 — le service worker porte enfin `push`/`notificationclick`,
+          # et sa table de destinations est un JUMEAU (un script classique
+          # chargé par `importScripts` ne peut importer aucun module TS). Ce
+          # gate compare le jumeau à `target.ts` ET aux motifs de
+          # `route-table.tsx`, puis le fait DÉCIDER. Il lit aussi `dist/`,
+          # donc il vient après le build ci-dessus. Le fichier qu'il remplace,
+          # `firebase-messaging-sw.js`, portait la bonne règle en commentaire
+          # et avait quand même dérivé sur trois routes sur trois.
+          node scripts/check-push-target-parity.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
@@ -563,7 +572,7 @@ jobs:
     name: Peaux web-v2 (institutionnel, Lentille, états et virtualisation du fil)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -802,6 +811,19 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-feed-media.mjs
+
+      # #7449 — LE FIL SE LIT DANS UNE COLONNE, ET ON Y PUBLIE. Le SEUL gate du
+      # dépôt qui mesure un gabarit LARGE (1440 × 900) : tous les autres
+      # tournent à 390 × 844 et 320 × 568, et c'est exactement pour cela que le
+      # fil a pu s'étaler sur 1416 px sans qu'aucun ne rougisse. Il garde aussi
+      # l'autre moitié — que la borne ne MORD PAS sur un téléphone — puis
+      # traverse la porte de création : ses deux formats, le refus NOMMÉ d'un
+      # réel non qualifiant, la bascule qui garde la saisie, la publication.
+      - name: Gate colonne du fil (centrage large, porte de création, publication)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-column.mjs
 
       # #7135 — LES GESTES D'UNE RANGÉE DE COMMENTAIRE ONT UN EFFET. Les
       # témoins `bun test` tournent sous happy-dom et prouvent que les rappels
@@ -1932,7 +1954,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.38.0
+        uses: github/codeql-action/upload-sarif@v4.38.1
         if: always()
         continue-on-error: true
         with:

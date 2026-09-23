@@ -219,6 +219,18 @@ post-*
 !apps/web-v2/src/lib/api/post-media-upload.test.ts
 !services/gateway/src/services/notifications/post-media-thumbnail.ts
 !services/gateway/src/services/notifications/fanout/post-mention.ts
+# 2026-09-21 (#7284) : la garde d'INVENTAIRE des hôtes de `FeedPostCard`
+# vivait sur disque, verte en local, et sur AUCUNE branche — le motif
+# ci-dessus l'avait avalée à sa naissance. Une garde qu'aucun dépôt ne
+# porte ne garde personne.
+!apps/web-v2/src/routes/post-card-hosts.test.ts
+# 2026-09-22 (#7449) : le composeur de publication du fil et son témoin. Même
+# motif, même piège — `post-*` matche par BASENAME à toute profondeur, et il
+# aurait avalé l'écran ENTIER : gates verts en local, route introuvable sur un
+# clone frais. `check-git-tracking.mjs` l'a attrapé avant le premier commit,
+# ce qui est exactement ce pour quoi il a été écrit.
+!apps/web-v2/src/routes/post-compose.tsx
+!apps/web-v2/src/routes/post-compose.test.tsx
 
 # Development runtime (dev.sh)
 .pids/

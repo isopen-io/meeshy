@@ -255,6 +255,11 @@ services:
       - TURN_SERVERS=${TURN_SERVERS:-}
       - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       - MAX_TRANSLATION_LENGTH=10000
+      # Lecture exacte (#7356) : un message créé après cette date n'est servi
+      # « lu » que si le lecteur l'a AFFICHÉ (readAt gelé). Forme `-` et non
+      # `:-` : l'hôte désarme sans nouvelle image en posant la variable VIDE,
+      # ou déplace la bascule en posant une autre date ISO 8601.
+      - EXACT_READ_TRACKING_SINCE=${EXACT_READ_TRACKING_SINCE-2026-09-22T00:00:00.000Z}
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}

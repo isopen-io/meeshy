@@ -241,10 +241,24 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2
   // à l'origine, 1 depuis #5760 — la reconciliation d'appartenance de
   // communauté est passée dans `services/conversations/communityMembershipSync.ts`,
-  // hors du périmètre balayé ici) et core-list.ts (3).
+  // hors du périmètre balayé ici) et core-list.ts (3 à l'origine, 2 depuis
+  // #7198 — voir ci-dessous).
   'conversations/core-detail.ts': 3,
   'conversations/core-lifecycle.ts': 1,
-  'conversations/core-list.ts': 3,
+  // 3 -> 2 : le troisieme n'a pas ete SUPPRIME, il a ete DEPLACE puis BORNE.
+  // #7198/#7216 (G1) a extrait la lecture du curseur de lecture de la page
+  // vers `conversations/read-cursor-projection.ts`
+  // (`loadReadCursorBoundaries`, site UNIQUE partage par la liste et le
+  // detail). Une garde indexee par FICHIER rougit sur une EXTRACTION meme a
+  // dette constante — la reponse retenue n'est pas de deplacer l'entree
+  // (2 + 1), c'est de poser la borne que la forme de la requete rendait
+  // disponible : `take: participantIds.length`, exact parce que
+  // `ConversationReadCursor` est unique par `[conversationId, participantId]`
+  // et qu'un `Participant.id` n'appartient qu'a UNE conversation. Le fichier
+  // extrait n'entre donc PAS dans cet inventaire, et la dette du depot
+  // descend d'un site. Temoin de la borne :
+  // `__tests__/routes/conversations.read-boundary.test.ts`.
+  'conversations/core-list.ts': 2,
   'conversations/leave.ts': 1,
   // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
   // (currentUserReactions au niveau du message, currentUserConsumption par piece

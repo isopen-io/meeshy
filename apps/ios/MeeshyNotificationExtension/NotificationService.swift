@@ -122,6 +122,25 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             bestAttemptContent.body = fallback
         }
 
+        // #7453 — L'ÉCHÉANCE, pas une durée figée.
+        //
+        // La passerelle compose « 🔥 💬 5min » une fois pour toutes ; ce texte
+        // est déjà faux à la seconde où il s'affiche, et il le reste sur
+        // l'écran verrouillé pendant que le message meurt. iOS ne sait pas
+        // faire battre une seconde dans une bannière standard — mais une
+        // HEURE ne se périme pas : elle dit la même chose à 14:30 et à 14:31.
+        //
+        // L'échéance est aussi GRAVÉE dans le `userInfo`, où les trois
+        // balayages viendront la lire. Sans elle, rien ne saurait quelles
+        // bannières retirer sans réseau.
+        applyEphemeralDeadline(to: bestAttemptContent)
+
+        // Le balayage, à chaque passage : c'est le chemin « si iOS le
+        // supporte » de la directive. Une NSE s'exécute à chaque push reçu,
+        // ce qui en fait l'occasion la plus fréquente de nettoyer — bien plus
+        // souvent que le retour de l'application au premier plan.
+        Self.sweepExpiredDeliveredBanners()
+
         // Prisme Linguistique (i18n serveur) : pour `message_reaction`, le gateway
         // envoie désormais le body DÉJÀ localisé dans la langue du destinataire
         // (« reacted ❤️ to your message » / « a réagi ❤️ à votre message » …, via
@@ -186,7 +205,15 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             // pour tout type dès qu'un média peut voyager — vidéos et documents
             // compris —, et la taille qu'il pose à côté n'était pas lue.
             let declaredSize = NSEAttachmentPolicy.declaredFileSize(userInfo["attachmentFileSize"])
-            if NSEAttachmentPolicy.mayAttach(mimeType: mime, fileSize: declaredSize) {
+            // #7453 — SECOND VERROU sur la protection. Le serveur ne pose déjà
+            // plus d'URL pour un message protégé (`mediaMayTravel`, cycle 125),
+            // mais un champ de service qui DÉCLARE une restriction ne la fait
+            // pas respecter : c'est l'hôte qui rend, et c'est donc ici que le
+            // refus doit aussi pouvoir tomber. Une photo à vue unique s'est
+            // affichée ENTIÈRE sur un écran verrouillé sous une bannière qui
+            // disait « 👁️ 🖼️ ».
+            let isProtected = NSEAttachmentPolicy.declaresProtection(userInfo: userInfo)
+            if !isProtected, NSEAttachmentPolicy.mayAttach(mimeType: mime, fileSize: declaredSize) {
                 group.enter()
                 downloadFile(from: attachmentURL) { [weak self] fileURL in
                     defer { group.leave() }
@@ -504,7 +531,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 replyToId: nil, storyReplyToId: nil,
                 forwardedFromId: nil, forwardedFromConversationId: nil,
                 replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: nil, effectFlags: 0,
+                // #7453 — la protection VOYAGE avec la bulle pré-enregistrée.
+                // Ces deux champs valaient `nil` et `0` en dur : au démarrage
+                // à froid depuis la bannière, un éphémère s'affichait comme un
+                // message ordinaire (sans décompte) et une vue unique sans
+                // voile, jusqu'à ce que la synchro REST rapporte la ligne
+                // canonique — c'est-à-dire pendant les secondes où
+                // l'utilisateur regarde.
+                expiresAt: plan.expiresAt, effectFlags: plan.effectFlags,
                 maxViewOnceCount: nil, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
@@ -558,16 +592,56 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 
-    // MARK: - Delivery Receipt
+    // MARK: - Éphémère (#7453)
 
-    /// Push types that mean "a new message was delivered to this recipient".
-    /// Reactions and social events also carry a `messageId`, but they do not
-    /// constitute message delivery, so they are excluded.
-    private static let deliveryReceiptTypes: Set<String> = [
-        "new_message", "message_reply", "reply", "message_forwarded",
-        "new_conversation", "new_conversation_direct", "new_conversation_group",
-        "added_to_conversation"
-    ]
+    /// Réécrit le corps avec l'heure d'échéance et grave cette échéance dans
+    /// le `userInfo`.
+    ///
+    /// Les deux vont ensemble et se font ici : le corps est ce que
+    /// l'utilisateur LIT, l'échéance du `userInfo` est ce qui permettra de
+    /// retirer la bannière quand elle sera passée. Poser l'un sans l'autre
+    /// laisserait soit une bannière qui annonce une heure et ne part pas, soit
+    /// une bannière qui part sans avoir jamais dit quand.
+    private func applyEphemeralDeadline(to content: UNMutableNotificationContent) {
+        guard let deadline = NotificationPayloadHelpers.ephemeralDeadline(
+            userInfo: content.userInfo,
+            now: Date()
+        ) else { return }
+
+        if let body = NotificationPayloadHelpers.ephemeralBodyOverride(
+            userInfo: content.userInfo,
+            deadline: deadline
+        ) {
+            content.body = body
+        }
+
+        var userInfo = content.userInfo
+        userInfo[EphemeralBannerDeadline.userInfoKey] = deadline.timeIntervalSince1970
+        content.userInfo = userInfo
+    }
+
+    /// Retire les bannières délivrées dont l'échéance est passée.
+    ///
+    /// Fire-and-forget : le centre de notifications répond en asynchrone, et ce
+    /// balayage ne doit jamais retarder l'affichage. Il ne touche QUE les
+    /// bannières qui portent une échéance — une notification ordinaire n'est
+    /// jamais retirée par ce chemin.
+    nonisolated static func sweepExpiredDeliveredBanners(now: Date = Date()) {
+        // Le centre est redemandé DANS la fermeture plutôt que capturé : une
+        // fermeture d'API système doit être `@Sendable`, et la capture d'un
+        // objet de framework y coûte une exception de concurrence pour rien —
+        // `current()` rend le même singleton.
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let entries = delivered.map {
+                (id: $0.request.identifier, userInfo: $0.request.content.userInfo)
+            }
+            let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
+            guard !expired.isEmpty else { return }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
+        }
+    }
+
+    // MARK: - Delivery Receipt
 
     /// Acknowledge delivery of a push-delivered message to the gateway.
     ///
@@ -586,7 +660,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               !messageId.isEmpty, !conversationId.isEmpty else { return }
 
         let type = userInfo["type"] as? String ?? ""
-        guard Self.deliveryReceiptTypes.contains(type) else { return }
+        guard NotificationPayloadHelpers.isDeliveryReceiptType(type) else { return }
 
         NSEDataSync.postDeliveryReceipt(
             conversationId: conversationId,

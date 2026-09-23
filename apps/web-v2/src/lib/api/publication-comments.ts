@@ -1,18 +1,25 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
-import type { CommentAddedEventData } from '@meeshy/shared/types/post';
+import type {
+  CommentAddedEventData,
+  CommentDeletedEventData,
+  CommentLikedEventData,
+  CommentUnlikedEventData,
+  CommentUpdatedEventData,
+  PostComment as SharedPostComment,
+} from '@meeshy/shared/types/post';
 
-import { applyCommentCount, shiftedCount, withCommentCount } from '@/lib/feed/interactions';
+import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
+import { updateCardPost, writeCardCache } from './card-caches';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
-import { FEED_QUERY_KEY } from './feed';
-import type { FeedAuthor, FeedInfiniteData, FeedMedia, FeedPost } from './feed-pages';
+import type { FeedAuthor, FeedMedia } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
-import { REELS_QUERY_ROOT } from './reels';
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
+import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translation-delivery';
 
 /**
  * **LE PORT DES COMMENTAIRES D'UNE PUBLICATION** — le fil de commentaires que
@@ -170,6 +177,26 @@ const mapFirstPage = (
   return { ...data, pages: [{ ...first, comments }, ...data.pages.slice(1)] };
 };
 
+/**
+ * **TOUTES LES PAGES**, contrairement à `mapFirstPage` — nécessaire dès
+ * qu'un événement en temps réel (édition, suppression, réaction) peut viser
+ * une ligne posée par une page PLUS ANCIENNE que la première (#7227, W8) :
+ * `mapFirstPage` sert exclusivement l'insertion d'une rangée NEUVE, toujours
+ * la plus récente, donc toujours en tête. Chaque page dont rien ne change
+ * garde son IDENTITÉ — aucune rangée déjà peinte ne se re-rend.
+ */
+const mapAllPages = (
+  data: CommentInfiniteData | undefined,
+  update: (comments: readonly PostComment[]) => readonly PostComment[],
+): CommentInfiniteData | undefined => {
+  if (data === undefined) return data;
+  const pages = data.pages.map((page) => {
+    const comments = update(page.comments);
+    return comments === page.comments ? page : { ...page, comments };
+  });
+  return pages.every((page, i) => page === data.pages[i]) ? data : { ...data, pages };
+};
+
 /** EN TÊTE, parce que la passerelle sert `createdAt desc` : un commentaire
  * qu'on vient d'écrire est le plus récent. */
 export function insertComment(data: CommentInfiniteData | undefined, comment: PostComment): CommentInfiniteData | undefined {
@@ -200,43 +227,47 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
  * commentaire, et revient avec lui : sans cela, un refus laisserait un
  * compteur menteur derrière un fil vide.
  *
- * **IL Y A QUATRE CAISSES, ET LE DOC-COMMENT N'EN A CONNU QU'UNE, PUIS DEUX.**
- * Chacune a été trouvée en demandant, non pas « qui calcule ce compte ? », mais
- * **« qui l'AFFICHE ? »** — et la réponse a changé trois fois :
+ * **DEUX FAMILLES DE CAISSES — et leur énumération a cédé à chaque écran
+ * NOUVEAU.** Chacune a été trouvée en demandant, non pas « qui calcule ce
+ * compte ? », mais **« qui l'AFFICHE ? »** :
  *
- *  1. `postQueryKey(postId)` — la fiche `/post/$post` ;
- *  2. `STORY_FEED_QUERY_KEY` — la pastille du rail du lecteur de stories
- *     (#7112 : on commentait une story, la ligne apparaissait, la pastille
- *     restait au chiffre d'avant) ;
- *  3. `FEED_QUERY_KEY` — la rangée de statistiques d'une carte du Flux
- *     (`feed-post-card.tsx:75`) ;
- *  4. `REELS_QUERY_ROOT` — la MÊME carte servie par un fil de Réels, qui peint
- *     depuis ses propres pages (#6457).
+ *  - **les caisses qui peignent une CARTE de publication** — le Flux, les
+ *    Réels, les enregistrées, la page d'un hashtag, les publications d'un
+ *    profil, la fiche `/post/$post`. Elles ne sont plus nommées ici : le
+ *    registre `card-caches.ts` les tient (#7341), et `updateCardPost` les
+ *    parcourt. Cette énumération les RECOPIAIT, et la recopie a perdu tour à
+ *    tour le Flux et les Réels (#7135), puis n'a jamais connu les
+ *    enregistrées, le hashtag ni le profil (#7341) : on commentait depuis la
+ *    fiche, on revenait à l'écran, et la carte affichait l'ancien compte ;
+ *  - **les caisses du lecteur de STORIES**, d'une autre forme
+ *    (`StoryFeedPost`, pas de pages) et qu'aucune carte de publication ne
+ *    lit : `STORY_FEED_QUERY_KEY` — la pastille du rail (#7112) — et
+ *    `storyPostQueryKey(postId)`, la TROISIÈME MARCHE du lecteur (#7120) : une
+ *    story ouverte par LIEN, hors des 50 plus récentes, n'est QUE là, et
+ *    `postQueryKey` vaut `['posts', id]` quand celle-ci vaut
+ *    `['stories', 'post', id]`.
  *
- * Les deux dernières manquaient (#7135) : on supprimait son commentaire depuis
- * la fiche, on revenait au fil, et la carte affichait toujours l'ancien compte.
- * `feed-gestures.ts` avait déjà tranché pour le cœur — « la même publication ne
- * peut pas porter deux cœurs selon l'écran qui la montre » — et le compteur de
- * commentaires n'avait pas suivi.
+ * **L'énumération porte DEUX affirmations, et c'est la seconde qui a cédé** :
+ * « ces caisses appliquent la règle » se vérifie ; « ce sont les caisses où la
+ * règle s'applique » ne se vérifie qu'en demandant, pour un ÉCRAN de plus,
+ * d'où il lit son compte.
  *
- * **La règle elle-même vit dans `lib/feed/interactions.ts`**, à côté de
- * `applyPostToggle` : c'est le site unique de « comment une page de fil
- * bascule », et la borne basse (`shiftedCount`) y est écrite une seule fois —
- * la leçon que `PostLikeMutation.swift` a coûtée à iOS. Ici, seule
- * l'énumération des caisses. Un post absent d'une racine y est laissé tel quel.
+ * **La règle elle-même vit dans `lib/feed/interactions.ts`** (`withCommentCount`,
+ * `shiftedCount`) : la borne basse y est écrite une seule fois — la leçon que
+ * `PostLikeMutation.swift` a coûtée à iOS. Un post absent d'une caisse y est
+ * laissé tel quel.
  */
 export function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
   const change = { postId, delta };
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyCommentCount(data, change));
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyCommentCount(data, change));
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
-    post === undefined ? post : withCommentCount(post, change),
-  );
+  updateCardPost(queryClient, postId, (post) => withCommentCount(post, change));
   queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
     if (stories === undefined) return stories;
     if (!stories.some((s) => s.id === postId)) return stories;
     return stories.map((s) => (s.id === postId ? { ...s, commentCount: shiftedCount(s.commentCount, delta) } : s));
   });
+  queryClient.setQueryData<StoryFeedPost>(storyPostQueryKey(postId), (story) =>
+    story === undefined ? story : { ...story, commentCount: shiftedCount(story.commentCount, delta) },
+  );
 }
 
 /** Une CLÉ de catalogue, jamais un texte déjà traduit — seule la surface qui
@@ -454,7 +485,7 @@ export function isCommentAdded(payload: unknown): payload is CommentAddedEventDa
  * revivre. La garde a déjà vérifié le type à l'exécution ; cette projection le
  * dit au typage, sans second décodage.
  */
-const commentFromSocket = (comment: CommentAddedEventData['comment']): PostComment =>
+const commentFromSocket = (comment: SharedPostComment): PostComment =>
   ({
     ...comment,
     createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : comment.createdAt.toISOString(),
@@ -475,7 +506,7 @@ const optimisticIdOf = (clientMutationId: string | undefined): string | undefine
  *    Le compteur a déjà été bougé quand on l'a posée : le toucher une seconde
  *    fois le ferait dériver.
  * 3. sinon ⇒ insertion, et le compteur suit (`shiftCommentCount`, le site
- *    unique qui tient les QUATRE caisses).
+ *    unique qui tient TOUTES les caisses qui l'affichent).
  *
  * Un post dont aucune liste n'est ouverte n'a rien à mettre à jour — ce n'est
  * pas une erreur, et lever y casserait l'écran d'à côté.
@@ -502,4 +533,227 @@ export function applyCommentAdded(queryClient: QueryClient, payload: unknown): v
 
   queryClient.setQueryData<CommentInfiniteData>(key, (d) => insertComment(d, servi));
   shiftCommentCount(queryClient, data.postId, 1);
+}
+
+/* ------------------------------------------------------------------ #7227 --
+ * **W8 — `comment:updated` / `comment:deleted` / `comment:liked` /
+ * `comment:unliked` : LE FIL DE COMMENTAIRES SUIT LA PASSERELLE EN DIRECT.**
+ *
+ * Les quatre événements existent depuis toujours côté passerelle
+ * (`SocialEventsHandler.ts:554,565,569,590,591`) ; `socket.ts` n'en écoutait
+ * AUCUN — mesuré avant ce lot, comme pour `comment:added` (#7151).
+ * -------------------------------------------------------------------------- */
+
+/** LA GARDE DE `comment:updated` — même discipline que `isCommentAdded`. */
+export function isCommentUpdated(payload: unknown): payload is CommentUpdatedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.postId !== 'string') return false;
+  const comment = p.comment;
+  if (typeof comment !== 'object' || comment === null) return false;
+  const c = comment as Record<string, unknown>;
+  return typeof c.id === 'string' && typeof c.content === 'string' && typeof c.createdAt === 'string';
+}
+
+/**
+ * **CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR** — jumelle EXACTE
+ * de `feed-realtime.ts#merged` pour les PUBLICATIONS, et pour la même raison :
+ * `comment:updated` est diffusé à TOUT le fil, donc sa charge ne peut pas
+ * porter juste pour chacun ce qui se lit PAR LECTEUR. C'est mesuré, pas
+ * supposé — `PostCommentService.getCommentAsUpdateResult`
+ * (`services/gateway/src/services/PostCommentService.ts:375-399`, la relecture
+ * que la route PATCH diffuse) sélectionne `likeCount` mais NI `isLikedByMe`
+ * NI `currentUserReactions`.
+ *
+ * Sans cette préservation, un auteur corrigeant une faute de frappe vidait le
+ * cœur de tous ceux qui avaient aimé son commentaire.
+ *
+ * Spread CONDITIONNEL, jamais `a ?? b` : sous `exactOptionalPropertyTypes`,
+ * poser explicitement `undefined` sur une propriété optionnelle est un défaut
+ * de type. La comparaison est `== null` pour couvrir les deux formes
+ * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
+ * pas une absence, et il survit. Les COMPTEURS, eux, ne sont pas préservés —
+ * `likeCount` est un agrégat que le serveur tient mieux que nous.
+ */
+const mergedComment = (incoming: PostComment, held: PostComment): PostComment => ({
+  ...incoming,
+  ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+  ...(held.currentUserReactions == null ? {} : { currentUserReactions: held.currentUserReactions }),
+});
+
+/** L'ÉDITION REMPLACE LA LIGNE EN PLACE, sur TOUTES les pages — une
+ * publication éditée ne trie rien, `mapAllPages` suffit là où `mapFirstPage`
+ * ne visait que l'insertion. Une page qui ne PORTE pas la ligne éditée garde
+ * son IDENTITÉ (la liste ne se re-rend pas en entier) ; une liste jamais
+ * ouverte n'est pas fabriquée. */
+export function applyCommentUpdated(queryClient: QueryClient, payload: unknown): void {
+  if (!isCommentUpdated(payload)) return;
+  const key = commentsQueryKey(payload.postId);
+  if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
+  const updated = commentFromSocket(payload.comment);
+  queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
+    mapAllPages(d, (comments) =>
+      comments.some((c) => c.id === updated.id)
+        ? comments.map((c) => (c.id === updated.id ? mergedComment(updated, c) : c))
+        : comments,
+    ),
+  );
+}
+
+/** LA GARDE DE `comment:deleted` — `commentCount` est l'agrégat ABSOLU de la
+ * publication après retrait, jamais un delta (miroir de `comment:added`). */
+export function isCommentDeleted(payload: unknown): payload is CommentDeletedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.postId !== 'string' || typeof p.commentId !== 'string' || typeof p.commentCount !== 'number') return false;
+  /* CE QU'ELLE DÉPLIE, ELLE LE VÉRIFIE (revue-correction W8) : `applyCommentDeleted`
+     fait `[...deletedCommentIds ?? []]`, et un champ qui n'est pas itérable y
+     levait un `TypeError` — dans un `import().then()`, un rejet non intercepté,
+     alors que ce module promet qu'une charge invalide « ne change rien et ne
+     lève pas ». Le champ est OPTIONNEL (additif, cf. son doc-comment partagé) :
+     absent ⇒ conforme ; présent ⇒ tableau de chaînes, ou rien. */
+  if (p.deletedCommentIds === undefined) return true;
+  return Array.isArray(p.deletedCommentIds) && p.deletedCommentIds.every((id) => typeof id === 'string');
+}
+
+/**
+ * **LE JUMEAU ABSOLU DE `shiftCommentCount`** — celui-ci REÇOIT le compte
+ * plutôt que de le calculer par delta : un `comment:deleted` porte déjà le
+ * total serveur, et un client qui redériverait un delta depuis une liste
+ * PARTIELLE (page non chargée) diverge.
+ *
+ * **LES MÊMES CAISSES que son jumeau DELTA**, sans exception — les caisses
+ * de CARTES par le registre (`updateCardPost`), puis les deux du lecteur de
+ * stories. `storyPostQueryKey` est justement celle qu'aucune autre n'atteint :
+ * une story ouverte par LIEN, hors des 50 plus récentes, n'est QUE là. Sans
+ * elle (revue-correction W8, #7227), quelqu'un supprimait son commentaire sous
+ * la story qu'on regarde par lien, la ligne quittait le fil, **et la pastille
+ * du rail restait au chiffre d'avant** — le défaut que #7120 avait payé sur la
+ * voie ADDITIVE, rejoué sur la voie SERVIE.
+ */
+export function setCommentCountServed(queryClient: QueryClient, postId: string, count: number): void {
+  updateCardPost(queryClient, postId, (post) => (post.commentCount === count ? post : { ...post, commentCount: count }));
+  queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
+    if (stories === undefined) return stories;
+    if (!stories.some((s) => s.id === postId)) return stories;
+    return stories.map((s) => (s.id === postId ? { ...s, commentCount: count } : s));
+  });
+  queryClient.setQueryData<StoryFeedPost>(storyPostQueryKey(postId), (story) =>
+    story === undefined || story.commentCount === count ? story : { ...story, commentCount: count },
+  );
+}
+
+/**
+ * LA CIBLE ET SES DESCENDANTS NOMMÉS QUITTENT LE FIL, sur TOUTES les pages ;
+ * le compte SERVI se pose à chaque caisse qui l'affiche INCONDITIONNELLEMENT
+ * (`setCommentCountServed`) — même si la liste de commentaires n'est pas
+ * ouverte, la carte de chaque écran et la pastille du rail doivent rester
+ * justes. `deletedCommentIds` porte le
+ * sous-arbre entier (soft-delete côté serveur) ; web n'a pas de réponses
+ * imbriquées (pas de route `replies`), donc un id de réponse n'y trouve
+ * simplement rien à retirer — sans effet, jamais une erreur.
+ */
+export function applyCommentDeleted(queryClient: QueryClient, payload: unknown): void {
+  if (!isCommentDeleted(payload)) return;
+  const ids = new Set<string>([payload.commentId, ...(payload.deletedCommentIds ?? [])]);
+  const key = commentsQueryKey(payload.postId);
+  if (queryClient.getQueryData<CommentInfiniteData>(key) !== undefined) {
+    queryClient.setQueryData<CommentInfiniteData>(key, (d) => mapAllPages(d, (comments) => comments.filter((c) => !ids.has(c.id))));
+  }
+  setCommentCountServed(queryClient, payload.postId, payload.commentCount);
+}
+
+/** LA GARDE PARTAGÉE de `comment:liked` / `comment:unliked` — même forme
+ * (`CommentLikedEventData`/`CommentUnlikedEventData`), même garantie de
+ * `likeCount` ABSOLU (doc-comment du couple dans `@meeshy/shared/types/post`). */
+export function isCommentLikeEvent(payload: unknown): payload is CommentLikedEventData | CommentUnlikedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.postId === 'string' &&
+    typeof p.commentId === 'string' &&
+    typeof p.userId === 'string' &&
+    typeof p.emoji === 'string' &&
+    typeof p.likeCount === 'number'
+  );
+}
+
+/**
+ * `likeCount` ABSOLU remplace l'estimation, sur TOUTES les pages. `liked`
+ * (posé par l'appelant — `true` pour `comment:liked`, `false` pour
+ * `comment:unliked`) ne pose `isLikedByMe` QUE pour le geste du LECTEUR (un
+ * autre de SES appareils) : le cœur d'un AUTRE ne remplit jamais le mien —
+ * même garde que `post:liked` (`socket.ts#onPostLikeChanged`).
+ */
+export function applyCommentLikeEvent(queryClient: QueryClient, payload: unknown, viewerId: string, liked: boolean): void {
+  if (!isCommentLikeEvent(payload)) return;
+  const key = commentsQueryKey(payload.postId);
+  if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
+  const byViewer = payload.userId === viewerId;
+  const { commentId, likeCount } = payload;
+  queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
+    mapAllPages(d, (comments) =>
+      comments.map((c) => (c.id === commentId ? { ...c, likeCount, ...(byViewer ? { isLikedByMe: liked } : {}) } : c)),
+    ),
+  );
+}
+
+/* ------------------------------------------------------------------ #7394 --
+ * **`comment:translation-updated` : UN COMMENTAIRE TRADUIT EN DIRECT BASCULE
+ * DANS LA LANGUE DU LECTEUR.**
+ *
+ * La passerelle le diffuse dès que NLLB livre la traduction d'un commentaire
+ * (`PostTranslationService.handleCommentTranslationCompleted` →
+ * `SocialEventsHandler.broadcastCommentTranslationUpdated`), sous la forme
+ * `CommentTranslationUpdatedEventData` : `postId` (la publication qui PORTE le
+ * commentaire), `commentId`, `language`, `translation`. iOS l'écoute sur le
+ * Flux, la fiche, la feuille de commentaires et le lecteur de stories
+ * (`FeedViewModel.applyCommentTranslation` et ses jumelles) ; web-v2 ne
+ * l'écoutait NULLE PART — mesuré avant ce lot, comme `comment:added` (#7151).
+ * -------------------------------------------------------------------------- */
+
+/**
+ * **LA LOI RANGE, LE RÉSOLVEUR ÉLIT** — la traduction entre dans
+ * `PostComment.translations`, à sa langue, sans doublon (`mergedTranslations`,
+ * le site UNIQUE partagé avec la publication et la légende). Ce que la rangée
+ * PEINT est redescendu à chaque rendu par `resolveFeedText` (`comment-row.tsx`),
+ * qui parcourt le prisme dans l'ordre et fait concourir la langue d'origine à
+ * SON rang : une traduction de rang 2 fait basculer un commentaire écrit hors
+ * du prisme, une traduction hors du prisme est rangée sans rien changer.
+ *
+ * iOS ne tient qu'UNE traduction par commentaire (`translatedContent`) et
+ * garde donc l'arrivée à la main (« première arrivée dans le prisme, si
+ * l'original n'est pas mieux classé ») — son doc-comment avoue que l'ordre
+ * d'arrivée entre deux traductions reste non résolu. Web-v2 tient la CARTE
+ * que la passerelle persiste et sert (`translations.<langue>`), comme pour une
+ * publication : la prochaine lecture du fil rendrait exactement ce que la
+ * fusion vient de ranger, et le rang reste l'affaire du résolveur.
+ *
+ * **UNE SEULE CAISSE, DEUX HÔTES** — `commentsQueryKey(postId)`, sur TOUTES
+ * ses pages : la fiche (`routes/post.tsx`) et la feuille du lecteur de
+ * stories (`story-comments-sheet.tsx`) montent la même surface
+ * (`CommentThread`) sur le même cache. Aucune carte ne peint de commentaire
+ * (`FeedPost` ne déclare pas `comments`), et web-v2 n'a pas de caisse de
+ * réponses imbriquées (#7118) : une réponse n'y entre que par `comment:added`,
+ * à plat, où cette loi la trouve par son id comme n'importe quelle rangée. Le
+ * jour où une caisse de réponses naîtra, elle devra être parcourue ICI.
+ *
+ * **UNE RÉÉCRITURE QUI NE CHANGE RIEN N'EST PAS ÉCRITE** (`writeCardCache`) :
+ * un commentaire absent du fil, un fil jamais ouvert, une rediffusion du même
+ * texte — la caisse reste la même référence, ET une caisse périmée le reste
+ * (#7385, #7399).
+ */
+export function applyCommentTranslation(queryClient: QueryClient, payload: unknown): void {
+  const delivery = translationDeliveryOf(payload);
+  const p = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
+  const { postId, commentId } = p;
+  if (delivery === null || !nonEmpty(postId) || !nonEmpty(commentId)) return;
+
+  writeCardCache<CommentInfiniteData>(queryClient, commentsQueryKey(postId), (data) =>
+    mapAllPages(data, (comments) => {
+      const held = comments.find((c) => c.id === commentId);
+      const translations = held === undefined ? null : mergedTranslations(held.translations, delivery);
+      return translations === null ? comments : comments.map((c) => (c === held ? { ...c, translations } : c));
+    }),
+  );
 }

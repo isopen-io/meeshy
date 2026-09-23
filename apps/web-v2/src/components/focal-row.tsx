@@ -1,8 +1,11 @@
 import { memo, useRef } from 'react';
 
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
-import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
+import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
@@ -11,7 +14,7 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
-import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import {
   AVATAR_FRAME,
   AVATAR_SIZE,
@@ -27,12 +30,14 @@ import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
-import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectedContent, ProtectionNotice } from './protected-content';
+import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
 import {
@@ -120,9 +125,11 @@ export const FocalRow = memo(function FocalRow({
   revealable = true,
   onJumpToMessage,
   onOpenStory,
+  senderStoryRing,
   highlighted = false,
   elected = false,
   expired = false,
+  ephemeralDeadline,
   onConsumeViewOnce,
   onEphemeralExpired,
   now = defaultNow,
@@ -207,11 +214,26 @@ export const FocalRow = memo(function FocalRow({
    * dans une peau »).
    */
   expired?: boolean;
+  /**
+   * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée par l'HÔTE
+   * (`thread-modes.tsx`, `resolveEphemeralDeadline`) et jamais recalculée ici :
+   * la règle est partagée (`@meeshy/shared/utils/ephemeral-deadline`) et la
+   * RÉCEPTION locale qui l'alimente est un état du client, hors de cette
+   * rangée. OBLIGATOIRE : c'est ce qui rend impossible de monter une peau de
+   * message sans décider ce qu'elle fait d'un éphémère.
+   */
+  ephemeralDeadline: EphemeralDeadline;
   /** Consomme une vue unique (D-10, `lib/api/view-once.ts`) ; `undefined` en environnement sans réseau. */
   onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement (déterminisme des témoins). */
   now?: () => number;
+  /**
+   * L'ANNEAU DE STORY DE L'EXPÉDITEUR (#7528) — lu par l'HÔTE dans le corpus
+   * du plateau. Présent, l'avatar ET le nom ouvrent sa story ; absent, son
+   * profil (`identityTarget`).
+   */
+  senderStoryRing?: AuthorStoryRing;
 }) {
   const { message, head, tail } = place;
   const nowMs = now();
@@ -374,6 +396,13 @@ export const FocalRow = memo(function FocalRow({
      (D-7) : elle est vue à chaque message de chaque conversation. */
   const senderPhoto = participantAvatarOf(message.sender);
   const senderName = isMine ? 'Vous' : senderAvatarName;
+  /* LE PSEUDO DE L'EXPÉDITEUR (#7241) — sous `sender.user.username`, jamais à
+     la racine du participant. `undefined` sur soi : on n'ouvre pas SON profil
+     depuis son propre message, la fiche de soi n'offre aucun geste relationnel
+     (`user-profile.tsx`, `isSelf`). */
+  const senderHandle = isMine ? undefined : message.sender?.user?.username;
+  const senderRing = isMine ? undefined : senderStoryRing;
+  const identityOpens = (typeof senderHandle === 'string' && senderHandle !== '') || senderRing !== undefined;
   /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
    * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
    * peint le nom de SOI en `MeeshyColors.indigo500` ; servi TEL QUEL sur la
@@ -433,22 +462,19 @@ export const FocalRow = memo(function FocalRow({
   // (`memo`), donc `new Date()` ici ne tourne pas à chaque frame de la scène.
   const nowMoment = elected ? new Date() : null;
 
-  const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
   /**
    * LES BADGES DE TÊTE (#5936) — `badgesOf` porte l'ORDRE complet
-   * (épinglé, transféré, éphémère, modifié) ; `Badges` n'en peint que les
-   * deux premiers (l'éphémère reste `EphemeralBadge`, « modifié »
-   * `EditedMark` — chacun a sa propre place, § doc-comment de `Badges`).
+   * (épinglé, transféré, modifié) ; `Badges` n'en peint que les deux premiers
+   * (« modifié » revient à `EditedMark` — chacun a sa propre place, §
+   * doc-comment de `Badges`). L'ÉPHÉMÈRE a quitté cette loi au lot #7454 :
+   * voir `message-badges.ts` § « L'ÉPHÉMÈRE A QUITTÉ CETTE LOI ».
    *
-   * `ephemeralBadge`/`isEdited` LISENT CETTE SORTIE, jamais `message.expiresAt`
-   * / `message.isEdited` en direct (revue-correction #5936, défaut majeur 1) —
-   * sans quoi la moitié de ce que `badgesOf` calcule n'atteignait aucun
-   * pixel, et rien ne garantissait plus que la rangée montre exactement ce
-   * que la loi a décidé.
+   * `isEdited` LIT CETTE SORTIE, jamais `message.isEdited` en direct
+   * (revue-correction #5936, défaut majeur 1) — sans quoi la moitié de ce que
+   * `badgesOf` calcule n'atteignait aucun pixel.
    */
-  const badges = badgesOf(message, nowMs);
-  const ephemeralBadge = ephemeralBadgeOf(badges);
+  const badges = badgesOf(message);
   const isEdited = editedOf(badges);
 
   /**
@@ -478,7 +504,12 @@ export const FocalRow = memo(function FocalRow({
           {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
         />
       ) : message.replyTo ? (
-        <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
+        <Quote
+          quote={message.replyTo}
+          isMine={false}
+          languages={languages}
+          onJump={() => onJumpToMessage(message.replyTo!.id)}
+        />
       ) : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
@@ -487,10 +518,11 @@ export const FocalRow = memo(function FocalRow({
           fallbackLanguage={message.originalLanguage}
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="tiles"
+          isMine={isMine}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
-      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
         <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
@@ -610,6 +642,18 @@ export const FocalRow = memo(function FocalRow({
             color="var(--accent)"
             size={AVATAR_SIZE}
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            /* `name` VOYAGE AVEC `profileUsername`, jamais seul : il ne sert
+               ici qu'à NOMMER le lien (« Voir le profil de … »). Posé
+               inconditionnellement, il ferait écrire le nom dans l'`aria-label`
+               des initiales — un SECOND libellé que #5935 a précisément retiré
+               de cette rangée, et que trois témoins tiennent. */
+            {...(identityOpens
+              ? {
+                  name: senderAvatarName,
+                  ...(senderHandle === undefined ? {} : { profileUsername: senderHandle }),
+                  ...(senderRing === undefined ? {} : { storyRing: senderRing }),
+                }
+              : {})}
             presence={presenceOf(message.sender, nowMs)}
           />
         ) : null}
@@ -633,6 +677,8 @@ export const FocalRow = memo(function FocalRow({
             name={senderName}
             accent="var(--accent)"
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            username={senderHandle}
+            {...(senderRing === undefined ? {} : { storyRing: senderRing })}
           />
         ) : null}
 
@@ -645,17 +691,17 @@ export const FocalRow = memo(function FocalRow({
           <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
-        {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
-            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),
-            monté SEULEMENT quand le minuteur tourne. Tient SON PROPRE
-            intervalle (`memo`) — cette rangée ne re-rend jamais pour lui. */}
-        {ephemeral.state === 'running' && ephemeralBadge !== undefined ? (
-          <EphemeralBadge
-            expiresAt={ephemeralBadge.expiresAt}
-            now={now}
-            onExpired={() => onEphemeralExpired?.(message.id)}
-          />
-        ) : null}
+        {/* LE CHROME DE PROTECTION — AU-DESSUS de l'identité (F11,
+            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`). UN
+            composant pour les deux peaux et pour les modes à venir (#7454) :
+            le décompte d'un éphémère ET la désignation d'une vue unique, que
+            cette rangée ne câble plus elle-même. L'horloge est PARTAGÉE
+            (`secondClock`) — cette rangée ne re-rend jamais pour elle. */}
+        <ProtectionChrome
+          deadline={ephemeralDeadline}
+          isViewOnce={message.isViewOnce}
+          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
+        />
 
         {head ? (
           /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne
@@ -699,9 +745,20 @@ export const FocalRow = memo(function FocalRow({
                 style={{ width: '0.8em', height: '0.8em', color: 'var(--ios-purple-500)' }}
               />
             ) : null}
-            <span className="text-title font-extrabold" style={{ color: senderNameColor }}>
+            {/* `redundant` — cette ligne est `aria-hidden` (voir juste au-dessus) :
+                un lien focalisable dans un sous-arbre masqué recevrait le focus
+                sans jamais s'annoncer. L'AVATAR, hors du masque, porte le
+                chemin annoncé. */}
+            <PersonName
+              name={senderName}
+              username={senderHandle}
+              {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+              redundant
+              className="text-title font-extrabold"
+              style={{ color: senderNameColor }}
+            >
               {senderName}
-            </span>
+            </PersonName>
           </div>
         ) : null}
 

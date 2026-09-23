@@ -24,6 +24,7 @@ import {
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
 import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtures-live';
+import { UNREAD_CONVERSATION, UNREAD_CONVERSATION_ID, UNREAD_MESSAGES } from './fixtures-unread';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
@@ -490,6 +491,12 @@ export const CONVERSATIONS: readonly Conversation[] = [
      * autres rangs vivent sur des participants de conversations DIRECTES.
      */
     avatar: portraitStandIn('#fbbf24', '#b45309', 'aucune'),
+    /**
+     * L'APPAREIL NEUF (#7351, D-L2) — 2 non-lus et AUCUN curseur de lecture :
+     * le fil que reçoit un appareil qui ne l'a jamais ouvert. Il s'ouvre sur
+     * « 2 messages non lus » (`unreadCountHint`, `first-unread.ts`), et
+     * `check-list-actions.mjs` bascule ce badge (2 → Lu → Non lu → 1).
+     */
     unreadCount: 2,
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
@@ -776,7 +783,7 @@ export function resetSurgedConversationsForTests(): void {
  * ADRESSE et dont aucune liste n'a besoin. Y ajouter une entrée ne déplace
  * AUCUN compte ; l'ajouter à `CONVERSATIONS` les déplace TOUS.
  */
-const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT];
+const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT, UNREAD_CONVERSATION];
 
 /**
  * LA LECTURE PAR IDENTIFIANT — la liste servie D'ABORD (corpus figé +
@@ -798,6 +805,24 @@ export function conversationById(id: string): Conversation | undefined {
 export function directConversationWith(participantId: string): Conversation | undefined {
   const matches = (c: Conversation) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId);
   return conversationsWithSurged().find(matches) ?? OFF_LIST_CONVERSATIONS.find(matches);
+}
+
+/**
+ * LES CONVERSATIONS EN COMMUN AVEC QUELQU'UN (#7124) — ce que la passerelle
+ * rend sur `?withUserId=<id>` : les conversations dont le LECTEUR **et** le
+ * sujet sont tous deux membres actifs (`core-list.ts:193-210`), quel que soit
+ * leur TYPE — un direct, un groupe et un salon public y entrent pareil.
+ *
+ * Les deux registres sont balayés, pour la raison qui vaut déjà pour
+ * `directConversationWith` : une conversation partagée existe indépendamment
+ * de ce qu'une page de liste montre — l'archiver ne la supprime pas, et le
+ * serveur la retrouverait.
+ */
+export function sharedConversationsWith(participantId: string): readonly Conversation[] {
+  const membre = (c: Conversation, id: string) => c.participants.some((p) => p.userId === id);
+  return [...conversationsWithSurged(), ...OFF_LIST_CONVERSATIONS].filter(
+    (c) => membre(c, participantId) && membre(c, VIEWER_ID),
+  );
 }
 
 const withConsumption = (messages: readonly Message[]): readonly Message[] => {
@@ -965,6 +990,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === RICH_TEXT_CONVERSATION_ID) return withSent(conversationId, withConsumption(RICH_TEXT_MESSAGES));
   if (conversationId === RICH_TEXT_DIRECT_ID) return withSent(conversationId, withConsumption(RICH_TEXT_DIRECT_MESSAGES));
   if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
+  if (conversationId === UNREAD_CONVERSATION_ID) return withSent(conversationId, withConsumption(UNREAD_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

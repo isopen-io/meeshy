@@ -496,21 +496,7 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     private func resolveAvailability() async {
-        let urlString = attachment.fileUrl
-        if urlString.hasPrefix("file://") {
-            let exists = FileManager.default.fileExists(
-                atPath: URL(string: urlString)?.path ?? ""
-            )
-            resolvedAvailability = VideoAvailability.resolve(
-                isLocalFile: true, localFileExists: exists, isServerCached: false
-            )
-            return
-        }
-        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let cached = await CacheCoordinator.shared.video.isCached(resolved)
-        resolvedAvailability = VideoAvailability.resolve(
-            isLocalFile: false, localFileExists: false, isServerCached: cached
-        )
+        resolvedAvailability = await VideoAvailability.resting(for: attachment)
     }
 
     var body: some View {
@@ -602,9 +588,10 @@ struct GalleryVideoPage: View, Equatable {
         // et rejoue dès qu'une page y entre.
         .task(id: "\(attachment.id)#\(isWindowed)") {
             guard isWindowed else { return }
-            if !downloader.isDownloading {
-                downloader.isCached = false
-            }
+            // Le registre partagé fait foi (#7492) : un téléchargement lancé
+            // depuis la bulle se poursuit ici, et celui lancé ici rend la bulle
+            // « prête » à la fermeture de la galerie.
+            downloader.observe(attachment)
             await resolveAvailability()
             if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
                 let condition = NetworkConditionMonitor.shared.condition
@@ -644,6 +631,9 @@ struct GalleryVideoPage: View, Equatable {
                   videoManagerActiveURL != attachment.fileUrl else { return }
             videoManager.isForceMuted = false
             videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
             videoManager.play()
             onCacheActivation()
         }
@@ -784,6 +774,9 @@ struct GalleryVideoPage: View, Equatable {
                 // l'activité), on ne veut jamais en hériter silencieusement ici.
                 videoManager.isForceMuted = false
                 videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+                // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par
+                // la pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+                videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
                 videoManager.play()
                 onCacheActivation()
                 HapticFeedback.light()

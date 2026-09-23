@@ -99,6 +99,7 @@ const ACTIONS = {
   write: { aria: 'userProfile.action.writeLabel', tone: 'brand' },
   block: { aria: 'userProfile.action.blockLabel', tone: 'danger' },
   unblock: { aria: 'discover.blocked.unblockLabel', tone: 'warning' },
+  report: { aria: 'report.action', tone: 'danger' },
 } as const satisfies Readonly<Record<ProfileActionKind, { readonly aria: InterfaceCatalogKey; readonly tone: ActionTone }>>;
 
 /**
@@ -116,7 +117,8 @@ const PLAIN_LABEL = {
   write: 'userProfile.action.write',
   block: 'userProfile.action.block',
   unblock: 'discover.blocked.unblock',
-} as const satisfies Readonly<Record<'add' | 'write' | 'block' | 'unblock', InterfaceCatalogKey>>;
+  report: 'report.action',
+} as const satisfies Readonly<Record<'add' | 'write' | 'block' | 'unblock' | 'report', InterfaceCatalogKey>>;
 
 /* Accepter, refuser et annuler nomment la personne : iOS écrit « Accepter la
    connexion » ; la v3.1 réutilise les libellés déjà traduits de « Découvrir ». */
@@ -142,6 +144,7 @@ const ACTION_GLYPH: Readonly<Record<ProfileActionKind, ReactNode>> = {
   write: <GlyphSvg glyph={PROFILE_GLYPHS.envelopeSimple} size={14} />,
   block: <GlyphSvg glyph={DISCOVER_GLYPHS.handPalm} size={14} />,
   unblock: <GlyphSvg glyph={DISCOVER_GLYPHS.handPalm} size={14} />,
+  report: <Glyph name="warningCircle" size={14} />,
 };
 
 /**
@@ -221,13 +224,12 @@ const CONTEXT_KEY = {
 export function ContextBanner({ language, relation, name }: { readonly language: InterfaceLanguage; readonly relation: ProfileRelation; readonly name: string }) {
   if (relation.kind !== 'pendingReceived' && relation.kind !== 'pendingSent') return null;
   const key = CONTEXT_KEY[relation.kind];
-  const waiting = relation.request === null;
   return (
     <p data-profile-context className="flex items-start gap-2 rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: INK_2 }}>
       <span aria-hidden="true" className="pt-0.5" style={{ color: BRAND }}>
         <GlyphSvg glyph={PROFILE_GLYPHS.userPlus} size={14} />
       </span>
-      {waiting ? translate(language, 'userProfile.context.pending') : translate(language, key, { name })}
+      {translate(language, key, { name })}
     </p>
   );
 }
@@ -241,7 +243,9 @@ export function ContextBanner({ language, relation, name }: { readonly language:
  * **un lecteur sans session y voit une INVITATION à se connecter**, jamais un
  * bouton désactivé : un contrôle inerte est un contrôle qui ment.
  *
- * **Tant que l'identifiant de la demande manque**, les gestes d'une relation en
- * attente sont DÉSACTIVÉS et la bannière le dit — le panier est en vol, et un
- * bouton qui n'aurait rien à envoyer mentirait de la même façon.
+ * **L'identifiant de la demande arrive AVEC l'identité** (#7122,
+ * `relationRequestId`) : les gestes d'une relation en attente sont armés au
+ * premier rendu, il n'y a plus de panier en vol ni d'état « en attente de sa
+ * ligne ». S'il manquait tout de même, `actionsFor` n'offre pas les gestes qui
+ * l'exigent — un bouton qui n'aurait rien à envoyer mentirait de la même façon.
  */

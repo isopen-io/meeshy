@@ -1,7 +1,13 @@
+import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { applyConsumption, consumeViewOnce } from './view-once';
+import { applyConsumption, consumeViewOnce, consumeViewOnceOptimistic } from './view-once';
+import { createHttpTransport } from './http';
+import { messagesQueryKey } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
+import type { Message } from './types';
 import type { Transport } from '../net/transport';
+import { message } from './fixtures-base';
 import {
   PROTECTION_CONVERSATION_ID,
   VIEW_ONCE_OFFLINE_WITNESS_ID,
@@ -88,5 +94,197 @@ describe('recordViewOnceConsumption — la consommation SURVIT au démontage de 
     recordViewOnceConsumption(before[0]!.id);
     const after = messagesOf('c-deploiement');
     expect(after).toEqual(before);
+  });
+});
+
+/**
+ * LE COMPORTEMENT, PAS LA SOURCE (#7224) — ces témoins montent un vrai
+ * `QueryClient`, un vrai transport HTTP bouchonné par son `fetchImpl`, et
+ * mesurent ce que la RANGÉE lira : le compte du cache. Un témoin qui se
+ * contenterait de vérifier que le port compose son chemin (juste au-dessus)
+ * reste VERT si le branchement de la révélation disparaît — il ne dit rien de
+ * la loi. Même patron que `receipts.test.ts` pour `markCaughtUp`.
+ */
+const viewOnce = (id: string, viewOnceCount = 0): Message =>
+  message({
+    id,
+    conversationId: 'c-a',
+    senderId: 'u1',
+    content: `secret ${id}`,
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: new Date(1_757_000_000_000),
+    isViewOnce: true,
+    viewOnceCount,
+    maxViewOnceCount: 1,
+  });
+
+const seedThread = (client: QueryClient, conversationId: string, messages: readonly Message[]): void => {
+  client.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), {
+    pages: [{ messages, hasOlder: false, nextCursor: null }],
+    pageParams: [undefined],
+  });
+};
+
+const countOf = (client: QueryClient, conversationId: string, messageId: string): number | undefined =>
+  client
+    .getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId))
+    ?.pages.flatMap((p) => [...p.messages])
+    .find((m) => m.id === messageId)?.viewOnceCount;
+
+const respondingWith = (status: number, body: unknown) =>
+  createHttpTransport({
+    base: '',
+    fetchImpl: (async () => new Response(JSON.stringify(body), { status })) as typeof fetch,
+  });
+
+describe('consumeViewOnceOptimistic — la révélation se dit au serveur (#7224)', () => {
+  test('le cache porte la consommation AVANT toute réponse réseau (optimiste)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    // Une promesse qui ne se résout JAMAIS dans ce test — seul l'AVANT compte.
+    const transport = createHttpTransport({ base: '', fetchImpl: (() => new Promise(() => {})) as unknown as typeof fetch });
+
+    void consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(countOf(client, 'c-a', 'm1')).toBe(1);
+  });
+
+  test('la révélation est DITE au serveur : POST …/consume part une fois, chemin exact', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const calls: { readonly url: string; readonly method: string }[] = [];
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), method: init?.method ?? 'GET' });
+        return new Response(JSON.stringify({ success: true, data: { messageId: 'm1', viewOnceCount: 1, maxViewOnceCount: 1, isFullyConsumed: true } }), { status: 200 });
+      }) as typeof fetch,
+    });
+
+    await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(calls).toEqual([{ url: '/api/v1/conversations/c-a/messages/m1/consume', method: 'POST' }]);
+  });
+
+  test('sur 200, le compte SERVI atteint la rangée (2, jamais le 1 optimiste)', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const transport = respondingWith(200, {
+      success: true,
+      data: { messageId: 'm1', viewOnceCount: 2, maxViewOnceCount: 3, isFullyConsumed: false },
+    });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(revealed).toBe(true);
+    expect(countOf(client, 'c-a', 'm1')).toBe(2);
+  });
+
+  test('refus PERMANENT (403) : le compte revient à sa valeur d’AVANT et la révélation est refusée', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const transport = respondingWith(403, { success: false, error: 'Access denied' });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(revealed).toBe(false);
+    expect(countOf(client, 'c-a', 'm1')).toBe(0);
+  });
+
+  test('le rollback est CIBLÉ : un message arrivé entre-temps RESTE dans le cache', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: (async () => {
+        // Le fil bouge PENDANT l'aller-retour — `message:new`, un autre patch.
+        seedThread(client, 'c-a', [viewOnce('m1', 1), viewOnce('m2')]);
+        return new Response(JSON.stringify({ success: false, error: 'Access denied' }), { status: 403 });
+      }) as typeof fetch,
+    });
+
+    await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(countOf(client, 'c-a', 'm1')).toBe(0);
+    expect(countOf(client, 'c-a', 'm2')).toBe(0);
+  });
+
+  test('panne TRANSITOIRE (500) : la consommation RESTE, le secret ne se rouvre pas', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const transport = respondingWith(500, { success: false, error: 'Internal error' });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(revealed).toBe(true);
+    expect(countOf(client, 'c-a', 'm1')).toBe(1);
+  });
+
+  test('panne RÉSEAU (le transport lève) : la consommation RESTE, aucun rejet ne remonte', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const fail = async (): Promise<never> => {
+      throw new Error('offline');
+    };
+    const transport = Object.assign(fail, { request: fail });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(revealed).toBe(true);
+    expect(countOf(client, 'c-a', 'm1')).toBe(1);
+  });
+
+  test('source fixtures : AUCUN appel réseau, et le CACHE porte quand même la consommation', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    let called = false;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: (async () => {
+        called = true;
+        return new Response(null, { status: 200 });
+      }) as typeof fetch,
+    });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'fixtures', transport, queryClient: client },
+    });
+
+    expect(called).toBe(false);
+    expect(revealed).toBe(true);
+    // SANS cette écriture, une rangée recyclée par le virtualiseur remonte sur
+    // `viewOnceCount: 0` et ROUVRE le secret dans la même session (revue W5).
+    expect(countOf(client, 'c-a', 'm1')).toBe(1);
   });
 });

@@ -90,11 +90,37 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     /// position-seule a un `content` vide : c'est ce champ qui permet à la
     /// ligne d'aperçu de composer son libellé côté client.
     public let location: SharedPlace?
+    /// Sous-groupe NATURE du contrat #7545 — mêmes champs que les clés plates
+    /// `lastMessage*` de `conversation:updated`.
+    public let effectFlags: Int?
+    public let ephemeralDuration: Int?
+    public let isEncrypted: Bool?
+    public let isForwarded: Bool?
+    public let systemEvent: LastMessageSystemEvent?
+    public let callSummary: LastMessageCallSummary?
+    public let attachmentSummary: LastMessageAttachmentSummary?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
         case isBlurred, isViewOnce, expiresAt, location
+        case effectFlags, ephemeralDuration, isEncrypted, isForwarded
+        case systemEvent, callSummary, attachmentSummary
+    }
+
+    /// La nature telle que le serveur la sert ; `nil` sur un serveur antérieur.
+    public var nature: LastMessageNature? {
+        let nature = LastMessageNature(
+            messageType: messageType,
+            effectFlags: effectFlags,
+            ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted ?? false,
+            isForwarded: isForwarded ?? false,
+            systemEvent: systemEvent,
+            callSummary: callSummary,
+            attachmentSummary: attachmentSummary
+        )
+        return nature.isEmpty ? nil : nature
     }
 }
 
@@ -173,6 +199,10 @@ public struct APIConversation: Decodable, Sendable {
     /// d'avant, jamais sur « pas membre ».
     public let isMember: Bool?
     public let lastMessage: APIConversationLastMessage?
+    /// Ce qui s'est passé DEPUIS le dernier message (#7545) : sa dernière
+    /// réaction et l'appel en cours. `var` : décodés sans élargir l'init.
+    public var lastReaction: ConversationLastReaction? = nil
+    public var activeCall: ConversationActiveCall? = nil
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
     /// au même plafond que `lastMessage.content`.
@@ -193,6 +223,15 @@ public struct APIConversation: Decodable, Sendable {
     public let encryptionMode: String?
     public let currentUserRole: String?
     public let currentUserJoinedAt: Date?
+    /// La frontière de lecture du lecteur (#7198, #7222) — servie
+    /// INCONDITIONNELLEMENT par `GET /conversations` (minimal) et
+    /// `GET /conversations/:id` (détail), depuis `ConversationReadCursor`.
+    /// `nil` sans curseur connu — jamais fabriqué (REV-4). Rang 1 de
+    /// `FirstUnreadBoundary.resolve` : la clé CHRONOLOGIQUE du curseur.
+    public let lastReadMessageCreatedAt: Date?
+    /// Dernier message lu par le lecteur — le curseur SERVEUR (voir
+    /// `ConversationUserState.lastReadMessageId`).
+    public let lastReadMessageId: String?
     public let createdAt: Date
     public let closedAt: Date?
     public let closedBy: String?
@@ -214,7 +253,9 @@ public struct APIConversation: Decodable, Sendable {
         currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
         createdAt: Date,
         closedAt: Date? = nil, closedBy: String? = nil,
-        isMember: Bool? = nil
+        isMember: Bool? = nil,
+        lastReadMessageId: String? = nil,
+        lastReadMessageCreatedAt: Date? = nil
     ) {
         self.id = id; self.type = type; self.identifier = identifier; self.title = title
         self.description = description; self.avatar = avatar; self.banner = banner
@@ -233,6 +274,8 @@ public struct APIConversation: Decodable, Sendable {
         self.createdAt = createdAt
         self.closedAt = closedAt; self.closedBy = closedBy
         self.isMember = isMember
+        self.lastReadMessageId = lastReadMessageId
+        self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
     }
 }
 
@@ -375,7 +418,11 @@ extension APIConversation {
         // Conversely, a server `_count` that lags behind a fresh payload
         // (optimistic insert just landed locally) must not erase what we see.
         let lastMsgAttCount = max(lastMessage?._count?.attachments ?? 0, lastMsgAttachments.count)
-        let lastMsgSenderName = lastMessage?.sender?.name
+        let lastMsgSenderName = ConversationListAuthor.name(
+            senderId: lastMessage?.sender?.resolvedUserId ?? lastMessage?.sender?.id ?? lastMessage?.senderId,
+            senderName: lastMessage?.sender?.name,
+            readerId: currentUserId
+        )
 
         let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in
             let sName = msg.sender?.name ?? "?"
@@ -451,6 +498,18 @@ extension APIConversation {
             )
         }
         conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        conversation.lastMessageNature = lastMessage?.nature
+        conversation.lastReaction = lastReaction
+        conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false
+        conversation.activeCall = activeCall
+
+        // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
+        // ci-dessus : arrivée après l'init memberwise, projetée post-init pour
+        // ne pas élargir CHAQUE appelant. `lastReadAt` (l'horloge de l'ACTION,
+        // locale) N'EST PAS écrasé ici : voir `ConversationSyncEngine+Ecritures
+        // .reconcileUnread`, qui en reste l'UNIQUE loi de fusion.
+        conversation.userState.lastReadMessageId = lastReadMessageId
+        conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
 
         return conversation
     }

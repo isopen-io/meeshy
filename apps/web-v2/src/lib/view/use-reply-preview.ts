@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 
-import { served } from '@/lib/api/prism';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Message } from '@/lib/api/types';
+
+import { quotedPreviewOf } from './quoted-preview';
 
 /**
  * LA CITATION PRÉ-ADRESSÉE DU COMPOSEUR — ce que `thread.tsx` transmet à
@@ -37,21 +39,26 @@ export function useReplyToPreview(params: {
   readonly readerLanguages: readonly string[];
 }): ReplyToPreview | undefined {
   const { message, readerLanguages } = params;
+  /* LU DANS LE CORPS, pas dans le memo (#7556) : une valeur lue à l'intérieur
+     sans être en dépendance survivrait à son propre changement. C'est une
+     primitive — l'identité du memo reste stable d'un rendu à l'autre. */
+  const interfaceLanguage = currentInterfaceLanguage();
   return useMemo(() => {
     if (message === undefined) return undefined;
-    const servedReply = served({
-      preferredLanguages: readerLanguages,
-      originalLanguage: message.originalLanguage,
-      translations: message.translations,
-      original: message.content,
-    });
+    /* LE SITE UNIQUE (#7556) — `quotedPreviewOf` (`quoted-preview.ts`), la
+       MÊME fonction que `Quote` (`components/message-blocks.tsx`) : le
+       bandeau du composeur et la bulle gravée doivent citer le même message
+       dans la MÊME langue, et un média SANS légende doit s'y nommer par son
+       genre plutôt que de laisser la bande vide. Deux descentes parallèles
+       sont exactement le défaut que le cycle 128 a fermé. */
+    const preview = quotedPreviewOf({ quoted: message, readerLanguages, interfaceLanguage });
     return {
       author: message.sender?.displayName ?? message.senderId,
-      excerpt: servedReply.text,
-      /* La PAIRE, jamais le seul texte : `served()` rend `language`
+      excerpt: preview.text,
+      /* La PAIRE, jamais le seul texte : la descente rend `language`
          précisément pour que l'hôte puisse DIRE dans quelle langue il sert
          (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
-      ...(servedReply.language === '' ? {} : { language: servedReply.language }),
+      ...(preview.language === '' ? {} : { language: preview.language }),
     };
-  }, [message, readerLanguages]);
+  }, [message, readerLanguages, interfaceLanguage]);
 }

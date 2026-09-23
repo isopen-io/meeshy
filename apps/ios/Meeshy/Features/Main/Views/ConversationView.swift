@@ -101,6 +101,10 @@ struct ConversationScrollState {
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
+    /// Les vues uniques OUVERTES dont la consommation attend la fermeture du
+    /// plein écran (#7499). État de VUE — il décrit ce qui est à l'écran, pas
+    /// une donnée du fil — donc il vit ici et non dans le ViewModel.
+    var pendingViewOnceConsumption = ViewOnceConsumption.Pending()
     var imageToPreview: UIImage? = nil
     var videoToPreview: URL? = nil
 
@@ -507,6 +511,13 @@ struct ConversationView: View {
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
             memberJoinedAt: conversation?.currentUserJoinedAt,
+            // Frontière de lecture (#7198/#7222) — reprise SYNCHRONE de la
+            // ligne de liste qui ouvre ce fil, même idiome que
+            // `memberJoinedAt` juste au-dessus (voir le doc-comment de ces
+            // trois champs sur `ConversationViewModel`).
+            lastReadMessageId: conversation?.userState.lastReadMessageId,
+            lastReadAt: conversation?.userState.lastReadAt,
+            lastReadMessageCreatedAt: conversation?.userState.lastReadMessageCreatedAt,
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         )
@@ -1275,6 +1286,11 @@ struct ConversationView: View {
                     // en avant-plan — ou le démontage de la vue.
                     scrollState.flushSeenTrigger += 1
                     persistDraftAttachmentsForBackground()
+                    // #7500 — « quitter, c'est quitter » : l'arrière-plan et le
+                    // verrouillage sont des sorties au même titre que le
+                    // retour. Les deux portes appellent le MÊME geste, qui est
+                    // idempotent — la seconde ne trouve plus rien.
+                    consumeOpenedViewOnceOnExit()
                 }
             }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
@@ -1297,6 +1313,10 @@ struct ConversationView: View {
             }
             .onDisappear {
                 composerText.flushPendingChange()
+                // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
+                // en arrière-plan ci-dessus : une vue unique lue ici ne
+                // survivra pas au retour.
+                consumeOpenedViewOnceOnExit()
                 // Rompt le cycle de rétention : `onPersistNeeded` capture une
                 // copie de cette struct, dont le wrapper State retient (via sa
                 // box de stockage) le modèle vivant — soit modèle → closure →
@@ -1669,13 +1689,35 @@ struct ConversationView: View {
                     // (`fileUrl`), sinon les deux se téléchargeaient ; puis on
                     // met la pièce jointe en scène pour la galerie.
                     GalleryPrewarm.warm(attachment)
+                    // #7499 — une vue unique s'OUVRE au toucher et se consomme
+                    // à la FERMETURE. On arme ici, la galerie consomme en se
+                    // refermant (`ConversationView+MediaGallery`). C'est le
+                    // seul endroit qui voie les deux : la bulle sait qu'on
+                    // ouvre, elle ne sait pas quand on sort.
+                    if attachment.isViewOnce {
+                        scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+                    }
                     scrollState.galleryStartAttachment = attachment
                 },
                 onConsumeViewOnce: { messageId, completion in
-                    Task {
-                        let success = await viewModel.consumeViewOnce(messageId: messageId)
-                        completion(success)
-                    }
+                    // #7500 — **on ARME, on ne détruit pas.**
+                    //
+                    // Ce canal appelait le serveur au moment de la révélation :
+                    // le contenu était consommé avant d'avoir été lu, et la
+                    // révélation dépendait d'un aller-retour pour afficher ce
+                    // que ce même aller-retour venait de détruire.
+                    //
+                    // La consommation part maintenant de la SORTIE de la
+                    // conversation — retour, arrière-plan, verrouillage :
+                    // quitter, c'est quitter. On confirme donc aussitôt, pour
+                    // que la révélation se fasse, et c'est l'hôte qui sait
+                    // quand on s'en va.
+                    //
+                    // Ce site couvre les DEUX chemins qui passaient par lui :
+                    // le TEXTE à vue unique, et l'appui long du mode Focal sur
+                    // un média — le reste nommé par #7499.
+                    scrollState.pendingViewOnceConsumption.arm(messageId)
+                    completion(true)
                 },
                 onRequestTranslation: { messageId, targetLang in
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
@@ -1818,6 +1860,16 @@ struct ConversationView: View {
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
                     },
+                    // #7452 — MÊME canal que le Fil. Sans lui le voile d'une
+                    // vue unique ne se lèverait jamais en Rivière : le
+                    // contrôleur de révélation est fail-closed sur un message
+                    // qui exige l'accusé serveur.
+                    onConsumeViewOnce: { messageId, completion in
+                        Task {
+                            let success = await viewModel.consumeViewOnce(messageId: messageId)
+                            completion(success)
+                        }
+                    },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
@@ -1851,6 +1903,11 @@ struct ConversationView: View {
                     analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
                     conversationId: viewModel.conversationId,
                     isDark: isDark,
+                    // #7452 — les messages protégés encore vivants, recomposés
+                    // à chaque passe de ce corps (ils dérivent de
+                    // `viewModel.messages`). Le digest, lui, ne se recompose
+                    // jamais : c'est pourquoi il ne contient PLUS leur texte.
+                    protections: LivingSummaryProtections.entries(messages: viewModel.messages),
                     onReplyToPerson: { entry in
                         readingModeController.select(.script)
                         guard let targetId = entry.evidenceMessageIds.first,
@@ -1867,7 +1924,11 @@ struct ConversationView: View {
                     },
                     onResumeThread: {
                         readingModeController.select(.script)
-                        if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
+                        // La VRAIE frontière (#7222), pas « le premier message
+                        // d'autrui » : `firstUnreadMessageId` est posé par
+                        // `FirstUnreadBoundary.resolve` sur le curseur de
+                        // lecture, pas sur l'auteur.
+                        if let firstUnread = viewModel.firstUnreadMessageId {
                             scrollState.scrollToMessageId = firstUnread
                             scrollState.scrollToMessageTrigger += 1
                         }

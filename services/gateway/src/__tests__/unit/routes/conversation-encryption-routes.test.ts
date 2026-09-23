@@ -314,6 +314,19 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
 
+  it("pose une clé localisable sur l'avis système, jamais seulement le texte anglais (#7545)", async () => {
+    const app = await buildApp({
+      conversation: { participants: [{ userId: USER_ID, role: 'OWNER' }], type: 'group' },
+      senderParticipant: { id: PARTICIPANT_ID },
+    });
+    const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ messageType: 'system', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } }),
+    }));
+    await app.close();
+  });
+
   it('skips system message creation when senderParticipant is null', async () => {
     const app = await buildApp({
       conversation: { participants: [{ userId: USER_ID, role: 'OWNER' }], type: 'group' },

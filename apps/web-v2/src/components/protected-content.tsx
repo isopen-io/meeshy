@@ -1,10 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   BLUR_RADIUS_PX,
   REVEAL_ERROR_NOTICE_MS,
-  ephemeralOf,
-  formatRemaining,
   rendersContent,
   requiresConsume,
   reveal,
@@ -17,6 +15,8 @@ import {
 } from '@/lib/reading-mode/protection';
 import { useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
 import type { Attachment } from '@/lib/api/types';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { attachmentSegments } from '@/lib/view/message-a11y-label';
 
 import { Glyph } from './glyph';
@@ -231,7 +231,10 @@ export function ProtectedContent({
   }
 
   // L'affordance — seule surface où le contenu n'a PAS encore de raison
-  // d'exister dans le DOM.
+  // d'exister dans le DOM. Ses QUATRE textes viennent du catalogue (#7337) ;
+  // la langue se lit ici pour la même raison que dans `ProtectionNotice`
+  // ci-dessous (§ son doc-comment) — une lecture, jamais un abonnement.
+  const veilLanguage = currentInterfaceLanguage();
   return (
     <>
       <button
@@ -239,7 +242,7 @@ export function ProtectedContent({
         data-protected="hidden"
         data-surface={surface}
         className="protected-veil"
-        aria-label="Contenu masqué"
+        aria-label={translate(veilLanguage, 'message.veiled')}
         /* iOS sert DEUX chaînes distinctes — l'étiquette `bubble.content.hidden`
            et l'INDICE `bubble.content.hidden.hint` (`FocalProtectedContent.swift:56-73`).
            Sur le web, `aria-label` REMPLACE le contenu dans le calcul du nom
@@ -269,11 +272,11 @@ export function ProtectedContent({
           {surrogateOf(contentLength)}
         </span>
         <span className="sr-only" id={`${messageId}-reveal-hint`}>
-          Toucher pour révéler le contenu
+          {translate(veilLanguage, 'message.veiled.hint')}
         </span>
         {attachmentCount > 0 ? (
           <span data-masked-media aria-hidden>
-            {isViewOnce ? 'Voir une fois' : 'Contenu masqué'}
+            {translate(veilLanguage, isViewOnce ? 'message.veiled.viewOnce' : 'message.veiled')}
           </span>
         ) : null}
       </button>
@@ -294,7 +297,7 @@ export function ProtectedContent({
           className="protected-notice-error mt-1.5 flex items-center gap-1.5 rounded-quote px-2 py-1.5 text-check font-semibold"
         >
           <Glyph name="warningCircle" size={12} />
-          <span>Révélation impossible pour l’instant</span>
+          <span>{translate(veilLanguage, 'message.veiled.error')}</span>
         </p>
       ) : null}
     </>
@@ -339,12 +342,31 @@ export function ProtectionNotice({
    */
   readonly attachments?: readonly Attachment[];
 }) {
+  /**
+   * LES LIBELLÉS VIENNENT DU CATALOGUE (#7337) — ils étaient EN DUR, en
+   * français, sur les trois tombstones que SEPT langues lisent. Les valeurs
+   * sont celles du catalogue iOS là où il en a une (`bubble.system.deleted`,
+   * `bubble.system.burned`, `bubble.system.burned.a11y`).
+   *
+   * LA LANGUE SE LIT ICI, PAS EN PROP (même parti que `MaskedAttachment` et
+   * `ViewerMaskedPage`) : ce substitut est rendu depuis CINQ chaînes
+   * différentes — la bulle, la rangée plate, la grille, la visionneuse et la
+   * lecture souveraine — dont aucune ne transporte de langue d'interface. Un
+   * prop devrait traverser `ProtectedContent`, `Attachments`, `MediaGrid` et
+   * `MediaViewer` pour atteindre des feuilles qui n'ont pas d'autre raison de
+   * la connaître, alors que `currentInterfaceLanguage()` est une LECTURE
+   * synchrone de `document.documentElement.lang`, jamais un abonnement : la
+   * racine redessine déjà l'arbre entier quand la langue change
+   * (`subscribeInterfaceLanguage`).
+   */
+  const language = currentInterfaceLanguage();
   const LABELS = {
-    deleted: { label: 'Message supprimé', aria: 'Message supprimé' },
-    burned: { label: 'Vu et supprimé', aria: 'Message vu et supprimé' },
-    withheld: { label: 'Contenu retenu', aria: 'Contenu retenu : ce message existe et ne se montre pas' },
-  } as const;
-  const { label, aria: ariaLabel } = LABELS[kind];
+    deleted: { label: 'message.deleted', aria: 'message.deleted' },
+    burned: { label: 'message.burned', aria: 'message.burned.a11y' },
+    withheld: { label: 'message.withheld', aria: 'message.withheld.a11y' },
+  } as const satisfies Readonly<Record<'deleted' | 'burned' | 'withheld', { label: InterfaceCatalogKey; aria: InterfaceCatalogKey }>>;
+  const label = translate(language, LABELS[kind].label);
+  const ariaLabel = translate(language, LABELS[kind].aria);
   /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
      unique, importé et jamais recopié (§ `PROTECTED_LABEL`). */
   const constat = kind === 'withheld' ? attachmentSegments(attachments).join(', ') : '';
@@ -360,6 +382,7 @@ export function ProtectionNotice({
     return (
       <p
         data-protected="consumed"
+        data-protection-notice={kind}
         /* AUCUN retrait ici : `FocalDeletedRow`/`FocalBurnedRow` posent
            `.padding(.leading, FocalMetrics.Text.indent)` parce qu'iOS n'a pas
            de gouttière — la rangée web, elle, vit DÉJÀ dans la colonne 2 d'une
@@ -380,6 +403,7 @@ export function ProtectionNotice({
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
       <span
         data-protected="consumed"
+        data-protection-notice={kind}
         className={`protected-notice protected-notice--${kind} inline-flex items-center gap-1.5 rounded-chip`}
         aria-label={constat === '' ? ariaLabel : `${ariaLabel}, ${constat}`}
       >
@@ -396,53 +420,3 @@ export function ProtectionNotice({
     </div>
   );
 }
-
-/**
- * LE BADGE ÉPHÉMÈRE — miroir de `BubbleEphemeralBadge`/`BubbleMetaBadges.swift:146-171`.
- * Tient SON PROPRE minuteur (1 s), s'arrête à l'expiration et au démontage —
- * `memo` : c'est LUI seul qui re-rend au tic, jamais la rangée qui le monte
- * (la promesse `memo` de `FocalRow`/`Bubble`).
- */
-export const EphemeralBadge = memo(function EphemeralBadge({
-  expiresAt,
-  now = defaultNow,
-  onExpired,
-}: {
-  readonly expiresAt: Date | string;
-  readonly now?: () => number;
-  readonly onExpired: () => void;
-}) {
-  const [remaining, setRemaining] = useState(() => ephemeralOf(expiresAt, now()));
-
-  useEffect(() => {
-    const state = ephemeralOf(expiresAt, now());
-    setRemaining(state);
-    if (state.state !== 'running') return;
-    const interval = setInterval(() => {
-      const next = ephemeralOf(expiresAt, now());
-      setRemaining(next);
-      if (next.state !== 'running') clearInterval(interval);
-    }, 1000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expiresAt]);
-
-  const onExpiredRef = useRef(onExpired);
-  onExpiredRef.current = onExpired;
-  useEffect(() => {
-    if (remaining.state === 'expired') onExpiredRef.current();
-  }, [remaining.state]);
-
-  if (remaining.state !== 'running') return null;
-  const label = formatRemaining(remaining.remainingSeconds);
-  return (
-    <span
-      data-ephemeral
-      className="protected-ephemeral-badge rounded-chip inline-flex items-center gap-1"
-      aria-label={`Message éphémère, expire dans ${label}`}
-    >
-      <Glyph name="flameFill" size={11} />
-      <span className="tabular-nums font-bold text-chip">{label}</span>
-    </span>
-  );
-});

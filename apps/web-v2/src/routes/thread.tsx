@@ -16,6 +16,7 @@ import '@/styles/thread-menu.css';
 import '@/styles/thread-system.css';
 
 import { Composer } from '@/components/composer';
+import { ForwardSheet } from '@/components/forward-sheet';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
@@ -25,15 +26,15 @@ import { ThreadHeader } from '@/components/thread-header';
 import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
 import { TypingDots } from '@/components/typing-dots';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
-import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
-import { recordViewOnceConsumption } from '@/lib/api/fixtures';
-import { patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
-import { applyConsumption } from '@/lib/api/view-once';
+import { markCaughtUp } from '@/lib/api/receipts';
+import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { accentOf, withAccent } from '@/lib/accent';
+import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
@@ -46,6 +47,7 @@ import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -59,14 +61,17 @@ import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { draftStore } from '@/lib/send/draft-store';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
+import type { SharedPlace } from '@/lib/send/shared-place';
 import { useThreadDraft } from '@/lib/view/use-draft';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
-import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
+import { useReadTracking } from '@/lib/view/use-read-tracking';
+import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -138,6 +143,7 @@ export default function ThreadScreen() {
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const storyRingOf = useAuthorStoryRings(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -167,32 +173,28 @@ export default function ThreadScreen() {
    * intervalle (`memo`), il ne remonte que l'INSTANT d'expiration, jamais un
    * `setInterval` porté par la rangée elle-même.
    *
-   * `consume` (#5650, §5 étape 10) — écrit désormais dans le CACHE de
-   * requêtes (`queryClient.setQueryData(messagesQueryKey(conversationId), …)`),
-   * jamais un état local : `threadData.messages` (dérivé du MÊME cache par
-   * `select`) reflète la consommation au rendu SUIVANT, sans second état à
-   * tenir synchronisé. En source `fixtures`, `recordViewOnceConsumption`
-   * fait survivre la consommation à un aller-retour vers `/` (la couche de
-   * données est le seul endroit qui survit au démontage) ; en `gateway`,
-   * c'est le port `consumeViewOnce` (`lib/api/view-once.ts`) qui écrira la
-   * confirmation serveur — HORS PÉRIMÈTRE de ce diff (l'écriture cache
-   * suffit pour la session courante).
+   * `consume` (#5650, §5 étape 10 ; #7224) — DÉLÈGUE : la loi entière vit
+   * dans `consumeViewOnceOptimistic` (`lib/api/view-once.ts`), qui écrit la
+   * consommation au CACHE de requêtes avant tout réseau, la DIT au serveur
+   * (`POST …/messages/:messageId/consume`) et la défait sur un refus
+   * permanent. `threadData.messages` (dérivé du MÊME cache par `select`)
+   * reflète l'écriture au rendu suivant, sans second état à tenir
+   * synchronisé ; cet écran n'en garde que la garde HORS LIGNE, la seule
+   * moitié qui soit à lui (`online`, D-16 — une révélation dont la
+   * confirmation ne peut pas partir ne s'accorde pas).
    */
-  const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
-  const onEphemeralExpired = useCallback((messageId: string) => {
-    setExpiredIds((previous) => (previous.has(messageId) ? previous : new Set(previous).add(messageId)));
-  }, []);
+  /**
+   * LA DESTRUCTION D'UN ÉPHÉMÈRE, EN TROIS PHASES (#7468) — le crochet tient
+   * les deux ensembles et la minuterie qui fait passer de l'un à l'autre, et
+   * s'inscrit au canal d'annonce pour que `message:expired` emprunte le MÊME
+   * chemin que l'échéance atteinte sous les yeux du lecteur. L'écran ne fait
+   * plus que le consommer — il tenait `expiredIds` à la main jusqu'ici.
+   */
+  const { destroyingIds, expiredIds, noteExpired: onEphemeralExpired } = useEphemeralDestruction();
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
-      /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un
-         fil (`lib/api/messages.ts`) : cet écran ne recopie plus la forme de la
-         page, qui est devenue `InfiniteData` à l'étape 2. */
-      patchThreadMessages(queryClient, conversationId, (messages) =>
-        applyConsumption(messages, { messageId, viewOnceCount: 1 }),
-      );
-      return true;
+      return consumeViewOnceOptimistic({ conversationId, messageId, deps: { ...apiDeps, queryClient } });
     },
     [online, queryClient, conversationId],
   );
@@ -546,7 +548,7 @@ export default function ThreadScreen() {
     readerLanguages,
     readerLocale,
     viewerId: viewer.id ?? '',
-    onCompose: (messageId) => setReplyTarget(messageId),
+    onReply: (messageId) => setReplyTarget(messageId),
     announce: announcer.announce,
   });
 
@@ -569,7 +571,7 @@ export default function ThreadScreen() {
   };
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
+    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
   };
 
   /**
@@ -590,60 +592,71 @@ export default function ThreadScreen() {
   });
 
   /**
-   * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
-   * `align: 'end'` plutôt qu'un `scrollTop = scrollHeight`, qui serait faux
-   * tant que les hauteurs réelles ne sont pas mesurées.
+   * LE MARQUAGE-LU SANS GESTE (#7201, W1) — ouvrir ce fil, le faire défiler
+   * jusqu'au bout et revenir au premier plan avancent la frontière de
+   * lecture. `useReadTracking` (`lib/view/use-read-tracking.ts`) pose
+   * l'IntersectionObserver et les écouteurs `visibilitychange`/`focus` ; cet
+   * écran ne fait que CÂBLER `onMark` vers `markCaughtUp`
+   * (`lib/api/receipts.ts`), qui porte la discipline optimiste (override
+   * avant réseau, rollback sur refus) — même séparation que `fetchOlder`
+   * ci-dessus.
    *
-   * **SUR L'IDENTITÉ DE LA QUEUE, PLUS SUR LE COMPTE** (#6972). Cet effet
-   * dépendait de `placed.length` — donc il se rejouait à CHAQUE page
-   * d'historique insérée, et ses vingt images de `scrollTop = scrollHeight`
-   * ramenaient le fil tout en bas juste après que l'ancrage venait de le
-   * tenir en place. Le lecteur qui remontait son historique aurait été
-   * renvoyé au présent par le geste même qui devait le servir.
-   *
-   * L'identité du DERNIER message dit ce que le compte voulait dire : elle
-   * change quand un message arrive ou disparaît en queue (re-ancrer est
-   * juste), elle NE change pas quand l'historique s'insère en tête
-   * (re-ancrer serait faux).
+   * La frontière est le dernier message CONFIRMÉ (`threadData.messages`,
+   * JAMAIS `messages`/`placed`, qui portent aussi les envois optimistes
+   * encore locaux — un id que le serveur ne connaît pas).
    */
-  const lastMessageId = placed[placed.length - 1]?.message.id;
-  useEffect(() => {
-    const el = scroller.current;
-    if (el === null || lastMessageId === undefined) return;
+  const lastConfirmedMessageId = threadData.messages[threadData.messages.length - 1]?.id;
+  const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
+    void markCaughtUp({
+      conversationId: markedConversationId,
+      caughtUpToMessageId,
+      deps: { ...apiDeps, store: conversationStore, queryClient },
+    });
+  }, [queryClient]);
+  /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
+     modale — visionneuse plein écran comprise, que cet écran ne monte pas :
+     le registre `lib/view/modal-layers.ts` le sait, l'écran n'a rien à
+     recalculer. */
+  const readTracking = useReadTracking({
+    scroller,
+    conversationId,
+    lastMessageId: lastConfirmedMessageId,
+    enabled: placed.length > 0,
+    onMark: onMarkCaughtUp,
+  });
 
-    /**
-     * UN SEUL `scrollToIndex` NE SUFFIT PAS, et c'est mesuré : il vise le bas
-     * d'une hauteur ESTIMÉE, puis les cellules réellement montées se mesurent
-     * et la hauteur totale change sous lui. Le témoin voyait alors un fil
-     * « en bas » où le dernier message n'était pas rendu.
-     *
-     * On se RÉ-ANCRE donc sur quelques images, le temps que les mesures
-     * convergent — et on abandonne à la PREMIÈRE intention de l'utilisateur.
-     * Sans ce désarmement, remonter son historique dans la demi-seconde qui
-     * suit l'ouverture serait impossible : le fil reviendrait en bas sous le
-     * doigt, ce qui est pire que de s'ouvrir au mauvais endroit.
-     */
-    // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni armer
-    // la scène du fil (§5.8 de la spécification #5648) — l'unique intention
-    // qui le RELÂCHE (`release`, mêmes écouteurs) rouvre la scène par le même
-    // événement, sans course possible entre les deux effets.
-    //
-    // La loi elle-même vit dans `lib/view/pin-to-bottom.ts` (#5774, revue) :
-    // le bouton « revenir en bas » demande EXACTEMENT le même geste, et deux
-    // formulations pour un seul geste sont une jumelle.
-    const release = pinToBottom(el, { frames: BOTTOM_ANCHOR_FRAMES, onFirstFrame: scene.noteProgrammaticScroll });
-    for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
-      el.addEventListener(event, release, { passive: true });
-    }
-    return () => {
-      release();
-      for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
-        el.removeEventListener(event, release);
-      }
-    };
-    // Volontairement sur la seule QUEUE du fil : se ré-ancrer à chaque rendu
-    // empêcherait l'utilisateur de remonter son historique.
-  }, [lastMessageId]);
+  /**
+   * LE PREMIER NON-LU, GELÉ POUR LA SESSION (#7202, S1/D-L2/D-L3) — la loi
+   * (gel + calcul) vit dans `lib/view/unread-boundary.ts`, ce hook n'en est
+   * que la GLUE ; `threadData.status === 'success'` (jamais
+   * `messages.length > 0`) évite de figer `null` à tort si `conversation`
+   * résout avant `messages` (doc-comment complet là-bas).
+   */
+  const unreadBoundary = useUnreadBoundary({
+    conversationId,
+    ready: threadData.status === 'success',
+    conversation,
+    confirmedMessages: threadData.messages,
+    viewerId: viewer.id ?? '',
+  });
+
+  /**
+   * UN FIL S'OUVRE EN BAS — SAUF sur le séparateur de non-lus, TOUJOURS, à
+   * l'ouverture (D-L2). La loi (décision pure + ancrage DOM/virtualiseur)
+   * vit dans `lib/view/use-thread-open-scroll.ts` (#6972, étendu #7202) :
+   * extraite d'ici pour le budget de taille de ce fichier (CLAUDE.md § Code
+   * Style) et pour que la loi du séparateur ait son propre fichier, comme
+   * demandé par le cadrage de W3.
+   */
+  useThreadOpenScroll({
+    scroller,
+    conversationId,
+    placed,
+    unreadBoundary,
+    ready: threadData.status === 'success',
+    virtualizer,
+    onProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
 
   /**
    * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
@@ -679,11 +692,13 @@ export default function ThreadScreen() {
       attachments,
       language,
       protection,
+      place,
     }: {
       text: string;
       attachments: readonly PendingAttachment[];
       language: string;
       protection: ComposeProtection;
+      place: SharedPlace | null;
     }) => {
       /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
          (revue-correction #5813, défaut majeur 6) — `replyToMessage`
@@ -697,7 +712,11 @@ export default function ThreadScreen() {
          `protection` (#6175) — éphémère / flou / effets choisis par
          la rangée haute, composée en champs `Message` par
          `localMessageOf` (`protectionFieldsOf`). */
-      send(text, attachments, replyToMessage ?? null, language, protection);
+      /* `place` (#7280) — le lieu que la tuile « Position » a obtenu ; il
+         part dans un champ `location` DÉDIÉ du corps, que la passerelle
+         valide seule (`parseSharedPlace`) avant de l'écrire dans
+         `Message.metadata.location`. */
+      send(text, attachments, replyToMessage ?? null, language, protection, place);
       setReplyTarget(null);
     },
     [send, replyToMessage, setReplyTarget],
@@ -771,6 +790,7 @@ export default function ThreadScreen() {
         conversation={conversation}
         viewerId={viewer.id ?? ''}
         group={group}
+        storyRingOf={storyRingOf}
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
@@ -873,8 +893,10 @@ export default function ThreadScreen() {
           scene={scene}
           readerLanguages={readerLanguages}
           group={group}
+          storyRingOf={storyRingOf}
           highlightedId={highlightedId}
           expiredIds={expiredIds}
+          destroyingIds={destroyingIds}
           jumpToMessage={jumpToMessage}
           consume={consume}
           onEphemeralExpired={onEphemeralExpired}
@@ -890,10 +912,14 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
+          onOpenDetail={messageMenu.setDetailFor}
           typists={typing.typists}
           typistAvatarOf={typistAvatarOf}
           accent={accent}
           older={{ state: older.state, sentinelRef: older.sentinelRef }}
+          readTrackingSentinelRef={readTracking.sentinelRef}
+          unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
+          unreadCount={unreadBoundary?.unreadCount ?? 0}
         />
       </main>
       {/*
@@ -1015,6 +1041,9 @@ export default function ThreadScreen() {
           count={messageMenu.selection.ids.length}
           onEnd={messageMenu.onEndSelection}
           onCopy={() => messageMenu.onCopySelection(placed)}
+          /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
+             transferts, jamais l'ordre des coches (#5866). */
+          onForward={() => messageMenu.onForwardSelection(placed)}
         />
       ) : (
         /*
@@ -1087,6 +1116,17 @@ export default function ThreadScreen() {
       {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
           feuilles indépendantes, jamais montées en même temps que le menu
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
+      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
+          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
+          fait que la requête de liste (`useConversations`, cache-first) n'est
+          jamais lancée par la simple ouverture d'un fil. */}
+      {messageMenu.forwardIds === null ? null : (
+        <ForwardSheet
+          viewerId={viewer.id ?? ''}
+          onPick={messageMenu.onForwardTo}
+          onClose={messageMenu.onCloseForward}
+        />
+      )}
       {((messageId) =>
         messageId === null ? null : (
           <ReactionSheet
@@ -1113,6 +1153,9 @@ export default function ThreadScreen() {
             sentAt={new Date(detailMessage.createdAt)}
             delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
             locale={readerLocale}
+            conversationId={conversationId}
+            messageId={detailMessage.id}
+            attachments={detailMessage.attachments ?? []}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);

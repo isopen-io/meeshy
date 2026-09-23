@@ -31,6 +31,10 @@ public struct ConversationReadEntry: Sendable, Hashable {
 /// supprime : deux gates « conversation ouverte » divergeaient
 /// (`ConversationSyncEngine` et `MessageSocketManager`), et une troisième copie
 /// par ligne aurait fait pire.
+///
+/// `unreadCount` est donc le compte SU, jamais projeté : la conversation
+/// ouverte y garde ce qui lui reste à lire (#7350), et c'est `isOpen` qui dit
+/// à une surface de la MONTRER à zéro.
 public struct ConversationReadState: Sendable, Hashable {
     public let conversationId: String
     public let unreadCount: Int
@@ -101,7 +105,8 @@ public enum ConversationReadEvent: Sendable, Hashable {
     case serverReceipt(conversationId: String, unreadCount: Int, lastReadAt: Date)
     /// L'écran de conversation s'ouvre (`conversationId`) ou se ferme (`nil`).
     case localOpen(conversationId: String?)
-    /// Geste « marquer comme lu » / ouverture : optimistic update.
+    /// Geste « marquer comme lu », rattrapage du présent : optimistic update.
+    /// Jamais la simple ouverture (#7350) — ouvrir n'est pas lire.
     case localMarkRead(conversationId: String)
     /// Geste « marquer comme non lu » : optimistic update symétrique.
     case localMarkUnread(conversationId: String)
@@ -131,10 +136,15 @@ public enum ConversationReadEvent: Sendable, Hashable {
 ///
 /// Les quatre rangs, dans l'ordre où ils s'appliquent :
 ///
-/// 1. **Conversation OUVERTE ⇒ 0, quoi qu'il arrive.** L'utilisateur la
-///    REGARDE : tout compteur non nul est un mensonge visuel, y compris s'il
-///    vient du serveur — le gateway diffuse le même compte à tous les
-///    destinataires sans savoir qui lit.
+/// 1. **Conversation OUVERTE ⇒ elle se LIT à 0, quoi qu'il arrive.**
+///    L'utilisateur la REGARDE : tout compteur non nul est un mensonge
+///    visuel, y compris s'il vient du serveur — le gateway diffuse le même
+///    compte à tous les destinataires sans savoir qui lit. C'est une
+///    PROJECTION du registre (`counts()`, borne `excludingOpen`), jamais une
+///    écriture : l'écrire dans l'entrée perdait le compte servi PENDANT
+///    l'affichage, et la fermeture rendait 0 à une conversation encore non
+///    lue — l'API disait « 1 conversation non lue » pendant que le badge
+///    affichait 0 (#7350, recette 2026-09-21). Ouvrir n'est pas lire.
 /// 2. **Un accusé de lecture SERVEUR est MONOTONE.** Un `serverReceipt` dont
 ///    le `lastReadAt` n'est pas STRICTEMENT postérieur à celui déjà connu est
 ///    un rejeu, et il est jeté EN ENTIER — son compteur avec lui. C'est la
@@ -149,7 +159,8 @@ public enum ConversationReadEvent: Sendable, Hashable {
 ///    aller-retour pour voir sa pastille tomber.
 public enum ConversationReadPrecedence {
 
-    /// Applique un événement NOMMANT UNE CONVERSATION à son entrée.
+    /// Applique un événement NOMMANT UNE CONVERSATION à son entrée — rangs 2
+    /// à 4. Le rang 1 n'y est pas : il se lit, il ne s'écrit pas.
     ///
     /// `localOpen` et `snapshot` rendent `current` inchangé : ils ne nomment
     /// pas une conversation unique et se résolvent au niveau du registre. Les
@@ -157,8 +168,7 @@ public enum ConversationReadPrecedence {
     /// nomme donc explicitement.
     public static func resolve(
         _ current: ConversationReadEntry,
-        event: ConversationReadEvent,
-        isOpen: Bool
+        event: ConversationReadEvent
     ) -> ConversationReadEntry {
         var next = current
         switch event {
@@ -187,11 +197,6 @@ public enum ConversationReadPrecedence {
         case .localOpen, .snapshot, .forget:
             return current
         }
-
-        // Rang 1, appliqué EN DERNIER et sans exception : il écrase tout ce que
-        // les rangs inférieurs viennent de décider. Posé en premier, un
-        // `serverUnread` arrivé juste après l'aurait annulé.
-        if isOpen { next.unreadCount = 0 }
         return next
     }
 }
@@ -249,9 +254,15 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// Projection PAR CONVERSATION du compteur, pour les surfaces qui rendent
     /// une LIGNE plutôt qu'un agrégat (une conversation muette garde sa
     /// pastille : seul le total la tait). Aucune borne ici — ce n'est pas un
-    /// total, c'est l'inventaire.
+    /// total, c'est l'inventaire. La conversation OUVERTE s'y lit à zéro
+    /// (rang 1) ; son entrée garde ce qui lui reste à lire.
     public func counts() -> [String: Int] {
-        stateQueue.sync { entries.mapValues { max(0, $0.unreadCount) } }
+        stateQueue.sync {
+            let openId = _openConversationId
+            return Dictionary(uniqueKeysWithValues: entries.map { id, entry in
+                (id, id == openId ? 0 : max(0, entry.unreadCount))
+            })
+        }
     }
 
     /// **Le total UNIQUE**, et ses deux seules bornes. Trois formules
@@ -280,6 +291,39 @@ public final class ConversationReadLedger: @unchecked Sendable {
         }
     }
 
+    /// **Le compte de CONVERSATIONS non lues** — D-L1 (#7236) : le badge
+    /// d'icône compte les conversations, jamais la somme de leurs messages.
+    /// Une conversation à douze messages non lus pèse UN.
+    ///
+    /// Jumelle de `total(excludingOpen:excludingMuted:)`, et surtout pas son
+    /// remplaçante : les deux nombres coexistent parce que deux surfaces
+    /// posent deux questions. Une pastille de LIGNE, un indicateur « combien
+    /// de messages m'attendent » comptent des MESSAGES ; l'icône d'app et le
+    /// miroir App Group comptent des CONVERSATIONS. Écraser la somme aurait
+    /// fait dire à toutes les surfaces ce que seule l'icône demande.
+    ///
+    /// Les conversations muettes sortent TOUJOURS — la borne n'est pas
+    /// offerte, parce que D-L1 ne la rend pas facultative : c'est la même
+    /// borne, au même rang, que le producteur SERVEUR de ce nombre
+    /// (`computeConversationUnreadBadge`, gateway G3 #7218), et deux formules
+    /// qui divergeraient feraient clignoter l'icône entre le nombre poussé par
+    /// APNs et celui recalculé au premier plan.
+    ///
+    /// `excludingOpen` reste DÉCLARÉ par la surface : la conversation affichée
+    /// ne pèse pas sur l'icône tant qu'elle est à l'écran, ce que le serveur ne
+    /// peut pas savoir — c'est le seul écart assumé avec lui. Il se referme à
+    /// la fermeture : l'entrée a gardé ce que le serveur a servi (#7350).
+    public func conversationUnreadTotal(excludingOpen: Bool) -> Int {
+        stateQueue.sync {
+            let openId = _openConversationId
+            return entries.reduce(0) { acc, element in
+                if excludingOpen, element.key == openId { return acc }
+                if element.value.isMuted { return acc }
+                return element.value.unreadCount > 0 ? acc + 1 : acc
+            }
+        }
+    }
+
     // MARK: Écriture
 
     /// L'entrée UNIQUE. Rend l'entrée telle qu'elle était AVANT l'événement
@@ -298,13 +342,13 @@ public final class ConversationReadLedger: @unchecked Sendable {
         let previous: ConversationReadEntry? = stateQueue.sync { () -> ConversationReadEntry? in
             switch event {
             case .localOpen(let conversationId):
+                // Ouvrir n'est pas lire (#7350) : seul le curseur bouge. La
+                // ligne affichée se LIT à zéro dans ce tour de boucle (rang 1,
+                // projection) et son entrée garde ce que le serveur sert
+                // pendant l'affichage. La refermer rend ce compte — rien
+                // d'inventé : la lecture, elle, passe par `localMarkRead` ou
+                // par le serveur.
                 _openConversationId = conversationId
-                // Ouvrir, c'est lire : la ligne tombe à zéro DANS CE TOUR DE
-                // BOUCLE, sans attendre l'accusé. La refermer ne ressuscite
-                // rien — le compteur reviendra du serveur s'il y a lieu.
-                if let conversationId, entries[conversationId] != nil {
-                    entries[conversationId]?.unreadCount = 0
-                }
                 return nil
 
             case .snapshot(let rows, let source):
@@ -321,11 +365,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
                  .localMarkRead(let conversationId),
                  .localMarkUnread(let conversationId):
                 let before = entries[conversationId] ?? ConversationReadEntry()
-                entries[conversationId] = ConversationReadPrecedence.resolve(
-                    before,
-                    event: event,
-                    isOpen: conversationId == _openConversationId
-                )
+                entries[conversationId] = ConversationReadPrecedence.resolve(before, event: event)
                 return before
             }
         }
@@ -357,9 +397,9 @@ public final class ConversationReadLedger: @unchecked Sendable {
             if source == .server || !isTracked {
                 entry.unreadCount = max(0, row.unreadCount)
             }
-            if row.conversationId == _openConversationId {
-                entry.unreadCount = 0
-            }
+            // La conversation OUVERTE garde elle aussi le compte servi : elle se
+            // LIT à zéro (rang 1, projection), et c'est ce compte que sa
+            // fermeture rend (#7350).
             known[row.conversationId] = entry
         }
         // Un instantané dit aussi QUI existe : une conversation qui n'y figure

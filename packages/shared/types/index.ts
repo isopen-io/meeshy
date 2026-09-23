@@ -29,6 +29,7 @@ export {
 
 // Export des types unifies Phase 1
 export * from './conversation.js';
+export * from './conversation-preview.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -50,6 +51,9 @@ export * from './tracking-link.js';
 
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
+
+// Favori de message (#7377) — étoile personnelle, liste et paramètres
+export * from './message-star.js';
 
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';

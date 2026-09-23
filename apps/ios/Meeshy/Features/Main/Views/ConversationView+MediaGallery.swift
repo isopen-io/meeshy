@@ -36,7 +36,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content.fullScreenCover(item: $scrollState.galleryStartAttachment,
-                                onDismiss: promotePendingCompose) { startAttachment in
+                                onDismiss: handleGalleryDismiss) { startAttachment in
             ConversationMediaGalleryView(
                 allAttachments: viewModel.allVisualAttachments,
                 startAttachmentId: startAttachment.id,
@@ -144,5 +144,35 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         guard let attendue = composerState.pendingComposeTarget else { return }
         composerState.pendingComposeTarget = nil
         composerState.composeMediaTarget = attendue
+    }
+
+    /// **C'est en SORTANT qu'on a vu** (#7499).
+    ///
+    /// Une vue unique s'ouvre au toucher et se consomme à la fermeture de son
+    /// plein écran — jamais à l'ouverture, qui détruisait le contenu sans
+    /// l'avoir montré. Ce site est le seul de la chaîne qui voie la SORTIE : la
+    /// bulle sait qu'on ouvre, la galerie sait ce qu'on regarde, l'hôte seul
+    /// sait quand le plein écran se referme.
+    ///
+    /// `takeAll()` vide dans le même geste : deux fermetures — un `onDismiss`
+    /// rejoué, un retour suivi d'un passage en arrière-plan — ne consomment
+    /// qu'une fois, et le serveur COMPTE les ouvertures.
+    private func consumeOpenedViewOnce() {
+        let ouvertes = scrollState.pendingViewOnceConsumption.takeAll()
+        guard !ouvertes.isEmpty else { return }
+        Task {
+            for messageId in ouvertes {
+                _ = await viewModel.consumeViewOnce(messageId: messageId)
+            }
+        }
+    }
+
+    /// Les deux gestes de la fermeture, dans l'ordre où ils comptent : on
+    /// consomme ce qu'on vient de regarder, puis on promeut la composition
+    /// différée. Les enchaîner dans UNE fermeture plutôt que d'en passer deux
+    /// au `onDismiss` évite qu'un ajout futur en oublie une.
+    private func handleGalleryDismiss() {
+        consumeOpenedViewOnce()
+        promotePendingCompose()
     }
 }

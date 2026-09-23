@@ -5,7 +5,8 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { EMOJI_ONLY_FONT_SIZES, mapsUrlOf, type SharedPlace, type StoryCitation } from '@/lib/view/message-body';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { META_TEXT_OPACITY, STICKER_EMOJI_BOX } from '@/lib/reading-mode/metrics';
@@ -109,15 +110,42 @@ export function EmojiOnly({ text, fontSize }: { readonly text: string; readonly 
  * la spécification #5936) : un glyphe teinté, le nom, l'adresse, et un lien
  * NOMMÉ qui ouvre Plans sur iOS (redirige vers Google Maps ailleurs). Rayon
  * `--ios-radius-md` (14, `packages/design-tokens/ios.css:68`), déjà dérivé.
+ *
+ * ## LA BARRE D'INFORMATION N'EXISTE QUE SI ELLE A QUELQUE CHOSE À DIRE
+ *
+ * `LocationMessageView.swift:55-57` ne monte `locationInfoBar` que si
+ * `placeName != nil || address != nil`, et chaque ligne y est conditionnelle.
+ * Ici le NOM ne peut pas manquer — il replie sur `message.location.shared`,
+ * parce qu'un lien SANS libellé n'est pas atteignable ; l'ADRESSE, elle, reste
+ * conditionnelle comme sur iOS. **C'est le cas NOMINAL du web** : sans
+ * géocodeur inverse, la tuile « Position » n'envoie que des coordonnées
+ * (`send/shared-place.ts`), donc `name`/`address` sont `null` sur tout lieu
+ * envoyé depuis cette peau.
+ *
+ * ## LES TROIS LIBELLÉS VIENNENT DU CATALOGUE (#7328)
+ *
+ * Ils étaient en dur, en français, sur une surface servie en SEPT langues —
+ * un francophone les lisait justes, les six autres lisaient du français.
+ * Les valeurs sont celles du catalogue iOS (`location.shared`,
+ * `location.fullscreen.openInMaps`, `location.a11y.label`), la référence
+ * déclarée de cette bulle.
  */
-export function LocationCard({ place, accent }: { readonly place: SharedPlace; readonly accent: string }) {
-  const label = place.name ?? 'Position partagée';
+export function LocationCard({
+  place,
+  accent,
+  language,
+}: {
+  readonly place: SharedPlace;
+  readonly accent: string;
+  readonly language: InterfaceLanguage;
+}) {
+  const label = place.name ?? translate(language, 'message.location.shared');
   return (
     <a
       href={mapsUrlOf(place)}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Position : ${label}`}
+      aria-label={translate(language, 'message.location.a11y', { place: label })}
       className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-left"
       style={{
         borderRadius: 'var(--ios-radius-md)',
@@ -142,7 +170,7 @@ export function LocationCard({ place, accent }: { readonly place: SharedPlace; r
             carte (mesuré 2,10:1). C'est la SEULE affordance qui dit que la
             carte s'ouvre, elle porte donc l'encre la plus lisible. */}
         <span className="text-mini font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          Ouvrir dans Plans
+          {translate(language, 'message.location.open')}
         </span>
       </span>
     </a>
