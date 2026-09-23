@@ -1157,7 +1157,7 @@ final class MessageListViewController: UIViewController {
         // donc bas visuel). Pas un overlay : un message reçu en direct
         // s'insère au-dessus et remonte la conversation. La bulle anime
         // ses points en autonomie ; le contre-flip annule la transform.
-        let typingRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let typingRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
@@ -1188,7 +1188,7 @@ final class MessageListViewController: UIViewController {
         // le passage de minuit sans avoir à reconstruire la datasource.
         // Les libellés relatifs sont injectés depuis le catalogue de
         // chaînes localisées pour suivre la langue d'interface de l'app.
-        let dayHeaderRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let dayHeaderRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .dayHeader(let dayStart) = item else {
                 cell.contentConfiguration = nil
                 return
@@ -1217,7 +1217,7 @@ final class MessageListViewController: UIViewController {
         // Focal, parti avec le pass — `applySnapshot` n'appende plus jamais
         // `.conversationStart` ; cette registration est conservée INERTE
         // pour que le cas d'item reste rendable si le marqueur revient.
-        let startRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let startRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .conversationStart = item else {
                 cell.contentConfiguration = nil
                 return
@@ -1252,7 +1252,7 @@ final class MessageListViewController: UIViewController {
             cell.backgroundColor = .clear
         }
 
-        let messageRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let messageRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
