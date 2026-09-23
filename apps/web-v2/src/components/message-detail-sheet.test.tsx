@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
+import { modalLayersOpen } from '@/lib/view/modal-layers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageDetailSheet } from './message-detail-sheet';
@@ -78,5 +79,17 @@ describe('MessageDetailSheet — la garde de « Infos du message »', () => {
   test('message ENVOYÉ mais encore OPTIMISTE (`cid_…`) ⇒ aucune section', async () => {
     const host = await mountSheet('sent', 'cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18');
     expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+  });
+});
+
+describe('MessageDetailSheet — la feuille DÉCLARE qu’elle recouvre (W14, #7372)', () => {
+  test('montée ⇒ le registre des couches modales la compte ; démontée ⇒ il l’oublie', async () => {
+    expect(modalLayersOpen()).toBe(false);
+    await mountSheet('sent');
+    // Toute feuille passe par `Sheet` → `useBackDismiss` → le registre, que
+    // le suivi de lecture du fil lit pour se suspendre (#7372).
+    expect(modalLayersOpen()).toBe(true);
+    mounter.unmountAll();
+    expect(modalLayersOpen()).toBe(false);
   });
 });
