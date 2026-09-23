@@ -314,7 +314,7 @@
       "changeVisibility": "Alterar visibilidade",
       "mediaAlt": {
         "label": "Texto alternativo",
-        "placeholder": "Descreva este conteúdo para os leitores de ecrã"
+        "placeholder": "Descreva este conteúdo para os leitores de tela"
       },
       "soundExtraction": {
         "label": "Permitir a reutilização do som",
