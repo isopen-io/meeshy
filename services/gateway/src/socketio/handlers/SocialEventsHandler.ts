@@ -243,10 +243,6 @@ export class SocialEventsHandler {
     emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
   }
 
-  // ==============================================
-  // FEED ROOM MANAGEMENT
-  // ==============================================
-
   /**
    * Une PUBLICATION vers son audience — sa liste d'audience ne part qu'à la
    * salle de son AUTEUR (#7407).
@@ -266,6 +262,9 @@ export class SocialEventsHandler {
    * l'union — Socket.IO dédoublonne l'ami présent dans sa salle de fil ET dans
    * la salle de la publication — SAUF les sockets de l'auteur (`except`), qui
    * s'y tient quand il regarde sa propre publication et reçoit la sienne.
+   *
+   * Cinquième seam, contraint comme les quatre du cycle 100 : `payloadFor` rend
+   * un `SocialEventPayload<E>`, le couple (événement, charge) reste vérifié.
    */
   private emitPostToAudience<E extends SocialEventName>(
     recipientIds: readonly string[],
@@ -285,6 +284,10 @@ export class SocialEventsHandler {
     }
     emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
   }
+
+  // ==============================================
+  // FEED ROOM MANAGEMENT
+  // ==============================================
 
   /**
    * Appelé quand un socket reçoit feed:subscribe
