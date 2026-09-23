@@ -186,8 +186,14 @@ describe('unlikePost — emoji désigné', () => {
     );
     expect(result?.removedEmoji).toBe('😂');
     // Le cœur ET le pouce SURVIVENT : le geste n'emporte que ce qu'il désigne.
-    expect(persistedReactions(prisma).map((r) => r.emoji).sort())
-      .toEqual(['❤️', '👍', '🔥'].sort());
+    // Cela se lit sur `removeReaction` ci-dessus — la table `postReaction` est
+    // la source de vérité, et ce service n'en retire que l'emoji nommé.
+    //
+    // #7406 — le Json legacy `Post.reactions` n'est PLUS réécrit. Vérifier ici
+    // l'image qu'il portait reviendrait à GARDER l'écriture que le lot supprime :
+    // le témoin rougirait sur le bon geste. Il garde donc l'inverse — que plus
+    // rien ne repart dans ce champ.
+    expect(persistedReactions(prisma)).toEqual([]);
   });
 
   it('emoji posé par QUELQU\'UN D\'AUTRE ⇒ rien retiré, rien à annoncer', async () => {
