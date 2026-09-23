@@ -1101,6 +1101,34 @@ const fr = {
   'attachment.kind.audio': 'Audio',
   'attachment.kind.file': 'Fichier',
 
+  /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
+     Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
+     SEPT langues (`lib/view/message-actions.ts`, `components/selection-toolbar.tsx`,
+     `components/message-detail-sheet.tsx`) — pendant que les annonces VOISINES
+     du même hook (`announce.messageCopied`, …) étaient déjà traduites.
+
+     `message.menu.reply` dit « Répondre », et le mot « composer » est rendu au
+     sens qu'il a sur iOS — créer une story ou un post AVEC ce média
+     (`MessageActionResolver.swift`, `case compose`). Valeur reprise du
+     catalogue iOS : `action.reply`.
+
+     « Annuler » de la barre de sélection réutilise `common.cancel` : un seul
+     mot, une seule clé. */
+  'message.menu.select': 'Sélectionner',
+  'message.menu.translate': 'Traduire',
+  'message.menu.copy': 'Copier',
+  'message.menu.reply': 'Répondre',
+  'message.menu.more': 'Plus…',
+  'message.menu.react': 'Réagir',
+  'message.menu.addReaction': 'Ajouter une réaction',
+  'message.selection.toolbar': 'Sélection de messages',
+  'message.selection.count': '{count} sélectionnés',
+  'message.detail.title': 'Détails du message',
+  'message.detail.languages': 'Langues',
+  'message.detail.reactions': 'Réactions',
+  'message.detail.sent': 'Envoyé',
+  'message.detail.language.original': '{language} (original)',
+
 } as const;
 
 export default fr;

@@ -43,7 +43,9 @@ export function useMessageMenu(params: {
   readonly readerLanguages: readonly string[];
   readonly readerLocale: string;
   readonly viewerId: string;
-  readonly onCompose: (messageId: string) => void;
+  /** ARME LA RÉPONSE au message — `onCompose` jusqu'à #7555, où le mot est
+   * rendu au sens iOS (créer une story ou un post avec ce média). */
+  readonly onReply: (messageId: string) => void;
   /**
    * LA RÉGION LIVE PARTAGÉE (revue #5814, défaut majeur 9) — remplace
    * l'ancien `actionNotice` local : ce hook POSE ses annonces sur
@@ -180,9 +182,9 @@ export function useMessageMenu(params: {
         announce(translate(currentInterfaceLanguage(), 'announce.messageCopied'));
         return;
       }
-      if (id === 'compose') {
+      if (id === 'reply') {
         focusTakenRef.current = true;
-        params.onCompose(messageId);
+        params.onReply(messageId);
         return;
       }
       if (id === 'select') {

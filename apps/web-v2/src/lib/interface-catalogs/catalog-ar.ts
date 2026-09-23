@@ -973,6 +973,22 @@ const ar = {
   'attachment.kind.audio': 'مقطع صوتي',
   'attachment.kind.file': 'ملف',
 
+  /* Le menu du message, sa barre de sélection et sa feuille « Plus… » (#7555). */
+  'message.menu.select': 'تحديد',
+  'message.menu.translate': 'ترجمة',
+  'message.menu.copy': 'نسخ',
+  'message.menu.reply': 'رد',
+  'message.menu.more': 'المزيد…',
+  'message.menu.react': 'تفاعل',
+  'message.menu.addReaction': 'إضافة تفاعل',
+  'message.selection.toolbar': 'تحديد الرسائل',
+  'message.selection.count': 'تم تحديد {count}',
+  'message.detail.title': 'تفاصيل الرسالة',
+  'message.detail.languages': 'اللغات',
+  'message.detail.reactions': 'التفاعلات',
+  'message.detail.sent': 'أُرسلت',
+  'message.detail.language.original': '{language} (الأصل)',
+
 } satisfies InterfaceCatalog;
 
 export default ar;

@@ -261,7 +261,9 @@ emit({
 /**
  * LE JEU D'ECRAN DU MENU DU MESSAGE (#5814) — miroir
  * `MessageActionsMenu.swift:96-111` : Selectionner (check-circle), Traduire
- * (globe), Copier (copy), Composer (magic-wand), Plus... (dots-three).
+ * (globe), Copier (copy), Repondre (magic-wand — l'action s'appelait
+ * `compose` jusqu'a #7555 ; l'icone n'a pas suivi le renommage, #7564),
+ * Plus... (dots-three).
  * `magic-wand` et `globe` existent deja dans le jeu PROGRESSION : deux jeux
  * d'ecran distincts peuvent extraire le meme glyphe phosphor, chacun dans SON
  * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne

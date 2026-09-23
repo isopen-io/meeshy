@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { translation } from '@/lib/api/fixtures-base';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 
 import {
   EXTENDED_REACTIONS,
@@ -20,31 +21,64 @@ const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext =>
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, compose, more', () => {
-    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'compose', 'more']);
+  test('message standard, deux langues ⇒ select, translate, copy, reply, more', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'reply', 'more']);
   });
 
-  test('message SANS texte (m3) ⇒ select, compose, more — ni copy ni translate', () => {
-    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'compose', 'more']);
+  test('message SANS texte (m3) ⇒ select, reply, more — ni copy ni translate', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'reply', 'more']);
   });
 
   test('message PROTÉGÉ (D-23) ⇒ ni copy ni translate, même avec du texte', () => {
-    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'compose', 'more']);
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'reply', 'more']);
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'compose', 'more']);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'reply', 'more']);
   });
 
-  test('libellés exacts', () => {
-    const labels = Object.fromEntries(messageMenuItems(ctx()).map((i) => [i.id, i.label]));
-    expect(labels).toEqual({
-      select: 'Sélectionner',
-      translate: 'Traduire',
-      copy: 'Copier',
-      compose: 'Composer',
-      more: 'Plus…',
+  /**
+   * LE MENU PORTE DES CLÉS, JAMAIS DES LIBELLÉS (#7555). Cette loi est PURE :
+   * elle ne connaît ni la langue du lecteur ni le catalogue chargé — elle
+   * nomme ce qu'il faut dire, et `message-menu.tsx` le dit. Un libellé rendu
+   * ici aurait à nouveau figé le français dans une loi que les sept langues
+   * partagent.
+   */
+  test('chaque entrée porte une CLÉ de catalogue, jamais un libellé', () => {
+    const keys = Object.fromEntries(messageMenuItems(ctx()).map((i) => [i.id, i.labelKey]));
+    expect(keys).toEqual({
+      select: 'message.menu.select',
+      translate: 'message.menu.translate',
+      copy: 'message.menu.copy',
+      reply: 'message.menu.reply',
+      more: 'message.menu.more',
     });
+  });
+
+  /**
+   * TÉMOIN DE RANG SUR UNE LOCALE NON FRANÇAISE (leçon 261, #7555) — le
+   * français ne peut PAS trancher : un libellé EN DUR et une clé de catalogue
+   * rendent le même verdict en `fr`, exactement comme le rang 1 du Prisme
+   * rend le même verdict pour une descente juste et pour un court-circuit.
+   * L'anglais et l'arabe séparent les deux, et l'arabe est de plus la langue
+   * RTL du produit : un menu qui ne l'a jamais servie ne l'a jamais essayée.
+   */
+  test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
+    await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+    expect(messageMenuItems(ctx()).map((i) => translate('en', i.labelKey))).toEqual([
+      'Select',
+      'Translate',
+      'Copy',
+      'Reply',
+      'More…',
+    ]);
+    expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
+      'تحديد',
+      'ترجمة',
+      'نسخ',
+      'رد',
+      'المزيد…',
+    ]);
   });
 
   test('QUICK_REACTIONS et EXTENDED_REACTIONS — miroir MessageOverlayMenu.swift:99-104', () => {

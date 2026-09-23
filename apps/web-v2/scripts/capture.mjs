@@ -454,7 +454,9 @@ for (const scheme of ['dark', 'light']) {
     const page = await openThread('focal');
     await page.locator('[data-row]').nth(0).click({ button: 'right' });
     await page.waitForTimeout(300);
-    await page.getByRole('menuitem', { name: 'Traduire' }).click();
+    // Vise l'ACTION, plus son libelle (#7141/#7555) : le menu lit desormais le
+    // catalogue d'interface, donc son texte suit la langue du navigateur.
+    await page.locator('[role="menuitem"][data-action="translate"]').click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUTPUT}thread-message-menu-translate.${scheme}.png` });
     console.log(`  thread-message-menu-translate · ${scheme}`);
@@ -466,7 +468,7 @@ for (const scheme of ['dark', 'light']) {
     const page = await openThread('focal');
     await page.locator('[data-row]').nth(0).click({ button: 'right' });
     await page.waitForTimeout(300);
-    await page.getByRole('menuitem', { name: 'Sélectionner' }).click();
+    await page.locator('[role="menuitem"][data-action="select"]').click();
     await page.waitForTimeout(300);
     await page.locator('[data-row]').nth(3).click();
     await page.waitForTimeout(200);
