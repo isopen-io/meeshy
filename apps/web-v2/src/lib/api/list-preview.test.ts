@@ -262,14 +262,14 @@ describe('conversation:updated — le MÊME message rafraîchit tout le groupe (
           { id: 'a1', mimeType: 'audio/webm', thumbnailUrl: null, originalName: 'voix.webm', fileSize: 48_000, duration: 12_000, width: null, height: null },
         ],
         lastMessageAttachmentCount: 1,
-        lastMessageExpiresAt: '2026-09-12T10:04:00.000Z',
+        lastMessageExpiresAt: '2099-01-01T00:00:00.000Z',
       }),
     );
 
     const last = rowOf(client)?.lastMessage;
     expect(last?.content).toBe('après');
     expect(last?.attachments?.map((a) => a.id)).toEqual(['a1']);
-    expect(last?.expiresAt as unknown).toBe('2026-09-12T10:04:00.000Z');
+    expect(last?.expiresAt as unknown).toBe('2099-01-01T00:00:00.000Z');
     /* Ce que le contrat ne transporte pas (les effets décoratifs) reste. */
     expect(last?.effectFlags).toBe(4);
   });

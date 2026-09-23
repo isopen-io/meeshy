@@ -21,6 +21,13 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { patchConversation } from './conversations';
 import {
+  acceptsLastMessage,
+  isListProtected,
+  listSafeLastMessage,
+  mergeLastMessageCard,
+  offerLastMessage,
+} from './list-preview';
+import {
   cachedThreadConversationIds,
   findCachedThreadMessage,
   latestCachedThreadMessage,
@@ -108,6 +115,7 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(raw.editedAt !== undefined ? { editedAt: raw.editedAt } : {}),
     ...(raw.deletedAt !== undefined ? { deletedAt: raw.deletedAt } : {}),
     ...(raw.expiresAt !== undefined ? { expiresAt: raw.expiresAt } : {}),
+    ...(raw.ephemeralDuration !== undefined ? { ephemeralDuration: raw.ephemeralDuration } : {}),
     ...(raw.maxViewOnceCount !== undefined ? { maxViewOnceCount: raw.maxViewOnceCount } : {}),
     ...(raw.effectFlags !== undefined ? { effectFlags: raw.effectFlags } : {}),
     ...(raw.replyToId !== undefined ? { replyToId: raw.replyToId } : {}),
@@ -204,17 +212,11 @@ export function applyMessageNew(
      jamais, donc cette ligne ne peut pas retirer l'envoi de quelqu'un d'autre. */
   if (cid !== undefined) outbox.getState().remove(raw.conversationId, cid);
 
-  const translations = buildTranslationRecord(raw.translations);
-  patchConversation(queryClient, raw.conversationId, (c) => {
-    const { lastMessageTranslations: _lastMessageTranslations, ...rest } = c;
-    return {
-      ...rest,
-      lastMessage: message,
-      lastMessageAt: message.createdAt,
-      lastMessageOriginalLanguage: message.originalLanguage,
-      ...(Object.keys(translations).length === 0 ? {} : { lastMessageTranslations: translations }),
-    };
-  });
+  /* `offerLastMessage` (`list-preview.ts`, #7547) — garde d'ordre ET
+     masquage : un `message:new` plus ancien que l'aperçu en place ne le
+     remplace jamais, et un message protégé n'entre dans la ligne (cache
+     PERSISTÉ) que par son identité et ses drapeaux. */
+  offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
 }
 
 /** Garde de FORME pour `conversation:unread-updated` (§ 3.4 de la
@@ -413,25 +415,33 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
       return rest;
     }
 
+    const described = neutralLastMessageFromPreview(data);
+    const same = c.lastMessage !== undefined && c.lastMessage !== null && c.lastMessage.id === data.lastMessageId;
+
+    /* LA GARDE D'ORDRE AVANT L'ADOPTION (#7547). Un AUTRE message plus ancien,
+       sans `previewRecalculated`, est une diffusion arrivée dans le désordre :
+       « tout le groupe est jeté » (doc-comment de `previewRecalculated`). La
+       garde tournait APRÈS l'adoption et ne protégeait que le rang — la ligne
+       rendait alors le contenu périmé au rang du message plus récent. */
+    if (
+      !same &&
+      data.previewRecalculated !== true &&
+      typeof data.lastMessageAt === 'string' &&
+      !acceptsLastMessage(c, described)
+    ) {
+      return c;
+    }
+
     let next: Conversation = c;
 
-    if (next.lastMessage?.id !== data.lastMessageId) {
+    if (!same) {
       /* ADOPTER, C'EST CESSER DE DÉCRIRE LE PRÉCÉDENT — *Y COMPRIS SA CARTE*
-         (revue-correction #6171). `adoptLastMessage` (iOS,
-         `LastMessageFacet.swift:170-182`) remet à neutre les TREIZE champs de la
-         facette, `lastMessageTranslations`/`lastMessageOriginalLanguage`
-         comprises, et laisse les blocs tri-état ci-dessous les reposer depuis la
-         charge. Sans ce retrait, un évènement qui nomme un AUTRE message sans
-         porter le groupe Prisme laissait la ligne servir la traduction de
-         l'ANCIEN message par-dessus l'original du NOUVEAU — exactement ce que le
-         contrat décrit (« poser l'un sans les autres laisse la ligne rendre
-         l'ANCIEN texte traduit », doc-comment de `lastMessageTranslations`).
-         Les trois émetteurs réels posent toujours les trois clés (à `null` quand
-         il n'y a pas de carte, `resolveLastMessagePreviewPrism:135-147`), donc
-         ceci ne les change pas : c'est la dépendance à l'ORDRE des blocs qui
-         disparaît, et elle est ce que trente écrans recopieraient. */
+         (revue-correction #6171, miroir `LastMessageFacet.adoptLastMessage`) :
+         les blocs tri-état ci-dessous reposent la carte depuis la charge. */
       const { lastMessageTranslations: _card, lastMessageOriginalLanguage: _cardLang, ...adopted } = next;
-      next = { ...adopted, lastMessage: neutralLastMessageFromPreview(data) };
+      next = { ...adopted, lastMessage: described };
+    } else {
+      next = { ...next, lastMessage: refreshedLastMessage(c.lastMessage as Message, described, data) };
     }
 
     if (data.lastMessageAt !== undefined) {
@@ -445,16 +455,9 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
           previewRecalculated: data.previewRecalculated,
         })
       ) {
-        // Chaîne ISO conservée TELLE QUELLE (D-26, « cache = forme du fil ») —
-        // `decodeConversation` (le `select`) la revit en `Date`, motif exact de
-        // `applyMessageNew` ci-dessus. Cast vers `Date` (jamais
-        // `Conversation['lastMessageAt']`, qui inclut `undefined` — une valeur
-        // ainsi typée resterait REFUSÉE par `exactOptionalPropertyTypes`).
-        //
-        // `c` et non `next` : le rang se compare à celui que la ligne portait
-        // AVANT cet évènement — l'adoption ci-dessus ne touche pas
-        // `lastMessageAt`, mais s'appuyer sur `next` ferait dépendre la garde
-        // de l'ordre des blocs plutôt que de la donnée.
+        // Chaîne ISO conservée TELLE QUELLE (D-26) — `decodeConversation` la
+        // revit en `Date`. `c` et non `next` : le rang se compare à celui que
+        // la ligne portait AVANT cet évènement.
         next = { ...next, lastMessageAt: data.lastMessageAt as unknown as Date };
       }
     }
@@ -477,17 +480,40 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
       }
     }
 
-    if (
-      data.lastMessagePreview !== undefined &&
-      data.lastMessagePreview !== null &&
-      next.lastMessage !== undefined &&
-      next.lastMessage.id === data.lastMessageId
-    ) {
-      next = { ...next, lastMessage: { ...next.lastMessage, content: data.lastMessagePreview } };
+    /* AUCUN TEXTE PROTÉGÉ EN CACHE DE LISTE (#7547) — le masquage se juge sur
+       le message QUE LA LIGNE DÉCRIT désormais, après la fusion. */
+    const last = next.lastMessage;
+    if (last !== undefined && last !== null && isListProtected(last)) {
+      const { lastMessageTranslations: _tr, ...rest } = next;
+      next = { ...rest, lastMessage: listSafeLastMessage(last) };
     }
 
     return next;
   });
+}
+
+/**
+ * LE MÊME MESSAGE RAFRAÎCHIT TOUT SON GROUPE (#7547) — texte, pièces jointes,
+ * floutage, vue unique, échéance : le contrat déclare que « qui porte
+ * `lastMessageId` porte les six champs de ce sous-groupe » (clé absente = un
+ * FAIT). Ne restent de la ligne connue que ce que la charge ne transporte
+ * pas : l'identité de l'auteur, l'horloge, les effets décoratifs, la carte du
+ * message lui-même. Seul `content` suivait, et un floutage ou une pièce jointe
+ * arrivée après coup n'atteignaient jamais la ligne.
+ */
+function refreshedLastMessage(known: Message, described: Message, data: ConversationUpdatedEventData): Message {
+  const { attachments: _attachments, expiresAt: _expiresAt, ...kept } = known;
+  return {
+    ...kept,
+    isBlurred: described.isBlurred,
+    isViewOnce: described.isViewOnce,
+    ...(data.lastMessagePreview === undefined || data.lastMessagePreview === null ? {} : { content: data.lastMessagePreview }),
+    ...(described.expiresAt === undefined ? {} : { expiresAt: described.expiresAt }),
+    ...(described.attachments === undefined ? {} : { attachments: described.attachments }),
+    ...(data.lastMessageSenderName === undefined || data.lastMessageSenderName === null || kept.sender !== undefined
+      ? {}
+      : { sender: described.sender as Message['sender'] }),
+  } as Message;
 }
 
 /** Garde de FORME pour `message:translation` (revue-correction #5793,
@@ -559,13 +585,12 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
     patchThreadMessages(queryClient, conversationId, (messages) =>
       messages.map((m) => (m.id === data.messageId ? merged : m)),
     );
-
-    patchConversation(queryClient, conversationId, (c) => {
-      if (c.lastMessage?.id !== data.messageId) return c;
-      const { lastMessageTranslations: _existing, ...rest } = c;
-      return { ...rest, lastMessageTranslations: { ..._existing, ...incoming } };
-    });
   }
+
+  /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER
+     message, jamais par le cache du fil : la traduction n'atteignait la liste
+     que si la conversation avait été ouverte. */
+  mergeLastMessageCard(queryClient, data.messageId, incoming);
 }
 
 /**
