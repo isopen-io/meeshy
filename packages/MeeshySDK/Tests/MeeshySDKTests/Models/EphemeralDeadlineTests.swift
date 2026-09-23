@@ -102,4 +102,38 @@ struct EphemeralDeadlineTests {
         #expect(state.deadline == served)
         #expect(EphemeralDeadline.State.notEphemeral.deadline == nil)
     }
+
+    // MARK: - Ce qui a DÉJÀ quitté sa vie (#7552)
+
+    @Test("Un message échu se DÉCLARE échu, là où son échéance se tait")
+    func test_hasElapsed_expiré_estVraiAlorsQueDeadlineEstNil() {
+        let state = EphemeralDeadline.resolve(
+            servedExpiresAt: now.addingTimeInterval(-30),
+            ephemeralDuration: nil, localReceivedAt: nil, now: now
+        )
+        #expect(state == .expired)
+        // Les deux questions divergent ICI, et c'est tout le défaut : le
+        // balayage lisait `deadline`, qui n'a plus rien à dire sur un échu.
+        #expect(state.deadline == nil)
+        #expect(state.hasElapsed)
+    }
+
+    @Test("Rien d'autre ne se déclare échu")
+    func test_hasElapsed_faussePourTousLesAutresÉtats() {
+        let enCours = EphemeralDeadline.resolve(
+            servedExpiresAt: now.addingTimeInterval(300),
+            ephemeralDuration: nil, localReceivedAt: nil, now: now
+        )
+        let imminent = EphemeralDeadline.resolve(
+            servedExpiresAt: now.addingTimeInterval(20),
+            ephemeralDuration: nil, localReceivedAt: nil, now: now
+        )
+        let enAttente = EphemeralDeadline.resolve(
+            servedExpiresAt: nil, ephemeralDuration: 60, localReceivedAt: nil, now: now
+        )
+        #expect(!enCours.hasElapsed)
+        #expect(!imminent.hasElapsed)
+        #expect(!enAttente.hasElapsed)
+        #expect(!EphemeralDeadline.State.notEphemeral.hasElapsed)
+    }
 }
