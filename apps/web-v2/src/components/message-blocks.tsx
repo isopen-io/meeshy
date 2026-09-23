@@ -10,9 +10,10 @@ import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { activeDecorativeEffects } from '@/lib/effects';
+import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
 
-import { Glyph, GlyphSvg } from './glyph';
-import type { GlyphName } from './glyphs';
+import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
+import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
@@ -597,13 +598,42 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
   );
 }
 
+/**
+ * LE GLYPHE D'UN GENRE CITÉ — miroir `previewGlyph`
+ * (`BubbleQuotedReply.swift:452-476`), qui nomme un TYPE. Décoratif ici (le
+ * bouton entier SAUTE au message cité, il n'ouvre aucun média) : `GlyphSvg`
+ * sans `title` pose donc `aria-hidden`, et le genre reste dit à l'oreille par
+ * `inventory` sur le nom accessible du bouton.
+ */
+const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
+  image: GLYPHS.image,
+  video: THREAD_STATES_GLYPHS.videoCamera,
+  audio: GLYPHS.microphone,
+  file: GLYPHS.file,
+};
+
+/** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */
+const QUOTE_THUMBNAIL_PX = 36;
+
 export function Quote({
   quote,
   isMine,
+  languages,
   onJump,
 }: {
   quote: NonNullable<Message['replyTo']>;
   isMine: boolean;
+  /**
+   * LE PRISME DU LECTEUR (#7556) — celui que la rangée hôte a déjà reçu. Sans
+   * lui, `Quote` rendait `quote.content` BRUT : le même message cité
+   * s'affichait traduit dans le bandeau du composeur (`use-reply-preview.ts`,
+   * qui descendait le Prisme) et en langue d'ORIGINE une fois gravé dans la
+   * bulle.
+   *
+   * La langue EXPLORÉE au geste (`displayLanguage`) n'entre PAS ici : elle
+   * appartient au message qui PORTE la citation, pas au message CITÉ.
+   */
+  languages: readonly string[];
   /**
    * SAUTE au message cité et le met en évidence — absent QUE lorsque l'hôte
    * n'a pas encore la liste complète des messages à portée (rare, jamais le
@@ -614,13 +644,30 @@ export function Quote({
    */
   onJump: () => void;
 }) {
+  /* SITE UNIQUE (`lib/view/quoted-preview.ts`) — ce composant DESSINE, il ne
+     RÉSOUT pas : une seconde descente ici servirait une autre langue que le
+     bandeau du composeur, qui lit la même fonction. */
+  const preview = quotedPreviewOf({
+    quoted: quote,
+    readerLanguages: languages,
+    interfaceLanguage: currentInterfaceLanguage(),
+  });
+  const media = preview.media;
+  const ink = isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)';
+  /* L'INVENTAIRE REJOINT LE NOM ACCESSIBLE — `attachmentSegments`, le MÊME
+     vocabulaire que `composeMessageLabel` (le bouton porte un `aria-label`,
+     donc son contenu n'est PAS lu : sans ce segment, « une photo » n'était
+     annoncée nulle part). */
+  const label = [`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`, ...preview.inventory].join(', ');
+
   return (
     <button
       type="button"
       onClick={onJump}
       className="mb-1.5 flex w-full rounded-quote text-left"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
-      aria-label={`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`}
+      {...(media === null ? {} : { 'data-quote-media': media.kind })}
+      aria-label={label}
     >
       <span
         className="w-1 shrink-0 rounded-full"
@@ -629,6 +676,32 @@ export function Quote({
         }}
         aria-hidden
       />
+      {/* LA VIGNETTE (#7556) — `quotedThumbnail` (`BubbleQuotedReply.swift:
+          382-411`). Le flou ThumbHash tient la case AVANT la requête réseau ;
+          `alt=""` + `aria-hidden` parce que le bouton porte déjà son nom. */}
+      {media !== null && media.thumbnailSrc !== null ? (
+        <span
+          className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
+          style={{
+            width: QUOTE_THUMBNAIL_PX,
+            height: QUOTE_THUMBNAIL_PX,
+            ...(media.placeholderSrc === null
+              ? {}
+              : { backgroundImage: `url("${media.placeholderSrc}")`, backgroundSize: 'cover' }),
+          }}
+          aria-hidden
+        >
+          <img
+            data-quote-thumb={media.kind}
+            src={media.thumbnailSrc}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover"
+          />
+          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
+        </span>
+      ) : null}
       {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
           iOS #5103) : deux lignes separees feraient de la citation un bloc
           aussi haut que le message, et c'est le message qu'on vient lire. */}
@@ -636,9 +709,33 @@ export function Quote({
         <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
           {quote.sender?.displayName ?? ''}{' '}
         </span>
-        <span className="line-clamp-2" style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)' }}>
-          {quote.content}
+        {media !== null && media.thumbnailSrc === null && !preview.isProtected ? (
+          <GlyphSvg
+            glyph={QUOTE_GLYPH[media.kind]}
+            size={11}
+            className="mr-1 inline-block align-baseline"
+            style={{ color: ink }}
+          />
+        ) : null}
+        <span
+          className="line-clamp-2"
+          style={{ color: ink }}
+          {...(preview.language === '' ? {} : { lang: preview.language })}
+        >
+          {preview.text}
         </span>
+        {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
+            .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
+            qu'un « 0:00 » qu'on croirait. */}
+        {media !== null && media.durationLabel !== null ? (
+          <span
+            data-quote-duration={media.durationLabel}
+            className="block text-check tabular-nums"
+            style={{ color: ink, opacity: META_TEXT_OPACITY }}
+          >
+            {media.durationLabel}
+          </span>
+        ) : null}
       </span>
     </button>
   );

@@ -968,6 +968,10 @@ const ar = {
   'attachment.protected.video': 'فيديو محمي',
   'attachment.protected.audio': 'رسالة صوتية محمية',
   'attachment.protected.file': 'مرفق محمي',
+  'attachment.kind.image': 'صورة',
+  'attachment.kind.video': 'فيديو',
+  'attachment.kind.audio': 'مقطع صوتي',
+  'attachment.kind.file': 'ملف',
 
 } satisfies InterfaceCatalog;
 

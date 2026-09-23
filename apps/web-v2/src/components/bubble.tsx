@@ -317,7 +317,12 @@ export function Bubble({
           tient pas dans une bulle » : elle vit HORS de la boîte (voir plus
           bas, juste sous les badges), donc ni l'une ni l'autre ici. */}
       {storyCitation === null && message.replyTo ? (
-        <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
+        <Quote
+          quote={message.replyTo}
+          isMine={isMine}
+          languages={languages}
+          onJump={() => onJumpToMessage(message.replyTo!.id)}
+        />
       ) : null}
       {/* « MODIFIÉ » — INLINE dans le corps, entre la citation et le texte
           (#5936, `BubbleStandardLayout.swift:1064-1066`). `EditedMark` porte
