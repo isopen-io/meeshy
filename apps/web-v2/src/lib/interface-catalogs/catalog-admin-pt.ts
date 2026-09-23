@@ -13,7 +13,6 @@ const pt = {
   'admin.counters.reports': 'Denúncias',
   'admin.counters.newUsers': 'Novas (24 h)',
   'admin.sections.title': 'Secções',
-  'admin.sections.legacy': 'interface anterior',
   'admin.nav.dashboard': 'Painel',
   'admin.nav.users': 'Contas',
   'admin.nav.moderation': 'Moderação',

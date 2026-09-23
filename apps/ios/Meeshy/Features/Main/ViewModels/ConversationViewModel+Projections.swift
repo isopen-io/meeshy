@@ -220,9 +220,12 @@ extension ConversationViewModel {
         return map
     }
 
+    /// #7618 — une vue unique n'entre pas dans le défilement du plein écran :
+    /// on ne l'atteint pas en balayant depuis une autre photo. Elle s'ouvre
+    /// seule, par sa puce (`ConversationMediaGalleryLayer`).
     var allVisualAttachments: [MessageAttachment] {
         if let cached = _allVisualAttachments { return cached }
-        let result = messages.flatMap { msg in
+        let result = messages.filter { !$0.holdsViewOnce }.flatMap { msg in
             msg.attachments.filter { [.image, .video].contains($0.type) }
         }
         _allVisualAttachments = result
@@ -233,7 +236,7 @@ extension ConversationViewModel {
 
     var allAudioItems: [AudioItem] {
         if let cached = _allAudioItems { return cached }
-        let result = messages.flatMap { msg in
+        let result = messages.filter { !$0.holdsViewOnce }.flatMap { msg in
             msg.attachments
                 .filter { $0.type == .audio }
                 .map { att in

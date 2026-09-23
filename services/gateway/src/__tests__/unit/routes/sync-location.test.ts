@@ -60,7 +60,12 @@ function defaultParticipantFindMany() {
 
 function makePrisma(over: Record<string, unknown> = {}) {
   return {
-    participant: { findMany: defaultParticipantFindMany() },
+    // `count` : les membres ACTIFS de la conversation — le dénominateur de
+    // l'audience d'une vue unique (#7578). Quatre : l'auteur et trois
+    // destinataires.
+    participant: { findMany: defaultParticipantFindMany(), count: jest.fn<any>().mockResolvedValue(4) },
+    // Les ouvertures relues par l'audience (#7578) : personne n'a ouvert.
+    messageStatusEntry: { findMany: jest.fn<any>().mockResolvedValue([]) },
     conversation: { findMany: jest.fn<any>().mockResolvedValue([]) },
     reaction: { findMany: jest.fn<any>().mockResolvedValue([]) },
     message: { findMany: jest.fn<any>().mockResolvedValue([]) },
@@ -190,8 +195,14 @@ describe('GET /sync — un lieu partagé voyage hissé, et la protection voyage 
     const res = await injectMessages(prisma);
     const added = res.json().data.collections.messages.added[0];
     expect(added.isViewOnce).toBe(true);
-    expect(added.maxViewOnceCount).toBe(3);
-    expect(added.viewOnceCount).toBe(1);
+    // #7578 — servis PAR LECTEUR, relus depuis les ouvertures et les membres
+    // actifs, jamais recopiés des colonnes : `maxViewOnceCount` = destinataires
+    // actifs (auteur exclu), `viewOnceCount` = ceux d'entre eux qui ont ouvert.
+    // L'auteur `s1` n'est pas dans le double des membres actifs : les quatre
+    // comptés sont des destinataires.
+    expect(added.maxViewOnceCount).toBe(4);
+    expect(added.viewOnceCount).toBe(0);
+    expect(added.consumedByMe).toBe(false);
     expect(added.isBlurred).toBe(true);
     // `effectFlags` — le BITFIELD. Un client qui le lit plutôt que les trois
     // colonnes rendait une ligne protégée comme une ligne ordinaire tant qu'il
@@ -273,9 +284,23 @@ describe('GET /sync — un lieu partagé voyage hissé, et la protection voyage 
     const added = res.json().data.collections.messages.added[0];
     expect(added.content).toBe('Salut');
     expect(added.isViewOnce).toBe(true);
-    expect(added.maxViewOnceCount).toBe(1);
+    expect(added.maxViewOnceCount).toBe(4);
     expect(added.effectFlags).toBe(2);
     expect(added.expiresAt).toBe('2026-07-04T00:00:00.000Z');
+  });
+
+  it("ne sert plus le contenu d'une vue unique que le lecteur a DÉJÀ ouverte (#7578)", async () => {
+    const prisma = makePrisma();
+    prisma.messageStatusEntry.findMany.mockResolvedValue([{ messageId: 'm1', participantId: 'p-mine' }]);
+    prisma.message.findMany
+      .mockResolvedValueOnce([base('m1', { isViewOnce: true, effectFlags: 2 })])
+      .mockResolvedValueOnce([]);
+
+    const res = await injectMessages(prisma);
+    const added = res.json().data.collections.messages.added[0];
+    expect(added.consumedByMe).toBe(true);
+    expect(added.content).toBe('');
+    expect(JSON.stringify(added)).not.toContain('Salut');
   });
 
   it('une projection qui NE demande PAS `content` ne charge ni ne sert la protection', async () => {

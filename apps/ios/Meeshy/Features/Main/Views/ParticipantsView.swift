@@ -619,7 +619,13 @@ struct ParticipantsView: View {
             )
             participants = fetched
             hasMore = await ParticipantService.shared.hasMore(for: conversationId)
-            try? await CacheCoordinator.shared.participants.save(fetched, for: conversationId)
+            // Pas de `save()` ici : `ParticipantService.fetchNextPage` vient de
+            // persister CETTE page. Le second écrit était un doublon — un
+            // encodage et une écriture atomique de plus par ouverture — et
+            // surtout il REMETTRAIT à zéro l'horloge de fraîcheur d'une charge
+            // que le service a pu récupérer du disque sans jamais joindre le
+            // réseau : un `.expired` servi hors ligne repartirait pour 24 h
+            // étiqueté frais, et plus rien ne tenterait de le revalider.
             UserDisplayNameCache.shared.trackFromParticipants(fetched)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")

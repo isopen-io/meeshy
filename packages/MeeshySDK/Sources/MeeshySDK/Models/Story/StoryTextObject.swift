@@ -412,19 +412,35 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
 }
 
 extension StoryTextObject {
-    /// Resolves the displayable text via the Prisme Linguistique chain.
-    /// Falls back to original `text` when no translation matches. Each preferred
-    /// language tries an exact key, then a normalized (case/region-insensitive)
-    /// match BEFORE moving to the next — so chain priority is preserved.
+    /// Le texte à AFFICHER pour un lecteur — projection de
+    /// `PrismTranslationResolver`, jamais une seconde descente. `nil` du
+    /// résolveur ⇒ `text`, l'original (règle #1 du Prisme).
+    ///
+    /// **`sourceLanguage` est l'argument qui manquait.** Cette boucle était
+    /// écrite à la main et ne lisait JAMAIS la langue dans laquelle l'auteur a
+    /// écrit, alors que le composer la pose sur chaque objet créé
+    /// (`StoryComposerViewModel.declaredContentLanguage`). La langue d'origine
+    /// ne concourait donc pas à son rang : prisme `["de", "fr", "en"]`, texte
+    /// écrit en `fr`, traduction `en` disponible — le rang `fr` ne trouvait
+    /// aucune traduction, tombait au rang `en`, et un lecteur dont la langue
+    /// PRIMAIRE servie est le français lisait la story **en anglais** alors
+    /// qu'elle était déjà écrite dans sa langue. C'est la violation exacte que
+    /// nomme la règle 3 du Prisme (`CLAUDE.md`), et aucun témoin ne pouvait la
+    /// voir : pas un seul ne construisait un `StoryTextObject` AVEC sa
+    /// `sourceLanguage`, donc la dimension était absente, pas testée.
+    ///
+    /// Deux autres règles arrivent avec la délégation, que la boucle n'avait
+    /// pas : une traduction VIDE est sautée plutôt que rendue en blanc, et
+    /// deux clés qui se canonisent pareil (`"fr"` et `"fr-CA"`) sont départagées
+    /// par leur CONTENU — `translations` étant un `Dictionary`, le
+    /// `first(where:)` qu'on remplace ici rendait à la MÊME story deux textes
+    /// différents d'un lancement à l'autre.
     public func resolvedText(preferredLanguages: [String]) -> String {
-        guard let translations, !preferredLanguages.isEmpty else { return text }
-        for lang in preferredLanguages {
-            if let t = translations[lang] { return t }
-            let target = StoryPrismeMatch.base(lang)
-            if let t = translations.first(where: { StoryPrismeMatch.base($0.key) == target })?.value {
-                return t
-            }
-        }
-        return text
+        guard let translations else { return text }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: sourceLanguage,
+            translations: translations,
+            preferredLanguages: preferredLanguages
+        )?.text ?? text
     }
 }

@@ -157,8 +157,12 @@ export interface GatewayMessage {
   readonly isViewOnce?: boolean;
   /** Nombre max de lecteurs uniques (null = tous les membres) */
   readonly maxViewOnceCount?: number;
-  /** Nombre d'utilisateurs ayant vu le message */
+  /** Destinataires ACTIFS (auteur exclu) qui ont ouvert la vue unique (#7578) */
   readonly viewOnceCount?: number;
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi */
+  readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte — ne retire jamais la bulle */
+  readonly isFullyConsumed?: boolean;
   /** Contenu flouté jusqu'à ce que l'utilisateur clique */
   readonly isBlurred?: boolean;
   /** Bitfield for message effects (lifecycle, appearance, persistent) */

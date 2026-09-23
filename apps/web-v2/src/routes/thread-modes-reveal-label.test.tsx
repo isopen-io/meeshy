@@ -305,19 +305,21 @@ describe('La fenêtre se referme — et le nom accessible se referme avec elle',
 });
 
 /**
- * **LA VUE UNIQUE — le seul cas où l'échec est DÉFINITIF** (critère 2).
- *
- * Le tap CONSOMME le message : la fenêtre s'ouvre, se referme, et ne se rouvre
- * plus. Un correctif qui ne traiterait que le voile ordinaire rendrait le texte
- * lisible là où il se re-révèle à volonté, et laisserait non couvert le cas où
- * le contenu est BRÛLÉ sans avoir jamais été lisible par une technologie
- * d'assistance.
+ * **LA VUE UNIQUE — le seul cas où l'échec est DÉFINITIF** (critère 2), sous la
+ * règle porteur du 2026-09-23 (#7580) : le toucher ouvre le texte À SA PLACE,
+ * SANS horloge ; un second toucher (ou la sortie de l'écran) le referme, et la
+ * puce passe « Déjà ouvert » — pour toujours.
  */
 describe('Vue unique — le contenu est lisible AVANT que la fenêtre ne se referme', () => {
-  test('révélée, la rangée porte son texte dans le nom accessible', async () => {
+  test('au repos, la rangée se nomme par sa puce, jamais par son contenu', async () => {
     const host = await monte('focal', messageOf({ isViewOnce: true, viewOnceCount: 0 }), async () => true);
 
-    expect(labelOf(host)).toContain('Contenu masqué');
+    expect(labelOf(host)).toContain('Message à vue unique, touchez pour afficher');
+    expect(labelOf(host)).not.toContain('4817-2290');
+  });
+
+  test('ouverte, la rangée porte son texte dans le nom accessible', async () => {
+    const host = await monte('focal', messageOf({ isViewOnce: true, viewOnceCount: 0 }), async () => true);
     await mounter.click(host.querySelector('button[data-protected="hidden"]'));
 
     expect(host.querySelector('[data-protected="revealed"]')).not.toBe(null);
@@ -325,17 +327,33 @@ describe('Vue unique — le contenu est lisible AVANT que la fenêtre ne se refe
   });
 
   test(
-    'consommée, elle retombe sur son constat — et n y revient pas',
+    'ouverte, elle n a PAS d horloge : la fenêtre de 5 s du flou ne la referme pas',
+    async () => {
+      const host = await monte('focal', messageOf({ isViewOnce: true, viewOnceCount: 0 }), async () => true);
+      await mounter.click(host.querySelector('button[data-protected="hidden"]'));
+
+      await laisseLaFenetreSeFermer();
+
+      expect(host.querySelector('[data-protected="revealed"]')).not.toBe(null);
+    },
+    FENETRE_TIMEOUT_MS,
+  );
+
+  test(
+    'retouchée, elle retombe sur « Déjà ouvert » — et n y revient pas',
     async () => {
       const host = await monte('focal', messageOf({ isViewOnce: true, viewOnceCount: 0 }), async () => true);
       await mounter.click(host.querySelector('button[data-protected="hidden"]'));
       expect(labelOf(host)).toContain('4817-2290');
 
-      await laisseLaFenetreSeFermer();
+      await mounter.click(host.querySelector('[data-view-once-open]'));
+      await new Promise((resolve) => setTimeout(resolve, FOG_DURATION_MS + 200));
+      await mounter.settle();
 
       expect(labelOf(host)).not.toContain('4817-2290');
       expect(texteExposeDansLeDom(host, SECRET)).toBe(false);
-      /* Plus d'affordance : une vue unique consommée ne se révèle plus. */
+      expect(host.querySelector('[data-view-once-chip="opened"]')).not.toBe(null);
+      /* Plus d'affordance : une vue unique ouverte ne se rouvre plus. */
       expect(host.querySelector('button[data-protected="hidden"]')).toBe(null);
     },
     FENETRE_TIMEOUT_MS,
@@ -351,7 +369,7 @@ describe('Vue unique — le contenu est lisible AVANT que la fenêtre ne se refe
     await mounter.click(host.querySelector('button[data-protected="hidden"]'));
 
     expect(host.querySelector('[data-protected="revealed"]')).toBe(null);
-    expect(labelOf(host)).toContain('Contenu masqué');
+    expect(labelOf(host)).toContain('Message à vue unique, touchez pour afficher');
     expect(labelOf(host)).not.toContain('4817-2290');
   });
 });

@@ -176,10 +176,26 @@ describe('composeMessageLabel — la protection', () => {
     expect(label.includes('image')).toBe(false);
   });
 
-  test('supprimé / brûlé / expiré : le tombstone SEUL, rien de la rangée', () => {
+  test('vue unique : la phrase de sa puce, jamais son contenu ni ses pièces, jamais « supprimé » (#7580)', () => {
+    const cases = [
+      ['viewOnce', 'Bruno Bêta, Message à vue unique, touchez pour afficher, 09:02'],
+      ['opened', 'Bruno Bêta, Message à vue unique, déjà ouvert, 09:02'],
+    ] as const;
+    for (const [protection, expected] of cases) {
+      const label = composeMessageLabel({ language: 'fr',
+        message: message({ isViewOnce: true, content: SECRET, attachments: [attachment()] }),
+        isMine: false,
+        servedText: SECRET,
+        delivery: null,
+        protection,
+      });
+      expect(label).toBe(expected);
+    }
+  });
+
+  test('supprimé / expiré : le tombstone SEUL, rien de la rangée', () => {
     const cases = [
       ['deleted', 'Message supprimé'],
-      ['burned', 'Message vu et supprimé'],
       ['expired', 'Message éphémère expiré'],
     ] as const;
     for (const [protection, expected] of cases) {
@@ -466,10 +482,10 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
     expect(label).not.toContain('effets');
   });
 
-  test('CONFETTI actif ⇒ « effets : confettis », après « éphémère »', () => {
+  test('des effets actifs ne s’ÉNUMÈRENT pas (#7596) : ils s’exécutent, l’éphémère reste dit', () => {
     const label = composeMessageLabel({ language: 'fr',
       message: message({
-        effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI,
+        effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI | MESSAGE_EFFECT_FLAGS.SPARKLE | MESSAGE_EFFECT_FLAGS.SHAKE,
         expiresAt: new Date('2026-09-10T09:10:00.000Z'),
       }),
       isMine: false,
@@ -477,20 +493,7 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
       delivery: null,
       protection: 'standard',
     });
-    const ephemeralIndex = label.indexOf('éphémère');
-    const effectsIndex = label.indexOf('effets : confettis');
-    expect(ephemeralIndex).toBeGreaterThan(-1);
-    expect(effectsIndex).toBeGreaterThan(ephemeralIndex);
-  });
-
-  test('deux effets ⇒ joints par une virgule, dans l’ordre iOS', () => {
-    const label = composeMessageLabel({ language: 'fr',
-      message: message({ effectFlags: MESSAGE_EFFECT_FLAGS.SPARKLE | MESSAGE_EFFECT_FLAGS.SHAKE }),
-      isMine: false,
-      servedText: 'Bonjour',
-      delivery: null,
-      protection: 'standard',
-    });
-    expect(label).toContain('effets : secousse, scintillant');
+    expect(label).toContain('éphémère');
+    expect(label).not.toMatch(/effets|confettis|secousse|scintillant/);
   });
 });

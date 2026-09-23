@@ -594,21 +594,25 @@ extension APIPost {
     /// If original is already in a preferred language, return nil (no translation needed).
     /// Internal (pas private) : `PostRecord.toFeedPost` réutilise la MÊME
     /// règle — jamais de résolution de langue dupliquée (stores-05).
+    ///
+    /// Projection de `PrismTranslationResolver`. La boucle vivait ici, et elle
+    /// rapprochait les codes par un `.lowercased()` BRUT là où la SSOT canonise
+    /// (`MeeshyUser.normalizeLanguageForDedup` : casse repliée ET région
+    /// strippée). Un lecteur dont le rang 4 est la locale appareil `"en-US"`
+    /// ne rencontrait donc jamais une clé `"en"` — la traduction existait, le
+    /// post restait dans la langue de l'auteur, et cela ressemblait à une
+    /// traduction absente.
     static func resolveTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
     ) -> String? {
         guard let translations, !translations.isEmpty else { return nil }
-        let origLower = originalLanguage?.lowercased()
-        for lang in preferredLanguages {
-            let langLower = lang.lowercased()
-            if let orig = origLower, orig == langLower { return nil }
-            if let match = translations.first(where: { $0.key.lowercased() == langLower }) {
-                return match.value.text
-            }
-        }
-        return nil
+        return PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            candidates: translations.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+            preferredLanguages: preferredLanguages
+        )?.text
     }
 }
 

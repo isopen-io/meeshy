@@ -25,20 +25,13 @@ import { Glyph } from './glyph';
  * un fil complet et aucun des deux. Ici, une seule surface les rend, et
  * `thread-modes-protection-chrome.test.tsx` échoue si un mode ne la monte pas.
  *
- * ## LES DEUX PICTOGRAMMES, ET POURQUOI ILS DIFFÈRENT
+ * ## LA VUE UNIQUE N'EST PLUS ICI (#7580)
  *
- * Le dépôt s'était contredit exactement comme iOS (#7452) : `flame` désignait
- * la VUE UNIQUE dans la liste des conversations (`lens-row.tsx`) pendant que
- * le même `flame` désignait l'ÉPHÉMÈRE dans la bulle. **Le vocabulaire retenu
- * est celui du COMPOSEUR** — là où l'utilisateur CHOISIT la protection :
- * `flameFill` pour l'éphémère (`composer-top-row.tsx:212`), `eye` pour la vue
- * unique (`:250`). Même pictogramme au choix et à l'affichage ; deux sens,
- * deux pictogrammes.
- *
- * Le LIBELLÉ suit la même discipline, et jusqu'à la CLÉ : la désignation lit
- * `composer.viewOnce.label`, la chaîne même que la bascule du composeur
- * affiche. Une clé jumelle `message.viewOnce` porterait aujourd'hui les mêmes
- * sept traductions et divergerait au premier lot qui n'en relit qu'une.
+ * Le chrome la DÉSIGNAIT au-dessus de la bulle (« 👁 Vue unique ») pendant que
+ * le voile, dessous, disait « Voir une fois » : deux puces pour un état. La
+ * règle porteur du 2026-09-23 en veut UNE, à la place du contenu —
+ * `ViewOnceChip` (`protected-content.tsx`), que tous les modes montent par
+ * `ProtectedContent`. Ce chrome ne porte plus que l'éphémère.
  *
  * ## UNE HORLOGE, PAS UNE MINUTERIE PAR BULLE (#7454, travail 5)
  *
@@ -50,56 +43,27 @@ import { Glyph } from './glyph';
 
 export function ProtectionChrome({
   deadline,
-  isViewOnce,
   align = 'start',
   onExpired,
   clock = secondClock,
   now = Date.now,
 }: {
   readonly deadline: EphemeralDeadline;
-  readonly isViewOnce: boolean;
   readonly align?: 'start' | 'end';
   /** Absent ⇒ la surface ne retire pas ses rangées (lecture souveraine) — le décompte se peint quand même. */
   readonly onExpired?: (() => void) | undefined;
   readonly clock?: IntervalClock;
   readonly now?: () => number;
 }) {
-  if (deadline.state === 'none' && !isViewOnce) return null;
+  if (deadline.state === 'none') return null;
 
   return (
     <div
       data-protection-chrome
       className={`mb-1 flex flex-wrap items-center gap-1.5 ${align === 'end' ? 'justify-end' : 'justify-start'}`}
     >
-      {isViewOnce ? <ViewOnceMention /> : null}
       <EphemeralMention deadline={deadline} clock={clock} now={now} {...(onExpired === undefined ? {} : { onExpired })} />
     </div>
-  );
-}
-
-/**
- * LA DÉSIGNATION D'UNE VUE UNIQUE — **même sans pièce jointe** (#7454,
- * travail 4). Le voile (`ProtectedContent`) ne nommait « Voir une fois » que
- * lorsqu'il y avait un média (`protected-content.tsx:279-283`) : un TEXTE à
- * vue unique était masqué sans que rien ne dise ce qu'il était, ni pourquoi le
- * toucher le consommerait.
- *
- * Elle vit dans le chrome, DEHORS du voile, pour une raison de fond : elle
- * reste vraie après la révélation, et un lecteur qui revient sur la rangée
- * doit pouvoir lire ce qui lui est arrivé.
- */
-function ViewOnceMention() {
-  const language = currentInterfaceLanguage();
-  return (
-    <span
-      data-view-once
-      data-glyph="eye"
-      className="protected-view-once-badge rounded-chip inline-flex items-center gap-1"
-      aria-label={translate(language, 'message.viewOnce.a11y')}
-    >
-      <Glyph name="eye" size={11} />
-      <span className="font-bold text-chip">{translate(language, 'composer.viewOnce.label')}</span>
-    </span>
   );
 }
 

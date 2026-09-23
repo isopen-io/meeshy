@@ -1,5 +1,6 @@
 import { resolveLastMessageSummaryKind } from '@meeshy/shared/utils/last-message-protection';
-import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
+import { parseJoinNotice, type JoinNoticeMetadata } from '@meeshy/shared/utils/join-notice';
+import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared/utils/conversation-notice';
 import type {
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
@@ -166,6 +167,31 @@ function isSystemMessage(message: SystemEventSource): boolean {
 }
 
 /**
+ * Une arrivée ajoutée par un tiers se dit « Demo a ajouté Bob » (#7593) ; une
+ * arrivée de soi-même (lien, conversation globale) « Bob a rejoint ». Les
+ * params sont des NOMS affichés, ceux que `composeConversationPreview` lit.
+ */
+function joinNoticeEvent(notice: JoinNoticeMetadata): LastMessageSystemEvent {
+  if (notice.addedBy) {
+    return { key: 'system.member-added', params: { actor: notice.addedBy.displayName, target: notice.displayName } };
+  }
+  return { key: 'system.member-joined', params: { name: notice.displayName } };
+}
+
+function conversationNoticeEvent(notice: ConversationNotice): LastMessageSystemEvent {
+  switch (notice.kind) {
+    case 'member-removed':
+      return { key: 'system.member-removed', params: { actor: notice.actor.displayName, target: notice.target.displayName } };
+    case 'member-left':
+      return { key: 'system.member-left', params: { actor: notice.actor.displayName } };
+    case 'conversation-renamed':
+      return { key: 'system.conversation-renamed', params: { actor: notice.actor.displayName } };
+    case 'conversation-image':
+      return { key: 'system.conversation-image', params: { actor: notice.actor.displayName } };
+  }
+}
+
+/**
  * L'événement système localisable d'un message système, ou `null` pour un
  * message ordinaire ou une synthèse d'appel (portée par `callSummary`). Jamais
  * le texte français stocké dans `content`.
@@ -174,7 +200,9 @@ export function systemEventFromMessage(message: SystemEventSource): LastMessageS
   if (!isSystemMessage(message)) return null;
   if (callSummaryFromMetadata(message.metadata)) return null;
   const joinNotice = parseJoinNotice(message.metadata);
-  if (joinNotice) return { key: 'system.member-joined', params: { name: joinNotice.displayName } };
+  if (joinNotice) return joinNoticeEvent(joinNotice);
+  const notice = parseConversationNotice(message.metadata);
+  if (notice) return conversationNoticeEvent(notice);
   const raw = asRecord(message.metadata);
   if (raw?.kind === 'encryption-enabled' && typeof raw.mode === 'string' && ENCRYPTION_MODES.has(raw.mode)) {
     return { key: 'system.encryption-enabled', params: { mode: raw.mode } };

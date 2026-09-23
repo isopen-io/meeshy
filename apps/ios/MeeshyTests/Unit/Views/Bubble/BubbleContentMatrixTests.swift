@@ -1039,8 +1039,8 @@ final class BubbleContentMatrixTests: XCTestCase {
     /// Condition de levée : si `BubbleContent.Kind` gagne un cas, trancher
     /// dans `QuickReactionGesture` puis monter ce compte, jamais l'inverse.
     func test_laRegleCouvreTousLesKinds() {
-        let tous: [BubbleContent.Kind] = [.standard, .deleted, .burned, .ephemeralExpired, .system]
-        XCTAssertEqual(tous.count, 5,
+        let tous: [BubbleContent.Kind] = [.standard, .deleted, .burned, .viewOnceSealed, .ephemeralExpired, .system]
+        XCTAssertEqual(tous.count, 6,
                        "BubbleContent.Kind a changé — trancher le nouveau cas dans QuickReactionGesture")
         XCTAssertEqual(tous.filter(QuickReactionGesture.acceptsDoubleTap(kind:)).count, 1,
                        "une seule nature de bulle accepte le geste : la standard")

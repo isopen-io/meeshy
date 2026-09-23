@@ -383,7 +383,9 @@ export const messageSchema = {
     expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : D(lecteur) pour un destinataire, la plus tardive des D connues pour l\'expéditeur, null tant que rien n\'a démarré. Pour un non-éphémère, la grâce de vue unique.' },
     ephemeralDuration: { type: 'integer', nullable: true, description: 'Durée d\'un éphémère, en secondes. Le décompte part de la RÉCEPTION de chaque destinataire (#7451).' },
     isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
-    viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
+    viewOnceCount: { type: 'number', description: 'Vue unique (#7578) : destinataires ACTIFS (auteur exclu) qui l\'ont ouverte' },
+    consumedByMe: { type: 'boolean', description: 'Vue unique (#7578) : CE lecteur l\'a déjà ouverte (auteur compris). Vrai ⇒ ni texte, ni traduction, ni pièce jointe ne sont servis ; la bulle reste « ouverte »' },
+    isFullyConsumed: { type: 'boolean', description: 'Vue unique (#7578) : tous les destinataires actifs l\'ont ouverte — la purge du contenu est programmée ou faite. Ne retire JAMAIS la bulle' },
     isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
     // Bitfield des effets, recomposé serveur (`MessageProcessor.saveMessage`)
     // depuis isBlurred / expiresAt / isViewOnce. La route l'émet déjà au
@@ -472,7 +474,7 @@ export const messageSchema = {
     maxViewOnceCount: {
       type: 'number',
       nullable: true,
-      description: 'Maximum unique viewers allowed for view-once messages'
+      description: 'Vue unique (#7578) : destinataires ACTIFS (auteur exclu) — le dénominateur. viewOnceCount ≥ maxViewOnceCount ⇔ tous l\'ont ouverte'
     },
 
     // Timestamps
@@ -532,6 +534,8 @@ export const messageMinimalSchema = {
     isViewOnce: { type: 'boolean', nullable: true, description: 'View-once message (disappears after view)' },
     isBlurred: { type: 'boolean', nullable: true, description: 'Content blurred until tap to reveal' },
     effectFlags: { type: 'number', nullable: true, description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    // #7594 — par LECTEUR : sans déclaration, fast-json-stringify le retire.
+    viewOnceConsumed: { type: 'boolean', nullable: true, description: 'Le lecteur a déjà ouvert ce message à vue unique (MessageStatusEntry.viewedOnceAt) — false pour l’expéditeur et hors vue unique' },
     // #7545 — la NATURE du dernier message, pour le composeur partagé
     // (`composeConversationPreview`, #7546). Mêmes champs que les clés plates
     // `lastMessage*` de `conversation:updated`.
@@ -575,6 +579,13 @@ export const messageMinimalSchema = {
           lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
           fileSize: { type: 'number', nullable: true, description: 'Taille en octets (#7545)' },
           thumbnailUrl: { type: 'string', nullable: true, description: 'Vignette (#7545)' },
+          // #7594 — le texte alternatif (phrase d'un sticker de texte), null
+          // quand le message ou la pièce est protégé ; et la protection de la
+          // PIÈCE elle-même, pour que le composeur dessine son placeholder.
+          alt: { type: 'string', nullable: true, description: 'Texte alternatif — null si absent ou si le message ou la pièce est protégé (#7594)' },
+          isViewOnce: { type: 'boolean', nullable: true, description: 'Pièce à vue unique (protection propre à la pièce)' },
+          isBlurred: { type: 'boolean', nullable: true, description: 'Pièce floutée (protection propre à la pièce)' },
+          effectFlags: { type: 'number', nullable: true, description: 'Bitfield d’effets de la pièce (vue unique / flou)' },
           // La JUMELLE de `messageAttachmentSchema.metadata` — celle de
           // l'APERÇU de conversation, pas celle du fil — et elle portait le
           // même objet NU, avec une description qui NOMMAIT
