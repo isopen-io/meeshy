@@ -73,10 +73,20 @@ final class StoryCanvasStickerMotionTests: XCTestCase {
                        cos(120 * Double.pi / 180), accuracy: 1e-3)
     }
 
+    /// Ce que ce témoin garde est le CÂBLAGE — le canvas repose l'opacité de
+    /// la pose sur la couche —, pas l'amplitude du clignotement. L'attendu se
+    /// LIT donc de `pose(at:)` : hériter du nombre a fait rougir `dev` quand
+    /// #7583 a remonté le plancher de 0,40 à 0,70 pour la lisibilité. La VALEUR
+    /// appartient à `StickerAnimationLegibilityTests`, qui tient le plancher et
+    /// l'amplitude minimale — sans quoi cet attendu pourrait devenir 1,0 et le
+    /// témoin, vide.
     func test_blink_drivesOpacity() throws {
         let vue = canvas(animation: .blink)
-        joue(vue, pendant: StickerAnimation.blink.period / 2)
-        XCTAssertEqual(Double(try couche(vue).opacity), 0.4, accuracy: 1e-2)
+        let miPériode = StickerAnimation.blink.period / 2
+        joue(vue, pendant: miPériode)
+        XCTAssertEqual(Double(try couche(vue).opacity),
+                       StickerAnimation.blink.pose(at: miPériode).opacity,
+                       accuracy: 1e-2)
     }
 
     // MARK: - Ce qui ne bouge PAS

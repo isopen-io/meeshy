@@ -370,6 +370,17 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // #7451 — les deux moitiés du décompte éphémère. Aucune des deux ne SERT de
   // contenu : le masquage protège ce qu'un lecteur VOIT, et ces lectures ne
   // rendent rien à personne.
+  // #7578 — la purge du contenu d'une vue unique : balayage serveur, sans
+  // lecteur et de portée GLOBALE (filtré par `viewOnceBurnAt`), qui ne sélectionne
+  // ni expéditeur ni contenu servi. Même famille qu'ExpiredMessagesCleanupService.
+  'messaging/purgeViewOnceContent.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Purge serveur du contenu d'une vue unique arrivée à échéance, sans lecteur " +
+      "et de portée globale (`viewOnceBurnAt`) : elle ne sert rien à personne. " +
+      "Masquer ou réparer ici laisserait survivre un contenu que tous ont ouvert.",
+  },
   'messaging/freezeMessageStatus.ts': {
     kind: 'exempt',
     reads: 1,

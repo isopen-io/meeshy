@@ -61,12 +61,14 @@ nonisolated enum QuickReactionGesture {
     /// - `.deleted` — le contenu n'existe plus ;
     /// - `.burned` — une vue unique consommée ne se réagit pas après coup ;
     /// - `.ephemeralExpired` — le message n'est plus là ;
-    /// - `.system` — un avis n'est la parole de personne.
+    /// - `.system` — un avis n'est la parole de personne ;
+    /// - `.viewOnceSealed` — le toucher d'une vue unique l'OUVRE (#7618) :
+    ///   un second geste sur la même puce ne doit rien faire d'autre.
     static func acceptsDoubleTap(kind: BubbleContent.Kind) -> Bool {
         switch kind {
         case .standard:
             return true
-        case .deleted, .burned, .ephemeralExpired, .system:
+        case .deleted, .burned, .viewOnceSealed, .ephemeralExpired, .system:
             return false
         }
     }
@@ -310,6 +312,22 @@ struct ThemedMessageBubble: View {
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
         case .burned where !blurController.isRevealed:
             BubbleBurnedView(isMe: message.isMe, isDark: isDark)
+        case .viewOnceSealed:
+            if content.protection.isExpired {
+                EmptyView()
+            } else {
+                BubbleViewOnceSealedView(
+                    isMe: message.isMe,
+                    isDark: isDark,
+                    protection: content.protection,
+                    timeString: content.meta.timeString,
+                    onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
+                        HapticFeedback.medium()
+                        onConsumeViewOnce?(messageId) { _ in }
+                    }
+                )
+                .ephemeralBurn(isBurning: content.isBurning)
+            }
         default:
             if content.protection.isExpired {
                 EmptyView()

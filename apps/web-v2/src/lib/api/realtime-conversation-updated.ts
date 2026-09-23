@@ -6,7 +6,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events/conversation';
 
 import { patchConversation } from './conversations';
-import { acceptsLastMessage, isListProtected, listSafeLastMessage, withNature, withSideband } from './list-preview';
+import { acceptsLastMessage, isListProtected, listSafeLastMessage, withListRank, withNature, withSideband } from './list-preview';
 import type { Conversation, Message, Participant } from './types';
 
 /**
@@ -181,9 +181,14 @@ export function acceptsLastMessageAt(params: {
 export function applyConversationUpdated(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
   const speaksOfPreview = 'lastMessageId' in data;
   const speaksOfSideband = 'lastReaction' in data || 'activeCall' in data;
-  if (!speaksOfPreview && !speaksOfSideband) return;
+  const speaksOfRank = 'listRankAt' in data;
+  if (!speaksOfPreview && !speaksOfSideband && !speaksOfRank) return;
 
-  patchConversation(queryClient, data.conversationId, (row) => {
+  patchConversation(queryClient, data.conversationId, (served) => {
+    /* LE RANG SERVI (#7592) — posé tel quel par l'émission adressée à
+       l'auteur du message réagi ; les autres ne le reçoivent pas et ne
+       réordonnent rien. */
+    const row = withListRank(served, data);
     /* LA RÉACTION ET L'APPEL EN COURS (#7545) — posés d'abord, sans toucher au
        groupe d'aperçu. Une réaction seule ne remonte la ligne que par le
        `lastMessageAt` que le serveur lui joint, et jamais vers le passé. */

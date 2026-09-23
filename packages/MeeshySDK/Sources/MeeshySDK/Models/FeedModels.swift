@@ -702,24 +702,32 @@ public struct FeedPost: Identifiable, Sendable {
     /// because it occupies rank 1. Never fall back to an arbitrary
     /// translation if no preferred language matches.
     public func resolved(preferredLanguages: [String]) -> FeedPost {
-        guard let dict = translations, !dict.isEmpty else { return self }
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        let origLang = originalLanguage?.lowercased()
-        for lang in preferred {
-            if let origLang, origLang == lang {
-                var copy = self
-                copy.translatedContent = nil
-                return copy
-            }
-            if let hit = dict.first(where: { $0.key.lowercased() == lang }) {
-                var copy = self
-                copy.translatedContent = hit.value.text
-                return copy
-            }
-        }
+        guard translations?.isEmpty == false else { return self }
         var copy = self
-        copy.translatedContent = nil
+        copy.translatedContent = servedTranslation(preferredLanguages: preferredLanguages)?.text
         return copy
+    }
+
+    /// La descente, UNE fois, pour les DEUX projections ci-dessous.
+    ///
+    /// `resolved(preferredLanguages:)` et `resolvedLanguageCode(preferredLanguages:)`
+    /// portaient chacune sa copie de la boucle — même parcours, deux types de
+    /// retour, et donc deux occasions de diverger sur une charge où elles
+    /// doivent être d'accord par construction : le badge de langue de la carte
+    /// de feed ANNONCE la langue du texte que le corps AFFICHE. Elles partagent
+    /// désormais `PrismTranslationResolver`, et ne diffèrent plus que par ce
+    /// qu'elles projettent de son résultat.
+    ///
+    /// Les deux copies rapprochaient aussi les codes par un `.lowercased()`
+    /// BRUT, quand la SSOT canonise (casse repliée ET région strippée) : un
+    /// lecteur dont un rang est `"en-US"` ne rencontrait jamais la clé `"en"`.
+    private func servedTranslation(preferredLanguages: [String]) -> PrismTranslation? {
+        guard let dict = translations, !dict.isEmpty else { return nil }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            candidates: dict.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+            preferredLanguages: preferredLanguages
+        )
     }
 
     /// Companion to `resolved(preferredLanguages:)`: returns the language code
@@ -737,14 +745,9 @@ public struct FeedPost: Identifiable, Sendable {
     /// `nil` only when there's truly no language to report (no original AND
     /// no preferred-language translation matches).
     public func resolvedLanguageCode(preferredLanguages: [String]) -> String? {
-        let origLang = originalLanguage?.lowercased()
-        guard let dict = translations, !dict.isEmpty else { return origLang }
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        for lang in preferred {
-            if let origLang, origLang == lang { return origLang }
-            if dict.keys.contains(where: { $0.lowercased() == lang }) { return lang }
-        }
-        return origLang
+        let origLang = originalLanguage.map { MeeshyUser.normalizeLanguageForDedup($0) }
+        guard let served = servedTranslation(preferredLanguages: preferredLanguages) else { return origLang }
+        return MeeshyUser.normalizeLanguageForDedup(served.language)
     }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,

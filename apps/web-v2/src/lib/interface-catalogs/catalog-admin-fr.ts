@@ -25,7 +25,6 @@ const fr = {
   'admin.counters.reports': 'Signalements',
   'admin.counters.newUsers': 'Nouveaux (24 h)',
   'admin.sections.title': 'Sections',
-  'admin.sections.legacy': 'ancienne interface',
   'admin.nav.dashboard': 'Tableau de bord',
   'admin.nav.users': 'Comptes',
   'admin.nav.moderation': 'Modération',

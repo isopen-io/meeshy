@@ -795,12 +795,12 @@ describe('cycle de vie du message porteur', () => {
   });
 
   /**
-   * `scheduleViewOnceBurn` écrit le budget de vue unique épuisé sous forme
-   * d'`expiresAt`. La garde couvre donc la brûlure sans rien connaître de la
-   * vue unique — l'échéance EST la brûlure.
+   * `scheduleViewOnceBurn` écrit « tous les destinataires ont ouvert » sous
+   * forme de `viewOnceBurnAt` (#7578, jamais `expiresAt`). La garde couvre donc
+   * la purge sans rien connaître de l'audience — l'échéance EST la purge.
    */
-  it('refuse le fichier d\'un message à vue unique dont le sursis de brûlure est écoulé', async () => {
-    const app = await buildApp({ message: { conversationId: 'conv-1', expiresAt: PAST } });
+  it('refuse le fichier d\'un message à vue unique dont le sursis de purge est écoulé', async () => {
+    const app = await buildApp({ message: { conversationId: 'conv-1', viewOnceBurnAt: PAST } });
     const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
     expect(res.statusCode).toBe(404);
     await app.close();

@@ -10,6 +10,10 @@ nonisolated struct BubbleContent: Equatable {
         case standard
         case deleted
         case burned
+        /// Vue unique pas encore ouverte (#7618) : le mode rend la seule puce
+        /// `(1) · Touchez pour afficher`, rien du contenu — qui n'est d'ailleurs
+        /// plus dans ce modèle (`MeeshyMessage.sealedForDisplay`).
+        case viewOnceSealed
         case ephemeralExpired
         /// System notice rendered as a centered capsule (no avatar, no L/R
         /// alignment) — e.g. the call-summary messages "Appel vidéo · 04:32".
@@ -286,6 +290,12 @@ nonisolated struct BubbleContent: Equatable {
     /// Le contenu est-il voilé jusqu'au geste du lecteur — flou OU vue unique
     /// (#7452). Projection de `protection.requiresVeil`, le site de la règle.
     var requiresVeil: Bool { protection.requiresVeil }
+
+    /// Le chrome à peindre au-dessus du message : celui d'une vue unique
+    /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
+    var chromeProtection: MessageProtectionDescriptor {
+        kind == .viewOnceSealed ? protection.withoutViewOnce : protection
+    }
     /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
     /// (#7467) — projection de `MeeshyMessage.isBurning`.
     ///

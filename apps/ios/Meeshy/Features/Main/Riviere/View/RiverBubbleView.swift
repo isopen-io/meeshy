@@ -77,6 +77,10 @@ struct RiverBubbleContent: Equatable {
     /// (#7467) — projeté par `RiverConversationMapping`, jamais lu ici.
     let isBurning: Bool
 
+    /// Vue unique pas encore ouverte (#7618) : la bulle ne porte QUE la puce,
+    /// `text` est vide par la projection, jamais masqué par la vue.
+    let isViewOnceSealed: Bool
+
     init(
         bubble: RiverLaneResolver.RiverBubble,
         senderDisplayName: String,
@@ -99,6 +103,7 @@ struct RiverBubbleContent: Equatable {
         storyCitation: ReplyReference? = nil,
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
+        isViewOnceSealed: Bool = false,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -115,6 +120,7 @@ struct RiverBubbleContent: Equatable {
         self.storyCitation = storyCitation
         self.protection = protection
         self.isBurning = isBurning
+        self.isViewOnceSealed = isViewOnceSealed
     }
 }
 
@@ -448,10 +454,12 @@ struct RiverBubbleView: View, Equatable {
                 Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
             }
         }
-        Button {
-            UIPasteboard.general.string = content.text
-        } label: {
-            Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
+        if !content.isViewOnceSealed {
+            Button {
+                UIPasteboard.general.string = content.text
+            } label: {
+                Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
+            }
         }
     }
 
@@ -518,7 +526,11 @@ struct RiverBubbleView: View, Equatable {
             // le texte d'une vue unique EN CLAIR, exactement comme la rangée
             // plate avant ce lot. Le wrapper est le même que celui de Focal :
             // il possède l'état de révélation, la rivière reste sans `@State`.
-            if content.protection.requiresVeil {
+            if content.isViewOnceSealed {
+                ViewOnceChip(state: .sealed, isDark: isDark) {
+                    onConsumeViewOnce?(content.bubble.messageId) { _ in }
+                }
+            } else if content.protection.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
                     isViewOnce: content.protection.isViewOnce,
@@ -775,7 +787,8 @@ struct RiverBubbleView: View, Equatable {
     // MARK: - Accessibilité
 
     private var accessibilityLabel: String {
-        var parts = [content.senderDisplayName, content.text, content.timeString]
+        let body = content.isViewOnceSealed ? ViewOnceChip.accessibilityLabel(for: .sealed) : content.text
+        var parts = [content.senderDisplayName, body, content.timeString]
         if let reply = content.replyPreview {
             parts.append(
                 String(

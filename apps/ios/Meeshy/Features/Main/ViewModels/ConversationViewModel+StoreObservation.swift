@@ -219,7 +219,9 @@ extension ConversationViewModel {
         })
 
         let preserved = messages.filter { !incomingIds.contains($0.id) && !supersededIds.contains($0.id) }
-        let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+        let result = applyingViewOnceReveals(
+            preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+        )
 
         // Diagnostic: log when a message disappears from the display unexpectedly.
         // Superseded rows (known id-flip) are EXPECTED drops and logged at info.

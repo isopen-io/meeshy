@@ -213,6 +213,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.preferredLanguageRevision
         _ = vm.quotedMessageSearchTarget
         _ = vm.reactionDetails
+        _ = vm.revealedViewOnceIds
         _ = vm.scrollAnchorId
         _ = vm.searchHasMore
         _ = vm.searchResults

@@ -17,6 +17,7 @@ import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
 import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
 
 /**
  * Collection `messages` de `/sync` — extrait tel quel de `routes/sync.ts`
@@ -313,6 +314,9 @@ const syncMessageSchema = {
     isViewOnce: { type: 'boolean' },
     maxViewOnceCount: { type: 'number', nullable: true },
     viewOnceCount: { type: 'number' },
+    // #7578 — l'état PAR LECTEUR d'une vue unique (`projectViewOnceForReader`).
+    consumedByMe: { type: 'boolean' },
+    isFullyConsumed: { type: 'boolean' },
     isBlurred: { type: 'boolean' },
     effectFlags: { type: 'number' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
@@ -527,13 +531,24 @@ export async function syncMessages(opts: {
   // posant après, `location` accompagne la `metadata` SERVIE — présente si et
   // seulement si `metadata` l'est (travail `rich`, 2026-09-06).
   const servedPinned = servedPinnedFor(fields);
+  // #7578 — qui a déjà ouvert une vue unique n'en reçoit plus que l'état. Le
+  // lecteur est sa ligne DANS la conversation du message.
+  const viewOnceStates = await loadViewOnceReaderStates(
+    prisma,
+    visible,
+    (conversationId) => readerParticipantIdByConversation.get(conversationId),
+    (err) => logger.warn('view-once reader states failed — served closed', { err }),
+  );
   const serialize = (m: SyncMessage): Record<string, unknown> =>
-    hoistLocationOnto(
-      restrictFields(
-        serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
-        fields,
-        servedPinned,
-      ),
+    projectViewOnceForReader(
+      hoistLocationOnto(
+        restrictFields(
+          serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+          fields,
+          servedPinned,
+        ),
+      ) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
+      viewOnceStates.get(m.id),
     );
 
   // added = créé après `since` ; modified = pré-existant mais modifié.
