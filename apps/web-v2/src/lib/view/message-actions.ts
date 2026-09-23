@@ -1,3 +1,5 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translationsOf } from '@/lib/view/message';
@@ -81,6 +83,13 @@ export type MessageMenuContext = {
    * héritant même de sa durée) alors qu'ils ne se copient ni ne se traduisent.
    */
   readonly canForward: boolean;
+  /**
+   * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
+   * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
+   * citerait. Le menu se réduit à « Plus… » (Infos) ; la suppression n'a pas
+   * encore de port web (`message-detail-sheet.tsx`, D-29).
+   */
+  readonly isViewOnce?: boolean;
 };
 
 /**
@@ -108,6 +117,7 @@ export function messageMenuContextOf(
     isProtected: kind !== 'standard',
     languageCount: 1 + translationsOf(message).length,
     canForward: forwardRefusalOf(message, input.now) === null,
+    isViewOnce: message.isViewOnce === true,
   };
 }
 
@@ -120,6 +130,7 @@ export function messageMenuContextOf(
  * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
 export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
+  if (ctx.isViewOnce === true) return [{ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' }];
   const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
@@ -133,6 +144,57 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
+}
+
+/**
+ * **LE FAVORI, DANS « PLUS… »** (#7378) — miroir de
+ * `MessageActionResolver.moreSections` (`apps/ios/Meeshy/Features/Main/
+ * Components/MessageActionResolver.swift`, `ctx.isStarred ? .unstar : .star`) :
+ * iOS range l'étoile dans la feuille « Plus… », section « Faire », juste après
+ * l'épingle. Le web n'a pas d'épingle — l'étoile ouvre la section.
+ *
+ * DEUX ÉCARTS avec iOS, assumés parce qu'ils vont dans le sens de la vérité :
+ * - `null` quand l'état est INCONNU (l'ensemble des favoris n'est pas chargé,
+ *   `starred-messages-cache.ts`) : proposer « Ajouter » sur un message déjà en
+ *   favori ferait mentir le geste ;
+ * - `null` pour AJOUTER sur un message que le serveur refuserait (vue unique :
+ *   409 `MESSAGE_NOT_STARRABLE`) : iOS la propose sans condition parce que son
+ *   magasin est local ; l'entrée disparaît ici plutôt que d'échouer au tap.
+ *   Une étoile déjà posée se RETIRE toujours (le retrait serveur est sans
+ *   condition).
+ *
+ * Le LIBELLÉ n'est pas ici : il vit dans les sept catalogues d'interface
+ * (`action.star` / `action.unstar`, les clés d'iOS), lus par la feuille.
+ */
+export type MessageStarAction = 'star' | 'unstar';
+
+export function messageStarAction(ctx: {
+  readonly starred: boolean | undefined;
+  readonly starrable: boolean;
+}): MessageStarAction | null {
+  if (ctx.starred === undefined) return null;
+  if (ctx.starred) return 'unstar';
+  return ctx.starrable ? 'star' : null;
+}
+
+/**
+ * CE QUE LE SERVEUR ACCEPTERAIT D'ÉTOILER — la règle 2 de #7377
+ * (`starredMessageVerdict.ts`) lue côté client : ni supprimé, ni expiré, ni à
+ * vue unique (par le booléen ET par le bit `VIEW_ONCE` d'`effectFlags`, comme
+ * le verdict serveur). Un message encore OPTIMISTE (`cid_…`,
+ * `api/client-message-id.ts`) n'existe pas côté serveur : `PUT` rendrait 404.
+ *
+ * Flouté, chiffré ou éphémère encore vivant se mettent en favori : ils seront
+ * servis en PLACEHOLDER (règle 3), jamais refusés.
+ */
+export function starrableOf(
+  message: Pick<Message, 'id' | 'deletedAt' | 'expiresAt' | 'isViewOnce' | 'effectFlags'>,
+  input: { readonly now: number },
+): boolean {
+  if (message.id.startsWith('cid_')) return false;
+  if (message.deletedAt != null) return false;
+  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now) return false;
+  return !message.isViewOnce && ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) === 0;
 }
 
 /** Le rail — 6 fixes (question 6 de la spécification, tranchée : jamais un

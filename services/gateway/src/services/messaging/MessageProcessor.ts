@@ -424,7 +424,7 @@ export class MessageProcessor {
       encryptionMetadata: encryptionContext.encryptionMetadata,
       isBlurred: data.isBlurred || false,
       // #7451 — la DURÉE s'enregistre ; `expiresAt` devient interne.
-      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, now: new Date() }),
+      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, now: new Date() }),
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,

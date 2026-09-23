@@ -39,12 +39,21 @@ describe('ephemeralSendFields', () => {
     });
   });
 
-  it("laisse la colonne à son AUTRE écrivain sur un message non éphémère", () => {
-    // `expiresAt` sert aussi la grâce de vue unique (`scheduleViewOnceBurn`).
-    // L'écraser ici rallongerait la vie d'un contenu voulu plus court.
+  it("ne pose aucune échéance sur un message ordinaire", () => {
     expect(ephemeralSendFields({ now: NOW })).toEqual({
       ephemeralDuration: null,
       expiresAt: null,
+    });
+  });
+
+  it("pose le plafond de rétention d'une VUE UNIQUE dans sa propre colonne, jamais dans expiresAt (#7578)", () => {
+    // Une vue unique qu'un destinataire n'ouvre jamais finit quand même purgée
+    // (#7450) — mais sans devenir un éphémère : `expiresAt` resterait servi
+    // comme un décompte et supprimerait la bulle pour tous.
+    expect(ephemeralSendFields({ isViewOnce: true, now: NOW })).toEqual({
+      ephemeralDuration: null,
+      expiresAt: null,
+      viewOnceBurnAt: new Date(NOW.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
     });
   });
 });

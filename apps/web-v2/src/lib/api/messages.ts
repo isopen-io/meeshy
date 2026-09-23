@@ -9,6 +9,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
+import { sealedIfOpened } from './view-once-seal';
 
 /**
  * LE PORT DU FIL (#5650, F2 ; PAGINÉ #6972) —
@@ -87,7 +88,10 @@ export async function loadMessages(
   return {
     ok: true,
     data: {
-      messages: [...result.data].reverse(),
+      /* UNE VUE UNIQUE DÉJÀ OUVERTE PAR MOI ARRIVE PURGÉE (#7580) — même si
+         une passerelle antérieure à #7578 sert encore son contenu : rien
+         n'en atteint le cache persisté. */
+      messages: [...result.data].reverse().map(sealedIfOpened),
       hasOlder: result.cursorPagination?.hasMore === true,
       /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
          `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —

@@ -56,7 +56,7 @@ const hasViewOnceFlag = (effectFlags: number | undefined): boolean =>
 export function forwardRefusalOf(message: ForwardProtection, now: number): ForwardRefusal | null {
   if (message.isViewOnce || hasViewOnceFlag(message.effectFlags)) return 'view-once';
   const kind = protectionOf(message, now);
-  return kind === 'deleted' || kind === 'expired' || kind === 'burned' ? 'unavailable' : null;
+  return kind === 'deleted' || kind === 'expired' ? 'unavailable' : null;
 }
 
 /**

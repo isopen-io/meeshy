@@ -1,6 +1,7 @@
 import type { PrismaClient, PostType } from '@meeshy/shared/prisma/client';
 import { NOT_DELETED } from './softDelete';
 import { isEphemeralPostType } from './postVisibility';
+import { withAudienceListFor, type ServedAudienceList } from './audienceList';
 
 /**
  * L'ÉTAT DU LECTEUR sur une page de publications — la SEULE fonction qui le
@@ -32,6 +33,15 @@ import { isEphemeralPostType } from './postVisibility';
  * réactions, favoris et republications des AUTRES ne sont jamais lus, donc
  * jamais servis. La fonction n'ajoute que les quatre clés ci-dessous.
  *
+ * Elle en RETIRE une : la liste d'audience (`visibilityUserIds`), que la page
+ * charge pour toutes ses publications et qui ne part qu'à leur AUTEUR (#7407,
+ * `audienceList.ts`). C'est ici qu'elle se projette parce que c'est le seul
+ * point où une liste connaît à la fois sa page et son lecteur ; sans lecteur,
+ * elle ne part pour personne. Une lecture dont le résultat ROUTE encore une
+ * diffusion ne doit donc pas passer par ici telle quelle : `getPostById` nourrit
+ * la relecture d'une création (`routes/posts/core.ts`, `onDuplicate` →
+ * `runPublicationEffects`), qui adresse la diffusion avec cette liste.
+ *
  * ## Republication simple → l'état sur l'ORIGINAL
  *
  * `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false` reflètent
@@ -58,6 +68,7 @@ export type ViewerPostState = {
 
 export type ViewerStateSubject = {
   readonly id: string;
+  readonly authorId?: string | null;
   readonly isQuote?: boolean | null;
   readonly repostOfId?: string | null;
   readonly originalRepostOfId?: string | null;
@@ -69,8 +80,10 @@ type ViewerStatePrisma = Pick<PrismaClient, 'postReaction' | 'postBookmark' | 'p
 /** `isLikedByMe` se lit sur les réactions du lecteur — la même règle pour toute publication servie. */
 export const likedFromReactions = (reactions: readonly string[]): boolean => reactions.length > 0;
 
-const withoutViewer = <T extends ViewerStateSubject>(post: T): T & ViewerPostState => ({
-  ...post,
+export type ViewerServedPost<T> = ServedAudienceList<T> & ViewerPostState;
+
+const withoutViewer = <T extends ViewerStateSubject>(post: T): ViewerServedPost<T> => ({
+  ...withAudienceListFor(post, undefined),
   isLikedByMe: false,
   currentUserReactions: [],
   isBookmarkedByMe: false,
@@ -87,7 +100,7 @@ export async function withViewerPostState<T extends ViewerStateSubject>(
   prisma: ViewerStatePrisma,
   viewerUserId: string | undefined,
   posts: readonly T[],
-): Promise<Array<T & ViewerPostState>> {
+): Promise<Array<ViewerServedPost<T>>> {
   if (!viewerUserId || posts.length === 0) return posts.map(withoutViewer);
 
   const postIds = posts.map((post) => post.id);
@@ -118,7 +131,7 @@ export async function withViewerPostState<T extends ViewerStateSubject>(
   return posts.map((post) => {
     const currentUserReactions = [...(emojisByTarget.get(reactionTargetId(post)) ?? [])];
     return {
-      ...post,
+      ...withAudienceListFor(post, viewerUserId),
       isLikedByMe: likedFromReactions(currentUserReactions),
       currentUserReactions,
       isBookmarkedByMe: bookmarkedIds.has(post.id),

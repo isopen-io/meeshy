@@ -14,18 +14,14 @@ import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
-import {
-  buildLastMessagePreviewTranslations,
-  truncateMessagePreview
-} from './utils/last-message-preview';
+import { buildLastMessagePreviewTranslations } from './utils/last-message-preview';
 import { loadConversationListActivity } from './utils/list-activity';
+import { loadRankedConversationPage } from './utils/list-rank';
+import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
-import {
-  isPreviewWithheld,
-  resolveLastMessageNature,
-  resolvePreviewProtection,
-  summarizeAttachments,
-} from './utils/last-message-nature';
+import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { projectListLastMessageBody } from './utils/list-last-message-body';
+import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -38,7 +34,6 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import {
@@ -258,17 +253,8 @@ export function registerConversationListRoute(
       if (curseur.genre === 'refus') {
         return sendBadRequest(reply, 'Unknown pagination cursor', { code: 'INVALID_CURSOR' });
       }
-      let cursorLastMessageAt: Date | null = null;
-      if (curseur.genre === 'borne') {
-        cursorLastMessageAt = curseur.lastMessageAt;
-        whereClause.lastMessageAt = { lt: cursorLastMessageAt };
-      } else if (curseur.genre === 'queue') {
-        // Les `lastMessageAt` nuls sortent en QUEUE d'un tri `desc` : une
-        // conversation sans message est une borne légitime, et rien ne la suit.
-        // Sans cette branche, le lecteur reprendrait la page 1 — la seconde
-        // moitié du défaut, celle que l'optionnel confondait avec la première.
-        whereClause.lastMessageAt = { lt: new Date(0) };
-      }
+      // La borne du curseur porte sur le RANG du lecteur (#7592) : elle est posée
+      // par `loadRankedConversationPage`, pas sur `whereClause`.
 
       // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
       // ce que « mis à jour » veut dire :
@@ -314,56 +300,25 @@ export function registerConversationListRoute(
           }).catch(() => ({ ids: [] as string[], truncated: true }))
         : null;
 
-      // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
-      // TRONQUÉE est rattrapable.
-      //
-      // Le `limit` est plafonné à 100 (voir plus haut) et les deux clients
-      // avancent leur watermark au max des `updatedAt` REÇUS. Trié par
-      // `lastMessageAt` décroissant — l'ordre de l'écran de liste, sans aucun
-      // rapport avec le filtre — les lignes coupées ne sont pas « les plus
-      // anciennes mises à jour » : le prochain `updatedSince` passe PAR-DESSUS
-      // et ne les revoit qu'à la réconciliation complète (1×/24 h sur iOS).
-      // Pendant ce temps la liste affiche des compteurs de non-lus et des
-      // aperçus périmés sans qu'aucun signal ne l'indique.
-      //
-      // Trié par `updatedAt` croissant, les lignes coupées sont exactement
-      // celles dont l'`updatedAt` est SUPÉRIEUR à celui de la dernière ligne
-      // rendue : le watermark qui les enjambait pointe désormais dessus, et
-      // l'appel delta suivant les rend. La troncature devient une pagination
-      // naturelle, sans aucun changement client. `id` départage les égalités
-      // pour que deux appels identiques rendent la même page.
-      //
-      // Résidu assumé : plus de `limit` conversations portant la MÊME
-      // milliseconde d'`updatedAt` (écriture en masse) débordent d'une page que
-      // la borne stricte `gt` ne peut pas reprendre. Le web traite déjà une page
-      // PLEINE comme une preuve d'incomplétude et escalade vers la relecture
-      // complète (`DELTA_PAGE_LIMIT`, use-conversations-delta-sync.ts) : c'est
-      // ce cas-là, et lui seul, qui reste à sa charge.
-      //
-      // Le curseur `before` garde la main : il BORNE sur `lastMessageAt`, donc
-      // une page ordonnée par `updatedAt` le rendrait incohérent. Aucun client
-      // ne combine les deux aujourd'hui — la garde existe pour que celui qui
-      // essaiera obtienne une pagination cohérente plutôt qu'un mélange.
-      const orderBy = isDeltaPage && !beforeCursor
-        ? [{ updatedAt: 'asc' as const }, { id: 'asc' as const }]
-        : { lastMessageAt: 'desc' as const };
-
       t0 = performance.now();
       // Effectif compté par la base, PAS la colonne dénormalisée du même nom :
-      // voir `conversationActiveMemberCountSelect`. La ligne de liste en
-      // dépend visiblement (badge de groupe iOS `memberCount > 1`, saturation
-      // de la couleur d'accent `min(memberCount/100, 1) × 0.2`), et la colonne
-      // rendait `0` pour toute conversation créée depuis la migration
-      // héritée : badge absent, et couleur d'accent différente entre la liste
-      // et le fil ouvert, qui lui compte. Le `select` lui-même est extrait
-      // dans `core-selects.ts` (`conversationListQuerySelect`) pour porter un
-      // type Prisma nommé (#3679) — il compose `_count` en son sein.
-      const conversations: ConversationListRow[] = await prisma.conversation.findMany({
+      // voir `conversationActiveMemberCountSelect` (badge de groupe, saturation
+      // de la couleur d'accent). Le `select` est extrait dans `core-selects.ts`
+      // pour porter un type Prisma nommé (#3679).
+      //
+      // L'ORDRE est le RANG du lecteur (#7592) — une réaction à SON message
+      // remonte sa ligne ; une page delta garde `updatedAt asc`. Les raisons des
+      // deux ordres et la fusion des deux flux vivent dans `utils/list-rank.ts`.
+      const conversations: ConversationListRow[] = await loadRankedConversationPage({
+        prisma,
+        readRows: ({ where, orderBy, skip, take }) =>
+          prisma.conversation.findMany({ where, orderBy, skip, take, select: conversationListQuerySelect(userId) }),
         where: whereClause,
-        skip: beforeCursor ? 0 : offset,
-        take: limit,
-        select: conversationListQuerySelect(userId),
-        orderBy
+        viewerKey: userId,
+        curseur,
+        deltaOrder: isDeltaPage,
+        limit,
+        offset: beforeCursor ? 0 : offset
       });
       perfTimings.conversationsQuery = performance.now() - t0;
 
@@ -600,11 +555,23 @@ export function registerConversationListRoute(
       });
       // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
       const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
-      const servedEphemeralExpiry = await loadListEphemeralExpiries(
-        prisma,
-        conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
-        (conversationId) => readerParticipantByConversation.get(conversationId)
-      );
+      const [servedEphemeralExpiry, consumedViewOnce] = await Promise.all([
+        loadListEphemeralExpiries(
+          prisma,
+          conversations.map((c) => ({ conversationId: c.id, message: c.messages?.[0] })),
+          (conversationId) => readerParticipantByConversation.get(conversationId)
+        ),
+        // #7594 — la vue unique déjà OUVERTE par ce lecteur (« 👁 Ouvert »).
+        loadViewOnceConsumptions(
+          prisma,
+          conversations.flatMap((c) => {
+            const message = c.messages?.[0];
+            const participantId = readerParticipantByConversation.get(c.id);
+            return message?.isViewOnce && participantId ? [{ messageId: message.id, participantId }] : [];
+          }),
+          (error) => logger.warn('view-once consumption read failed', { error })
+        )
+      ]);
       perfTimings.listActivity = performance.now() - t0;
 
       // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
@@ -861,49 +828,19 @@ export function registerConversationListRoute(
           lastMessage: (() => {
             const msg = conversation.messages[0];
             if (!msg) return null;
-            // `translations` (JSON brut, potentiellement chiffré, une entrée par
-            // langue de la conversation) et `originalLanguage` sont consommés
-            // ci-dessus pour construire la carte d'aperçu ; les laisser fuiter
-            // dans le spread renverrait le blob complet à chaque ligne.
-            const { translations: _rawTranslations, originalLanguage: _originalLanguage, ...msgRest } =
-              msg as typeof msg & { translations?: unknown; originalLanguage?: string | null };
+            const readerParticipantId = readerParticipantByConversation.get(conversation.id);
             const sender = msg.sender as ConversationListPreviewSender | null;
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
             const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
-            // Lot 3 : hisser metadata.location en `location` top-level. Un
-            // message géolocalisé SANS légende a un `content` vide — hisser
-            // la position ne fabrique aucun texte de repli ; c'est au client
-            // de décider comment rendre l'aperçu (ex. via `messageType` ou la
-            // seule présence de `location`), pas au serveur.
-            //
-            // #6111 — un aperçu PROTÉGÉ (vue unique, flouté, éphémère périmé)
-            // ne calcule ni ne sert le lieu : la métadonnée brute peut aussi
-            // bien porter un lieu qu'un sticker ou un résumé — rien de ce
-            // qu'elle transporte n'a le droit de sortir.
-            const place = lastMessageProtected ? null : sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
-            const { attachments: loadedAttachments, ...msgWithoutAttachments } = msgRest;
             return {
-              ...msgWithoutAttachments,
-              // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ;
-              // la liste n'en SERT que la première en détail.
-              ...resolveLastMessageNature(msg),
-              attachments: (loadedAttachments ?? []).slice(0, 1),
-              attachmentSummary: lastMessageProtected
-                ? null
-                : summarizeAttachments(loadedAttachments ?? [], msg._count?.attachments),
-              content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
-              ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
-              // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
-              // continuent de partir : ce sont eux qui qualifient le
-              // placeholder que le client compose (« Message à vue unique »).
-              // Tout le reste du contenu — métadonnée brute, pièces jointes,
-              // leur compte — est retiré pour un aperçu protégé.
-              ...(lastMessageProtected
-                ? { metadata: null, attachments: null, _count: { attachments: 0 } }
-                : {}),
-              ...(place ? { location: place } : {}),
+              ...projectListLastMessageBody(msg, {
+                withheld: lastMessageProtected,
+                servedExpiresAt,
+                viewOnceConsumed: readerParticipantId !== undefined
+                  && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
+              }),
               sender: sender && senderVis ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
@@ -921,6 +858,9 @@ export function registerConversationListRoute(
             };
           })(),
           unreadCount,
+          // #7592 — le rang de CE lecteur, la clé du tri ci-dessus : les
+          // clients trient dessus au lieu de le recalculer.
+          listRankAt: listRankFromColumns(conversation, userId)?.toISOString() ?? null,
           lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
           activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
           // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —

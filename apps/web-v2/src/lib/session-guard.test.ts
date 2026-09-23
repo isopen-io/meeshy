@@ -89,6 +89,10 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
   // l'écran d'attente (route publique par défaut).
   test('feed', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'feed' })).toBe('redirect-login'));
+  // #7286 — les trois routes `/me/starred-messages` refusent un contexte sans
+  // compte (le favori est réservé aux inscrits, décision serveur de #7377).
+  test('starredMessages', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'starredMessages' })).toBe('redirect-login'));
   // #6288 — les six routes `/notifications*` de la passerelle portent toutes
   // `onRequest: [fastify.authenticate]` : la cloche d'un visiteur sans compte
   // n'existe pas, et un écran qui s'ouvre sur un 401 muet n'invite personne.

@@ -559,10 +559,10 @@ function callLine(call: LastMessageCallSummary, viewerId: string, str: Str): Con
 }
 
 /**
- * Les clés d'événement système que ce composeur sait dire. Les deux premières
- * sont celles que le serveur pose aujourd'hui (`SystemEventKey`, #7545) ; les
- * suivantes sont celles de la matrice (#7546) que le serveur posera — une clé
- * absente d'ici se rend en `system.generic`, jamais en texte brut.
+ * Les clés d'événement système que ce composeur sait dire — toutes posées par
+ * le serveur (`SystemEventKey`, #7545 puis #7593) avec des params `actor` /
+ * `target` en NOMS affichés. Une clé absente d'ici se rend en `system.generic`,
+ * jamais en texte brut.
  */
 const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, string | number>>) => ConversationPreviewStringKey>> = {
   'system.member-joined': () => 'system.member.joined',

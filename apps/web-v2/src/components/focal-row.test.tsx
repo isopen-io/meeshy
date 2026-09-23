@@ -231,7 +231,7 @@ describe('FocalRow — protection (D-23, #5676)', () => {
     expect(html).toContain('Message supprimé');
   });
 
-  test('vue unique consommée : « Vu et supprimé », sans le contenu', () => {
+  test('vue unique déjà ouverte par moi : la puce « (1) · Déjà ouvert », sans le contenu ni un mot de suppression (#7580)', () => {
     const html = render({
       ...BASE_MESSAGE,
       isViewOnce: true,
@@ -240,7 +240,10 @@ describe('FocalRow — protection (D-23, #5676)', () => {
       viewOnceCount: 1,
       content: 'Contenu brûlé',
     });
-    expect(html).toContain('Vu et supprimé');
+    expect(html).toContain('data-view-once-chip="opened"');
+    expect(html).toContain('Déjà ouvert');
+    expect(html).toContain('Message à vue unique, déjà ouvert');
+    expect(html).not.toContain('supprimé');
     expect(html).not.toContain('Contenu brûlé');
   });
 
@@ -275,10 +278,21 @@ describe('FocalRow — protection (D-23, #5676)', () => {
     expect(html).toContain('En attente de réception');
   });
 
-  test('une VUE UNIQUE est nommée même SANS pièce jointe', () => {
-    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true }, { state: 'none' });
-    expect(html).toContain('data-view-once');
-    expect(html).toContain('Vue unique');
+  test('une VUE UNIQUE non ouverte : UNE puce « (1) · Touchez pour afficher », sans le mot « Vue unique » ni le contenu (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true, content: 'SECRET-VU' }, { state: 'none' });
+    expect(html.match(/data-view-once-chip=/g)?.length).toBe(1);
+    expect(html).toContain('data-view-once-chip="sealed"');
+    expect(html).toContain('Touchez pour afficher');
+    expect(html).toContain('Message à vue unique, touchez pour afficher');
+    expect(html).not.toContain('Vue unique');
+    expect(html).not.toContain('SECRET-VU');
+  });
+
+  test('un FLOU n\'a ni puce ni œil : la ligne floutée seule (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-FLOU' }, { state: 'none' });
+    expect(html).toContain('data-surrogate');
+    expect(html).not.toContain('data-view-once-chip');
+    expect(html).not.toContain('SECRET-FLOU');
   });
 
   test('un message voilé garde le NOM de l’expéditeur et une heure lisibles (le flou ne touche ni l’identité ni la méta)', () => {
@@ -982,21 +996,16 @@ describe('FocalRow — « modifié » d’un message ENVOYÉ reste lisible', () 
 });
 
 /**
- * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
- * — même loi que `bubble.test.tsx`, une seule fois (`EffectsIndicator`,
- * `message-blocks.tsx`).
+ * PLUS AUCUN COMPTEUR D'EFFETS (#7596) — les effets s'EXÉCUTENT
+ * (`MessageEffectsHost`, monté par `ThreadModes` autour de chaque peau) ; la
+ * peau ne les compte ni ne les nomme. Témoin de comportement complet :
+ * `routes/thread-modes-effects.test.tsx`.
  */
-describe('FocalRow — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
-  test('aucun effet ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('RAINBOW actif ⇒ badge « effects » rendu, aria-hidden', () => {
+describe('FocalRow — les effets ne se comptent plus (#7596)', () => {
+  test('RAINBOW actif ⇒ aucun badge, aucun libellé d’effet', () => {
     const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.RAINBOW });
-    expect(html).toContain('data-badge="effects"');
-    expect(html).toContain('aria-hidden');
-    expect(html).toContain('title="Arc-en-ciel"');
+    expect(html).not.toContain('data-badge="effects"');
+    expect(html).not.toMatch(/title="(Confettis|Arc-en-ciel)"/);
   });
 });
 

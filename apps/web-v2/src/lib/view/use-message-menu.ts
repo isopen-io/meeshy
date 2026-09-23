@@ -21,6 +21,7 @@ import { admitForward } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
 import { isMineOf } from './message';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
+import { useMessageStar, type MessageStarEntry } from './use-message-star';
 
 /**
  * LE HOOK DU MENU DU MESSAGE (#5814) — porte l'ÉTAT et les EFFETS (menu
@@ -44,6 +45,8 @@ export function useMessageMenu(params: {
   readonly readerLanguages: readonly string[];
   readonly readerLocale: string;
   readonly viewerId: string;
+  /** Le lecteur a un COMPTE : le favori est réservé aux inscrits (#7377), l'invité d'un lien n'en a pas. */
+  readonly canStar: boolean;
   /** ARME LA RÉPONSE au message — `onCompose` jusqu'à #7555, où le mot est
    * rendu au sens iOS (créer une story ou un post avec ce média). */
   readonly onReply: (messageId: string) => void;
@@ -69,6 +72,10 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+
+  /** LE FAVORI (#7378) — l'état CONNU dès l'ouverture du fil, offert par « Plus… » (`use-message-star.ts`). */
+  const starEntryOf = useMessageStar({ enabled: params.canStar, announce });
+  const starOf = useCallback((messageId: string): MessageStarEntry | null => starEntryOf(messageOf(messageId)), [starEntryOf, messageOf]);
 
   /** Le texte SERVI d'UN message, `displayLanguage` inséré au rang 0 du
    * Prisme (D-14, un SEUL résolveur — jamais une seconde loi ici). */
@@ -379,5 +386,6 @@ export function useMessageMenu(params: {
     reactionSheetFor,
     setReactionSheetFor,
     servedOf,
+    starOf,
   };
 }

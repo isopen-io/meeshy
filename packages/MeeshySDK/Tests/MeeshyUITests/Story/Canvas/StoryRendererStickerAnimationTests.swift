@@ -60,10 +60,17 @@ final class StoryRendererStickerAnimationTests: XCTestCase {
         XCTAssertTrue(CATransform3DIsIdentity(couche.transform))
     }
 
-    /// `blink` descend à 40 % d'opacité à mi-période.
+    /// `blink` descend à son creux d'opacité à mi-période, et le renderer y
+    /// repose CETTE opacité — c'est le câblage qui est gardé ici, pas la
+    /// profondeur du creux. L'attendu se LIT donc de `pose(at:)` : figé à 0,40,
+    /// il a fait rougir `dev` quand #7583 a remonté le plancher à 0,70 pour la
+    /// lisibilité. La VALEUR appartient à `StickerAnimationLegibilityTests`.
     func test_blink_drivesOpacity() throws {
-        let couche = try stickerLayer(slide(animation: .blink), at: StickerAnimation.blink.period / 2)
-        XCTAssertEqual(Double(couche.opacity), 0.4, accuracy: 1e-4)
+        let miPériode = StickerAnimation.blink.period / 2
+        let couche = try stickerLayer(slide(animation: .blink), at: miPériode)
+        XCTAssertEqual(Double(couche.opacity),
+                       StickerAnimation.blink.pose(at: miPériode).opacity,
+                       accuracy: 1e-4)
     }
 
     // MARK: - Ce qui n'anime PAS

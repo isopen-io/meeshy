@@ -94,7 +94,7 @@ export function resetEphemeralReception(): void {
   servedDeadlines.clear();
 }
 
-export type EphemeralMessageFields = Pick<Message, 'id' | 'expiresAt' | 'ephemeralDuration'>;
+export type EphemeralMessageFields = Pick<Message, 'id' | 'expiresAt' | 'ephemeralDuration'> & { readonly isViewOnce?: boolean };
 
 /**
  * LA RÈGLE, APPLIQUÉE À CE MESSAGE POUR CE LECTEUR — site UNIQUE d'appel de
@@ -121,6 +121,10 @@ export function resolveEphemeralDeadline(input: {
   const { message, isMine, now } = input;
   const duration = message.ephemeralDuration;
   const hasDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+  /* UNE VUE UNIQUE SANS DURÉE N'A PAS D'ÉCHÉANCE À MONTRER (#7580) : son
+     `expiresAt` est la destruction SERVEUR programmée quand tous les
+     destinataires l'ont ouverte (#7578), jamais un décompte pour le lecteur. */
+  if (message.isViewOnce === true && !hasDuration) return { state: 'none' };
   if (!isMine && hasDuration) noteEphemeralReception(message.id, now);
 
   return ephemeralDeadline({
