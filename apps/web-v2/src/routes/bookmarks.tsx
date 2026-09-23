@@ -226,7 +226,7 @@ export default function BookmarksScreen() {
   const [filter, setFilter] = useState<BookmarkFilter>('all');
 
   const corpus = useInfiniteQuery(bookmarkedPostsQuery(apiDeps));
-  const { announcement, onGesture, onShare, onComment } = usePostGesture();
+  const { announcement, onGesture, onShare, onComment, menu } = usePostGesture();
 
   const posts = corpus.data ?? [];
   /** CACHE D'ABORD (§ Instant App Principles) : le squelette n'existe que pour
@@ -290,6 +290,7 @@ export default function BookmarksScreen() {
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={onComment}
+                  menu={menu}
                   preferredLanguages={readerLanguages}
                 />
               </li>

@@ -189,7 +189,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
      le Flux, jamais une seconde mécanique : `onComment` conduit à la page de
      la publication, à son ancre de commentaires. L'adresse vivait ici en
      copie ; elle vit désormais avec les deux autres gestes de la rangée. */
-  const { announcement: gestureAnnouncement, onGesture, onShare, onComment } = usePostGesture();
+  const { announcement: gestureAnnouncement, onGesture, onShare, onComment, menu } = usePostGesture();
   const { text: actionAnnouncement, tone: actionTone, announce } = useLiveAnnouncer();
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
   const [busy, setBusy] = useState(false);
@@ -531,6 +531,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           onGesture={onGesture}
                           onShare={onShare}
                           onComment={onComment}
+                          menu={menu}
                           preferredLanguages={readerLanguages}
                         />
                       ))

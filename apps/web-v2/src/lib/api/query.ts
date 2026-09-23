@@ -23,6 +23,8 @@ import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
+import { deletePost, pinPost, type PostActionOutcome } from './publication-actions';
+import { reportPost, type ReportOutcome, type ReportReason } from './reports';
 import {
   STORIES_QUERY_PREFIX,
   STORY_TRAY_QUERY_KEY,
@@ -183,6 +185,21 @@ export function refreshFeedAction(): Promise<void> {
  */
 export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
+ * sur l'instance partagée du cache : la suppression retire la carte de
+ * CHAQUE caisse qui la peint (`removeCardPost`). */
+export function deletePostAction(postId: string): Promise<PostActionOutcome> {
+  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+export function pinPostAction(postId: string): Promise<PostActionOutcome> {
+  return pinPost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+export function reportPostAction(postId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportPost({ postId, reason, deps: apiDeps });
 }
 
 /** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un

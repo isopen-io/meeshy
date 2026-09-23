@@ -2,6 +2,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState, type ReactNode } from 'react';
 
 import { Avatar } from './avatar';
+import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
 import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
@@ -255,7 +256,7 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
  * grande porte (`grandesPortes`, dérivée du relevé). Le calque du texte peut
  * donc faire une ligne de haut sans que rien ne devienne inatteignable.
  */
-function FeedPostHeader({ model, storyRing, mood, isDetail }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail: boolean }) {
+function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail: boolean; readonly hosts: CardHosts }) {
   const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
@@ -272,7 +273,7 @@ function FeedPostHeader({ model, storyRing, mood, isDetail }: { readonly model: 
         {...(storyRing === undefined ? {} : { storyRing })}
         {...(mood === undefined ? {} : { mood })}
       />
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
             `FeedPostCard+Header.swift:51-60`. */}
         {/* `items-center` et non `items-baseline` : la porte de 44 ne s'aligne pas
@@ -313,6 +314,9 @@ function FeedPostHeader({ model, storyRing, mood, isDetail }: { readonly model: 
           </span>
         ) : null}
       </div>
+      {/* LE « ⋯ » EN HAUT À DROITE (#7533) — miroir
+          `FeedPostCard+Header.swift:164-241`, après le `Spacer()`. */}
+      <CardMenu model={model} isDetail={isDetail} tone="card" hosts={hosts} />
     </div>
   );
 }
@@ -403,15 +407,41 @@ function FeedPostText({
 /** Le RÉEL — plein cadre, identité et actions SUR le média, scrim bas (miroir
  * `ReelFeedCard.swift`). Rendu en AFFICHE IMMOBILE : la lecture reste hors
  * tranche (D-42), le média est son propre repli (poster/placeholder). */
-type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler; readonly onComment?: CommentHandler };
+type CardHosts = {
+  readonly onGesture?: GestureHandler;
+  readonly onShare?: ShareHandler;
+  readonly onComment?: CommentHandler;
+  /** Le menu « ⋯ » (#7533) — absent, le bouton ne se monte pas (loi 4). */
+  readonly menu?: PostMenuHost;
+};
 
 /** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
  * refuse de poser une clé optionnelle à `undefined`. */
-const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): CardHosts => ({
+const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): Omit<CardHosts, 'menu'> => ({
   ...(onGesture !== undefined ? { onGesture } : {}),
   ...(onShare !== undefined ? { onShare } : {}),
   ...(onComment !== undefined ? { onComment } : {}),
 });
+
+/** LE « ⋯ » D'UNE CARTE (#7533) — la MÊME pose pour les deux natures, seul le
+ * fond change (`tone`). `null` sans hôte de menu. */
+function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardModel; readonly isDetail: boolean; readonly tone: 'card' | 'overlay'; readonly hosts: CardHosts }) {
+  if (hosts.menu === undefined) return null;
+  return (
+    <FeedPostMenu
+      postId={model.id}
+      authorId={model.author.id}
+      authorName={model.author.name}
+      text={model.text?.full}
+      bookmarked={model.viewer.bookmarked}
+      isDetail={isDetail}
+      tone={tone}
+      menu={hosts.menu}
+      onShare={hosts.onShare}
+      onGesture={hosts.onGesture}
+    />
+  );
+}
 
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
@@ -467,6 +497,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       >
         {translate(language, 'feed.post.reel.chip')}
       </span>
+      {/* LE « ⋯ » EN HAUT À DROITE, AU-DESSUS du lien qui couvre la carte —
+          miroir `ReelFeedCard.swift:297-325` (disque sombre sur le média). */}
+      <div className="absolute top-2 right-2">
+        <CardMenu model={model} isDetail={false} tone="overlay" hosts={hosts} />
+      </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
@@ -703,7 +738,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // re-rendent (Zero Unnecessary Re-render).
   const active = useIsActiveScene(model.id);
 
-  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
+  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
   // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
   // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
@@ -725,7 +760,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} isDetail={isDetail} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
+      <FeedPostHeader model={model} isDetail={isDetail} hosts={hosts} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
       {bodyText !== undefined ? (
         <FeedPostOpenZone postId={model.id} isDetail={isDetail}>
           <FeedPostText text={bodyText} mentions={model.validatedMentions} />

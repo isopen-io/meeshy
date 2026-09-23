@@ -58,13 +58,39 @@ export type ReportDeps = {
  * `reason` (le texte libre) reste facultatif ; c'est `reportType` qui porte le
  * motif, et lui seul est structuré.
  */
-export async function reportUser(params: {
+export function reportUser(params: {
   readonly userId: string;
   readonly reason: ReportReason;
   readonly details?: string;
   readonly deps: ReportDeps;
 }): Promise<ReportOutcome> {
-  const { userId, reason, details, deps } = params;
+  const { userId, ...rest } = params;
+  return sendReport({ ...rest, reportedType: 'user', entityId: userId });
+}
+
+/**
+ * Signale une PUBLICATION (#7533) — le « Signaler » du menu « ⋯ » d'une carte
+ * du fil. MÊME route, MÊME motifs : seul `reportedType` change, et la
+ * passerelle l'accepte (`creerSchema.reportedType`, `'post'`).
+ */
+export function reportPost(params: {
+  readonly postId: string;
+  readonly reason: ReportReason;
+  readonly details?: string;
+  readonly deps: ReportDeps;
+}): Promise<ReportOutcome> {
+  const { postId, ...rest } = params;
+  return sendReport({ ...rest, reportedType: 'post', entityId: postId });
+}
+
+async function sendReport(params: {
+  readonly reportedType: 'user' | 'post';
+  readonly entityId: string;
+  readonly reason: ReportReason;
+  readonly details?: string;
+  readonly deps: ReportDeps;
+}): Promise<ReportOutcome> {
+  const { reportedType, entityId, reason, details, deps } = params;
 
   if (__FIXTURES__ && deps.source === 'fixtures') return 'done';
 
@@ -73,8 +99,8 @@ export async function reportUser(params: {
       method: 'POST',
       path: '/api/v1/reports',
       body: {
-        reportedType: 'user',
-        reportedEntityId: userId,
+        reportedType,
+        reportedEntityId: entityId,
         reportType: reason,
         ...(details === undefined || details.trim() === '' ? {} : { reason: details.trim() }),
       },

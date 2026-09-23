@@ -31,11 +31,14 @@ import { Sheet } from './sheet';
  */
 export function ReportSheet({
   name,
+  title,
   busy,
   onPick,
   onClose,
 }: {
   readonly name: string;
+  /** Ce qu'on signale (#7533) — défaut : un COMPTE. Une publication a son propre titre. */
+  readonly title?: string;
   readonly busy: boolean;
   readonly onPick: (reason: ReportReason) => void;
   readonly onClose: () => void;
@@ -43,7 +46,7 @@ export function ReportSheet({
   const language = currentInterfaceLanguage();
 
   return (
-    <Sheet title={translate(language, 'report.title')} onClose={onClose}>
+    <Sheet title={title ?? translate(language, 'report.title')} onClose={onClose}>
       <li>
         <p data-report-body className="px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           {translate(language, 'report.body')}
