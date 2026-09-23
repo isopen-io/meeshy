@@ -112,8 +112,10 @@ describe('useUnreadBoundary — gelé pour la session', () => {
       <Sonde conversation={conversationOf({ id: 'c-autre', unreadCount: 3 })} vus={vus} />,
     );
 
-    /* Aucun signal de lecture sur ce second fil ⇒ aucune frontière inventée
-       (garde du zéro-signal), et surtout PAS le `m2` gelé du premier. */
-    expect(host.querySelector('output')?.getAttribute('data-frontiere')).toBe('');
+    /* Aucun signal CHRONOLOGIQUE sur ce second fil, mais `unreadCount: 3`
+       EST servi (#7351, V3, profil neuf) : la frontière se recalcule sur ce
+       repli — SA PROPRE valeur (m1, le premier des 3 messages), jamais le
+       `m2` gelé du premier fil. */
+    expect(host.querySelector('output')?.getAttribute('data-frontiere')).toBe('m1');
   });
 });

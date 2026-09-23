@@ -152,4 +152,38 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(consultations, 2,
             "Deux étages attendus : pré-vol sur la taille DÉCLARÉE, après-vol sur la taille MESURÉE.")
     }
+
+    // MARK: - Aucun média sous une protection
+
+    /// **Le second verrou.** Le serveur ne pose déjà plus d'URL de média pour
+    /// un message protégé (`mediaMayTravel`, cycle 125) — mais un champ de
+    /// service qui DÉCLARE une restriction ne la fait pas respecter, et c'est
+    /// l'hôte qui rend. Une photo à vue unique s'est affichée ENTIÈRE sur un
+    /// écran verrouillé sous une bannière qui disait « 👁️ 🖼️ ».
+    func test_declaresProtection_reconnaîtLesDeuxDéclarations() {
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "4"]))   // viewOnce
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "2"]))   // blurred
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "1"]))   // ephemeral
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(
+            userInfo: ["notificationLocKey": "notification.view_once_message"]
+        ))
+    }
+
+    /// Un effet purement VISUEL (arc-en-ciel, bit 18) n'est pas une
+    /// protection : le confondre priverait de vignette un message ordinaire.
+    func test_declaresProtection_ignoreLesEffetsQuiNeProtègentRien() {
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: [:]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "0"]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["effectFlags": "\(1 << 18)"]))
+        XCTAssertFalse(NSEAttachmentPolicy.declaresProtection(userInfo: ["notificationLocKey": "  "]))
+    }
+
+    /// **Le verrou est CONSULTÉ, pas seulement écrit.** Une loi pure que le
+    /// site d'appel n'interroge pas est une loi qui ne protège rien — c'est la
+    /// même raison qui a fait naître les deux gardes de câblage ci-dessus.
+    func test_leVerrouDeProtection_estConsulteAvantLaRequete() throws {
+        let source = try nseSource()
+        XCTAssertTrue(source.contains("NSEAttachmentPolicy.declaresProtection"),
+                      "La branche du média du message doit refuser un message protégé.")
+    }
 }

@@ -11,7 +11,7 @@
 // via `@Binding` here so the orchestrator stays a leaf-friendly composition
 // of sub-views (Bubble*Indicator, BubbleQuotedReply, BubbleAttachmentView,
 // BubbleExpandableText, BubbleSecondaryContent, BubbleReactionsOverlay,
-// BubbleBackground, BubbleEphemeralBadge, BubbleMediaTimestampOverlay…).
+// BubbleBackground, MessageProtectionChrome, BubbleMediaTimestampOverlay…).
 //
 // Visual fidelity is the strongest constraint of this refactor: this body
 // is a structurally identical port of the legacy `messageContent`. Every
@@ -134,7 +134,6 @@ struct BubbleStandardLayout: View {
     // MARK: - Controllers (lifecycle objects owned by wrapper)
 
     @ObservedObject var blurController: BubbleBlurRevealController
-    @ObservedObject var ephemeralController: BubbleEphemeralController
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
     /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
@@ -338,18 +337,6 @@ struct BubbleStandardLayout: View {
         content.text?.emojiFontSize ?? 15
     }
 
-    private var isEphemeralExpired: Bool {
-        if case .expired = ephemeralController.state { return true }
-        return false
-    }
-
-    private var ephemeralTimerText: String {
-        if case .running(let remaining) = ephemeralController.state {
-            return BubbleEphemeralLifecycle.format(remaining: remaining)
-        }
-        return "0s"
-    }
-
     private var timeString: String { content.meta.timeString }
 
     /// BUG3 — an outgoing message whose send failed (drives the orange retry band).
@@ -368,18 +355,6 @@ struct BubbleStandardLayout: View {
     /// status sheet). The footer keeps its retry handler in every other case.
     static func footerShowsRetry(isFailedOutgoing: Bool) -> Bool { !isFailedOutgoing }
 
-    private var deliveryStatusAccessibilityLabel: String {
-        switch message.deliveryStatus {
-        case .sending: return "en cours d'envoi"
-        case .invisible: return "en cours d'envoi"
-        case .clock: return "en cours d'envoi"
-        case .slow: return "envoi lent"
-        case .sent: return "envoye"
-        case .delivered: return "distribue"
-        case .read: return "lu"
-        case .failed: return "echec d'envoi"
-        }
-    }
 
     private var reactionSummaries: [ReactionSummary] { content.reactions }
 
@@ -491,7 +466,7 @@ struct BubbleStandardLayout: View {
         ))
         parts.append(content.meta.timeString)
         if content.isMe {
-            parts.append(deliveryStatusAccessibilityLabel)
+            parts.append(MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus))
         }
         if content.editedAt != nil {
             parts.append(String(localized: "a11y.message.edited", bundle: .main))
@@ -499,9 +474,7 @@ struct BubbleStandardLayout: View {
         if content.isPinned {
             parts.append(String(localized: "a11y.message.pinned", bundle: .main))
         }
-        if message.expiresAt != nil {
-            parts.append(String(localized: "a11y.message.ephemeral", bundle: .main))
-        }
+        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.protection))
         let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
@@ -540,14 +513,13 @@ struct BubbleStandardLayout: View {
                     )
                 }
 
-                // Ephemeral indicator — gated on the raw `message.expiresAt`
-                // (not `content.ephemeral`, which is nil for already-past
-                // expiry) to preserve legacy badge behavior. The controller
-                // emits `.expired` on tick to hide the badge once the timer
-                // runs out.
-                if message.expiresAt != nil && !isEphemeralExpired {
-                    BubbleEphemeralBadge(timerText: ephemeralTimerText, isDark: isDark)
-                }
+                // #7452 — LE chrome de protection, celui que les cinq modes
+                // consomment. Il porte le décompte d'un éphémère (battu par
+                // le système, sans minuteur de cellule), la désignation d'une
+                // vue unique et celle d'un flou. Un badge peint ici serait un
+                // sixième dialecte.
+                MessageProtectionChrome(descriptor: content.protection, isDark: isDark)
+                    .equatable()
 
                 // Vue `3h` (#4098) — la story citée est une SCÈNE, et une
                 // scène ne tient pas dans une bulle. Elle est posée ICI, au
@@ -564,8 +536,11 @@ struct BubbleStandardLayout: View {
                     .equatable()
                 }
 
-                // Message content (blurred if isBlurred and not revealed)
-                let shouldBlur = content.isBlurred && !blurController.isRevealed
+                // Message content — voilé tant que le lecteur n'a pas fait le
+                // geste. #7452 : la VUE UNIQUE voile elle aussi (le texte
+                // s'affichait en clair auparavant, voir
+                // `MessageProtectionDescriptor.requiresVeil`).
+                let shouldBlur = content.requiresVeil && !blurController.isRevealed
 
                 ZStack {
                     contentStack(shouldBlur: shouldBlur)
@@ -576,13 +551,12 @@ struct BubbleStandardLayout: View {
                     }
 
                     // Blur peek: tap to reveal for N seconds, then auto re-blur
-                    if content.isBlurred && !blurController.isRevealed {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Contenu masqué", bundle: .main))
-                            .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
-                            .onTapGesture { revealBlurredContent() }
+                    if content.requiresVeil && !blurController.isRevealed {
+                        ProtectedVeilAffordance(
+                            isViewOnce: content.isViewOnce,
+                            isDark: isDark,
+                            onReveal: revealBlurredContent
+                        )
                     }
                 }
                 // Les effets du message se posent sur LA BULLE, jamais sur la
@@ -958,7 +932,7 @@ struct BubbleStandardLayout: View {
         // majorité non floutée (coût GPU au scroll). `content.isBlurred` est
         // statique par message → branche stable, pas de churn d'identité. Pour
         // une bulle floutable on garde les modifiers pour animer la révélation.
-        .modifier(BlurRevealModifier(isBlurrable: content.isBlurred, shouldBlur: shouldBlur))
+        .modifier(BlurRevealModifier(isBlurrable: content.requiresVeil, shouldBlur: shouldBlur))
     }
 
     /// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
@@ -1180,7 +1154,7 @@ struct BubbleStandardLayout: View {
     /// - Parameter includesTranslationControls: when `false`, language flags
     ///   and the translate button are omitted — the audio widget owns its own
     ///   per-language switcher, so rendering both would compete.
-    func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
+    func resolvedFooter(includesTranslationControls: Bool = true, retryBandShown: Bool = false) -> (BubbleFooterModel, BubbleFooterActions) {
         // Le bouton translate s'affiche toujours pour les contenus traductibles
         // — texte ou audio (la transcription est traductible) — même si aucune
         // traduction n'existe encore : l'utilisateur peut alors la demander
@@ -1203,9 +1177,10 @@ struct BubbleStandardLayout: View {
             storyRing: senderStoryRingState
         ) : nil
 
+        // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
         let model = BubbleFooterModel.make(
             timeString: content.meta.timeString,
-            deliveryStatus: message.deliveryStatus,
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
             isMe: content.isMe,
             isOnline: networkIsOnline,
             sender: sender,
@@ -1213,7 +1188,7 @@ struct BubbleStandardLayout: View {
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
             showsTranslate: showTranslation,
-            sendStartedAt: message.createdAt
+            sendStartedAt: message.createdAt, retryBandShown: retryBandShown
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1240,7 +1215,7 @@ struct BubbleStandardLayout: View {
 
     /// The standard footer row rendered below text and emoji bubbles.
     private var standardFooter: some View {
-        let (model, actions) = resolvedFooter()
+        let (model, actions) = resolvedFooter(retryBandShown: isFailedOutgoing)
         return BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
             .equatable()
             .padding(.horizontal, showIdentityBar ? 10 : 14)

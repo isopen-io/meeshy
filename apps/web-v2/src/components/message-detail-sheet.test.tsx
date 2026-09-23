@@ -2,8 +2,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
+import { modalLayersOpen } from '@/lib/view/modal-layers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageDetailSheet } from './message-detail-sheet';
@@ -20,7 +21,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
 });
 
 afterAll(async () => {
@@ -32,16 +33,21 @@ const mounter = createActMounter();
 afterEach(() => {
   mounter.unmountAll();
   appQueryClient.clear();
+  document.documentElement.lang = 'fr';
 });
 
 const SERVER_MESSAGE_ID = '66f0a1b2c3d4e5f6a7b8c9d0';
 
-async function mountSheet(delivery: 'sent' | null, messageId: string = SERVER_MESSAGE_ID) {
+async function mountSheet(
+  delivery: 'sent' | null,
+  messageId: string = SERVER_MESSAGE_ID,
+  extra: { choices?: readonly { code: string; isOriginal: boolean; isServed: boolean }[]; reactions?: readonly (readonly [string, number])[] } = {},
+) {
   return mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <MessageDetailSheet
-        choices={[]}
-        reactions={[]}
+        choices={extra.choices ?? []}
+        reactions={extra.reactions ?? []}
         sentAt={new Date('2026-09-21T10:00:00.000Z')}
         delivery={delivery}
         locale="fr-FR"
@@ -78,5 +84,51 @@ describe('MessageDetailSheet — la garde de « Infos du message »', () => {
   test('message ENVOYÉ mais encore OPTIMISTE (`cid_…`) ⇒ aucune section', async () => {
     const host = await mountSheet('sent', 'cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18');
     expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+  });
+});
+
+describe('MessageDetailSheet — la feuille DÉCLARE qu’elle recouvre (W14, #7372)', () => {
+  test('montée ⇒ le registre des couches modales la compte ; démontée ⇒ il l’oublie', async () => {
+    expect(modalLayersOpen()).toBe(false);
+    await mountSheet('sent');
+    // Toute feuille passe par `Sheet` → `useBackDismiss` → le registre, que
+    // le suivi de lecture du fil lit pour se suspendre (#7372).
+    expect(modalLayersOpen()).toBe(true);
+    mounter.unmountAll();
+    expect(modalLayersOpen()).toBe(false);
+  });
+});
+
+/**
+ * « PLUS… » DANS LA LANGUE DU LECTEUR (#7555) — témoin de RANG sur une locale
+ * NON française (leçon 261) : le titre de la feuille et ses trois en-têtes
+ * étaient EN DUR en français, et aucun témoin `fr` ne pouvait distinguer un
+ * littéral d'une clé servie. Seul l'anglais tranche.
+ */
+describe('MessageDetailSheet — les libellés viennent du catalogue (#7555)', () => {
+  test('interface EN ⇒ titre, Languages, Reactions, Sent — aucun mot français', async () => {
+    document.documentElement.lang = 'en';
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      choices: [{ code: 'fr', isOriginal: true, isServed: true }],
+      reactions: [['👍', 2]],
+    });
+    const text = host.textContent ?? '';
+    expect(text).toContain(translate('en', 'message.detail.title'));
+    expect(text).toContain(translate('en', 'message.detail.languages'));
+    expect(text).toContain(translate('en', 'message.detail.reactions'));
+    expect(text).toContain(translate('en', 'message.detail.sent'));
+    expect(text).not.toContain('Détails du message');
+    expect(text).not.toContain('Langues');
+    expect(text).not.toContain('Réactions');
+  });
+
+  test('interface AR ⇒ la mention « original » d’une langue est arabe, pas française', async () => {
+    document.documentElement.lang = 'ar';
+    const host = await mountSheet('sent', SERVER_MESSAGE_ID, {
+      choices: [{ code: 'fr', isOriginal: true, isServed: true }],
+    });
+    const text = host.textContent ?? '';
+    expect(text).toContain(translate('ar', 'message.detail.language.original', { language: 'Français' }));
+    expect(text).not.toContain('(original)');
   });
 });

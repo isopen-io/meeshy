@@ -5,9 +5,11 @@ import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-sto
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
-import { findCachedConversation, patchConversation, type ConversationsDeps } from './conversations';
+import { findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
+import { toDate } from './decode';
 import { outcomeOf } from './outcome';
 import { pushConversationFlags, pushRead, pushUnread } from './preferences';
+import { caughtUpConversation } from './receipts';
 import type { Conversation } from './types';
 
 /**
@@ -87,7 +89,11 @@ function planOf(params: {
     return {
       keys: ['unreadCount'],
       request: gateway ? () => pushRead(transport, conversationId) : null,
-      applyConfirmed: () => patchConversation(queryClient, conversationId, (c) => ({ ...c, unreadCount: 0 })),
+      applyConfirmed: () => {
+        const readThrough = readThroughLastMessage(conversation);
+        patchConversation(queryClient, conversationId, readThrough);
+        patchConversationDetail(queryClient, conversationId, readThrough);
+      },
     };
   }
   store.markUnread(conversationId);
@@ -100,6 +106,21 @@ function planOf(params: {
         unreadCount: Math.max(1, c.unreadCount ?? 0),
       })),
   };
+}
+
+/**
+ * « Lu » confirmé (#7351, revue-correction) — `POST …/receipts { type: 'read' }`
+ * lit TOUT jusqu'au dernier message que la rangée montrait : le compte tombe à
+ * 0 ET le curseur avance sur ce message, dans la liste comme dans le détail
+ * que le fil relit (`caughtUpConversation`, la forme de `markCaughtUp`). Le
+ * compte seul laissait un curseur ancien — qui prime sur le compte — rendre
+ * non lus au fil rouvert les messages qu'on venait de marquer lus.
+ */
+function readThroughLastMessage(row: Conversation): (conversation: Conversation) => Conversation {
+  const last = row.lastMessage;
+  if (last === undefined) return (conversation) => ({ ...conversation, unreadCount: 0 });
+  const cursor = { messageId: last.id, messageCreatedAt: toDate(last.createdAt), readAt: new Date() };
+  return (conversation) => caughtUpConversation(conversation, cursor);
 }
 
 /**

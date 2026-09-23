@@ -98,6 +98,11 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         lastSentFacet = facet
     }
 
+    var noteUnreadRemainingCalls: [(conversationId: String, remaining: Int)] = []
+    func noteUnreadRemaining(_ conversationId: String, _ remaining: Int) {
+        noteUnreadRemainingCalls.append((conversationId, remaining))
+    }
+
     var setCurrentlyOpenConversationCallCount = 0
     var lastSetCurrentlyOpenConversationId: String?
     var currentlyOpenConversationId: String?
@@ -139,6 +144,7 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         markConversationUnreadLocallyCallCount = 0
         lastMarkUnreadConversationId = nil
         updateConversationAfterSendCallCount = 0
+        noteUnreadRemainingCalls = []
         setCurrentlyOpenConversationCallCount = 0
         lastSetCurrentlyOpenConversationId = nil
         currentlyOpenConversationId = nil

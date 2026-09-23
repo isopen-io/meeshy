@@ -53,6 +53,20 @@ public enum ConversationListAuthor {
         readerLabel = label
     }
 
+    /// L'auteur d'un message dont on TIENT l'expéditeur (ligne REST) : le mot
+    /// du lecteur quand c'est lui, son nom servi sinon. Même verdict que
+    /// `resolve` pour « moi », pour que le REST ne dise pas le nom du lecteur
+    /// là où le socket dit « Vous » (#7548).
+    public static func name(
+        senderId: String?,
+        senderName: String?,
+        readerId: String?,
+        youLabel: String = readerLabel
+    ) -> String? {
+        if let readerId, !readerId.isEmpty, senderId == readerId { return youLabel }
+        return senderName
+    }
+
     /// Ce que l'événement AFFIRME de l'auteur — trois états, comme partout où
     /// ce dépôt sépare une clé absente d'une clé nulle.
     ///

@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SocialEventsHandler } from '../SocialEventsHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -654,6 +655,29 @@ describe('SocialEventsHandler', () => {
       const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    /**
+     * #7395 — le lecteur d'une publication PUBLIQUE qui n'est pas ami de son
+     * auteur n'est dans AUCUNE feed room de l'audience : seule la post room,
+     * rejointe à l'ouverture de la fiche, le relie à la publication. Sa jumelle
+     * `broadcastMediaCaptionTranslationUpdated` l'atteignait déjà ; le TEXTE
+     * traduit ne l'atteignait jamais. Une émission UNIQUE sur l'union des rooms :
+     * l'ami qui a aussi ouvert la fiche la reçoit une fois, pas deux.
+     */
+    it('reaches the post room too, in ONE emission — the non-friend reader of a public post receives the translated text (#7395)', async () => {
+      const { handler, io } = buildHandler();
+      const data: PostTranslationUpdatedEventData = {
+        postId: POST_ID,
+        language: 'fr',
+        translation: { text: 'Bonjour', translationModel: 'nllb-200', createdAt: '2026-09-22T10:00:00.000Z' },
+      };
+
+      await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      expect(emittedRooms(io)).toContain(`post:${POST_ID}`);
+      expect(io.to).toHaveBeenCalledTimes(1);
+      expect(emitCalls(io)).toEqual([['post:translation-updated', data]]);
     });
   });
 

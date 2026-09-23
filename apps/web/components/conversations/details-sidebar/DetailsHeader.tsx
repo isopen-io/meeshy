@@ -99,6 +99,7 @@ export function DetailsHeader({
               onBlur={onSaveName}
             />
             <Button
+              aria-label={t('conversationDetails.save')}
               size="sm"
               onClick={onSaveName}
               disabled={isLoading}
@@ -107,6 +108,7 @@ export function DetailsHeader({
               <Save className="h-3 w-3" />
             </Button>
             <Button
+              aria-label={t('conversationDetails.cancel')}
               size="sm"
               variant="ghost"
               onClick={onCancelNameEdit}

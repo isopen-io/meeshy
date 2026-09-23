@@ -83,9 +83,15 @@ export type PlaybackStretch = {
 };
 
 export type AttachmentStatusReport = {
-  /** 'listened' pour un vocal, 'watched' pour une vidéo — les deux seuls
-   * verbes que ce lot émet (`viewed`/`downloaded` restent hors périmètre). */
-  readonly action: 'listened' | 'watched';
+  /** 'listened' pour un vocal, 'watched' pour une vidéo, 'viewed' pour
+   * l'OUVERTURE d'une image ou d'un document (#7363, W6 — miroir
+   * `DocumentOpenReport.bodyForOpening`, `packages/MeeshySDK/Sources/
+   * MeeshyUI/Media/DocumentOpenReport.swift` : lire n'est pas enregistrer,
+   * jamais `'downloaded'` pour une simple ouverture), 'downloaded' pour un
+   * enregistrement EXPLICITE. Le serveur accepte les quatre depuis toujours
+   * (`AttachmentStatusBodySchema`, `messages-schemas.ts:212`) — seul ce
+   * type CLIENT était resté étroit. */
+  readonly action: 'listened' | 'watched' | 'viewed' | 'downloaded';
   readonly playPositionMs?: number;
   readonly durationMs?: number;
   readonly complete?: boolean;
@@ -166,19 +172,32 @@ export const attachmentStatusDetailsQueryKey = (attachmentId: string) =>
  * `attachmentId` (même motif que `waveformOf`, `lib/view/message.ts:103`)
  * fait varier ouvertures/téléchargements/position d'une pièce à l'autre
  * SANS jamais changer d'un rendu au suivant.
+ *
+ * `viewedAt` ET `viewCount` DÉRIVENT DU MÊME TIRAGE (revue #7363) — ils ne
+ * sont pas deux dés indépendants. La passerelle les pose ENSEMBLE, dans la
+ * même transaction (`MessageMediaConsumptionService.markImageAsViewed` :
+ * `viewedAt: now, viewCount: 1` à la création, les deux incrémentés à la
+ * mise à jour) : `viewCount > 0` sans `viewedAt` n'existe pas en base. Les
+ * deux tirages séparés d'avant étaient exactement INVERSES l'un de l'autre
+ * (`seed % 4 === 0` posait la date quand `seed % 4` posait zéro), si bien
+ * que la carte de la fiche affirmait « 1 ouverture » ET « Pas encore
+ * ouvert » sur la MÊME pièce — une contradiction que seul le corpus
+ * fabriquait, mais qu'une capture, un gate navigateur ou une démonstration
+ * montrait telle quelle.
  */
 function attachmentStatusFixtureOf(attachmentId: string): readonly AttachmentStatusRow[] {
   const seed = [...attachmentId].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 9973, 7);
   const complete = seed % 2 === 0;
   const positionMs = complete ? null : 4_000 + (seed % 20_000);
   const count = 1 + (seed % 3);
+  const viewCount = seed % 4;
   const base = Date.UTC(2026, 8, 21, 10, 5, 0);
   return [
     {
       participantId: `fx-participant-${seed}`,
       username: 'Alice',
       avatar: null,
-      viewedAt: seed % 4 === 0 ? new Date(base).toISOString() : null,
+      viewedAt: viewCount > 0 ? new Date(base).toISOString() : null,
       downloadedAt: seed % 5 === 0 ? new Date(base + 1_000).toISOString() : null,
       listenedAt: new Date(base + 2_000).toISOString(),
       watchedAt: new Date(base + 2_000).toISOString(),
@@ -188,7 +207,7 @@ function attachmentStatusFixtureOf(attachmentId: string): readonly AttachmentSta
       watchedComplete: complete,
       lastPlayPositionMs: positionMs,
       lastWatchPositionMs: positionMs,
-      viewCount: seed % 4,
+      viewCount,
       viewedLanguages: [],
     },
   ];

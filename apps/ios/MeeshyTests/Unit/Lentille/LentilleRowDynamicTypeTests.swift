@@ -168,123 +168,26 @@ final class LentilleRowDynamicTypeTests: XCTestCase {
         )
     }
 
-    // MARK: - Branches 4, 5, 6 : previewLine — expired / hidden / viewOnce
-    // (LastMessageSummaryKind, SDK gelé — 3 des 5 cas ; les 2 restants,
-    // ephemeralActive/standard, partagent standardPreview ci-dessous)
+    // MARK: - Branche 4 : la préview composée (#7548)
 
-    func test_expiredBranch_appliesExactlyOneDocumentedLineLimit() throws {
-        let code = try source("LentilleConversationRow.swift")
-        let text = try body(of: "private var previewLine: some View {", in: code)
-        guard let start = text.range(of: "case .expired:"),
-              let end = text.range(of: "\n        case .hidden:")
-        else {
-            XCTFail("le cas .expired de previewLine est introuvable — la structure a-t-elle changé ?")
-            return
-        }
-        XCTAssertEqual(
-            lineLimitOneCount(text[start.lowerBound..<end.lowerBound]), 1,
-            "previewLine, cas .expired, doit tronquer « message.expired » À UNE LIGNE (politique " +
-            "documentée) — ni 0, ni 2."
-        )
-    }
-
-    func test_hiddenBranch_appliesExactlyOneDocumentedLineLimit() throws {
-        let code = try source("LentilleConversationRow.swift")
-        let text = try body(of: "private var previewLine: some View {", in: code)
-        guard let start = text.range(of: "case .hidden:"),
-              let end = text.range(of: "\n        case .viewOnce:")
-        else {
-            XCTFail("le cas .hidden de previewLine est introuvable — la structure a-t-elle changé ?")
-            return
-        }
-        XCTAssertEqual(
-            lineLimitOneCount(text[start.lowerBound..<end.lowerBound]), 1,
-            "previewLine, cas .hidden, doit tronquer « conversation.summary.hidden » À UNE LIGNE " +
-            "(politique documentée) — ni 0, ni 2."
-        )
-    }
-
-    func test_viewOnceBranch_appliesExactlyOneDocumentedLineLimit() throws {
-        let code = try source("LentilleConversationRow.swift")
-        let text = try body(of: "private var previewLine: some View {", in: code)
-        guard let start = text.range(of: "case .viewOnce:"),
-              let end = text.range(of: "\n        case .ephemeralActive:")
-        else {
-            XCTFail("le cas .viewOnce de previewLine est introuvable — la structure a-t-elle changé ?")
-            return
-        }
-        XCTAssertEqual(
-            lineLimitOneCount(text[start.lowerBound..<end.lowerBound]), 1,
-            "previewLine, cas .viewOnce, doit tronquer « conversation.summary.view_once » À UNE " +
-            "LIGNE (politique documentée) — ni 0, ni 2."
-        )
-    }
-
-    // MARK: - Branches 7 & 8 : ephemeralActive / standard (même fichier, même
-    // politique — les deux routent vers `standardPreview`, seul l'icône
-    // horloge diffère)
-
-    /// `previewLine` route .ephemeralActive et .standard vers LA MÊME
-    /// fonction `standardPreview(showEphemeralIcon:)` (LentilleConversationRow.swift:490-494) —
-    /// même chemin de code que les branches 1&2 / 4&5 de FocalDynamicTypeTests
-    /// (une paire de cas, un seul test).
-    func test_ephemeralActiveAndStandardBranches_routeToTheSameStandardPreview() throws {
+    /// La préview n'a plus de branches dans la rangée : `ConversationPreviewLine`
+    /// peint UN `Text` composé par le SDK (auteur, glyphe, corps), borné par le
+    /// `lineLimit` que la rangée lui passe — une ligne au repos, deux sous la
+    /// loupe, jamais libre (rang à hauteur fixe).
+    func test_previewBranch_passesItsLineLimit_andTheSharedLineHonoursIt() throws {
         let code = try source("LentilleConversationRow.swift")
         let text = try body(of: "private var previewLine: some View {", in: code)
         XCTAssertTrue(
-            text.contains("case .ephemeralActive:") && text.contains("standardPreview(showEphemeralIcon: true)"),
-            "previewLine doit router .ephemeralActive vers standardPreview(showEphemeralIcon: true)."
+            text.contains("lineLimit: isMagnified ? 2 : 1"),
+            "La préview tronque à UNE ligne au repos, DEUX sous la loupe — jamais libre."
         )
-        XCTAssertTrue(
-            text.contains("case .standard:") && text.contains("standardPreview(showEphemeralIcon: false)"),
-            "previewLine doit router .standard vers standardPreview(showEphemeralIcon: false)."
-        )
-    }
 
-    /// `standardPreview` (LentilleConversationRow.swift:498-554) — quatre
-    /// issues (texte / pièce jointe / position / vide) ; SEULES les trois
-    /// issues à contenu variable tronquent à une ligne (texte du message,
-    /// libellé court de pièce jointe, nom de lieu) — l'issue vide (fallback
-    /// `Text("")`) ne porte aucun `.lineLimit`, rien à tronquer.
-    ///
-    /// **2026-08-23** — la première des trois (le texte du message) est
-    /// devenue CONDITIONNELLE : `.lineLimit(isMagnified ? 2 : 1)`. La
-    /// politique est inchangée au repos — c'est le même rang à hauteur fixe,
-    /// tronqué à une ligne — et la magnification lui en accorde une seconde,
-    /// dans une enveloppe elle aussi fixe (`FocusInline.height`). Le témoin
-    /// compte donc deux `.lineLimit(1)` littéraux plus cette forme ternaire,
-    /// et vérifie explicitement qu'aucune des trois issues à contenu variable
-    /// n'a perdu sa borne.
-    func test_standardPreviewBody_appliesExactlyThreeDocumentedLineLimits() throws {
-        let code = try source("LentilleConversationRow.swift")
-        let text = try body(of: "private func standardPreview(showEphemeralIcon: Bool) -> some View {", in: code)
-        XCTAssertTrue(
-            text.contains(".lineLimit(isMagnified ? 2 : 1)"),
-            "Le texte du message tronque à UNE ligne au repos, DEUX sous la loupe — jamais libre."
-        )
-        XCTAssertEqual(
-            lineLimitOneCount(text), 2,
-            "standardPreview doit tronquer EXACTEMENT deux Text à une ligne EN DUR (libellé de " +
-            "pièce jointe, nom de lieu) — le texte du message, lui, porte la forme ternaire " +
-            "vérifiée juste au-dessus, politique documentée, rang à hauteur fixe — " +
-            "ni moins (croissance libre dans un conteneur figé à .accessibility5), ni plus " +
-            "(troncature accidentelle supplémentaire, par ex. sur senderLabel qui a SA PROPRE " +
-            "politique testée séparément ci-dessous)."
-        )
-    }
-
-    /// `senderLabel` (LentilleConversationRow.swift:556-566), consommé par
-    /// `standardPreview` ET par les branches .hidden/.viewOnce ci-dessus —
-    /// tronque à une ligne, comme tout nom affiché sur le rang (même
-    /// politique que `headerLine`'s `conversation.displayName`, hors
-    /// périmètre ligne 2 mais même discipline).
-    func test_senderLabel_appliesExactlyOneDocumentedLineLimit() throws {
-        let code = try source("LentilleConversationRow.swift")
-        let text = try body(of: "private var senderLabel: some View {", in: code)
-        XCTAssertEqual(
-            lineLimitOneCount(text), 1,
-            "senderLabel doit tronquer le nom d'expéditeur À UNE LIGNE (politique documentée) — " +
-            "ni 0, ni 2."
-        )
+        let lineURL = rowRoot()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Views/ConversationPreviewLine.swift")
+        let line = AppSourceGuard.stripComments(try String(contentsOf: lineURL, encoding: .utf8))
+        XCTAssertTrue(line.contains(".lineLimit(lineLimit)"), "ConversationPreviewLine doit appliquer la borne reçue.")
+        XCTAssertFalse(line.contains(".clipped()"), "ConversationPreviewLine ne rogne jamais un glyphe à mi-hauteur.")
     }
 }

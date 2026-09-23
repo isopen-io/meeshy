@@ -640,6 +640,12 @@ export class SocialEventsHandler {
   // POST/COMMENT TRANSLATION BROADCASTS
   // ==============================================
 
+  /**
+   * Même audience que sa jumelle `broadcastMediaCaptionTranslationUpdated` : les
+   * feed rooms autorisées par la visibilité + l'auteur + la post room (#7395).
+   * Sans la post room, le lecteur d'une publication PUBLIQUE qui n'est pas ami
+   * de son auteur recevait la légende traduite en direct, jamais le TEXTE.
+   */
   async broadcastPostTranslationUpdated(
     data: PostTranslationUpdatedEventData,
     postAuthorId: string,
@@ -647,7 +653,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
   async broadcastCommentTranslationUpdated(

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import type { AnonymousFormData } from './use-join-flow';
+import { logger } from '@/utils/logger';
 
 export function useConversationJoin(linkId: string) {
   const router = useRouter();
@@ -106,7 +107,7 @@ export function useConversationJoin(linkId: string) {
       }
 
       if (authToken) {
-        console.log('[JOIN] Envoi requête POST à:', `${buildApiUrl('/conversations/join')}/${linkId}`);
+        logger.debug('[JOIN]', 'Envoi requête de jonction');
 
         const response = await fetch(`${buildApiUrl('/conversations/join')}/${linkId}`, {
           method: 'POST',
@@ -115,13 +116,11 @@ export function useConversationJoin(linkId: string) {
           }
         });
 
-        console.log('[JOIN] Statut réponse:', response.status);
+        logger.debug('[JOIN]', 'Statut réponse:', response.status);
 
         if (response.ok) {
           const result = await response.json();
-          console.log('[JOIN] Réponse complète du backend:', JSON.stringify(result, null, 2));
-          console.log('[JOIN] result.data:', result.data);
-          console.log('[JOIN] result.data?.conversationId:', result.data?.conversationId);
+          logger.debug('[JOIN]', 'Conversation résolue:', Boolean(result.data?.conversationId));
 
           if (!result.data?.conversationId) {
             console.error('[JOIN] conversationId manquant dans la réponse:', result);
@@ -130,7 +129,7 @@ export function useConversationJoin(linkId: string) {
           }
 
           toast.success('Redirection...');
-          console.log('[JOIN] Redirection vers:', `/conversations/${result.data.conversationId}`);
+          logger.debug('[JOIN]', 'Redirection vers la conversation');
           router.push(`/conversations/${result.data.conversationId}`);
         } else {
           const error = await response.json();

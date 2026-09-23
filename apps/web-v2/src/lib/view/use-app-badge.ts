@@ -32,12 +32,17 @@ type Overrides = Readonly<Record<string, ConversationOverride>>;
  * pose un override OPTIMISTE que le wire ne porte pas encore, et le badge
  * serait resté en retard d'un aller-retour serveur (Instant App § Optimistic
  * Updates).
+ *
+ * Cache absent (`undefined`) retourne `undefined` pour signaler que le badge
+ * ne doit pas être mis à jour — il reste inchangé jusqu'à la première valeur
+ * servie. Cela distingue l'absence de données (undefined) d'une liste vide
+ * chargée ([] → 0, le badge doit être effacé).
  */
 export function countUnreadConversations(
   conversations: readonly Conversation[] | undefined,
   overrides: Overrides,
-): number {
-  if (conversations === undefined) return 0;
+): number | undefined {
+  if (conversations === undefined) return undefined;
   return conversations.filter(
     (conversation) =>
       effectiveUnreadOf(conversation, overrides) > 0 && !effectiveFlagsOf(conversation, overrides).isMuted,
@@ -103,8 +108,13 @@ function writeTitle(document: TitleHost | undefined, count: number): void {
  * `updateAppBadge` — les DEUX surfaces d'un même nombre : le badge d'icône de
  * la PWA et le titre de l'onglet. `host` n'existe que pour les témoins ; en
  * production les deux globales sont lues telles quelles.
+ *
+ * `undefined` signale une absence de données : ni badge ni titre ne sont mis
+ * à jour. Cela permet au badge de rester inchangé tant que le cache n'a pas
+ * livré sa première valeur.
  */
-export function updateAppBadge(count: number, host: AppBadgeHost = {}): void {
+export function updateAppBadge(count: number | undefined, host: AppBadgeHost = {}): void {
+  if (count === undefined) return;
   writeBadge(host.navigator ?? globalThis.navigator, count);
   writeTitle(host.document ?? globalThis.document, count);
 }

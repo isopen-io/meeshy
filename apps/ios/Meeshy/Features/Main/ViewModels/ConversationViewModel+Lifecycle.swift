@@ -45,7 +45,7 @@ struct ConversationDependencies {
 
 // MARK: - Seam de reprise d'appel
 
-/// Seam de testabilité pour `ConversationViewModel.joinOngoingCall` — par
+/// Seam de testabilité de `LiveCallJoiner` (bulle vivante et ligne de liste) — par
 /// défaut lit/actionne `CallManager.shared` (singleton WebRTC intestable en
 /// unit) ; les tests injectent des closures espionnes pour couvrir les 4
 /// branches sans toucher au sous-système d'appel réel.
@@ -173,24 +173,18 @@ extension ConversationViewModel {
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
         // aggregator. Cleared in `deinit`.
+        //
+        // OUVRIR N'EST PAS LIRE (#7350, I-2). Ce zéro est TRANSITOIRE : il ne
+        // pose aucune frontière de lecture, et la fermeture redonne à la ligne
+        // ce qui reste réellement non lu (`notePartialRead(seen:)`, borné par
+        // `FirstUnreadBoundary`). Un `ConversationReadSignal.markReadLocally`
+        // vivait ici : il datait une frontière de l'ouverture, forcément
+        // postérieure au dernier message, et `reconcileUnread` ramenait ensuite
+        // à 0 tout instantané serveur — 99 non-lus, 5 vus, liste à 0 pendant
+        // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
+        // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
+        // contient le message le plus récent) ou un geste explicite.
         syncEngine.setCurrentlyOpenConversation(conversationId)
-        // OUVRIR, C'EST LIRE — et ça se voit tout de suite.
-        //
-        // Le moteur posait déjà cette règle (zéro + frontière) mais dans son
-        // cache SEUL, et de façon différée : les lignes @Published et le
-        // `ConversationStore` ne l'apprenaient que par le rechargement de
-        // cache débouncé à 200 ms — quand ils l'apprenaient. Le seul autre
-        // chemin qui les touchait, `markAsRead(messageIds:)`, est gaté par
-        // l'exactitude de lecture (`caughtUpMessageId`) : ouvrir une
-        // conversation à 99 non-lus sans en atteindre le bas ne le franchit
-        // jamais. Le store gardait donc 99, le cache disait 0, et la ligne
-        // affichait celui des deux qui avait publié en dernier — le
-        // va-et-vient que l'utilisateur voyait.
-        //
-        // Rien n'est envoyé au serveur ici : l'accusé de lecture garde son
-        // exigence d'exactitude, il part par `markAsRead(messageIds:)` quand
-        // le lecteur a réellement rattrapé.
-        ConversationReadSignal.markReadLocally(conversationId, syncEngine: syncEngine)
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
@@ -247,6 +241,32 @@ extension ConversationViewModel {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
         }
+    }
+
+    // MARK: - Lecture partielle
+
+    /// Lecture PARTIELLE (#7350, I-2) : ce qui reste non lu, borné par la
+    /// frontière du premier non-lu (`FirstUnreadBoundary.remainingUnread`, la
+    /// loi de S1), est confié au moteur, qui le redonne à la ligne de liste
+    /// quand l'écran se ferme. 99 non-lus, 5 affichés ⇒ 94 — et non le 0 que
+    /// l'ouverture posait avant ce lot.
+    func notePartialRead(seen messageIds: [String]) {
+        seenServerMessageIds.formUnion(messageIds)
+        let remaining = FirstUnreadBoundary.remainingUnread(
+            messages: messages.map {
+                FirstUnreadCandidateMessage(id: serverId(for: $0.id), senderId: $0.senderId, createdAt: $0.createdAt)
+            },
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: memberJoinedAt,
+            viewerId: currentUserId,
+            seenIds: seenServerMessageIds,
+            unreadAtOpen: initialUnreadCount,
+            windowIsAtTip: !hasNewerMessages,
+            caughtUpMessageId: lastCaughtUpMessageId
+        )
+        syncEngine.noteUnreadRemaining(conversationId, remaining)
     }
 
     // MARK: - Miroirs et préférences de langue

@@ -490,6 +490,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                 <div className="flex items-center gap-3">
                   {isMobile && (
                     <Button
+                      aria-label={tGroups('groups.community.backToCommunities')}
                       variant="ghost"
                       size="sm"
                       onClick={handleBackToList}
@@ -544,6 +545,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                     {tGroups('actions.invite')}
                   </Button>
                   <Button 
+                    aria-label={tGroups('groups.actions.settings')}
                     variant="outline" 
                     size="sm"
                     onClick={() => setIsSettingsModalOpen(true)}

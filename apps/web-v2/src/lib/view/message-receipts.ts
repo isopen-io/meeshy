@@ -94,3 +94,14 @@ export function positionFraction(params: {
 export function playCountLabel(count: number): string | null {
   return count > 1 ? `${count}x` : null;
 }
+
+/**
+ * QUI A OUVERT UNE IMAGE/UN DOCUMENT (#7363, W6) — filtre sur `viewedAt`
+ * SEUL (jamais `downloadedAt` : télécharger n'est pas ouvrir, § critère de
+ * fin de l'issue). Miroir `MessageViewsConsumption.attachments(…, in: .opened)`
+ * au niveau LIGNE plutôt que pièce : la carte reste montée pour toute pièce
+ * (agrégats déjà rendus), seules les RANGÉES nominatives se filtrent ici.
+ */
+export function openedRowsOf(rows: readonly AttachmentStatusRow[]): readonly AttachmentStatusRow[] {
+  return rows.filter((row) => row.viewedAt !== null);
+}

@@ -63,6 +63,7 @@ interface ConversationLinksSectionProps {
 
 export function ConversationLinksSection({ conversationId }: ConversationLinksSectionProps) {
   const { t, locale } = useI18n('conversations');
+  const { t: tA11y } = useI18n('common');
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -212,6 +213,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  aria-label={tA11y('a11y.moreActions')}
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2 text-xs"

@@ -70,10 +70,15 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     /// qu'avant ce lot (mêmes noms, même ordre) — un argument oublié ou
     /// substitué serait un changement de comportement silencieux drapeau
     /// éteint.
+    ///
+    /// **2026-09-23 (#7548) — « Rejoindre » s'ajoute aux DEUX branches, à
+    /// l'identique** : la ligne d'aperçu offre de rejoindre l'appel en cours,
+    /// quel que soit le rang monté. Un drapeau qui l'offrirait d'un côté
+    /// seulement ferait dépendre une capacité d'un choix de présentation.
     func test_rowCore_offBranch_buildsThemedConversationRow_withUnchangedArguments() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages ) .equatable() }
+        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() } ) .equatable() }
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 
@@ -97,7 +102,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     func test_rowCore_onBranch_buildsLentilleConversationRow_withSameArgumentSet() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, magnification: context )
+        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, onJoinLiveCall: { joinLiveCall() }, magnification: context )
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 

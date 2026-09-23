@@ -33,7 +33,7 @@ final class FocalAudioRoutingTests: XCTestCase {
             reply: reply,
             attachments: attachments,
             location: nil,
-            ephemeral: nil,
+            protection: .unprotected,
             isBlurred: false,
             isViewOnce: false,
             isPinned: false,

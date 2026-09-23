@@ -53,6 +53,57 @@ func withSendTimeout<T: Sendable>(
 
 extension ConversationViewModel {
 
+    // MARK: - La protection armée au composeur
+
+    /// Ce que la rangée du composeur affiche comme ARMÉ, lu en UNE valeur.
+    ///
+    /// Les trois bascules restent des `@Published` distincts parce que la
+    /// rangée s'y lie une par une ; mais tout ce qui ENVOIE lit cette valeur,
+    /// jamais les trois champs. C'est ce qui rend impossible qu'un chemin
+    /// d'envoi n'en applique que deux sur trois.
+    var armedProtection: MessageProtectionIntent {
+        MessageProtectionIntent(
+            ephemeralDurationSeconds: ephemeralDuration?.rawValue,
+            isBlurred: isBlurEnabled,
+            isViewOnce: isViewOnceEnabled
+        )
+    }
+
+    /// Saisit la protection armée et DÉSARME la rangée dans le même tour.
+    ///
+    /// Appelée une fois par tap, avant que quoi que ce soit parte : la valeur
+    /// rendue voyage ensuite jusqu'à chaque message de cet envoi. Le
+    /// désarmement était jusqu'ici fait à l'ACQUITTEMENT de chaque message
+    /// (`finalizeSuccessfulSend`), ce qui donnait à un envoi multi-pièces une
+    /// fenêtre où la protection avait déjà disparu pour les groupes suivants.
+    ///
+    /// Désarmer au TAP est aussi ce que l'utilisateur attend : il vient
+    /// d'envoyer, la rangée s'éteint — elle ne reste pas allumée le temps d'un
+    /// upload, à lui faire croire que le prochain envoi sera protégé aussi.
+    func consumeArmedProtection() -> MessageProtectionIntent {
+        let intent = armedProtection
+        if ephemeralDuration != nil { ephemeralDuration = nil }
+        if isBlurEnabled { isBlurEnabled = false }
+        if isViewOnceEnabled { isViewOnceEnabled = false }
+        return intent
+    }
+
+    /// Les bits que la ligne OPTIMISTE doit porter : l'axe apparition/persistant
+    /// choisi au composeur, UNI à l'axe cycle de vie de la protection armée.
+    ///
+    /// Le serveur, lui, RECOMPOSE (`composeMessageEffectFlags`) depuis les
+    /// colonnes déclarées — la charge REST n'a donc rien à unir, et c'est
+    /// précisément ce qui a caché le défaut. La ligne LOCALE n'a pas cette
+    /// chance : elle est lue telle quelle par la bulle, et
+    /// `MessageProtectionDescriptor` lit les BITS pour la vue unique et le
+    /// flou. Sans cette union, un texte armé « ① » n'avait ni puce ni voile
+    /// jusqu'à la réponse serveur — l'éphémère s'en sortait par la porte de
+    /// derrière (`expiresAt` suffit à le prouver), ses deux voisins non.
+    func optimisticEffectFlags(_ intent: MessageProtectionIntent) -> MessageEffectFlags {
+        let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : MessageEffectFlags(rawValue: 0)
+        return apparence.union(intent.lifecycleFlags)
+    }
+
     // MARK: - Délai de garde de l'envoi REST
 
     /// REST send timeout (seconds). Far below `APIClient.timeoutIntervalForRequest`
@@ -136,26 +187,25 @@ extension ConversationViewModel {
         Task { [weak self] in
             await self?.persistMessagesUsingServerIds()
         }
-        let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
         // Facette relue sur la ligne optimiste : elle porte les pièces jointes et
         // les effets réellement envoyés. Recomposer une facette « texte nu » ici
         // effacerait de la liste la photo qu'on vient d'envoyer, une seconde
         // après que l'insert optimiste l'y a mise.
         let ackedFacet = messages.first(where: { $0.id == tempId }).map {
-            LastMessageFacet(
-                message: $0,
-                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType, location: $0.location),
-                id: serverId,
-                at: msgTime
-            )
-        } ?? LastMessageFacet(id: serverId, preview: msgContent.meeshyPreviewTruncated, senderName: sentSenderName, at: msgTime)
+            LastMessageFacet(message: $0, preview: msgContent, id: serverId, at: msgTime)
+        } ?? LastMessageFacet.sent(id: serverId, text: msgContent, at: msgTime)
         Task {
-            await ConversationSyncEngine.shared.updateConversationAfterSend(ackedFacet, conversationId: convId)
+            await ConversationSyncEngine.shared.updateConversationAfterSend(
+                ackedFacet, conversationId: convId, replacing: [tempId]
+            )
         }
 
-        if ephemeralDuration != nil { ephemeralDuration = nil }
-        if isBlurEnabled { isBlurEnabled = false }
-        if isViewOnceEnabled { isViewOnceEnabled = false }
+        // Le désarmement des TROIS protections a quitté cet endroit (#7498) :
+        // il se fait au TAP, par `consumeArmedProtection()`. Ici, on est à
+        // l'ACQUITTEMENT d'UN message — et un tap en produit souvent plusieurs
+        // (un par groupe de pièces jointes, plus le texte). Désarmer ici
+        // laissait partir sans protection tout ce qui suivait le premier
+        // acquittement, la rangée allumée au moment du tap.
         if pendingEffects.hasAnyEffect { pendingEffects = .none }
         mentionController.clearDraft()
 
@@ -173,32 +223,6 @@ extension ConversationViewModel {
         // Détaché : la demande ouvre une alerte système qui peut rester à
         // l'écran indéfiniment, et rien de l'envoi ne doit l'attendre.
         Task { await PushPermissionPrompt.honourDeferredRequest() }
-    }
-
-    /// Preview shown in the conversation list for an OPTIMISTIC message: the
-    /// caption when present, else the media label of ``MediaKindLabel`` in its
-    /// registre APERÇU (mirrors the server's last-message preview wording).
-    /// Used to surface a just-sent message in the list before any server ACK.
-    /// `nonisolated static` so the media path can compute it for a
-    /// `Task.detached`.
-    nonisolated static func optimisticListPreview(text: String,
-                                                  messageType: Message.MessageType,
-                                                  location: SharedPlace? = nil,
-                                                  bundle: Bundle = .main,
-                                                  locale: Locale = .current) -> String {
-        if !text.isEmpty { return text }
-        // Message porteur d'un lieu sans texte : « 📍 <nom, à défaut adresse,
-        // à défaut Position> ». Sans cette branche, l'aperçu d'un message
-        // « lieu seul » (content vide, messageType .text) serait vide — la clé
-        // `media.summary.location` n'était atteinte que par le type de pièce
-        // jointe, jamais par `message.location` (lot 2, spec 2026-07-30).
-        if let location {
-            if let name = location.name, !name.isEmpty { return "📍 \(name)" }
-            if let address = location.address, !address.isEmpty { return "📍 \(address)" }
-            return MediaKindLabel.summary(.location, bundle: bundle, locale: locale)
-        }
-        guard let kind = MediaKindLabel.kind(for: messageType) else { return "" }
-        return MediaKindLabel.summary(kind, bundle: bundle, locale: locale)
     }
 
     /// Colonne `stickerJson` du record OPTIMISTE (#4823) — même mécanique que
@@ -226,7 +250,7 @@ extension ConversationViewModel {
     /// parce qu'il est « spécial », mais parce que ce canal PERDRAIT une part
     /// de ce qu'on lui confie — et que la perte serait invisible (le message
     /// part, l'accusé revient, seule la citation ment).
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, protection: MessageProtectionIntent? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         // Garde partagé avec le composer (`SendEligibility`) : un message
@@ -413,10 +437,7 @@ extension ConversationViewModel {
             // just-typed message — with the correct author name — even before
             // the network returns. Without this the preview keeps the previous
             // author/content while the user waits for connectivity.
-            let offlineFacet = LastMessageFacet(
-                message: offlineMessage,
-                preview: Self.optimisticListPreview(text: text, messageType: .text, location: location)
-            )
+            let offlineFacet = LastMessageFacet(message: offlineMessage, preview: text)
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
             }
@@ -439,17 +460,25 @@ extension ConversationViewModel {
             }
         }
 
-        // Resolve ephemeral: use explicit param or ViewModel state
-        let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
-        let resolvedEphemeralDuration = ephemeralDuration?.rawValue
-
-        // Resolve view-once: explicit param, else the ViewModel toggle state
-        // (surfaced by the notification preview composer).
-        let resolvedIsViewOnce = isViewOnce ?? isViewOnceEnabled
-        let resolvedMaxViewOnceCount = maxViewOnceCount
-
-        // Resolve blur: use explicit param or ViewModel state
-        let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
+        // La protection est une VALEUR, saisie UNE fois (#7498).
+        //
+        // `protection` est l'intention SAISIE AU TAP par le composeur : un tap
+        // produit souvent plusieurs messages (un par groupe de pièces jointes,
+        // plus le texte en dernier), et la rangée se désarme dès le tap. Relire
+        // l'état publié à chaque envoi faisait partir tout ce qui suivait le
+        // premier groupe SANS protection, la rangée pourtant allumée — le
+        // défaut « cela ne fonctionne que sur les textes » de la recette 1.1.0.
+        //
+        // `?? armedProtection` sert les chemins qui n'ont pas de tap derrière
+        // eux (rejeu d'outbox, envoi programmatique) : ils lisent ce qui est
+        // armé, comme avant. Un chemin ne peut donc pas partir SANS protection
+        // par oubli ; il faudrait passer `.none` délibérément.
+        let intent = protection ?? armedProtection
+        let resolvedExpiresAt = intent.expiresAt()
+        let resolvedEphemeralDuration = intent.ephemeralDurationSeconds
+        let resolvedIsViewOnce = intent.isViewOnce
+        let resolvedMaxViewOnceCount = intent.maxViewOnceCount
+        let resolvedBlur = intent.wireIsBlurred
 
         // Build ReplyReference from quoted message or story via la helper
         // unifiee — meme logique que `insertOptimisticMediaMessage` pour
@@ -511,7 +540,7 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
-                expiresAt: resolvedExpiresAt, effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0,
+                expiresAt: resolvedExpiresAt, effectFlags: optimisticEffectFlags(intent).rawValue,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
@@ -545,17 +574,16 @@ extension ConversationViewModel {
                 // appear/reorder in the list until its ACK. finalizeSuccessfulSend
                 // refreshes it with the server timestamp at ACK time.
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    LastMessageFacet(
+                    LastMessageFacet.sent(
                         id: tempId,
-                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType, location: location),
-                        senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+                        text: text,
                         at: optimisticRecord.createdAt,
                         attachments: resolvedAttachments,
-                        attachmentCount: resolvedAttachments.count,
                         isBlurred: resolvedBlur ?? false,
                         isViewOnce: resolvedIsViewOnce,
                         expiresAt: resolvedExpiresAt,
-                        originalLanguage: optimisticRecord.originalLanguage
+                        originalLanguage: optimisticRecord.originalLanguage,
+                        location: location
                     ),
                     conversationId: conversationId
                 )
@@ -964,7 +992,8 @@ extension ConversationViewModel {
         storyReplyToId: String? = nil,
         replyReference: ReplyReference? = nil,
         originalLanguage: String? = nil,
-        sticker: MessageSticker? = nil
+        sticker: MessageSticker? = nil,
+        protection: MessageProtectionIntent
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
@@ -990,8 +1019,15 @@ extension ConversationViewModel {
             storyReplyToId: storyReplyToId,
             forwardedFromId: nil, forwardedFromConversationId: nil,
             replyToJson: replyToJson, forwardedFromJson: nil,
-            expiresAt: nil, effectFlags: 0,
-            maxViewOnceCount: nil, viewOnceCount: 0,
+            // La bulle optimiste PORTE la protection qu'on vient d'armer
+            // (#7498). Elle valait `nil`/`0` en dur : l'expéditeur envoyait un
+            // éphémère et voyait un message ordinaire — ni flamme, ni
+            // décompte, ni voile — jusqu'à la réconciliation serveur. Le
+            // défaut se lisait comme « la protection n'a pas été appliquée »,
+            // ce qui était vrai à l'écran et faux sur le fil.
+            expiresAt: protection.expiresAt(from: now),
+            effectFlags: protection.lifecycleFlags.rawValue,
+            maxViewOnceCount: protection.maxViewOnceCount, viewOnceCount: 0,
             isEdited: false, editedAt: nil, deletedAt: nil,
             pinnedAt: nil, pinnedBy: nil,
             senderName: authManager.currentUser?.displayName,
@@ -1016,13 +1052,11 @@ extension ConversationViewModel {
         let attachmentCount = attachments.count
         // Captured for the conversation-list optimistic update below (computed on
         // the MainActor before the detached insert).
-        let listFacet = LastMessageFacet(
+        let listFacet = LastMessageFacet.sent(
             id: tempId,
-            preview: Self.optimisticListPreview(text: content, messageType: messageType),
-            senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+            text: content,
             at: now,
             attachments: attachments,
-            attachmentCount: attachments.count,
             originalLanguage: resolvedOriginalLanguage
         )
         Task.detached(priority: .userInitiated) {

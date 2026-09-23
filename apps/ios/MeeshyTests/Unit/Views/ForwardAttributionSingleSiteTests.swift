@@ -171,7 +171,7 @@ final class ForwardAttributionSingleSiteTests: XCTestCase {
     private func contenu(attribution: ForwardAttribution?) -> BubbleContent {
         BubbleContent(
             messageId: "m1", kind: .standard, text: nil, translation: nil, reply: nil,
-            attachments: .none, location: nil, ephemeral: nil, isBlurred: false,
+            attachments: .none, location: nil, protection: .unprotected, isBlurred: false,
             isViewOnce: false, isPinned: false, forwardAttribution: attribution, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),

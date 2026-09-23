@@ -116,11 +116,14 @@ extension ConversationView {
         let storyRef = isStory ? pendingRef : nil
         let lang = composerState.selectedLanguage
         let tempId = ClientMessageId.generate()
+        // Un sticker est un ENVOI comme un autre : la protection armée le suit
+        // (#7498), et la rangée se désarme au tap, ici comme ailleurs.
+        let protection = viewModel.consumeArmedProtection()
 
         viewModel.insertOptimisticMediaMessage(
             tempId: tempId, content: "", attachments: [local], messageType: .image,
             replyToId: replyId, storyReplyToId: storyReplyId, replyReference: storyRef,
-            originalLanguage: lang, sticker: sticker
+            originalLanguage: lang, sticker: sticker, protection: protection
         )
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)
@@ -132,7 +135,7 @@ extension ConversationView {
                 image: image, attachmentId: attachmentId, directory: directory, localKey: localKey,
                 tempId: tempId, sticker: sticker,
                 replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
-                originalLanguage: lang, currentUserId: currentUserId
+                originalLanguage: lang, currentUserId: currentUserId, protection: protection
             )
         }
     }
@@ -147,7 +150,7 @@ extension ConversationView {
         image: UIImage, attachmentId: String, directory: URL, localKey: String,
         tempId: String, sticker: MessageSticker?,
         replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
-        originalLanguage: String, currentUserId: String
+        originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         let écrit: StickerSendPipeline.WrittenSticker
         do {
@@ -165,7 +168,7 @@ extension ConversationView {
         await uploadAndSendSticker(
             fileURL: écrit.url, data: écrit.data, image: image, tempId: tempId, sticker: sticker,
             replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
-            originalLanguage: originalLanguage, currentUserId: currentUserId
+            originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection
         )
     }
 
@@ -177,7 +180,7 @@ extension ConversationView {
     private func uploadAndSendSticker(
         fileURL: URL, data: Data, image: UIImage, tempId: String, sticker: MessageSticker?,
         replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
-        originalLanguage: String, currentUserId: String
+        originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         if NetworkMonitor.shared.isOffline {
             await enqueueStickerOffline(fileURL: fileURL, tempId: tempId, sticker: sticker,
@@ -208,6 +211,7 @@ extension ConversationView {
                 storyReplyReference: storyRef,
                 attachmentIds: [result.id],
                 localAttachments: [result.toMessageAttachment(uploadedBy: currentUserId)],
+                protection: protection,
                 originalLanguage: originalLanguage,
                 existingTempId: tempId,
                 sticker: sticker

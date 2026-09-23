@@ -114,7 +114,11 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
     expect(closed).toBe(true);
   });
 
-  test('fermée AUTREMENT (pas par le retour) ⇒ rend son entrée d’historique — un retour ULTÉRIEUR n’est pas avalé', () => {
+  /** L'entrée est désormais LAISSÉE puis rendue à la micro-tâche suivante
+   * (#7527, adoption par la couche successeur) : la propriété est la même —
+   * une couche fermée autrement rend son entrée — seul son instant change,
+   * d'où l'attente ci-dessous. */
+  test('fermée AUTREMENT (pas par le retour) ⇒ rend son entrée d’historique — un retour ULTÉRIEUR n’est pas avalé', async () => {
     let backCalls = 0;
     const originalBack = window.history.back.bind(window.history);
     window.history.back = () => {
@@ -125,6 +129,7 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       act(() => {
         root.render(<Harness open={false} onClose={() => {}} />);
       });
+      await act(async () => {});
       expect(backCalls).toBe(1);
     } finally {
       window.history.back = originalBack;
@@ -137,7 +142,7 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
    * moment-là reculerait d'UNE entrée — celle de la destination — et
    * défaisait la navigation : `/notifications` poussée, `/` rendue.
    */
-  test('une navigation survenue pendant que la couche est ouverte n’est PAS défaite à sa fermeture', () => {
+  test('une navigation survenue pendant que la couche est ouverte n’est PAS défaite à sa fermeture', async () => {
     let backCalls = 0;
     const originalBack = window.history.back.bind(window.history);
     window.history.back = () => {
@@ -149,6 +154,7 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       act(() => {
         root.render(<Harness open={false} onClose={() => {}} />);
       });
+      await act(async () => {});
       expect(backCalls).toBe(0);
     } finally {
       window.history.back = originalBack;
@@ -156,7 +162,7 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
     }
   });
 
-  test('fermée PAR LE RETOUR (popstate) ⇒ ne rend PAS une seconde entrée (l’entrée est déjà consommée)', () => {
+  test('fermée PAR LE RETOUR (popstate) ⇒ ne rend PAS une seconde entrée (l’entrée est déjà consommée)', async () => {
     let backCalls = 0;
     const originalBack = window.history.back.bind(window.history);
     window.history.back = () => {
@@ -170,9 +176,99 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       act(() => {
         root.render(<Harness open={false} onClose={() => {}} />);
       });
+      await act(async () => {});
       expect(backCalls).toBe(0);
     } finally {
       window.history.back = originalBack;
     }
+  });
+});
+
+/**
+ * LA PASSATION D'UNE COUCHE A L'AUTRE (#7527) - mesure sur staging : appui
+ * long sur une bulle, clic sur « Plus... », et la feuille « Infos du
+ * message » ne s'ouvrait PAS, le menu se refermant seul. Le menu et la
+ * feuille sont DEUX couches : le clic les echange dans un SEUL commit
+ * React, donc le nettoyage du menu rend son entree (`history.back()`) juste
+ * AVANT que la feuille ne pose la sienne. Le `popstate` que ce retour
+ * produit arrive apres - et c'est la FEUILLE qui l'ecoute : elle se
+ * refermait sur le retour d'une couche qui n'existe plus.
+ *
+ * POURQUOI LE RETOUR EST SIMULE ICI. Le navigateur ne dispatche PAS
+ * `popstate` pendant l'appel a `history.back()` : il le poste en tache
+ * (HTML § « traverse the history by a delta »). happy-dom, lui, le
+ * dispatche SYNCHRONEMENT - ce qui fait disparaitre la fenetre pendant
+ * laquelle la couche suivante s'enregistre, et donc le defaut avec elle. Le
+ * temoin retablit le contrat du navigateur (un `popstate` a la tache
+ * suivante) : sans cela il verdit sur le defaut, ce que le depot interdit.
+ */
+function SheetLayer({ onClose }: { onClose: () => void }) {
+  useBackDismiss(onClose);
+  return <div data-sheet="true" />;
+}
+
+function Handoff({ layer, onCloseA, onCloseB }: { layer: 'a' | 'b' | null; onCloseA: () => void; onCloseB: () => void }) {
+  return (
+    <>
+      {layer === 'a' ? <Modal onClose={onCloseA} /> : null}
+      {layer === 'b' ? <SheetLayer onClose={onCloseB} /> : null}
+    </>
+  );
+}
+
+/** Le `history.back()` du NAVIGATEUR : il recule, puis poste `popstate`. */
+function withDeferredBack<T>(run: () => T): T {
+  const original = window.history.back.bind(window.history);
+  window.history.back = () => {
+    original();
+    setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+  };
+  try {
+    return run();
+  } finally {
+    window.history.back = original;
+  }
+}
+
+describe('useBackDismiss - une couche qui en REMPLACE une autre ADOPTE son entree (#7527)', () => {
+  test('menu ferme + feuille ouverte dans le MEME commit ⇒ le retour du menu ne ferme PAS la feuille', async () => {
+    let closedB = 0;
+    await withDeferredBack(async () => {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Handoff layer="a" onCloseA={() => {}} onCloseB={() => { closedB += 1; }} />);
+      });
+      act(() => {
+        root.render(<Handoff layer="b" onCloseA={() => {}} onCloseB={() => { closedB += 1; }} />);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    });
+    expect(closedB).toBe(0);
+  });
+
+  test('la feuille reste PROPRIETAIRE d une entree : un retour materiel la ferme', async () => {
+    let closedB = 0;
+    await withDeferredBack(async () => {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Handoff layer="a" onCloseA={() => {}} onCloseB={() => { closedB += 1; }} />);
+      });
+      act(() => {
+        root.render(<Handoff layer="b" onCloseA={() => {}} onCloseB={() => { closedB += 1; }} />);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+    });
+    expect(closedB).toBe(1);
   });
 });

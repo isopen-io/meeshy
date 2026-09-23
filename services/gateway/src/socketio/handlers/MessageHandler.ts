@@ -30,6 +30,7 @@
 // Une fois le sac de clés retiré, il ne restait AUCUN blocage : ni cast, ni
 // validateur au producteur.
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
+import { clientDeclaredProtection } from './messageProtectionInput';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -53,11 +54,8 @@ import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
 import { fetchParticipantSuperset } from '../participant-superset';
-import {
-  resolveLastMessagePreviewPrism,
-  resolvePreviewMediaFields,
-  toIsoOrNull,
-} from '../utils/lastMessagePreviewPrism';
+import { toIsoOrNull } from '../utils/lastMessagePreviewPrism';
+import { resolveLastMessagePreviewGroup } from '../utils/lastMessagePreviewGroup';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -397,15 +395,13 @@ export class MessageHandler {
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
         encryptedPayload,
-        // Effets de message — parité avec POST /messages. Le bitfield final
-        // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
-        // depuis `isBlurred` / `expiresAt` / `isViewOnce`, donc on transmet
-        // les champs bruts.
-        isBlurred: validated.isBlurred,
-        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
-        effectFlags: validated.effectFlags,
-        isViewOnce: validated.isViewOnce,
-        maxViewOnceCount: validated.maxViewOnceCount,
+        // Effets de protection déclarés par le client — parité avec
+        // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
+        // les deux chemins socket. Sans cette propagation, une photo view-once
+        // / floutée / éphémère envoyée sur le path des pièces jointes — le
+        // PRINCIPAL — serait persistée comme un média normal, rouvrable
+        // indéfiniment.
+        ...clientDeclaredProtection(validated),
         isAnonymous,
         // Lieu partagé et sticker (#4823) — champs dédiés transmis tels quels ;
         // validés et écrits dans `metadata.location` / `metadata.sticker` par
@@ -624,18 +620,13 @@ export class MessageHandler {
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
-        // Effets de message — parité avec `handleMessageSend` (path texte) et
-        // POST /messages. Le bitfield final `effectFlags` est recomposé par
-        // `MessageProcessor.saveMessage` depuis `isBlurred` / `expiresAt` /
-        // `isViewOnce`, donc on transmet les champs bruts. Sans cette
-        // propagation, une photo view-once / floutée / éphémère envoyée sur ce
-        // path (le PRINCIPAL pour les pièces jointes) serait persistée comme un
-        // média normal, rouvrable indéfiniment.
-        isBlurred: validated.isBlurred,
-        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
-        effectFlags: validated.effectFlags,
-        isViewOnce: validated.isViewOnce,
-        maxViewOnceCount: validated.maxViewOnceCount,
+        // Effets de protection déclarés par le client — parité avec
+        // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
+        // les deux chemins socket. Sans cette propagation, une photo view-once
+        // / floutée / éphémère envoyée sur le path des pièces jointes — le
+        // PRINCIPAL — serait persistée comme un média normal, rouvrable
+        // indéfiniment.
+        ...clientDeclaredProtection(validated),
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
@@ -1604,16 +1595,9 @@ export class MessageHandler {
           // le type se décider chez l'encodeur.
           lastMessageAt: toIsoOrNull(message.createdAt),
           lastMessageId: message.id,
-          // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
-          // le reste de la paire, sous le même plafond qu'elle.
-          // Un message position-seule a un `content` vide : hisser
-          // `metadata.location` (même règle que la liste REST et
-          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
-          // client compose son libellé — aucun texte de repli côté serveur.
-          ...((): Record<string, unknown> => {
-            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-            return place ? { location: place } : {};
-          })(),
+          // `lastMessagePreview`, le lieu, le sous-groupe MÉDIA et la NATURE
+          // sortent de `resolveLastMessagePreviewGroup`, sous la protection du
+          // message (#7545) — aucun texte de repli côté serveur.
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
@@ -1635,14 +1619,7 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewPrism(participant, message),
-            // Sous-groupe MÉDIA (#3737) — identique pour toute la room, donc
-            // hors de la boucle par destinataire serait plus juste ; posé ici
-            // pour rester à un seul point d'appel, comme le Prisme ci-dessus.
-            // `message` (le type `Message` partagé) satisfait déjà la forme
-            // attendue : `attachments` NON plafonné en entrée, plafonné en
-            // sortie par la fonction elle-même.
-            ...resolvePreviewMediaFields(message)
+            ...resolveLastMessagePreviewGroup(participant, message)
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

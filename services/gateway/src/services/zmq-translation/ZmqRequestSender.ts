@@ -482,6 +482,19 @@ export class ZmqRequestSender {
   }
 
   /**
+   * Cette requête est-elle encore en cours ?
+   *
+   * Un refus transitoire du translator (« translation pool full ») doit laisser
+   * le deadman armé pour qu'il renvoie ; mais s'il arrive pour un taskId déjà
+   * soldé — dernière langue rendue, ou deadman déjà tombé — il n'y a plus rien à
+   * réarmer, et l'erreur doit remonter. C'est cette distinction que la question
+   * tranche.
+   */
+  hasPendingRequest(taskId: string): boolean {
+    return this.pendingRequests.has(taskId);
+  }
+
+  /**
    * Retire une requête du cache des requêtes en cours et annule son timeout.
    */
   removePendingRequest(taskId: string): void {

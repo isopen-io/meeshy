@@ -178,10 +178,6 @@ nonisolated struct BubbleContent: Equatable {
         }
     }
 
-    struct Ephemeral: Equatable {
-        let expiresAt: Date
-    }
-
     struct Meta: Equatable {
         let timeString: String
         let deliveryStatus: MeeshyMessage.DeliveryStatus?  // nil si reçu
@@ -276,8 +272,27 @@ nonisolated struct BubbleContent: Equatable {
     /// pièces jointes `.location` sont exclues de `attachments` pour qu'un
     /// message portant les deux ne rende le lieu qu'UNE fois.
     let location: SharedPlace?
-    let ephemeral: Ephemeral?
+    /// **Le chrome de protection, résolu UNE fois pour les cinq modes de
+    /// lecture** (#7452). Remplace l'ancien `ephemeral: Ephemeral?`, qui ne
+    /// disait qu'une échéance, et seulement à la bulle et à la rangée plate.
+    ///
+    /// La résolution vit chez `MeeshyMessage.protection` (SDK) : c'est elle qui
+    /// tranche la règle du contrat #7451 — la plus PROCHE de l'échéance servie
+    /// et de « réception locale + durée », l'attente de réception pour
+    /// l'expéditeur, l'expiration. Rivière et Résumé projettent la MÊME valeur
+    /// depuis le même appel, sans passer par `BubbleContent`.
+    let protection: MessageProtectionDescriptor
     let isBlurred: Bool                    // gates le composant de blur reveal
+    /// Le contenu est-il voilé jusqu'au geste du lecteur — flou OU vue unique
+    /// (#7452). Projection de `protection.requiresVeil`, le site de la règle.
+    var requiresVeil: Bool { protection.requiresVeil }
+    /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
+    /// (#7467) — projection de `MeeshyMessage.isBurning`.
+    ///
+    /// `var`/`= false` plutôt que `let` : l'init memberwise garde ainsi sa
+    /// compatibilite source avec les fixtures existantes, meme patron que
+    /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
+    var isBurning: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
     /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
@@ -391,7 +406,8 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.reply == rhs.reply
             && lhs.attachments == rhs.attachments
             && lhs.location == rhs.location
-            && lhs.ephemeral == rhs.ephemeral
+            && lhs.protection == rhs.protection
+            && lhs.isBurning == rhs.isBurning
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned

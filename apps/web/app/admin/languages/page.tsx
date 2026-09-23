@@ -95,6 +95,7 @@ const languageFlags: Record<string, string> = {
 export default function AdminLanguagesPage() {
   const router = useRouter();
   const { t } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [languageData, setLanguageData] = useState<LanguageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -391,6 +392,7 @@ export default function AdminLanguagesPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
+                    aria-label={tA11y('a11y.previousPage')}
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -399,6 +401,7 @@ export default function AdminLanguagesPage() {
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button
+                    aria-label={tA11y('a11y.nextPage')}
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}

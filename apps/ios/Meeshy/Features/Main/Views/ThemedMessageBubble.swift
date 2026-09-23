@@ -253,14 +253,6 @@ struct ThemedMessageBubble: View {
     // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
     @StateObject private var blurController = BubbleBlurRevealController()
-    @StateObject private var ephemeralController = BubbleEphemeralController()
-
-    // MARK: - Derived state for kind dispatch
-
-    private var isEphemeralExpired: Bool {
-        if case .expired = ephemeralController.state { return true }
-        return false
-    }
 
     // MARK: - Body (kind dispatch + lifecycle modifiers)
 
@@ -319,7 +311,7 @@ struct ThemedMessageBubble: View {
         case .burned where !blurController.isRevealed:
             BubbleBurnedView(isMe: message.isMe, isDark: isDark)
         default:
-            if isEphemeralExpired {
+            if content.protection.isExpired {
                 EmptyView()
             } else {
                 Group {
@@ -339,7 +331,7 @@ struct ThemedMessageBubble: View {
                 // #4020 — le double tap ouvre la barre de réaction rapide.
                 // Posé ICI, sur la seule branche que la règle accepte : le
                 // `switch` au-dessus a déjà écarté système, supprimé et
-                // brûlé, et `isEphemeralExpired` vient d'écarter le
+                // brûlé, et `content.protection.isExpired` vient d'écarter le
                 // quatrième. La règle est tout de même consultée — elle
                 // reste la SOURCE, l'aiguillage n'en est qu'un chemin.
                 // **Le double tap du MESSAGE a quitté ce fichier** (#6117).
@@ -365,14 +357,21 @@ struct ThemedMessageBubble: View {
                 // qui ne passent pas par ici, ne portent plus d'effets. Un
                 // tombstone « message supprimé » n'a ni arc-en-ciel ni
                 // confettis.
-                .opacity(isEphemeralExpired ? 0 : 1)
-                .scaleEffect(isEphemeralExpired ? 0.8 : 1)
+                //
+                // #7452 — plus de minuteur de cellule ici. La disparition d'un
+                // éphémère est ordonnancée UNE fois pour tout le fil
+                // (`EphemeralExpiryCoordinator`), qui retire le message de
+                // `messages` à son échéance ; la branche `isExpired` ci-dessus
+                // reste le filet de sécurité d'une passe de rendu qui
+                // précéderait ce retrait.
+                // #7467 — la destruction se VOIT. Posé sur le `Group`, donc
+                // sur la bulle comme sur le sticker : un éphémère détruit sous
+                // les yeux du lecteur se consume, puis l'hôte retire la ligne.
+                .ephemeralBurn(isBurning: content.isBurning)
                 .onAppear {
-                    startEphemeralTimerIfNeeded()
                     applyBlurRevealDurationFromPrefs()
                 }
                 .onDisappear {
-                    ephemeralController.stop()
                     blurController.cancel()
                 }
                 .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
@@ -412,7 +411,10 @@ struct ThemedMessageBubble: View {
             isDark: isDark,
             accentHex: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
             timeString: content.meta.timeString,
-            deliveryStatus: message.deliveryStatus,
+            // #7365 — statut RÉSOLU (tout-ou-rien pour un groupe), déjà posé
+            // par `BubbleContentBuilder` sur `content.meta` ; le brut
+            // `message.deliveryStatus` vaut « lu » dès UN lecteur sur N.
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
             sendStartedAt: message.createdAt,
             isOnline: NetworkMonitor.shared.isOnline,
             effects: message.effects,
@@ -420,6 +422,10 @@ struct ThemedMessageBubble: View {
             isLastReceivedMessage: isLastReceivedMessage,
             isLastInGroup: isLastInGroup,
             standalone: standalone,
+            // #7508 — la protection ENTRE dans la feuille sticker : sans elle
+            // cette branche rendait un message à vue unique en clair.
+            protection: content.protection,
+            onConsumeViewOnce: onConsumeViewOnce,
             onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
             onShowReadStatus: onShowReadStatus == nil ? nil : { onShowReadStatus?(message.id) },
             onAddReaction: onAddReaction,
@@ -515,7 +521,6 @@ struct ThemedMessageBubble: View {
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,
-            ephemeralController: ephemeralController,
             voiceConsentMissing: voiceConsentMissing,
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
@@ -525,11 +530,6 @@ struct ThemedMessageBubble: View {
     }
 
     // MARK: - Lifecycle helpers (delegated to controllers)
-
-    private func startEphemeralTimerIfNeeded() {
-        guard let expiresAt = message.expiresAt else { return }
-        ephemeralController.start(expiresAt: expiresAt)
-    }
 
     private func applyBlurRevealDurationFromPrefs() {
         if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {

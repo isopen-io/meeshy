@@ -278,6 +278,7 @@ struct FocalAudioBlock: View, Equatable {
                     replyReference: mode == .hostsReply ? content.reply?.reference : nil,
                     replyIsStory: mode == .hostsReply ? (content.reply?.isStory ?? false) : false,
                     parentIsMe: content.isMe,
+                    replySkin: .focal,
                     onReplyTap: onReplyTap,
                     onStoryReplyTap: onStoryReplyTap,
                     onQuotedAuthorTap: onQuotedAuthorTap,

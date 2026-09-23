@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { FIXTURES_LOADED_AT, parisCalendarDay, resolveThreadAnchor } from './fixtures-base';
+import { FIXTURES_LOADED_AT, parisCalendarDay, resolveThreadAnchor, resolveThreadMoment } from './fixtures-base';
 
 /**
  * `resolveThreadAnchor` (#5797) — extraite de l'IIFE qui calculait
@@ -46,5 +46,53 @@ describe('resolveThreadAnchor — robuste à la traversée de minuit parisien (#
   test("FIXTURES_LOADED_AT est l'instant UNIQUE du module, un Date valide", () => {
     expect(FIXTURES_LOADED_AT).toBeInstanceOf(Date);
     expect(Number.isNaN(FIXTURES_LOADED_AT.getTime())).toBe(false);
+  });
+});
+
+/**
+ * `resolveThreadMoment` (#7411) — la SECONDE moitié de l'invariant. #5797
+ * garantissait « le fil reste dans le jour parisien de `at` » en TRANSLATANT
+ * tout le fil jusqu'à minuit : entre 00:00 et 01:36 à Paris, les messages
+ * « écrits il y a 2 à 82 minutes » tombaient donc APRÈS `at`, dans le futur.
+ * Un message envoyé par un gate se rangeait alors AVANT eux, et
+ * `check-thread-chrome.mjs` lisait la langue d'une bulle de fixture
+ * (CI de dev, 00:00:26 à Paris, run 35658332188). Un instant du fil est donc
+ * jugé sur DEUX propriétés à la fois : le jour parisien de `at`, et jamais
+ * après `at`.
+ */
+describe('resolveThreadMoment — jamais dans le futur, jamais hors du jour parisien (#7411)', () => {
+  const THREAD_SPAN_MINUTES = 96;
+  const momentAt = (at: Date, minutesAgo: number): Date =>
+    resolveThreadMoment({
+      at,
+      anchor: resolveThreadAnchor(at, THREAD_SPAN_MINUTES),
+      spanMinutes: THREAD_SPAN_MINUTES,
+      minutesAgo,
+    });
+  const WRITTEN = [96, 82, 15, 10, 5, 2] as const;
+
+  test('juste APRÈS minuit parisien (00:00:30 CEST) ⇒ aucun instant du fil n’est après `at`', () => {
+    const at = new Date('2026-09-21T22:00:30.000Z');
+    const future = WRITTEN.filter((minutesAgo) => momentAt(at, minutesAgo).getTime() > at.getTime());
+    expect(future).toEqual([]);
+  });
+
+  test('juste APRÈS minuit parisien (00:10 CEST) ⇒ chaque instant du fil reste dans le jour parisien de `at`', () => {
+    const at = new Date('2026-09-21T22:10:00.000Z');
+    const days = WRITTEN.map((minutesAgo) => parisCalendarDay(momentAt(at, minutesAgo)));
+    expect(new Set(days)).toEqual(new Set([parisCalendarDay(at)]));
+  });
+
+  test('dans la fenêtre de minuit (00:10 CEST) ⇒ l’ORDRE d’écriture est conservé, strictement', () => {
+    const at = new Date('2026-09-21T22:10:00.000Z');
+    const times = [240, 120, ...WRITTEN].map((minutesAgo) => momentAt(at, minutesAgo).getTime());
+    const increasing = times.every((time, i) => i === 0 || time > (times[i - 1] ?? Number.NEGATIVE_INFINITY));
+    expect(increasing).toBe(true);
+  });
+
+  test('loin de tout minuit (14:00 CEST) ⇒ chaque instant est exactement minutesAgo(n)', () => {
+    const at = new Date('2026-09-21T12:00:00.000Z');
+    const offsets = [240, 120, ...WRITTEN].map((minutesAgo) => (at.getTime() - momentAt(at, minutesAgo).getTime()) / 60_000);
+    expect(offsets).toEqual([240, 120, ...WRITTEN]);
   });
 });

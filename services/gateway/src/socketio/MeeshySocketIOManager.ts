@@ -100,6 +100,7 @@ import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
 import { emitServerEvent } from './serverEmit';
+import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
@@ -333,7 +334,7 @@ export class MeeshySocketIOManager {
     // d'instancier un doublon muet sans io.
     setSharedNotificationService(this.notificationService);
     this.mentionService = new MentionService(prisma);
-    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
+    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService, () => ({ io: this.io, prisma, readStatusService: this.readStatusService, privacyPreferencesService: this.privacyPreferencesService, bridgeService: this.bridgeService }));
     // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
     // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
     // backgroundedParticipants maps (previously two independent instances,
@@ -3543,24 +3544,21 @@ export class MeeshySocketIOManager {
         const normalizedConversationId = message.conversationId;
         // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
         // emoji précédent — aucun retrait compensatoire à diffuser.
-        this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
-        // An agent's reaction is a reaction like any other: without this the
-        // room emit is its only audience and the toggle is lost for every
-        // participant offline at that instant.
-        void this.enqueueOfflineReactionMutation({
+        // Une réaction d'agent est une réaction comme une autre : ses TROIS
+        // audiences (room, file hors ligne, liste — #7545) passent par la
+        // source unique des transports REST.
+        await broadcastReactionMutation({
+          manager: this,
           conversationId: normalizedConversationId,
           actorParticipantId: participant.id,
           eventType: 'reaction-added',
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
           payload: updateEvent,
-        }).catch((error: unknown) =>
-          logger.warn('[AGENT] offline reaction enqueue rejected', {
-            conversationId: normalizedConversationId,
-            messageId: reaction.targetMessageId,
-            error,
-          })
-        );
+          prisma: this.prisma,
+          updatedByUserId: reaction.asUserId,
+          onError: (error) => logger.warn('[AGENT] reaction broadcast failed', { conversationId: normalizedConversationId, error }),
+        });
 
         const authorParticipant = message.senderId
           ? await this.prisma.participant.findUnique({

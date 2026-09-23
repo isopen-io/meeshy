@@ -107,6 +107,10 @@ const MAX_LINES = 1000;
  * carte `data` du push reproduit est partie vers `reproducedNotificationPush.ts`
  * avant d'y recevoir son marqueur — le fichier mesurait 4490.
  *
+ * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
+ * réservation d'appel (claim / reprise / libération) est partie vers
+ * `services/calls/activeCallClaim.ts`, qui notifie la liste de conversations.
+ *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
  * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi. Puis
@@ -121,7 +125,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
-  'services/CallService.ts': 3121,
+  'services/CallService.ts': 3064,
   'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2336,
   'services/EmailService.ts': 1032,

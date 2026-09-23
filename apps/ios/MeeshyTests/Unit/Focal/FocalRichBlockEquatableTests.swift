@@ -58,7 +58,7 @@ final class FocalRichBlockEquatableTests: XCTestCase {
     ) -> BubbleContent {
         BubbleContent(
             messageId: "m1", kind: .standard, text: nil, translation: nil, reply: nil,
-            attachments: attachments, location: nil, ephemeral: nil, isBlurred: false,
+            attachments: attachments, location: nil, protection: .unprotected, isBlurred: false,
             isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),

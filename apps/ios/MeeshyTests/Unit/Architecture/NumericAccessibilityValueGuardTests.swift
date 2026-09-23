@@ -245,7 +245,10 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Services/CallManager.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
-            "Features/Main/Views/ThemedConversationRow.swift",
+            // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
+            // visible rend l'horloge du composeur commun (SDK), la ligne DITE
+            // la convertit ici. La liste suit l'hôte, comme au 248i.
+            "Features/Main/Views/ConversationPreviewLine.swift",
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)

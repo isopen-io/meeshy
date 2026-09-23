@@ -15,6 +15,11 @@ import { amina, conversationDefaults, message, minutesAgo, viewer, VIEWER_ID } f
  * `nl-2` (le lecteur) EST la frontière : `nl-3` et `nl-4` (tous deux Amina)
  * suivent, ni l'un ni l'autre du lecteur — le séparateur s'ouvre donc devant
  * `nl-3` en annonçant deux non-lus.
+ *
+ * `c-deploiement` (`fixtures.ts`) est l'AUTRE chemin du séparateur depuis
+ * #7351 (V3) : 2 non-lus et AUCUN curseur — l'appareil qui n'a jamais ouvert
+ * la conversation. Sa frontière vient du compte servi (`unreadCountHint`,
+ * les 2 DERNIERS messages d'autrui), celle de `c-non-lus` de son curseur.
  */
 
 export const UNREAD_CONVERSATION_ID = 'c-non-lus';

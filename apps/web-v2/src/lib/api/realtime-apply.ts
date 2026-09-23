@@ -2,12 +2,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import type { AttachmentUpdatedEventData } from '@meeshy/shared/types/socketio-events/attachment';
+import type { ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import type {
-  ConversationUnreadUpdatedEventData,
-  ConversationUpdatedEventData,
-  LastMessagePreviewAttachment,
-} from '@meeshy/shared/types/socketio-events/conversation';
-import type { ReadStatusUpdatedEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+  MessageConsumedEventData,
+  ReadStatusUpdatedEventData,
+  SocketIOMessage,
+} from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
 import { maskedAttachment, raisedAttachmentProtection } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
@@ -16,6 +16,7 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { patchConversation } from './conversations';
+import { mergeLastMessageCard, offerLastMessage } from './list-preview';
 import {
   cachedThreadConversationIds,
   findCachedThreadMessage,
@@ -23,7 +24,18 @@ import {
   patchThreadMessages,
   upsertThreadMessage,
 } from './messages';
-import type { Attachment, Conversation, Message, Participant } from './types';
+import { messageReceiptsPeopleQueryKey } from './receipts';
+import type { Attachment, Message, Participant } from './types';
+import { applyConsumption } from './view-once';
+
+/* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
+   ses importeurs historiques le lisent toujours ici. */
+export {
+  acceptsLastMessageAt,
+  applyConversationUpdated,
+  isConversationUpdated,
+  neutralLastMessageFromPreview,
+} from './realtime-conversation-updated';
 
 /**
  * L'APPLICATION DU TEMPS RÉEL AU CACHE (#5793) — des fonctions PURES,
@@ -102,6 +114,7 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(raw.editedAt !== undefined ? { editedAt: raw.editedAt } : {}),
     ...(raw.deletedAt !== undefined ? { deletedAt: raw.deletedAt } : {}),
     ...(raw.expiresAt !== undefined ? { expiresAt: raw.expiresAt } : {}),
+    ...(raw.ephemeralDuration !== undefined ? { ephemeralDuration: raw.ephemeralDuration } : {}),
     ...(raw.maxViewOnceCount !== undefined ? { maxViewOnceCount: raw.maxViewOnceCount } : {}),
     ...(raw.effectFlags !== undefined ? { effectFlags: raw.effectFlags } : {}),
     ...(raw.replyToId !== undefined ? { replyToId: raw.replyToId } : {}),
@@ -198,17 +211,11 @@ export function applyMessageNew(
      jamais, donc cette ligne ne peut pas retirer l'envoi de quelqu'un d'autre. */
   if (cid !== undefined) outbox.getState().remove(raw.conversationId, cid);
 
-  const translations = buildTranslationRecord(raw.translations);
-  patchConversation(queryClient, raw.conversationId, (c) => {
-    const { lastMessageTranslations: _lastMessageTranslations, ...rest } = c;
-    return {
-      ...rest,
-      lastMessage: message,
-      lastMessageAt: message.createdAt,
-      lastMessageOriginalLanguage: message.originalLanguage,
-      ...(Object.keys(translations).length === 0 ? {} : { lastMessageTranslations: translations }),
-    };
-  });
+  /* `offerLastMessage` (`list-preview.ts`, #7547) — garde d'ordre ET
+     masquage : un `message:new` plus ancien que l'aperçu en place ne le
+     remplace jamais, et un message protégé n'entre dans la ligne (cache
+     PERSISTÉ) que par son identité et ses drapeaux. */
+  offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
 }
 
 /** Garde de FORME pour `conversation:unread-updated` (§ 3.4 de la
@@ -235,253 +242,6 @@ export function applyConversationUnreadUpdated(
 ): void {
   patchConversation(queryClient, data.conversationId, (c) => ({ ...c, unreadCount: data.unreadCount }));
   conversationStore.getState().clearOverride(data.conversationId, ['unreadCount']);
-}
-
-/** Garde de FORME pour `conversation:updated` (revue-correction #5793,
- * défaut 1) — SEULS les trois champs OBLIGATOIRES du contrat sont vérifiés ;
- * les champs du groupe d'aperçu sont TRI-ÉTAT par construction (absent /
- * `null` / valeur) et validés un par un dans `applyConversationUpdated`,
- * jamais ici — une valeur de forme inattendue sur l'un d'eux ne doit pas
- * REJETER tout l'évènement (fail-closed CHAMP PAR CHAMP, pas message par
- * message, motif la doc de `ConversationUpdatedEventData`). */
-export function isConversationUpdated(payload: unknown): payload is ConversationUpdatedEventData {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  if (typeof p.conversationId !== 'string' || typeof p.updatedAt !== 'string') return false;
-  const updatedBy = p.updatedBy;
-  return typeof updatedBy === 'object' && updatedBy !== null && typeof (updatedBy as Record<string, unknown>).id === 'string';
-}
-
-/**
- * `messageTypeOf` — le SEUL champ de la ligne neutre que le contrat ne
- * transporte pas directement (question 9.4 de la spécification #6171) :
- * dérivé du `mimeType` de la PREMIÈRE pièce jointe (`image/*` ⇒ `'image'`,
- * `audio/*` ⇒ `'audio'`, `video/*` ⇒ `'video'`, sinon `'file'` ; aucune pièce
- * ⇒ `'text'`). La Lentille ne LIT PAS ce champ sur son aperçu — elle lit
- * `lastMessageAttachments` pour choisir son glyphe (`lens-row.tsx` §
- * `MEDIA_PREVIEW`) — donc cette valeur ne gouverne aucun rendu aujourd'hui ;
- * elle est posée pour que la forme du `Message` reste COMPLÈTE, documentée
- * comme telle.
- */
-function messageTypeOf(attachments: readonly LastMessagePreviewAttachment[]): Message['messageType'] {
-  const first = attachments[0];
-  if (first === undefined) return 'text';
-  if (first.mimeType.startsWith('image/')) return 'image';
-  if (first.mimeType.startsWith('audio/')) return 'audio';
-  if (first.mimeType.startsWith('video/')) return 'video';
-  return 'file';
-}
-
-/**
- * `neutralLastMessageFromPreview` — LA LIGNE NEUTRE (#6171, G3) que
- * `applyConversationUpdated` compose quand `lastMessageId` nomme un AUTRE
- * message que celui que la ligne connaît déjà : miroir `LastMessageFacet
- * .adoptLastMessage` (iOS, `:170-184`). Exportée pour le témoin (T5).
- *
- * CE N'EST PAS « inventer ce que la source ne porte pas » (leçon « un
- * instantané qui RECOPIE invente ce que la source ne porte pas ») : chaque
- * champ vient soit de la charge, soit d'un défaut que le CONTRAT lui-même
- * déclare — « clé absente = un FAIT » (doc-comment de
- * `ConversationUpdatedEventData` : pas de pièce jointe déclarée ⇒ pas de
- * pièce jointe, pas flouté déclaré ⇒ pas flouté).
- *
- * `sender` — SEUL le `displayName` (motif `rawMessageFromSocket`, § doc-
- * comment ci-dessus : le cast est justifié par les deux seuls lecteurs de
- * `message.sender` sur une rangée de liste, `displayName` et `avatar` — ici
- * seul le premier est transporté). Absent si `lastMessageSenderName` ne l'est
- * pas (tri-état, jamais un nom fabriqué).
- *
- * `createdAt`/`timestamp` — `lastMessageAt`, chaîne ISO gardée TELLE QUELLE
- * (D-26) ; repli sur `updatedAt` (le SEUL horodatage que le contrat garantit
- * toujours) si `lastMessageAt` est absent ou `null` dans cette branche.
- */
-export function neutralLastMessageFromPreview(data: ConversationUpdatedEventData): Message {
-  const attachments = data.lastMessageAttachments ?? [];
-  const at = data.lastMessageAt ?? data.updatedAt;
-  return {
-    id: data.lastMessageId as string,
-    conversationId: data.conversationId,
-    senderId: data.senderId ?? '',
-    content: data.lastMessagePreview ?? '',
-    originalLanguage: data.lastMessageOriginalLanguage ?? '',
-    messageType: messageTypeOf(attachments),
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: data.lastMessageIsViewOnce ?? false,
-    viewOnceCount: 0,
-    isBlurred: data.lastMessageIsBlurred ?? false,
-    deliveredCount: 0,
-    readCount: 0,
-    reactionCount: 0,
-    isEncrypted: false,
-    createdAt: at as unknown as Date,
-    timestamp: at as unknown as Date,
-    translations: [],
-    ...(data.lastMessageExpiresAt === undefined || data.lastMessageExpiresAt === null
-      ? {}
-      : { expiresAt: data.lastMessageExpiresAt as unknown as Date }),
-    ...(data.lastMessageSenderName === undefined || data.lastMessageSenderName === null
-      ? {}
-      : { sender: { displayName: data.lastMessageSenderName } as unknown as Participant }),
-    ...(attachments.length === 0 ? {} : { attachments: attachments as unknown as Message['attachments'] }),
-  } as unknown as Message;
-}
-
-/**
- * `acceptsLastMessageAt` — LA GARDE MONOTONE DU RANG (revue-correction #6171),
- * exigée par le contrat lui-même : « Les clients tiennent une garde monotone sur
- * le groupe d'aperçu — un `lastMessageAt` plus ancien y désigne un message
- * périmé … Posé par `emitConversationPreviewUpdate` et par LUI SEUL. Les
- * émetteurs message-driven (`MessageHandler`, `MeeshySocketIOManager`)
- * l'omettent délibérément : **ce sont eux que la garde monotone protège** »
- * (doc-comment de `previewRecalculated`, `packages/shared/types/socketio-events/
- * conversation.ts`). Miroir EXACT d'iOS : le `>` strict du bump
- * (`ConversationListViewModel.swift:1100`) et son unique exception
- * (`:1214-1216`, « Réservé au drapeau : sans lui, un horodatage qui recule
- * décrit un message périmé (diffusion arrivée dans le désordre) et doit rester
- * ignoré »).
- *
- * `lastMessageAt` est le RANG de la ligne (la liste trie dessus) : l'écrire sans
- * garde faisait redescendre une conversation vivante dès que deux `message:new`
- * arrivaient dans le désordre. Le défaut PRÉEXISTAIT à l'adoption (G3), qui l'a
- * rendu visible : la ligne adopte désormais aussi le CONTENU du message nommé.
- *
- * `known` arrive en DEUX formes — chaîne ISO du cache brut (D-26) ou `Date`
- * décodée : `new Date()` accepte les deux, et un horodatage connu ILLISIBLE
- * laisse passer (fail-open sur le rang, jamais une ligne figée pour toujours).
- */
-export function acceptsLastMessageAt(params: {
-  readonly known: Conversation['lastMessageAt'];
-  readonly incoming: string;
-  readonly previewRecalculated?: boolean | undefined;
-}): boolean {
-  if (params.previewRecalculated === true) return true;
-  if (params.known === undefined) return true;
-  const knownMs = new Date(params.known as unknown as string).getTime();
-  if (Number.isNaN(knownMs)) return true;
-  return new Date(params.incoming).getTime() > knownMs;
-}
-
-/**
- * `applyConversationUpdated` — le puits de `conversation:updated` (défaut
- * MAJEUR 1 de la revue #5793) : la QUATRIÈME famille du Prisme (résolue
- * SERVEUR, § CLAUDE.md « Prisme Linguistique ») — l'aperçu de ligne DÉJÀ
- * descendu par lecteur, restreint à ses langues et plafonné
- * (`resolveLastMessagePreviewPrism`, `services/gateway/.../
- * lastMessagePreviewPrism.ts`) — PRIME sur ce que `applyMessageNew` a DÉDUIT
- * de `message:new`, dont `translations` est souvent VIDE à la création (le
- * pipeline traduit APRÈS, défaut 2 de la même revue) : cet évènement est ce
- * qui rattrape la ligne quand la traduction atterrit, ou quand une édition
- * périme la carte. Témoin de RANG SUR UN RANG AUTRE QUE LE PREMIER (CLAUDE.md
- * § Prisme, leçon 261) : ce site gouverne ce que `message:new` ne peut pas
- * couvrir seul.
- *
- * TRI-ÉTAT de `lastMessageId` (doc-comment du type, `packages/shared`) :
- *  - **clé ABSENTE** — cet évènement ne parle pas du dernier message
- *    (renommage, réglage) : RIEN à toucher.
- *  - **`null`** — plus AUCUN message visible pour ce lecteur : la ligne perd
- *    son groupe d'aperçu.
- *  - **présent** — le groupe d'aperçu (`lastMessageAt`,
- *    `lastMessageOriginalLanguage`, `lastMessageTranslations`,
- *    `lastMessagePreview`) est fusionné CHAMP PAR CHAMP, chacun tri-état à
- *    son tour (absent = ne pas toucher, `null` = retirer la clé — jamais
- *    `undefined`, `exactOptionalPropertyTypes`, motif `applyMessageNew`).
- *
- * **UN AUTRE `lastMessageId` ADOPTE une ligne NEUVE** (#6171, G3, revue de
- * #5793) — miroir `LastMessageFacet.adoptLastMessage` (iOS, `:170-184` :
- * « Nommer un AUTRE message, c'est cesser de décrire le précédent … sans ce
- * geste, une suppression pour tous du dernier message laissait la ligne
- * rendre l'aperçu du remplaçant sous la vignette, l'auteur et le “Vue
- * unique” du message supprimé »). `neutralLastMessageFromPreview` compose
- * cette ligne AVANT la fusion champ par champ ci-dessous — ce n'est PAS
- * « inventer ce que la source ne porte pas » : chaque champ vient de la
- * charge, ou d'un défaut que le CONTRAT lui-même déclare (« clé absente = un
- * FAIT », doc-comment de `ConversationUpdatedEventData`).
- */
-export function applyConversationUpdated(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
-  if (!('lastMessageId' in data)) return;
-
-  patchConversation(queryClient, data.conversationId, (c) => {
-    if (data.lastMessageId === null) {
-      const { lastMessage: _m, lastMessageAt: _at, lastMessageTranslations: _tr, lastMessageOriginalLanguage: _lang, ...rest } = c;
-      return rest;
-    }
-
-    let next: Conversation = c;
-
-    if (next.lastMessage?.id !== data.lastMessageId) {
-      /* ADOPTER, C'EST CESSER DE DÉCRIRE LE PRÉCÉDENT — *Y COMPRIS SA CARTE*
-         (revue-correction #6171). `adoptLastMessage` (iOS,
-         `LastMessageFacet.swift:170-182`) remet à neutre les TREIZE champs de la
-         facette, `lastMessageTranslations`/`lastMessageOriginalLanguage`
-         comprises, et laisse les blocs tri-état ci-dessous les reposer depuis la
-         charge. Sans ce retrait, un évènement qui nomme un AUTRE message sans
-         porter le groupe Prisme laissait la ligne servir la traduction de
-         l'ANCIEN message par-dessus l'original du NOUVEAU — exactement ce que le
-         contrat décrit (« poser l'un sans les autres laisse la ligne rendre
-         l'ANCIEN texte traduit », doc-comment de `lastMessageTranslations`).
-         Les trois émetteurs réels posent toujours les trois clés (à `null` quand
-         il n'y a pas de carte, `resolveLastMessagePreviewPrism:135-147`), donc
-         ceci ne les change pas : c'est la dépendance à l'ORDRE des blocs qui
-         disparaît, et elle est ce que trente écrans recopieraient. */
-      const { lastMessageTranslations: _card, lastMessageOriginalLanguage: _cardLang, ...adopted } = next;
-      next = { ...adopted, lastMessage: neutralLastMessageFromPreview(data) };
-    }
-
-    if (data.lastMessageAt !== undefined) {
-      if (data.lastMessageAt === null) {
-        const { lastMessageAt: _at, ...rest } = next;
-        next = rest;
-      } else if (
-        acceptsLastMessageAt({
-          known: c.lastMessageAt,
-          incoming: data.lastMessageAt,
-          previewRecalculated: data.previewRecalculated,
-        })
-      ) {
-        // Chaîne ISO conservée TELLE QUELLE (D-26, « cache = forme du fil ») —
-        // `decodeConversation` (le `select`) la revit en `Date`, motif exact de
-        // `applyMessageNew` ci-dessus. Cast vers `Date` (jamais
-        // `Conversation['lastMessageAt']`, qui inclut `undefined` — une valeur
-        // ainsi typée resterait REFUSÉE par `exactOptionalPropertyTypes`).
-        //
-        // `c` et non `next` : le rang se compare à celui que la ligne portait
-        // AVANT cet évènement — l'adoption ci-dessus ne touche pas
-        // `lastMessageAt`, mais s'appuyer sur `next` ferait dépendre la garde
-        // de l'ordre des blocs plutôt que de la donnée.
-        next = { ...next, lastMessageAt: data.lastMessageAt as unknown as Date };
-      }
-    }
-
-    if (data.lastMessageOriginalLanguage !== undefined) {
-      if (data.lastMessageOriginalLanguage === null) {
-        const { lastMessageOriginalLanguage: _lang, ...rest } = next;
-        next = rest;
-      } else {
-        next = { ...next, lastMessageOriginalLanguage: data.lastMessageOriginalLanguage };
-      }
-    }
-
-    if (data.lastMessageTranslations !== undefined) {
-      if (data.lastMessageTranslations === null || Object.keys(data.lastMessageTranslations).length === 0) {
-        const { lastMessageTranslations: _tr, ...rest } = next;
-        next = rest;
-      } else {
-        next = { ...next, lastMessageTranslations: data.lastMessageTranslations };
-      }
-    }
-
-    if (
-      data.lastMessagePreview !== undefined &&
-      data.lastMessagePreview !== null &&
-      next.lastMessage !== undefined &&
-      next.lastMessage.id === data.lastMessageId
-    ) {
-      next = { ...next, lastMessage: { ...next.lastMessage, content: data.lastMessagePreview } };
-    }
-
-    return next;
-  });
 }
 
 /** Garde de FORME pour `message:translation` (revue-correction #5793,
@@ -520,7 +280,7 @@ export function isMessageTranslationEvent(payload: unknown): payload is Translat
  * revues).
  */
 function mergeMessageTranslations(message: Message, incoming: TranslationEvent['translations']): Message {
-  const byLanguage = new Map(message.translations.map((t) => [t.targetLanguage, t]));
+  const byLanguage = new Map((message.translations ?? []).map((t) => [t.targetLanguage, t]));
   for (const t of incoming) byLanguage.set(t.targetLanguage, t as unknown as Message['translations'][number]);
   return { ...message, translations: Array.from(byLanguage.values()) };
 }
@@ -553,13 +313,12 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
     patchThreadMessages(queryClient, conversationId, (messages) =>
       messages.map((m) => (m.id === data.messageId ? merged : m)),
     );
-
-    patchConversation(queryClient, conversationId, (c) => {
-      if (c.lastMessage?.id !== data.messageId) return c;
-      const { lastMessageTranslations: _existing, ...rest } = c;
-      return { ...rest, lastMessageTranslations: { ..._existing, ...incoming } };
-    });
   }
+
+  /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER
+     message, jamais par le cache du fil : la traduction n'atteignait la liste
+     que si la conversation avait été ouverte. */
+  mergeLastMessageCard(queryClient, data.messageId, incoming);
 }
 
 /**
@@ -710,6 +469,12 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
  * une forme mal typée est rejetée FAIL-CLOSED comme le reste de la garde,
  * jamais laissée traverser en silence.
  *
+ * `summary.readByAllAt` (#7347, G-5) — de même OPTIONNEL (repli legacy sans
+ * lot exact), et validé dès qu'il est CONSOMMÉ par `applyReadStatusUpdated`
+ * ci-dessous : `null` (pas encore tout le monde) ou une chaîne (l'ISO 8601
+ * réelle du fil — `updatedAt` voyage de la même façon) sont acceptées ; toute
+ * AUTRE forme (un nombre, un objet) est rejetée, même motif que `messageId`.
+ *
  * **Et la CHAÎNE VIDE est une forme mal typée** (revue-correction W2) : aucun
  * `Message.id` n'est vide, et `''` ne retombe PAS dans le repli « la charge
  * ne nomme aucun message » — `applyReadStatusUpdated` distingue le repli par
@@ -728,7 +493,8 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
     typeof s.totalMembers === 'number' &&
     typeof s.deliveredCount === 'number' &&
     typeof s.readCount === 'number' &&
-    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0))
+    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0)) &&
+    (s.readByAllAt === undefined || s.readByAllAt === null || typeof s.readByAllAt === 'string')
   );
 }
 
@@ -756,14 +522,35 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
  * à AUCUNE rangée en cache (fil partiellement chargé) est un NO-OP, même
  * motif — jamais un repli silencieux sur un AUTRE message.
  *
- * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
- * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
- * posés ici : la charge ne les porte pas, et les inventer depuis un événement
- * qui ne les affirme pas serait une horloge fabriquée. Ce sont les COMPTEURS
- * que ce puits rafraîchit, et `deliveryOf` les tranche palier par palier
- * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
- * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
- * dans `view/message.ts`, ce puits ne la réécrit pas.
+ * `deliveredToAllAt` — l'horodatage FIGÉ que `deliveryOf` (`lib/view/message.ts`)
+ * consulte au palier LIVRÉ — n'est PAS posé ici : la charge ne le porte pas
+ * (`ReadStatusSummary` n'a que `readByAllAt`, cf. #7347/G-5), et l'inventer
+ * depuis un événement qui ne l'affirme pas serait une horloge fabriquée. C'est
+ * un COMPTEUR (`deliveredCount`) que ce puits rafraîchit pour ce palier, et
+ * `deliveryOf` le tranche palier par palier (#7223, revue-correction W2 :
+ * l'horloge « distribué à tous » ne court-circuite plus le palier LU).
+ * TOUS-OU-RIEN EN GROUPE conservé — la règle vit dans `view/message.ts`, ce
+ * puits ne la réécrit pas.
+ *
+ * `readByAllAt` (#7347, G-5), lui, EST posé ici quand le résumé l'AFFIRME —
+ * même moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * celui que `GET …/receipts` sert déjà) : `summary.readByAllAt` PRÉSENT
+ * (`Date` ou `null`) remplace la valeur connue, `undefined` (repli legacy —
+ * gateway pré-G5, ou résumé agrégé sans lot exact) ne la touche pas. Un
+ * `null` EFFACE une date déjà connue plutôt que de la préserver : le
+ * dénominateur peut grandir (nouveau participant) après que « tous ont lu »
+ * a été vrai, et ce résumé est SERVEUR-AUTORITATIF sur ce point précis, comme
+ * il l'est déjà pour `deliveredCount`/`readCount` ci-dessus.
+ *
+ * **LA FICHE « INFOS DU MESSAGE » SUIT LE MÊME DIRECT (#7352, V4)** — ce
+ * puits ne PATCHAIT que les compteurs agrégés ci-dessus ; il n'invalidait
+ * jamais `messageReceiptsPeopleQueryKey` (`receipts.ts:122-123`), la query
+ * de la LISTE NOMINATIVE que `MessageReceiptsSheet` lit. Une fiche ouverte
+ * pendant qu'un accusé arrive ne bougeait donc pas. Même idiome
+ * qu'`onAttachmentStatusUpdated` (`socket.ts:365`) : INVALIDER `target.id`
+ * (déjà résolu, AVEC ou SANS `summary.messageId`), jamais PATCHER — la forme
+ * paginée par participant ne se fusionne pas champ à champ sans risquer de
+ * désynchroniser une ligne encore en vol.
  */
 export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
   const { summary } = data;
@@ -783,14 +570,76 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
       : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const next: Message = {
+  const counters: Message = {
     ...target,
     deliveredCount: summary.deliveredCount,
     readCount: summary.readCount,
     recipientCount: summary.totalMembers,
   };
+  // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
+  // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
+  // lui assignant `undefined`.
+  let next: Message = counters;
+  if (summary.readByAllAt !== undefined) {
+    if (summary.readByAllAt === null) {
+      const { readByAllAt: _drop, ...rest } = counters;
+      next = rest;
+    } else {
+      next = { ...counters, readByAllAt: summary.readByAllAt };
+    }
+  }
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
     messages.map((m) => (m.id === target.id ? next : m)),
+  );
+
+  void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });
+}
+
+/**
+ * Garde de FORME pour `message:consumed` (#7354, V6), motif
+ * `isAttachmentUpdated` — FAIL-CLOSED : une charge qui ne nomme pas SON
+ * message, SA conversation et un compte NUMÉRIQUE est rejetée plutôt que
+ * devinée. `userId`/`maxViewOnceCount`/`isFullyConsumed` ne sont pas vérifiés
+ * ici : `applyMessageConsumed` ci-dessous ne les consomme pas (seul
+ * `viewOnceCount` atteint le cache, motif `applyConsumption`,
+ * `view-once.ts:51-58`).
+ */
+export function isMessageConsumedEvent(payload: unknown): payload is MessageConsumedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.messageId === 'string' && typeof p.conversationId === 'string' && typeof p.viewOnceCount === 'number';
+}
+
+/**
+ * `applyMessageConsumed` — LE PUITS DE `message:consumed` (#7354, V6) : LA
+ * BULLE D'UNE VUE UNIQUE SUIT LE DIRECT.
+ *
+ * L'ÉVÉNEMENT PAIR que `view-once.ts:20-26` annonçait déjà sans qu'aucun
+ * `socket.on` ne le branche (« un seul réducteur pour la réponse REST et
+ * l'événement socket ») : `applyConsumption` (`view-once.ts`), déjà le
+ * réducteur IMMUABLE de `consumeViewOnceOptimistic`, est réutilisé tel quel —
+ * jamais une seconde écriture de la même règle. La passerelle ne diffuse cet
+ * événement qu'au PREMIER visionnage (`firstConsumption`,
+ * `messages-view-once.ts:158-167`), donc chaque destinataire de la room —
+ * l'expéditeur compris — voit `viewOnceCount` bouger SANS recharger le fil.
+ *
+ * MONOTONE (revue V6) : le compte ne REDESCEND jamais. L'événement socket et
+ * la réponse REST de `consumeViewOnceOptimistic` voyagent sur deux canaux —
+ * un `message:consumed` EN RETARD (compte 1) arrivé après le compte servi (2)
+ * ramènerait une vue brûlée à `veiled` et la rouvrirait au remontage. Seul le
+ * rollback optimiste (`view-once.ts`) a le droit d'abaisser le compte ; il
+ * n'emprunte pas ce puits.
+ *
+ * `patchThreadMessages` est un NO-OP silencieux si la conversation n'a pas
+ * de cache (fil non ouvert) ou si `messageId` n'y figure pas
+ * (`applyConsumption`, motif `.map` sans correspondance) — jamais une
+ * exception, même motif que `applyReadStatusUpdated`.
+ */
+export function applyMessageConsumed(queryClient: QueryClient, data: MessageConsumedEventData): void {
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => m.id === data.messageId && (m.viewOnceCount ?? 0) < data.viewOnceCount)
+      ? applyConsumption(messages, data)
+      : messages,
   );
 }

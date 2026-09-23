@@ -64,18 +64,17 @@ export function protectionOf(message: ProtectionFields, now: number): Protection
   return 'standard';
 }
 
-export type EphemeralState =
-  | { readonly state: 'none' }
-  | { readonly state: 'running'; readonly remainingSeconds: number }
-  | { readonly state: 'expired' };
-
-/** Miroir de `BubbleEphemeralLifecycle.State.evaluate` (:8-20). */
-export function ephemeralOf(expiresAt: Date | string | undefined, now: number): EphemeralState {
-  if (expiresAt === undefined) return { state: 'none' };
-  const remainingMs = new Date(expiresAt).getTime() - now;
-  if (remainingMs <= 0) return { state: 'expired' };
-  return { state: 'running', remainingSeconds: Math.floor(remainingMs / 1000) };
-}
+/**
+ * `ephemeralOf` A ÉTÉ RETIRÉE AU LOT #7454 — elle lisait `expiresAt` et
+ * répondait « reste-t-il du temps ? » depuis lui seul. Un éphémère n'a plus
+ * d'`expiresAt` sur `message:new` (contrat du fil #7451, point 4) : ce que le
+ * lecteur voit se compose de son échéance SERVIE et de sa RÉCEPTION locale,
+ * par `ephemeralDeadline()` (`@meeshy/shared/utils/ephemeral-deadline`) et
+ * `resolveEphemeralDeadline()` (`lib/view/ephemeral-reception.ts`).
+ *
+ * `formatRemaining` reste ICI : c'est une écriture, pas une décision, et le
+ * chrome de protection la consomme telle quelle.
+ */
 
 /** Miroir de `BubbleEphemeralLifecycle.format` (:25-37). */
 export function formatRemaining(seconds: number): string {
@@ -87,6 +86,22 @@ export function formatRemaining(seconds: number): string {
   if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
   if (minutes > 0) return `${minutes}m ${String(secs).padStart(2, '0')}s`;
   return `${secs}s`;
+}
+
+/**
+ * LE COMPTEUR DE LA DERNIÈRE MINUTE — `0:59 → 0:00`, la forme que le porteur
+ * écrit (#7468). DISTINCT de `formatRemaining` ci-dessus, et les deux sont
+ * justes : celui-ci s'adresse à l'ŒIL, dans une puce où deux chiffres qui
+ * défilent se lisent d'un coup ; l'autre s'adresse à l'OREILLE, où « 0:45 » se
+ * prononce mal et où « 45s » se comprend seul.
+ *
+ * C'est la raison pour laquelle le libellé accessible ne recopie PAS ce qui est
+ * peint : ils ne disent pas la même chose au même public.
+ */
+export function countdownDigits(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  return `${minutes}:${String(total % 60).padStart(2, '0')}`;
 }
 
 export type RevealPhase =

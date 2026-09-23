@@ -438,6 +438,17 @@ public struct APIMessage: Sendable {
     public let isViewOnce: Bool?
     public let isBlurred: Bool?
     public let expiresAt: Date?
+    /// Durée d'un message éphémère, en SECONDES (contrat du fil #7451).
+    ///
+    /// C'est elle qui voyage désormais, pas l'échéance : `message:new` est une
+    /// diffusion en room et ne peut pas porter une `expiresAt` différente par
+    /// lecteur (contrat point 4). Le client compose donc son échéance locale
+    /// avec sa propre réception. `nil` sur une charge antérieure au contrat —
+    /// le message retombe alors sur `expiresAt`, qui reste servi.
+    ///
+    /// Même patron `var`/`= nil` que `location` et `sticker` : l'init
+    /// memberwise reste source-compatible avec les fixtures existantes.
+    public var ephemeralDuration: Int? = nil
     /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
     /// mécanique que `postReplyTo`. Le SDK ne décode pas `metadata` brut.
     /// `var`/`= nil` (au lieu de `let`) : même patron que `trackingLinks`
@@ -503,7 +514,7 @@ extension APIMessage: Decodable {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location, sticker
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, ephemeralDuration, location, sticker
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
@@ -562,6 +573,7 @@ extension APIMessage: Decodable {
         isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
         // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
@@ -944,6 +956,15 @@ extension APIMessage {
             if isBlurred == true { effects.flags.insert(.blurred) }
             if isViewOnce == true { effects.flags.insert(.viewOnce) }
             if expiresAt != nil { effects.flags.insert(.ephemeral) }
+        }
+        // #7452 — la DURÉE voyage désormais avec le message, et c'est elle qui
+        // fait l'échéance quand elle est combinée à la réception LOCALE. Sans
+        // cette ligne, `message:new` (qui ne porte plus d'`expiresAt` pour un
+        // éphémère, contrat #7451 point 4) laisserait un message éphémère sans
+        // aucune horloge.
+        if let ephemeralDuration, ephemeralDuration > 0 {
+            effects.ephemeralDuration = ephemeralDuration
+            effects.flags.insert(.ephemeral)
         }
 
         if let username = resolvedUsername, let displayName = senderDisplayName, displayName != username {

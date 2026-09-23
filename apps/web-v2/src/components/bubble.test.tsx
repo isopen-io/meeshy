@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
 import { Bubble } from './bubble';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
@@ -82,9 +84,24 @@ const render = (message: Message, opts: { tail?: boolean; now?: () => number } =
       languages={['fr', 'en']}
       isGrouped
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
       {...(opts.now ? { now: opts.now } : {})}
+    />,
+  );
+
+/** L'ÉCHÉANCE DESCENDUE PAR L'HÔTE (#7454) — voir le témoin qui la consomme. */
+const renderAvecEcheance = (message: Message, deadline: EphemeralDeadline) =>
+  renderToStaticMarkup(
+    <Bubble
+      place={placeOf(message, true)}
+      languages={['fr', 'en']}
+      isGrouped
+      viewerId="u-viewer"
+      ephemeralDeadline={deadline}
+      onJumpToMessage={() => {}}
+      onPickLanguage={() => {}}
     />,
   );
 
@@ -96,6 +113,7 @@ const renderSansPrise = (message: Message) =>
       languages={['fr', 'en']}
       isGrouped
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
     />,
   );
@@ -107,6 +125,7 @@ const renderRetenu = (message: Message) =>
       languages={['fr', 'en']}
       isGrouped
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       revealable={false}
     />,
@@ -242,13 +261,30 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).toBe('');
   });
 
-  test('éphémère dans 2 minutes : aria-label du badge « Message éphémère, expire dans 2m 00s »', () => {
-    const now = () => new Date('2026-09-08T09:00:00.000Z').getTime();
-    const html = render(
-      { ...BASE_MESSAGE, expiresAt: new Date('2026-09-08T09:02:00.000Z') },
-      { now },
-    );
-    expect(html).toContain('Message éphémère, expire dans 2m 00s');
+  /**
+   * L'ÉCHÉANCE VIENT DE L'HÔTE (#7454) — cette peau ne lit plus `expiresAt`
+   * pour décider d'un décompte : `resolveEphemeralDeadline` la compose chez
+   * `ThreadModes`, depuis la RÉCEPTION locale, et la descend ici. Le témoin la
+   * passe donc telle quelle, ce qui est aussi ce qui le rend déterministe.
+   */
+  test('échéance dans 2 minutes : aria-label « Message éphémère, disparaît dans 2m 00s »', () => {
+    /* L'ÉCHÉANCE EST RELATIVE À MAINTENANT, et elle doit l'être : le décompte
+       se lit sur l'horloge partagée, pas sur une horloge injectée — une date
+       fixe de 2026-09-08 serait déjà passée au moment du run. */
+    const html = renderAvecEcheance(BASE_MESSAGE, { state: 'scheduled', expiresAtMs: Date.now() + 120_500 });
+    expect(html).toContain('Message éphémère, disparaît dans 2m 00s');
+  });
+
+  test('l’EXPÉDITEUR sans échéance voit « en attente de réception », jamais un décompte', () => {
+    const html = renderAvecEcheance(BASE_MESSAGE, { state: 'awaiting-reception', durationSeconds: 120 });
+    expect(html).toContain('data-ephemeral="awaiting"');
+    expect(html).toContain('En attente de réception');
+  });
+
+  test('une VUE UNIQUE est nommée même SANS pièce jointe', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true }, { state: 'none' });
+    expect(html).toContain('data-view-once');
+    expect(html).toContain('Vue unique');
   });
 
   /**
@@ -315,6 +351,7 @@ const renderMine = (props: {
       languages={['fr', 'en']}
       isGrouped
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onRetry={() => {}}
       {...props}
@@ -376,6 +413,7 @@ describe('Bubble — un refus permanent perd le geste, jamais la cause (#5813)',
         languages={['fr', 'en']}
         isGrouped
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
         localDelivery="failed"
         sendFailureReason={reason}
@@ -422,6 +460,7 @@ describe('Bubble — displayLanguage, myReactions, selected (#5814, T12)', () =>
         languages={['es', 'en']}
         isGrouped
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
         {...extra}
       />,
@@ -465,7 +504,7 @@ describe('Bubble — `lang` SUIT la langue servie après une traduction greffée
   const spanish: Message = { ...BASE_MESSAGE, originalLanguage: 'es', content: 'Hola, ¿todo bien?', translations: [] };
   const renderAt = (translations: Message['translations']) =>
     renderToStaticMarkup(
-      <Bubble place={placeOf({ ...spanish, translations })} languages={['fr', 'en']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      <Bubble place={placeOf({ ...spanish, translations })} languages={['fr', 'en']} isGrouped viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
     );
 
   test('aucune traduction ⇒ lang="es", l’ORIGINAL', () => {
@@ -536,6 +575,7 @@ describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => 
           languages={['fr', 'en']}
           isGrouped
           viewerId="u-viewer"
+          ephemeralDeadline={{ state: 'none' }}
           onJumpToMessage={() => {}}
           myReactions={['👍']}
           onReact={onReact}
@@ -658,6 +698,7 @@ describe('Bubble — les états du message (#5936)', () => {
         languages={['fr', 'en']}
         isGrouped
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
         {...(onOpenStory === undefined ? {} : { onOpenStory })}
       />,
@@ -739,6 +780,7 @@ describe('Bubble — le corps nu d’un message envoyé reste lisible', () => {
         languages={['fr']}
         isGrouped
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
       />,
     );
@@ -847,7 +889,7 @@ describe('Bubble — remet le carrier (auteur, date) à la visionneuse ouverte (
     root = createRoot(container);
     act(() => {
       root.render(
-        <Bubble place={placeOf(withFourImages)} languages={['fr', 'en']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+        <Bubble place={placeOf(withFourImages)} languages={['fr', 'en']} isGrouped viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
       );
     });
 
@@ -856,16 +898,30 @@ describe('Bubble — remet le carrier (auteur, date) à la visionneuse ouverte (
     act(() => {
       tile.click();
     });
-    // Le chunk `lazy()` résout en une microtask ; `Suspense` remonte au tour
-    // suivant — un SEUL `act(async)` vide laisse React rejouer les deux.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    // `MediaViewer` est un CHUNK À LA DEMANDE — `lazy(() => import('./media-
+    // viewer'))`, `attachment-blocks.tsx:51`. Le coût de ce `import()` n'est
+    // PAS une constante : il ne se paie qu'au PREMIER importateur du process.
+    // Un seul tour de boucle suffisait donc quand un autre fichier avait déjà
+    // chargé le module, et pas quand celui-ci est le premier — c'est bun qui
+    // décide, en répartissant les fichiers. Attendre l'EFFET plutôt qu'une
+    // durée rend le témoin indépendant de cette répartition, sans lui retirer
+    // ses dents : la boucle est bornée, et un pied qui ne vient jamais fait
+    // tomber l'assertion ci-dessous comme avant.
+    const footerWithin = async (attempts: number): Promise<Element | null> => {
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
+        // viewer.tsx) — HORS de `container`, il faut donc interroger le
+        // DOCUMENT, pas la racine montée.
+        const found = document.querySelector('[data-viewer-footer]');
+        if (found) return found;
+      }
+      return null;
+    };
 
-    // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
-    // viewer.tsx) — HORS de `container`, il faut donc interroger le
-    // DOCUMENT, pas la racine montée.
-    const footer = document.querySelector('[data-viewer-footer]');
+    const footer = await footerWithin(50);
     expect(footer).not.toBeNull();
     expect(footer?.textContent).toContain('Kwame Mensah');
   });
@@ -894,7 +950,7 @@ describe('Bubble — la grille de médias en boîte unique (revue #6169)', () =>
       })),
     };
     const html = renderToStaticMarkup(
-      <Bubble place={placeOf(fourImages)} languages={['fr']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      <Bubble place={placeOf(fourImages)} languages={['fr']} isGrouped viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
     );
     expect(html).toContain('data-media-frame="box"');
     expect(html).not.toContain('data-media-frame="tiles"');

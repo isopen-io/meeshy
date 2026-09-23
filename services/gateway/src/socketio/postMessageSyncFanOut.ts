@@ -10,12 +10,8 @@ import {
   type UnreadBridgeBuilder,
 } from './emitUnreadCountsToRecipients';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
-import {
-  resolveLastMessagePreviewPrism,
-  resolvePreviewMediaFields,
-  toIsoOrNull,
-} from './utils/lastMessagePreviewPrism';
-import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
+import { toIsoOrNull } from './utils/lastMessagePreviewPrism';
+import { resolveLastMessagePreviewGroup } from './utils/lastMessagePreviewGroup';
 import type { QueuedPayloadFor } from './queuedEventContract';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
@@ -148,24 +144,12 @@ export async function syncConversationListOnNewMessage(
       // rang pour se trier.
       lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
       lastMessageId: message.id,
-      // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
-      // avec le reste de la paire, sous le même plafond qu'elle.
-      // Un message position-seule a un `content` vide, donc un aperçu
-      // vide : `location` est alors la SEULE chose dont la ligne de liste
-      // dispose pour composer son libellé. Hissée ici comme les deux
-      // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
-      // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
-      // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
-      // laissait la ligne littéralement blanche.
-      //
-      // Clé ABSENTE quand le message n'a pas de position, jamais présente
-      // à `null` : les clients écrivent `location` AVEC l'identité du
-      // message, donc une clé nulle sur le chemin le plus fréquenté du
-      // service effacerait une épingle correcte à chaque message texte.
-      ...((): Record<string, unknown> => {
-        const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-        return place ? { location: place } : {};
-      })(),
+      // `lastMessagePreview`, le lieu, le sous-groupe MÉDIA et la NATURE
+      // sortent de `resolveLastMessagePreviewGroup`, sous la protection du
+      // message (#7545). `location` y reste une clé ABSENTE quand le message
+      // n'a pas de position (ou qu'il est protégé), jamais présente à `null` :
+      // les clients écrivent `location` AVEC l'identité du message, donc une
+      // clé nulle effacerait une épingle correcte à chaque message texte.
       senderId: message.senderId,
       updatedAt: new Date().toISOString()
     };
@@ -181,11 +165,10 @@ export async function syncConversationListOnNewMessage(
     for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
       ctx.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...updatePayload,
-        ...resolveLastMessagePreviewPrism(participant, message),
-        // Sous-groupe MÉDIA (#3737) — parité avec le chemin WS
-        // (`MessageHandler.ts`) et `emitConversationPreviewUpdate.ts`, les
-        // deux autres émetteurs de ce même groupe.
-        ...resolvePreviewMediaFields(message)
+        // Parité avec le chemin WS (`MessageHandler.ts`) et
+        // `emitConversationPreviewUpdate.ts` : les trois émetteurs composent le
+        // groupe par la MÊME fonction, donc sous la même protection.
+        ...resolveLastMessagePreviewGroup(participant, message)
       });
     }
 

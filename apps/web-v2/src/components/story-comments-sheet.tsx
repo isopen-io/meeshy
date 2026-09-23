@@ -5,6 +5,7 @@ import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
 
 /**
  * **LE FIL DE COMMENTAIRES D'UNE STORY**, posé en feuille au-dessus de la
@@ -37,6 +38,11 @@ export type StoryCommentsSheetProps = {
 export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps) {
   const language = currentInterfaceLanguage();
   const panneau = useRef<HTMLDivElement | null>(null);
+  /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
+     qui n'est pas ami peut lire le fil d'une story `FRIENDS`
+     (`canUserConsumePost`), mais il n'est dans aucun salon de fil : sans la
+     salle, aucun commentaire ne lui arrive en direct. */
+  usePublicationRoom(postId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

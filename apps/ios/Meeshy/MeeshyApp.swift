@@ -58,9 +58,7 @@ struct MeeshyApp: App {
         //
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
-        ConversationListAuthor.configureReaderLabel(
-            String(localized: "focal.row.you", bundle: .main)
-        )
+        ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
 
         // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
@@ -245,6 +243,13 @@ struct MeeshyApp: App {
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.
                     NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
+                    // #7453 — le balayage des bannières éphémères échues, au
+                    // démarrage puis à chaque retour au premier plan. C'est le
+                    // seul des trois chemins qui tourne quand l'utilisateur
+                    // REGARDE : la NSE nettoie plus souvent, mais elle ne
+                    // s'exécute qu'à l'arrivée d'un push.
+                    await NotificationActionHandler.sweepExpiredEphemeralBanners()
+                    NotificationActionHandler.shared.observeForegroundSweep()
                     launchSplash.reach(.cache)
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to

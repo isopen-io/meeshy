@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { FeedEmpty, FeedError, FeedHeader, FeedSkeleton, FeedTopChrome, FEED_HEADER_HEIGHT, FEED_TOP_RESERVE } from './feed';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { READING_COLUMN_MAX } from '@/lib/view/reading-column';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
@@ -90,6 +91,50 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     const anchor = html.match(/<a [^>]*href="\/reels"[^>]*>/)?.[0] ?? '';
     expect(anchor).toContain('size-11');
     expect(anchor).toContain('draggable="false"');
+  });
+
+  /**
+   * LA PORTE DE CRÉATION (#7449) — et son ORDRE, qui n'est pas un goût : deux
+   * gates mesurent que « Lancer les Réels » touche le bord droit
+   * (`check-reels.mjs`, `innerWidth - right <= 16`) et vit dans les 64 derniers
+   * pixels (`check-feed-disc.mjs`). Insérer la création à sa droite le
+   * déplacerait ; ce témoin fixe l'ordre AVANT qu'un navigateur n'ait à le
+   * mesurer.
+   */
+  test('la porte de création se pose AVANT « Lancer les Réels », qui reste le dernier contrôle', () => {
+    const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).toContain('data-feed-create');
+    expect(html).toContain('aria-label="Créer une publication ou un réel"');
+    expect(html.indexOf('data-feed-create')).toBeGreaterThan(html.indexOf('Meeshy Feed'));
+    expect(html.indexOf('data-feed-create')).toBeLessThan(html.indexOf('href="/reels"'));
+  });
+
+  /**
+   * LE CHROME PREND LA FENÊTRE (#7449, directive porteur du 2026-09-22) —
+   * l'en-tête ne porte AUCUNE borne, et le témoin l'exige plutôt que de le
+   * constater : la première écriture du lot la lui avait donnée, ce qui
+   * rétrécissait « Meeshy Feed » avec les cartes. C'est la mesure de LECTURE
+   * qu'on borne, jamais l'application.
+   */
+  test('l’en-tête ne se borne PAS — il prend toute la fenêtre', () => {
+    const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).not.toContain(`max-width:${READING_COLUMN_MAX}px`);
+  });
+
+  /** LE PLATEAU DES STORIES AUSSI — il vit DANS le scrollport (il sort du
+   * champ au défilement, #6103) et reste pourtant du chrome : il court de
+   * bord à bord de la fenêtre. */
+  test('le plateau des stories ne se borne PAS non plus', () => {
+    const html = renderToStaticMarkup(<FeedTopChrome railProps={RAIL_PLEIN} inert={false} />);
+    expect(html).not.toContain(`max-width:${READING_COLUMN_MAX}px`);
+  });
+
+  /** ...et le CONTENU, lui, la porte : le squelette est la seule pièce de
+   * contenu que ce fichier peut rendre seule. */
+  test('le contenu porte la colonne, bornée et centrée', () => {
+    const html = renderToStaticMarkup(<FeedSkeleton count={1} />);
+    expect(html).toContain(`max-width:${READING_COLUMN_MAX}px`);
+    expect(html).toContain('margin-inline:auto');
   });
 });
 

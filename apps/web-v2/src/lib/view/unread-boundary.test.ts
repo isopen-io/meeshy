@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { conversationDefaults, message, VIEWER_ID } from '@/lib/api/fixtures-base';
 import type { Conversation, Message } from '@/lib/api/types';
 
-import { nextFrozenUnreadBoundary, unreadBoundaryOf } from './unread-boundary';
+import { nextFrozenUnreadBoundary, resumeThreadTarget, unreadBoundaryOf } from './unread-boundary';
 
 /**
  * **LE GEL DE LA FRONTIÈRE DE NON-LUS** (#7202, W3, décision D-L2/D-L3) — le
@@ -159,5 +159,73 @@ describe('unreadBoundaryOf — la garde du zéro-signal', () => {
     const boundary = unreadBoundaryOf({ conversation, messages, viewerId: VIEWER_ID });
 
     expect(boundary).toEqual({ firstUnreadId: 'm2', unreadCount: 2 });
+  });
+
+  /**
+   * **LE PROFIL NEUF** (#7351, V3) — AUCUN signal chronologique, mais
+   * `unreadCount` EST servi (toujours, `GET /conversations/:id` ne coûte
+   * aucune colonne pour ce champ, `core-detail.ts:193,227`) : c'est le cas
+   * d'un lecteur qui ouvre un lien direct sur une conversation qu'il n'a
+   * JAMAIS ouverte. Avant #7351 la garde du zéro-signal avalait ce cas et
+   * rendait `null` — l'inverse de D-L2.
+   */
+  test('`unreadCount` SEUL (profil neuf, GET /conversations/:id direct) élit les N derniers messages', () => {
+    const conversation = conversationOf({ unreadCount: 2 });
+    expect('lastReadMessageId' in conversation).toBe(false);
+    expect('currentUserJoinedAt' in conversation).toBe(false);
+
+    const boundary = unreadBoundaryOf({ conversation, messages, viewerId: VIEWER_ID });
+
+    expect(boundary).toEqual({ firstUnreadId: 'm2', unreadCount: 2 });
+  });
+
+  test('`unreadCount: 0` SEUL ⇒ null (rien n’est jamais inventé comme non lu)', () => {
+    const conversation = conversationOf({ unreadCount: 0 });
+
+    const boundary = unreadBoundaryOf({ conversation, messages, viewerId: VIEWER_ID });
+
+    expect(boundary).toBeNull();
+  });
+});
+
+/**
+ * `resumeThreadTarget` (#7351, V3, critère de fin « Reprendre le fil cible
+ * firstUnreadBoundary ») — `routes/thread.tsx::onResumeThread` visait
+ * `messages.find((m) => m.senderId !== viewer.id)`, le premier message
+ * d'autrui de la fenêtre CHARGÉE, jamais la vraie frontière : sur un fil
+ * paginé, ce premier message chargé peut être bien AVANT le premier non-lu
+ * réel.
+ */
+describe('resumeThreadTarget', () => {
+  const messages = [
+    { id: 'm1', senderId: 'u-autrui' },
+    { id: 'm2', senderId: VIEWER_ID },
+    { id: 'm3', senderId: 'u-autrui' },
+  ];
+
+  test('une frontière existe ⇒ elle est la cible, jamais le premier message chargé', () => {
+    const target = resumeThreadTarget({
+      unreadBoundary: { firstUnreadId: 'm3', unreadCount: 1 },
+      messages,
+      viewerId: VIEWER_ID,
+    });
+
+    expect(target).toBe('m3');
+  });
+
+  test('aucune frontière (tout est lu) ⇒ repli sur le premier message d’autrui, comme avant', () => {
+    const target = resumeThreadTarget({ unreadBoundary: null, messages, viewerId: VIEWER_ID });
+
+    expect(target).toBe('m1');
+  });
+
+  test('aucune frontière et aucun message d’autrui ⇒ null', () => {
+    const target = resumeThreadTarget({
+      unreadBoundary: null,
+      messages: [{ id: 'm1', senderId: VIEWER_ID }],
+      viewerId: VIEWER_ID,
+    });
+
+    expect(target).toBeNull();
   });
 });

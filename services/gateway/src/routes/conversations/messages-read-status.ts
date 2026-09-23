@@ -26,30 +26,9 @@ import { canAccessConversation, resolveCallerParticipant } from './utils/access-
 import type { ConversationParams } from './types';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logger } from './messages-shared';
-
-// Mirrors the cursor-advance freshness guard in MessageReadStatusService. It
-// orders by the message's `createdAt` (millisecond precision, stable across
-// gateway processes); ObjectId hex order is only second-accurate and its next 5
-// bytes are per-process random, so it can invert real recency for same-second
-// messages from different nodes. The ObjectId comparison is kept only as a
-// fallback for legacy cursors written before `lastReadMessageCreatedAt` existed.
-const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-function isStaleCursorMessageId(params: {
-  candidateMessageId: string;
-  candidateCreatedAt: Date;
-  cursorMessageId: string | null | undefined;
-  cursorMessageCreatedAt: Date | null | undefined;
-}): boolean {
-  const { candidateMessageId, candidateCreatedAt, cursorMessageId, cursorMessageCreatedAt } = params;
-  if (!cursorMessageId) return false;
-  if (cursorMessageCreatedAt) {
-    return candidateCreatedAt < cursorMessageCreatedAt;
-  }
-  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(cursorMessageId)) {
-    return false;
-  }
-  return candidateMessageId.toLowerCase() < cursorMessageId.toLowerCase();
-}
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { MeeshySocketIOHandler } from '../../socketio/MeeshySocketIOHandler';
+import { bridgeNotComputed } from '../../socketio/unreadBridgeField';
 
 /**
  * Enregistre `POST /conversations/:id/mark-read` — ADAPTATEUR de la collection
@@ -159,7 +138,8 @@ export function registerMarkReadRoute(
 export function registerMarkUnreadRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  participantAuth: any
+  participantAuth: any,
+  socketIOHandler?: Pick<MeeshySocketIOHandler, 'getManager'>
 ) {
   fastify.post<{ Params: ConversationParams }>('/conversations/:id/mark-unread', {
     schema: {
@@ -261,27 +241,41 @@ export function registerMarkUnreadRoute(
       // copie de la règle d'identité qui oubliait les invités de lien partagé.
       const participantForCursor = currentParticipant;
 
-      // Guard against a race with a concurrent, fresher read: another device
-      // may have read a message newer than `latestMessage` between our read
-      // above and this write. Without this check the unconditional upsert
-      // below would roll the cursor backward past that fresher read,
-      // resurrecting already-read messages as unread (mirrors the
-      // isStaleCursorMessageId guard in MessageReadStatusService.markMessagesAsRead).
-      const currentCursor = await prisma.conversationReadCursor.findUnique({
+      // Guard against a GENUINE race: has a message from someone ELSE, newer
+      // than `latestMessage`, appeared since we read it above? (#7346).
+      //
+      // The previous guard compared `latestMessage` to the caller's PERSISTED
+      // cursor (`ConversationReadCursor.lastReadMessageId`) — but that cursor
+      // also advances every time this SAME participant sends a message
+      // (`MessagingService.runPostSaveSideEffects` →
+      // `markMessagesAsRead(senderParticipantId, …, message.id)`,
+      // `services/messaging/MessagingService.ts`). Replying to a conversation
+      // therefore left the cursor pointing at the participant's OWN message —
+      // always newer than `latestMessage`, which excludes their own messages
+      // by construction — and the old guard read that as "someone already
+      // read further", silently turning every mark-unread called after a
+      // reply into a no-op that still answered `200 {unreadCount:0}`.
+      //
+      // Re-querying for a fresher OTHER's message instead of re-reading the
+      // cursor answers the actual question this guard exists for — "did the
+      // world change since I captured `latestMessage`?" — without caring
+      // whether that message has been read yet: a message that showed up
+      // meanwhile from someone else means the rewind target below (computed
+      // from the now-stale `latestMessage`/`previousMessage` pair) is no
+      // longer the right one, whether or not anyone has read it.
+      const fresherOtherMessage = await prisma.message.findFirst({
         where: {
-          conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
+          conversationId,
+          deletedAt: null,
+          senderId: { not: currentParticipant.id },
+          createdAt: { gt: latestMessage.createdAt }
         },
-        select: { lastReadMessageId: true, lastReadMessageCreatedAt: true }
+        select: { id: true }
       });
 
-      if (isStaleCursorMessageId({
-        candidateMessageId: latestMessage.id,
-        candidateCreatedAt: latestMessage.createdAt,
-        cursorMessageId: currentCursor?.lastReadMessageId,
-        cursorMessageCreatedAt: currentCursor?.lastReadMessageCreatedAt
-      })) {
+      if (fresherOtherMessage) {
         logger.info(
-          `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
+          `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: a newer message from another participant appeared since latestMessage was captured`
         );
         return sendSuccess(reply, { unreadCount: 0 });
       }
@@ -313,6 +307,27 @@ export function registerMarkUnreadRoute(
       });
 
       logger.info(`[MARK-UNREAD] User ${userId} marked conversation ${conversationId} as unread (cursor moved before message ${latestMessage.id})`);
+
+      // Push the fresh badge to the READER'S OWN other devices (#7346, D-L1
+      // territory) — the mirror of what `broadcastReadStatus` already does for
+      // mark-read/receipts (`socketio/broadcastReadStatus.ts`). `userId` is
+      // already the right room key on BOTH branches: the anonymous branch of
+      // `UnifiedAuthService` sets `authContext.userId` to the caller's OWN
+      // `Participant.id` (see `utils/access-control.ts`'s doc-comment), so a
+      // shared-link guest's personal room is already named by it — no
+      // `isAnonymous` branch needed here, unlike `broadcastReadStatus` which
+      // also computes a CONTRACT field (`actorUserId`) this response doesn't
+      // carry. No `bridge` field: this route has no `ConversationBridgeService`
+      // wired in, so it DECLARES "I did not compute" (`unreadBridgeField.ts`)
+      // rather than guessing — the client keeps whatever bridge it already has.
+      const io = socketIOHandler?.getManager()?.getIO();
+      if (io) {
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount: 1,
+          ...bridgeNotComputed()
+        });
+      }
 
       return sendSuccess(reply, { unreadCount: 1 });
 

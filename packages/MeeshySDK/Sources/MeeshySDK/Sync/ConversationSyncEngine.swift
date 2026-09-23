@@ -75,6 +75,12 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     /// Pass `nil` (on view disappear) to restore pass-through behaviour.
     func setCurrentlyOpenConversation(_ conversationId: String?)
 
+    /// Ce qui reste non lu dans la conversation OUVERTE après une lecture
+    /// partielle (#7350) — redonné à sa ligne quand elle se ferme, au lieu du
+    /// 0 transitoire de l'ouverture. Ignoré si `conversationId` n'est plus la
+    /// conversation ouverte.
+    func noteUnreadRemaining(_ conversationId: String, _ remaining: Int)
+
     /// The conversation currently forced to unread=0 and excluded from the
     /// cross-conversation aggregate, or `nil`. Read in
     /// `ConversationViewModel.deinit` so the gate is relinquished ONLY when it
@@ -145,6 +151,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// conversation's `unreadCount` to 0 on every server broadcast and
     /// excludes it from the cross-conversation aggregator.
     /* partagé entre les fichiers du moteur (#4172) */ var _currentlyOpenConversationId: String?
+    /// Le compte à REDONNER à la conversation ouverte quand elle se ferme
+    /// (#7350, I-2). Semé à l'ouverture par le compte d'avant (rien lu tant que
+    /// rien n'est affiché), remplacé par `noteUnreadRemaining` à chaque
+    /// lecture partielle, ramené à 0 par une lecture complète. Tant que
+    /// l'écran est affiché le moteur montre 0 ; ce compte est ce qui reste
+    /// VRAI une fois qu'il ne l'est plus.
+    /* partagé entre les fichiers du moteur (#4172) */ var _unreadToRestoreOnClose: Int?
     /// Public for the `ConversationSyncEngineProviding` read requirement (used by
     /// `ConversationViewModel.deinit` for the order-safe, identity-conditional
     /// gate release). `setCurrentlyOpenConversation(_:)` remains the canonical
@@ -383,7 +396,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Currently-open conversation
 
     public func setCurrentlyOpenConversation(_ conversationId: String?) {
-        currentlyOpenConversationId = conversationId
+        let (previousId, toRestore) = stateQueue.sync { () -> (String?, Int?) in
+            let previous = (_currentlyOpenConversationId, _unreadToRestoreOnClose)
+            guard previous.0 != conversationId else { return (nil, nil) }
+            _currentlyOpenConversationId = conversationId
+            _unreadToRestoreOnClose = conversationId.flatMap { _unreadByConversation[$0] }
+            return previous
+        }
+        if let previousId, let toRestore {
+            restoreUnreadOnClose(previousId, toRestore)
+        }
         // SYNCHRONE, avant tout `Task` : l'agrégat doit avoir exclu (ou
         // ré-inclus) cette conversation AVANT que l'écran qui vient de
         // s'ouvrir s'abonne. Un `CurrentValueSubject` rejoue sa dernière
@@ -420,11 +442,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
+                    // Zéro TRANSITOIRE, sans frontière de lecture (#7350) :
+                    // `lastReadAt = Date()` posé ici arrivait toujours APRÈS
+                    // le dernier message, et `reconcileUnread` ramenait alors
+                    // à 0 tout instantané serveur postérieur à la fermeture —
+                    // 99 non-lus, 5 vus, liste à 0 pendant que le serveur
+                    // disait 94. La fermeture redonne le compte vrai
+                    // (`restoreUnreadOnClose`).
                     updated[idx].userState.unreadCount = 0
-                    // Frontière de lecture : sans elle, le prochain instantané
-                    // serveur (delta au retour en avant-plan, reconnexion socket)
-                    // ré-injecterait le compteur d'AVANT l'ouverture.
-                    updated[idx].userState.lastReadAt = Date()
                 }
                 return updated
             }

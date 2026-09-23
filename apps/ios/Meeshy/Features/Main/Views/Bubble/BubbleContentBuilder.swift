@@ -247,12 +247,19 @@ extension BubbleContent {
             self.attachments = .mixed(visual: visual, audio: audio, nonMedia: nonMedia)
         }
 
-        // --- Ephemeral ---
-        if let exp = message.expiresAt, exp.timeIntervalSinceNow > 0 {
-            self.ephemeral = Ephemeral(expiresAt: exp)
-        } else {
-            self.ephemeral = nil
-        }
+        // --- Protection (éphémère / vue unique / flou) ---
+        //
+        // UN appel, pour les cinq modes. La règle d'échéance n'est PAS relue
+        // ici : `MeeshyMessage.protection` la tient (contrat #7451 point 6), et
+        // c'est ce qui permet à la Rivière et au Résumé de projeter exactement
+        // la même chose sans passer par `BubbleContent`.
+        //
+        // L'ancienne ligne (`expiresAt.timeIntervalSinceNow > 0`) lisait
+        // l'échéance calculée à l'ENVOI : un destinataire qui ouvrait la
+        // conversation après coup héritait d'une horloge démarrée chez
+        // quelqu'un d'autre.
+        self.protection = message.protection()
+        self.isBurning = message.isBurning
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred

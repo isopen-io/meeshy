@@ -194,6 +194,20 @@ extension ConversationView {
             return
         }
 
+        // La protection armée est saisie UNE fois, ici, et la rangée se
+        // désarme dans le même tour (#7498). Elle voyage ensuite jusqu'à
+        // CHAQUE message de cet envoi — un par groupe de pièces jointes, plus
+        // le texte en dernier. Relue à chaque envoi et désarmée au premier
+        // acquittement, elle ne couvrait que le premier message : « cela ne
+        // fonctionne que sur les textes » de la recette 1.1.0 était exactement
+        // cela, vu de l'utilisateur.
+        //
+        // Saisie APRÈS tous les chemins qui REVIENNENT sans rien envoyer
+        // (garde d'éligibilité, popup de consentement vocal) : désarmer avant
+        // eux perdrait la protection sans qu'aucun message ne parte, et le
+        // popup relance ce même tap sur un état qu'il doit retrouver intact.
+        let protection = viewModel.consumeArmedProtection()
+
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
             composerState.pendingAttachments.removeAll()
@@ -208,7 +222,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang, location: place)
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place)
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -311,7 +325,8 @@ extension ConversationView {
                 replyToId: send.group.carriesReply ? replyId : nil,
                 storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
                 replyReference: send.group.carriesReply ? storyRef : nil,
-                originalLanguage: lang
+                originalLanguage: lang,
+                protection: protection
             )
             // Atomicity : la transcription locale déjà connue est posée dans le
             // MÊME slice que la bulle — aucun `await` entre les deux.
@@ -338,7 +353,7 @@ extension ConversationView {
         // `insertOptimisticMediaMessage` n'a de « Media » que le nom : avec
         // `attachments: []` et `messageType: .text` il construit un
         // `MessageRecord` texte ordinaire (`attachmentsJson` reste nil) et
-        // `optimisticListPreview` gère déjà `.text`.
+        // `LastMessageFacet.sent` porte déjà sa légende.
         let textGroupPlan = plan.first(where: { $0.kind == .text })
         let textTempId: String? = {
             let hasText = !(textGroupPlan?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -354,7 +369,8 @@ extension ConversationView {
                 replyToId: textGroupPlan?.carriesReply == true ? replyId : nil,
                 storyReplyToId: textGroupPlan?.carriesReply == true ? storyReplyId : nil,
                 replyReference: textGroupPlan?.carriesReply == true ? storyRef : nil,
-                originalLanguage: lang
+                originalLanguage: lang,
+                protection: protection
             )
         }
 
@@ -625,6 +641,7 @@ extension ConversationView {
                         storyReplyReference: send.group.carriesReply ? storyRef : nil,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
+                        protection: protection,
                         originalLanguage: lang,
                         existingTempId: send.tempId
                     )
@@ -710,6 +727,7 @@ extension ConversationView {
                     replyToId: textGroup.carriesReply ? replyId : nil,
                     storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
                     storyReplyReference: textGroup.carriesReply ? storyRef : nil,
+                    protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
                     location: place
@@ -719,6 +737,7 @@ extension ConversationView {
             } else if place != nil {
                 let ok = await viewModel.sendMessage(
                     content: "",
+                    protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
                     location: place

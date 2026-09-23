@@ -64,6 +64,9 @@ import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
+import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
+import { setEphemeralCountdownIOResolver } from './socketio/ephemeralCountdownAnnouncer';
+import { emitConversationActivityUpdate } from './socketio/emitConversationActivityUpdate';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
 import { ExpiredShareLinksCleanupService } from './services/ExpiredShareLinksCleanupService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
@@ -134,6 +137,7 @@ class MeeshyServer {
   private tusCleanup: TusCleanupService;
   private expiredStoriesCleanup: ExpiredStoriesCleanupService;
   private expiredMessagesCleanup: ExpiredMessagesCleanupService;
+  private ephemeralRecipientExpiry: EphemeralRecipientExpiryService;
   private expiredShareLinksCleanup: ExpiredShareLinksCleanupService;
   private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
@@ -280,6 +284,20 @@ class MeeshyServer {
     this.expiredMessagesCleanup = new ExpiredMessagesCleanupService(this.prisma, {
       resolveManager: () => this.socketIOHandler.getManager(),
     });
+
+    // #7451 — l'echeance PAR DESTINATAIRE d'un ephemere : `message:expired`
+    // vers `user:<u>` SEUL et retrait de SES bannieres a `D(u)`, une heure
+    // avant que le balayage ci-dessus ne detruise le contenu pour tout le
+    // monde. Deux balayages parce que deux invariants : l'un met hors de vue
+    // par lecteur, l'autre detruit une fois pour toutes.
+    this.ephemeralRecipientExpiry = new EphemeralRecipientExpiryService(this.prisma, {
+      resolveIO: () => this.socketIOHandler.getManager()?.getIO(),
+    });
+
+    // Le decompte demarre au fond du gel des accuses de reception, ou trois des
+    // cinq chemins n'ont aucun `io` a leur disposition. Meme patron, meme raison
+    // et meme paresse que ci-dessus : le manager n'existe pas encore.
+    setEphemeralCountdownIOResolver(() => this.socketIOHandler.getManager()?.getIO());
 
     // Cron de révocation des liens de partage échus (#4195, suite de #4194).
     // `expiresAt` n'est le geste de personne : sans ce balayage, un invité
@@ -989,6 +1007,26 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // `call:leave` handler did), leaving a departed/kicked group-call
         // member visible in every other participant's roster/video grid
         // until the ~120s GC sweep.
+        // #7545 — la liste de conversations apprend l'appel en cours : sa
+        // réservation, chaque arrivée et chaque départ, et sa fin, relus
+        // depuis `Conversation.activeCallId` par UNE unité de diffusion.
+        // `updatedBy` : l'initiateur de l'appel — un départ ou une fin par GC
+        // n'a pas d'autre auteur, et le contrat exige un `User.id`.
+        cleanupManager.getCallService().setActiveCallChangedListener((conversationId, callId) => {
+          void this.prisma.callSession
+            .findUnique({ where: { id: callId }, select: { initiatorId: true } })
+            .then((call) =>
+              call
+                ? emitConversationActivityUpdate(this.prisma, cleanupManager.getIO(), {
+                    conversationId,
+                    updatedByUserId: call.initiatorId,
+                    call: true,
+                    onError: (error) => logger.warn('conversation:updated activeCall failed', { conversationId, error }),
+                  })
+                : undefined
+            )
+            .catch((error: unknown) => logger.warn('conversation:updated activeCall rejected', { conversationId, error }));
+        });
         cleanupManager.getCallService().setParticipantLeftBroadcaster(
           (_callId, event) =>
             callEventsHandler.broadcastParticipantLeftForRest(cleanupManager.getIO(), event)
@@ -1083,6 +1121,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredMessagesCleanup.start();
       logger.info('✓ Expired messages cleanup service started');
 
+      // Start per-recipient ephemeral expiry sweep (per-minute): drops the
+      // bubble and the banners of the ONE recipient whose D(u) has lapsed.
+      this.ephemeralRecipientExpiry.start();
+      logger.info('✓ Ephemeral recipient expiry service started');
+
       // Start expired-share-links sweep (hourly): revokes guests of a share
       // link once its expiresAt has lapsed, and marks the link inactive.
       this.expiredShareLinksCleanup.start();
@@ -1157,6 +1200,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredMessagesCleanup) {
         this.expiredMessagesCleanup.stop();
         logger.info('✓ Expired messages cleanup service stopped');
+      }
+
+      // Stop per-recipient ephemeral expiry sweep
+      if (this.ephemeralRecipientExpiry) {
+        this.ephemeralRecipientExpiry.stop();
+        logger.info('✓ Ephemeral recipient expiry service stopped');
       }
 
       // Stop expired-share-links sweep

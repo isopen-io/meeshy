@@ -159,7 +159,22 @@ export function buildMessageNewPayload(
     isViewOnce: Boolean(message.isViewOnce),
     maxViewOnceCount: message.maxViewOnceCount ?? undefined,
     effectFlags: typeof raw['effectFlags'] === 'number' ? raw['effectFlags'] : 0,
-    expiresAt: message.expiresAt || undefined,
+    // #7451 — la DURÉE voyage, l'ÉCHÉANCE non.
+    //
+    // `message:new` est une diffusion de ROOM : une seule charge utile pour
+    // tous les lecteurs. Or l'échéance d'un éphémère est PAR DESTINATAIRE
+    // (`D(u) = sa première réception + la durée`), et `Message.expiresAt` porte
+    // désormais l'heure INTERNE de destruction — le plafond de rétention tant
+    // que personne n'a reçu. La servir ici afficherait « ce message disparaît
+    // dans 7 jours » sous un éphémère de trente secondes, sur TOUS les écrans.
+    //
+    // Le client décompte donc depuis SA réception locale, et `message:countdown-started`
+    // lui porte l'échéance serveur dès qu'elle existe — vers sa room PERSONNELLE,
+    // la seule adresse où une valeur par lecteur a un sens.
+    //
+    // Un message NON éphémère garde sa colonne : c'est la grâce de vue unique.
+    ephemeralDuration: message.ephemeralDuration ?? undefined,
+    expiresAt: message.ephemeralDuration ? undefined : message.expiresAt || undefined,
     isEdited: Boolean(message.isEdited),
     deletedAt: message.deletedAt || undefined,
     createdAt: message.createdAt || new Date(),

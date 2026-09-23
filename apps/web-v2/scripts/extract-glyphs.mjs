@@ -134,6 +134,16 @@ const USED = [
   'prohibit',
   'eye-slash',
   /**
+   * `eye` (#7354, V6) — la bascule « vue unique » du composeur : PENDANT
+   * OUVERT d'`eye-slash` (le VOILE d'un message déjà protégé), même
+   * métaphore que quoted.isViewOnce → « 👁️ » (iOS,
+   * `ConversationViewModel+ReplyReference.swift:200`) et `bubble.media.viewOnce`
+   * (« Voir une fois »). iOS arme sa capsule avec `1.circle`/`1.circle.fill`
+   * (SF Symbol, sans pendant Phosphor) — `eye` en est la traduction dans le
+   * socle de glyphes déjà établi par ce dépôt pour cette famille.
+   */
+  'eye',
+  /**
    * `timer` (revue #5676) — iOS distingue dans la LIGNE DE LISTE l'éphémère
    * (`timer`) de la vue unique (`flame`)
    * (`LentilleConversationRow.swift:578-584`, `:616`, `standardPreview`
@@ -251,14 +261,21 @@ emit({
 /**
  * LE JEU D'ECRAN DU MENU DU MESSAGE (#5814) — miroir
  * `MessageActionsMenu.swift:96-111` : Selectionner (check-circle), Traduire
- * (globe), Copier (copy), Composer (magic-wand), Plus... (dots-three).
+ * (globe), Copier (copy), Transferer (arrow-bend-up-right, #5866),
+ * Repondre (magic-wand — l'action s'appelait
+ * `compose` jusqu'a #7555 ; l'icone n'a pas suivi le renommage, #7564),
+ * Plus... (dots-three).
  * `magic-wand` et `globe` existent deja dans le jeu PROGRESSION : deux jeux
  * d'ecran distincts peuvent extraire le meme glyphe phosphor, chacun dans SON
  * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne
  * sont pas la meme route), donc aucun octet n'est paye deux fois au meme
  * demarrage.
+ *
+ * `arrow-bend-up-right` (#5866) est le plus proche de `arrowshape.turn.up.right`
+ * que iOS pose sur « Transferer » (`MessageActionsMenu.swift`) : phosphor ne
+ * publie pas la fleche PLEINE en chevron, et le contour lit mieux a 18 px.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three'];
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three'];
 
 emit({
   ids: THREAD_MENU,
@@ -745,4 +762,43 @@ emit({
   constant: 'LINKS_GLYPHS',
   type: 'LinksGlyphName',
   role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+});
+
+/**
+ * LE JEU DE LA LIGNE D'APERÇU (#7547) — l'iconographie web des icônes que rend
+ * le composeur partagé (`PreviewIcon`, `composeConversationPreview`, #7546) et
+ * que le socle ne porte pas encore. Le socle garde `phone`, `microphone`,
+ * `image`, `file`, `eye`, `eye-slash`, `flame-fill`, `timer` et `lock`.
+ *
+ * | icône du composeur | phosphor |
+ * |---|---|
+ * | `call-video` | `video-camera` |
+ * | `audio` | `music-note` |
+ * | `video` | `film-strip` |
+ * | `location` | `map-pin` |
+ * | `attachments` | `paperclip` |
+ * | `effect` | `sparkle` |
+ * | `forward` | `arrow-bend-up-right` |
+ * | `sticker` | `sticker` |
+ * | direction d'un appel (entrant / sortant) | `arrow-down-left` / `arrow-up-right` |
+ */
+const LENS_PREVIEW = [
+  'video-camera',
+  'music-note',
+  'film-strip',
+  'map-pin',
+  'paperclip',
+  'sparkle',
+  'arrow-bend-up-right',
+  'arrow-down-left',
+  'arrow-up-right',
+  'sticker',
+];
+
+emit({
+  ids: LENS_PREVIEW,
+  output: join(HERE, '../src/components/glyphs-lens-preview.ts'),
+  constant: 'LENS_PREVIEW_GLYPHS',
+  type: 'LensPreviewGlyphName',
+  role: "LE JEU de la ligne d'apercu de la Lentille (#7547) : les icones du composeur partage que le socle ne porte pas.",
 });

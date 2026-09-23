@@ -21,6 +21,31 @@ const fr = {
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
+  /* LE MENU DU MESSAGE ET SA BARRE DE SÉLECTION (#5866) — les six entrées du
+     menu voyagent ENSEMBLE : ajouter « Transférer » en français seul à côté de
+     cinq libellés eux aussi écrits en dur aurait figé la surface entière dans
+     une seule langue. `messageMenuItems(ctx, language)` les lit désormais ici,
+     la barre de sélection aussi. « Copier » et « Transférer » sont PARTAGÉS
+     par les deux portes : même mot, même clé (dimension 6). */
+  'message.action.select': 'Sélectionner',
+  'message.action.translate': 'Traduire',
+  'message.action.copy': 'Copier',
+  'message.action.forward': 'Transférer',
+  'message.action.compose': 'Composer',
+  'message.action.more': 'Plus…',
+  'selection.toolbar': 'Sélection de messages',
+  'selection.cancel': 'Annuler',
+  'selection.count': '{count} sélectionnés',
+  'forward.title': 'Transférer à…',
+  'forward.empty': 'Aucune conversation',
+  'forward.search.label': 'Rechercher une conversation',
+  'forward.search.placeholder': 'Rechercher',
+  'forward.announce.sent': 'Message transféré',
+  'forward.announce.sentMany': '{count} messages transférés',
+  'forward.announce.failed': 'Le transfert a échoué',
+  'forward.refusal.viewOnce': 'Un message à vue unique ne peut pas être transféré',
+  'forward.refusal.unavailable': 'Le message d’origine n’est plus disponible : rien à transférer',
+
   'typing.named': '{name} écrit',
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
@@ -86,6 +111,14 @@ const fr = {
   'status.compose.error': "Votre humeur n'a pas pu être publiée.",
   'status.compose.offline': 'Hors ligne — votre humeur partira au retour du réseau.',
 
+  /* PUBLIER DEPUIS LE FIL (#7449) — la porte de création de l'en-tête du Flux.
+     Elle ouvre le COMPOSER UNIQUE (#7497, `routes/publication-compose.tsx`),
+     au format post ou réel ; ses libellés sont ceux du studio
+     (`story.studio.*`). */
+  'feed.header.create': 'Créer une publication ou un réel',
+  'feed.create.post': 'Publication',
+  'feed.create.reel': 'Réel',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
@@ -104,6 +137,19 @@ const fr = {
   'media.unavailable': 'Média indisponible',
   'feed.post.see_more': 'voir plus',
   'feed.post.see_less': 'voir moins',
+  'feed.post.more_options': 'Plus d’options',
+  'feed.post.menu.open': 'Ouvrir',
+  'feed.post.menu.copy_text': 'Copier le texte',
+  'feed.post.menu.unsave': 'Retirer des enregistrements',
+  'feed.post.menu.pin': 'Épingler',
+  'feed.post.menu.delete': 'Supprimer',
+  'report.post.title': 'Signaler cette publication',
+  'feed.post.copied': 'Texte copié',
+  'feed.post.copy_failed': 'Impossible de copier le texte',
+  'feed.post.pinned': 'Publication épinglée',
+  'feed.post.pin_failed': 'Impossible d’épingler la publication',
+  'feed.post.deleted': 'Publication supprimée',
+  'feed.post.delete_failed': 'Erreur lors de la suppression',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',
   /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :
@@ -753,6 +799,16 @@ const fr = {
   'story.studio.publish': 'Publier',
   'story.studio.publishing': 'Publication…',
   'story.studio.publish.waiting': 'En attente du réseau…',
+  'story.studio.title.post': 'Nouvelle publication',
+  'story.studio.title.reel': 'Nouveau réel',
+  'story.studio.publish.as.story': 'Publier la story',
+  'story.studio.publish.as.post': 'Publier le post',
+  'story.studio.publish.as.reel': 'Publier le réel',
+  'story.studio.publish.menu': 'Publier comme',
+  'story.studio.kind.story': 'Story',
+  'story.studio.kind.post': 'Publication',
+  'story.studio.kind.reel': 'Réel',
+  'story.studio.refusal.reel': 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.',
   'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
   'story.studio.stage': 'Aperçu de la story',
   'story.studio.background.add': 'Ajouter une photo ou une vidéo',
@@ -946,6 +1002,7 @@ const fr = {
   'message-detail.received-by.empty': 'Aucune confirmation de distribution',
   'message-detail.read-by.empty': 'Personne n’a encore lu ce message',
   'message-detail.not-yet.empty': 'Tout le monde a reçu le message',
+  'message-detail.open': 'Voir les détails du message',
   'message-detail.attachment.opens.one': '{count} ouverture',
   'message-detail.attachment.opens.other': '{count} ouvertures',
   'message-detail.attachment.downloads.one': '{count} téléchargement',
@@ -955,6 +1012,8 @@ const fr = {
   'message-detail.attachment.complete': 'Terminé',
   'message-detail.attachment.listen.empty': 'Pas encore écouté',
   'message-detail.attachment.watch.empty': 'Pas encore regardé',
+  'message-detail.attachment.open': 'Ouvrir {name}',
+  'message-detail.attachment.opened.empty': 'Pas encore ouvert',
   'message-detail.loading': 'Chargement…',
   'message-detail.load-error': 'Impossible de charger ces informations',
   'message-detail.retry': 'Réessayer',
@@ -999,6 +1058,14 @@ const fr = {
   'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
 
+  /* LA BASCULE « VUE UNIQUE » DE LA RANGÉE HAUTE (#7354, V6) — même famille
+     que `composer.attach.*` ci-dessus. Libellés repris du catalogue iOS
+     (`composer.viewonce.activate`/`.active`/`.label`,
+     `+Protections.swift:233-235`), la référence de cette bascule. */
+  'composer.viewOnce.activate': 'Activer le mode vue unique',
+  'composer.viewOnce.active': 'Mode vue unique actif',
+  'composer.viewOnce.label': 'Vue unique',
+
   /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
      (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,
      `location.fullscreen.openInMaps`, `location.a11y.label`), la référence de
@@ -1039,10 +1106,54 @@ const fr = {
   'message.veiled.hint': 'Toucher pour révéler le contenu',
   'message.veiled.viewOnce': 'Voir une fois',
   'message.veiled.error': 'Révélation impossible pour l’instant',
+  'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
+  'message.ephemeral.awaiting': 'En attente de réception',
+  'message.ephemeral.awaiting.a11y': 'Message éphémère de {duration}, en attente de réception',
+  'message.viewOnce.a11y': 'Vue unique, ce message ne s’affiche qu’une fois',
   'attachment.protected.image': 'Photo protégée',
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',
   'attachment.protected.file': 'Pièce protégée',
+  /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
+     (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
+     COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).
+     DISTINCT d'`attachment.protected.*` juste au-dessus, qui qualifie le
+     SUBSTITUT d'une piece masquee — deux etats, donc deux jeux de mots : « un
+     second vocabulaire ferait dire deux choses differentes a l'oeil et a
+     l'oreille pour un meme etat ». */
+  'attachment.kind.image': 'Photo',
+  'attachment.kind.video': 'Vidéo',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'Fichier',
+
+  /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
+     Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
+     SEPT langues (`lib/view/message-actions.ts`, `components/selection-toolbar.tsx`,
+     `components/message-detail-sheet.tsx`) — pendant que les annonces VOISINES
+     du même hook (`announce.messageCopied`, …) étaient déjà traduites.
+
+     `message.menu.reply` dit « Répondre », et le mot « composer » est rendu au
+     sens qu'il a sur iOS — créer une story ou un post AVEC ce média
+     (`MessageActionResolver.swift`, `case compose`). Valeur reprise du
+     catalogue iOS : `action.reply`.
+
+     « Annuler » de la barre de sélection réutilise `common.cancel` : un seul
+     mot, une seule clé. */
+  'message.menu.select': 'Sélectionner',
+  'message.menu.translate': 'Traduire',
+  'message.menu.copy': 'Copier',
+  'message.menu.forward': 'Transférer',
+  'message.menu.reply': 'Répondre',
+  'message.menu.more': 'Plus…',
+  'message.menu.react': 'Réagir',
+  'message.menu.addReaction': 'Ajouter une réaction',
+  'message.selection.toolbar': 'Sélection de messages',
+  'message.selection.count': '{count} sélectionnés',
+  'message.detail.title': 'Détails du message',
+  'message.detail.languages': 'Langues',
+  'message.detail.reactions': 'Réactions',
+  'message.detail.sent': 'Envoyé',
+  'message.detail.language.original': '{language} (original)',
 
 } as const;
 

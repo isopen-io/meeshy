@@ -16,6 +16,7 @@ import '@/styles/thread-menu.css';
 import '@/styles/thread-system.css';
 
 import { Composer } from '@/components/composer';
+import { ForwardSheet } from '@/components/forward-sheet';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
@@ -31,6 +32,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
@@ -45,6 +47,7 @@ import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -67,7 +70,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
-import { useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
@@ -140,6 +143,7 @@ export default function ThreadScreen() {
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const storyRingOf = useAuthorStoryRings(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -179,10 +183,14 @@ export default function ThreadScreen() {
    * moitié qui soit à lui (`online`, D-16 — une révélation dont la
    * confirmation ne peut pas partir ne s'accorde pas).
    */
-  const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
-  const onEphemeralExpired = useCallback((messageId: string) => {
-    setExpiredIds((previous) => (previous.has(messageId) ? previous : new Set(previous).add(messageId)));
-  }, []);
+  /**
+   * LA DESTRUCTION D'UN ÉPHÉMÈRE, EN TROIS PHASES (#7468) — le crochet tient
+   * les deux ensembles et la minuterie qui fait passer de l'un à l'autre, et
+   * s'inscrit au canal d'annonce pour que `message:expired` emprunte le MÊME
+   * chemin que l'échéance atteinte sous les yeux du lecteur. L'écran ne fait
+   * plus que le consommer — il tenait `expiredIds` à la main jusqu'ici.
+   */
+  const { destroyingIds, expiredIds, noteExpired: onEphemeralExpired } = useEphemeralDestruction();
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
@@ -540,7 +548,7 @@ export default function ThreadScreen() {
     readerLanguages,
     readerLocale,
     viewerId: viewer.id ?? '',
-    onCompose: (messageId) => setReplyTarget(messageId),
+    onReply: (messageId) => setReplyTarget(messageId),
     announce: announcer.announce,
   });
 
@@ -563,7 +571,7 @@ export default function ThreadScreen() {
   };
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
+    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
   };
 
   /**
@@ -605,6 +613,10 @@ export default function ThreadScreen() {
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
   }, [queryClient]);
+  /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
+     modale — visionneuse plein écran comprise, que cet écran ne monte pas :
+     le registre `lib/view/modal-layers.ts` le sait, l'écran n'a rien à
+     recalculer. */
   const readTracking = useReadTracking({
     scroller,
     conversationId,
@@ -778,6 +790,7 @@ export default function ThreadScreen() {
         conversation={conversation}
         viewerId={viewer.id ?? ''}
         group={group}
+        storyRingOf={storyRingOf}
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
@@ -880,8 +893,10 @@ export default function ThreadScreen() {
           scene={scene}
           readerLanguages={readerLanguages}
           group={group}
+          storyRingOf={storyRingOf}
           highlightedId={highlightedId}
           expiredIds={expiredIds}
+          destroyingIds={destroyingIds}
           jumpToMessage={jumpToMessage}
           consume={consume}
           onEphemeralExpired={onEphemeralExpired}
@@ -897,6 +912,7 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
+          onOpenDetail={messageMenu.setDetailFor}
           typists={typing.typists}
           typistAvatarOf={typistAvatarOf}
           accent={accent}
@@ -1025,6 +1041,9 @@ export default function ThreadScreen() {
           count={messageMenu.selection.ids.length}
           onEnd={messageMenu.onEndSelection}
           onCopy={() => messageMenu.onCopySelection(placed)}
+          /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
+             transferts, jamais l'ordre des coches (#5866). */
+          onForward={() => messageMenu.onForwardSelection(placed)}
         />
       ) : (
         /*
@@ -1097,6 +1116,17 @@ export default function ThreadScreen() {
       {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
           feuilles indépendantes, jamais montées en même temps que le menu
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
+      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
+          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
+          fait que la requête de liste (`useConversations`, cache-first) n'est
+          jamais lancée par la simple ouverture d'un fil. */}
+      {messageMenu.forwardIds === null ? null : (
+        <ForwardSheet
+          viewerId={viewer.id ?? ''}
+          onPick={messageMenu.onForwardTo}
+          onClose={messageMenu.onCloseForward}
+        />
+      )}
       {((messageId) =>
         messageId === null ? null : (
           <ReactionSheet

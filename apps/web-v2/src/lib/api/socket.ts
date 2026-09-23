@@ -7,6 +7,7 @@ import type {
   AuthTokenExpiredEventData,
 } from '@meeshy/shared/types/socketio-events/auth';
 import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketio-events/presence';
+import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
@@ -29,6 +30,7 @@ import {
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
+import { bindPublicationRoomTransport } from './publication-rooms';
 import {
   applyNotificationCounts,
   applyNotificationDeleted,
@@ -41,16 +43,25 @@ import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
   applyMessageAttachmentUpdated,
+  applyMessageConsumed,
   applyMessageNew,
   applyMessageTranslation,
   applyReadStatusUpdated,
   isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
+  isMessageConsumedEvent,
   isMessageTranslationEvent,
   isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import {
+  applyMessageCountdownStarted,
+  applyMessageExpired,
+  isMessageCountdownStartedEvent,
+  isMessageExpiredEvent,
+  noteEphemeralDelivery,
+} from './realtime-ephemeral';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
@@ -66,6 +77,10 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * `AuthHandler._joinUserConversations` (`AuthHandler.ts:855-890`) rejoint
  * TOUTES les rooms de participation à l'authentification elle-même — aucun
  * événement client n'est nécessaire (§ 1.4 point 3 de la spécification).
+ *
+ * Ce qu'il FAIT à la place pour les PUBLICATIONS : `post:join` / `post:leave`
+ * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
+ * passerelle ne peut pas deviner ce qu'un écran montre.
  */
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
@@ -202,6 +217,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     auth: { token: session.token, sessionToken: session.sessionToken },
   });
 
+  /**
+   * LES SALLES DE PUBLICATION (#7395) — `publication-rooms.ts` tient le COMPTE (quels
+   * écrans tiennent quelle salle) ; la connexion ÉMET. Rien ne part sur un
+   * socket COUPÉ : `socket.io-client` tamponnerait l'émission et la viderait
+   * dès la reconnexion, AVANT que la passerelle ait réauthentifié le socket —
+   * `handleJoinPost` la refuserait (« User not authenticated ») et la salle
+   * resterait perdue. Le rejeu d'`onAuthenticated` s'en charge ; un `leave`
+   * sur un socket coupé n'a rien à quitter, la passerelle a déjà vidé ses
+   * salles.
+   */
+  const emitPostRoom = (event: typeof CLIENT_EVENTS.JOIN_POST | typeof CLIENT_EVENTS.LEAVE_POST, postId: string): void => {
+    if (!socket.connected) return;
+    const body: PostRoomActionData = { postId };
+    socket.emit(event, body);
+  };
+  const publicationRooms = bindPublicationRoomTransport({
+    join: (postId) => emitPostRoom(CLIENT_EVENTS.JOIN_POST, postId),
+    leave: (postId) => emitPostRoom(CLIENT_EVENTS.LEAVE_POST, postId),
+  });
+
   /** Un minuteur de SÉCURITÉ par (conversation, frappeur) — REMIS À ZÉRO à
    * chaque `typing:start` du MÊME frappeur (miroir iOS, doc-comment ci-
    * dessus), ANNULÉ dès que `typing:stop` arrive en premier. */
@@ -252,6 +287,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+    /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
+       fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
+    noteEphemeralDelivery(payload, now());
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -349,6 +387,38 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onReadStatusUpdated = (payload: unknown): void => {
     if (!isReadStatusUpdated(payload)) return;
     applyReadStatusUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `message:consumed` (#7354, V6) — L'ÉVÉNEMENT PAIR DE
+   * `consumeViewOnceOptimistic` (`view-once.ts:20-26`), diffusé par la
+   * passerelle à TOUTE la room de conversation au PREMIER visionnage d'une
+   * vue unique (`messages-view-once.ts:158-167`). La règle vit dans
+   * `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onMessageConsumed = (payload: unknown): void => {
+    if (!isMessageConsumedEvent(payload)) return;
+    applyMessageConsumed(deps.queryClient, payload);
+  };
+
+  /**
+   * L'ÉCHÉANCE D'UN ÉPHÉMÈRE, DES DEUX CÔTÉS (#7454) — `message:expired` la
+   * CONSOMME (le message quitte l'écran sur-le-champ), `message:countdown-
+   * started` la POSE. Les deux étaient absents : un message détruit par le
+   * serveur restait affiché jusqu'au prochain chargement du fil.
+   *
+   * Les deux puits vivent dans `realtime-ephemeral.ts` ; ici, seule la
+   * reconnaissance de la charge et le branchement — motif de tous les autres
+   * gestionnaires de ce fichier.
+   */
+  const onMessageExpired = (payload: unknown): void => {
+    if (!isMessageExpiredEvent(payload)) return;
+    applyMessageExpired(deps.queryClient, payload);
+  };
+
+  const onMessageCountdownStarted = (payload: unknown): void => {
+    if (!isMessageCountdownStartedEvent(payload)) return;
+    applyMessageCountdownStarted(payload);
   };
 
   /**
@@ -675,9 +745,16 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * La PREMIÈRE authentification ne rejoue rien : il n'y a pas de trou à
    * combler au démarrage, et invalider y doublerait la requête que l'écran
    * vient d'émettre.
+   *
+   * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
+   * authentification, la première comprise : un écran ouvert avant que la
+   * connexion ait fini de s'établir a demandé sa salle à un socket qui ne
+   * pouvait pas encore l'accepter, et une coupure a vidé côté passerelle
+   * toutes celles du socket précédent.
    */
   let authenticatedOnce = false;
   const onAuthenticated = (): void => {
+    publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
       return;
@@ -725,6 +802,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
@@ -780,6 +860,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.emit(isTyping ? CLIENT_EVENTS.TYPING_START : CLIENT_EVENTS.TYPING_STOP, body);
     },
     destroy: () => {
+      publicationRooms.detach();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
       windowTarget?.removeEventListener('online', onOnline);
@@ -793,6 +874,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
