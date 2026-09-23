@@ -33,6 +33,27 @@ public extension MeeshyMessage {
             || expiresAt != nil
             || (effects.ephemeralDuration ?? 0) > 0
 
+        // **Un message DÉTRUIT ne renaît pas** (#7552).
+        //
+        // La question se pose AVANT toute arithmétique et avant tout stampage :
+        // c'est ce qui ferme la CLASSE plutôt que l'instance. Quel que soit
+        // l'entrelacement entre l'annonce de destruction et le retrait effectif
+        // de la ligne — et le fil garde la ligne quelques instants —, aucune
+        // projection ne peut plus fabriquer une échéance neuve pour un mort.
+        //
+        // `min` avec `now` garantit l'expiration quelle que soit l'horloge : une
+        // mort gravée dans le futur (dérive d'horloge entre l'appareil et le
+        // serveur) ne peut pas prolonger d'une seconde la vie du message.
+        if declaresEphemeral, let destroyedAt = ledger.destruction(of: id) {
+            return MessageProtectionDescriptor.resolve(
+                flags: effects.flags,
+                servedExpiresAt: min(destroyedAt, now),
+                ephemeralDuration: effects.ephemeralDuration,
+                localReceivedAt: nil,
+                now: now
+            )
+        }
+
         // Un message ordinaire — l'écrasante majorité — ne touche NI le
         // registre NI les `UserDefaults` : la question ne se pose que pour un
         // éphémère.
