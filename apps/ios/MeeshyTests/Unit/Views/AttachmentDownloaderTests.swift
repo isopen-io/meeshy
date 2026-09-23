@@ -447,4 +447,55 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         subscription.cancel()
         await CacheCoordinator.shared.video.invalidate(for: key)
     }
+
+    // MARK: - #7625 — le préchargement passe par le MÊME registre, en silence
+
+    /// Le réel suivant se télécharge AVANT le swipe : sa surface, montée au
+    /// moment où il entre à l'écran, doit rejoindre ce téléchargement au lieu
+    /// d'en ouvrir un second — et le trouver « prêt » s'il a fini.
+    func test_prefetch_aSurfaceMountedLater_joinsThePrefetch() {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+
+        center.prefetch(urlString: video.fileUrl, expectedSize: 100, cacheStore: .video)
+        surface.observe(video)
+
+        XCTAssertTrue(surface.isDownloading, "la surface doit lire le préchargement en cours, pas en lancer un autre")
+        center.cancel(key: AttachmentDownloadCenter.key(for: video.fileUrl))
+    }
+
+    /// Un préchargement est invisible : il ne doit pas faire vibrer le
+    /// téléphone à chaque réel qui défile, ni au départ ni à la fin.
+    func test_prefetch_finishedFromTheCache_neverVibrates() async {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let surface = AttachmentDownloader(center: center)
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        surface.observe(video)
+        let cached = expectation(description: "préchargement terminé depuis le cache")
+        let subscription = surface.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        center.prefetch(urlString: video.fileUrl, expectedSize: 3, cacheStore: .video)
+
+        await fulfillment(of: [cached], timeout: 5)
+        XCTAssertEqual(haptics, [], "un préchargement ne vibre jamais")
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
+    }
+
+    /// Le témoin du canal : un téléchargement DEMANDÉ garde sa vibration de
+    /// départ — sans quoi le test précédent serait vert par un canal débranché.
+    func test_start_requestedByTheUser_stillVibrates() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+
+        center.start(urlString: key, expectedSize: 100, cacheStore: .video)
+
+        XCTAssertEqual(haptics, [.light])
+        center.cancel(key: AttachmentDownloadCenter.key(for: key))
+    }
 }
