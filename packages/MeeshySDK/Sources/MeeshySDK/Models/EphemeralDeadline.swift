@@ -82,6 +82,25 @@ public enum EphemeralDeadline {
             }
         }
 
+        /// **Ce message a-t-il déjà quitté sa vie ?** (#7552)
+        ///
+        /// `deadline` répond à « QUAND dois-je me réveiller ? » et vaut donc
+        /// `nil` pour un message échu — il n'y a plus rien à attendre. Le
+        /// balayage, lui, pose une autre question : « qu'est-ce qui doit
+        /// PARTIR maintenant ? ». Les deux se confondaient dans une seule
+        /// table, et `.expired` est exactement le cas où elles divergent : un
+        /// éphémère échu pendant que l'app était fermée n'entrait dans aucune
+        /// échéance future, donc n'était jamais dû, donc n'était **jamais
+        /// retiré** — et le serveur le sert encore une heure après l'échéance,
+        /// si bien que chaque démarrage à froid de cette heure-là le
+        /// réaffichait.
+        public var hasElapsed: Bool {
+            switch self {
+            case .expired: return true
+            case .running, .imminent, .notEphemeral, .awaitingReception: return false
+            }
+        }
+
         /// Le compteur chiffré doit-il s'afficher ?
         ///
         /// La question se pose à la VUE, la réponse vient du modèle. C'est
