@@ -584,8 +584,7 @@ export function registerConversationListRoute(
           })
         : [];
 
-      // #7545 — dernière réaction (bornée par le plancher de l'aperçu) et
-      // appel en cours, deux lectures pour la page.
+      // #7545 — dernière réaction (plancher de l'aperçu) et appel en cours.
       t0 = performance.now();
       const clearHistoryBeforeById = new Map(
         conversations.map((c) => [c.id, c.userPreferences?.[0]?.clearHistoryBefore ?? null] as const)
@@ -816,10 +815,8 @@ export function registerConversationListRoute(
         // `ephemeralDuration` compris : sans elle, l'heure interne de
         // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
         // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
-        const lastMessage = conversation.messages[0];
-        const servedExpiresAt = lastMessage && servedEphemeralExpiry.has(lastMessage.id)
-          ? servedEphemeralExpiry.get(lastMessage.id) ?? null
-          : undefined;
+        const firstId = conversation.messages[0]?.id;
+        const servedExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
         const lastMessageProtected = latestMessage
           ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt }))
           : false;
