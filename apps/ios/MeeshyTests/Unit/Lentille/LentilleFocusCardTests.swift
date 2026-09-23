@@ -381,10 +381,10 @@ final class LentilleFocusCardTests: XCTestCase {
     /// L'aperçu coule sur DEUX lignes sous la loupe, une seule au repos.
     func test_thePreviewFlowsOnTwoLines_onlyWhenMagnified() throws {
         let row = try rowSource("LentilleConversationRow.swift")
-        XCTAssertTrue(row.contains(".lineLimit(isMagnified ? 2 : 1)"))
+        XCTAssertTrue(row.contains("lineLimit: isMagnified ? 2 : 1"))
         XCTAssertTrue(
-            row.contains("(senderPrefix + Text(resolvedPreviewText)"),
-            "« Auteur : texte » reste UN seul texte — deux `Text` côte à côte tronquaient le message avant le bord."
+            row.contains("ConversationPreviewLine("),
+            "« Auteur : texte » est UN seul texte, peint par la ligne partagée (#7548) — deux `Text` côte à côte tronquaient le message avant le bord."
         )
     }
 

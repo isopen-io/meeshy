@@ -58,9 +58,7 @@ struct MeeshyApp: App {
         //
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
-        ConversationListAuthor.configureReaderLabel(
-            String(localized: "focal.row.you", bundle: .main)
-        )
+        ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
 
         // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.

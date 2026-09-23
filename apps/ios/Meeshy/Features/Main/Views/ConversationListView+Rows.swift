@@ -222,6 +222,16 @@ struct ConversationRowItem: View {
         }
     }
 
+    /// « Rejoindre » depuis la ligne (#7548) — la MÊME revalidation que la
+    /// bulle vivante du fil (`LiveCallJoiner`), jamais une seconde.
+    private func joinLiveCall() {
+        guard let request = LiveCallJoinRequest(
+            conversation: conversation,
+            currentUserId: AuthManager.shared.currentUser?.id ?? ""
+        ) else { return }
+        Task { await LiveCallJoiner.live.join(request) }
+    }
+
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
     ///
     /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
@@ -285,6 +295,7 @@ struct ConversationRowItem: View {
                     isSelected: isSelected,
                     draftSummary: draftSummary,
                     preferredContentLanguages: preferredContentLanguages,
+                    onJoinLiveCall: { joinLiveCall() },
                     magnification: context
                 )
             }
@@ -306,7 +317,8 @@ struct ConversationRowItem: View {
                 typingUsername: typingUsername,
                 isSelected: isSelected,
                 draftSummary: draftSummary,
-                preferredContentLanguages: preferredContentLanguages
+                preferredContentLanguages: preferredContentLanguages,
+                onJoinLiveCall: { joinLiveCall() }
             )
             .equatable()
         }
