@@ -534,7 +534,14 @@ await checkProtectionStates({ browser, BASE, expect });
   await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).getByRole('button', { name: 'Annuler' }).click();
   await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }), { state: 'detached' });
   await openMenuOnRow(0);
-  if (await clickMenuItem('Transférer')) {
+  /* `forward`, l'IDENTIFIANT — pas « Transférer », le libellé (#7607).
+     `clickMenuItem` construit `[data-action="…"]` : lui passer un mot français
+     fabriquait `[data-action="Transférer"]`, qui ne matche rien, et son message
+     interpole l'argument — si bien qu'un appel fautif se lisait « l'entrée
+     manque au menu » et accusait le produit. Les quatre autres appels de ce
+     fichier passent déjà `copy`, `translate`, `reply`, `select` ; celui-ci
+     était le seul resté sur l'ancien contrat. */
+  if (await clickMenuItem('forward')) {
     await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
     expect(
       (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
