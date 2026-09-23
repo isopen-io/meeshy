@@ -69,6 +69,14 @@ struct ViewOnceSealTests {
         #expect(sealed.openableViewOnceMedia?.id == "a1")
     }
 
+    @Test("Un vocal à vue unique se lit sur place : pas de plein écran visuel")
+    func test_openableViewOnceMedia_audio_isNil() {
+        let voice = MeeshyMessageAttachment(
+            id: "a2", messageId: "m1", mimeType: "audio/m4a", fileUrl: "https://x/v.m4a", isViewOnce: true
+        )
+        #expect(message(attachments: [voice]).openableViewOnceMedia == nil)
+    }
+
     @Test("Un texte à vue unique n'a aucun média ouvrable : il se lit sur place")
     func test_openableViewOnceMedia_text_isNil() {
         #expect(message(flags: [.viewOnce]).openableViewOnceMedia == nil)
@@ -99,6 +107,15 @@ struct ViewOnceSealTests {
             .sealedForDisplay
         #expect(revealed.content == "SECRET")
         #expect(revealed.attachments.count == 1)
+    }
+
+    @Test("La puce dit la vue unique : le chrome ne la répète pas, l'éphémère reste")
+    func test_withoutViewOnce_keepsEphemeralDropsViewOnce() {
+        let descriptor = MessageProtectionDescriptor(
+            badges: [.ephemeral(.awaitingReception(duration: 60)), .viewOnce],
+            ephemeralState: .awaitingReception(duration: 60)
+        )
+        #expect(descriptor.withoutViewOnce.badges == [.ephemeral(.awaitingReception(duration: 60))])
     }
 
     @Test("Une pièce à vue unique porte le badge de vue unique, comme le drapeau du message")

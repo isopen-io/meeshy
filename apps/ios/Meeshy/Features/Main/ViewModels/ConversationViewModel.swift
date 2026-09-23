@@ -191,6 +191,10 @@ class ConversationViewModel: ObservableObject {
     /// exactly what made `.equatable()` unsafe — see b9a39c2c.)
     @Published private(set) var bubbleLanguageSelections: [String: BubbleLanguageSelection] = [:]
 
+    /// Les vues uniques TEXTE que le lecteur a ouvertes pendant cette visite
+    /// (#7618) — lues par chaque mode via `MeeshyMessage.isViewOnceRevealed`.
+    @Published var revealedViewOnceIds: [String: Bool] = [:]
+
     struct BubbleLanguageSelection: Equatable {
         var activeDisplayLangCode: String?
         var secondaryLangCode: String?

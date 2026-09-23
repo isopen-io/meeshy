@@ -28,11 +28,12 @@ public extension MeeshyMessage {
         holdsViewOnce && !isViewOnceRevealed && !isDeleted && messageSource != .system
     }
 
-    /// Le média qu'un toucher ouvre en plein écran, ou `nil` pour une vue unique
-    /// qui se lit sur place (texte, lieu).
+    /// Le média qu'un toucher ouvre en plein écran — une image (sticker
+    /// compris) ou une vidéo —, ou `nil` pour une vue unique qui se lit sur
+    /// place (texte, lieu, vocal, document).
     var openableViewOnceMedia: MeeshyMessageAttachment? {
         guard holdsViewOnce else { return nil }
-        return attachments.first { $0.type != .location }
+        return attachments.first { $0.type == .image || $0.type == .video }
     }
 
     /// Le message tel qu'un mode de lecture a le DROIT de le voir tant qu'il est

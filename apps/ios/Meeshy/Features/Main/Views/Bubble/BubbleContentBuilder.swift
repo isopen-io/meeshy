@@ -35,6 +35,17 @@ extension BubbleContent {
         // unchanged. See CLAUDE.md "Prisme Linguistique" for resolution order.
         deviceLocale: String? = nil
     ) {
+        // #7618 — **une vue unique non ouverte n'entre pas dans le modèle.**
+        // Le sceau retire texte, pièces, sticker et lieu, et les traductions
+        // qui les disent : aucune sous-vue, aucun libellé accessible, aucun
+        // chargeur de média ne peut plus rendre ce que ce modèle ne porte pas.
+        let isSealed = message.isViewOnceSealed
+        let message = message.sealedForDisplay
+        let translations = isSealed ? [] : translations
+        let preferredTranslation = isSealed ? nil : preferredTranslation
+        let translatedAudios = isSealed ? [] : translatedAudios
+        let preferredAudioLangCode = isSealed ? nil : preferredAudioLangCode
+
         self.messageId = message.id
         self.isMe = message.isMe
         self.senderName = message.senderName
@@ -55,6 +66,8 @@ extension BubbleContent {
             self.kind = .deleted
         } else if message.isViewOnce && message.viewOnceCount > 0 {
             self.kind = .burned
+        } else if isSealed {
+            self.kind = .viewOnceSealed
         } else {
             self.kind = .standard
         }
@@ -258,7 +271,10 @@ extension BubbleContent {
         // l'échéance calculée à l'ENVOI : un destinataire qui ouvrait la
         // conversation après coup héritait d'une horloge démarrée chez
         // quelqu'un d'autre.
-        self.protection = message.protection()
+        // Une vue unique OUVERTE se lit sans second voile (#7618) : la puce a
+        // déjà recueilli le geste, le contenu est là pour être lu.
+        let protection = message.protection()
+        self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
         self.isBurning = message.isBurning
 
         // --- Other flags ---

@@ -67,7 +67,7 @@ struct FocalRow: View {
                 systemBody
             case .ephemeralExpired:
                 EmptyView()
-            case .standard:
+            case .standard, .viewOnceSealed:
                 standardBody
             }
         }
@@ -293,7 +293,9 @@ struct FocalRow: View {
             // « Voir une fois » n'existait que sur les médias. Un message
             // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
             // jusqu'au toucher qui le consomme.
-            if content.requiresVeil {
+            if content.kind == .viewOnceSealed {
+                ViewOnceChip(state: .sealed, isDark: input.isDark) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+            } else if content.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
                     isViewOnce: content.isViewOnce,
@@ -425,7 +427,7 @@ struct FocalRow: View {
         // #7452 — LE chrome de protection, partagé avec la bulle, la rivière
         // et le résumé. `FocalEphemeralBadge` était une seconde implémentation
         // du même badge, avec son propre minuteur de cellule.
-        MessageProtectionChrome(descriptor: content.protection, isDark: input.isDark)
+        MessageProtectionChrome(descriptor: content.chromeProtection, isDark: input.isDark)
             .equatable()
     }
 
