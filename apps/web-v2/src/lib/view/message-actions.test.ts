@@ -79,15 +79,18 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
     expect(result.hasText).toBe(false);
   });
 
-  test('translations UNDEFINED (cache allégé) ⇒ languageCount = 1, pas TypeError', () => {
+  /** LE CACHE ALLÉGÉ NE PORTE PAS LE CHAMP (#7527) — le témoin le passe donc
+   * ABSENT, jamais `undefined` explicite derrière une assertion : c'est la
+   * SIGNATURE qui doit l'accepter, et une assertion l'aurait justement
+   * dispensée de le faire. */
+  test('translations ABSENT (cache allégé) ⇒ languageCount = 1, pas TypeError', () => {
     const result = messageMenuContextOf(
       {
         content: 'nouveau message',
         isBlurred: false,
         isViewOnce: false,
         viewOnceCount: 0,
-        translations: undefined,
-      } as any,
+      },
       { now: 1000 },
     );
     expect(result.languageCount).toBe(1);
@@ -96,7 +99,7 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
   });
 });
 
-describe('translationChoices — original puis les rangs du PRISME, jamais l\'ordre du tableau', () => {
+describe('translationChoices — original puis les rangs du PRISME, jamais l’ordre du tableau', () => {
   test('témoin de RANG (leçon 261) : lecteur [es,en], message fr + trad en ⇒ servie au rang 2', () => {
     const message = {
       originalLanguage: 'fr',
@@ -122,13 +125,9 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l\'or
     expect(choices.map((c) => c.code)).toEqual(['fr', 'en', 'de']);
   });
 
-  test('translations UNDEFINED => choices contient seulement l\'original, pas d\'erreur', () => {
-    const message = {
-      originalLanguage: 'fr',
-      translations: undefined,
-    } as any;
+  test('translations ABSENT ⇒ choices ne contient que l\'original, sans jeter', () => {
     const choices = translationChoices({
-      message,
+      message: { originalLanguage: 'fr' },
       preferredLanguages: ['en', 'es'],
       servedLanguage: 'fr',
     });

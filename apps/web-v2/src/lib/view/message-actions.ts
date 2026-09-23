@@ -39,23 +39,23 @@ export type MessageMenuContext = {
  * Dérive le contexte d'UN message, à l'instant `now` — même discipline que
  * `protectionOf` (D-23) : jamais de seconde horloge, l'appelant injecte `now`.
  *
- * GARDE (#7526) : `message.translations` peut être UNDEFINED dans le cache
- * allégé — aucun second regard du champ pour éviter une divergence au tour
- * suivant (§ leçon du cycle 123 : « que transporte-t-on À CÔTÉ »). Le
- * `translationsOf` qui suit le tolère déjà.
+ * GARDE (#7526, rendue EFFECTIVE #7527) : `message.translations` peut être
+ * UNDEFINED dans le cache allégé. Le champ sort donc du `Pick` — qui le
+ * rendrait REQUIS, une intersection avec un optionnel n'y changeant rien — et
+ * l'assertion `as Message` qui masquait l'écart a disparu avec lui : c'est
+ * `translationsOf` qui déclare l'optionalité, une fois.
  */
 export function messageMenuContextOf(
-  message: Pick<
-    Message,
-    'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'translations'
-  > & { readonly translations?: readonly MessageTranslation[] },
+  message: Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content'> & {
+    readonly translations?: readonly MessageTranslation[];
+  },
   input: { readonly now: number },
 ): MessageMenuContext {
   const kind = protectionOf(message, input.now);
   return {
     hasText: message.content.trim().length > 0,
     isProtected: kind !== 'standard',
-    languageCount: 1 + translationsOf(message as Message).length,
+    languageCount: 1 + translationsOf(message).length,
   };
 }
 
@@ -108,16 +108,16 @@ export type TranslationChoice = {
  * la servie n'est donc jamais celle du rang 1, et le verdict distingue une
  * loi juste d'une loi qui s'arrêterait au premier rang.
  *
- * GARDE (#7526) : `message.translations` peut être UNDEFINED — tolérée par
- * `translationsOf`.
+ * GARDE (#7526, rendue EFFECTIVE #7527) : `translations` est OPTIONNEL ici,
+ * hors du `Pick` — voir `messageMenuContextOf` ci-dessus.
  */
 export function translationChoices(params: {
-  readonly message: Pick<Message, 'originalLanguage' | 'translations'> & { readonly translations?: readonly MessageTranslation[] };
+  readonly message: Pick<Message, 'originalLanguage'> & { readonly translations?: readonly MessageTranslation[] };
   readonly preferredLanguages: readonly string[];
   readonly servedLanguage: string;
 }): readonly TranslationChoice[] {
   const { message, preferredLanguages, servedLanguage } = params;
-  const translations = translationsOf(message as Message);
+  const translations = translationsOf(message);
   const available = new Set(translations.map((t) => t.language));
   const seen = new Set<string>();
   const choices: TranslationChoice[] = [];
