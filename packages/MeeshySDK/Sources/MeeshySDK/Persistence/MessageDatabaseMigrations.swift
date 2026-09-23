@@ -331,5 +331,24 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "stickerJson", .text)
             }
         }
+
+        // **La DURÉE d'un éphémère** (#7451 point 4, suite #7508).
+        //
+        // `message:new` est une diffusion de ROOM : il ne peut pas porter
+        // l'échéance, qui est PAR destinataire. Il porte donc la durée, et le
+        // client la recompose avec sa réception locale
+        // (`EphemeralDeadline.resolve`). Sans cette colonne, ce seul porteur
+        // d'horloge mourait au passage en base — et le fil, qui ne lit QUE
+        // GRDB (`MessageStore.domainMessages`), affichait un message marqué
+        // éphémère sans aucune échéance : ni flamme, ni décompte, et aucune
+        // entrée dans le balayage, donc jamais détruit.
+        //
+        // Même convention nullable que les colonnes ci-dessus : les lignes
+        // déjà sur disque valent NULL, donc `nil`.
+        migrator.registerMigration("messages_ephemeral_duration") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "ephemeralDuration", .integer)
+            }
+        }
     }
 }
