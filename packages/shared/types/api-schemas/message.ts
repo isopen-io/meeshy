@@ -9,6 +9,7 @@
  * @module @meeshy/shared/types/api-schemas/message
  */
 
+import { attachmentSummarySchema, callSummarySchema, systemEventSchema } from './conversation-preview.js';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from './message-attachment.js';
 import { MESSAGE_STICKER_ANIMATIONS } from '../message-sticker.js';
 import { userMinimalSchema } from './user.js';
@@ -531,6 +532,14 @@ export const messageMinimalSchema = {
     isViewOnce: { type: 'boolean', nullable: true, description: 'View-once message (disappears after view)' },
     isBlurred: { type: 'boolean', nullable: true, description: 'Content blurred until tap to reveal' },
     effectFlags: { type: 'number', nullable: true, description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    // #7545 — la NATURE du dernier message, pour le composeur partagé
+    // (`composeConversationPreview`, #7546). Mêmes champs que les clés plates
+    // `lastMessage*` de `conversation:updated`.
+    isEncrypted: { type: 'boolean', nullable: true, description: 'Message chiffré' },
+    isForwarded: { type: 'boolean', nullable: true, description: 'Message transféré (forwardedFromId posé)' },
+    systemEvent: systemEventSchema,
+    callSummary: callSummarySchema,
+    attachmentSummary: attachmentSummarySchema,
     // Lot 3 (partage de position) — hissé depuis metadata.location. Un
     // message géolocalisé sans légende a un `content` vide ; ce champ est
     // ce qui permet au client de rendre malgré tout un aperçu pertinent.
@@ -564,6 +573,8 @@ export const messageMinimalSchema = {
           sampleRate: { type: 'number', nullable: true, description: 'Sample rate (audio)' },
           pageCount: { type: 'number', nullable: true, description: 'Page count (PDFs)' },
           lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
+          fileSize: { type: 'number', nullable: true, description: 'Taille en octets (#7545)' },
+          thumbnailUrl: { type: 'string', nullable: true, description: 'Vignette (#7545)' },
           // La JUMELLE de `messageAttachmentSchema.metadata` — celle de
           // l'APERÇU de conversation, pas celle du fil — et elle portait le
           // même objet NU, avec une description qui NOMMAIT
