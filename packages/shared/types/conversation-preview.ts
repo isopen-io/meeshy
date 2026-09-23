@@ -88,13 +88,26 @@ export interface LastMessageCallSummary {
  * Les clés d'événement système que le serveur sait nommer. Une clé inconnue
  * d'un client ancien se rend comme `system.generic`.
  *
- * - `system.member-joined` — params `{ name }` (le nom affiché de l'arrivant)
+ * - `system.member-joined` — params `{ name }` (le nom affiché de l'arrivant),
+ *   pour une arrivée de SOI-MÊME (lien d'invitation, conversation globale)
+ * - `system.member-added` — params `{ actor, target }` (noms affichés) : un
+ *   membre en a ajouté un autre (#7593)
+ * - `system.member-removed` — params `{ actor, target }` : un membre en a
+ *   retiré un autre
+ * - `system.member-left` — params `{ actor }` : départ volontaire
+ * - `system.conversation-renamed` — params `{ actor }` : le titre a changé
+ * - `system.conversation-image` — params `{ actor }` : l'image a changé
  * - `system.encryption-enabled` — params `{ mode }` (`e2ee` | `server` | `hybrid`)
  * - `system.generic` — un message système que le serveur ne sait pas typer ;
  *   aucun paramètre, le client rend un libellé neutre.
  */
 export type SystemEventKey =
   | 'system.member-joined'
+  | 'system.member-added'
+  | 'system.member-removed'
+  | 'system.member-left'
+  | 'system.conversation-renamed'
+  | 'system.conversation-image'
   | 'system.encryption-enabled'
   | 'system.generic';
 
