@@ -11,30 +11,89 @@ import MeeshyUI
 /// chargement avec des cards en préchargement plutôt qu'une page blanche ».
 final class SkeletonLoadMoreGuardTests: XCTestCase {
 
-    private func feedViewSource() throws -> String {
+    /// Les DEUX hôtes du fil : `FeedView` (iPad) et `ThemedFeedOverlay`
+    /// (iPhone, dans `RootViewComponents.swift`). La garde n'en lisait qu'un —
+    /// l'iPhone, hôte de la quasi-totalité des lectures, gardait son spinner
+    /// sous du fond nu sans que rien ne rougisse (#7657).
+    private static let feedHosts = [
+        "Meeshy/Features/Main/Views/FeedView.swift",
+        "Meeshy/Features/Main/Views/RootViewComponents.swift",
+    ]
+
+    private func source(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/FeedView.swift")
+            .appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Le bloc qui rend les publications : du dernier `ForEach` qui précède
+    /// l'état « chargement de la suite » jusqu'à lui.
+    private func postRows(in source: String) -> String? {
+        guard let fin = source.range(of: "if viewModel.isLoadingMore {") else { return nil }
+        let avant = source[..<fin.lowerBound]
+        guard let debut = avant.range(of: "ForEach(", options: .backwards) else { return nil }
+        return String(avant[debut.lowerBound...])
+    }
+
     func test_laPaginationDuFil_montreDesCartesFantomes_jamaisUnSpinner() throws {
-        let source = try feedViewSource()
-        guard let debut = source.range(of: "if viewModel.isLoadingMore {") else {
-            return XCTFail("FeedView ne rend plus d'état « chargement de la suite ».")
+        for host in Self.feedHosts {
+            let source = try source(host)
+            guard let debut = source.range(of: "if viewModel.isLoadingMore {") else {
+                return XCTFail("\(host) ne rend plus d'état « chargement de la suite ».")
+            }
+            let suite = source[debut.upperBound...]
+            guard let fin = suite.range(of: "\n                    }") else {
+                return XCTFail("\(host) : bloc `isLoadingMore` sans fin lisible.")
+            }
+            let bloc = String(suite[..<fin.lowerBound])
+            XCTAssertTrue(bloc.contains("SkeletonFeedList("),
+                          "\(host) : le chargement de la suite doit rendre des cartes fantômes de la hauteur des vraies.")
+            XCTAssertFalse(bloc.contains("ProgressView("),
+                           "\(host) : un spinner sous le dernier post laisse du fond nu là où des cartes vont apparaître.")
         }
-        let suite = source[debut.upperBound...]
-        guard let fin = suite.range(of: "\n                    }") else {
-            return XCTFail("Bloc `isLoadingMore` sans fin lisible.")
+    }
+
+    // MARK: - #7657 — une rangée du fil est PEINTE dès qu'elle est disposée
+
+    /// **La cause du fond nu au défilement rapide.** Chaque publication du fil
+    /// iPhone portait `.staggeredAppear(index: index, baseDelay: 0.06)` : une
+    /// opacité 0 levée par un ressort RETARDÉ de `index × 60 ms`. Dans une pile
+    /// paresseuse, une rangée naît quand elle entre dans la zone — la 30e
+    /// restait donc TRANSPARENTE 1,8 s, la 60e 3,6 s, pendant que le fil
+    /// principal, oisif, attendait un délai d'animation. C'est la signature
+    /// relevée : rangées disposées, non peintes, jusqu'à plusieurs secondes
+    /// après l'arrêt.
+    func test_uneRangeeDuFil_nAttendJamaisUneAnimationPourEtrePeinte() throws {
+        for host in Self.feedHosts {
+            let source = try source(host)
+            guard let rows = postRows(in: source) else {
+                return XCTFail("\(host) : bloc des publications introuvable.")
+            }
+            XCTAssertFalse(rows.contains("staggeredAppear("),
+                           "\(host) : une apparition échelonnée par index rend la rangée N transparente N × délai après sa naissance — du fond nu au défilement.")
+            XCTAssertFalse(rows.contains(".opacity(0"),
+                           "\(host) : une rangée du fil ne naît jamais transparente.")
         }
-        let bloc = String(suite[..<fin.lowerBound])
-        XCTAssertTrue(bloc.contains("SkeletonFeedList("),
-                      "Le chargement de la suite doit rendre des cartes fantômes de la hauteur des vraies.")
-        XCTAssertFalse(bloc.contains("ProgressView("),
-                       "Un spinner sous le dernier post laisse du fond nu là où des cartes vont apparaître.")
+    }
+
+    /// Le préchargement des médias voisins (`prefetchMedia(around:)`, fenêtre
+    /// −2…+6) n'était appelé que par l'hôte iPad : sur iPhone, chaque image
+    /// partait au moment où sa rangée naissait.
+    func test_chaqueHoteDuFil_prechargeLesMediasVoisins() throws {
+        for host in Self.feedHosts {
+            let source = try source(host)
+            guard let rows = postRows(in: source) else {
+                return XCTFail("\(host) : bloc des publications introuvable.")
+            }
+            XCTAssertTrue(rows.contains("prefetchMediaForPost("),
+                          "\(host) : la rangée qui naît doit précharger les médias de ses voisines.")
+            XCTAssertTrue(rows.contains("loadMoreIfNeeded(currentPost:"),
+                          "\(host) : la page suivante se demande à cinq publications de la fin.")
+        }
     }
 
     // MARK: - #7625 — un reflet de chargement n'anime que LUI-MÊME
