@@ -46,8 +46,8 @@ const MENU_MARGIN = 8;
 const MENU_GAP = 4;
 const MENU_ITEM_HEIGHT = 44;
 const MENU_PADDING = 8;
-/** 34 dessinés + le débord de `tap-target-34` = 44, le plancher du dépôt. */
-const BUTTON_SIZE = 34;
+/** Le disque DESSINÉ ; la cible, elle, fait 44 (`size-11`). */
+const DISC_SIZE = 34;
 
 export function FeedPostMenu({
   postId,
@@ -125,16 +125,23 @@ export function FeedPostMenu({
           if (!open) measure();
           setOpen((value) => !value);
         }}
-        className="tap-target-34 grid shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{
-          width: BUTTON_SIZE,
-          height: BUTTON_SIZE,
-          color: overlay ? 'white' : 'var(--color-ios-ink-3)',
-          backgroundColor: overlay ? 'rgba(0,0,0,0.35)' : 'transparent',
-          outlineColor: overlay ? 'white' : 'var(--color-ios-brand)',
-        }}
+        /* UNE VRAIE BOÎTE DE 44 (`check-profile.mjs` mesure la boîte, pas un
+           débord `::after`) ; le DISQUE visible garde 34, la cote iOS. */
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
+        style={{ outlineColor: overlay ? 'white' : 'var(--color-ios-brand)' }}
       >
-        <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={20} />
+        <span
+          aria-hidden
+          className="grid place-items-center rounded-chip"
+          style={{
+            width: DISC_SIZE,
+            height: DISC_SIZE,
+            color: overlay ? 'white' : 'var(--color-ios-ink-3)',
+            backgroundColor: overlay ? 'rgba(0,0,0,0.35)' : 'transparent',
+          }}
+        >
+          <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={20} />
+        </span>
       </button>
 
       {open || reporting ? (

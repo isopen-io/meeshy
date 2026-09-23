@@ -499,7 +499,7 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       </span>
       {/* LE « ⋯ » EN HAUT À DROITE, AU-DESSUS du lien qui couvre la carte —
           miroir `ReelFeedCard.swift:297-325` (disque sombre sur le média). */}
-      <div className="absolute top-2 right-2">
+      <div className="absolute top-1 right-1">
         <CardMenu model={model} isDetail={false} tone="overlay" hosts={hosts} />
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
