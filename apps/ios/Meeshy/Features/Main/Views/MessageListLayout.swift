@@ -217,16 +217,26 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// des corrections self-sizing) est AVALÉE pour la transaction : la
     /// passe de cellules visibles converge au lieu de franchir la garde de
     /// ré-entrance d'UIKit (assertion à ~7 passes imbriquées). Les cellules
-    /// concernées gardent leur hauteur estimée UNE frame — invisible à
-    /// vitesse de fling — et se rattrapent au tour suivant : une invalidation
-    /// COMPLÈTE est planifiée (jamais avalée, budget réarmé). Les
-    /// invalidations complètes (rotation, reload, notre rattrapage) passent
-    /// TOUJOURS.
+    /// concernées gardent leur hauteur UNE frame de plus, et une passe de
+    /// layout est demandée au tour suivant (`scheduleDeferredRelayout`), budget
+    /// réarmé : UIKit y ré-émet la correction. Les invalidations complètes
+    /// (rotation, reload, adoption d'estimation) passent TOUJOURS.
+    ///
+    /// **#7624 — le plafond DIFFÈRE, il ne remplace plus par une invalidation
+    /// COMPLÈTE.** Le rattrapage d'origine était une invalidation complète ;
+    /// or le layout compositionnel y JETTE toutes les hauteurs mesurées —
+    /// mesuré au simulateur, chaque cellule visible re-mesurée depuis
+    /// l'estimation (`in=62.7` pour toutes), `contentSize` 7155 → 6445 au
+    /// repos. La re-mesure de la fenêtre dépassait à son tour le plafond et
+    /// replanifiait un rattrapage : 22 invalidations complètes en cascade sur
+    /// 25 s de flings, 2,4 s de fil principal (Time Profiler, Debug), des
+    /// gels de 100 à 400 ms à chaque pose. Une simple passe de layout suffit
+    /// à faire ré-émettre la correction, sans rien oublier.
     static let maxPartialInvalidationsPerTransaction = 4
 
     private(set) var partialInvalidationsThisTransaction = 0
     private var transactionResetScheduled = false
-    private var recoveryInvalidationScheduled = false
+    private var deferredRelayoutScheduled = false
 
     private func scheduleTransactionReset() {
         guard !transactionResetScheduled else { return }
@@ -237,15 +247,30 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         }
     }
 
-    private func scheduleRecoveryInvalidation() {
-        guard !recoveryInvalidationScheduled else { return }
-        recoveryInvalidationScheduled = true
+    /// Le contexte avalé n'est PAS rejouable : celui qu'UIKit fabrique pour
+    /// une correction self-sizing appartient à la mise à jour en cours
+    /// (`_queueDeferredResolveForInvalidationWithContext:` exige
+    /// `currentUpdate != nil` — SIGABRT mesuré au simulateur en le rejouant au
+    /// tour suivant). Ce qui se rejoue, c'est la QUESTION : une passe de
+    /// layout au tour suivant, où UIKit re-mesure les cellules visibles et
+    /// ré-émet la correction de celles dont la hauteur diffère encore —
+    /// budget réarmé, sans rien oublier de ce qui est déjà mesuré.
+    private func scheduleDeferredRelayout() {
+        guard !deferredRelayoutScheduled else { return }
+        deferredRelayoutScheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.fireOrDeferRecoveryInvalidation()
+            self?.relayoutAfterDeferredInvalidations()
         }
     }
 
-    /// Le rattrapage (invalidation COMPLÈTE) ne tombe JAMAIS pendant que la
+    func relayoutAfterDeferredInvalidations() {
+        deferredRelayoutScheduled = false
+        collectionView?.setNeedsLayout()
+    }
+
+    /// L'invalidation COMPLÈTE ancrée — depuis #7624, le seul client est
+    /// l'adoption d'une nouvelle estimation (`invalidateForAdoptedEstimate`) ;
+    /// le plafond ci-dessus ne l'appelle plus. Elle ne tombe JAMAIS pendant que la
     /// liste bouge : une invalidation complète en plein momentum tue la
     /// décélération — chaque fling semblait « avalé » dès qu'une tempête
     /// avait laissé un refus derrière elle (rouleau, user 2026-08-18).
@@ -265,12 +290,11 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// relance en vol — si aucun arrêt n'est signalé (défilement programmé).
     private(set) var recoveryInvalidationPending = false
 
-    /// Portée non-`private` : appelée par `scheduleRecoveryInvalidation()`
-    /// (asynchrone, chemin réel) ET directement par les tests — le
+    /// Portée non-`private` : appelée par `invalidateForAdoptedEstimate()`
+    /// (chemin réel) ET directement par les tests — le
     /// mécanisme d'ancrage ci-dessous ne dépend d'aucun timing, seul le
     /// DÉCLENCHEMENT (planification async) l'est.
     func fireOrDeferRecoveryInvalidation() {
-        recoveryInvalidationScheduled = false
         if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
             recoveryInvalidationPending = true
             scheduleRecoveryRetry()
@@ -358,7 +382,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
         if isPartial {
             guard partialInvalidationsThisTransaction < Self.maxPartialInvalidationsPerTransaction else {
-                scheduleRecoveryInvalidation()
+                scheduleDeferredRelayout()
                 return
             }
             partialInvalidationsThisTransaction += 1
