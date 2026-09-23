@@ -22,6 +22,7 @@ import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
+import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 import {
@@ -649,6 +650,18 @@ await checkProtectionStates({ browser, BASE, expect });
   await touchPage.close();
   await touchContext.close();
 }
+
+/**
+ * 6.13 — « PLUS… » OUVRE SA FEUILLE (#7415) — `lib/check-more-sheet.mjs`.
+ *
+ * La SEULE porte du menu qu'aucun témoin de navigateur n'ouvrait : les § 6.6
+ * à 6.10 couvrent Copier, Traduire, Réagir, Composer et Sélectionner. Le § 6.2
+ * ne pouvait pas combler le trou — il vérifie que chaque contrôle A un
+ * gestionnaire, pas que l'EFFET du gestionnaire atteint l'écran. Le détail de
+ * ce que mesure ce témoin, et pourquoi il ne peut pas vivre sous `bun test`,
+ * est dans le doc-comment du module.
+ */
+await checkMoreSheet({ browser, BASE, expect });
 
 /**
  * 7 — LE COMPOSEUR TIENT CE QU'IL PROMET (#5668, critère (1)).
