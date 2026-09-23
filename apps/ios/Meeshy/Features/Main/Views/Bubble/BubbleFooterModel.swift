@@ -49,6 +49,15 @@ struct BubbleFooterModel: Equatable, Sendable {
     /// .sending` — drives `BubbleDeliveryCheck.SendingClockGlyph`'s reveal
     /// debounce (spec §6.2). `nil` for every other delivery state.
     var sendStartedAt: Date?
+    /// #7620 — « modifié » se dit DANS le pied, à côté de l'heure. Posé en
+    /// tête de bulle, le crayon tombait dans le coin arrondi et le
+    /// `clipShape` le rognait.
+    var edit: BubbleEditMark? = nil
+
+    /// L'icône de traduction ne se montre que si AUCUN drapeau ne la dit déjà
+    /// (#7599). Lue par la VUE : un site qui plie ses drapeaux après `make`
+    /// (le widget audio) reste soumis à la même règle.
+    var showsTranslateGlyph: Bool { showsTranslate && flags.isEmpty }
 
     /// A send still in flight — clock territory (excludes `.failed`).
     var isPending: Bool {
@@ -124,7 +133,8 @@ extension BubbleFooterModel {
         flags: [FooterFlag],
         showsTranslate: Bool,
         sendStartedAt: Date? = nil,
-        retryBandShown: Bool = false
+        retryBandShown: Bool = false,
+        edit: BubbleEditMark? = nil
     ) -> BubbleFooterModel {
         BubbleFooterModel(
             sender: sender,
@@ -134,8 +144,28 @@ extension BubbleFooterModel {
             delivery: isMe ? glyphStatus(deliveryStatus, retryBandShown: retryBandShown) : nil,
             isOffline: !isOnline,
             isMe: isMe,
-            sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil
+            sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil,
+            edit: edit
         )
+    }
+
+    /// #7620 — une bulle n'offre la traduction que si elle porte un TEXTE à
+    /// traduire (ou un audio, dont la transcription se traduit). Une position,
+    /// un fichier, un média seul ou un émoji n'ont rien à traduire.
+    static func offersTranslation(hasText: Bool, isEmojiOnly: Bool, hasAudio: Bool) -> Bool {
+        !isEmojiOnly && (hasText || hasAudio)
+    }
+}
+
+/// L'état « modifié » tel que le pied le dit : le crayon, ou la rotation
+/// pendant que l'édition part au serveur.
+enum BubbleEditMark: Equatable, Sendable {
+    case edited
+    case saving
+
+    static func resolve(editedAt: Date?, isSaving: Bool) -> BubbleEditMark? {
+        if isSaving { return .saving }
+        return editedAt == nil ? nil : .edited
     }
 }
 

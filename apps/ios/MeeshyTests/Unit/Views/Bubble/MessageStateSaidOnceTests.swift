@@ -99,4 +99,122 @@ final class MessageStateSaidOnceTests: XCTestCase {
         let src = try source("Focal/Row/FocalRow.swift")
         XCTAssertTrue(src.contains("BubbleFooterModel.glyphStatus(content.meta.deliveryStatus, retryBandShown: isFailedOutgoing)"))
     }
+
+    // MARK: - #7620 — le pied de bulle en Bulles, jusqu'au pixel
+
+    private func footerWidth(
+        _ model: BubbleFooterModel,
+        actions: BubbleFooterActions,
+        style: BubbleFooterStyle = .row
+    ) -> CGFloat {
+        let footer = BubbleFooter(model: model, actions: actions, style: style, isDark: false)
+        let host = UIHostingController(rootView: footer.fixedSize())
+        return host.sizeThatFits(in: CGSize(width: 1000, height: 1000)).width
+    }
+
+    private func receivedFooter(
+        flags: [FooterFlag] = [],
+        showsTranslate: Bool = true,
+        edit: BubbleEditMark? = nil
+    ) -> BubbleFooterModel {
+        BubbleFooterModel.make(
+            timeString: "16:44",
+            deliveryStatus: .sent,
+            isMe: false,
+            isOnline: true,
+            sender: nil,
+            flags: flags,
+            showsTranslate: showsTranslate,
+            edit: edit
+        )
+    }
+
+    private var translateAction: BubbleFooterActions { BubbleFooterActions(onTranslate: {}) }
+
+    /// La recette du 2026-09-23 voyait l'icône de traduction ET 🇬🇧 : le
+    /// modèle taisait l'icône, la VUE la rendait dès que le rappel existait.
+    func test_rowFooter_withFlagAndTranslateCallback_rendersNoTranslateGlyph() {
+        let flags = [FooterFlag(code: "en", isActive: false)]
+        let withCallback = footerWidth(receivedFooter(flags: flags), actions: translateAction)
+        let withoutCallback = footerWidth(receivedFooter(flags: flags), actions: .none)
+        XCTAssertEqual(withCallback, withoutCallback, accuracy: 0.5)
+    }
+
+    func test_rowFooter_withoutFlag_rendersTranslateGlyph() {
+        let withCallback = footerWidth(receivedFooter(), actions: translateAction)
+        let withoutCallback = footerWidth(receivedFooter(), actions: .none)
+        XCTAssertGreaterThan(withCallback, withoutCallback)
+    }
+
+    /// Le widget audio plie ses drapeaux APRÈS `make` : la règle tient sur le
+    /// modèle final, pas seulement dans le constructeur.
+    func test_showsTranslateGlyph_flagsFoldedAfterMake_isFalse() {
+        var model = receivedFooter(showsTranslate: true)
+        model.flags = [FooterFlag(code: "en", isActive: true)]
+        model.showsTranslate = true
+        XCTAssertFalse(model.showsTranslateGlyph)
+    }
+
+    func test_offersTranslation_contentWithoutText_isFalse() {
+        XCTAssertFalse(BubbleFooterModel.offersTranslation(hasText: false, isEmojiOnly: false, hasAudio: false))
+        XCTAssertFalse(BubbleFooterModel.offersTranslation(hasText: true, isEmojiOnly: true, hasAudio: false))
+    }
+
+    func test_offersTranslation_textOrAudio_isTrue() {
+        XCTAssertTrue(BubbleFooterModel.offersTranslation(hasText: true, isEmojiOnly: false, hasAudio: false))
+        XCTAssertTrue(BubbleFooterModel.offersTranslation(hasText: false, isEmojiOnly: false, hasAudio: true))
+    }
+
+    /// Une POSITION n'a pas de texte : ni icône, ni drapeau. Le prédicat
+    /// d'avant (`hasTextOrNonMediaContent`) comptait le lieu comme du texte.
+    func test_resolvedFooter_positionBubble_readsTheTextRule() throws {
+        let src = try source("Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertTrue(src.contains("BubbleFooterModel.offersTranslation("))
+        XCTAssertFalse(src.contains("&& (hasTextOrNonMediaContent || !audioAttachments.isEmpty)"))
+    }
+
+    func test_editMarkResolve_editedAtOrSaving_returnsTheMark() {
+        XCTAssertNil(BubbleEditMark.resolve(editedAt: nil, isSaving: false))
+        XCTAssertEqual(BubbleEditMark.resolve(editedAt: Date(), isSaving: false), .edited)
+        XCTAssertEqual(BubbleEditMark.resolve(editedAt: nil, isSaving: true), .saving)
+    }
+
+    /// Le crayon vit DANS le pied : un pied « modifié » est plus large que le
+    /// même pied sans l'état, en rangée comme en compact (émoji seul).
+    func test_rowFooter_editedMessage_rendersPencilInFooter() {
+        let edited = footerWidth(receivedFooter(showsTranslate: false, edit: .edited), actions: .none)
+        let plain = footerWidth(receivedFooter(showsTranslate: false), actions: .none)
+        XCTAssertGreaterThan(edited, plain)
+    }
+
+    func test_compactFooter_editedMessage_rendersPencilInFooter() {
+        let edited = footerWidth(receivedFooter(showsTranslate: false, edit: .edited), actions: .none, style: .compact)
+        let plain = footerWidth(receivedFooter(showsTranslate: false), actions: .none, style: .compact)
+        XCTAssertGreaterThan(edited, plain)
+    }
+
+    /// Posé en tête de bulle, le crayon tombait dans le coin arrondi que le
+    /// `clipShape` rogne. Le pied est son seul site.
+    func test_bubbleLayout_editedMark_isNotMountedAboveTheBody() throws {
+        let src = try source("Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertFalse(src.contains("editedIndicator"))
+        XCTAssertTrue(src.contains("BubbleEditMark.resolve("))
+    }
+
+    /// Le bouton de réaction du dernier message reçu se posait sur l'heure :
+    /// son disque commence SOUS la ligne de méta (8 pt de marge basse du
+    /// pied), et le strip tient dans la réserve basse de la cellule (31 pt).
+    func test_reactionStripRestingOffset_lastReceivedBubble_clearsTheFooterMetaLine() {
+        let offset = BubbleReactionsOverlay.restingOffset
+        XCTAssertGreaterThanOrEqual(
+            BubbleReactionsOverlay.chipTop(offset: offset),
+            -BubbleReactionsOverlay.footerBottomInset
+        )
+        XCTAssertLessThanOrEqual(BubbleReactionsOverlay.hitBottom(offset: offset), 31)
+    }
+
+    func test_bubbleLayout_reactionStrip_usesTheRestingOffset() throws {
+        let src = try source("Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertTrue(src.contains(".offset(y: BubbleReactionsOverlay.restingOffset)"))
+    }
 }
