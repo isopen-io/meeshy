@@ -13,7 +13,6 @@ const de = {
   'admin.counters.reports': 'Meldungen',
   'admin.counters.newUsers': 'Neu (24 Std.)',
   'admin.sections.title': 'Bereiche',
-  'admin.sections.legacy': 'alte Oberfläche',
   'admin.nav.dashboard': 'Übersicht',
   'admin.nav.users': 'Konten',
   'admin.nav.moderation': 'Moderation',
