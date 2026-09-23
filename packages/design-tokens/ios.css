@@ -47,6 +47,11 @@
   --ios-neutral-500: #6b7280;
   --ios-neutral-600: #4b5563;
   --ios-meesh-silver: #a8b1bf;
+  --ios-state-view-once: #6366f1;
+  --ios-state-opened: #9ca3af;
+  --ios-state-ephemeral: #f97316;
+  --ios-state-concealed: #6b7280;
+  --ios-state-failed: #ef4444;
 
   /* Les plans et les encres, schéma SOMBRE. */
   --ios-surface: #09090b;

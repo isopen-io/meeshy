@@ -66,109 +66,72 @@ public struct MessageProtectionChrome: View, Equatable {
 
     // MARK: - Les capsules
 
+    /// Ce qu'une capsule MONTRE (#7599) : un pictogramme, une teinte du code
+    /// commun, et — dans la seule dernière minute d'un éphémère — le décompte.
+    /// Aucun libellé : l'état se lit par sa couleur, et la phrase complète
+    /// reste au lecteur d'écran (`accessibilityLabels(for:)`).
+    public struct Presentation: Equatable, Sendable {
+        public let symbol: String
+        public let tintHex: String
+        public let tint: Color
+        public let showsCountdown: Bool
+    }
+
+    public static func presentation(for badge: MessageProtectionDescriptor.Badge) -> Presentation {
+        switch badge {
+        case .ephemeral(let state):
+            let isImminent: Bool
+            if case .imminent = state { isImminent = true } else { isImminent = false }
+            return Presentation(symbol: MessageProtectionSymbols.ephemeral,
+                                tintHex: MeeshyColors.stateEphemeralHex,
+                                tint: MeeshyColors.stateEphemeral,
+                                showsCountdown: isImminent)
+        case .viewOnce:
+            return Presentation(symbol: MessageProtectionSymbols.viewOnceFilled,
+                                tintHex: MeeshyColors.stateViewOnceHex,
+                                tint: MeeshyColors.stateViewOnce,
+                                showsCountdown: false)
+        case .blurred:
+            return Presentation(symbol: MessageProtectionSymbols.blurred,
+                                tintHex: MeeshyColors.stateConcealedHex,
+                                tint: MeeshyColors.stateConcealed,
+                                showsCountdown: false)
+        }
+    }
+
     @ViewBuilder
     private func capsule(for badge: MessageProtectionDescriptor.Badge) -> some View {
         switch badge {
-        case .ephemeral(let state):
-            ephemeralCapsule(state)
-        case .viewOnce:
-            protectionCapsule(
-                symbol: MessageProtectionSymbols.viewOnceFilled,
-                tint: MeeshyColors.indigo600,
-                label: Self.viewOnceLabel
-            )
-            .accessibilityLabel(Self.viewOnceA11y)
-        case .blurred:
-            protectionCapsule(
-                symbol: MessageProtectionSymbols.blurred,
-                tint: MeeshyColors.indigo500,
-                label: Self.blurredLabel
-            )
-            .accessibilityLabel(Self.blurredLabel)
-        }
-    }
-
-    @ViewBuilder
-    private func ephemeralCapsule(_ state: EphemeralDeadline.State) -> some View {
-        switch state {
-        case .running(let deadline):
-            // **La flamme SEULE, hors de la dernière minute** (#7467). Elle dit
-            // déjà tout ce qu'il y a à savoir — ce message va disparaître — et
-            // un chiffre qui descend pendant vingt-trois heures n'ajoute rien
-            // qu'une horloge à faire battre. Le lecteur d'écran, lui, donne
-            // TOUJOURS le temps restant : il n'a pas la flamme pour le dire.
-            chrome(tint: MeeshyColors.error) {
-                Image(systemName: MessageProtectionSymbols.ephemeral)
+        case .ephemeral(.notEphemeral), .ephemeral(.expired):
+            EmptyView()
+        default:
+            let presentation = Self.presentation(for: badge)
+            let tint = presentation.tint
+            chrome(tint: tint) {
+                Image(systemName: presentation.symbol)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.ephemeralA11y(deadline: deadline))
-
-        case .imminent(let deadline):
-            chrome(tint: MeeshyColors.error) {
-                Image(systemName: MessageProtectionSymbols.ephemeral)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
-                // Le battement est rendu PAR LE SYSTÈME : le texte se met à
-                // jour sans que SwiftUI ré-évalue la cellule. Il n'est monté
-                // QUE dans ce cas — c'est ce qui fait qu'aucune horloge ne bat
-                // avant la dernière minute.
-                // La borne haute est forcée dans le futur : `ClosedRange`
-                // piège sur `lower > upper`, et une passe de rendu peut très
-                // bien tomber APRÈS l'échéance, entre le moment où l'hôte
-                // résout et celui où il retire la ligne.
-                Text(timerInterval: Date()...max(deadline, Date().addingTimeInterval(1)),
-                     pauseTime: nil, countsDown: true)
-                    .font(.system(.caption2, design: .monospaced).weight(.bold))
-                    .foregroundColor(MeeshyColors.error)
-                    .monospacedDigit()
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.ephemeralA11y(deadline: deadline))
-
-        case .awaitingReception(let duration):
-            // L'expéditeur, tant que personne n'a accusé réception : la DURÉE
-            // s'affiche, elle ne décompte pas (contrat #7451 point 6). Une
-            // horloge qui tournerait ici mentirait sur ce qui se passe chez
-            // les destinataires — ce que faisait exactement l'échéance
-            // calculée à l'envoi.
-            chrome(tint: MeeshyColors.warning) {
-                Image(systemName: MessageProtectionSymbols.ephemeral)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(MeeshyColors.warning)
-                if !isCompact {
-                    Text(Self.awaitingLabel(duration: duration))
+                    .foregroundColor(tint)
+                if presentation.showsCountdown, case .ephemeral(.imminent(let deadline)) = badge {
+                    // Le battement est rendu PAR LE SYSTÈME : aucune passe
+                    // SwiftUI, aucune horloge de cellule, et il n'est monté que
+                    // dans la dernière minute (#7467). La borne haute est forcée
+                    // dans le futur : `ClosedRange` piège sur `lower > upper`.
+                    Text(timerInterval: Date()...max(deadline, Date().addingTimeInterval(1)),
+                         pauseTime: nil, countsDown: true)
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
-                        .foregroundColor(MeeshyColors.warning)
+                        .foregroundColor(tint)
+                        .monospacedDigit()
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.awaitingA11y(duration: duration))
-
-        case .notEphemeral, .expired:
-            EmptyView()
-        }
-    }
-
-    @ViewBuilder
-    private func protectionCapsule(symbol: String, tint: Color, label: String) -> some View {
-        chrome(tint: tint) {
-            Image(systemName: symbol)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(tint)
-            if !isCompact {
-                Text(label)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(tint)
-            }
+            .accessibilityLabel(Self.accessibilityLabel(for: badge) ?? "")
         }
     }
 
     @ViewBuilder
     private func chrome<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 4) { content() }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, isCompact ? 6 : 8)
             .padding(.vertical, 4)
             .background(
                 Capsule()
@@ -240,22 +203,29 @@ public extension MessageProtectionChrome {
         for descriptor: MessageProtectionDescriptor,
         now: Date = Date()
     ) -> [String] {
-        descriptor.badges.compactMap { badge in
-            switch badge {
-            // Le libellé accessible donne TOUJOURS le temps restant, seuil ou
-            // pas (#7467) : un lecteur d'écran ne voit pas la flamme, et
-            // « Message éphémère » sans échéance ne dit pas quand.
-            case .ephemeral(.running(let deadline)), .ephemeral(.imminent(let deadline)):
-                return ephemeralA11y(deadline: deadline, now: now)
-            case .ephemeral(.awaitingReception(let duration)):
-                return awaitingA11y(duration: duration)
-            case .ephemeral:
-                return nil
-            case .viewOnce:
-                return viewOnceA11y
-            case .blurred:
-                return blurredLabel
-            }
+        descriptor.badges.compactMap { accessibilityLabel(for: $0, now: now) }
+    }
+
+    /// La phrase d'UN badge — celle que la capsule porte, et celle que les
+    /// composeurs de libellé des bulles et des rangées reprennent.
+    static func accessibilityLabel(
+        for badge: MessageProtectionDescriptor.Badge,
+        now: Date = Date()
+    ) -> String? {
+        switch badge {
+        // Le libellé accessible donne TOUJOURS le temps restant, seuil ou
+        // pas (#7467) : un lecteur d'écran ne voit pas la flamme, et
+        // « Message éphémère » sans échéance ne dit pas quand.
+        case .ephemeral(.running(let deadline)), .ephemeral(.imminent(let deadline)):
+            return ephemeralA11y(deadline: deadline, now: now)
+        case .ephemeral(.awaitingReception(let duration)):
+            return awaitingA11y(duration: duration)
+        case .ephemeral:
+            return nil
+        case .viewOnce:
+            return viewOnceA11y
+        case .blurred:
+            return blurredLabel
         }
     }
 }

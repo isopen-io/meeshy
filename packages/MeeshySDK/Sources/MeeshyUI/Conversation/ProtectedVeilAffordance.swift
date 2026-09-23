@@ -44,20 +44,19 @@ public struct ProtectedVeilAffordance: View, Equatable {
             ZStack {
                 Color.clear
                 if isViewOnce {
-                    HStack(spacing: 4) {
-                        Image(systemName: MessageProtectionSymbols.viewOnceFilled)
-                            .font(.caption.weight(.semibold))
-                        Text(Self.viewOnceVeilLabel)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                    .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.85))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule().fill(.ultraThinMaterial)
-                    )
+                    // Le pictogramme de la vue unique vit dans le chrome, en
+                    // violet, juste au-dessus (#7599) : le voile ne le répète
+                    // pas, il offre le GESTE.
+                    Text(Self.viewOnceVeilLabel)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(.ultraThinMaterial)
+                        )
                 }
             }
             .contentShape(Rectangle())

@@ -46,21 +46,18 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.caption2.weight(.medium))
                     .italic()
             } else {
+                // #7599 — le crayon SEUL : « modifié » ne s'écrit plus, le
+                // lecteur d'écran le dit. Le point « historique » était un
+                // pictogramme décoratif — l'historique s'ouvre depuis le menu.
                 Image(systemName: "pencil")
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
-                Text(String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
-                    .font(.caption2.weight(.medium))
-                    .italic()
-                if hasEditHistory {
-                    // Dot affordance hinting the detail sheet shows history.
-                    Circle()
-                        .fill(metaColor)
-                        .frame(width: 3, height: 3)
-                        .opacity(0.7)
-                }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isSaving
+            ? String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
         .foregroundColor(metaColor)
     }
 }
@@ -75,13 +72,10 @@ struct BubbleEditedIndicator: View, Equatable {
 struct BubblePinnedIndicator: View, Equatable {
     var body: some View {
         HStack(spacing: 4) {
+            // #7599 — l'épingle SEULE, droite ; le libellé reste au lecteur
+            // d'écran (ci-dessous).
             Image(systemName: "pin.fill")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-                .rotationEffect(.degrees(45))
-
-            Text(String(localized: "bubble.meta.pinned", defaultValue: "épinglé", bundle: .main))
-                .font(.caption2.weight(.medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)

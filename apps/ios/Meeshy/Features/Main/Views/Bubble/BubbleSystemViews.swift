@@ -58,7 +58,7 @@ struct BubbleBurnedView: View, Equatable {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
                     .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundColor(MeeshyColors.stateOpened)
                 Text(String(localized: "bubble.system.burned", defaultValue: "Vu et supprimé", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .regular))
                     .italic()
@@ -68,10 +68,10 @@ struct BubbleBurnedView: View, Equatable {
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.warning.opacity(0.08))
+                    .fill(MeeshyColors.stateOpened.opacity(0.08))
                     .overlay(
                         Capsule()
-                            .stroke(MeeshyColors.warning.opacity(0.15), lineWidth: 0.5)
+                            .stroke(MeeshyColors.stateOpened.opacity(0.15), lineWidth: 0.5)
                     )
             )
             .accessibilityElement(children: .combine)

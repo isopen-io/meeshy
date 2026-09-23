@@ -174,7 +174,7 @@ struct FocalRow: View {
             FocalMetaColumn(
                 isMe: content.isMe,
                 timeString: content.meta.timeString,
-                deliveryStatus: content.meta.deliveryStatus,
+                deliveryStatus: BubbleFooterModel.glyphStatus(content.meta.deliveryStatus, retryBandShown: isFailedOutgoing),
                 isDark: input.isDark,
                 editedAt: content.editedAt,
                 isEditSaving: content.isEditSaving,
@@ -370,7 +370,7 @@ struct FocalRow: View {
     private var mountsBottomLine: Bool {
         FocalMetaColumn.mountsBottomLine(
             hasTranslation: content.translation != nil,
-            isBlurred: content.isBlurred,
+            isBlurred: content.requiresVeil,
             isLastInGroup: input.isLastInGroup,
             hasReactions: mountsReactions
         )
@@ -830,7 +830,7 @@ struct FocalRow: View {
             // (`onSetActiveDisplayLanguageForGroup`) ; changer la langue d'UN
             // message précis du groupe reste possible via la magnification
             // (`focusStrip`, `onSetActiveDisplayLanguage`) ou le long-press.
-            if let translation = content.translation, !content.isBlurred, input.isLastInGroup {
+            if let translation = content.translation, !content.requiresVeil, input.isLastInGroup {
                 plainLanguageFlags(translation)
             }
             if mountsReactions {
@@ -927,7 +927,7 @@ struct FocalRow: View {
     /// hauteur réservée, donc affichage instantané au tick d'élection.
     private var focusStrip: some View {
         HStack(alignment: .center, spacing: 4) {
-            if let translation = content.translation, !content.isBlurred {
+            if let translation = content.translation, !content.requiresVeil {
                 Button {
                     actions.onShowTranslationDetail?(content.messageId)
                 } label: {

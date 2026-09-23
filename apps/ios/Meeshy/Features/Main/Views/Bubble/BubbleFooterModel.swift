@@ -110,6 +110,11 @@ extension BubbleFooterModel {
     /// alignée à droite avec la coche de livraison. C'est une information de
     /// premier rang, jamais un détail conditionnel.
     /// `delivery` reste non-nil uniquement pour les messages sortants (`isMe`).
+    ///
+    /// #7599 — un état se dit UNE fois. Des drapeaux affichés disent déjà
+    /// qu'une traduction existe : l'icône 🌐 ne reste que là où elle est la
+    /// seule porte vers la demande. Et un échec d'envoi que la bande de renvoi
+    /// porte ne se redit pas par la coche rouge.
     static func make(
         timeString: String,
         deliveryStatus: MeeshyMessage.DeliveryStatus,
@@ -118,17 +123,32 @@ extension BubbleFooterModel {
         sender: SenderIdentity?,
         flags: [FooterFlag],
         showsTranslate: Bool,
-        sendStartedAt: Date? = nil
+        sendStartedAt: Date? = nil,
+        retryBandShown: Bool = false
     ) -> BubbleFooterModel {
         BubbleFooterModel(
             sender: sender,
             flags: flags,
-            showsTranslate: showsTranslate,
+            showsTranslate: showsTranslate && flags.isEmpty,
             timestamp: timeString,
-            delivery: isMe ? deliveryStatus : nil,
+            delivery: isMe ? glyphStatus(deliveryStatus, retryBandShown: retryBandShown) : nil,
             isOffline: !isOnline,
             isMe: isMe,
             sendStartedAt: (isMe && deliveryStatus == .sending) ? sendStartedAt : nil
         )
+    }
+}
+
+extension BubbleFooterModel {
+    /// L'état de livraison que la COCHE doit dire — la règle unique de la bulle
+    /// et de la rangée plate (#7599). Un échec d'envoi est dit par la bande de
+    /// renvoi quand elle est montée : la coche se tait alors, elle ne répète
+    /// pas en rouge ce que la bande dit en rouge.
+    static func glyphStatus(
+        _ status: MeeshyMessage.DeliveryStatus?,
+        retryBandShown: Bool
+    ) -> MeeshyMessage.DeliveryStatus? {
+        guard status == .failed, retryBandShown else { return status }
+        return nil
     }
 }
