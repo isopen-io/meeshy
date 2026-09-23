@@ -78,9 +78,25 @@ describe('messageMenuContextOf — dérivé du message, jamais une seconde loi d
     );
     expect(result.hasText).toBe(false);
   });
+
+  test('translations UNDEFINED (cache allégé) ⇒ languageCount = 1, pas TypeError', () => {
+    const result = messageMenuContextOf(
+      {
+        content: 'nouveau message',
+        isBlurred: false,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        translations: undefined,
+      } as any,
+      { now: 1000 },
+    );
+    expect(result.languageCount).toBe(1);
+    expect(result.hasText).toBe(true);
+    expect(result.isProtected).toBe(false);
+  });
 });
 
-describe('translationChoices — original puis les rangs du PRISME, jamais l’ordre du tableau', () => {
+describe('translationChoices — original puis les rangs du PRISME, jamais l\'ordre du tableau', () => {
   test('témoin de RANG (leçon 261) : lecteur [es,en], message fr + trad en ⇒ servie au rang 2', () => {
     const message = {
       originalLanguage: 'fr',
@@ -104,5 +120,18 @@ describe('translationChoices — original puis les rangs du PRISME, jamais l’o
     };
     const choices = translationChoices({ message, preferredLanguages: ['en'], servedLanguage: 'en' });
     expect(choices.map((c) => c.code)).toEqual(['fr', 'en', 'de']);
+  });
+
+  test('translations UNDEFINED => choices contient seulement l\'original, pas d\'erreur', () => {
+    const message = {
+      originalLanguage: 'fr',
+      translations: undefined,
+    } as any;
+    const choices = translationChoices({
+      message,
+      preferredLanguages: ['en', 'es'],
+      servedLanguage: 'fr',
+    });
+    expect(choices).toEqual([{ code: 'fr', isOriginal: true, isServed: true }]);
   });
 });

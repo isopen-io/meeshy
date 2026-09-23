@@ -1,4 +1,4 @@
-import type { Message } from '@/lib/api/types';
+import type { Message, MessageTranslation } from '@/lib/api/types';
 import { translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
@@ -38,12 +38,17 @@ export type MessageMenuContext = {
 /**
  * Dérive le contexte d'UN message, à l'instant `now` — même discipline que
  * `protectionOf` (D-23) : jamais de seconde horloge, l'appelant injecte `now`.
+ *
+ * GARDE (#7526) : `message.translations` peut être UNDEFINED dans le cache
+ * allégé — aucun second regard du champ pour éviter une divergence au tour
+ * suivant (§ leçon du cycle 123 : « que transporte-t-on À CÔTÉ »). Le
+ * `translationsOf` qui suit le tolère déjà.
  */
 export function messageMenuContextOf(
   message: Pick<
     Message,
     'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'translations'
-  >,
+  > & { readonly translations?: readonly MessageTranslation[] },
   input: { readonly now: number },
 ): MessageMenuContext {
   const kind = protectionOf(message, input.now);
@@ -102,9 +107,12 @@ export type TranslationChoice = {
  * traduit en `en` sert l'anglais au RANG 2 (« es » n'a pas de traduction) —
  * la servie n'est donc jamais celle du rang 1, et le verdict distingue une
  * loi juste d'une loi qui s'arrêterait au premier rang.
+ *
+ * GARDE (#7526) : `message.translations` peut être UNDEFINED — tolérée par
+ * `translationsOf`.
  */
 export function translationChoices(params: {
-  readonly message: Pick<Message, 'originalLanguage' | 'translations'>;
+  readonly message: Pick<Message, 'originalLanguage' | 'translations'> & { readonly translations?: readonly MessageTranslation[] };
   readonly preferredLanguages: readonly string[];
   readonly servedLanguage: string;
 }): readonly TranslationChoice[] {
