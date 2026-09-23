@@ -148,7 +148,6 @@ import type {
 import type {
   MentionCreatedEventData,
   MessageConsumedEventData,
-  MessageViewOncePurgedEventData,
   MessageCountdownStartedEventData,
   MessageDeleteData,
   MessageDeletedEventData,
@@ -265,7 +264,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
-  [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED]: (data: ParticipantRightsUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
