@@ -128,6 +128,8 @@ describe('MessageDetailSheet — le favori', () => {
     const entry = document.querySelector('[data-message-star]');
     expect(entry?.getAttribute('data-message-star')).toBe('unstar');
     expect(entry?.textContent).toContain('Retirer des favoris');
+  });
+});
 
 describe('MessageDetailSheet — la feuille DÉCLARE qu’elle recouvre (W14, #7372)', () => {
   test('montée ⇒ le registre des couches modales la compte ; démontée ⇒ il l’oublie', async () => {
