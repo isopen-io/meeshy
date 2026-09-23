@@ -167,9 +167,17 @@ describe('quotedPreviewOf — le Prisme descend, la citation ne sert pas l’ori
     content: 'Hello',
     originalLanguage: 'en',
     translations: [
-      { id: 't-fr', messageId: 'm-quoted', sourceLanguage: 'en', targetLanguage: 'fr', translatedContent: 'Bonjour' },
+      {
+        id: 't-fr',
+        messageId: 'm-quoted',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-23T09:00:00.000Z'),
+      },
     ],
-  } as Partial<Message>);
+  });
 
   test('rang 2 servi : le texte cité est la traduction, pas le contenu d’origine', () => {
     const result = preview(anglais, ['de', 'fr']);

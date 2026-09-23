@@ -975,6 +975,10 @@ const pt = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Áudio protegido',
   'attachment.protected.file': 'Anexo protegido',
+  'attachment.kind.image': 'Foto',
+  'attachment.kind.video': 'Vídeo',
+  'attachment.kind.audio': 'Áudio',
+  'attachment.kind.file': 'Ficheiro',
 
 } satisfies InterfaceCatalog;
 
