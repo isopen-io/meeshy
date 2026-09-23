@@ -92,6 +92,24 @@ describe('resolveLastMessagePreviewGroup — un message protégé ne transporte 
     expect(group.lastMessagePreview).toBe('Le code du portail est 4521');
     expect(group.lastMessageEphemeralDuration).toBe(240);
   });
+
+  it("éphémère : l'échéance ne voyage pas en room — la colonne est l'heure interne de destruction (#7451)", () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({ ephemeralDuration: 240, expiresAt: new Date('2026-09-30T12:00:00Z') }),
+      NOW,
+    );
+    expect(group.lastMessageExpiresAt).toBeNull();
+  });
+
+  it('vue unique non éphémère : sa grâce voyage', () => {
+    const group = resolveLastMessagePreviewGroup(
+      reader,
+      makeMessage({ expiresAt: new Date('2026-09-23T13:00:00Z') }),
+      NOW,
+    );
+    expect(group.lastMessageExpiresAt).toBe('2026-09-23T13:00:00.000Z');
+  });
 });
 
 describe('resolveLastMessagePreviewGroup — la nature du dernier message', () => {

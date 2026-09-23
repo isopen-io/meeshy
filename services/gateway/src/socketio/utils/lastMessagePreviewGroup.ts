@@ -61,6 +61,10 @@ const WITHHELD_PRISM: LastMessagePreviewPrism = {
   lastMessageOriginalLanguage: null,
 };
 
+function isEphemeral(message: PreviewGroupMessage | null | undefined): boolean {
+  return typeof message?.ephemeralDuration === 'number' && message.ephemeralDuration > 0;
+}
+
 /**
  * LE groupe d'aperçu que `conversation:updated` porte pour un destinataire
  * (#7545) : Prisme, sous-groupe MÉDIA, NATURE et lieu, sous UNE protection.
@@ -92,6 +96,11 @@ export function resolveLastMessagePreviewGroup(
     ...(withheld ? WITHHELD_PRISM : resolveLastMessagePreviewPrism(participant, message)),
     ...media,
     ...(withheld ? { lastMessageAttachments: [], lastMessageAttachmentCount: 0 } : {}),
+    // #7451 — pour un éphémère, `expiresAt` est l'heure INTERNE de destruction,
+    // jamais l'échéance d'un lecteur : une diffusion de room ne peut pas la
+    // servir (même règle que `message:new`). Le client décompte depuis SA
+    // réception, et `message:countdown-started` lui porte l'échéance serveur.
+    ...(isEphemeral(message) ? { lastMessageExpiresAt: null } : {}),
     lastMessageType: message?.messageType ?? null,
     lastMessageEffectFlags: message?.effectFlags ?? null,
     lastMessageEphemeralDuration: message?.ephemeralDuration ?? null,
