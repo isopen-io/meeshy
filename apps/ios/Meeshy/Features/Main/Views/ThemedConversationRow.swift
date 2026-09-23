@@ -38,6 +38,8 @@ struct ThemedConversationRow: View {
     /// Falls back to the raw preview if the conversation has no
     /// translations attached (e.g., gateway not yet providing them).
     var preferredContentLanguages: [String] = []
+    /// « Rejoindre » l'appel en cours, offert par la ligne d'aperçu (#7548).
+    var onJoinLiveCall: (() -> Void)? = nil
 
     private var accentColor: String { conversation.accentColor }
 
@@ -494,7 +496,8 @@ struct ThemedConversationRow: View {
                 preferredLanguages: preferredContentLanguages,
                 accent: accent,
                 isDark: isDark,
-                font: MeeshyFont.relative(MeeshyFont.subheadSize)
+                font: MeeshyFont.relative(MeeshyFont.subheadSize),
+                onJoin: onJoinLiveCall
             )
         }
     }

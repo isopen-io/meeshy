@@ -45,7 +45,7 @@ struct ConversationDependencies {
 
 // MARK: - Seam de reprise d'appel
 
-/// Seam de testabilité pour `ConversationViewModel.joinOngoingCall` — par
+/// Seam de testabilité de `LiveCallJoiner` (bulle vivante et ligne de liste) — par
 /// défaut lit/actionne `CallManager.shared` (singleton WebRTC intestable en
 /// unit) ; les tests injectent des closures espionnes pour couvrir les 4
 /// branches sans toucher au sous-système d'appel réel.
