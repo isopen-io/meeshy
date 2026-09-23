@@ -56,6 +56,18 @@ describe('forwardBodyOf — ce qui part, et ce qui NE part JAMAIS', () => {
     expect(body.forwardedFromId).toBe('m2');
   });
 
+  /** La passerelle DÉRIVE le type des pièces jointes FINALES, après la copie
+   * (`MessageProcessor.ts:617-643`) : un `messageType` déclaré ici serait la
+   * seconde écriture d'une règle qui a son site unique — et faux sur un lot
+   * hétérogène, que cette règle dit `'file'`. */
+  test('AUCUN `messageType` déclaré — c’est la passerelle qui le dérive après la copie', () => {
+    const body = forwardBodyOf({
+      message: { id: 'm4', content: '', originalLanguage: 'fr' },
+      clientMessageId: 'cid_4',
+    });
+    expect('messageType' in body).toBe(false);
+  });
+
   test('une conversation d’origine ABSENTE s’OMET — `""` casse l’écriture Prisma `@db.ObjectId`', () => {
     const body = forwardBodyOf({
       message: { id: 'm3', content: 'x', originalLanguage: 'fr' },

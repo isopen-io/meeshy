@@ -44,6 +44,16 @@ export type ForwardResult =
  * LE CORPS — `content` OMIS quand le texte est vide (un média seul, un vocal :
  * `forwardedFromId` suffit à rendre le corps non vide pour le `.refine()` du
  * schéma serveur, `messages-send.ts:107-116`), et AUCUN `attachmentIds`.
+ *
+ * **NI `messageType`, ET C'EST DÉLIBÉRÉ.** Le transfert d'une photo ne
+ * s'annonce pas `'image'` ici : la passerelle DÉRIVE le type des pièces
+ * jointes FINALES, après la copie (`MessageProcessor.ts:617-643`,
+ * `deriveMessageTypeForAttachments` — « le seul point du service où les
+ * pièces jointes finales sont connues, quel que soit le chemin qui les a
+ * produites : liaison par `attachmentIds`, **copie de transfert**, copie de
+ * diffusion »). Un type déclaré par le client serait la seconde écriture
+ * d'une règle qui a déjà son site unique, et il serait FAUX sur un lot
+ * hétérogène (que la règle dit `'file'`).
  */
 export function forwardBodyOf(params: {
   readonly message: ForwardSource;
