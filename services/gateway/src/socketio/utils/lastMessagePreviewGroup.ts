@@ -5,11 +5,11 @@ import type {
 } from '@meeshy/shared/types/conversation-preview';
 import { sharedPlaceFromMetadata, type SharedPlace } from '../../services/location/sharedPlace';
 import {
-  callSummaryFromMetadata,
+  PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
   isPreviewWithheld,
+  resolveLastMessageNature,
   resolvePreviewProtection,
   summarizeAttachments,
-  systemEventFromMessage,
 } from '../../routes/conversations/utils/last-message-nature';
 import {
   resolveLastMessagePreviewPrism,
@@ -38,6 +38,8 @@ export interface PreviewGroupMessage extends PreviewPrismMessage, PreviewMediaMe
   readonly forwardedFromId?: string | null;
 }
 
+export { PREVIEW_ATTACHMENT_SUMMARY_LIMIT };
+
 export interface LastMessageNatureFields {
   readonly lastMessageType: string | null;
   readonly lastMessageEffectFlags: number | null;
@@ -52,13 +54,6 @@ export interface LastMessageNatureFields {
 export type LastMessagePreviewGroup = LastMessagePreviewPrism &
   PreviewMediaFields &
   LastMessageNatureFields & { readonly location?: SharedPlace };
-
-/**
- * Borne de lecture des pièces jointes d'un dernier message pour son résumé.
- * Le COMPTE reste exact (`_count`) au-delà ; seuls les familles et le poids se
- * lisent sur ces premières-ci.
- */
-export const PREVIEW_ATTACHMENT_SUMMARY_LIMIT = 50;
 
 const WITHHELD_PRISM: LastMessagePreviewPrism = {
   lastMessagePreview: '',
@@ -92,6 +87,7 @@ export function resolveLastMessagePreviewGroup(
   const withheld = message != null && isPreviewWithheld(resolvePreviewProtection(message, now));
   const media = resolvePreviewMediaFields(message);
   const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
+  const nature = message ? resolveLastMessageNature(message) : null;
   return {
     ...(withheld ? WITHHELD_PRISM : resolveLastMessagePreviewPrism(participant, message)),
     ...media,
@@ -99,10 +95,10 @@ export function resolveLastMessagePreviewGroup(
     lastMessageType: message?.messageType ?? null,
     lastMessageEffectFlags: message?.effectFlags ?? null,
     lastMessageEphemeralDuration: message?.ephemeralDuration ?? null,
-    lastMessageIsEncrypted: message?.isEncrypted === true,
-    lastMessageIsForwarded: message?.forwardedFromId != null,
-    lastMessageSystemEvent: message ? systemEventFromMessage(message) : null,
-    lastMessageCallSummary: callSummaryFromMetadata(message?.metadata),
+    lastMessageIsEncrypted: nature?.isEncrypted ?? false,
+    lastMessageIsForwarded: nature?.isForwarded ?? false,
+    lastMessageSystemEvent: nature?.systemEvent ?? null,
+    lastMessageCallSummary: nature?.callSummary ?? null,
     lastMessageAttachmentSummary: withheld
       ? null
       : summarizeAttachments(message?.attachments ?? [], message?._count?.attachments),

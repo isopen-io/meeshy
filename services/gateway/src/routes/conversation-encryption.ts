@@ -256,6 +256,9 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
               content: encryptionMessages[mode],
               originalLanguage: 'en',
               messageType: 'system',
+              // #7545 — la ligne de liste lit une clé localisable
+              // (`system.encryption-enabled`), jamais ce texte anglais.
+              metadata: { kind: 'encryption-enabled', mode },
               ...LIVE_MESSAGE_MARK
             }
           });

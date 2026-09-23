@@ -25,6 +25,14 @@ export interface PreviewProtectionFlags {
   readonly ephemeralDuration?: number | null;
 }
 
+/**
+ * Borne de lecture des pièces jointes d'un dernier message pour son résumé,
+ * partagée par `GET /conversations` et le socket. Le COMPTE reste exact
+ * (`_count`) au-delà ; seuls les familles et le poids se lisent sur ces
+ * premières-ci.
+ */
+export const PREVIEW_ATTACHMENT_SUMMARY_LIMIT = 50;
+
 const WITHHOLDING: ReadonlySet<PreviewProtection> = new Set(['expired', 'view-once', 'blurred', 'encrypted']);
 
 /**
@@ -160,4 +168,30 @@ export function systemEventFromMessage(message: SystemEventSource): LastMessageS
     return { key: 'system.encryption-enabled', params: { mode: raw.mode } };
   }
   return { key: 'system.generic', params: {} };
+}
+
+export interface NatureSource extends SystemEventSource {
+  readonly isEncrypted?: boolean | null;
+  readonly forwardedFromId?: string | null;
+}
+
+export interface LastMessageNature {
+  readonly isEncrypted: boolean;
+  readonly isForwarded: boolean;
+  readonly systemEvent: LastMessageSystemEvent | null;
+  readonly callSummary: LastMessageCallSummary | null;
+}
+
+/**
+ * Ce que la ligne dit du message au-delà de son texte — identique en REST
+ * (`lastMessage.*`) et sur le socket (`lastMessage*`), et indépendant de la
+ * protection : un appel ou un avis système n'a pas de contenu à retenir.
+ */
+export function resolveLastMessageNature(message: NatureSource): LastMessageNature {
+  return {
+    isEncrypted: message.isEncrypted === true,
+    isForwarded: message.forwardedFromId != null,
+    systemEvent: systemEventFromMessage(message),
+    callSummary: callSummaryFromMetadata(message.metadata),
+  };
 }

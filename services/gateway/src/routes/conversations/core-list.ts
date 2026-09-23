@@ -18,7 +18,12 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
-import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
+import {
+  isPreviewWithheld,
+  resolveLastMessageNature,
+  resolvePreviewProtection,
+  summarizeAttachments,
+} from './utils/last-message-nature';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -772,18 +777,21 @@ export function registerConversationListRoute(
                  sérialisée selon le chemin — un cast trop étroit décrit mal ce
                  qu'on lit, et `isLastMessageProtected` accepte les deux. */
               expiresAt?: Date | string | null;
+              ephemeralDuration?: number | null;
+              isEncrypted?: boolean | null;
             }
           | undefined;
         // #6111 — un dernier message à vue unique, flouté ou éphémère périmé
         // ne transporte plus rien de son contenu, carte du Prisme comprise :
         // masquer `lastMessage.content` sans y toucher aurait laissé partir
         // la traduction du même message sous un autre nom.
+        //
+        // #7545 — le prédicat est celui du socket (`resolvePreviewProtection`),
+        // `ephemeralDuration` compris : sans elle, l'heure interne de
+        // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
+        // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
         const lastMessageProtected = latestMessage
-          ? isLastMessageProtected({
-              isBlurred: latestMessage.isBlurred,
-              isViewOnce: latestMessage.isViewOnce,
-              expiresAt: latestMessage.expiresAt
-            })
+          ? isPreviewWithheld(resolvePreviewProtection(latestMessage))
           : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
@@ -848,8 +856,17 @@ export function registerConversationListRoute(
             // bien porter un lieu qu'un sticker ou un résumé — rien de ce
             // qu'elle transporte n'a le droit de sortir.
             const place = lastMessageProtected ? null : sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
+            const { attachments: loadedAttachments, ...msgWithoutAttachments } = msgRest;
             return {
-              ...msgRest,
+              ...msgWithoutAttachments,
+              // #7545 — la NATURE (transfert, chiffrement, avis système,
+              // appel) et le RÉSUMÉ de toutes les pièces jointes ; la liste
+              // n'en SERT que la première en détail.
+              ...resolveLastMessageNature(msg),
+              attachments: loadedAttachments.slice(0, 1),
+              attachmentSummary: lastMessageProtected
+                ? null
+                : summarizeAttachments(loadedAttachments, msg._count?.attachments),
               content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
               // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
               // continuent de partir : ce sont eux qui qualifient le
