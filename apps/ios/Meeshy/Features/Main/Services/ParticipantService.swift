@@ -48,9 +48,29 @@ actor ParticipantService {
             }
         }
 
+        // Fetch-then-replace : le cache n'est touché QUE lorsque le réseau a
+        // répondu. L'ordre inverse — `invalidate()` PUIS `fetchNextPage()` —
+        // détruisait la charge encore présente sur le disque avant de savoir
+        // s'il y aurait de quoi la remplacer : hors ligne, la liste des membres
+        // devenait vide sur les DEUX surfaces qui la servent
+        // (`ConversationInfoSheet`, `ParticipantsView`), et l'ouverture suivante
+        // repartait du réseau puisque le cache n'avait plus rien à servir.
+        // Même correctif que `ConversationListViewModel.forceRefresh`.
         paginationState[conversationId] = PaginationState()
-        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
-        return try await fetchNextPage(for: conversationId)
+        do {
+            return try await fetchNextPage(for: conversationId, replacingCachedPages: true)
+        } catch {
+            // `load()` rend un `.expired` SANS charge — le signal veut dire
+            // « ne t'y fie pas », jamais « il n'y a rien ». Le disque, lui, l'a
+            // encore : la servir vaut mieux qu'une liste vide (Offline Graceful
+            // Degradation, même branche que `performLoadConversations`).
+            if let recovered = await CacheCoordinator.shared.participants.loadIgnoringExpiry(for: conversationId),
+               !recovered.items.isEmpty {
+                logger.info("Participants served from expired disk payload after a failed refresh")
+                return recovered.items
+            }
+            throw error
+        }
     }
 
     func loadNextPage(for conversationId: String) async throws -> [PaginatedParticipant] {
@@ -96,7 +116,14 @@ actor ParticipantService {
 
     // MARK: - Private
 
-    private func fetchNextPage(for conversationId: String) async throws -> [PaginatedParticipant] {
+    /// - Parameter replacingCachedPages: une PREMIÈRE page remplace ce que le
+    ///   cache portait au lieu de s'y ajouter. C'est ce que l'`invalidate()`
+    ///   préalable obtenait ; le dire ici plutôt que de vider le disque donne le
+    ///   même résultat sans exposer l'intervalle où l'app n'a plus rien.
+    private func fetchNextPage(
+        for conversationId: String,
+        replacingCachedPages: Bool = false
+    ) async throws -> [PaginatedParticipant] {
         let cursor = paginationState[conversationId]?.nextCursor
         // #4282 — le chemin était CONSTRUIT par concaténation, requête comprise.
         // Ni la migration ni l'audit ne le voyaient : ils cherchent un littéral,
@@ -110,16 +137,24 @@ actor ParticipantService {
             method: "GET", body: nil, queryItems: queryItems
         )
         guard response.success else {
-            // Server reported a failure: surface the current cached page
-            // (snapshot semantics — no freshness signal applicable here).
-            let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            return result.snapshot() ?? []
+            // Server reported a failure: surface whatever the disk still holds.
+            // `snapshot()` rendait `nil` sur un `.expired` — exactement l'état
+            // dans lequel cette branche est atteinte le plus souvent — donc une
+            // panne serveur servait une liste vide alors que les membres
+            // étaient là.
+            return await CacheCoordinator.shared.participants
+                .loadIgnoringExpiry(for: conversationId)?.items ?? []
         }
 
         // Page-merge: we just fetched the next page, so we want to append to
         // whatever is currently cached regardless of freshness.
-        let existingResult = await CacheCoordinator.shared.participants.load(for: conversationId)
-        let existingItems = existingResult.snapshot() ?? []
+        let existingItems: [PaginatedParticipant]
+        if replacingCachedPages {
+            existingItems = []
+        } else {
+            let existingResult = await CacheCoordinator.shared.participants.load(for: conversationId)
+            existingItems = existingResult.snapshot() ?? []
+        }
         let merged = existingItems + response.data
 
         do {
