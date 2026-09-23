@@ -5,6 +5,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview,
 } from '../../routes/conversations/utils/last-message-preview';
+import { previewAltOf, previewAttachmentProtection } from '../../routes/conversations/utils/last-message-media';
 
 /**
  * Le fragment `select` Prisma que TOUT émetteur d'aperçu de ligne de liste doit
@@ -178,6 +179,11 @@ export const PREVIEW_MEDIA_ATTACHMENT_SELECT = {
   width: true,
   height: true,
   pageCount: true,
+  // #7594 — le texte alternatif et la protection propre de la pièce.
+  alt: true,
+  isViewOnce: true,
+  isBlurred: true,
+  effectFlags: true,
 } as const;
 
 export interface PreviewMediaSender {
@@ -207,6 +213,10 @@ export interface PreviewMediaAttachmentInput {
   readonly width?: number | null;
   readonly height?: number | null;
   readonly pageCount?: number | null;
+  readonly alt?: string | null;
+  readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
+  readonly effectFlags?: number | null;
 }
 
 export interface PreviewMediaMessage {
@@ -252,6 +262,7 @@ export interface PreviewMediaFields {
  */
 export function resolvePreviewMediaFields(
   message: PreviewMediaMessage | null | undefined,
+  messageWithheld = false,
 ): PreviewMediaFields {
   const attachments = message?.attachments ?? [];
   return {
@@ -261,7 +272,7 @@ export function resolvePreviewMediaFields(
     // sa requête Prisma à `take: 1` (optimisation légitime, conservée) ; les
     // deux autres émetteurs chargent le `Message` partagé, dont
     // `attachments` porte la liste COMPLÈTE.
-    lastMessageAttachments: attachments.slice(0, 1).map(normalizePreviewAttachment),
+    lastMessageAttachments: attachments.slice(0, 1).map((attachment) => normalizePreviewAttachment(attachment, messageWithheld)),
     lastMessageAttachmentCount: Math.max(message?._count?.attachments ?? 0, attachments.length),
     lastMessageIsBlurred: message?.isBlurred ?? false,
     lastMessageIsViewOnce: message?.isViewOnce ?? false,
@@ -269,7 +280,10 @@ export function resolvePreviewMediaFields(
   };
 }
 
-function normalizePreviewAttachment(attachment: PreviewMediaAttachmentInput): LastMessagePreviewAttachment {
+function normalizePreviewAttachment(
+  attachment: PreviewMediaAttachmentInput,
+  messageWithheld: boolean,
+): LastMessagePreviewAttachment {
   return {
     id: attachment.id,
     mimeType: attachment.mimeType,
@@ -280,5 +294,9 @@ function normalizePreviewAttachment(attachment: PreviewMediaAttachmentInput): La
     width: attachment.width ?? null,
     height: attachment.height ?? null,
     pageCount: attachment.pageCount ?? null,
+    // #7594 — le texte alternatif est du CONTENU, retenu sous protection du
+    // message ou de la pièce ; la protection de la pièce part toujours.
+    alt: previewAltOf(attachment, messageWithheld),
+    ...previewAttachmentProtection(attachment),
   };
 }

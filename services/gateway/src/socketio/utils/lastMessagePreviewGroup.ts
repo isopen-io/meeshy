@@ -1,8 +1,10 @@
 import type {
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
+  LastMessageSticker,
   LastMessageSystemEvent,
 } from '@meeshy/shared/types/conversation-preview';
+import { previewStickerOf } from '../../routes/conversations/utils/last-message-media';
 import { sharedPlaceFromMetadata, type SharedPlace } from '../../services/location/sharedPlace';
 import {
   PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
@@ -51,9 +53,26 @@ export interface LastMessageNatureFields {
   readonly lastMessageAttachmentSummary: LastMessageAttachmentSummary | null;
 }
 
+/**
+ * #7594 — le sticker (retenu sous protection du message ou de la pièce) et la
+ * vue unique déjà ouverte par CE lecteur. Les émetteurs d'un message NEUF ne
+ * passent aucune consommation : personne ne peut avoir ouvert un message avant
+ * sa diffusion, et `false` est alors exact.
+ */
+export interface LastMessageStickerFields {
+  readonly lastMessageSticker: LastMessageSticker | null;
+  readonly lastMessageViewOnceConsumed: boolean;
+}
+
+export interface PreviewGroupReaderContext {
+  /** Ce lecteur a déjà ouvert ce message (`loadViewOnceConsumptions`). */
+  readonly viewOnceConsumed?: boolean;
+}
+
 export type LastMessagePreviewGroup = LastMessagePreviewPrism &
   PreviewMediaFields &
-  LastMessageNatureFields & { readonly location?: SharedPlace };
+  LastMessageNatureFields &
+  LastMessageStickerFields & { readonly location?: SharedPlace };
 
 const WITHHELD_PRISM: LastMessagePreviewPrism = {
   lastMessagePreview: '',
@@ -87,9 +106,10 @@ export function resolveLastMessagePreviewGroup(
   participant: PreviewPrismParticipant,
   message: PreviewGroupMessage | null | undefined,
   now: Date = new Date(),
+  reader: PreviewGroupReaderContext = {},
 ): LastMessagePreviewGroup {
   const withheld = message != null && isPreviewWithheld(resolvePreviewProtection(message, now));
-  const media = resolvePreviewMediaFields(message);
+  const media = resolvePreviewMediaFields(message, withheld);
   const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
   const nature = message ? resolveLastMessageNature(message) : null;
   return {
@@ -111,6 +131,11 @@ export function resolveLastMessagePreviewGroup(
     lastMessageAttachmentSummary: withheld
       ? null
       : summarizeAttachments(message?.attachments ?? [], message?._count?.attachments),
+    lastMessageSticker: previewStickerOf(message?.metadata, {
+      messageWithheld: withheld,
+      attachments: message?.attachments ?? [],
+    }),
+    lastMessageViewOnceConsumed: message?.isViewOnce === true && reader.viewOnceConsumed === true,
     ...(place ? { location: place } : {}),
   };
 }
