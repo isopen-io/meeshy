@@ -13,6 +13,7 @@ import MeeshyUI
 /// Les huit combinaisons des trois bascules sont énumérées : une règle de
 /// priorité testée sur trois cas seulement laisse passer l'ordre inverse dès
 /// que deux bascules sont allumées ensemble.
+@MainActor
 final class ComposerProtectionToneTests: XCTestCase {
 
     // MARK: - La protection dominante, sur les huit combinaisons
