@@ -50,6 +50,8 @@ describe('composeConversationPreview — le fichier de cas commun (web + iOS)', 
     'photo-without-size',
     'file-without-name',
     'en-view-once-placeholder-not-translated',
+    'sticker-text',
+    'sticker-text-view-once',
   ])('le fichier couvre le cas exigé %s', (id) => {
     expect(caseById(id).text.length).toBeGreaterThan(0);
   });
@@ -79,6 +81,8 @@ describe('sécurité — un message protégé ne transporte ni texte, ni traduct
     ['ephemeral-expired', ['Rendez-vous']],
     ['expired-legacy', ['Vieux secret']],
     ['en-view-once-placeholder-not-translated', ['4242', 'code']],
+    ['sticker-text-view-once', ['4242', 'Code']],
+    ['sticker-text-blurred-attachment', ['Spoiler']],
   ] as const;
 
   it.each(PROTECTED)('%s ne laisse rien fuir', (id, secrets) => {

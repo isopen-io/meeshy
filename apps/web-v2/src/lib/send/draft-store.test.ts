@@ -118,3 +118,18 @@ describe('robustesse', () => {
     expect(store.getDraft('u_a', 'c1')).toEqual(draftOf());
   });
 });
+
+describe('draftStore — la liste relit le brouillon EN DIRECT (#7547)', () => {
+  test('un abonné est prévenu à chaque écriture ou effacement, pour la conversation concernée', () => {
+    const store = createDraftStore(fakeStorage());
+    const seen: string[] = [];
+    const unsubscribe = store.subscribe((scope, conversationId) => seen.push(`${scope}/${conversationId}`));
+
+    store.setDraft('u_a', 'c1', draftOf({ text: 'Je pensais' }));
+    store.setDraft('u_a', 'c1', draftOf({ text: '' }));
+    unsubscribe();
+    store.setDraft('u_a', 'c2', draftOf());
+
+    expect(seen).toEqual(['u_a/c1', 'u_a/c1']);
+  });
+});

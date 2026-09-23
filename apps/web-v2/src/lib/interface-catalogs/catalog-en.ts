@@ -971,6 +971,10 @@ const en = {
   'attachment.protected.video': 'Protected video',
   'attachment.protected.audio': 'Protected voice message',
   'attachment.protected.file': 'Protected attachment',
+  'attachment.kind.image': 'Photo',
+  'attachment.kind.video': 'Video',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'File',
 
 } satisfies InterfaceCatalog;
 

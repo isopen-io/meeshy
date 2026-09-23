@@ -591,9 +591,11 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
 
     const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(new Date(patched?.lastMessageAt as unknown as string).toISOString()).toBe('2026-09-12T10:05:00.000Z');
-    // L'ADOPTION, elle, s'applique — miroir iOS, qui adopte dans la branche
-    // « pas de bump » et ne garde QUE le rang.
-    expect(patched?.lastMessage?.id).toBe('m-1');
+    // L'ADOPTION NON PLUS (#7547, matrice validée 2026-09-23) : un AUTRE
+    // message plus ancien sans `previewRecalculated` est une diffusion
+    // désordonnée, et « tout le groupe est jeté » — contenu compris.
+    expect(patched?.lastMessage?.id).toBe('m-2');
+    expect(patched?.lastMessage?.content).toBe('le plus récent');
   });
 
   test('adopter un AUTRE message JETTE la carte de l’ancien — jamais une traduction périmée sur un original neuf', () => {
