@@ -30,7 +30,7 @@ final class ConversationListActivityTests: XCTestCase {
     private func reaction(target: String?, at date: Date) -> [String: Any] {
         [
             "emoji": "❤️", "reactorId": "p-bob", "reactorUserId": "u-bob", "reactorName": "Bob",
-            "messageId": "m-0", "targetSenderId": "p-target", "targetSenderUserId": target ?? NSNull(),
+            "messageId": "m-0", "targetSenderId": "p-target", "targetSenderUserId": target.map { $0 as Any } ?? NSNull(),
             "excerpt": "avant", "excerptOriginalLanguage": "fr", "excerptTranslations": NSNull(),
             "excerptProtection": NSNull(), "createdAt": WireDate.string(from: date),
         ]
