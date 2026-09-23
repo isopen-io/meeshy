@@ -119,7 +119,16 @@ const MAX_LINES = 1000;
  *
  * `socketio/CallEventsHandler.ts` : entrée 5181 → 4631 (#7632, 2026-09-23 ; le
  * fichier MESURAIT 5069 avant le lot — le gel d'origine portait 112 lignes de
- * marge, rendues au dépôt par ce rabaissement). Trois responsabilités sont
+ * marge, rendues au dépôt par ce rabaissement), puis 4631 → 4392 (#7632,
+ * 2026-09-24). Ce second pas sort une QUATRIÈME responsabilité, et son
+ * discriminant n'est plus « ce que le code sait » mais **de quoi il parle** :
+ * `call-client-reports.ts` ne fait ni naître, ni joindre, ni terminer un appel
+ * — il reçoit ce que l'APPLICATION cliente rapporte sur elle-même (premier
+ * plan, capture d'écran, télémétrie de fin). Les quatre gestionnaires
+ * partagent une doctrine qui se perdait, diluée, dans les 4631 lignes : le
+ * `participantId` du client n'est jamais cru sur parole, et chacun paie une
+ * raison DIFFÉRENTE de le résoudre côté serveur. Le cliquet descend par
+ * MESURE (`wc -l`), pas par estimation. Trois responsabilités sont
  * parties, et le discriminant est ce que chacune SAIT : `call-recipients.ts`
  * (dans quelle langue parler à un destinataire, depuis quel pays il décroche,
  * son appareil sait-il recevoir un VoIP), `call-participants.ts` (par QUEL
@@ -145,7 +154,7 @@ const MAX_LINES = 1000;
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
-  'socketio/CallEventsHandler.ts': 4631,
+  'socketio/CallEventsHandler.ts': 4392,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
