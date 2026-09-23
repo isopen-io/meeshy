@@ -38,7 +38,13 @@
       "security": "Seguridad",
       "theme": "Tema",
       "fonts": "Fuentes",
-      "stats": "Estadísticas"
+      "stats": "Estadísticas",
+      "application": "Aplicación",
+      "beta": "Beta",
+      "document": "Documentos",
+      "media": "Multimedia",
+      "message": "Mensajes",
+      "video": "Vídeo"
     },
     "profile": {
       "title": "Perfil",
@@ -92,7 +98,9 @@
         "profileUpdated": "Perfil actualizado con éxito",
         "updateError": "Error al actualizar el perfil",
         "confirm": "Confirmar",
-        "uploading": "Subiendo..."
+        "uploading": "Subiendo...",
+        "edit": "Editar",
+        "languageUpdated": "Idioma actualizado"
       },
       "email": {
         "available": "Email disponible",
@@ -124,7 +132,88 @@
         "error": "Error durante el cambio"
       },
       "verification": {
-        "codePlaceholder": "000000"
+        "codePlaceholder": "000000",
+        "email": {
+          "notVerified": "Correo sin verificar",
+          "verified": "Correo verificado"
+        },
+        "phone": {
+          "enterCode": "Código recibido por SMS",
+          "notVerified": "Teléfono sin verificar",
+          "sendCode": "Enviar el código",
+          "start": "Verificar por SMS",
+          "verified": "Teléfono verificado"
+        },
+        "resend": "Reenviar",
+        "sending": "Enviando..."
+      },
+      "account": {
+        "delete": {
+          "confirmDescription": "Introduce tu contraseña para continuar con la eliminación de la cuenta.",
+          "confirmTextLabel": "Escribe \"DELETE\" para confirmar",
+          "confirmTitle": "Confirmar la eliminación de la cuenta",
+          "consequence1": "Todos tus mensajes se eliminarán definitivamente",
+          "consequence2": "Tu perfil y tus ajustes se eliminarán",
+          "consequence3": "Se cerrará tu sesión de inmediato",
+          "consequence4": "Esta acción es irreversible",
+          "continue": "Continuar",
+          "deleteButton": "Eliminar mi cuenta",
+          "deleteSuccess": "Cuenta eliminada correctamente",
+          "deleting": "Eliminando...",
+          "description": "Elimina definitivamente tu cuenta y todos los datos asociados",
+          "errors": {
+            "confirmTextMismatch": "Escribe \"DELETE\" para confirmar",
+            "deleteFailed": "No se ha podido eliminar la cuenta",
+            "passwordRequired": "La contraseña es obligatoria"
+          },
+          "finalConfirm": "Eliminar definitivamente",
+          "finalConfirmTitle": "Confirmación final",
+          "finalWarning": "Es tu última oportunidad. Esta acción es permanente e irreversible.",
+          "passwordLabel": "Tu contraseña",
+          "passwordPlaceholder": "Introduce tu contraseña",
+          "title": "Eliminar la cuenta",
+          "warning": "Atención: esta acción no se puede deshacer"
+        },
+        "email": {
+          "codeSent": "Hemos enviado un código de verificación a tu nuevo correo",
+          "currentEmail": "Correo actual",
+          "description": "Cambia tu dirección de correo con verificación",
+          "errors": {
+            "codeRequired": "El código de verificación es obligatorio",
+            "emailRequired": "El correo es obligatorio",
+            "invalidEmail": "El formato del correo no es válido",
+            "requestFailed": "No se ha podido solicitar el cambio de correo",
+            "verifyFailed": "No se ha podido verificar el correo"
+          },
+          "newEmail": "Nuevo correo",
+          "newEmailPlaceholder": "tu.nuevo.correo@ejemplo.com",
+          "sendCode": "Enviar el código de verificación",
+          "sending": "Enviando...",
+          "title": "Cambiar el correo",
+          "updateSuccess": "Correo actualizado correctamente",
+          "verificationCode": "Código de verificación",
+          "verificationCodePlaceholder": "Introduce el código de 6 dígitos",
+          "verificationHelp": "Consulta tu nuevo correo para encontrar el código de verificación",
+          "verify": "Verificar el correo",
+          "verifying": "Verificando..."
+        },
+        "username": {
+          "available": "Nombre de usuario disponible",
+          "currentUsername": "Nombre de usuario actual",
+          "description": "Cambia tu nombre de usuario único",
+          "errors": {
+            "updateFailed": "No se ha podido actualizar el nombre de usuario",
+            "usernameNotAvailable": "El nombre de usuario no está disponible",
+            "usernameRequired": "El nombre de usuario es obligatorio"
+          },
+          "newUsername": "Nuevo nombre de usuario",
+          "newUsernamePlaceholder": "Introduce tu nuevo nombre de usuario",
+          "notAvailable": "Ese nombre de usuario ya está en uso",
+          "title": "Cambiar el nombre de usuario",
+          "update": "Actualizar el nombre de usuario",
+          "updateSuccess": "Nombre de usuario actualizado correctamente",
+          "updating": "Actualizando..."
+        }
       }
     },
     "translation": {
@@ -915,6 +1004,165 @@
       "never": "Nunca",
       "serviceActive": "Servicio de traducción API activo",
       "serverSide": "Traducciones procesadas en el servidor"
+    },
+    "application": {
+      "accessibility": {
+        "description": "Mejorar la accesibilidad y la facilidad de uso",
+        "highContrast": {
+          "description": "Aumentar el contraste para ver mejor",
+          "label": "Contraste alto"
+        },
+        "reducedMotion": {
+          "description": "Reducir las animaciones y los efectos de movimiento",
+          "label": "Movimiento reducido"
+        },
+        "screenReader": {
+          "description": "Optimizar la interfaz para lectores de pantalla",
+          "label": "Optimizado para lector de pantalla"
+        },
+        "title": "Accesibilidad"
+      },
+      "advanced": {
+        "beta": {
+          "description": "Acceder a funciones experimentales (pueden ser inestables)",
+          "label": "Funciones beta"
+        },
+        "description": "Funciones y preferencias avanzadas",
+        "keyboard": {
+          "description": "Activar los atajos de teclado para navegar más rápido",
+          "label": "Atajos de teclado"
+        },
+        "telemetry": {
+          "description": "Compartir datos de uso anónimos para mejorar la aplicación",
+          "label": "Telemetría"
+        },
+        "title": "Avanzado",
+        "tutorials": {
+          "description": "Mostrar los mensajes de tutorial y las guías de iniciación",
+          "label": "Mostrar los tutoriales",
+          "reset": "Tutoriales restablecidos",
+          "resetButton": "Restablecer"
+        }
+      },
+      "appearance": {
+        "accentColor": {
+          "description": "Elige el color principal de los elementos destacados",
+          "label": "Color de acento"
+        },
+        "description": "Personaliza el aspecto de la aplicación",
+        "fontFamily": {
+          "description": "Elegir la tipografía de la interfaz",
+          "label": "Tipografía"
+        },
+        "fontSize": {
+          "description": "Ajustar el tamaño del texto en toda la aplicación",
+          "label": "Tamaño de letra"
+        },
+        "theme": {
+          "description": "Elegir entre modo claro, oscuro o automático",
+          "label": "Tema"
+        },
+        "title": "Apariencia"
+      },
+      "languages": {
+        "custom": {
+          "description": "Idioma de destino específico (opcional)",
+          "label": "Idioma personalizado"
+        },
+        "description": "Configura tus preferencias de idioma",
+        "interface": {
+          "description": "Idioma de los menús y botones",
+          "label": "Idioma de la interfaz"
+        },
+        "regional": {
+          "description": "Idioma secundario (opcional)",
+          "label": "Idioma regional"
+        },
+        "system": {
+          "description": "Idioma principal de tus mensajes",
+          "label": "Idioma del sistema"
+        },
+        "title": "Idiomas"
+      },
+      "layout": {
+        "animations": {
+          "description": "Activar las transiciones y los efectos de la interfaz",
+          "label": "Animaciones"
+        },
+        "avatars": {
+          "description": "Mostrar las fotos de perfil en los mensajes",
+          "label": "Mostrar los avatares"
+        },
+        "compact": {
+          "description": "Reducir el espaciado para mostrar más contenido",
+          "label": "Modo compacto"
+        },
+        "description": "Personaliza la disposición y el comportamiento de la interfaz",
+        "sidebar": {
+          "description": "Elegir dónde aparece la barra lateral",
+          "label": "Posición de la barra lateral",
+          "left": "Izquierda",
+          "right": "Derecha"
+        },
+        "title": "Disposición"
+      }
+    },
+    "consentDialog": {
+      "buttons": {
+        "accept": "Aceptar y continuar",
+        "cancel": "Cancelar",
+        "submitting": "Procesando..."
+      },
+      "description": "Algunas funciones necesitan tu consentimiento explícito para tratar datos sensibles. Revisa y acepta los permisos necesarios que aparecen abajo.",
+      "descriptions": {
+        "analytics": "Nos ayuda a mejorar Meeshy recogiendo estadísticas de uso anónimas. No incluye ningún dato personal ni el contenido de los mensajes.",
+        "audioTranscription": "Activa la transcripción automática de los mensajes de audio. Las transcripciones se generan en servidores seguros y se guardan únicamente según tus preferencias de conservación.",
+        "biometricData": "Activa el uso de la autenticación biométrica (huella dactilar, reconocimiento facial) para reforzar la seguridad.",
+        "default": "Esta función necesita tu consentimiento para tratar datos sensibles conforme al RGPD.",
+        "locationSharing": "Permite compartir tu ubicación con los participantes de la conversación. Los datos de ubicación nunca se guardan de forma permanente y solo se comparten cuando tú lo decides expresamente.",
+        "videoRecording": "Permite grabar y procesar las videollamadas. Los datos de vídeo se cifran y solo pueden verlos los participantes autorizados.",
+        "voiceDataConsent": "Permite el tratamiento de tus grabaciones de voz para los servicios de transcripción y traducción. Tus datos de voz se tratan de forma segura y solo se usan para las funciones que tú actives."
+      },
+      "errors": {
+        "allRequired": "Debes aceptar todos los consentimientos necesarios para continuar",
+        "submitFailed": "No se han podido guardar tus preferencias de consentimiento. Inténtalo de nuevo."
+      },
+      "labels": {
+        "analytics": "Datos de análisis y de uso",
+        "audioTranscription": "Transcripción de audio",
+        "biometricData": "Tratamiento de datos biométricos",
+        "locationSharing": "Compartir ubicación",
+        "videoRecording": "Grabación de vídeo",
+        "voiceDataConsent": "Tratamiento de datos de voz"
+      },
+      "legalNote": "Puedes retirar estos consentimientos cuando quieras desde tus ajustes de privacidad. Más información en nuestra Política de Privacidad.",
+      "title": "Consentimiento necesario",
+      "violationsTitle": "Las siguientes acciones necesitan un consentimiento adicional:"
+    },
+    "media": {
+      "description": "Configura los ajustes de audio, vídeo y documentos",
+      "sections": {
+        "audio": {
+          "description": "Mensajes de voz, transcripción, TTS y clonación de voz",
+          "title": "Audio y transcripción"
+        },
+        "document": {
+          "description": "Descarga, vista previa y almacenamiento",
+          "title": "Documentos y archivos"
+        },
+        "video": {
+          "description": "Calidad de vídeo, efectos y ajustes de llamada",
+          "title": "Vídeo y llamadas"
+        }
+      },
+      "title": "Multimedia y archivos"
+    },
+    "register": {
+      "errors": {
+        "emailExists": "Ese correo ya está en uso",
+        "phoneExists": "Ese número de teléfono ya está en uso",
+        "usernameExists": "Ese nombre de usuario ya está en uso"
+      }
     }
   },
   "consentDialog": {
@@ -947,6 +1195,28 @@
     "errors": {
       "allRequired": "Todos los consentimientos requeridos deben ser aceptados para continuar",
       "submitFailed": "Error al guardar las preferencias de consentimiento. Por favor, inténtelo de nuevo."
+    }
+  },
+  "emailChange": {
+    "verify": {
+      "backToHome": "Volver al inicio",
+      "backToSettings": "Volver a los ajustes",
+      "error": "Error durante la verificación",
+      "errorTitle": "Error",
+      "expired": "El enlace de verificación ha caducado",
+      "expiredInfo": "El enlace de verificación ha caducado. Solicita de nuevo el cambio de correo desde tus ajustes.",
+      "expiredTitle": "Enlace caducado",
+      "invalid": "El enlace de verificación no es válido",
+      "invalidTitle": "Enlace no válido",
+      "networkError": "Error de conexión",
+      "noPending": "No hay ningún cambio de correo pendiente",
+      "noToken": "Falta el token de verificación",
+      "pleaseWait": "Espera un momento...",
+      "success": "¡Correo cambiado!",
+      "successInfo": "Ya puedes iniciar sesión con tu nueva dirección de correo.",
+      "successMessage": "Tu dirección de correo se ha cambiado correctamente.",
+      "tryAgain": "Volver a intentar el cambio de correo",
+      "verifying": "Verificando..."
     }
   }
 }
