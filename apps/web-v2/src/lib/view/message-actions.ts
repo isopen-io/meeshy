@@ -1,6 +1,9 @@
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import { translationsOf } from '@/lib/view/message';
+import { forwardRefusalOf } from '@/lib/view/forward';
 import { protectionOf } from '@/lib/reading-mode/protection';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE MENU DU MESSAGE — LA LOI (#5814) : QUELLES actions, dans quel ORDRE, et
@@ -14,10 +17,10 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
  */
 
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'compose' | 'more';
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'compose' | 'more';
 
-/** Les cinq glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
-export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'magicWand' | 'dotsThree';
+/** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
+export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'dotsThree';
 
 export type MessageMenuItem = {
   readonly id: MessageActionId;
@@ -33,6 +36,13 @@ export type MessageMenuContext = {
   /** `1 + traductions.length` — Traduire n'apparaît qu'à partir de 2 : un
    * sous-menu à une seule entrée ne changerait rien (loi 4). */
   readonly languageCount: number;
+  /**
+   * #5866 — `forwardRefusalOf(message) === null` (`view/forward.ts`), la
+   * règle du serveur rejouée AVANT l'aller-retour. Indépendante d'`isProtected` :
+   * un ÉPHÉMÈRE et un FLOU se transfèrent (le serveur les admet, l'éphémère
+   * héritant même de sa durée) alors qu'ils ne se copient ni ne se traduisent.
+   */
+  readonly canForward: boolean;
 };
 
 /**
@@ -46,7 +56,10 @@ export type MessageMenuContext = {
  * `translationsOf` qui déclare l'optionalité, une fois.
  */
 export function messageMenuContextOf(
-  message: Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content'> & {
+  message: Pick<
+    Message,
+    'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'effectFlags'
+  > & {
     readonly translations?: readonly MessageTranslation[];
   },
   input: { readonly now: number },
@@ -56,26 +69,41 @@ export function messageMenuContextOf(
     hasText: message.content.trim().length > 0,
     isProtected: kind !== 'standard',
     languageCount: 1 + translationsOf(message).length,
+    canForward: forwardRefusalOf(message, input.now) === null,
   };
 }
 
 /**
  * `MessageActionResolver.primaryActions` réduit : `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
- * (`translate` de plus par `languageCount > 1`), `compose` inconditionnel
- * (v3.1 : « Composer » = répondre, § question 2 de la spécification —
- * toujours disponible, aucune capacité manquante ne le retire).
+ * (`translate` de plus par `languageCount > 1`), `forward` gardé par
+ * `canForward` (#5866 — la règle du serveur, dite AVANT l'aller-retour),
+ * `compose` inconditionnel (v3.1 : « Composer » = répondre, § question 2 de
+ * la spécification — toujours disponible, aucune capacité manquante ne le
+ * retire).
+ *
+ * LES LIBELLÉS VIENNENT DU CATALOGUE (#5866), et la langue est un PARAMÈTRE —
+ * jamais `currentInterfaceLanguage()` lu ici : ce fichier reste une loi PURE,
+ * son hôte (`use-message-menu.ts`) sait quelle langue il sert. Les cinq
+ * libellés historiques étaient écrits en dur ; ajouter « Transférer » en
+ * français seul au milieu d'eux aurait figé la surface entière dans une
+ * langue, alors que le produit en sert sept.
  */
-export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
-  const items: MessageMenuItem[] = [{ id: 'select', label: 'Sélectionner', glyph: 'checkCircle' }];
+export function messageMenuItems(ctx: MessageMenuContext, language: InterfaceLanguage): readonly MessageMenuItem[] {
+  const items: MessageMenuItem[] = [
+    { id: 'select', label: translate(language, 'message.action.select'), glyph: 'checkCircle' },
+  ];
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
-    items.push({ id: 'translate', label: 'Traduire', glyph: 'globe' });
+    items.push({ id: 'translate', label: translate(language, 'message.action.translate'), glyph: 'globe' });
   }
   if (ctx.hasText && !ctx.isProtected) {
-    items.push({ id: 'copy', label: 'Copier', glyph: 'copy' });
+    items.push({ id: 'copy', label: translate(language, 'message.action.copy'), glyph: 'copy' });
   }
-  items.push({ id: 'compose', label: 'Composer', glyph: 'magicWand' });
-  items.push({ id: 'more', label: 'Plus…', glyph: 'dotsThree' });
+  if (ctx.canForward) {
+    items.push({ id: 'forward', label: translate(language, 'message.action.forward'), glyph: 'arrowBendUpRight' });
+  }
+  items.push({ id: 'compose', label: translate(language, 'message.action.compose'), glyph: 'magicWand' });
+  items.push({ id: 'more', label: translate(language, 'message.action.more'), glyph: 'dotsThree' });
   return items;
 }
 

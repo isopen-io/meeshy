@@ -12,6 +12,7 @@ import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
 import { feedQuery, refreshFeed } from './feed';
+import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
@@ -407,6 +408,21 @@ export function retrySendAction(params: {
  */
 export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
   return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `forwardAction` (#5866) — RÉFÉRENCE DE MODULE STABLE, motif `reactAction`.
+ * Le SITE UNIQUE par lequel la barre de sélection atteint le transport ; la
+ * règle (« quoi peut partir ») vit dans `view/forward.ts`, la forme du corps
+ * (« jamais d'`attachmentIds` ») dans `api/forward.ts`. Ce relais n'en porte
+ * aucune — il ne fait que brancher `apiDeps`.
+ */
+export function forwardAction(params: {
+  readonly messages: readonly ForwardSource[];
+  readonly sourceConversationId: string;
+  readonly targetConversationId: string;
+}): Promise<ForwardResult> {
+  return forwardMessages({ ...apiDeps, ...params });
 }
 
 /**

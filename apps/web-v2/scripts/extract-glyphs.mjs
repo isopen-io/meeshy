@@ -261,14 +261,19 @@ emit({
 /**
  * LE JEU D'ECRAN DU MENU DU MESSAGE (#5814) — miroir
  * `MessageActionsMenu.swift:96-111` : Selectionner (check-circle), Traduire
- * (globe), Copier (copy), Composer (magic-wand), Plus... (dots-three).
+ * (globe), Copier (copy), Transferer (arrow-bend-up-right, #5866), Composer
+ * (magic-wand), Plus... (dots-three).
  * `magic-wand` et `globe` existent deja dans le jeu PROGRESSION : deux jeux
  * d'ecran distincts peuvent extraire le meme glyphe phosphor, chacun dans SON
  * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne
  * sont pas la meme route), donc aucun octet n'est paye deux fois au meme
  * demarrage.
+ *
+ * `arrow-bend-up-right` (#5866) est le plus proche de `arrowshape.turn.up.right`
+ * que iOS pose sur « Transferer » (`MessageActionsMenu.swift`) : phosphor ne
+ * publie pas la fleche PLEINE en chevron, et le contour lit mieux a 18 px.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three'];
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three'];
 
 emit({
   ids: THREAD_MENU,

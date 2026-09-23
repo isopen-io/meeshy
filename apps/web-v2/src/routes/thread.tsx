@@ -16,6 +16,7 @@ import '@/styles/thread-menu.css';
 import '@/styles/thread-system.css';
 
 import { Composer } from '@/components/composer';
+import { ForwardSheet } from '@/components/forward-sheet';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
@@ -1040,6 +1041,9 @@ export default function ThreadScreen() {
           count={messageMenu.selection.ids.length}
           onEnd={messageMenu.onEndSelection}
           onCopy={() => messageMenu.onCopySelection(placed)}
+          /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
+             transferts, jamais l'ordre des coches (#5866). */
+          onForward={() => messageMenu.onForwardSelection(placed)}
         />
       ) : (
         /*
@@ -1112,6 +1116,17 @@ export default function ThreadScreen() {
       {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
           feuilles indépendantes, jamais montées en même temps que le menu
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
+      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
+          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
+          fait que la requête de liste (`useConversations`, cache-first) n'est
+          jamais lancée par la simple ouverture d'un fil. */}
+      {messageMenu.forwardIds === null ? null : (
+        <ForwardSheet
+          viewerId={viewer.id ?? ''}
+          onPick={messageMenu.onForwardTo}
+          onClose={messageMenu.onCloseForward}
+        />
+      )}
       {((messageId) =>
         messageId === null ? null : (
           <ReactionSheet

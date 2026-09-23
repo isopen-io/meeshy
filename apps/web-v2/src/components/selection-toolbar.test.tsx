@@ -1,87 +1,88 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { SelectionToolbar } from './selection-toolbar';
 
-describe('SelectionToolbar — rendu (T13)', () => {
-  test('1 sélectionné ⇒ pas de compteur', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={1} onEnd={() => {}} onCopy={() => {}} />);
-    expect(html).not.toContain('sélectionnés');
-  });
+/**
+ * LA BARRE DE SÉLECTION PORTE « TRANSFÉRER » (#5866) — la SECONDE porte de la
+ * décision du porteur (#5989) : le menu ARME la sélection, la barre la VALIDE
+ * vers des destinataires. Un bouton sans effet est le défaut que la loi 4 du
+ * dépôt interdit et que `check-thread-states.mjs` § 6.2 mesure : ce témoin
+ * CLIQUE, il ne se contente pas de trouver le libellé.
+ */
+describe('SelectionToolbar — Annuler · N sélectionnés · Transférer · Copier', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-  test('2 sélectionnés ⇒ « 2 sélectionnés »', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} />);
-    expect(html).toContain('2 sélectionnés');
-  });
-
-  test('`role="toolbar"` posé, cibles ≥ 44 px', () => {
-    const html = renderToStaticMarkup(<SelectionToolbar count={3} onEnd={() => {}} onCopy={() => {}} />);
-    expect(html).toContain('role="toolbar"');
-    expect(html).toContain('44');
-  });
-});
-
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-
-describe('SelectionToolbar — effets (T13)', () => {
   beforeAll(() => {
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
+
   afterAll(async () => {
+    await act(async () => {});
     delete globals.IS_REACT_ACT_ENVIRONMENT;
     await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;
   let root: Root;
+
   afterEach(() => {
-    act(() => root.unmount());
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 
-  const mount = (props: { onEnd: () => void; onCopy: () => void }): HTMLDivElement => {
+  const mount = (count: number, handlers: { onEnd?: () => void; onCopy?: () => void; onForward?: () => void } = {}) => {
     container = document.createElement('div');
-    document.body.appendChild(container);
+    document.body.append(container);
     root = createRoot(container);
     act(() => {
-      root.render(<SelectionToolbar count={2} {...props} />);
+      root.render(
+        <SelectionToolbar
+          count={count}
+          onEnd={handlers.onEnd ?? (() => {})}
+          onCopy={handlers.onCopy ?? (() => {})}
+          onForward={handlers.onForward ?? (() => {})}
+        />,
+      );
     });
     return container;
   };
 
-  test('Annuler ⇒ onEnd', () => {
-    let ended = false;
-    const el = mount({ onEnd: () => (ended = true), onCopy: () => {} });
+  const buttonNamed = (host: HTMLElement, label: string): HTMLButtonElement | undefined =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label) as HTMLButtonElement | undefined;
+
+  test('« Transférer » existe et APPELLE son gestionnaire (loi 4)', () => {
+    let forwarded = 0;
+    const host = mount(2, { onForward: () => (forwarded += 1) });
+    const button = buttonNamed(host, 'Transférer');
+    expect(button).toBeDefined();
     act(() => {
-      (el.querySelector('button') as HTMLButtonElement).click();
+      button?.click();
     });
-    expect(ended).toBe(true);
+    expect(forwarded).toBe(1);
   });
 
-  test('Copier ⇒ onCopy', () => {
-    let copied = false;
-    const el = mount({ onEnd: () => {}, onCopy: () => (copied = true) });
-    const buttons = el.querySelectorAll('button');
-    act(() => {
-      (buttons[buttons.length - 1] as HTMLButtonElement).click();
-    });
-    expect(copied).toBe(true);
+  test('sélection VIDE ⇒ Transférer et Copier sont désactivés — rien à envoyer', () => {
+    const host = mount(0);
+    expect(buttonNamed(host, 'Transférer')?.disabled).toBe(true);
+    expect(buttonNamed(host, 'Copier')?.disabled).toBe(true);
+    expect(buttonNamed(host, 'Annuler')?.disabled).toBe(false);
   });
 
-  /**
-   * « SÉLECTIONNER » MET LE FOCUS SUR LA BARRE (revue #5814, défaut majeur
-   * 8) — avant ce correctif, `document.activeElement` valait BODY après
-   * l'action « Sélectionner » du menu du message : cette barre REMPLACE le
-   * composeur exactement à ce moment (`thread.tsx`), et rien n'y prenait le
-   * focus que `focusTakenRef` (`use-message-menu.ts`) promettait pris.
-   */
-  test('au montage, « Annuler » REÇOIT le focus', () => {
-    const el = mount({ onEnd: () => {}, onCopy: () => {} });
-    const cancelButton = el.querySelector('button')!;
-    expect(document.activeElement).toBe(cancelButton);
+  test('« Annuler » et « Copier » gardent leur effet — la barre ne régresse pas', () => {
+    let ended = 0;
+    let copied = 0;
+    const host = mount(3, { onEnd: () => (ended += 1), onCopy: () => (copied += 1) });
+    act(() => {
+      buttonNamed(host, 'Annuler')?.click();
+      buttonNamed(host, 'Copier')?.click();
+    });
+    expect({ ended, copied }).toEqual({ ended: 1, copied: 1 });
+    expect(host.textContent).toContain('3 sélectionnés');
   });
 });

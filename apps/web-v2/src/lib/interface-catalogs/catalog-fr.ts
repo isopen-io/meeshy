@@ -21,6 +21,31 @@ const fr = {
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
+  /* LE MENU DU MESSAGE ET SA BARRE DE SÉLECTION (#5866) — les six entrées du
+     menu voyagent ENSEMBLE : ajouter « Transférer » en français seul à côté de
+     cinq libellés eux aussi écrits en dur aurait figé la surface entière dans
+     une seule langue. `messageMenuItems(ctx, language)` les lit désormais ici,
+     la barre de sélection aussi. « Copier » et « Transférer » sont PARTAGÉS
+     par les deux portes : même mot, même clé (dimension 6). */
+  'message.action.select': 'Sélectionner',
+  'message.action.translate': 'Traduire',
+  'message.action.copy': 'Copier',
+  'message.action.forward': 'Transférer',
+  'message.action.compose': 'Composer',
+  'message.action.more': 'Plus…',
+  'selection.toolbar': 'Sélection de messages',
+  'selection.cancel': 'Annuler',
+  'selection.count': '{count} sélectionnés',
+  'forward.title': 'Transférer à…',
+  'forward.empty': 'Aucune conversation',
+  'forward.search.label': 'Rechercher une conversation',
+  'forward.search.placeholder': 'Rechercher',
+  'forward.announce.sent': 'Message transféré',
+  'forward.announce.sentMany': '{count} messages transférés',
+  'forward.announce.failed': 'Le transfert a échoué',
+  'forward.refusal.viewOnce': 'Un message à vue unique ne peut pas être transféré',
+  'forward.refusal.unavailable': 'Le message d’origine n’est plus disponible : rien à transférer',
+
   'typing.named': '{name} écrit',
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
