@@ -7,6 +7,7 @@ import XCTest
 /// Les hex ci-dessous sont le CONTRAT entre plateformes : ils s'écrivent en
 /// littéral ici, jamais relus depuis `MeeshyColors`, sinon le témoin
 /// confirmerait n'importe quelle valeur.
+@MainActor
 final class MessageStateColorCodeTests: XCTestCase {
 
     private let deadline = Date(timeIntervalSince1970: 2_000_000_000)

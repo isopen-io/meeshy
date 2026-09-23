@@ -118,6 +118,12 @@ public nonisolated struct MeeshyColors {
     /// Échec d'envoi.
     public static let stateFailed = Color(hex: "EF4444")
 
+    public static let stateViewOnceHex = "6366F1"
+    public static let stateOpenedHex = "9CA3AF"
+    public static let stateEphemeralHex = "F97316"
+    public static let stateConcealedHex = "6B7280"
+    public static let stateFailedHex = "EF4444"
+
     // MARK: - Monnaie (#6427)
     //
     // L'ARGENT de la pièce Meesh. Une Meesh est une monnaie : son glyphe dit

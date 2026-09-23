@@ -932,7 +932,7 @@ struct BubbleStandardLayout: View {
         // majorité non floutée (coût GPU au scroll). `content.isBlurred` est
         // statique par message → branche stable, pas de churn d'identité. Pour
         // une bulle floutable on garde les modifiers pour animer la révélation.
-        .modifier(BlurRevealModifier(isBlurrable: content.isBlurred, shouldBlur: shouldBlur))
+        .modifier(BlurRevealModifier(isBlurrable: content.requiresVeil, shouldBlur: shouldBlur))
     }
 
     /// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
@@ -1154,7 +1154,7 @@ struct BubbleStandardLayout: View {
     /// - Parameter includesTranslationControls: when `false`, language flags
     ///   and the translate button are omitted — the audio widget owns its own
     ///   per-language switcher, so rendering both would compete.
-    func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
+    func resolvedFooter(includesTranslationControls: Bool = true, retryBandShown: Bool = false) -> (BubbleFooterModel, BubbleFooterActions) {
         // Le bouton translate s'affiche toujours pour les contenus traductibles
         // — texte ou audio (la transcription est traductible) — même si aucune
         // traduction n'existe encore : l'utilisateur peut alors la demander
@@ -1188,7 +1188,7 @@ struct BubbleStandardLayout: View {
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
             showsTranslate: showTranslation,
-            sendStartedAt: message.createdAt
+            sendStartedAt: message.createdAt, retryBandShown: retryBandShown
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1215,7 +1215,7 @@ struct BubbleStandardLayout: View {
 
     /// The standard footer row rendered below text and emoji bubbles.
     private var standardFooter: some View {
-        let (model, actions) = resolvedFooter()
+        let (model, actions) = resolvedFooter(retryBandShown: isFailedOutgoing)
         return BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
             .equatable()
             .padding(.horizontal, showIdentityBar ? 10 : 14)
