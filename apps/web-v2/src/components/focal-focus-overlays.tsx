@@ -1,4 +1,5 @@
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { Check, Flags, PrismPastille, ReactionChip } from './message-blocks';
 import {
   FLAG_LIMIT_MAGNIFIED,
@@ -8,6 +9,7 @@ import {
 } from '@/lib/reading-mode/metrics';
 import { focusStampLabel } from '@/lib/reading-mode/stamp';
 import type { Delivery } from '@/lib/view/message';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -52,10 +54,22 @@ export function FocusIdentity({
   name,
   accent,
   src,
+  username,
+  storyRing,
 }: {
   readonly initials: string;
   readonly name: string;
   readonly accent: string;
+  /**
+   * OÙ MÈNE L'IDENTITÉ DE LA RANGÉE ÉLUE (#7528) — la puce RECOUVRE la ligne
+   * d'identité (passée à `opacity: 0`) : sans ces deux valeurs, le doigt qui
+   * touchait l'avatar ou le nom tombait sur une superposition inerte, et le
+   * profil n'était plus atteignable sur la rangée même qu'on lit. Les deux
+   * liens sont `redundant` : la puce est `aria-hidden`, et l'avatar de tête,
+   * hors du masque, porte le chemin annoncé.
+   */
+  readonly username?: string | undefined;
+  readonly storyRing?: AuthorStoryRing | undefined;
   /**
    * LA PHOTO DE L'EXPÉDITEUR (#6975) — RÉSOLUE PAR L'HÔTE, jamais ici : la
    * chip d'identité en focus est la superposition de la rangée qu'elle élit,
@@ -71,16 +85,29 @@ export function FocusIdentity({
       style={{ minHeight: IDENTITY_CHIP_HEIGHT }}
       aria-hidden
     >
-      <Avatar initials={initials} color={accent} size={IDENTITY_AVATAR_SIZE} {...(src === undefined ? {} : { src })} />
+      <Avatar
+        initials={initials}
+        color={accent}
+        size={IDENTITY_AVATAR_SIZE}
+        {...(src === undefined ? {} : { src })}
+        {...(typeof username === 'string' && username !== '' ? { profileUsername: username, name } : {})}
+        {...(storyRing === undefined ? {} : { storyRing, name })}
+        redundant
+      />
       {/* `IDENTITY_NAME_SIZE` (13,5) est une cote GÉOMÉTRIQUE dérivée de
           `FocalMetrics.FocusStrip.identityNameSize` — un nombre, pas une
           couleur (D-4 vaut pour la palette) : elle voyage en style inline,
           comme `AVATAR_SIZE`/`TEXT_INDENT` le font déjà ailleurs dans ce
           fichier, plutôt que par une classe Tailwind inventée pour une
           seule cote sans équivalent de token. */}
-      <span className="font-semibold" style={{ color: 'var(--color-ios-ink)', fontSize: IDENTITY_NAME_SIZE }}>
-        {name}
-      </span>
+      <PersonName
+        name={name}
+        username={username}
+        {...(storyRing === undefined ? {} : { storyRing })}
+        redundant
+        className="font-semibold"
+        style={{ color: 'var(--color-ios-ink)', fontSize: IDENTITY_NAME_SIZE }}
+      />
     </div>
   );
 }

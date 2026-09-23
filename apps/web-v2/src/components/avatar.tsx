@@ -46,6 +46,7 @@ export function Avatar({
   profileUsername,
   storyRing,
   mood,
+  redundant,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -125,6 +126,13 @@ export function Avatar({
    * annonce ce qu'il ouvre.
    */
   storyRing?: AuthorStoryRing;
+  /**
+   * UN AUTRE CHEMIN ANNONCÉ MÈNE DÉJÀ AU MÊME ENDROIT (#7528) — même contrat
+   * que `PersonName.redundant` : le lien reste au DOIGT et sort du parcours
+   * clavier. Posé par une superposition `aria-hidden` (la puce d'identité du
+   * focus), où un lien focalisable recevrait le focus sans s'annoncer.
+   */
+  redundant?: boolean;
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
@@ -303,6 +311,7 @@ export function Avatar({
   if (cible === null) return corps;
 
   const sizeVar = { '--avatar-size': `${size}px` } as CSSProperties;
+  const focus = redundant === true ? { tabIndex: -1 } : {};
   const nomme = (cle: 'a11y.avatar.story' | 'a11y.avatar.profile'): string =>
     translate(currentInterfaceLanguage(), cle, { name: name ?? profileUsername ?? '' });
 
@@ -314,6 +323,7 @@ export function Avatar({
         className="avatar-profile-link"
         style={sizeVar}
         aria-label={nomme('a11y.avatar.story')}
+        {...focus}
       >
         {corps}
       </Link>
@@ -331,6 +341,7 @@ export function Avatar({
       className="avatar-profile-link"
       style={sizeVar}
       aria-label={nomme('a11y.avatar.profile')}
+      {...focus}
     >
       {corps}
     </Link>

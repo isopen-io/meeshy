@@ -86,8 +86,8 @@ export function refreshListAction(): Promise<void> {
  * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
  * le socket qui doit prévenir — issue compagnon, comme pour les messages.
  */
-export function useStoryTray() {
-  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000 });
+export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
 }
 
 /**

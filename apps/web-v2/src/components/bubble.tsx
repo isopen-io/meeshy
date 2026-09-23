@@ -5,6 +5,7 @@ import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -95,6 +96,7 @@ export function Bubble({
   selected,
   onToggleSelect,
   onOpenDetail,
+  senderStoryRing,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
@@ -158,6 +160,8 @@ export function Bubble({
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement. */
   now?: () => number;
+  /** L'anneau de story de l'expéditeur — voir `focal-row.tsx`, même contrat (#7528). */
+  senderStoryRing?: AuthorStoryRing;
   /**
    * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé sur `Check` (`message-blocks
    * .tsx`), qui n'accepte `onOpen` que sur les DEUX rendus de cette peau
@@ -595,6 +599,7 @@ export function Bubble({
                   {...(typeof message.sender?.user?.username === 'string' && message.sender.user.username !== ''
                     ? { profileUsername: message.sender.user.username }
                     : {})}
+                  {...(senderStoryRing === undefined ? {} : { storyRing: senderStoryRing })}
                   /* LA PHOTO DE L'EXPÉDITEUR (#6975), par la MÊME loi que la
                      rangée plate — les deux tenues du même message ne peuvent
                      pas servir deux visages différents. */
@@ -615,6 +620,7 @@ export function Bubble({
                   <PersonName
                     name={message.sender?.displayName ?? ''}
                     username={message.sender?.user?.username}
+                    {...(senderStoryRing === undefined ? {} : { storyRing: senderStoryRing })}
                     className="text-title font-semibold"
                     style={{ color: 'var(--color-ios-ink)' }}
                   />

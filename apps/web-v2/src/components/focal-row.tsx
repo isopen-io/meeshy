@@ -4,6 +4,7 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
@@ -124,6 +125,7 @@ export const FocalRow = memo(function FocalRow({
   revealable = true,
   onJumpToMessage,
   onOpenStory,
+  senderStoryRing,
   highlighted = false,
   elected = false,
   expired = false,
@@ -226,6 +228,12 @@ export const FocalRow = memo(function FocalRow({
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement (déterminisme des témoins). */
   now?: () => number;
+  /**
+   * L'ANNEAU DE STORY DE L'EXPÉDITEUR (#7528) — lu par l'HÔTE dans le corpus
+   * du plateau. Présent, l'avatar ET le nom ouvrent sa story ; absent, son
+   * profil (`identityTarget`).
+   */
+  senderStoryRing?: AuthorStoryRing;
 }) {
   const { message, head, tail } = place;
   const nowMs = now();
@@ -393,6 +401,8 @@ export const FocalRow = memo(function FocalRow({
      depuis son propre message, la fiche de soi n'offre aucun geste relationnel
      (`user-profile.tsx`, `isSelf`). */
   const senderHandle = isMine ? undefined : message.sender?.user?.username;
+  const senderRing = isMine ? undefined : senderStoryRing;
+  const identityOpens = (typeof senderHandle === 'string' && senderHandle !== '') || senderRing !== undefined;
   /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
    * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
    * peint le nom de SOI en `MeeshyColors.indigo500` ; servi TEL QUEL sur la
@@ -632,8 +642,12 @@ export const FocalRow = memo(function FocalRow({
                inconditionnellement, il ferait écrire le nom dans l'`aria-label`
                des initiales — un SECOND libellé que #5935 a précisément retiré
                de cette rangée, et que trois témoins tiennent. */
-            {...(typeof senderHandle === 'string' && senderHandle !== ''
-              ? { profileUsername: senderHandle, name: senderAvatarName }
+            {...(identityOpens
+              ? {
+                  name: senderAvatarName,
+                  ...(senderHandle === undefined ? {} : { profileUsername: senderHandle }),
+                  ...(senderRing === undefined ? {} : { storyRing: senderRing }),
+                }
               : {})}
             presence={presenceOf(message.sender, nowMs)}
           />
@@ -658,6 +672,8 @@ export const FocalRow = memo(function FocalRow({
             name={senderName}
             accent="var(--accent)"
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            username={senderHandle}
+            {...(senderRing === undefined ? {} : { storyRing: senderRing })}
           />
         ) : null}
 
@@ -731,6 +747,7 @@ export const FocalRow = memo(function FocalRow({
             <PersonName
               name={senderName}
               username={senderHandle}
+              {...(senderRing === undefined ? {} : { storyRing: senderRing })}
               redundant
               className="text-title font-extrabold"
               style={{ color: senderNameColor }}

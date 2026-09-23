@@ -30,6 +30,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
+import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 
 /**
  * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE, déplacé ICI avec le
@@ -156,6 +157,7 @@ export function ThreadModes({
   onPickLanguage,
   onReact,
   onOpenDetail,
+  storyRingOf,
   typists,
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
@@ -245,6 +247,12 @@ export function ThreadModes({
    * chemin déjà mûr : appui long sur la rangée → « Plus… » (2 gestes).
    */
   readonly onOpenDetail?: (messageId: string) => void;
+  /**
+   * L'ANNEAU DE STORY D'UN EXPÉDITEUR (#7528) — son avatar et son nom ouvrent
+   * sa story quand il en a une, son profil sinon (`identityTarget`), dans
+   * les TROIS peaux. Absent (l'administration) ⇒ l'identité mène au profil.
+   */
+  readonly storyRingOf?: StoryRingOf;
   /** LE ROSTER ENTIER (#6171, G1) — `[]` ⇒ aucun frappeur connu ⇒ aucune
    * cellule (`useThreadTyping`, `lib/view/use-thread-typing.ts`). Jamais
    * tronqué à un seul frappeur : `typingAnnouncement`/`typingLead`
@@ -481,6 +489,7 @@ export function ThreadModes({
              message), « la mienne » (réactions), et l'état de sélection. */
           const rowDisplayLanguage = displayLanguageOf?.(p.message.id);
           const rowMyReactions = myReactionsOf?.(p.message.id);
+          const rowStoryRing = storyRingOf?.(p.message.sender?.userId ?? p.message.sender?.user?.id);
           const rowSelected =
             selection === null || selection === undefined ? undefined : selection.ids.includes(p.message.id);
           /* Le verdict SERVI, jamais recalculé (voir la prop). */
@@ -683,6 +692,7 @@ export function ThreadModes({
                       ? {}
                       : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
                     {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
                     {...(rowSelected === undefined || onRowTap === undefined
                       ? {}
@@ -707,6 +717,7 @@ export function ThreadModes({
                       ? {}
                       : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
                     {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
                     {...(rowSelected === undefined || onRowTap === undefined
                       ? {}
