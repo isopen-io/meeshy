@@ -119,6 +119,56 @@ final class ParticipantServiceCachePreservationTests: XCTestCase {
         await CacheCoordinator.shared.participants.invalidate(for: conversationId)
     }
 
+    func test_loadFirstPage_whenNetworkFails_doesNotLaunderTheRecoveredPayloadAsFresh() async {
+        let conversationId = makeConversationId()
+        await seedExpiredCache([makeParticipant("p1"), makeParticipant("p2")], for: conversationId)
+        let (sut, api) = makeSUT()
+        api.errorToThrow = URLError(.notConnectedToInternet)
+
+        _ = try? await sut.loadFirstPage(for: conversationId)
+
+        // Servir une charge n'est pas l'avoir REVALIDÉE : son horloge reste
+        // celle du dernier aller-retour réussi, sans quoi l'app cesserait de
+        // tenter un rafraîchissement pendant tout le TTL.
+        let freshness = await CacheCoordinator.shared.participants.load(for: conversationId)
+        switch freshness {
+        case .expired, .empty:
+            break
+        case .fresh, .stale:
+            XCTFail("Une charge récupérée du disque hors ligne ne doit pas repartir pour un TTL entier.")
+        }
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    func test_loadNextPage_whenPaginationIsExhausted_servesTheDiskPayload() async {
+        let conversationId = makeConversationId()
+        let (sut, api) = makeSUT()
+        let onlyPage: PaginatedParticipantsResponse = JSONStub.decode(
+            participantsResponseJSON(ids: ["p1", "p2"])
+        )
+        api.stub(
+            api.legacyPath(for: ConversationsEndpoint.byIdParticipants(id: conversationId)),
+            result: onlyPage
+        )
+        // Une seule page : `hasMore` retombe a false, la pagination est epuisee.
+        _ = try? await sut.loadFirstPage(for: conversationId)
+        // Le lendemain : la charge est toujours sur le disque, mais expiree.
+        await CacheCoordinator.shared.participants.debugRewindFetchTimestamp(
+            by: 25 * 60 * 60,
+            for: conversationId
+        )
+
+        let served = try? await sut.loadNextPage(for: conversationId)
+
+        XCTAssertEqual(
+            served?.count, 2,
+            "Pagination epuisee : on rend ce que le disque porte, jamais une liste vide — l'appelant l'assigne a `participants`."
+        )
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
     // MARK: - Ce que le correctif NE change pas
 
     func test_loadFirstPage_whenNetworkSucceeds_replacesTheCachedPageWithoutDuplicating() async {

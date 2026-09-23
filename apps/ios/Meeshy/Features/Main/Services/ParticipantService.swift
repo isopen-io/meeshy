@@ -76,10 +76,15 @@ actor ParticipantService {
     func loadNextPage(for conversationId: String) async throws -> [PaginatedParticipant] {
         let state = paginationState[conversationId]
         guard state?.hasMore ?? true else {
-            // Pagination exhausted — return whatever the cache currently
-            // holds (snapshot semantics, no SWR signal needed).
-            let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            return result.snapshot() ?? []
+            // Pagination exhausted — return whatever the DISK still holds.
+            // `snapshot()` rendait `nil` sur un `.expired`, et l'appelant
+            // (`loadMoreParticipants`) assigne ce retour à `participants` : la
+            // liste se serait vidée. Quatrième instance de la même loi dans ce
+            // fichier, aujourd'hui retenue par le `guard hasMore` des deux vues
+            // — une garde en amont n'est pas une raison d'en laisser une
+            // quatrième derrière soi.
+            return await CacheCoordinator.shared.participants
+                .loadIgnoringExpiry(for: conversationId)?.items ?? []
         }
 
         return try await fetchNextPage(for: conversationId)
