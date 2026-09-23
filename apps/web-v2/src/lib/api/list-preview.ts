@@ -50,7 +50,40 @@ export type ListLastMessage = Message & {
 export type ListConversation = Conversation & {
   readonly lastReaction?: ConversationLastReaction;
   readonly activeCall?: ConversationActiveCall;
+  /**
+   * LE RANG DE CETTE LIGNE POUR CE LECTEUR, SERVI par la passerelle (#7592) :
+   * max(`lastMessageAt`, la dernière réaction à MON message). `GET
+   * /conversations` le sert sur chaque ligne ; `conversation:updated` ne le
+   * porte que chez l'auteur du message réagi. Clé absente = ne pas réordonner.
+   */
+  readonly listRankAt?: string;
 };
+
+type WithListRank = { readonly listRankAt?: string | null };
+
+/**
+ * LE RANG DE TRI D'UNE LIGNE (#7592) — le rang SERVI, jamais recalculé ici,
+ * et au moins `lastMessageAt` : un message arrivé après la réaction fait
+ * toujours remonter la ligne (contrat #7592, « le rang d'une ligne est
+ * toujours au moins `lastMessageAt` »). Sans rang servi, `lastMessageAt`.
+ */
+export function listRankOf(conversation: Conversation): Date | undefined {
+  const served = (conversation as ListConversation).listRankAt;
+  const last = conversation.lastMessageAt;
+  const lastMs = last === undefined || last === null ? Number.NaN : new Date(last as unknown as string).getTime();
+  const servedMs = served === undefined ? Number.NaN : new Date(served).getTime();
+  if (Number.isNaN(servedMs)) return last === null ? undefined : last;
+  if (Number.isNaN(lastMs) || servedMs > lastMs) return new Date(servedMs);
+  return last === null ? undefined : last;
+}
+
+/** Le rang servi par `conversation:updated` : posé tel quel, retiré sur `null`, intact si la clé est absente. */
+export function withListRank(conversation: Conversation, data: ConversationUpdatedEventData): Conversation {
+  if (!('listRankAt' in data)) return conversation;
+  const incoming = (data as ConversationUpdatedEventData & WithListRank).listRankAt;
+  const { listRankAt: _rank, ...rest } = conversation as ListConversation;
+  return (typeof incoming === 'string' ? { ...rest, listRankAt: incoming } : rest) as ListConversation;
+}
 
 type WithClientId = Message & { readonly clientMessageId?: string };
 
