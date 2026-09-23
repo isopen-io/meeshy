@@ -51,7 +51,14 @@ const AMI = '507f1f77bcf86cd799439002';
 const EXCLU = '507f1f77bcf86cd799439003';
 const CONFIDENT = '507f1f77bcf86cd799439004';
 const REACTEUR = '507f1f77bcf86cd799439005';
-const NOW = new Date('2026-09-22T08:00:00.000Z');
+// L'horloge du témoin est RELATIVE, jamais une date littérale : la story de
+// `EXCEPT_STORY` porte `expiresAt: NOW + 1 h`, et `PostFeedService` la filtre
+// par `{ expiresAt: { gt: new Date() } }` — l'heure RÉELLE, que rien ici ne
+// gèle. Une date écrite en dur rendait donc ce fichier vert le jour de son
+// écriture et rouge le lendemain, sur un scope entier (`stories`) et pour une
+// raison qui n'a rien à voir avec ce qu'il garde : la fuite d'une liste
+// d'audience. Un témoin ne doit pas périmer.
+const NOW = new Date();
 
 const idDe = (n: number) => `bbbbbbbbbbbbbbbbbbbb${String(n).padStart(4, '0')}`;
 const EXCEPT_POST = idDe(1);
