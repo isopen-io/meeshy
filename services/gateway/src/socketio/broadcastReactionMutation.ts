@@ -114,6 +114,7 @@ export async function broadcastReactionMutation(params: {
     conversationId,
     updatedByUserId: params.updatedByUserId,
     reaction: true,
+    reactedMessageId: messageId,
     onError,
   }).catch((error: unknown) => onError?.(error));
 

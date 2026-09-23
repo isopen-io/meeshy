@@ -585,6 +585,13 @@ model Conversation {
   /// La ligne de liste la résout en `lastReaction` (auteur, emoji, extrait
   /// protégé) sans balayer les réactions de la conversation.
   lastReactionId String? @db.ObjectId
+  /// Heure de cette dernière réaction et clé de l'AUTEUR du message réagi
+  /// (`User.id`, ou `Participant.id` d'un invité) — dénormalisées avec
+  /// `lastReactionId`, au même endroit et effacées avec lui (#7592). Elles
+  /// portent le rang PAR LECTEUR de `GET /conversations` : une réaction à MON
+  /// message remonte ma ligne (`utils/conversation-list-rank.ts`).
+  lastReactionAt        DateTime?
+  lastReactionTargetKey String?
 
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
@@ -631,6 +638,10 @@ model Conversation {
   // EXPLOITATION : l'entrypoint prod ne joue aucune migration — créer cet index
   // à la main sur la prod.
   @@index([closedAt])
+  // #7592 — le flux « réactions à MES messages » du tri de liste : égalité sur
+  // la clé de l'auteur réagi, tri sur l'heure de la réaction. EXPLOITATION :
+  // créer cet index à la main sur la prod (aucune migration jouée).
+  @@index([lastReactionTargetKey, lastReactionAt])
 }
 
 /// Share/forward a conversation to a community or another context

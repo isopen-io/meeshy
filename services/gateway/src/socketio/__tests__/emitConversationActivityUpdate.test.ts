@@ -37,12 +37,37 @@ const participants = [
   { id: 'p-carol', userId: 'u-carol', joinedAt: new Date('2026-01-01'), user: { systemLanguage: 'es', regionalLanguage: 'en', role: 'USER' } },
 ];
 
-const makePrisma = (overrides: { reaction?: unknown; call?: unknown; lastReactionId?: string | null; activeCallId?: string | null } = {}) => ({
+const LAST_MESSAGE_AT = new Date('2026-09-23T10:30:00Z');
+const REACTION_AT = new Date('2026-09-23T11:00:00Z');
+
+type PrismaOverrides = {
+  reaction?: unknown;
+  call?: unknown;
+  lastReactionId?: string | null;
+  activeCallId?: string | null;
+  lastReactionTargetKey?: string | null;
+  reactedMessageSender?: { senderId: string; sender: { userId: string | null } | null } | null;
+};
+
+const makePrisma = (overrides: PrismaOverrides = {}) => ({
   conversation: {
-    findUnique: jest.fn(async () => ({
-      lastReactionId: 'lastReactionId' in overrides ? overrides.lastReactionId : 'r1',
-      activeCallId: 'activeCallId' in overrides ? overrides.activeCallId : null,
-    })),
+    findUnique: jest.fn(async () => {
+      const lastReactionId = 'lastReactionId' in overrides ? overrides.lastReactionId : 'r1';
+      return {
+        lastReactionId,
+        activeCallId: 'activeCallId' in overrides ? overrides.activeCallId : null,
+        lastMessageAt: LAST_MESSAGE_AT,
+        lastReactionAt: lastReactionId ? REACTION_AT : null,
+        lastReactionTargetKey: 'lastReactionTargetKey' in overrides
+          ? overrides.lastReactionTargetKey
+          : lastReactionId ? 'u-bob' : null,
+      };
+    }),
+  },
+  message: {
+    findUnique: jest.fn(async () =>
+      'reactedMessageSender' in overrides ? overrides.reactedMessageSender : { senderId: 'p-bob', sender: { userId: 'u-bob' } },
+    ),
   },
   reaction: { findUnique: jest.fn(async () => ('reaction' in overrides ? overrides.reaction : reactionRow())) },
   callSession: { findUnique: jest.fn(async () => overrides.call ?? null) },
@@ -104,6 +129,67 @@ describe('emitConversationActivityUpdate — la dernière réaction (#7545)', ()
     for (const { payload } of emitted) {
       expect(Object.keys(payload).filter((k) => !declared.has(k))).toEqual([]);
     }
+  });
+});
+
+describe('emitConversationActivityUpdate — le rang servi à l’auteur réagi (#7592)', () => {
+  it("l'auteur du message réagi reçoit son rang (sa ligne remonte), les tiers n'en reçoivent aucun", async () => {
+    const emitted: Emitted[] = [];
+    await emitConversationActivityUpdate(makePrisma() as never, makeIo(emitted) as never, {
+      conversationId: 'c1',
+      updatedByUserId: 'u-alice',
+      reaction: true,
+      reactedMessageId: 'm1',
+    });
+
+    const bob = emitted.find((e) => e.room === 'user:u-bob')!.payload;
+    const carol = emitted.find((e) => e.room === 'user:u-carol')!.payload;
+    expect(bob.listRankAt).toBe(REACTION_AT.toISOString());
+    expect(carol).not.toHaveProperty('listRankAt');
+  });
+
+  it("au retrait de la dernière réaction, l'auteur réagi reçoit le rang de son dernier message (sa ligne redescend)", async () => {
+    const emitted: Emitted[] = [];
+    await emitConversationActivityUpdate(makePrisma({ lastReactionId: null }) as never, makeIo(emitted) as never, {
+      conversationId: 'c1',
+      updatedByUserId: 'u-alice',
+      reaction: true,
+      reactedMessageId: 'm1',
+    });
+
+    const bob = emitted.find((e) => e.room === 'user:u-bob')!.payload;
+    const carol = emitted.find((e) => e.room === 'user:u-carol')!.payload;
+    expect(bob.listRankAt).toBe(LAST_MESSAGE_AT.toISOString());
+    expect(carol).not.toHaveProperty('listRankAt');
+  });
+
+  it("un invité auteur est reconnu par son Participant.id", async () => {
+    const guestParticipants = [
+      { id: 'p-guest', userId: null, joinedAt: new Date('2026-01-01'), user: null },
+      participants[1],
+    ];
+    const prisma = makePrisma({ lastReactionTargetKey: 'p-guest', reactedMessageSender: { senderId: 'p-guest', sender: null } });
+    prisma.participant.findMany.mockResolvedValueOnce(guestParticipants as never);
+    const emitted: Emitted[] = [];
+    await emitConversationActivityUpdate(prisma as never, makeIo(emitted) as never, {
+      conversationId: 'c1',
+      updatedByUserId: 'u-alice',
+      reaction: true,
+      reactedMessageId: 'm1',
+    });
+
+    expect(emitted.find((e) => e.room === 'user:p-guest')!.payload.listRankAt).toBe(REACTION_AT.toISOString());
+    expect(emitted.find((e) => e.room === 'user:u-carol')!.payload).not.toHaveProperty('listRankAt');
+  });
+
+  it("une mise à jour d'appel ne porte aucun rang", async () => {
+    const emitted: Emitted[] = [];
+    await emitConversationActivityUpdate(makePrisma() as never, makeIo(emitted) as never, {
+      conversationId: 'c1',
+      updatedByUserId: 'u-bob',
+      call: true,
+    });
+    for (const { payload } of emitted) expect(payload).not.toHaveProperty('listRankAt');
   });
 });
 

@@ -5,6 +5,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { noticeActor } from '../../services/conversations/conversationNotice';
+import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
 import {
   PARTICIPANT_RIGHT_NAMES,
   NEW_MEMBER_PERMISSIONS,
@@ -236,8 +238,10 @@ export function registerParticipantWriteRoutes(
     conversation: { isActive: boolean | null; closedAt: Date | null } | null;
     userId: string;
     currentUserId: string | undefined;
+    /** Le membre qui ajoute — l'avis se lit « Demo a ajouté X » (#7593). */
+    addedBy: NoticeActor;
   }): Promise<ParticipantAdmissionVerdict> {
-    const { conversationId, conversation, userId, currentUserId } = options;
+    const { conversationId, conversation, userId, currentUserId, addedBy } = options;
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
@@ -327,7 +331,8 @@ export function registerParticipantWriteRoutes(
         participantId: joinedParticipantId,
         displayName: addedMemberFields.displayName,
         isAnonymous: false,
-        viaShareLink: false
+        viaShareLink: false,
+        addedBy
       }
     );
 
@@ -629,7 +634,9 @@ export function registerParticipantWriteRoutes(
       // mécanique — chaque tour a ses destinataires et son compte.
       const results: ParticipantAdmissionVerdict[] = [];
       for (const userId of demandes.userIds) {
-        results.push(await admitOneParticipant({ conversationId, conversation, userId, currentUserId }));
+        results.push(await admitOneParticipant({
+          conversationId, conversation, userId, currentUserId, addedBy: noticeActor(currentUserParticipant),
+        }));
       }
 
       // **La forme historique garde son contrat d'ERREUR** — et ce n'est pas

@@ -12,6 +12,7 @@ import { resolveTargetParticipant, identifyTarget } from './utils/target-partici
 import { participantActionRefusal } from './utils/participant-authority'
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict'
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket'
+import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanCore' })
 
@@ -69,7 +70,8 @@ export async function bannirParticipant(
 
   const currentParticipant = await prisma.participant.findFirst({
     where: { conversationId: id, userId: currentUserId, isActive: true },
-    select: { id: true, role: true },
+    // `displayName` : le banneur est l'ACTEUR de l'avis de retrait (#7593).
+    select: { id: true, role: true, displayName: true },
   })
 
   if (!currentParticipant) {
@@ -137,6 +139,22 @@ export async function bannirParticipant(
     data: ban.data,
   })
   invalidateParticipantLookup(targetParticipant.id, id)
+
+  // #7593 — bannir un membre ACTIF le RETIRE : la liste des restants dit
+  // « Demo a retiré Bob ». Bannir quelqu'un déjà parti ne sort personne.
+  if (targetParticipant.isActive) {
+    await postConversationNotice(
+      { prisma, broadcast: noticeBroadcast(socketIO) },
+      {
+        conversationId: id,
+        notice: {
+          kind: 'member-removed',
+          actor: noticeActor(currentParticipant),
+          target: noticeActor({ id: targetParticipant.id, displayName: targetParticipant.displayName ?? '' }),
+        },
+      },
+    )
+  }
 
   // Bannir sort la personne ET ferme la porte par laquelle elle est entrée.
   // Sortir quelqu'un en laissant son lien ouvert ne protège de rien : il
