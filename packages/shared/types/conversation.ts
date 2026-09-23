@@ -168,6 +168,10 @@ export interface Message {
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
   readonly viewOnceCount: number;
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi. */
+  readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte. Ne retire jamais la bulle. */
+  readonly isFullyConsumed?: boolean;
   readonly isBlurred: boolean;
   /**
    * Le LECTEUR a déjà ouvert ce message à vue unique (#7594). Servi par

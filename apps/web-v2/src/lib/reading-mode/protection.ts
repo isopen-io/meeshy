@@ -27,7 +27,19 @@ import type { Message } from '@/lib/api/types';
  *    seraient une cote sans raison).
  */
 
-export type ProtectionKind = 'standard' | 'veiled' | 'burned' | 'deleted' | 'expired';
+/**
+ * LES ÉTATS D'UNE RANGÉE (#7580, règle porteur du 2026-09-23).
+ *
+ * La vue unique a DEUX états à elle, et plus aucun ne dit « supprimé » :
+ * - `viewOnce` — pas encore ouverte PAR MOI : une seule puce,
+ *   « (1) · Touchez pour afficher », et rien du contenu ;
+ * - `opened` — déjà ouverte par moi (auteur compris) : la même puce, fond
+ *   atténué, « (1) · Déjà ouvert ». PERMANENTE : elle ne part qu'à l'échéance
+ *   d'un éphémère ou par une suppression explicite.
+ *
+ * `veiled` ne désigne plus que le FLOU : la ligne floutée, révélée au toucher.
+ */
+export type ProtectionKind = 'standard' | 'veiled' | 'viewOnce' | 'opened' | 'deleted' | 'expired';
 
 /** `BubbleBlurRevealLifecycle.swift:23` — gardé par `check-curve.mjs` PARTIE 5. */
 export const REVEAL_DURATION_SECONDS = 5;
@@ -38,30 +50,62 @@ export const BLUR_RADIUS_PX = 18;
 /** Durée d'affichage de la légende d'échec de révélation (D-23 §1.4 point 8). */
 export const REVEAL_ERROR_NOTICE_MS = 2500;
 
-type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'>;
+/**
+ * `consumedByMe` — le contrat serveur de #7578 : la consommation est PAR
+ * PERSONNE. Tant que la passerelle ne le sert pas, `viewOnceCount > 0` reste
+ * la seule trace (l'ancien compteur global) : c'est un repli, jamais une
+ * seconde règle.
+ */
+export type ViewOnceConsumptionFields = Pick<Message, 'isViewOnce' | 'viewOnceCount'> & {
+  readonly consumedByMe?: boolean;
+};
+
+export function viewOnceOpenedByMe(message: ViewOnceConsumptionFields): boolean {
+  if (!message.isViewOnce) return false;
+  if (typeof message.consumedByMe === 'boolean') return message.consumedByMe;
+  return (message.viewOnceCount ?? 0) > 0;
+}
+
+type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'> & {
+  readonly consumedByMe?: boolean;
+  readonly ephemeralDuration?: number;
+};
+
+/** Un message dont la DURÉE d'éphémère est posée — le seul qui a le droit de partir à l'échéance. */
+function isEphemeral(message: Pick<ProtectionFields, 'ephemeralDuration'>): boolean {
+  const duration = message.ephemeralDuration;
+  return typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+}
 
 /**
- * L'ORDRE, exactement celui de `BubbleContentBuilder.swift:52-60` :
- * supprimé gagne sur tout, puis brûlé (vue unique déjà consommée), puis
- * expiré (éphémère échu), puis voilé (flou ou vue unique non consommée),
- * sinon standard. `messageSource === 'system'` n'a pas de rangée web
- * aujourd'hui — un message système protégé rendrait un tombstone, ce qui
- * est fail-closed et n'a donc pas besoin d'être exclu ici.
+ * L'ORDRE : supprimé gagne sur tout ; puis l'échéance d'un ÉPHÉMÈRE ; puis la
+ * vue unique (déjà ouverte par moi, sinon à ouvrir) ; puis le flou ; sinon
+ * standard.
+ *
+ * L'échéance d'une vue unique qui n'est PAS éphémère (le balayage serveur,
+ * #7578) ne retire rien : pour qui la lit, elle est « déjà ouverte », et le
+ * reste (#7580, précision porteur : « ni le balayage serveur, ni une sortie de
+ * conversation, ni un redémarrage ne la retirent »).
  */
 export function protectionOf(message: ProtectionFields, now: number): ProtectionKind {
   // Second verrou (défaut 4, revue #5668) : `!= null` plutôt que
-  // `!== undefined` — fail-closed même si une charge NON décodée (un
-  // `null` explicite de la passerelle, jamais retiré par `decodeMessage`)
-  // atteint malgré tout cette loi. `decodeMessage` reste le site qui
-  // retire la clé ; ce garde est une redondance délibérée, pas un
-  // remplacement.
+  // `!== undefined` — fail-closed même si une charge NON décodée atteint
+  // malgré tout cette loi.
   if (message.deletedAt != null) return 'deleted';
-  if (message.isViewOnce && message.viewOnceCount > 0) return 'burned';
-  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= now) return 'expired';
-  // Forme SDK `declaredProtection` (`MessageModels.swift:178-191`) : voilé
-  // dès que l'un OU l'autre est vrai — jamais `isBlurred` seul.
-  if (message.isBlurred || message.isViewOnce) return 'veiled';
+  const pastDeadline = message.expiresAt != null && new Date(message.expiresAt).getTime() <= now;
+  if (message.isViewOnce) {
+    if (pastDeadline && isEphemeral(message)) return 'expired';
+    if (pastDeadline || viewOnceOpenedByMe(message)) return 'opened';
+    return 'viewOnce';
+  }
+  if (pastDeadline) return 'expired';
+  if (message.isBlurred) return 'veiled';
   return 'standard';
+}
+
+/** Les deux états de la vue unique — ceux que la PUCE porte. */
+export function isViewOnceKind(kind: ProtectionKind): kind is 'viewOnce' | 'opened' {
+  return kind === 'viewOnce' || kind === 'opened';
 }
 
 /**
@@ -124,10 +168,8 @@ export const FOG_DURATION_MS = 400;
 
 /**
  * `hidden → revealed(until)` ; sur `revealed`, `fogging` ou `consumed`,
- * rend l'entrée INCHANGÉE — aucune affordance pendant la fenêtre
- * (`FocalProtectedContent` ne monte le bouton que sur `isMasked`, jamais
- * pendant la révélation ni sa fermeture), et une vue unique consommée ne se
- * révèle plus.
+ * rend l'entrée INCHANGÉE — aucune affordance pendant la fenêtre, et une vue
+ * unique ouverte ne se rouvre plus.
  */
 export function reveal(phase: RevealPhase, input: { readonly now: number }): RevealPhase {
   if (phase.phase !== 'hidden') return phase;
@@ -135,11 +177,36 @@ export function reveal(phase: RevealPhase, input: { readonly now: number }): Rev
 }
 
 /**
+ * L'OUVERTURE D'UNE VUE UNIQUE (#7580) — SANS horloge : elle reste ouverte
+ * jusqu'à ce que le lecteur la referme (un second toucher, la sortie de
+ * l'écran au défilement, ou la fermeture du plein écran d'un média).
+ * `until` infini : `settle` ne la referme donc jamais seule.
+ */
+export function openViewOnce(phase: RevealPhase): RevealPhase {
+  if (phase.phase !== 'hidden') return phase;
+  return { phase: 'revealed', until: Number.POSITIVE_INFINITY };
+}
+
+/**
+ * LA FERMETURE D'UNE VUE UNIQUE — `revealed → fogging(→ consumed)` : le
+ * brouillard joue, puis la puce « Déjà ouvert » prend la place. `immediate`
+ * (le plein écran d'un média qu'on ferme) passe directement à `consumed` :
+ * le brouillard n'a rien à couvrir, le contenu n'était pas dans la rangée.
+ */
+export function closeViewOnce(
+  phase: RevealPhase,
+  input: { readonly now: number; readonly immediate?: boolean },
+): RevealPhase {
+  if (phase.phase !== 'revealed') return phase;
+  if (input.immediate === true) return { phase: 'consumed' };
+  return { phase: 'fogging', until: input.now + FOG_DURATION_MS, next: 'consumed' };
+}
+
+/**
  * LE PREMIER PAS HORS DE `revealed` : la fenêtre s'éteint à `until` et
  * entre en `fogging` — le contenu reste monté (`rendersContent` le couvre),
  * le brouillard couvre l'écran en `FOG_DURATION_MS`, PUIS `settleFog`
- * achève le passage vers `hidden` (voilé ordinaire) ou `consumed` (vue
- * unique — la révélation était la consommation, elle ne se rejoue plus).
+ * achève le passage vers `hidden` (flou) ou `consumed` (vue unique).
  */
 export function settle(phase: RevealPhase, input: { readonly now: number; readonly isViewOnce: boolean }): RevealPhase {
   if (phase.phase !== 'revealed') return phase;
@@ -147,7 +214,7 @@ export function settle(phase: RevealPhase, input: { readonly now: number; readon
   return { phase: 'fogging', until: input.now + FOG_DURATION_MS, next: input.isViewOnce ? 'consumed' : 'hidden' };
 }
 
-/** LE SECOND PAS : le brouillard achève sa fermeture, rend la main au voile ou au tombstone. */
+/** LE SECOND PAS : le brouillard achève sa fermeture, rend la main au voile ou à la puce « Déjà ouvert ». */
 export function settleFog(phase: RevealPhase, input: { readonly now: number }): RevealPhase {
   if (phase.phase !== 'fogging') return phase;
   if (input.now < phase.until) return phase;
@@ -162,19 +229,22 @@ export function requiresConsume(message: Pick<Message, 'isViewOnce'>): boolean {
 /**
  * La matrice kind × phase — SEULE source du « quand rendre les enfants ».
  * `fogging` REND encore le contenu (le brouillard le couvre progressivement
- * PAR-DESSUS, il ne remplace rien en dessous) — c'est `settleFog` qui
- * démonte, jamais l'arrivée en `fogging`.
+ * PAR-DESSUS) — c'est `settleFog` qui démonte. `opened` rend le contenu
+ * pendant la fenêtre LOCALE : la consommation bascule le message en `opened`
+ * dès le toucher, et c'est l'état local, jamais le `kind` du dernier rendu,
+ * qui dit si le lecteur est en train de le lire.
  */
 export function rendersContent(kind: ProtectionKind, phase: RevealPhase): boolean {
   if (kind === 'standard') return true;
-  if (kind === 'veiled') return phase.phase === 'revealed' || phase.phase === 'fogging';
-  if (kind === 'burned') return phase.phase === 'revealed' || phase.phase === 'fogging';
+  if (kind === 'veiled' || kind === 'viewOnce' || kind === 'opened') {
+    return phase.phase === 'revealed' || phase.phase === 'fogging';
+  }
   return false;
 }
 
-/** L'affordance « Contenu masqué » ne monte QUE sur un voilé au repos. */
+/** L'affordance (la ligne floutée, ou la puce « Touchez pour afficher ») ne monte QUE sur un état à ouvrir, au repos. */
 export function showsAffordance(kind: ProtectionKind, phase: RevealPhase): boolean {
-  return kind === 'veiled' && phase.phase === 'hidden';
+  return (kind === 'veiled' || kind === 'viewOnce') && phase.phase === 'hidden';
 }
 
 /**

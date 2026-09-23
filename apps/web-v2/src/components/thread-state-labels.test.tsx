@@ -8,7 +8,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { MaskedAttachment } from './masked-attachment';
 import { Badges, FailedSendBand } from './message-blocks';
-import { ProtectionNotice } from './protected-content';
+import { ProtectionNotice, ViewOnceChip } from './protected-content';
 
 /**
  * LES LIBELLÉS D'ÉTAT DU FIL SUIVENT LA LANGUE DU LECTEUR (#7337).
@@ -97,18 +97,23 @@ describe('la bande d’échec d’envoi', () => {
 
 describe('les tombstones', () => {
   for (const surface of ['row', 'bubble'] as const) {
-    test(`[${surface}] en : supprimé et vu-et-supprimé, texte ET nom accessible`, () => {
+    test(`[${surface}] en : supprimé, texte ET nom accessible`, () => {
       const deleted = renderIn('en', <ProtectionNotice kind="deleted" surface={surface} />);
       expect(deleted).toContain('>Message deleted<');
       expect(deleted).toContain('aria-label="Message deleted"');
       expect(deleted).not.toContain('supprimé');
-
-      const burned = renderIn('en', <ProtectionNotice kind="burned" surface={surface} />);
-      expect(burned).toContain('>Seen and deleted<');
-      expect(burned).toContain('aria-label="Message seen and deleted"');
-      expect(burned).not.toContain('supprimé');
     });
   }
+
+  test('en : la puce de la vue unique se dit dans la langue du lecteur, sans un mot de suppression (#7580)', () => {
+    const sealed = renderIn('en', <ViewOnceChip state="sealed" />);
+    expect(sealed).toContain('Tap to view');
+    expect(sealed).toContain('aria-label="View-once message, tap to view"');
+    const opened = renderIn('en', <ViewOnceChip state="opened" />);
+    expect(opened).toContain('Already opened');
+    expect(opened).toContain('aria-label="View-once message, already opened"');
+    expect(opened).not.toMatch(/deleted|supprimé/);
+  });
 
   test('ar : le message supprimé est arabe', () => {
     const html = renderIn('ar', <ProtectionNotice kind="deleted" surface="row" />);
