@@ -141,7 +141,18 @@ extension ConversationSyncEngine {
             messageId: event.messageId,
             viewOnceCount: event.viewOnceCount
         ))
+        if let opened = Self.viewOnceOpenedMutation(for: event, readerId: await currentUserId()) {
+            await realtimeMessagePersistor?(opened)
+        }
         _messagesDidChange.send(event.conversationId)
+    }
+
+    /// `message:consumed` dit QUI a ouvert (#7578). Seul le lecteur dont c'est
+    /// l'identité — depuis n'importe lequel de ses appareils — passe la bulle
+    /// en « déjà ouvert » ; ce qu'un autre ouvre ne retire rien chez lui.
+    static func viewOnceOpenedMutation(for event: MessageConsumedEvent, readerId: String) -> RealtimeMessageMutation? {
+        guard !readerId.isEmpty, event.userId == readerId else { return nil }
+        return .viewOnceOpened(messageId: event.messageId)
     }
 
     // MARK: - Local-First Updates

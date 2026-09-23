@@ -189,6 +189,8 @@ final class DependencyContainer {
                 )
             case let .consumed(messageId, viewOnceCount):
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
+            case let .viewOnceOpened(messageId):
+                try await persistence.markViewOnceOpened(localId: messageId)
             }
         } catch {
             containerLogger.error("Realtime message persistence failed: \(error.localizedDescription, privacy: .public)")

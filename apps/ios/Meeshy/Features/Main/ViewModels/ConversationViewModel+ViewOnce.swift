@@ -70,10 +70,31 @@ extension ConversationViewModel {
     }
 
     /// Referme toutes les vues uniques révélées — la sortie de conversation.
+    ///
+    /// Ce que l'AUTEUR a révélé se referme sans être consommé (directive porteur
+    /// 2026-09-24) : la sortie de l'auteur consommait ses propres messages,
+    /// « sans geste » visible (#7578, § 6).
     func closeAllRevealedViewOnce() {
         for (messageId, isRevealed) in revealedViewOnceIds where isRevealed {
-            closeViewOnce(messageId: messageId)
+            guard isAuthoredByMe(messageId) else {
+                closeViewOnce(messageId: messageId)
+                continue
+            }
+            revealedViewOnceIds.removeValue(forKey: messageId)
+            if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                messages[index].isViewOnceRevealed = false
+            }
         }
+    }
+
+    /// Les vues uniques armées pendant la visite que la SORTIE peut consommer :
+    /// jamais celles de l'auteur.
+    func viewOnceConsumableOnExit(_ messageIds: [String]) -> [String] {
+        messageIds.filter { !isAuthoredByMe($0) }
+    }
+
+    private func isAuthoredByMe(_ messageId: String) -> Bool {
+        messages.first(where: { $0.id == messageId })?.isMe == true
     }
 
     /// Grave l'ouverture sur CET appareil et purge ce qui en reste : médias en

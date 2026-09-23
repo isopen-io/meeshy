@@ -224,6 +224,19 @@ extension ConversationSyncEngine {
             }
             .store(in: &socketSubscriptions)
 
+        // `message:view-once-purged` (#7578) : le contenu est purgé côté
+        // serveur. Un seul site, conversation ouverte ou fermée : la bulle
+        // reste, vidée, en « déjà ouvert ».
+        messageSocket.viewOncePurged
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task {
+                    await self.realtimeMessagePersistor?(.viewOnceOpened(messageId: event.messageId))
+                    self._messagesDidChange.send(event.conversationId)
+                }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in

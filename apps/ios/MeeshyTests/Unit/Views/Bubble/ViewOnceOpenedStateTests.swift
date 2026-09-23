@@ -17,9 +17,9 @@ final class ViewOnceOpenedStateTests: XCTestCase {
 
     private let secret = "SECRET-FIL-VU texte"
 
-    private func viewOnceText(openedAt: Date? = nil, isRevealed: Bool = false, isMe: Bool = false) -> Message {
+    private func viewOnceText(id: String = "vu1", openedAt: Date? = nil, isRevealed: Bool = false, isMe: Bool = false) -> Message {
         var message = Message(
-            id: "vu1", conversationId: "c1", senderId: "u2", content: secret,
+            id: id, conversationId: "c1", senderId: "u2", content: secret,
             senderName: "Demo", isMe: isMe
         )
         message.isViewOnce = true
@@ -135,6 +135,36 @@ final class ViewOnceOpenedStateTests: XCTestCase {
         sut.closeViewOnce(messageId: "vu1")
 
         XCTAssertNil(sut.messages[0].viewOnceOpenedAt, "la sortie d'écran d'une puce scellée ne consomme rien")
+    }
+
+    // MARK: - La sortie ne consomme pas ce que l'AUTEUR a révélé
+
+    func test_closeAllRevealedViewOnce_authorsOwnRevealedText_isClosedWithoutConsumption() throws {
+        let sut = try makeSUT()
+        sut.messages = [viewOnceText(isMe: true)]
+        _ = sut.openViewOnce(messageId: "vu1")
+
+        sut.closeAllRevealedViewOnce()
+
+        XCTAssertNil(sut.messages[0].viewOnceOpenedAt, "la sortie ne consomme pas une vue unique révélée par son auteur")
+        XCTAssertFalse(sut.messages[0].isViewOnceRevealed, "le texte de l'auteur se referme quand même à la sortie")
+    }
+
+    func test_closeAllRevealedViewOnce_recipientsRevealedText_isConsumed() throws {
+        let sut = try makeSUT()
+        sut.messages = [viewOnceText()]
+        _ = sut.openViewOnce(messageId: "vu1")
+
+        sut.closeAllRevealedViewOnce()
+
+        XCTAssertNotNil(sut.messages[0].viewOnceOpenedAt)
+    }
+
+    func test_viewOnceConsumableOnExit_excludesTheAuthorsOwnMessages() throws {
+        let sut = try makeSUT()
+        sut.messages = [viewOnceText(id: "mine", isMe: true), viewOnceText()]
+
+        XCTAssertEqual(sut.viewOnceConsumableOnExit(["mine", "vu1"]), ["vu1"])
     }
 
     private func makeSUT() throws -> ConversationViewModel {

@@ -58,7 +58,7 @@ extension ConversationView {
     /// l'échec : on ne détruit pas ce qu'on n'a pas pu confirmer.
     func consumeOpenedViewOnceOnExit() {
         viewModel.closeAllRevealedViewOnce()
-        let lues = scrollState.pendingViewOnceConsumption.takeAll()
+        let lues = viewModel.viewOnceConsumableOnExit(scrollState.pendingViewOnceConsumption.takeAll())
         guard !lues.isEmpty else { return }
         let vm = viewModel
         Task {
