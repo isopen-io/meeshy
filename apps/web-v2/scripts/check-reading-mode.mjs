@@ -1189,19 +1189,23 @@ const noRowCarriesContinuousPerspective = (page) =>
    * défilement et confondrait deux défauts distincts.
    *
    * Le fil s'ouvre PINNÉ EN BAS (§ mission) : l'UNIQUE message porteur d'une
-   * pastille (`m1`, langue d'origine anglaise servie en français) est alors
+   * drapeau (`m1`, langue d'origine anglaise servie en français) est alors
    * scrollé HORS de la zone visible de `<main>` (clippée par
    * `overflow-y-auto`) — un `elementFromPoint` à cet endroit répond
    * légitimement l'EN-TÊTE, qui occupe l'écran par-dessus. On remonte donc en
-   * haut du fil avant de mesurer, pour tester une pastille RÉELLEMENT visible.
+   * haut du fil avant de mesurer, pour tester un drapeau RÉELLEMENT visible.
    */
   await page.evaluate(() => {
     const main = document.querySelector('main');
     if (main) main.scrollTop = 0;
   });
   await page.waitForTimeout(200);
-  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
-  expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme (mouvement réduit)');
+  /* LE DRAPEAU, PLUS LA PASTILLE (#7599) — un message traduit ne montre plus
+     la pastille 🌐 à côté de ses drapeaux (chaque état se dit une fois) : le
+     premier contrôle `tap-target-22` de la ligne basse de m1 est désormais
+     son drapeau d'origine, et c'est lui dont la zone tactile se mesure. */
+  const pastille = page.locator('main li [data-row="m1"] button[data-prism-flag]').first();
+  expect((await pastille.count()) > 0, 'un message traduit porte son drapeau (mouvement réduit)');
   const tapTarget = await pastille.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const probe = (dx, dy) => {
@@ -1263,7 +1267,10 @@ const noRowCarriesContinuousPerspective = (page) =>
    * contrôles que les deux témoins de débord ci-dessous ciblent nommément
    * (« Afficher…langue d'origine » et « English »).
    */
-  expect(rowButtonCount >= 2, `la ligne basse porte au moins la pastille et le drapeau de la langue d’origine (${rowButtonCount} trouvés)`);
+  /* `>= 1` depuis #7599 : la pastille ne coexiste plus avec les drapeaux,
+     donc la frontière pastille/drapeau que ce témoin gardait n'existe plus ;
+     chaque bouton présent doit toujours posséder l'intérieur de sa boîte. */
+  expect(rowButtonCount >= 1, `la ligne basse porte au moins le drapeau de la langue d’origine (${rowButtonCount} trouvés)`);
   for (let i = 0; i < rowButtonCount; i += 1) {
     const btn = rowButtons.nth(i);
     const label = (await btn.getAttribute('aria-label')) ?? (await btn.getAttribute('title')) ?? `#${i}`;
