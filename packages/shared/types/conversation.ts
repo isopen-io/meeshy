@@ -9,6 +9,7 @@ import type { MentionedUser } from './mention.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
+import type { MessageSticker } from './message-sticker.js';
 import type { ConversationBridge } from './conversation-bridge.js';
 
 // Re-export canonical types from message-types.ts
@@ -172,6 +173,13 @@ export interface Message {
   /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte. Ne retire jamais la bulle. */
   readonly isFullyConsumed?: boolean;
   readonly isBlurred: boolean;
+  /**
+   * Le LECTEUR a déjà ouvert ce message à vue unique (#7594). Servi par
+   * `GET /conversations` sur `lastMessage` seulement — valeur par lecteur, lue
+   * dans `MessageStatusEntry.viewedOnceAt`. `false` pour l'expéditeur et pour
+   * un message qui n'est pas à vue unique.
+   */
+  readonly viewOnceConsumed?: boolean;
 
   // ===== PINNING =====
   readonly pinnedAt?: Date;
@@ -206,6 +214,12 @@ export interface Message {
   /** Structured per-type payload. For call-summary system messages this is a
    * {@link CallSummaryMetadata} the client renders into a rich call bubble. */
   readonly metadata?: CallSummaryMetadata | Record<string, unknown>;
+  /**
+   * Sticker hissé de `metadata.sticker` (#4823), revalidé serveur. `null` sans
+   * sticker — et, sur `lastMessage` de `GET /conversations`, pour un message
+   * ou une pièce jointe protégé (#7591).
+   */
+  readonly sticker?: MessageSticker | null;
 
   // ===== METADONNEES =====
   readonly createdAt: Date;

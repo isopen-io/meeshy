@@ -1,5 +1,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+
+import { appQueryClient } from '@/lib/api/query-client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { message, minutesAgo } from '@/lib/api/fixtures-base';
@@ -72,6 +75,11 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
       viewerId: 'u-viewer',
+      // #7377 — ce témoin garde le TRANSFERT, pas le favori. `false` le dit et
+      // évite d'exiger ici un QueryClientProvider : l'état d'étoile d'un
+      // message se LIT du serveur, donc `canStar: true` monterait une requête
+      // qui n'a rien à voir avec ce qui est mesuré.
+      canStar: false,
       onReply: () => {},
       announce: (text) => announced.push(text),
     });
@@ -82,7 +90,15 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
   document.body.append(container);
   root = createRoot(container);
   act(() => {
-    root.render(<Harness />);
+    root.render(
+      // #7378 — `useMessageMenu` lit l'état de favori par `useQuery`. Même
+      // `enabled: false` (ce que pose `canStar: false` ci-dessus), le hook
+      // exige un client dans l'arbre pour exister : `enabled` gouverne la
+      // REQUÊTE, jamais la présence du fournisseur.
+      <QueryClientProvider client={appQueryClient}>
+        <Harness />
+      </QueryClientProvider>,
+    );
   });
 
   return {
