@@ -672,6 +672,7 @@ public actor ConversationStore {
         // décrivent pas le dernier message et vivent leur propre vie (#7545).
         if case .replaced(let reaction) = event.lastReaction, reaction != conv.lastReaction {
             conv.lastReaction = reaction
+            conv.lastReactionTargetsReader = reaction?.targets(readerId: event.readerId ?? "") ?? false
             changed = true
         }
         if case .replaced(let call) = event.activeCall, call != conv.activeCall {

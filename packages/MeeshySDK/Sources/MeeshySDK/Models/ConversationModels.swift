@@ -500,6 +500,7 @@ extension APIConversation {
         conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         conversation.lastMessageNature = lastMessage?.nature
         conversation.lastReaction = lastReaction
+        conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false
         conversation.activeCall = activeCall
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme

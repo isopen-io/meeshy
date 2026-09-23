@@ -245,11 +245,10 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Services/CallManager.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
-            // #7548 — `ThemedConversationRow` n'a plus de minuterie : la durée
-            // d'un média dans la ligne de liste est composée par le SDK
-            // (`ConversationPreviewStrings.clock`), miroir de `formatClock` que
-            // rejoue le fichier de cas commun au web. Elle quitte donc l'app
-            // entière, et cette liste avec elle.
+            // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
+            // visible rend l'horloge du composeur commun (SDK), la ligne DITE
+            // la convertit ici. La liste suit l'hôte, comme au 248i.
+            "Features/Main/Views/ConversationPreviewLine.swift",
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)

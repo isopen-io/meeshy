@@ -286,3 +286,22 @@ public extension LastMessageAttachmentSummary {
         return "file"
     }
 }
+
+public extension ConversationLastReaction {
+    /// La réaction vise-t-elle un message du lecteur ? Un lecteur inconnu
+    /// (`""`, auth non résolue) ne s'attribue jamais une réaction.
+    func targets(readerId: String) -> Bool {
+        !readerId.isEmpty && targetSenderUserId == readerId
+    }
+}
+
+public extension MeeshyConversation {
+    /// Le RANG de la ligne dans la liste (règle client du contrat #7545,
+    /// décision porteur #7546) : max(`lastMessageAt`, `lastReaction.createdAt`
+    /// quand la réaction vise un message du lecteur). Une réaction entre tiers
+    /// s'affiche sans réordonner ; `lastMessageAt` reste la date AFFICHÉE.
+    var listActivityAt: Date {
+        guard lastReactionTargetsReader, let reaction = lastReaction else { return lastMessageAt }
+        return max(lastMessageAt, reaction.createdAt)
+    }
+}

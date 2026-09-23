@@ -312,6 +312,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// Dernière réaction de la conversation (#7545). HORS du groupe : elle ne
     /// décrit pas le dernier message et vit sa propre vie sur le fil.
     public var lastReaction: ConversationLastReaction? = nil
+    /// La dernière réaction vise un message du LECTEUR — posé là où le lecteur
+    /// est connu (REST, socket), lu par `listActivityAt` pour le rang.
+    public var lastReactionTargetsReader: Bool = false
     /// Appel en cours (#7545) — ligne 1 de la priorité de la ligne d'aperçu.
     public var activeCall: ConversationActiveCall? = nil
     public var recentMessages: [RecentMessagePreview] = []
@@ -719,7 +722,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
-        case lastMessageNature, lastReaction, activeCall
+        case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
@@ -778,6 +781,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         // bougé ne doit pas jeter la liste entière — le prochain sync la repose.
         self.lastMessageNature = (try? c.decodeIfPresent(LastMessageNature.self, forKey: .lastMessageNature))
         self.lastReaction = (try? c.decodeIfPresent(ConversationLastReaction.self, forKey: .lastReaction))
+        self.lastReactionTargetsReader = (try? c.decodeIfPresent(Bool.self, forKey: .lastReactionTargetsReader)) ?? false
         self.activeCall = (try? c.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
@@ -878,6 +882,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(lastMessageLocation, forKey: .lastMessageLocation)
         try c.encodeIfPresent(lastMessageNature, forKey: .lastMessageNature)
         try c.encodeIfPresent(lastReaction, forKey: .lastReaction)
+        try c.encode(lastReactionTargetsReader, forKey: .lastReactionTargetsReader)
         try c.encodeIfPresent(activeCall, forKey: .activeCall)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)

@@ -755,7 +755,7 @@ class ConversationListViewModel: ObservableObject {
                 isPinned: conversation.userState.isPinned && conversation.userState.sectionId == nil,
                 categoryId: conversation.userState.sectionId,
                 orderInCategory: conversation.userState.orderInCategory.map { Double($0) },
-                lastMessageAt: conversation.lastMessageAt,
+                lastMessageAt: conversation.listActivityAt,
                 updatedAt: conversation.updatedAt,
                 liveCall: nil
             )
@@ -791,8 +791,8 @@ class ConversationListViewModel: ObservableObject {
     /// Ordre total de la liste de conversations. Épinglées d'abord ; parmi les
     /// non-épinglées, les conversations avec un brouillon actif flottent en
     /// tête (brouillon le plus récemment édité d'abord) ; le reste retombe sur
-    /// `lastMessageAt` décroissant. Les épinglées conservent leur tri
-    /// `lastMessageAt` — la priorité brouillon ne s'applique qu'aux
+    /// `listActivityAt` décroissant (une réaction à MON message compte, #7548).
+    /// Les épinglées aussi — la priorité brouillon ne s'applique qu'aux
     /// non-épinglées.
     nonisolated static func conversationsAreInOrder(
         _ a: Conversation,
@@ -800,14 +800,14 @@ class ConversationListViewModel: ObservableObject {
         draftSummaries: [String: DraftSummary]
     ) -> Bool {
         if a.userState.isPinned != b.userState.isPinned { return a.userState.isPinned }
-        if a.userState.isPinned && b.userState.isPinned { return a.lastMessageAt > b.lastMessageAt }
+        if a.userState.isPinned && b.userState.isPinned { return a.listActivityAt > b.listActivityAt }
         let aHasDraft = draftSummaries[a.id] != nil
         let bHasDraft = draftSummaries[b.id] != nil
         if aHasDraft != bHasDraft { return aHasDraft }
         if let aDraft = draftSummaries[a.id], let bDraft = draftSummaries[b.id] {
             return aDraft.updatedAt > bDraft.updatedAt
         }
-        return a.lastMessageAt > b.lastMessageAt
+        return a.listActivityAt > b.listActivityAt
     }
 
     // MARK: - Sync Engine Observation

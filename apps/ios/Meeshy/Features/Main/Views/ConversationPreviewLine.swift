@@ -81,10 +81,27 @@ struct ConversationPreviewLine: View {
         return spokenText(preview, strings: strings)
     }
 
-    nonisolated static func spokenText(_ preview: ConversationPreview, strings: ConversationPreviewStrings) -> String {
-        let spoken = preview.segments.map(\.text).joined(separator: ", ")
+    nonisolated static func spokenText(
+        _ preview: ConversationPreview, strings: ConversationPreviewStrings, locale: Locale = .current
+    ) -> String {
+        let spoken = preview.segments.map { segment -> String in
+            guard case .label(let text) = segment, let seconds = clockSeconds(text) else { return segment.text }
+            return LocalizedNumber.spokenDuration(seconds: seconds, locale: locale)
+        }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }
         return strings(.lineAuthor, ["author": author.label, "line": spoken])
+    }
+
+    /// Les secondes d'une horloge `m:ss` / `h:mm:ss` — la forme exacte que rend
+    /// `ConversationPreviewStrings.clock`, et rien d'autre : un libellé qui
+    /// CONTIENT une heure (« Réunion à 10:30 ») n'est pas une durée.
+    nonisolated static func clockSeconds(_ text: String) -> Int? {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard (2...3).contains(parts.count),
+              parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
+              parts.dropFirst().allSatisfy({ $0.count == 2 })
+        else { return nil }
+        return parts.compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
     }
 
     // MARK: - Rendu
