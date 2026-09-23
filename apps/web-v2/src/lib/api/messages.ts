@@ -126,9 +126,20 @@ export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId:
 
 /** FABRIQUE (F3) — la même forme que `conversationsQuery`. `select` reste une
  * fonction de MODULE (`threadWindowOf`), jamais une lambda écrite en ligne :
- * le doc-comment de `flattenMessagePages` porte la mesure. */
+ * le doc-comment de `flattenMessagePages` porte la mesure.
+ *
+ * **`staleTime: 0` (#7353)** — un fil n'est PAS une famille quasi-immuable
+ * (`query-freshness.test.ts`, #6974) : c'est la donnée la plus VIVANTE de
+ * l'application. Le défaut de `createAppQueryClient` (30 s) laissait un
+ * rechargement qui suit une absence COURTE dans la fenêtre de fraîcheur :
+ * le cache restauré était servi et rien ne revalidait, alors que le serveur
+ * avait avancé (recette staging 2026-09-21). Cache-first reste entier (D-2,
+ * aucun spinner sur un cache non vide) : la valeur ne gouverne QUE la
+ * revalidation de fond — la MÊME doctrine que `useStoryFeed` / `usePost`.
+ * Posée ICI, dans la fabrique que `useMessages` consomme telle quelle, pour
+ * que le témoin `thread-reload-freshness.test.ts` mesure ce que l'écran sert. */
 export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
-  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf };
+  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf, staleTime: 0 };
 }
 
 export type { HttpTransport };
@@ -351,6 +362,21 @@ export type SendMessageBody = {
   readonly messageType?: 'image' | 'file' | 'audio' | 'video';
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
+  /**
+   * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
+   * un transfert EST un envoi qui désigne sa source, et la passerelle copie
+   * elle-même les pièces jointes du message d'origine (mêmes blobs, aucun
+   * ré-upload).
+   *
+   * **`attachmentIds` ET `forwardedFromId` SONT EXCLUSIFS** :
+   * `MessageProcessor.handleAttachments` (`MessageProcessor.ts:726-727`) est
+   * un `else if` — poser le premier DÉSACTIVE la copie. Le seul producteur de
+   * ces deux clés est `forwardBodyOf` (`api/forward.ts`), qui n'écrit jamais
+   * `attachmentIds` ; son doc-comment porte l'invariant.
+   */
+  readonly forwardedFromId?: string;
+  /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
+  readonly forwardedFromConversationId?: string;
   /**
    * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
    * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque

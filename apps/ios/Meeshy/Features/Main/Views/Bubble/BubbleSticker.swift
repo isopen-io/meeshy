@@ -156,6 +156,23 @@ struct BubbleSticker: View, Equatable {
     /// Aperçu du menu contextuel : sans les `Spacer` d'alignement.
     let standalone: Bool
 
+    /// **La protection du message, et elle ne se devine pas** (#7508).
+    ///
+    /// `ThemedMessageBubble` aiguille vers cette feuille AVANT
+    /// `BubbleStandardLayout`, seul site où le mode Bulles montait le voile et
+    /// le chrome. Un sticker à vue unique s'affichait donc EN CLAIR : mesuré en
+    /// recette staging le 2026-09-23 sur un message neuf, jamais touché, que le
+    /// serveur donnait pourtant `isViewOnce: true`, `viewOnceCount: 0`.
+    ///
+    /// Et ce n'est pas une branche rare : le bouton d'envoi par défaut rend le
+    /// texte tapé en sticker et le poste en `messageType: "image"`. C'est le
+    /// chemin nominal d'un message écrit au clavier.
+    var protection: MessageProtectionDescriptor = .unprotected
+    /// Le canal de consommation — MÊME contrat que la bulle standard : il ARME
+    /// la consommation et confirme aussitôt, la destruction partant de la sortie
+    /// de la conversation (#7500).
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+
     /// Rappels — hors de l'égalité : ils ne changent pas le rendu.
     var onRetry: (() -> Void)? = nil
     var onShowReadStatus: (() -> Void)? = nil
@@ -181,7 +198,16 @@ struct BubbleSticker: View, Equatable {
             && lhs.isLastReceivedMessage == rhs.isLastReceivedMessage
             && lhs.isLastInGroup == rhs.isLastInGroup
             && lhs.standalone == rhs.standalone
+            && lhs.protection == rhs.protection
     }
+
+    /// L'état de révélation vit ICI, comme `ThemedMessageBubble` le possède
+    /// pour `BubbleStandardLayout` : une feuille sans `@State` ne peut pas
+    /// porter un voile qui se lève.
+    @StateObject private var blurController = BubbleBlurRevealController()
+
+    /// La règle unique — jamais réécrite ici.
+    private var isVeiled: Bool { protection.requiresVeil && !blurController.isRevealed }
 
     // MARK: - Corps
 
@@ -193,6 +219,13 @@ struct BubbleSticker: View, Equatable {
             // même base, collé au bord de la conversation côté isMe —
             // `.fixedSize()` pour que le conteneur épouse le contenu, comme
             // l'emoji libre (voir `emojiOnlyContent`).
+            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            // Le chrome se pose AU-DESSUS du sticker, sur le fond de la
+            // conversation — même rang qu'en bulle standard : flamme, compteur
+            // de dernière minute, puce ① de vue unique.
+            MessageProtectionChrome(descriptor: protection, isDark: isDark)
+                .equatable()
+
             HStack(alignment: .bottom, spacing: 6) {
                 // **Le dessin est l'ATOME PARTAGÉ**, pas une copie locale.
                 // Focal, Script et Rivière montent le même
@@ -200,10 +233,22 @@ struct BubbleSticker: View, Equatable {
                 // emoji, la place réservée avant rasterisation et le mouvement
                 // ne peuvent plus diverger d'une surface à l'autre. Reduce
                 // Motion est honoré DANS l'atome — la bulle n'a plus à le lire.
-                MessageStickerArtwork(sticker: sticker, side: Self.side)
-                    // Les effets du message se posent sur le sticker lui-même,
-                    // jamais sur la rangée — même doctrine que la bulle.
-                    .messageEffects(effects)
+                ZStack {
+                    MessageStickerArtwork(sticker: sticker, side: Self.side)
+                        // Les effets du message se posent sur le sticker lui-même,
+                        // jamais sur la rangée — même doctrine que la bulle.
+                        .messageEffects(effects)
+                        .blur(radius: isVeiled ? 18 : 0)
+                        .allowsHitTesting(!isVeiled)
+
+                    if isVeiled {
+                        ProtectedVeilAffordance(
+                            isViewOnce: protection.isViewOnce,
+                            isDark: isDark,
+                            onReveal: revealVeiledSticker
+                        )
+                    }
+                }
                 compactFooter
             }
             .fixedSize()
@@ -218,10 +263,25 @@ struct BubbleSticker: View, Equatable {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityText)
+            }
+            .fixedSize()
 
             if !isMe && !standalone { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
+    }
+
+    /// Même geste, même contrat qu'en bulle standard : le toucher est le
+    /// CONSENTEMENT, et c'est lui qui appelle le canal de consommation.
+    private func revealVeiledSticker() {
+        HapticFeedback.medium()
+        blurController.requestReveal(
+            request: BubbleBlurRevealLifecycle.RevealRequest(
+                messageId: messageId,
+                isViewOnce: protection.isViewOnce
+            ),
+            consumeViewOnce: onConsumeViewOnce
+        )
     }
 
     // MARK: - L'image
@@ -288,7 +348,16 @@ struct BubbleSticker: View, Equatable {
     }
 
     private var accessibilityText: String {
-        var parts = [Self.accessibilityLabel(for: sticker), timeString]
+        // Le contenu d'un sticker VOILÉ ne se dit pas : le libellé du voile le
+        // remplace, sinon VoiceOver rendrait en clair ce que l'écran masque —
+        // la protection se mesure sur TOUT ce que la surface transporte.
+        let dessin = isVeiled
+            ? (protection.isViewOnce
+                ? ProtectedVeilAffordance.viewOnceVeilLabel
+                : ProtectedVeilAffordance.hiddenLabel)
+            : Self.accessibilityLabel(for: sticker)
+        var parts = [dessin, timeString]
+        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: protection))
         if !reactions.isEmpty {
             let reactionText = reactions.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
             parts.append(String(format: String(localized: "a11y.message.reactions", bundle: .main), reactionText))

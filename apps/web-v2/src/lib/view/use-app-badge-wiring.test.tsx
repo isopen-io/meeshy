@@ -99,8 +99,8 @@ describe('useAppBadge — le compte atteint le titre de l’onglet et le badge d
     conversationStore.setState({ overrides: {} });
   });
 
-  const mount = (conversations: readonly Conversation[]) => {
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, page(conversations));
+  const mount = (conversations?: readonly Conversation[]) => {
+    if (conversations !== undefined) client.setQueryData(CONVERSATIONS_QUERY_KEY, page(conversations));
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -172,6 +172,32 @@ describe('useAppBadge — le compte atteint le titre de l’onglet et le badge d
 
     expect(document.title).toBe('Meeshy');
     expect(calls.at(-1)).toEqual({ kind: 'clear' });
+  });
+
+  /**
+   * **#7370 — UN CACHE ABSENT N'EST PAS ZÉRO.** Ouvrir l'application AILLEURS
+   * que sur la liste (lien direct vers `/c/:id`, ou clé de cache versionnée qui
+   * vient de changer) monte `useAppBadge` sur un cache VIDE : le badge posé au
+   * tour précédent était effacé, et le titre perdait son préfixe, sans qu'aucune
+   * donnée ne l'ait dit. Le témoin PUR ne pouvait pas l'attraper — c'est ici,
+   * sur l'arbre rendu, que le trajet cache → pixel se mesure.
+   */
+  test('cache ABSENT ⇒ titre et badge INCHANGÉS, jusqu’à la première valeur servie', async () => {
+    document.title = '(3) Meeshy';
+    mount();
+
+    expect(document.title).toBe('(3) Meeshy');
+    expect(calls).toEqual([]);
+
+    await act(async () => {
+      client.setQueryData(CONVERSATIONS_QUERY_KEY, page([conversation({ id: 'c-1', unreadCount: 2 })]));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(document.title).toBe('(1) Meeshy');
+    expect(calls).toEqual([{ kind: 'set', count: 1 }]);
   });
 
   test('« mettre en sourdine » en OPTIMISTE retire la conversation du badge', () => {

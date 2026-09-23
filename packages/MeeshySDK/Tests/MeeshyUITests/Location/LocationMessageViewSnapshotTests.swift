@@ -7,8 +7,8 @@ import SnapshotTesting
 
 // MARK: - Snapshot record workflow
 //
-// Cadrage à la taille du COMPOSANT (`layout: .fixed(width: 260, height: 210)`,
-// les dimensions propres de `LocationMessageView`) et non au format appareil :
+// Cadrage à la taille du COMPOSANT (`layout: .fixed(width: 260, height: 194)`,
+// les dimensions propres de `LocationMessageView` — `LocationCardMetrics`, #7598) et non au format appareil :
 // un composant cadré au format device avec `precision: 0.99` ne peut jamais
 // franchir le budget de 1 % de pixels différents et le test devient incapable
 // d'échouer (cf. mémoire `reference_snapshot_gate_blind_component_share_vs_precision`).
@@ -46,7 +46,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .light),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 210)),
+                       layout: .fixed(width: 260, height: 194)),
             record: false
         )
     }
@@ -55,7 +55,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .dark),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 210)),
+                       layout: .fixed(width: 260, height: 194)),
             record: false
         )
     }

@@ -60,6 +60,15 @@ export type RouteKey =
   | 'story'
   | 'feed'
   /**
+   * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
+   * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
+   * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
+   * défaut (voir `routeKey` plus bas) : un visiteur sans compte composerait
+   * une publication entière — texte, médias montés — avant de se faire
+   * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
+   */
+  | 'postCompose'
+  /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
    * porte `fastify.authenticate` (`routes/directory/people.ts`), et
@@ -227,6 +236,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'storyCompose',
   'story',
   'feed',
+  /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
+  'postCompose',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',

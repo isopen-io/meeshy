@@ -5,6 +5,7 @@ import type { ConversationLink as BaseConversationLink } from '@meeshy/shared/ty
 import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { usersService } from '@/services/users.service';
+import { logger } from '@/utils/logger';
 
 export interface ConversationLink extends BaseConversationLink {
   requireAccount?: boolean;
@@ -119,7 +120,7 @@ async function fetchAndStoreCreatorAffiliateToken(creatorId: string) {
         document.cookie = `meeshy_affiliate_token=${affiliateToken}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
 
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[JOIN] Token d'affiliation du créateur stocké: ${affiliateToken.substring(0, 10)}...`);
+          logger.debug('[JOIN]', "Token d'affiliation du créateur stocké");
         }
       }
     }

@@ -109,7 +109,7 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'attachments/metadata.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-list-views.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
-  'conversations/messages-read-status.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -173,8 +173,29 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `unreadCountsCore.ts` (déclaré plus bas), afin que la liste et le push
   // temps réel comptent par la même implémentation. Aucune lecture n'a
   // disparu : elle a changé de fichier.
-  'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
+  //
+  // 11 → 10 (#7451) : le GEL par message est parti dans
+  // `messaging/freezeMessageStatus.ts` (déclaré plus bas), même mécanique —
+  // le fichier hôte pèse deux fois le plafond de taille et le lot du décompte
+  // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
+  'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
+  'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7451 — CELLE-CI sélectionne bien `sender`, et reste pourtant exempte : elle
+  // n'en lit que `{ id, userId }` pour NOMMER la room personnelle de
+  // l'expéditeur, et retombe explicitement sur `row.senderId` quand la relation
+  // est absente (`row.sender?.userId ?? row.sender?.id ?? row.senderId`). Un
+  // expéditeur disparu n'ouvre donc aucune trajectoire d'erreur : l'annonce
+  // part vers la room du `Participant.id`, qui est exactement l'adresse que
+  // `ROOMS.user()` attend d'un participant sans ligne `User`.
+  'messaging/ephemeralCountdown.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      'Sélectionne `sender` mais seulement `{ id, userId }`, pour nommer une room personnelle, ' +
+      'avec repli explicite sur `senderId` : rien à réparer.',
+  },
   // #6601 — la garde de citation : `{ select: { id: true, conversationId: true, deletedAt: true } }`,
   // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
   // un expéditeur disparu n'entre dans aucune de ses branches.

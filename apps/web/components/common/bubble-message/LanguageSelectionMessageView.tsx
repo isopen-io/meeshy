@@ -371,6 +371,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              aria-label={`${t('translateWith')} ${t('translation.basic.title')}`}
                               size="sm"
                               variant="ghost"
                               className="h-7 w-7 p-0 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
@@ -393,6 +394,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              aria-label={`${t('translateWith')} ${t('translation.standard.title')}`}
                               size="sm"
                               variant="ghost"
                               className="h-7 w-7 p-0 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
@@ -415,6 +417,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
+                              aria-label={`${t('translateWith')} ${t('translation.premium.title')}`}
                               size="sm"
                               variant="ghost"
                               className="h-7 w-7 p-0 hover:bg-purple-50 dark:hover:bg-purple-900/20"
@@ -493,6 +496,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
+                                      aria-label={t('improveQuality', { current: getModelLabel(version.model || 'basic'), next: getModelLabel(getNextTier(version.model || 'basic') || '') })}
                                       size="sm"
                                       variant="ghost"
                                       className="h-5 w-5 p-0"
@@ -524,6 +528,7 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
+                                      aria-label={t('downgradeToModel', { model: getModelLabel(getPreviousTier(version.model || 'basic') || '') })}
                                       size="sm"
                                       variant="ghost"
                                       className="h-5 w-5 p-0"

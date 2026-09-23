@@ -24,8 +24,10 @@ import {
   VIEW_ONCE_WITNESS_ID,
   messagesOf,
 } from './fixtures';
+import { CONVERSATION_ID, VIEWER_ID } from './fixtures-base';
 import { flagsOf } from './preferences';
 import { place } from '../grouping';
+import { unreadBoundaryOf } from '../view/unread-boundary';
 
 const ALL_MESSAGES = [
   ...THREAD_MESSAGES,
@@ -166,4 +168,28 @@ test('la Salle sécurisée n’est ni épinglée ni archivée (check-list-action
   const flags = flagsOf(room!);
   expect(flags.isPinned).toBe(false);
   expect(flags.isArchived).toBe(false);
+});
+
+/**
+ * L'APPAREIL NEUF DU CORPUS (#7351, D-L2) — « Équipe déploiement » n'a AUCUN
+ * curseur de lecture et la liste l'annonce non lue : c'est le fil que reçoit
+ * un appareil qui ne l'a jamais ouvert, et celui qu'ouvrent les gates
+ * navigateur du fil (`check-thread-virtualization.mjs` sur 500 messages,
+ * `check-list-actions.mjs` pour le badge). Le mettre à 0 pour garder un fil
+ * « ouvert en bas » effaçait le badge que `check-list-actions.mjs` bascule, et
+ * retirait aux gates le seul chemin navigateur du profil neuf.
+ */
+test('« Équipe déploiement » : aucun curseur, des non-lus servis — le séparateur annonce le MÊME nombre que le badge (#7351)', () => {
+  const deploiement = CONVERSATIONS.find((c) => c.id === CONVERSATION_ID);
+  expect(deploiement).toBeDefined();
+  const conversation = deploiement!;
+  expect(conversation.lastReadMessageId).toBeUndefined();
+  expect(conversation.lastReadAt).toBeUndefined();
+  expect(conversation.lastReadMessageCreatedAt).toBeUndefined();
+  expect(conversation.currentUserJoinedAt).toBeUndefined();
+  expect(conversation.unreadCount ?? 0).toBeGreaterThan(0);
+
+  const boundary = unreadBoundaryOf({ conversation, messages: messagesOf(CONVERSATION_ID), viewerId: VIEWER_ID });
+
+  expect(boundary?.unreadCount).toBe(conversation.unreadCount);
 });

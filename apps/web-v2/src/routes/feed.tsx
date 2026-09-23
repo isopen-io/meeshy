@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
+import { FeedCreateDoor } from '@/components/feed-create-door';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -22,6 +23,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
+import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useOnline } from '@/lib/net/online';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -57,13 +59,42 @@ import { Link } from '@/routes/route-table';
  * `RailTitleSlot` et `useStoryRailProps`, les MÊMES composants avec la MÊME
  * cote (#6133) — jamais une seconde tuile ni une seconde bascule.
  *
- * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le placeholder
- * de composeur, le bouton rond « À proximité » de l'en-tête (celui des Réels
- * l'a rejoint avec son lecteur, #6457), le menu « Plus d'options », le panneau de traduction secondaire et la bannière
- * temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait une route
- * ou un geste absent (loi 4), ou un compagnon de temps réel hors périmètre
- * lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par le disque
- * qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
+ * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le bouton rond
+ * « À proximité » de l'en-tête (celui des Réels l'a rejoint avec son lecteur,
+ * #6457), le panneau de traduction secondaire et la
+ * bannière temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait
+ * une route ou un geste absent (loi 4), ou un compagnon de temps réel hors
+ * périmètre lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par
+ * le disque qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
+ *
+ * LE MENU « PLUS D'OPTIONS » A SES GESTES (#7533) — il figurait dans la
+ * liste ci-dessus faute d'actions à servir. Supprimer, épingler et signaler
+ * une publication ont désormais leur port (`lib/api/publication-actions.ts`,
+ * `reportPost`) : le « ⋯ » se pose en haut à droite de chaque carte
+ * (`feed-post-menu.tsx`), servi par `usePostGesture().menu`.
+ *
+ * LE PLACEHOLDER DE COMPOSEUR A UNE PORTE (#7449) — il figurait dans la liste
+ * ci-dessus tant qu'aucune adresse ne créait de `Post.type = 'POST'` ni
+ * `'REEL'` : c'était un contrôle sans effet, donc un contrôle à ne pas
+ * dessiner. `FeedCreateDoor` le remplace dans l'EN-TÊTE plutôt qu'en tête de
+ * liste — la rangée d'iOS coûterait le plateau des stories, qui occupe déjà
+ * cette place ici, et une porte d'en-tête reste atteignable une fois le fil
+ * défilé.
+ *
+ * LE CHROME PREND LA FENÊTRE, LE CONTENU PREND LA COLONNE (#7449, directive
+ * porteur du 2026-09-22) — `READING_COLUMN_STYLE` (`lib/view/reading-column.ts`)
+ * est posée sur les CARTES, le squelette et les états vide/erreur ; l'en-tête,
+ * le plateau des stories et le scrollport (donc la barre de défilement)
+ * gardent toute la largeur de la fenêtre.
+ *
+ * La première écriture de ce lot bornait le SCROLLPORT : plus simple d'un
+ * `style`, et faux — elle emportait avec elle le titre « Meeshy Feed » et le
+ * plateau, qui sont du CHROME et n'ont aucune raison de rétrécir. C'est la
+ * mesure de LECTURE qu'on borne (une ligne trop longue se relit mal), jamais
+ * l'application.
+ *
+ * La borne ne mord qu'au-delà d'elle-même : aux deux gabarits que les gates
+ * mesurent (390 × 844, 320 × 568), le rendu est au pixel près celui d'avant.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
 
@@ -113,6 +144,12 @@ export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; re
         <Glyph name="caretLeft" size={20} />
       </Link>
       <RailTitleSlot title="Meeshy Feed" pinned={pinned} railProps={railProps} />
+      {/* PUBLIER (#7449) — « Publication » ou « Réel », deux adresses sous une
+          porte. Elle se pose À GAUCHE des Réels et ce n'est pas un goût :
+          `check-reels.mjs` mesure que « Lancer les Réels » touche le bord droit
+          (`innerWidth - right <= 16`) et `check-feed-disc.mjs` qu'il vit dans
+          les 64 derniers pixels — la place que la cible iOS lui donne. */}
+      <FeedCreateDoor language={language} />
       {/* LANCER LES RÉELS (#6457) — la première action de l'en-tête d'iOS
           (`FeedView.swift`, `reelsButton` ⇒ `ReelsPresenter.presentFresh()`),
           en haut à droite, sans graine. Le disque flottant de droite se pose
@@ -163,7 +200,7 @@ export function FeedTopChrome({
 export function FeedError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
   const language = currentInterfaceLanguage();
   return (
-    <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
+    <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center" style={READING_COLUMN_STYLE}>
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
@@ -188,7 +225,7 @@ export function FeedError({ online, onRetry }: { readonly online: boolean; reado
 export function FeedEmpty() {
   const language = currentInterfaceLanguage();
   return (
-    <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
+    <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center" style={READING_COLUMN_STYLE}>
       <Glyph name="image" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'feed.empty.title')}
@@ -214,7 +251,7 @@ export function FeedSkeleton({ count = SKELETON_CARDS_COLD_START }: { readonly c
     /* AUCUN `aria-busy` ICI — le scrollport qui PORTE ce squelette l'annonce
        déjà (`FeedScreen`) ; le poser deux fois faisait lire « Chargement du
        fil » deux fois de suite (revue-correction #5893). */
-    <div aria-hidden="true" className="flex flex-col gap-3">
+    <div aria-hidden="true" className="flex flex-col gap-3" style={READING_COLUMN_STYLE}>
       {Array.from({ length: count }, (_, i) => i).map((i) => (
         <div key={i} className="flex flex-col gap-2 p-3" style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18 }}>
           <div className="flex items-center gap-2.5">
@@ -287,7 +324,7 @@ export default function FeedScreen() {
      autres gestes de la rangée (`use-post-gesture.ts`) : l'adresse du fil
      s'écrit une seule fois pour les quatre écrans qui montent la carte. Elle
      était recopiée ici, et deux de ces écrans l'avaient oubliée. */
-  const { announcement, onGesture, onShare, onComment } = usePostGesture();
+  const { announcement, onGesture, onShare, onComment, menu } = usePostGesture();
 
   // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
   // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
@@ -342,7 +379,12 @@ export default function FeedScreen() {
         ) : (
           <>
             {models.map((model) => (
-              <li key={model.id}>
+              /* LA COLONNE EST SUR LA CARTE (#7449) — pas sur le scrollport,
+                 et c'est la directive porteur du 2026-09-22 : le CHROME prend
+                 la fenêtre (l'en-tête, le plateau des stories, la barre de
+                 défilement), seul le CONTENU se borne. Bornée plus haut, la
+                 colonne emportait le plateau et le titre avec elle. */
+              <li key={model.id} style={READING_COLUMN_STYLE}>
                 <FeedPostCard
                   model={model}
                   /* L'ANNEAU DE STORY VIENT DU CORPUS QUE CET ÉCRAN TIENT DÉJÀ
@@ -361,6 +403,7 @@ export default function FeedScreen() {
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={onComment}
+                  menu={menu}
                   preferredLanguages={readerLanguages}
                   onOpenScene={sceneGallery.onOpenScene}
                   registerScene={registerScene}

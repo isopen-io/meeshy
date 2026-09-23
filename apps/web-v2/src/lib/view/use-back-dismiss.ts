@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { openModalLayer } from './modal-layers';
+
 /**
  * LE RETOUR MATÉRIEL CONSOMME LA COUCHE MODALE, PAS L'ÉCRAN (#5555, puis
  * généralisé revue #5814, défaut majeur 6) — extrait de `components/
@@ -39,25 +41,59 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
  * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
  * la couche sans que le retour lui appartienne.
  *
- * **UNE COUCHE OUVERTE PAR LE GESTE QUI EN FERME UNE AUTRE ADOPTE SON ENTRÉE**
- * (#7415). « Plus… » dans le menu d'un message : le menu se ferme et la
- * feuille s'ouvre dans le MÊME commit. Le nettoyage du menu appelait
- * `history.back()` sur-le-champ ; ce recul est ASYNCHRONE, et son `popstate`
- * arrivait après que la feuille avait posé son entrée — elle le prenait pour
- * un retour matériel et se refermait une milliseconde après s'être ouverte
- * (mesuré dans Chromium). Le recul part donc au tour de micro-tâche qui suit
- * le commit : une couche montée DANS ce commit trouve l'entrée encore
- * courante, la reprend à son nom (`replaceState`) et annule le recul. Aucune
- * entrée n'est ajoutée ni perdue, et le retour matériel ferme bien la
- * nouvelle couche. Sans adoption, le recul part comme avant.
+ * **ELLE DÉCLARE AUSSI LA COUCHE AU REGISTRE** (`modal-layers.ts`, W14
+ * #7372). Ce crochet est le seul point que TOUTE couche modale traverse —
+ * c'est ce que son titre promet depuis #5814 — donc le seul endroit d'où
+ * « quelque chose recouvre l'écran » se sait sans être recalculé par chaque
+ * hôte. Le suivi de lecture s'y abonne pour cesser de marquer lu ce qu'une
+ * visionneuse ou une feuille cache. La déclaration vit dans le MÊME effet de
+ * mise en page que l'entrée d'historique, pour la même raison : une couche
+ * visible une image avant d'être comptée est une image pendant laquelle le
+ * fil se marque lu.
+ *
+ * **UNE COUCHE QUI EN REMPLACE UNE AUTRE ADOPTE SON ENTRÉE** (#7527). Mesuré
+ * sur staging : appui long sur une bulle, « Plus… », et la feuille « Infos du
+ * message » ne s'ouvrait pas — le menu se refermait seul. Les deux couches
+ * s'échangent dans un SEUL commit React, qui joue TOUS les nettoyages avant
+ * TOUS les effets : le menu rendait donc son entrée (`history.back()`) juste
+ * avant que la feuille ne pose la sienne. Or le navigateur ne dispatche pas
+ * `popstate` pendant `history.back()` — il le POSTE (HTML, « traverse the
+ * history by a delta ») : le retour arrivait quand la feuille était seule à
+ * écouter, et c'est elle qu'il fermait.
+ *
+ * L'entrée n'est donc plus rendue DANS le nettoyage : elle est LAISSÉE, et la
+ * couche suivante du même commit la reprend telle quelle — aucun `back()`,
+ * aucun `pushState`, donc aucun `popstate` à égarer. Sans successeur, la
+ * micro-tâche la rend comme avant, en revérifiant qu'elle est toujours
+ * l'entrée courante (une navigation entre-temps annule le retour, § #6313).
  */
 let nextMarker = 0;
 
-/** Les entrées RENDUES par une couche fermée, dont le recul attend la fin du commit. */
-const pendingReleases = new Set<string>();
+/** L'entrée qu'une couche démontée a laissée, tant qu'aucune autre ne l'a
+ * adoptée et que la micro-tâche ne l'a pas rendue (#7527). */
+let pendingRelease: string | null = null;
 
 function carriesMarker(state: unknown, marker: string): boolean {
   return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
+}
+
+function leaveEntry(marker: string): void {
+  pendingRelease = marker;
+  queueMicrotask(() => {
+    if (pendingRelease !== marker) return;
+    pendingRelease = null;
+    if (carriesMarker(window.history.state, marker)) window.history.back();
+  });
+}
+
+/** L'entrée laissée par la couche précédente, si elle est TOUJOURS l'entrée
+ * courante — sinon la nouvelle couche pose la sienne. */
+function adoptLeftEntry(): string | null {
+  if (pendingRelease === null) return null;
+  if (!carriesMarker(window.history.state, pendingRelease)) return null;
+  const adopted = pendingRelease;
+  pendingRelease = null;
+  return adopted;
 }
 
 export function useBackDismiss(onClose: () => void): void {
@@ -67,15 +103,15 @@ export function useBackDismiss(onClose: () => void): void {
   });
 
   useLayoutEffect(() => {
-    nextMarker += 1;
-    const marker = `back-dismiss-${nextMarker}`;
-    const released = [...pendingReleases].find((candidate) => carriesMarker(window.history.state, candidate));
-    if (released === undefined) {
+    const releaseModalLayer = openModalLayer();
+    const adopted = adoptLeftEntry();
+    let marker = adopted;
+    if (marker === null) {
+      nextMarker += 1;
+      marker = `back-dismiss-${nextMarker}`;
       window.history.pushState({ backDismiss: marker }, '');
-    } else {
-      pendingReleases.delete(released);
-      window.history.replaceState({ backDismiss: marker }, '');
     }
+    const ownMarker = marker;
     let consumedByHistory = false;
     const onPopState = () => {
       consumedByHistory = true;
@@ -84,13 +120,9 @@ export function useBackDismiss(onClose: () => void): void {
     window.addEventListener('popstate', onPopState);
 
     return () => {
+      releaseModalLayer();
       window.removeEventListener('popstate', onPopState);
-      if (consumedByHistory || !carriesMarker(window.history.state, marker)) return;
-      pendingReleases.add(marker);
-      queueMicrotask(() => {
-        if (!pendingReleases.delete(marker)) return;
-        if (carriesMarker(window.history.state, marker)) window.history.back();
-      });
+      if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) leaveEntry(ownMarker);
     };
   }, []);
 }

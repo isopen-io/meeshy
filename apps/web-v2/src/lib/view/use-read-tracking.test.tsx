@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { useBackDismiss } from './use-back-dismiss';
 import { useReadTracking } from './use-read-tracking';
 
 /**
@@ -76,6 +77,19 @@ afterEach(() => {
 
 let marked: { readonly conversationId: string; readonly caughtUpToMessageId: string }[] = [];
 let setLastMessageIdExternal: (id: string | undefined) => void = () => {};
+let setModalLayerExternal: (open: boolean) => void = () => {};
+
+/**
+ * UNE COUCHE MODALE, PAR LE CHEMIN RÉEL (W14, #7372) — `useBackDismiss` est
+ * l'unique passage de toute couche du dépôt (feuille, menu du message, menus
+ * flottants, actions de rangée, visionneuse plein écran) ; l'emprunter ici
+ * mesure la chaîne ENTIÈRE — couche → registre → suivi de lecture — plutôt
+ * qu'un drapeau que le témoin se serait donné lui-même.
+ */
+function ModalLayer() {
+  useBackDismiss(() => {});
+  return null;
+}
 
 function Host({
   conversationId = 'c1',
@@ -89,7 +103,9 @@ function Host({
   const scroller = useRef<HTMLElement | null>(null);
   const [lastMessageId, setLastMessageId] = useState<string | undefined>(initialLastMessageId);
   const [enabled] = useState(initialEnabled);
+  const [modalLayer, setModalLayer] = useState(false);
   setLastMessageIdExternal = setLastMessageId;
+  setModalLayerExternal = setModalLayer;
   const { sentinelRef } = useReadTracking({
     scroller,
     conversationId,
@@ -100,6 +116,7 @@ function Host({
   return (
     <main ref={scroller as never}>
       <div ref={sentinelRef} data-testid="sentinel" />
+      {modalLayer ? <ModalLayer /> : null}
     </main>
   );
 }
@@ -199,5 +216,57 @@ describe('useReadTracking — fenêtre cachée', () => {
       window.dispatchEvent(new Event('focus'));
     });
     expect(marked).toEqual([]);
+  });
+});
+
+describe('useReadTracking — la couche qui recouvre (W14, #7372)', () => {
+  test('une couche modale ouverte ⇒ la sentinelle visible ne marque RIEN', () => {
+    mount({ initialLastMessageId: 'm7' });
+    act(() => setModalLayerExternal(true));
+    fireEntry(true);
+    expect(marked).toEqual([]);
+  });
+
+  test('la couche se referme ⇒ la frontière retenue part enfin, sans nouveau geste', () => {
+    mount({ initialLastMessageId: 'm7' });
+    act(() => setModalLayerExternal(true));
+    fireEntry(true);
+    expect(marked).toEqual([]);
+
+    act(() => setModalLayerExternal(false));
+    expect(marked).toEqual([{ conversationId: 'c1', caughtUpToMessageId: 'm7' }]);
+  });
+
+  test('une frontière arrivée SOUS la couche attend la fermeture', () => {
+    mount({ initialLastMessageId: 'm7' });
+    fireEntry(true);
+    expect(marked).toEqual([{ conversationId: 'c1', caughtUpToMessageId: 'm7' }]);
+    marked = [];
+
+    act(() => setModalLayerExternal(true));
+    act(() => setLastMessageIdExternal('m8'));
+    expect(marked).toEqual([]);
+
+    act(() => setModalLayerExternal(false));
+    expect(marked).toEqual([{ conversationId: 'c1', caughtUpToMessageId: 'm8' }]);
+  });
+
+  test('retour au premier plan SOUS la couche ⇒ toujours rien', () => {
+    mount({ initialLastMessageId: 'm7' });
+    act(() => setModalLayerExternal(true));
+    fireEntry(true);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(marked).toEqual([]);
+  });
+
+  test('aucune couche ⇒ la frontière part comme avant (le refus ne se déclenche pas tout seul)', () => {
+    mount({ initialLastMessageId: 'm7' });
+    act(() => setModalLayerExternal(true));
+    act(() => setModalLayerExternal(false));
+    fireEntry(true);
+    expect(marked).toEqual([{ conversationId: 'c1', caughtUpToMessageId: 'm7' }]);
   });
 });

@@ -52,7 +52,9 @@ jest.mock('../../../utils/logger-enhanced', () => {
 // L'ÉCRITURE réussit — c'est toute la question : l'événement disparaissait
 // derrière un marquage réellement enregistré. Le module est PROLONGÉ, jamais
 // remplacé par une liste écrite à la main.
-const mockMarkAudioAsListened = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+const mockMarkAudioAsListened = jest
+  .fn<(...args: unknown[]) => Promise<{ position: number | null; complete: boolean }>>()
+  .mockResolvedValue({ position: 30_000, complete: false });
 jest.mock('../../../services/MessageReadStatusService', () => {
   const actual = jest.requireActual('../../../services/MessageReadStatusService') as Record<
     string,
@@ -258,5 +260,40 @@ describe('POST /attachments/:attachmentId/status — la diffusion survit à une 
     // Une préférence LUE n'est pas un repli : aucune trace de dégradation.
     const traces = mockLogWarn.mock.calls.concat(mockLogError.mock.calls).map(([m]) => String(m));
     expect(traces.some((m) => /repli/i.test(m))).toBe(false);
+  });
+});
+
+describe('POST /attachments/:attachmentId/status — la charge SERVIE, pas le rapport brut (#7359)', () => {
+  let app: FastifyInstance | null = null;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearPrivacyPreferencesCache();
+  });
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+    clearPrivacyPreferencesCache();
+  });
+
+  it('une reprise à 10 % après une écoute SERVIE à 80 % pousse percentage=80 et complete SERVI, pas le rapport brut', async () => {
+    // Le service a déjà protégé 8000/10000 ms (80 %, complet) contre la
+    // régression : ce rapport-ci n'apporte que 1000 ms (10 %, incomplet).
+    mockMarkAudioAsListened.mockResolvedValueOnce({ position: 8000, complete: true });
+    const socket = makeSocketDouble();
+    app = await buildApp({ readPreferences: () => Promise.resolve([]), socket });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/attachments/${ATTACHMENT_ID}/status`,
+      payload: { action: 'listened', playPositionMs: 1000, durationMs: 10_000, complete: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(socket.emit).toHaveBeenCalledWith(
+      SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED,
+      expect.objectContaining({ playPositionMs: 8000, percentage: 80, complete: true })
+    );
   });
 });

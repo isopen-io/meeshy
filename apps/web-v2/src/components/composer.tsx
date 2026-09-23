@@ -217,24 +217,41 @@ export const Composer = memo(function Composer({
   const languagePillRef = useRef<HTMLButtonElement>(null);
 
   /**
-   * LA PROTECTION (#6175) — les trois bascules de la rangée haute, seedées
-   * depuis le brouillon restauré. `viewOnce` n'a aucun contrôle ici (§ 1.2
-   * point 1 : réservé au composeur de prévisualisation de notification) —
-   * la loi le porte quand même (`ComposeProtection.viewOnce`), jamais armé
-   * depuis cet écran.
+   * LA PROTECTION (#6175) — les quatre bascules de la rangée haute, seedées
+   * depuis le brouillon restauré.
+   *
+   * `viewOnce` (#7354, V6) — RENVERSE la décision antérieure (« aucun
+   * contrôle ici, réservé au composeur de prévisualisation de notification,
+   * iOS `showViewOnce: previewMode` ») : le critère de fin de #7354 exige le
+   * contrôle EN CONVERSATION STANDARD. GATÉE sur `hasImageAttachment`
+   * ci-dessous — « envoie une IMAGE à vue unique » (#7354), et un texte seul
+   * marqué vue-unique n'a aucun rendu qui le dise (loi 4).
    */
   const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(draft?.protection.ephemeralSeconds);
   const [ephemeralPickerOpen, setEphemeralPickerOpen] = useState(false);
   const [blurred, setBlurred] = useState(draft?.protection.blurred === true);
+  const [viewOnce, setViewOnce] = useState(draft?.protection.viewOnce === true);
   const [effectFlags, setEffectFlags] = useState(draft?.protection.effectFlags ?? 0);
   const [effectsSheetOpen, setEffectsSheetOpen] = useState(false);
+  /** GATE PRODUIT DE LA BASCULE « VUE UNIQUE » (#7354) — au moins une pièce
+   * jointe IMAGE en attente, motif `canRecord`/`canLocate` (loi 4 : un
+   * contrôle sans objet ne se rend pas). */
+  const hasImageAttachment = pending.some((a) => a.kind === 'image');
+  /* LA BASCULE NE SURVIT PAS À LA DISPARITION DE SON OBJET (#7354) — retirer
+     la DERNIÈRE image pendant que « vue unique » est armé laisserait un
+     texte partir marqué vue-unique sans que rien à l'écran ne le montre
+     plus (même défaut que « un contrôle qui ment », `tasks/lessons.md`). */
+  useEffect(() => {
+    if (!hasImageAttachment && viewOnce) setViewOnce(false);
+  }, [hasImageAttachment, viewOnce]);
   const protection: ComposeProtection = useMemo(
     () => ({
       ...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds }),
       ...(blurred ? { blurred: true } : {}),
+      ...(hasImageAttachment && viewOnce ? { viewOnce: true } : {}),
       ...(effectFlags === 0 ? {} : { effectFlags }),
     }),
-    [ephemeralSeconds, blurred, effectFlags],
+    [ephemeralSeconds, blurred, hasImageAttachment, viewOnce, effectFlags],
   );
 
   /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
@@ -330,8 +347,9 @@ export const Composer = memo(function Composer({
   const showAbove = pending.length > 0 || notice !== null || locator.place !== null;
 
   /**
-   * « COMPOSER » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
-   * 8) — `useMessageMenu.onMenuAction('compose')` pose `focusTakenRef.current
+   * « RÉPONDRE » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
+   * 8 ; l'action s'appelait `compose` jusqu'à #7555) —
+   * `useMessageMenu.onMenuAction('reply')` pose `focusTakenRef.current
    * = true` sur la PROMESSE que quelqu'un prend le focus ; mesuré,
    * `document.activeElement` valait BODY après ce geste, contrairement à
    * iOS (`ConversationView+LongPressMenu.swift`,
@@ -381,6 +399,7 @@ export const Composer = memo(function Composer({
     setEphemeralSeconds(undefined);
     setEphemeralPickerOpen(false);
     setBlurred(false);
+    setViewOnce(false);
     setEffectFlags(0);
     /* LE LIEU NE SURVIT PAS AU MESSAGE QUI VIENT DE PARTIR (#7280) — même
        règle que la protection, et pour la même raison : il DÉCRIT ce
@@ -566,6 +585,9 @@ export const Composer = memo(function Composer({
           }}
           blurred={blurred}
           onToggleBlur={() => setBlurred((v) => !v)}
+          showViewOnce={hasImageAttachment}
+          viewOnce={viewOnce}
+          onToggleViewOnce={() => setViewOnce((v) => !v)}
           effectCount={decorativeEffectCountOf(effectFlags)}
           onOpenEffects={() => setEffectsSheetOpen(true)}
           sentiment={sentiment}

@@ -46,7 +46,21 @@ class ConversationViewModel: ObservableObject {
             _mentionDisplayNames = nil
             _mentionCandidates = nil
         }
+
+        // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
+        // TOUT changement de `messages` traverse (les deux pipelines, legacy et
+        // GRDB). Le retrait lui-même est toujours différé : voir
+        // `EphemeralExpiryCoordinator`.
+        refreshEphemeralExpirySchedule()
     }
+
+    /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le
+    /// fil, jamais un minuteur par bulle (#7452).
+    lazy var ephemeralExpiry: EphemeralExpiryCoordinator = {
+        let coordinator = EphemeralExpiryCoordinator()
+        coordinator.onExpired = { [weak self] ids in self?.expireEphemeralsIfNeeded(ids) }
+        return coordinator
+    }()
 
     var _cachedLastReceivedIndex: IndexCache = .uncomputed
 
@@ -251,7 +265,12 @@ class ConversationViewModel: ObservableObject {
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
     /// Cf. `caughtUpMessageId(seen:)`.
-    private var lastCaughtUpMessageId: String?
+    private(set) var lastCaughtUpMessageId: String?
+
+    /// Tout ce que l'observateur de visibilité a rapporté depuis l'ouverture
+    /// (#7350) — le préfixe contigu depuis la frontière s'y mesure, jamais sur
+    /// le seul dernier lot. Cf. `notePartialRead(seen:)`.
+    var seenServerMessageIds: Set<String> = []
 
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
@@ -407,6 +426,20 @@ class ConversationViewModel: ObservableObject {
         let senderAvatarURL: String?
         let senderColor: String
         let sentAt: Date
+        /// #7362 — la galerie plein écran n'a aucune autre source pour savoir
+        /// qui a envoyé une pièce donnée ; c'est ce qui gouverne
+        /// `GalleryImageOpenReport` (jamais reporter sa propre image). Défaut
+        /// `false` : les galeries POST / COMMENTAIRE (`SocialMediaGalleryPresentation`,
+        /// `CommentMediaGallery`) construisent ce type sans connaître la
+        /// notion — elles ne reportent de toute façon aucune consommation
+        /// (`ConversationMediaGalleryView.reportsAttachmentConsumption`).
+        ///
+        /// `var`, pas `let` : un stored `let` porteur d'un initialiseur
+        /// littéral n'entre PAS dans l'init memberwise synthétisé (le
+        /// compilateur le traite comme fixé à la déclaration, pas comme un
+        /// défaut substituable) — seul un `var` avec défaut y ajoute un
+        /// paramètre substituable (SE-0242).
+        var isMe: Bool = false
     }
 
     var _mediaSenderInfoMap: [String: MediaSenderInfo]?
@@ -756,15 +789,8 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — 4 branches :
-    ///   1. ce device est déjà sur CET appel (actif ou en négociation) →
-    ///      ramener l'UI d'appel au premier plan ;
-    ///   2. ce device SONNE sur cet appel (bannière call-waiting) → laisser la
-    ///      bannière/CallKit porter le geste de réponse, pas de double-join ;
-    ///   3. l'appel est actif côté serveur (revalidé via active-call) →
-    ///      `rejoinActiveCall` (réhydratation à froid — app relancée mi-appel) ;
-    ///   4. l'appel n'existe plus → toast « L'appel est terminé » (la bulle
-    ///      sera éditée au terminal dès que le message:edited arrive).
+    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — la revalidation
+    /// (4 branches) vit dans `LiveCallJoiner`, partagé avec la ligne de liste.
     /// Internal (pas private) pour la testabilité des branches.
     func joinOngoingCall(_ summary: CallSummaryMetadata) async {
         // Same anonymity gate as `callBack(for:)` — this is also reachable
@@ -772,46 +798,16 @@ class ConversationViewModel: ObservableObject {
         // distinct code path (revalidated server round-trip) so it re-asserts
         // the guard rather than relying on the caller alone.
         guard anonymousSession == nil else { return }
-        // 1 — déjà sur cet appel : l'UI d'appel revient au premier plan.
-        if liveCallJoin.currentCallId() == summary.callId, !liveCallJoin.isIdle() {
-            liveCallJoin.bringCallUIForward()
-            return
-        }
-        // 2 — cet appel sonne en attente sur ce device : répondre reste le
-        // geste de la bannière (jamais de rejoin concurrent).
-        if liveCallJoin.hasPendingIncomingCall(summary.callId) {
-            return
-        }
-        // 3/4 — réhydratation à froid : revalider côté serveur avant tout média.
-        do {
-            let session = try await activeCallService.activeCall(conversationId: conversationId)
-            guard let session, session.id == summary.callId else {
-                FeedbackToastManager.shared.show(
-                    String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
-                    type: .info
-                )
-                return
-            }
-            let remote = session.remoteParticipant(currentUserId: currentUserId)
-            let displayName = remote?.user?.displayName
-                ?? remote?.user?.username
-                ?? resolvedPeerDisplayName
-                ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
-            let joined = liveCallJoin.rejoinActiveCall(
-                summary.callId,
-                conversationId,
-                remote?.userId ?? participantUserId ?? "",
-                displayName,
-                summary.callType == .video
+        await LiveCallJoiner(context: liveCallJoin, activeCallService: activeCallService).join(
+            LiveCallJoinRequest(
+                callId: summary.callId,
+                conversationId: conversationId,
+                isVideo: summary.callType == .video,
+                currentUserId: currentUserId,
+                fallbackRemoteUserId: participantUserId,
+                fallbackDisplayName: resolvedPeerDisplayName
             )
-            if !joined {
-                Logger.messages.warning("[ConversationVM] rejoinActiveCall refused (state non-idle) for \(summary.callId, privacy: .public)")
-            }
-        } catch {
-            FeedbackToastManager.shared.showError(
-                String(localized: "bubble.call.join.failed", defaultValue: "Impossible de rejoindre l'appel", bundle: .main)
-            )
-        }
+        )
     }
 
     /// Best-effort peer display name from the most recent received message in
@@ -1015,7 +1011,9 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
-        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds, visible: visibleIds))
+        let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
+        if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
     }
 
     /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux

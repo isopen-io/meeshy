@@ -237,6 +237,72 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.conversationUnreadTotal, 1)
     }
 
+    // MARK: - #7350 — ouvrir n'est pas lire : la fermeture rend la conversation à l'icône
+
+    private final class OpenConversationBox { var id: String? }
+
+    private func makeSUT(open box: OpenConversationBox) -> NotificationCoordinator {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+                                       openConversationIdProvider: { box.id }, ledger: makeLedger())
+    }
+
+    /// Recette 2026-09-21, étape 7 : l'API dit « 1 conversation non lue », le
+    /// badge affiche 0. 99 non-lus, l'écran s'ouvre, 5 sont affichés, le
+    /// serveur sert 94 PENDANT l'affichage — puis l'écran se ferme et la liste
+    /// republie sa ligne, restaurée à 94.
+    func test_closingAPartiallyReadConversation_countsItAgainOnTheIcon() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([makeConversation(id: "c1", unread: 99)])
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 94)
+        XCTAssertEqual(sut.conversationUnreadTotal, 0, "l'écran affiché ne pèse pas sur l'icône")
+
+        box.id = nil
+        sut.registerConversations([makeConversation(id: "c1", unread: 94)])
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 1, "94 non-lus restent : la conversation compte à nouveau")
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 94)
+    }
+
+    /// Ouvrir une conversation la retire de l'icône DANS LE TOUR DE BOUCLE, même
+    /// quand le serveur lui sert le compte qu'elle avait déjà : c'est le
+    /// curseur qui a bougé, pas l'entrée, et le total publié doit le voir.
+    func test_openingAConversation_takesItOffTheIcon_evenWhenItsCountIsUnchanged() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 5)
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 1, "la conversation affichée ne pèse plus sur l'icône")
+    }
+
+    /// La lecture COMPLÈTE faite pendant l'affichage tient après la fermeture :
+    /// « marquer lu » doit s'appliquer à la conversation OUVERTE, dont la
+    /// ligne se lit déjà à zéro.
+    func test_closingAfterReadingEverything_leavesTheIconAtZero() {
+        let box = OpenConversationBox()
+        let sut = makeSUT(open: box)
+        sut.reconcileConversationUnreads([makeConversation(id: "c1", unread: 7)])
+        box.id = "c1"
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
+
+        sut.markConversationRead("c1")
+        box.id = nil
+        sut.registerConversations([makeConversation(id: "c1", unread: 0)])
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 0)
+    }
+
     // MARK: - appgroup-01 — reset() wipes the App Group widget store
 
     func test_reset_invokesWidgetSinkWipeAll() {

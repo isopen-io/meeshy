@@ -127,4 +127,16 @@ nonisolated enum MessageViewsConsumption {
             )
         }
     }
+
+    /// Un `attachment-status:updated` relance-t-il les cartes de CETTE fiche ?
+    /// Seulement s'il porte sur CE message : la fiche retourne au réseau pour
+    /// chacune de ses pièces jointes, et l'écoute d'un autre vocal du même fil
+    /// n'y change rien (#7360).
+    static func refreshesCards(
+        on event: AttachmentStatusUpdatedEvent,
+        messageId: String,
+        conversationId: String
+    ) -> Bool {
+        event.conversationId == conversationId && event.messageId == messageId
+    }
 }

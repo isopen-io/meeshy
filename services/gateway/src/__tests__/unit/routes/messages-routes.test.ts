@@ -2780,45 +2780,41 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
   });
 
-  it('race guard: a newer message was read concurrently after latestMessage was captured → skips the stale rewind, never overwrites the fresher cursor', async () => {
-    // A message strictly newer (lexicographically greater ObjectId) than MSG_ID
-    // was read by another device between our `latestMessage` read and the
-    // cursor write — the cursor now points past what we captured.
-    const NEWER_MSG_ID = '507f1f77bcf86cd799439099';
+  it('race guard: a newer message from ANOTHER participant appeared since latestMessage was captured → skips the stale rewind', async () => {
+    // A message from someone else, strictly newer than MSG_ID, showed up since (genuine race).
     prisma.participant.findFirst
       .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
       .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
     prisma.message.findFirst
       .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
-      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: NEWER_MSG_ID });
+      .mockResolvedValueOnce({ id: 'prev-msg-id' }) // previousMessage
+      .mockResolvedValueOnce({ id: '507f1f77bcf86cd799439099' }); // fresherOtherMessage recheck: FOUND
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+    // #7346 — un rewind refusé (course réelle) ne pousse aucun badge.
+    expect(fastify._mockEmit).not.toHaveBeenCalledWith('conversation:unread-updated', expect.anything());
   });
 
-  it('race guard orders by createdAt, not ObjectId string: an older message whose ObjectId sorts HIGHER than the cursor is still stale', async () => {
-    // The cursor points at a message read concurrently that is genuinely NEWER
-    // (createdAt later) but whose ObjectId string sorts BELOW latestMessage's —
-    // the same-second cross-process inversion. Ordering by ObjectId string would
-    // (wrongly) treat latestMessage as fresh and rewind past the fresher read;
-    // ordering by createdAt correctly detects it as stale and skips the rewind.
-    const CURSOR_MSG_ID = '507f1f77bcf86cd799439010'; // sorts below latestMessage
+  // #7346 — G-3 : répondre avance le curseur sur SON PROPRE message, pas une course.
+  it('« marquer non lu » reste effectif après une réponse — le propre message du lecteur ne compte pas comme une course', async () => {
     prisma.participant.findFirst
       .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
       .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
     prisma.message.findFirst
-      .mockResolvedValueOnce({ id: '507f1f77bcf86cd799439999', createdAt: new Date('2024-06-10T00:00:00.100Z') }) // latestMessage: older, higher ObjectId
-      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: new Date('2024-06-09') }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({
-      lastReadMessageId: CURSOR_MSG_ID,
-      lastReadMessageCreatedAt: new Date('2024-06-10T00:00:00.500Z') // newer than latestMessage
-    });
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage (from OTHER_USER_ID)
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: new Date('2024-06-09') }) // previousMessage
+      .mockResolvedValueOnce(null); // fresherOtherMessage recheck: NONE (reader's own reply, excluded by senderId)
+    // Cursor auto-advanced by the reader's OWN reply — inert on fixed code.
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: 'own-reply-msg-id', lastReadMessageCreatedAt: new Date('2024-06-11') });
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ lastReadMessageId: 'prev-msg-id' }),
+      update: expect.objectContaining({ lastReadMessageId: 'prev-msg-id' }),
+    }));
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
   });
 
   it('rewind writes lastReadMessageCreatedAt alongside lastReadMessageId (keeps the cursor pair consistent)', async () => {
@@ -2828,8 +2824,8 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
       .mockResolvedValueOnce({ id: PART_ID });
     prisma.message.findFirst
       .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
-      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: prevCreatedAt }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: prevCreatedAt }) // previousMessage
+      .mockResolvedValueOnce(null); // fresherOtherMessage recheck: none
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
@@ -2840,18 +2836,21 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     );
   });
 
-  it('cursor already exactly at latestMessage (not stale) → proceeds with the rewind as normal', async () => {
+  it('no fresher message from another participant → proceeds with the rewind as normal', async () => {
     prisma.participant.findFirst
       .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
       .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
     prisma.message.findFirst
       .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
-      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
-    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
+      .mockResolvedValueOnce({ id: 'prev-msg-id' }) // previousMessage
+      .mockResolvedValueOnce(null); // fresherOtherMessage recheck: none
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(prisma.conversationReadCursor.upsert).toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
+    // #7346 — pousse le badge (miroir broadcastReadStatus, mark-read/receipts).
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: 'resolved-conv-id', unreadCount: 1 });
   });
 });
 

@@ -4,6 +4,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
 
+import { createFakeIndexedDB, type FakeIndexedDB } from '@/test-support/fake-indexed-db';
+import {
+  DELIVERY_RECEIPT_DB_NAME,
+  DELIVERY_RECEIPT_KEY,
+  DELIVERY_RECEIPT_STORE_NAME,
+  type DeliveryReceiptCredential,
+} from './delivery-receipt-credential';
+
 /**
  * LE SERVICE WORKER QUI REÇOIT LE PUSH (#7305).
  *
@@ -64,6 +72,9 @@ type ClientStub = {
   postMessage(message: unknown): void;
 };
 
+/** Une requête `fetch` captée par le bouchon, telle que `accuserRemise` la compose. */
+type CapturedFetch = { readonly url: string; readonly init: Record<string, unknown> };
+
 type WorkerHarness = {
   readonly listeners: Map<string, Listener>;
   readonly shown: ShownNotification[];
@@ -71,6 +82,8 @@ type WorkerHarness = {
   readonly opened: string[];
   readonly badges: number[];
   readonly clients: ClientStub[];
+  /** Les accusés de remise partis — vide tant qu'aucun push éligible n'a de crédential. */
+  readonly deliveries: CapturedFetch[];
   readonly exports: {
     readonly PUSH_ROUTE_PATTERNS: Readonly<Record<string, string>>;
     readonly pushTargetUrl: (data: Record<string, unknown>) => string;
@@ -92,11 +105,32 @@ const windowClient = (visibilityState: string, url = 'https://meeshy.me/'): Clie
   return client;
 };
 
-function mount({ clients = [] as ClientStub[], already = [] as Record<string, unknown>[] } = {}): WorkerHarness {
+/**
+ * `credential`, sème le double IndexedDB EXACTEMENT comme
+ * `writeDeliveryReceiptCredential` (`delivery-receipt-credential.ts`, la
+ * moitié « page » du jumeau) l'aurait écrit — même base, même magasin, même
+ * clé — pour que ces témoins prouvent l'absence de dérive plutôt que de la
+ * supposer. `fetchFails`, un accusé qui échoue au réseau ne doit ni lever ni
+ * empêcher la bannière (best-effort, doc-comment de `accuserRemise`).
+ */
+function mount({
+  clients = [] as ClientStub[],
+  already = [] as Record<string, unknown>[],
+  credential,
+  fetchFails = false,
+}: {
+  readonly clients?: ClientStub[];
+  readonly already?: Record<string, unknown>[];
+  readonly credential?: DeliveryReceiptCredential;
+  readonly fetchFails?: boolean;
+} = {}): WorkerHarness {
   const listeners = new Map<string, Listener>();
   const shown: ShownNotification[] = [];
   const opened: string[] = [];
   const badges: number[] = [];
+  const deliveries: CapturedFetch[] = [];
+  const idb: FakeIndexedDB = createFakeIndexedDB();
+  if (credential !== undefined) idb.seed(DELIVERY_RECEIPT_DB_NAME, DELIVERY_RECEIPT_STORE_NAME, DELIVERY_RECEIPT_KEY, credential);
   /* La barre de notifications du navigateur : `getNotifications()` la lit, et
      `showNotification` y REMPLACE, à sa place, la bannière de même tag
      (« show steps » de la Notifications API). `already` y pose des bannières
@@ -152,6 +186,12 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
         badges.push(count);
       },
     },
+    indexedDB: idb,
+    fetch: async (url: string, init: Record<string, unknown>) => {
+      deliveries.push({ url, init });
+      if (fetchFails) throw new TypeError('Failed to fetch');
+      return { ok: true, status: 200 };
+    },
   } as Record<string, unknown>;
 
   new Function('self', SOURCE)(self);
@@ -164,6 +204,7 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
     opened,
     badges,
     clients,
+    deliveries,
     exports: self['meeshyPushTarget'] as WorkerHarness['exports'],
     async dispatch(type, event) {
       const listener = listeners.get(type);
@@ -463,6 +504,103 @@ describe('le worker AFFICHE ce que le serveur a composé — il ne re-résout ri
     await worker.dispatch('push', push(banner({ notificationId: 'n1', unreadCount: 'beaucoup' })));
     await worker.dispatch('push', push(banner({ notificationId: 'n2' })));
     expect(worker.badges).toEqual([]);
+  });
+});
+
+/**
+ * UN PUSH REÇU PAR LE SW ACCUSE SA REMISE (#7368, W4) — critère de fin :
+ * « onglet fermé, PWA suspendue … ⇒ envoyé jusqu'à reconnexion » ne doit
+ * plus tenir. Jumeau web de `NSEDataSync.postDeliveryReceipt`
+ * (`NSEDataSync.swift:453-466`), appelé SANS condition par
+ * `NotificationService.didReceive` (`NotificationService.swift:65`) — même
+ * discipline ici : `mount({ credential })` sème le double IndexedDB
+ * EXACTEMENT comme la page l'aurait écrit (`delivery-receipt-credential.ts`),
+ * preuve que les deux moitiés du jumeau ne divergent pas.
+ */
+describe('un push reçu par le SW accuse sa remise (#7368, W4)', () => {
+  const registered: DeliveryReceiptCredential = {
+    apiBase: 'https://gate.meeshy.me',
+    credential: { kind: 'registered', token: 'jwt-abc' },
+  };
+  const eligible = (extra: Record<string, unknown> = {}) =>
+    banner({ notificationId: 'n1', conversationId: 'conv-1', messageId: 'msg-1', type: 'new_message', ...extra });
+
+  test('un message ARRIVÉ, crédential posé ⇒ un accusé part vers la route canonique', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(eligible()));
+    expect(worker.deliveries).toEqual([
+      {
+        url: 'https://gate.meeshy.me/api/v1/conversations/conv-1/receipts',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer jwt-abc' },
+          body: JSON.stringify({ type: 'delivered', messageIds: ['msg-1'] }),
+          keepalive: true,
+        },
+      },
+    ]);
+  });
+
+  test('un invité de lien présente `X-Session-Token`, jamais `Authorization` — présenter un jeton d’invité en Bearer refuse (http.ts § Credential)', async () => {
+    const guest: DeliveryReceiptCredential = {
+      apiBase: 'https://gate.meeshy.me',
+      credential: { kind: 'anonymous', sessionToken: 'anon_xyz' },
+    };
+    const worker = mount({ credential: guest });
+    await worker.dispatch('push', push(eligible()));
+    expect(worker.deliveries[0]?.init['headers']).toEqual({
+      'Content-Type': 'application/json',
+      'X-Session-Token': 'anon_xyz',
+    });
+  });
+
+  test('aucun crédential posé par la page ⇒ aucun accusé — jamais une requête sans authentification', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(eligible()));
+    expect(worker.deliveries).toEqual([]);
+  });
+
+  /* JUMEAU de `NotificationPayloadHelpers.messageArrivalTypes` — une réaction
+     porte le `messageId` du message RÉAGI, pas remis. */
+  test('une réaction porte le messageId du message réagi — elle n’est pas une remise', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(eligible({ type: 'message_reaction' })));
+    expect(worker.deliveries).toEqual([]);
+  });
+
+  test('un événement social (« j’aime », commentaire) ne déclenche aucun accusé', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(eligible({ type: 'post_like' })));
+    expect(worker.deliveries).toEqual([]);
+  });
+
+  test('sans conversationId ou sans messageId, aucun accusé — rien à cibler', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(banner({ notificationId: 'n1', type: 'new_message', messageId: 'msg-1' })));
+    await worker.dispatch('push', push(banner({ notificationId: 'n2', type: 'new_message', conversationId: 'conv-1' })));
+    expect(worker.deliveries).toEqual([]);
+  });
+
+  /* D-11 point 1 supprime la BANNIÈRE système quand un onglet regarde déjà —
+     l'accusé, lui, n'a rien à voir avec ce que le lecteur VOIT. */
+  test('un onglet VISIBLE reçoit quand même l’accusé — seule la bannière système est supprimée (D-11)', async () => {
+    const worker = mount({ credential: registered, clients: [windowClient('visible')] });
+    await worker.dispatch('push', push(eligible()));
+    expect({ shown: worker.shown, delivered: worker.deliveries.length }).toEqual({ shown: [], delivered: 1 });
+  });
+
+  test('un échec réseau de l’accusé n’empêche pas la bannière — best-effort, comportement PRÉCÉDENT conservé', async () => {
+    const worker = mount({ credential: registered, fetchFails: true });
+    await worker.dispatch('push', push(eligible()));
+    expect(worker.shown.length).toBe(1);
+  });
+
+  /* Une conversation NEUVE annonce aussi l'arrivée d'un premier message —
+     miroir exact de `deliveryReceiptTypes` (`messageArrivalTypes` UNION). */
+  test('une conversation neuve accuse aussi son premier message', async () => {
+    const worker = mount({ credential: registered });
+    await worker.dispatch('push', push(eligible({ type: 'new_conversation_direct' })));
+    expect(worker.deliveries.length).toBe(1);
   });
 });
 

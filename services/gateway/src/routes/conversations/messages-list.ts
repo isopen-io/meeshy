@@ -72,6 +72,10 @@ import {
   parseLanguageFilterParam
 } from './messages-list-query';
 import type { RawMessageRow } from './messages-list-query-types';
+import {
+  isEphemeralServableToReader,
+  loadEphemeralReaderDeadlines,
+} from './ephemeralReaderDeadlines';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -627,6 +631,35 @@ export function registerMessagesListRoute(
         logger.info(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
+      // #7451 — les échéances d'éphémère de CETTE page, POUR CE LECTEUR.
+      // Chargées avant toute autre passe parce qu'elles décident ce qui reste
+      // servi : le service d'un éphémère s'arrête à `D(lecteur) + 1 h`, une
+      // heure après que la bulle a disparu de son écran et bien avant la
+      // destruction du contenu, qui attend le dernier décompte de la room.
+      //
+      // Le retrait a lieu ICI, sur `messages`, et pas sur la projection : les
+      // deux tableaux avancent ensemble jusqu'à la pagination (`splice`), et
+      // ne filtrer que le second les aurait désynchronisés.
+      const ephemeralDeadlines = await loadEphemeralReaderDeadlines(
+        prisma,
+        messages,
+        currentParticipantId
+      );
+      if (ephemeralDeadlines.size > 0) {
+        const servedAt = new Date();
+        const served = messages.filter((message: { id: string }) =>
+          isEphemeralServableToReader(
+            message as Parameters<typeof isEphemeralServableToReader>[0],
+            ephemeralDeadlines.get(message.id),
+            servedAt
+          )
+        );
+        if (served.length !== messages.length) {
+          messages.length = 0;
+          messages.push(...served);
+        }
+      }
+
       const readStatusMap = await loadMessageReadStatusMap(
         prisma,
         conversationId,
@@ -669,6 +702,7 @@ export function registerMessagesListRoute(
         senderPresenceVis,
         listMissingEntry,
         consumptionMap,
+        ephemeralDeadlines,
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

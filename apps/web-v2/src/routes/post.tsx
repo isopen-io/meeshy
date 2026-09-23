@@ -16,6 +16,8 @@ import { useParams, useSearch } from '@/lib/router';
 import { COMMENTS_ANCHOR, revealComments, useCommentsReveal } from '@/lib/view/comments-anchor';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link } from '@/routes/route-table';
 
@@ -125,6 +127,11 @@ const isRefusal = (error: unknown): boolean => error instanceof ApiError && (err
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
   const post = usePost(postId);
+  /* LA SALLE DE LA PUBLICATION (#7395) — la seule audience par laquelle le
+     lecteur qui n'est pas ami de l'auteur reçoit la traduction du texte et les
+     commentaires en direct. Tenue dès l'ouverture : un refus (403/404) est
+     refusé aussi par `post:join`, indistinctement (D-6). */
+  usePublicationRoom(postId);
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
@@ -174,7 +181,14 @@ export default function PostDetailScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
+      {/* LA MÊME COLONNE QUE LE FIL (#7449) — cet écran EST la destination du
+          geste d'ouverture d'une carte : laissé pleine largeur, il aurait
+          étiré, à UN tap du fil borné, la carte que le fil venait de borner.
+          Elle est ici sur le SCROLLPORT et non sur les cartes, parce que cet
+          écran n'a aucun chrome à l'intérieur de son défilement — pas de
+          plateau de stories à laisser courir de bord à bord. L'en-tête, lui,
+          prend la fenêtre, comme celui du fil. */}
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe" style={READING_COLUMN_STYLE}>
         {model !== undefined ? (
           <FeedPostCard
             model={model}

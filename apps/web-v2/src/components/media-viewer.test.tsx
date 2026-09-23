@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { scriptedGateway } from '@/test-support/scripted-transport';
 import { messagesOf } from '@/lib/api/fixtures';
 import { POST_SCENE_CLIP_A, POST_SCENE_TEXT, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
@@ -16,6 +17,8 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { composeSceneGalleryLot } from '@/lib/feed/gallery-lot';
 
 import type { MediaCarrier } from '@/lib/view/media';
+
+import { modalLayersOpen } from '@/lib/view/modal-layers';
 
 import MediaViewer from './media-viewer';
 
@@ -92,6 +95,8 @@ function mount(params: {
   readonly startIndex: number;
   readonly onClose: () => void;
   readonly carrier?: MediaCarrier;
+  readonly isMine?: boolean;
+  readonly deps?: ReturnType<typeof scriptedGateway>['deps'];
 }): HTMLElement {
   container = document.createElement('div');
   container.id = 'root';
@@ -106,6 +111,8 @@ function mount(params: {
         languages={['fr']}
         fallbackLanguage="fr"
         {...(params.carrier !== undefined ? { carrier: params.carrier } : {})}
+        {...(params.isMine !== undefined ? { isMine: params.isMine } : {})}
+        {...(params.deps !== undefined ? { deps: params.deps } : {})}
       />,
     );
   });
@@ -240,6 +247,28 @@ describe('MediaViewer — fermeture (critère « Escape/retour ferme »)', () =>
     });
     expect(body.querySelector('[data-media-viewer]')!.getAttribute('data-viewer-index')).toBe('1');
     expect(closed).toBe(0);
+  });
+});
+
+describe('MediaViewer — elle DÉCLARE qu’elle recouvre (W14, #7372)', () => {
+  test('montée ⇒ le registre des couches modales la compte ; démontée ⇒ il l’oublie', () => {
+    expect(modalLayersOpen()).toBe(false);
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    mount({ items, startIndex: 0, onClose: () => {} });
+    // Le suivi de lecture du fil (`use-read-tracking.ts`) lit ce registre :
+    // sans cette déclaration, agrandir une photo marquerait lu le fil qu’elle
+    // cache — le défaut que nomme le titre de #7372.
+    expect(modalLayersOpen()).toBe(true);
+
+    const mounted = { container, root };
+    act(() => {
+      mounted.root.unmount();
+    });
+    mounted.container.remove();
+    expect(modalLayersOpen()).toBe(false);
+
+    // Une seconde visionneuse rend à `afterEach` une racine vivante à démonter.
+    mount({ items, startIndex: 0, onClose: () => {} });
   });
 });
 
@@ -868,5 +897,66 @@ describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', ()
 
     expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
     expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+  });
+});
+
+/**
+ * OUVRIR UNE IMAGE ÉMET (#7363, W6) — la page active rapporte "viewed" à
+ * l'ouverture (`useAttachmentOpenReport`, patron `DocumentViewerView.
+ * onAppear`), jamais pour sa propre pièce.
+ */
+describe('MediaViewer — ouvrir une image REÇUE rapporte, jamais la sienne (#7363, W6)', () => {
+  test('la page ACTIVE (isMine=false, défaut) rapporte "viewed" pour SON attachment', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const opened = items[0]!;
+    const { calls, deps } = scriptedGateway({ [`POST /api/v1/attachments/${opened.id}/status`]: { ok: true, data: {} } });
+
+    mount({ items, startIndex: 0, onClose: () => {}, deps });
+
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]?.path).toBe(`/api/v1/attachments/${opened.id}/status`);
+    expect(calls()[0]?.body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+  });
+
+  test('SA PROPRE image (isMine=true) ⇒ aucun rapport', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const opened = items[0]!;
+    const { calls, deps } = scriptedGateway({ [`POST /api/v1/attachments/${opened.id}/status`]: { ok: true, data: {} } });
+
+    mount({ items, startIndex: 0, onClose: () => {}, isMine: true, deps });
+
+    expect(calls()).toHaveLength(0);
+  });
+
+  /**
+   * CHANGER DE PAGE EST UN GESTE, PAS UN `startIndex` (revue #7363) — la
+   * première rédaction de ce témoin montait DÉJÀ sur la seconde page et
+   * n'observait donc que le rapport d'ENTRÉE : il serait resté vert avec un
+   * effet réduit au montage. Il NAVIGUE désormais, par la pellicule, et
+   * mesure le SECOND rapport.
+   */
+  test('changer de page (pellicule) rapporte pour la NOUVELLE page active', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const first = items[0]!;
+    const second = items[1]!;
+    const { calls, deps } = scriptedGateway({
+      [`POST /api/v1/attachments/${first.id}/status`]: { ok: true, data: {} },
+      [`POST /api/v1/attachments/${second.id}/status`]: { ok: true, data: {} },
+    });
+
+    const body = mount({ items, startIndex: 0, onClose: () => {}, deps });
+    expect(calls()).toHaveLength(1);
+    expect(calls()[0]?.path).toBe(`/api/v1/attachments/${first.id}/status`);
+
+    const filmstripItems = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
+    act(() => {
+      filmstripItems[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(calls()).toHaveLength(2);
+    expect(calls()[1]?.path).toBe(`/api/v1/attachments/${second.id}/status`);
+    expect(calls()[1]?.body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+    const after = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
+    expect(after[1]!.getAttribute('aria-current')).toBe('true');
   });
 });

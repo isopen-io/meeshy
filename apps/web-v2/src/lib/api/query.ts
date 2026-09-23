@@ -12,6 +12,7 @@ import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
 import { feedQuery, refreshFeed } from './feed';
+import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
@@ -23,6 +24,8 @@ import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
+import { deletePost, pinPost, type PostActionOutcome } from './publication-actions';
+import { reportPost, type ReportOutcome, type ReportReason } from './reports';
 import {
   STORIES_QUERY_PREFIX,
   STORY_TRAY_QUERY_KEY,
@@ -86,8 +89,8 @@ export function refreshListAction(): Promise<void> {
  * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
  * le socket qui doit prévenir — issue compagnon, comme pour les messages.
  */
-export function useStoryTray() {
-  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000 });
+export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
 }
 
 /**
@@ -185,6 +188,21 @@ export function postGestureAction(postId: string, kind: PostToggleKind): Promise
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
+/** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
+ * sur l'instance partagée du cache : la suppression retire la carte de
+ * CHAQUE caisse qui la peint (`removeCardPost`). */
+export function deletePostAction(postId: string): Promise<PostActionOutcome> {
+  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+export function pinPostAction(postId: string): Promise<PostActionOutcome> {
+  return pinPost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+export function reportPostAction(postId: string, reason: ReportReason): Promise<ReportOutcome> {
+  return reportPost({ postId, reason, deps: apiDeps });
+}
+
 /** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
  * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
 export function recordShareAction(postId: string): Promise<boolean> {
@@ -232,6 +250,10 @@ export function useConversation(id: string) {
  * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
  * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
  * (`lib/lens/pagination.ts`), lue côté écran.
+ *
+ * **Fraîcheur** : `staleTime: 0` est porté par la FABRIQUE `messagesQuery`
+ * (`messages.ts`, #7353), jamais reposé ici — le témoin
+ * `thread-reload-freshness.test.ts` joue la fabrique, donc ce que l'écran sert.
  */
 export function useMessages(id: string) {
   return useInfiniteQuery(messagesQuery(apiDeps, id));
@@ -386,6 +408,21 @@ export function retrySendAction(params: {
  */
 export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
   return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `forwardAction` (#5866) — RÉFÉRENCE DE MODULE STABLE, motif `reactAction`.
+ * Le SITE UNIQUE par lequel la barre de sélection atteint le transport ; la
+ * règle (« quoi peut partir ») vit dans `view/forward.ts`, la forme du corps
+ * (« jamais d'`attachmentIds` ») dans `api/forward.ts`. Ce relais n'en porte
+ * aucune — il ne fait que brancher `apiDeps`.
+ */
+export function forwardAction(params: {
+  readonly messages: readonly ForwardSource[];
+  readonly sourceConversationId: string;
+  readonly targetConversationId: string;
+}): Promise<ForwardResult> {
+  return forwardMessages({ ...apiDeps, ...params });
 }
 
 /**

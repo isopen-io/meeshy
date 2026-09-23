@@ -94,6 +94,8 @@ struct RiverStreamHost: View {
     /// Lot 3 — retours au Fil depuis une bulle (appui long).
     var onOpenInThread: ((String) -> Void)? = nil
     var onReply: ((String) -> Void)? = nil
+    /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -555,7 +557,8 @@ struct RiverStreamHost: View {
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
-                onReply: onReply
+                onReply: onReply,
+                onConsumeViewOnce: onConsumeViewOnce
             )
                 .equatable()
                 .padding(.horizontal, RiverMetrics.Lane.gutter)

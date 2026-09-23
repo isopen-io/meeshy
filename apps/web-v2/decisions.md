@@ -3674,3 +3674,219 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 **Piège MESURÉ pendant l'essai de découpage, consigné pour qui le rejouerait** : un `import` **statique** vers le module différé — ici le squelette d'attente du `Suspense`, que l'hôte doit rendre — le **ramène dans le chunk de l'hôte** et laisse à sa place un **talon de 145 octets**. Le chunk apparaît dans le relevé, le gate voit deux fichiers, et rien n'a maigri d'un octet. Le squelette d'attente doit vivre chez l'HÔTE (`user-profile-states.tsx`), jamais dans le module qu'il attend.
 
 **Le lecteur de la LIGNE n'est pas celui du GESTE.** `titleOf` a besoin d'un identifiant pour savoir qui est « l'autre » dans un direct ; lui passer la chaîne vide fait de la PREMIÈRE partie l'autre — mesuré au navigateur : la rangée de `/c/c-direct-kwame` portait « Vous ». L'écran résout donc `resolveViewer({ source, session })` — le site unique, fixtures comprises, que la Lentille et le fil emploient déjà — pour la RANGÉE, et garde `viewerId` (l'identité de COMPTE, `null` sans session) pour les gestes, qui ne doivent rien inventer. **Un témoin de pièce ne peut pas voir quelle identité l'ÉCRAN sert au composant** : c'est `check-profile.mjs` qui l'attrape, et il le mesure désormais explicitement.
+
+## D-107 — « Vue unique » a une bascule dans le composeur de CONVERSATION, gatée sur une image en attente ; écart assumé avec iOS (2026-09-22, #7354)
+
+**iOS ne l'offre pas en conversation.** `UniversalComposerBar+Toolbar.swift:37-40` ne monte `viewOnceToggleButton` que si `showViewOnce`, et `ConversationView+Composer.swift:215` le pose à `previewMode` : le composeur de prévisualisation de notification seul. Le web suivait cette règle (`compose-protection.ts`, `composer.tsx`) : la LOI savait composer `isViewOnce`, aucun contrôle ne l'armait. Conséquence mesurée à la recette du 2026-09-21 : W5 (`consumeViewOnceOptimistic`, #7224) n'avait AUCUN chemin d'entrée depuis le web.
+
+**La forme retenue.** Le GESTE est celui d'iOS (`+Protections.swift:199-241` : capsule tapée, libellé « Vue unique » seulement une fois armée, teinte `indigo600` partagée avec « Flou », rang entre flou et effets) ; l'EMPLACEMENT diverge. La capsule n'existe que si une pièce jointe IMAGE est en attente — un texte marqué vue unique n'a aucun rendu qui le dise (loi 4) — et elle redescend si la dernière image part, et après chaque envoi. Glyphe : `eye` (Phosphor) pour `1.circle`, sans pendant dans le socle.
+
+**`message:consumed` est MONOTONE côté client.** L'événement et la réponse REST de la consommation voyagent sur deux canaux ; `applyMessageConsumed` (`realtime-apply.ts`) n'abaisse jamais `viewOnceCount`, sans quoi un événement en retard ramènerait une vue brûlée à `veiled` et la rouvrirait. Seul le rollback optimiste de `view-once.ts` abaisse le compte.
+
+**À trancher côté iOS, pas ici** : exposer la même bascule en conversation (parité inverse). Le miroir Kotlin natif est gelé (directive 2026-09-16) et ne reçoit rien.
+
+## D-108 — L'échéance d'un éphémère part de la RÉCEPTION, et un seul chrome la rend pour tous les modes (2026-09-22, #7454)
+
+Directive porteur 2026-09-22 : « les messages avec temps décompté ne doivent
+décompter que lorsque l'utilisateur l'a reçu », et « il est important de
+s'assurer que cette feature a un décompte en Script, Focal ou bulle **ou tout
+autre affichage plus tard** ». Contrat du fil : #7451.
+
+**La règle vit dans `packages/shared`, pas ici.** `ephemeralDeadline()`
+(`utils/ephemeral-deadline.ts`) retient la plus PROCHE de l'échéance SERVIE
+(`expiresAt` par lecteur sur REST, `message:countdown-started` sur le socket)
+et de la RÉCEPTION locale + `ephemeralDuration`. Jamais la plus tardive : des
+deux erreurs d'horloge possibles, une seule est acceptable — montrer le message
+un instant de MOINS que promis, jamais un instant de plus.
+
+**La réception, elle, ne peut pas y vivre** : c'est un état du client, et ses
+deux chemins (`message:new`, le rendu du fil) n'ont aucun ancêtre React commun
+— le socket vit hors de l'arbre. D'où un registre de module
+(`lib/view/ephemeral-reception.ts`), borné à 1 000 entrées, première-vue-gagne.
+Il est volontairement EN MÉMOIRE : un rechargement de page ne peut qu'ALLONGER
+l'échéance locale, et c'est exactement ce que la règle refuse de retenir dès
+que le serveur sert la sienne.
+
+**Un seul chrome, et il est OBLIGATOIRE au type.** `ProtectionChrome`
+(`components/protection-chrome.tsx`) rend le décompte ET la désignation de la
+vue unique ; `FocalRow` et `Bubble` déclarent `ephemeralDeadline` en prop
+REQUISE. Avant ce lot, chaque peau câblait son propre `EphemeralBadge` : un
+mode ajouté demain aurait eu un fil complet, aucun décompte, et aucun témoin
+rouge. `thread-modes-protection-chrome.test.tsx` énumère désormais
+`ConversationReadingModeSchema.options` — table exhaustive au TYPE, re-croisée
+à l'exécution parce que `bun test` n'applique aucun typage.
+
+**`river` n'a pas de peau à lui, et c'est ce qui rend la garde utile** :
+`ThreadModes` aiguille sur `usesFlatRow`, donc tout ce qui n'est ni `summary`
+ni plat retombe sur `<Bubble>` — un mode neuf y retombera pareillement, avec le
+chrome. `summary` porte l'autre moitié de la règle : un éphémère échu n'entre
+pas dans le corpus qu'il résume, sans quoi un texte DÉRIVÉ garderait en vie,
+sur le même écran, un message disparu du fil.
+
+**Deux pictogrammes, parce que deux sens.** Le dépôt se contredisait comme iOS
+(#7452) : `flame` désignait la VUE UNIQUE dans la liste et l'ÉPHÉMÈRE dans la
+bulle. Le vocabulaire retenu est celui du COMPOSEUR — là où l'utilisateur
+CHOISIT la protection : `flameFill` + rouge pour l'éphémère, `eye` + indigo
+pour la vue unique. Le libellé suit jusqu'à la CLÉ : la désignation lit
+`composer.viewOnce.label`, la chaîne même que la bascule affiche — une clé
+jumelle porterait aujourd'hui les mêmes sept traductions et divergerait au
+premier lot qui n'en relit qu'une.
+
+**UNE horloge.** `secondClock` (`lib/view/interval-clock.ts`) existait déjà ;
+`EphemeralBadge` ouvrait un `setInterval` par message affiché.
+
+**Ce que ce lot NE touche PAS : le chemin d'ENVOI.** Faire parler les clients
+en DURÉE plutôt qu'en échéance traverse le cliquet d'égalité de clés du
+gateway (`socket-event-schemas.ts`, § `SendDoorRatchet`) et appartient à
+#7451. Ici, seul ce qui REVIENT du serveur change.
+Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
+`aria-label` « éphémère, disparaît dans N »), 6 (un pictogramme par sens, en
+parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
+registre), 13 (les cinq modes énumérés, et le suivant).
+
+## D-109 — Le compteur d'un éphémère ne paraît que dans sa dernière minute, et sa destruction se voit (2026-09-22, #7468)
+
+Précision du porteur, arrivée pendant que la PR de D-108 était en vol :
+« l'éphémère est la flamme avec la configuration de durée par défaut ! Ce qu'il
+faudrait c'est d'afficher le compteur de l'éphémère dans la conversation
+uniquement quand on est déjà à 1 min et moins de sa destruction. Et sa
+destruction doit avoir un effet visuel si on est dans la conversation au moment
+de la destruction. »
+
+**Le seuil est une loi PARTAGÉE, pas un réglage de peau.**
+`ephemeralCounterVisible` (`@meeshy/shared/utils/ephemeral-deadline`) est la
+suite de la règle d'échéance : l'une dit QUAND, l'autre à partir de quand on
+l'ÉCRIT. iOS la reprend (#7467) ; un seuil recopié dans deux peaux divergerait
+au premier ajustement. Elle gouverne DEUX choses que rien d'autre ne relie — ce
+que l'œil voit, et ce qui s'abonne à l'horloge.
+
+**Deux régimes, un seul à la fois.** Au-delà de la minute, aucune horloge ne bat
+pour ce message : un SEUL `setTimeout` dort jusqu'au franchissement du seuil.
+Sous le seuil, l'horloge partagée reprend. Le passage se fait tout seul — le
+minuteur repose le reste, la fenêtre bascule, l'effet se rejoue dans l'autre
+régime.
+
+**L'œil est soulagé, jamais l'oreille.** Le libellé accessible donne TOUJOURS le
+temps restant. Privé des chiffres, un lecteur d'écran n'aurait aucun autre
+chemin vers l'échéance — et la flamme seule ne dit pas « dans douze minutes ».
+C'est aussi pourquoi les deux écritures diffèrent : `countdownDigits` rend
+`0:38` pour la puce, `formatRemaining` rend `38s` pour la voix.
+
+**La phase de destruction est PURE et SANS ÉTAT, et c'est ce qui ferme la
+course.** `destructionPhaseOf` (`lib/view/ephemeral-destruction.ts`) tranche
+entre `visible`, `destroying` et `gone` en comparant l'échéance à MAINTENANT.
+Entre l'échéance et le tic suivant de l'horloge, l'écran peut se rendre pour une
+raison étrangère — une frappe, un défilement qui bouge le virtualiseur. Une
+phase lue d'un ensemble alimenté par le seul rappel du chrome aurait coupé la
+rangée net à ce rendu-là, sans effet : le défaut même qu'on corrige. **Et passée
+la fenêtre, `gone` : on n'assiste pas à une destruction passée** — un fil
+rouvert des heures plus tard ne rejoue pas la combustion de chaque éphémère
+échu.
+
+**L'annonce précède le retrait, des deux côtés.** `message:expired` annonce la
+destruction sur-le-champ et ne retire la ligne du cache qu'après la fenêtre ;
+sinon la rangée disparaîtrait d'une image à l'autre, par le chemin qui
+deviendra le plus fréquent une fois #7451 fusionné. `forgetEphemeral` attend
+lui aussi : oublier la réception tout de suite ferait repasser la puce « en
+attente de réception » sur un message en train de brûler.
+
+**L'effet se pose sur le nœud de RANGÉE**, jamais dans une peau : `thread-modes`
+l'applique au `<div role="article">` qui enveloppe la rangée plate ET la bulle,
+si bien qu'un mode ajouté demain l'a sans rien câbler — même doctrine que le
+chrome de D-108.
+
+**Le repli des voisins vient de la GRILLE**, pas d'un `max-height` deviné :
+`grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
+`ResizeObserver` du virtualiseur suit à chaque image. Les rangées suivantes
+remontent à mesure, au lieu de sauter quand la ligne quitte la liste.
+
+**`prefers-reduced-motion` : un fondu, et rien d'autre** — pas même le repli.
+Un repli EST un mouvement, et c'est précisément ce que ce réglage demande
+d'éviter ; la rangée garde donc sa place jusqu'au retrait.
+
+Dimensions mûres : 4 (aucune horloge avant la dernière minute ; le repli suit le
+virtualiseur au lieu de le bousculer), 5 (le temps reste dit à l'oreille,
+`prefers-reduced-motion` honoré), 8 (la disparition se comprend), 13 (les cinq
+modes, par le nœud commun).
+
+## D-110 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
+
+**Le fait, mesuré.** `/feed` posait son scrollport en `flex-1 … px-3` sans aucune borne : à 1440 px, une carte de publication faisait **1416 px** de large. `/reels` étalait de même son pager 9:16 sur toute la largeur — la vidéo en `object-contain` au centre, le rail d'actions au bord opposé du regard. Aucun gate ne pouvait le voir : les trente-huit autres mesurent **390 × 844** et **320 × 568**, deux téléphones. **Un défaut qui ne se voit qu'au-delà des gabarits mesurés est invisible par construction** — d'où `scripts/check-feed-column.mjs`, qui ajoute 1440 × 900 au dépôt.
+
+**La borne vaut à TOUTE largeur, et c'est ce qui évite une media query.** `READING_COLUMN_STYLE` (`lib/view/reading-column.ts`) est un `max-width` + `margin-inline: auto` : en dessous de la borne il ne mord pas, au-dessus il centre. Aucun seuil à tenir, aucun gabarit à nommer, aucun second rendu à maintenir. Le rendu mobile est, au pixel près, celui d'avant le lot — le gate le mesure dans les deux sens.
+
+**640 px vient du CONTENU, jamais d'un appareil** : `MEDIA_GRID_MAX_WIDTH` borne déjà une mosaïque à 300 px, une carte en porte deux colonnes de cette échelle plus ses gouttières, et 640 tient ~85 caractères au corps du dépôt.
+
+**LE CHROME PREND LA FENÊTRE, LE CONTENU PREND LA COLONNE** (directive porteur du 2026-09-22, après une première écriture fausse). La colonne est portée par les CARTES, le squelette et les états vide/erreur ; l'en-tête, le plateau des stories et le scrollport — donc la barre de défilement — gardent toute la largeur.
+
+La première écriture la posait sur le SCROLLPORT : un `style` de moins, et faux — elle emportait avec elle le titre « Meeshy Feed » et le plateau des stories, qui sont du chrome et n'ont aucune raison de rétrécir. **Ce qu'on borne est la mesure de LECTURE** (une ligne trop longue se relit mal), jamais l'application. Le plateau vit pourtant DANS le scrollport (il sort du champ au défilement, #6103) : la règle ne se lit donc pas « ce qui défile se borne », mais « ce qui se LIT se borne ».
+
+Conséquence de forme : le pied de pagination (`LensPaginationFooter`) rend ses propres `<li>` et ne peut pas être enveloppé ; c'est `FeedSkeleton` — le contenu qu'il porte en `loading-more` — qui prend la colonne, et ses trois autres états (légende centrée, erreur centrée, sentinelle d'un pixel) n'en ont pas besoin. Le détail d'une publication (`/post/$post`) garde la colonne sur son scrollport, lui : aucun chrome ne vit dans son défilement.
+
+**Les Réels se bornent par la HAUTEUR, pas par un nombre de pixels** — `hauteur × 9/16`, le rapport de la scène. En `dvh` et non `vh` : c'est la hauteur que `ReelsFrame` emploie (`h-dvh`), et les deux divergent dès que la barre d'adresse d'une WebView bouge. La colonne porte le `relative`, donc « Retour » et les états plein cadre s'ancrent à ELLE — sans quoi le contrôle part à 460 px du contenu qu'il ferme.
+
+**Ce n'est PAS la géographie desktop** (#5418, deux colonnes liste + fil) : c'est une lecture réparée, pas un bureau dessiné. Le chantier de design reste entier.
+
+## D-111 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
+
+**Le fait.** `apps/web-v2` LISAIT le fil sans pouvoir l'alimenter : la table des routes n'offrait que `/stories/new` et `/status/new`. Aucune adresse ne créait de `Post.type = 'POST'` ni `'REEL'`, alors que la passerelle les sert depuis toujours. C'est pour cela que le doc-comment de `routes/feed.tsx` rangeait le « placeholder de composeur » d'iOS dans ce qui n'est PAS repris — un contrôle sans effet ne se dessine pas (loi 4). Ce lot lui donne son effet, donc sa porte.
+
+**`/posts/new` et `/posts/new?type=reel` sont le MÊME écran.** La composition est identique — un texte, des médias ; seule la CLASSIFICATION diffère, et l'auteur doit pouvoir changer d'avis sans perdre sa saisie. D'où la bascule dans l'écran, et d'où l'adresse qui SUIT ce choix (un rechargement retrouve le format). Même dispositif que `/stories?author=`.
+
+C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui tient : une humeur n'a ni texte long, ni média, ni format — ce n'était pas un mode, c'était un autre écran.
+
+**PLURIEL, et sans collision** : `/posts/new` voisine `/conversations/new`, `/communities/new`, `/links/share/new` ; le DÉTAIL d'une publication est au SINGULIER (`/post/$post`), et aucun motif paramétré ne vit sous `/posts`.
+
+**Le réel se REFUSE, il ne se dégrade pas.** `qualifiesAsReel` (`packages/shared/utils/reel-composition.ts`) est la règle SERVEUR, importée et non réécrite. Sans elle côté client, un réel de texte seul partait et la passerelle le **dégradait en post** (`createPost: REEL non qualifiant dégradé en POST`) : l'auteur choisissait un format et en obtenait un autre, sans un mot. L'écran nomme ce qui manque — miroir de `ComposerDocumentSendRefusal.reelWithoutQualifyingMedia` (iOS), et « le seul des deux verdicts qu'il puisse réparer ».
+
+**La qualification lit la COMPOSITION, pas l'état du réseau.** Un média encore en vol qualifie déjà : son type et sa durée sont connus du FICHIER LOCAL dès la sélection, et la publication attend les envois de toute façon. Éteindre le bouton pendant la montée d'une vidéo de huit secondes dirait « ce réel ne qualifie pas » d'un réel qui qualifie. Un envoi ÉCHOUÉ, lui, sort de la qualification — et l'écran le DIT, sans quoi la publication partirait amputée d'un média que l'auteur croit joint.
+
+**`visibility` n'est PAS envoyée**, comme en story : le défaut est une règle serveur (`defaultVisibilityForPostType`, PUBLIC hors story), et un défaut recopié côté client est exactement ce qui avait laissé les stories web à FRIENDS pendant que les posts naissaient publics.
+
+**DÉLIBÉRÉMENT MINIMAL**, même discipline que l'humeur : un texte, des médias, un format. Audience, lieu, mentions déclarées, repartage, son, montage et brouillon persisté restent hors tranche — des issues de suivi, jamais une dette silencieuse.
+
+**La porte se pose À GAUCHE de « Lancer les Réels », et ce n'est pas un goût** : `check-reels.mjs` mesure que le bouton des Réels touche le bord droit (`innerWidth - right <= 16`) et `check-feed-disc.mjs` qu'il vit dans les 64 derniers pixels — deux gates qui disent la place que la cible iOS lui donne (#6457). Insérer la création à sa droite l'aurait déplacée sans qu'aucune décision ne l'ait demandé.
+
+## D-112 — L'accusé de remise d'un push traverse la frontière fenêtre/worker par IndexedDB ; la coque Capacitor reste BLOQUÉE, pas contournée (2026-09-22, #7368, W4)
+
+**Le fait.** `public/sw-push.js` (script classique, `importScripts`) n'accusait jamais la remise d'un message arrivé par push : l'auto-livraison EN LIGNE de la passerelle exige un socket vivant, donc ne part jamais pour un onglet fermé, une PWA suspendue ou une coque en arrière-plan — l'auteur restait bloqué sur une coche ✓ jusqu'à la reconnexion du destinataire (relevé du 2026-09-21, W-4). L'extension de notification iOS résout ce même problème depuis longtemps (`NSEDataSync.postDeliveryReceipt`, App Group + Keychain partagé).
+
+**Pourquoi IndexedDB, et pas autre chose.** Un service worker classique ne peut lire ni `localStorage` (portée fenêtre, jamais worker) ni aucun module de `src/`. La session (crédential + `apiConfig.base`, résolue au build) doit donc être POSÉE quelque part que les deux contextes partagent, et qui SURVIT à la fermeture de l'onglet — exactement le symptôme visé. IndexedDB est la seule API qui coche les deux cases (même origine, fenêtre ET worker, persistante). `delivery-receipt-credential.ts` (page) écrit ; `sw-push.js` (worker, jumeau gardé de ses trois littéraux — nom de base, magasin, clé, même doctrine que `sw-caches.ts` § `LEGACY_CACHE_NAMESPACE`) lit.
+
+**`apiBase` voyage AVEC le crédential.** `sw-push.js` n'est pas transpilé par Vite : il ne peut pas lire `import.meta.env.VITE_API_BASE`. En déploiement, la base est une origine ABSOLUE (`gate.meeshy.me`/`gate.staging.meeshy.me`, aucun proxy `/api` devant le web, #5872) — sans elle, une requête relative depuis le worker viserait le serveur de fichiers statiques (405, exactement l'incident #5872). La page la connaît synchrone (`apiConfig.base`) ; elle la pose donc à côté du crédential plutôt que d'inventer un second canal.
+
+**La route est la CANONIQUE, jamais l'alias.** `POST /conversations/:id/receipts { type: 'delivered', messageIds }` (`services/gateway/src/routes/conversations/receipts.ts`), pas `.../delivery-receipt` — cette dernière est en sursis (`depreciee()`, `message-read-status.ts`, annoncée depuis le 2026-08-30). Le code neuf n'ouvre pas une porte que le dépôt referme déjà ; l'extension iOS, elle, continue d'utiliser l'alias — c'est une dette EXISTANTE, hors du périmètre de ce lot.
+
+**LA COQUE CAPACITOR RESTE BLOQUÉE — décision assumée, pas un oubli.** `apps/web-v2/android` n'a AUCUN plugin `@capacitor/push-notifications` (mesuré : absent de `package.json`), et `android/app/build.gradle:56` journalise lui-même « google-services.json not found … Push Notifications won't work » : la coque Android ne peut recevoir AUCUN push tant que ces deux capacités (plugin natif, config FCM) ne sont pas posées — un chantier d'infrastructure native, hors de portée d'un lot TDD `bun test`/`type-check`. Poser un gestionnaire de push sans plugin ni config serait un code mort qu'aucun témoin ne peut prouver. Ce lot livre la moitié SW (onglet fermé, PWA suspendue — la majorité du symptôme mesuré) et laisse la moitié coque aux issues QUI EXISTENT DÉJÀ, jamais à une issue « dédiée » qu'on nommerait sans la créer : **#7307** « La coque Android reçoit une notification quand l'application est fermée » (milestone « La v4 remplace la v3 en production ») spécifie déjà le plugin `@capacitor/push-notifications`, le canal `meeshy_notifications`, la permission `POST_NOTIFICATIONS` et le gestionnaire `src/lib/push/shell-push.ts` ; elle est bloquée par **#7302 · P1** (l'app Android du projet Firebase `meeshy-me` et son `google-services.json`). L'accusé de remise de CE lot y tient en une ligne — `pushNotificationReceived` appelle la MÊME route canonique — et c'est consigné en commentaire de #7307 plutôt qu'ici : un fichier de décisions ne pilote pas, il explique. Ouvrir une troisième issue aurait dupliqué un lot déjà spécifié.
+
+## D-113 — La ligne 2 de la Lentille est celle du composeur partagé ; « Rejoindre » attend que le web appelle (2026-09-23, #7547)
+
+**Le constat.** `lens-row.tsx` composait sa ligne 2 lui-même, en français codé en dur : ni durée, ni taille, ni « Vous », ni appels, ni réactions, ni brouillon, un « +N » toujours nul depuis REST. Et quatre chemins temps réel écrivaient le dernier message sans garde d'ordre ni masquage.
+
+**Ce qui est tranché.**
+- **Une composition, deux clients.** La ligne rend `composeConversationPreview()` (`@meeshy/shared`, #7546). web-v2 n'y compose RIEN : `previewInputOf` (`lib/view/conversation-preview-input.ts`) PROJETTE la conversation du cache de liste sur l'entrée du composeur, `LensPreviewLine` dessine la valeur. Le témoin `lens-row-preview.test.tsx` rejoue chaque cas du fichier commun que le SDK Swift rejoue aussi (#7548).
+- **L'icône est dessinée par l'iconographie web.** Le composeur NOMME une icône ; le socle et `glyphs-lens-preview.ts` (généré par `extract-glyphs.mjs`) la dessinent.
+- **Un texte, deux lectures.** Le lecteur d'écran lit la mise à plat du composeur (`renderConversationPreviewText`, `data-line2-label`) ; le rendu visible est `aria-hidden`. Sans cela la ligne serait annoncée deux fois, et le libellé dit ce que l'œil voit.
+- **L'encre reste `ink-2`**, sauf le vert d'un appel en cours et le rouge d'un appel manqué (`--color-success` / `--color-danger`, AA dans les deux schémas). Le ton « brouillon » ne colore que son étiquette, l'accent d'une conversation ne franchissant pas AA sur cette ligne.
+- **Seule la ligne qui décompte tique.** `useLiveNow` rafraîchit l'instant à la seconde tant que la valeur annonce une échéance (`live`), puis se désabonne ; « 🔥 4 min » bascule seul en « ⏱ Message expiré ».
+- **Le cache de liste ne garde rien d'un message protégé** (`lib/api/list-preview.ts`) : il est persisté, et un vue unique, un flouté, un chiffré ou un expiré n'y laisse ni texte, ni carte du Prisme, ni pièce jointe.
+
+**Divergence assumée : pas de bouton « Rejoindre ».** La matrice validée (#7546) le pose sur l'appel en cours. Le web n'a pas de pile d'appel (#6382, D-61) : le bouton n'aurait aucun effet, et un contrôle sans effet ment (loi 4). La ligne DIT l'appel en cours, en vert, avec son nombre de participants ; le bouton arrive avec #6382, qui remplacera le témoin d'absence par un témoin d'effet.
+
+## D-113 — « Transférer » arme la sélection, et le corps qui part ne porte JAMAIS `attachmentIds` (2026-09-23, #5866, décision porteur #5989)
+
+**Le geste, tranché par le porteur le 2026-09-23 (#5989).** « Transférer » ENTRE EN MODE SÉLECTION avec ce message déjà coché ; on choisit éventuellement d'autres messages, puis la barre valide vers les destinataires. Ce n'est PAS un sélecteur de conversations qui s'ouvre au premier tap. Le porteur a accepté le geste supplémentaire au cas nominal pour que **le même mot ait le même effet quelle que soit la porte** (dimension 6) — iOS avait deux portes divergentes (feuille « Plus… » : sélection multiple, `ConversationView.swift:971` ; barre rapide : sélecteur direct, `ConversationView+MessageRow.swift:326`). Web-v2 n'implémente donc qu'UN effet, celui de la feuille.
+
+**Aucune route serveur n'a été ajoutée, et il n'y en avait aucune à ajouter.** Un transfert EST un envoi ordinaire qui DÉSIGNE sa source : `POST /api/v1/conversations/:id/messages` accepte déjà `forwardedFromId` et `forwardedFromConversationId` (`services/gateway/src/routes/conversations/messages-send.ts:71-72`). L'issue #5866 supposait « aucun transport serveur » ; c'était faux, et c'est ce qui la tenait ouverte.
+
+**L'INVARIANT qui tient tout le lot : le corps ne porte jamais `attachmentIds`.** `MessageProcessor.handleAttachments` (`MessageProcessor.ts:726-727`) est un `else if` — poser `attachmentIds` DÉSACTIVE `copyForwardedAttachments`. Le réflexe « il faut bien renvoyer les pièces » est exactement ce qui casse la capacité visée. Le serveur copie la LIGNE `MessageAttachment` et réutilise le MÊME blob (`filePath`/`fileUrl` recopiés) : un transfert de vidéo ne coûte aucun octet de réseau. `forwardBodyOf` (`lib/api/forward.ts`) est le site UNIQUE qui compose ce corps, et `SendMessageBody` porte l'exclusion dans son doc-comment — les deux clés ne se rencontrent nulle part.
+
+**La garde de VUE UNIQUE vit des DEUX côtés, et ce n'est pas une duplication.** `admitMessageForward` (`forwardAdmission.ts:172-229`) refuse déjà côté serveur ; une garde qui ne vivrait QUE là laisserait l'utilisateur armer une sélection, ouvrir la feuille, choisir un destinataire — et n'apprendre l'interdit qu'après. `forwardRefusalOf` / `admitForward` (`lib/view/forward.ts`) rejouent la règle AVANT l'aller-retour : le menu n'offre pas « Transférer » sur une vue unique (`canForward`), et la barre refuse la sélection ENTIÈRE avec son motif plutôt que d'en retirer silencieusement les messages interdits. La colonne ET le bit (`effectFlags & VIEW_ONCE`) sont lus, comme côté serveur — « sinon le contournement ne coûte qu'un champ ».
+
+**Ce que le client AJOUTE à la règle serveur** : une source SUPPRIMÉE, BRÛLÉE ou ÉCHUE est refusée (`'unavailable'`). Le serveur rend `SOURCE_UNAVAILABLE` sur ce cas une fois la requête partie ; le dire ici évite d'écrire une ligne vide chez le destinataire. Un ÉPHÉMÈRE vivant et un FLOU se transfèrent — le serveur les admet (l'éphémère hérite même de sa durée), le client aussi.
+
+**La feuille de destinataires lit `useConversations()`, pas `useConversationsSnapshot()`.** Le snapshot est posé `enabled: false` : il OBSERVE le cache sans jamais le remplir — parfait pour le compteur de non-lus du fil, ruineux ici, où un lecteur arrivé par lien direct (`/c/:id`) n'aurait JAMAIS de destinataire. La requête complète sert le cache IMMÉDIATEMENT quand il en a (aucun squelette — « Cache-First, Network-Second ») et ne va au réseau que s'il est vide. Elle n'est montée QUE pendant que la feuille est ouverte : ouvrir un fil ne déclenche toujours aucune requête de liste.
+
+**Les six libellés du menu sont passés au catalogue en même temps.** Ils étaient écrits en dur, en français, dans `messageMenuItems` ; y ajouter « Transférer » seul aurait figé la surface entière dans une langue alors que le produit en sert sept. La langue est un PARAMÈTRE de la loi (`messageMenuItems(ctx, language)`), jamais `currentInterfaceLanguage()` lu dans un fichier qui se veut pur — et le témoin de langue s'écrit en ALLEMAND, parce qu'en français un libellé écrit en dur et un libellé lu au catalogue rendent le même texte (leçon 261, transposée).
+
+**Ce que ce lot NE livre PAS**, et qui reste à ouvrir en issue : le transfert HORS LIGNE (iOS l'enfile dans `OfflineQueue` ; ici l'envoi échoue et l'annonce le dit), le transfert vers un CONTACT sans conversation existante (iOS crée la conversation à l'envoi, `ConversationCreating`), et « Supprimer » — l'autre moitié de #5866, qui n'a ni transport câblé ni confirmation dessinée dans web-v2.

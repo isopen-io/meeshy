@@ -46,21 +46,18 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.caption2.weight(.medium))
                     .italic()
             } else {
+                // #7599 — le crayon SEUL : « modifié » ne s'écrit plus, le
+                // lecteur d'écran le dit. Le point « historique » était un
+                // pictogramme décoratif — l'historique s'ouvre depuis le menu.
                 Image(systemName: "pencil")
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
-                Text(String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
-                    .font(.caption2.weight(.medium))
-                    .italic()
-                if hasEditHistory {
-                    // Dot affordance hinting the detail sheet shows history.
-                    Circle()
-                        .fill(metaColor)
-                        .frame(width: 3, height: 3)
-                        .opacity(0.7)
-                }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isSaving
+            ? String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
         .foregroundColor(metaColor)
     }
 }
@@ -75,13 +72,10 @@ struct BubbleEditedIndicator: View, Equatable {
 struct BubblePinnedIndicator: View, Equatable {
     var body: some View {
         HStack(spacing: 4) {
+            // #7599 — l'épingle SEULE, droite ; le libellé reste au lecteur
+            // d'écran (ci-dessous).
             Image(systemName: "pin.fill")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-                .rotationEffect(.degrees(45))
-
-            Text(String(localized: "bubble.meta.pinned", defaultValue: "épinglé", bundle: .main))
-                .font(.caption2.weight(.medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
@@ -139,34 +133,10 @@ struct BubbleForwardedIndicator: View, Equatable {
 // inline by `BubbleFooter` / `BubbleDeliveryCheck`. The former standalone
 // `BubbleDeliveryBadge` has been removed.
 
-// MARK: - Ephemeral Badge (was: ThemedMessageBubble.ephemeralTimerOverlay)
-
-/// Capsule "flame + timer" affichee sous les messages ephemeres pour
-/// rappeler le compte a rebours avant expiration.
-struct BubbleEphemeralBadge: View, Equatable {
-    let timerText: String
-    let isDark: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(MeeshyColors.error)
-
-            Text(timerText)
-                .font(.system(.caption2, design: .monospaced).weight(.bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.error.opacity(isDark ? 0.15 : 0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message éphémère, expire dans \(timerText)", bundle: .main))
-    }
-}
+// MARK: - Le badge éphémère a quitté ce fichier (#7452)
+//
+// `BubbleEphemeralBadge` vivait ici, et `FocalEphemeralBadge` en était une
+// seconde implémentation pour la rangée plate — deux badges pour une même
+// chose, et RIEN en Rivière ni en Résumé. Les cinq modes consomment désormais
+// `MessageProtectionChrome` (`MeeshyUI/Conversation/`), qui porte le décompte,
+// la vue unique et le flou, et n'a plus de minuteur par cellule.

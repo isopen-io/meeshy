@@ -261,9 +261,11 @@ describe('emitConversationPreviewUpdate', () => {
     const emitted: Emitted[] = [];
     const withMedia = {
       ...latest,
-      isBlurred: true,
-      isViewOnce: true,
-      expiresAt: new Date('2026-07-09T11:00:00Z'),
+      // Non protégé (#7545) : un vue unique ou flouté ne transporte plus sa
+      // pièce jointe — `conversation-updated-protection.test.ts`.
+      isBlurred: false,
+      isViewOnce: false,
+      expiresAt: new Date('2099-07-09T11:00:00Z'),
       sender: { displayName: 'Bob', user: { displayName: 'Bob Legacy' } },
       attachments: [
         {
@@ -284,9 +286,9 @@ describe('emitConversationPreviewUpdate', () => {
     await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
 
     expect(emitted[0].payload.lastMessageSenderName).toBe('Bob');
-    expect(emitted[0].payload.lastMessageIsBlurred).toBe(true);
-    expect(emitted[0].payload.lastMessageIsViewOnce).toBe(true);
-    expect(emitted[0].payload.lastMessageExpiresAt).toBe('2026-07-09T11:00:00.000Z');
+    expect(emitted[0].payload.lastMessageIsBlurred).toBe(false);
+    expect(emitted[0].payload.lastMessageIsViewOnce).toBe(false);
+    expect(emitted[0].payload.lastMessageExpiresAt).toBe('2099-07-09T11:00:00.000Z');
     // `_count` (3) l'emporte sur la longueur de la liste chargée (1) — la
     // requête Prisma réelle la capait déjà à `take: 1`.
     expect(emitted[0].payload.lastMessageAttachmentCount).toBe(3);
@@ -300,6 +302,7 @@ describe('emitConversationPreviewUpdate', () => {
         duration: 12000,
         width: null,
         height: null,
+        pageCount: null,
       },
     ]);
   });

@@ -30,21 +30,43 @@ export interface MessageExpiredEventData {
 }
 
 /**
+ * LE DÉCOMPTE D'UN ÉPHÉMÈRE COMMENCE (contrat du fil #7451, point 5) — émis à
+ * la PREMIÈRE réception d'un destinataire, jamais à l'envoi.
+ *
+ * `expiresAt` vaut `D(u) = réception(u) + ephemeralDuration` sur la room
+ * `user:<destinataire>`, et la plus TARDIVE des `D(u)` connues sur la room
+ * `user:<expéditeur>` — deux valeurs pour un même message, ce qui est la raison
+ * même pour laquelle cet événement est adressé par utilisateur et non diffusé
+ * en room de conversation (point 4).
+ *
+ * Le client compose ce qu'il AFFICHE avec `ephemeralDeadline()`
+ * (`utils/ephemeral-deadline.ts`) : cette valeur y entre comme échéance SERVIE,
+ * en concurrence avec sa réception locale, et c'est la plus PROCHE qui gagne.
+ *
+ * @see MESSAGE_COUNTDOWN_STARTED
+ */
+export interface MessageCountdownStartedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  /** ISO 8601 — l'échéance de CE destinataire, ou celle de l'expéditeur. */
+  readonly expiresAt: string;
+}
+
+/**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  *
- * `messageId` — OPTIONNEL (#7347/G-5, contrat codé par anticipation depuis
- * #7348 : la branche `lot/g5-7347` n'existait pas encore côté web à
- * l'écriture de ce champ). Aujourd'hui `broadcastReadStatus.ts` calcule ce
- * résumé pour le DERNIER message non supprimé de la conversation
- * (`MessageReadStatusService.getLatestMessageSummary`) et ne pose pas ce
- * champ ; un client applique alors le résumé au message le plus RÉCENT de
- * son cache (repli historique #7223). Une fois G-5 livré, la passerelle
- * émettra UN résumé PAR message affecté, chacun nommant le sien — une
- * rafale de lecture sur trois messages de trois auteurs distincts produit
- * alors trois résumés, pas un agrégé sur le seul dernier. Optionnel pour ne
- * RIEN casser côté émetteur tant que G-5 n'a pas basculé : un champ requis
- * aurait fait échouer la compilation de `broadcastReadStatus.ts`, qui ne le
- * pose pas encore.
+ * `messageId` — OPTIONNEL, DÉSORMAIS POSÉ par G-5 (#7347) sur le chemin EXACT
+ * (`broadcastReadStatus.ts`, quand `applyReceipt` lui transmet le lot FIGÉ —
+ * `args.messageIds`) : la passerelle émet alors UN résumé PAR message affecté,
+ * chacun nommant le sien — une rafale de lecture sur trois messages de trois
+ * auteurs distincts produit trois résumés, pas un agrégé sur le seul dernier.
+ * Reste ABSENT sur le repli LEGACY (aucun lot exact connu, ou `type:
+ * 'received'`) : `broadcastReadStatus.ts` retombe alors sur
+ * `getLatestMessageSummary`, le DERNIER message non supprimé de la
+ * conversation, comme avant G-5 ; un client applique ce résumé au message le
+ * plus RÉCENT de son cache (repli historique #7223). Optionnel pour que les
+ * DEUX chemins compilent et se décodent sans erreur : un champ requis aurait
+ * cassé le repli legacy, qui ne le pose jamais.
  *
  * ── LA FORME EST ARRÊTÉE ICI, ET G-5 LA SUIT (revue-correction W2) ─────────
  *
@@ -59,7 +81,8 @@ export interface MessageExpiredEventData {
  *     critère — « rafale M1 M2 M3 lue ⇒ TROIS RÉSUMÉS, pas un » — et c'est
  *     la seule forme RÉTROCOMPATIBLE : `summary` est un OBJET que les trois
  *     décodeurs lisent déjà (web `isReadStatusUpdated`, iOS
- *     `ReadStatusSummary` dans `MessageSocketManager.swift`, Kotlin gelé) ;
+ *     `ReadStatusSummary` dans `Sockets/ReadStatusEvents.swift` — extrait de
+ *     `MessageSocketManager.swift` par G-5, budget de taille —, Kotlin gelé) ;
  *     le muer en tableau casserait les trois d'un coup, un champ optionnel
  *     de plus n'en casse aucun ;
  *   - **l'id vit SUR le résumé, pas à la racine de l'événement.** Ce résumé
@@ -69,17 +92,21 @@ export interface MessageExpiredEventData {
  *     forme d'angle mort du cycle 126 (un champ qui QUALIFIE une valeur,
  *     posé ailleurs qu'elle, se perd au premier relais qui recopie).
  *
- * Reste à trancher POUR G-5, et non ici : `readByAllAt` (troisième membre du
- * critère de #7347) n'est PAS sur ce résumé. `applyReadStatusUpdated` côté
- * web refuse aujourd'hui d'inventer cette horloge faute de la recevoir ; si
- * G-5 la met sur le fil, elle rejoint ce type et son consommateur web dans
- * le MÊME lot, jamais l'un sans l'autre.
+ * `readByAllAt` — TRANCHÉ par G-5 (#7347) : elle VOYAGE, calculée par le MÊME
+ * moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * qui rend déjà `{totalMembers, receivedCount, readCount, readByAllAt}` PAR
+ * message — celui que `GET …/receipts` sert déjà). `Date | null`, comme
+ * `lastReadAt` ci-dessous : `null` tant que le dernier destinataire actif n'a
+ * pas rattrapé CE message, une date figée dès qu'il l'a fait. Son
+ * consommateur web (`apps/web-v2/src/lib/api/realtime-apply.ts`) change dans
+ * le MÊME lot, comme promis ci-dessus — jamais l'un sans l'autre.
  */
 export interface ReadStatusSummary {
   readonly totalMembers: number;
   readonly deliveredCount: number;
   readonly readCount: number;
   readonly messageId?: string;
+  readonly readByAllAt?: Date | null;
 }
 
 /**
@@ -276,8 +303,22 @@ export interface MessageSendData {
    */
   readonly copyAttachmentsFromMessageId?: string;
   readonly isBlurred?: boolean;
-  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  /**
+   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL.
+   *
+   * LE REPLI DES CLIENTS DÉJÀ DISTRIBUÉS, depuis #7451 : un client à jour
+   * envoie `ephemeralDuration` ci-dessous, et la passerelle DÉRIVE la durée de
+   * cette échéance pour ceux qui ne savent envoyer que ça. Les deux côtés du
+   * cliquet d'égalité de clés portent le champ
+   * (`services/gateway/src/validation/socket-event-schemas.ts`, § SendDoorRatchet).
+   */
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -343,7 +384,14 @@ export interface MessageSendWithAttachmentsData {
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
   readonly isBlurred?: boolean;
+  /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -451,7 +499,16 @@ export interface SocketIOMessage {
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
+  /**
+   * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room
+   * ne peut pas porter une échéance différente par lecteur. Le client compose
+   * la sienne depuis `ephemeralDuration` et sa RÉCEPTION locale
+   * (`utils/ephemeral-deadline.ts`), et `message:countdown-started` lui porte
+   * l'échéance SERVEUR dès qu'elle existe — la passerelle l'émet depuis #7451.
+   */
   readonly expiresAt?: Date;
+  /** Secondes entières, > 0 — servi partout : REST, `message:new` et push. */
+  readonly ephemeralDuration?: number;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;

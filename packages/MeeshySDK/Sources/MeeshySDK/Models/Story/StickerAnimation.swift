@@ -28,8 +28,17 @@ import Foundation
 /// - une animation CONTINUE est périodique (`period`) ; une animation en UN
 ///   COUP (`isOneShot`) joue une fois à l'apparition puis se tient immobile ;
 /// - toute pose est BORNÉE : l'échelle reste dans [0,7 ; 1,3], le décalage
-///   sous 20 % du côté, l'opacité au-dessus de 0,4 — une décoration animée ne
-///   quitte jamais l'endroit où l'auteur l'a mise.
+///   sous 20 % du côté, l'opacité au-dessus de 0,70 — une décoration animée ne
+///   quitte jamais l'endroit où l'auteur l'a mise, et ne devient jamais
+///   illisible.
+///
+/// Le plancher d'opacité valait 0,4 jusqu'au 2026-09-23. Mesuré en recette sur
+/// un message envoyé dans le cadre « Néon » : la carte indigo composée à 40 %
+/// sur le fond clair du fil rend `(169, 168, 203)`, soit **2,29 : 1** face au
+/// texte blanc — sous le plancher WCAG AA le plus permissif (3 : 1 pour du
+/// grand texte). À 0,70 elle rend `(109, 107, 166)`, soit 4,88 : 1. Le chiffre
+/// est calculé, pas choisi, et `StickerAnimationLegibilityTests` le tient pour
+/// TOUTES les animations — pas seulement celle qui a révélé le défaut.
 public enum StickerAnimation: String, Codable, CaseIterable, Sendable {
     /// Gonfle et dégonfle doucement.
     case pulse
@@ -140,7 +149,10 @@ public enum StickerAnimation: String, Codable, CaseIterable, Sendable {
         case .spin:
             return Pose(rotationDegrees: 360 * p)
         case .blink:
-            return Pose(opacity: 1 - 0.6 * (1 - cos(tour)) / 2)
+            // Amplitude 0,30 et non 0,60 : le creux du clignotement doit
+            // rester au-dessus du plancher de lisibilité (voir l'en-tête).
+            // Borner n'est pas éteindre — 0,30 d'amplitude se voit très bien.
+            return Pose(opacity: 1 - 0.30 * (1 - cos(tour)) / 2)
         case .shake:
             return Pose(offsetX: 0.035 * sin(4 * tour))
         case .swing:

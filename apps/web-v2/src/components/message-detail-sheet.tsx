@@ -1,7 +1,7 @@
 import { flag, languageName } from '@/lib/languages';
-import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
 import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
@@ -41,6 +41,16 @@ import { Sheet } from './sheet';
  * l'étoile ouvre la feuille. Elle AGIT puis REFERME, comme une action iOS de
  * cette section. `star` nul — état inconnu, lecteur sans compte, message
  * non favorisable — n'offre rien (`messageStarAction`).
+ *
+ * SES TITRES VIENNENT DU CATALOGUE (#7555). `locale` (une prop) FORMATE la
+ * date — c'est la locale de l'utilisateur, celle d'`Intl` ; la langue
+ * d'INTERFACE, elle, se lit sur le document comme partout ailleurs. Les deux
+ * ne se confondent pas : un lecteur peut lire l'application en anglais et
+ * vouloir ses dates au format de son pays.
+ *
+ * CE QUI RESTE FRANÇAIS ICI n'appartient pas à cette feuille : le bouton de
+ * fermeture vient de `Sheet` (`aria-label="Fermer"`, en dur, partagé par
+ * TOUTES les feuilles) — #7566 porte cet inventaire.
  */
 export function MessageDetailSheet({
   choices,
@@ -70,9 +80,10 @@ export function MessageDetailSheet({
   readonly onClose: () => void;
 }) {
   const fullDate = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'short' }).format(sentAt);
+  const language = currentInterfaceLanguage();
 
   return (
-    <Sheet title="Détails du message" onClose={onClose}>
+    <Sheet title={translate(language, 'message.detail.title')} onClose={onClose}>
       {star === null ? null : (
         <li>
           <button
@@ -90,14 +101,14 @@ export function MessageDetailSheet({
               size={18}
               style={{ color: 'var(--accent)' }}
             />
-            <span className="flex-1">{translate(currentInterfaceLanguage(), star.action === 'star' ? 'action.star' : 'action.unstar')}</span>
+            <span className="flex-1">{translate(language, star.action === 'star' ? 'action.star' : 'action.unstar')}</span>
           </button>
         </li>
       )}
       {choices.length > 0 ? (
         <>
           <li className="px-4 pt-3 pb-1 text-mini font-semibold uppercase" style={{ color: 'var(--color-ios-ink-3)' }}>
-            Langues
+            {translate(language, 'message.detail.languages')}
           </li>
           {choices.map((choice) => (
             <li key={choice.code}>
@@ -109,8 +120,9 @@ export function MessageDetailSheet({
               >
                 <span aria-hidden>{flag(choice.code)}</span>
                 <span className="flex-1">
-                  {languageName(choice.code)}
-                  {choice.isOriginal ? ' (original)' : ''}
+                  {choice.isOriginal
+                    ? translate(language, 'message.detail.language.original', { language: languageName(choice.code) })
+                    : languageName(choice.code)}
                 </span>
                 {choice.isServed ? <span aria-hidden>✓</span> : null}
               </button>
@@ -122,7 +134,7 @@ export function MessageDetailSheet({
       {reactions.length > 0 ? (
         <>
           <li className="px-4 pt-3 pb-1 text-mini font-semibold uppercase" style={{ color: 'var(--color-ios-ink-3)' }}>
-            Réactions
+            {translate(language, 'message.detail.reactions')}
           </li>
           {reactions.map(([emoji, count]) => (
             <li key={emoji} className="flex items-center gap-2.5 px-4 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
@@ -134,7 +146,7 @@ export function MessageDetailSheet({
       ) : null}
 
       <li className="px-4 pt-3 pb-1 text-mini font-semibold uppercase" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Envoyé
+        {translate(language, 'message.detail.sent')}
       </li>
       <li className="flex items-center gap-2.5 px-4 pb-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
         <span>{fullDate}</span>

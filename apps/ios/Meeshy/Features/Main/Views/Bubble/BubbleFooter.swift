@@ -46,7 +46,7 @@ struct BubbleFooter: View, Equatable {
                             deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2.weight(.bold))
-                                .foregroundColor(MeeshyColors.error)
+                                .foregroundColor(MeeshyColors.stateFailed)
                         }
                         .contentShape(Rectangle())
                     }
@@ -189,7 +189,7 @@ struct BubbleFooter: View, Equatable {
                         deliveryView(tint: metaColor, readTint: readColor)
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundColor(MeeshyColors.stateFailed)
                     }
                     .contentShape(Rectangle())
                 }

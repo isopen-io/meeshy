@@ -19,6 +19,7 @@ type DeliveryQueuePanelProps = {
 
 export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueuePanelProps) {
   const { t } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [items, setItems] = useState<DeliveryQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +120,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
           </span>
         </div>
         <Button
+          aria-label={tA11y('a11y.refresh')}
           variant="ghost"
           size="sm"
           onClick={fetchQueue}

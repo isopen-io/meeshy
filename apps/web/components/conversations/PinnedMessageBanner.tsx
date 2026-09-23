@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pin, X } from 'lucide-react';
+import { ChevronDown, Pin, X } from 'lucide-react';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api.service';
@@ -78,6 +78,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
   // globalement uniques : ce seul champ réarme aussi bien sur une NOUVELLE
   // épingle que sur un changement de conversation.
   const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null);
+  const [rawIndex, setRawIndex] = useState(0);
   const queryClient = useQueryClient();
   const currentUser = useUser();
 
@@ -88,9 +89,11 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
       // Le composant lisait `data.messages[0]`, une clé qui n'existe sur aucune
       // route de ce dépôt — la bannière ne s'affichait donc jamais, même sur un
       // 200 parfaitement valide.
+      // Pas de `limit: 1` : une conversation peut porter plusieurs épingles, la
+      // route en sert 50 par défaut, et n'en demander qu'une rendait les autres
+      // non seulement invisibles mais impossibles à soupçonner (#7520).
       const response = await apiService.get<PinnedMessage[]>(
-        `/conversations/${conversationId}/pinned-messages`,
-        { limit: 1 }
+        `/conversations/${conversationId}/pinned-messages`
       );
       return response.data ?? null;
     },
@@ -134,7 +137,20 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
     [currentUser]
   );
 
-  const pinnedMessage = Array.isArray(data) ? data[0] : undefined;
+  const pinned = Array.isArray(data) ? data : [];
+
+  // L'index est CLAMPÉ à la lecture plutôt que remis à zéro par un effet : la
+  // liste change sous nos pieds (une épingle retirée, un changement de
+  // conversation), et un effet de remise à zéro courrait après elle d'un rendu.
+  const currentIndex = pinned.length > 0 ? Math.min(rawIndex, pinned.length - 1) : 0;
+  const pinnedMessage = pinned[currentIndex];
+
+  // Le rejet retient la tête de liste, pas l'épingle AFFICHÉE : fermer la
+  // bannière ferme la bannière, quelle que soit l'épingle qu'on regardait. La
+  // tête change dès qu'on épingle autre chose, donc la propriété de réarmement
+  // de la règle d'origine est conservée — c'est elle qui compte, pas l'identité
+  // retenue.
+  const headId = pinned[0]?.id;
 
   const displayContent = useMemo(
     () =>
@@ -147,7 +163,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
     [pinnedMessage?.content, pinnedMessage?.translations, pinnedMessage?.originalLanguage, preferredLanguages]
   );
 
-  if (!pinnedMessage || dismissedMessageId === pinnedMessage.id) return null;
+  if (!pinnedMessage || (headId !== undefined && dismissedMessageId === headId)) return null;
 
   const senderLabel = pinnedMessage.sender?.username ?? pinnedMessage.sender?.displayName ?? '';
 
@@ -187,9 +203,34 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
             <span>{displayContent}</span>
           </button>
 
+          {pinned.length > 1 && (
+            <>
+              <span
+                data-testid="pinned-counter"
+                className="flex-shrink-0 text-xs tabular-nums text-amber-700 dark:text-amber-300"
+              >
+                {currentIndex + 1}/{pinned.length}
+              </span>
+              <button
+                type="button"
+                data-testid="pinned-next"
+                onClick={() => setRawIndex((i) => (i + 1) % pinned.length)}
+                aria-label={t('pinnedBanner.next')}
+                className={cn(
+                  'flex-shrink-0 p-0.5 rounded',
+                  'text-amber-600 dark:text-amber-400',
+                  'hover:bg-amber-100 dark:hover:bg-amber-800/40',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500'
+                )}
+              >
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </>
+          )}
+
           <button
             type="button"
-            onClick={() => setDismissedMessageId(pinnedMessage.id)}
+            onClick={() => setDismissedMessageId(headId ?? pinnedMessage.id)}
             aria-label={t('pinnedBanner.close')}
             className={cn(
               'flex-shrink-0 p-0.5 rounded',

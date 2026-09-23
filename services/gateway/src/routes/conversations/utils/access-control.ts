@@ -1,5 +1,5 @@
 import type { FastifyReply } from 'fastify';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UnifiedAuthContext } from '../../../middleware/auth';
 import { sendForbidden, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
@@ -48,7 +48,7 @@ export async function resolveCallerParticipant(
   prisma: Pick<PrismaClient, 'participant'>,
   authContext: CallerParticipantIdentity | null | undefined,
   conversationId: string
-): Promise<{ id: string; role: string } | null> {
+): Promise<{ id: string; role: string; joinedAt: Date | null } | null> {
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
@@ -58,7 +58,7 @@ export async function resolveCallerParticipant(
         isActive: true,
         ...unsetOrNull('bannedAt')
       },
-      select: { id: true, role: true }
+      select: { id: true, role: true, joinedAt: true }
     });
   }
 
@@ -67,8 +67,29 @@ export async function resolveCallerParticipant(
 
   return prisma.participant.findFirst({
     where: { conversationId, userId, isActive: true },
-    select: { id: true, role: true }
+    select: { id: true, role: true, joinedAt: true }
   });
+}
+
+/**
+ * Le filtre `Participant` qui désigne l'APPELANT, pour les routes qui le
+ * cherchent dans une relation imbriquée (`conversation.participants`) plutôt
+ * que par `resolveCallerParticipant`. Même préséance, même garde de
+ * bannissement pour l'invité : les deux réponses ne doivent pas diverger sur
+ * qui est l'appelant (#7358 — `where: { userId }` ne trouvait jamais un invité).
+ * Sans identité, le filtre n'apparie PERSONNE — jamais `userId: null`, qui
+ * désignerait tous les invités de la conversation.
+ */
+export function callerParticipantWhere(
+  authContext: CallerParticipantIdentity | null | undefined
+): Prisma.ParticipantWhereInput {
+  const participantId = authContext?.participantId;
+  if (participantId) {
+    return { id: participantId, isActive: true, ...unsetOrNull('bannedAt') };
+  }
+  const userId = authContext?.userId;
+  if (!userId) return { id: { in: [] } };
+  return { userId, isActive: true };
 }
 
 /**

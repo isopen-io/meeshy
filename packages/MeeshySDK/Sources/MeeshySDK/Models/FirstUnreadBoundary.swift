@@ -50,6 +50,16 @@ public enum FirstUnreadBoundary {
 
     public struct Result: Equatable, Sendable {
         public let firstUnreadId: String
+        /// Le compte de la FENÊTRE reçue, jamais de la conversation (borne
+        /// assumée, ci-dessus). **iOS ne l'ANNONCE plus depuis #7525** :
+        /// `ConversationViewModel+InitialLoad` ne retient de cette loi que
+        /// `firstUnreadId` (la POSITION) et affiche
+        /// `conversation.userState.unreadCount` — le compte SERVEUR, celui de
+        /// la ligne de liste — parce que le curseur serveur n'avance que sur
+        /// le préfixe contigu vu et que la fenêtre paginée gardait alors des
+        /// candidats déjà comptés lus. Le rebrancher sur le séparateur rouvre
+        /// la divergence séparateur ↔ ligne de liste. Le miroir web
+        /// (`apps/web-v2/src/lib/view/unread-boundary.ts`) le lit encore.
         public let unreadCount: Int
 
         public init(firstUnreadId: String, unreadCount: Int) {
@@ -66,9 +76,90 @@ public enum FirstUnreadBoundary {
         joinedAt: Date? = nil,
         viewerId: String
     ) -> Result? {
+        let candidates = orderedCandidates(
+            messages: messages,
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: joinedAt,
+            viewerId: viewerId
+        )
+
+        guard let first = candidates.first else { return nil }
+
+        return Result(firstUnreadId: first.id, unreadCount: candidates.count)
+    }
+
+    /// Ce qui RESTE non lu après une lecture partielle (#7350, I-2), borné par
+    /// la MÊME frontière que `resolve`. Le serveur n'avance son curseur que
+    /// jusqu'au bout du PRÉFIXE CONTIGU de messages vus depuis la frontière
+    /// (`MessageReadStatusService.ts`, mode exact) : un message sauté arrête
+    /// le compte, et la loi le rejoue à l'identique.
+    ///
+    /// - `windowIsAtTip` : la fenêtre atteint le présent. Elle porte alors
+    ///   TOUS les non-lus récents — y compris ceux arrivés depuis l'ouverture.
+    ///   Si elle en compte MOINS que `unreadAtOpen`, les manquants sont PLUS
+    ///   ANCIENS qu'elle : le premier non-lu réel n'y est pas, le curseur
+    ///   serveur ne peut pas avancer, rien n'est consommé.
+    /// - sinon (fenêtre ouverte SUR le séparateur, D-L2), les non-lus absents
+    ///   sont plus RÉCENTS qu'elle et se déduisent de `unreadAtOpen`.
+    /// - `caughtUpMessageId` : le dernier message RATTRAPÉ pendant l'affichage
+    ///   (`ConversationCatchUpLaw`). Le serveur y a posé son curseur
+    ///   (`caughtUpToMessageId`) quels que soient les messages sautés : il
+    ///   devient la frontière, et rien n'était non lu à cet instant. Absent
+    ///   de la fenêtre, il ne déplace rien.
+    public static func remainingUnread(
+        messages: [FirstUnreadCandidateMessage],
+        lastReadMessageId: String?,
+        lastReadAt: Date?,
+        lastReadMessageCreatedAt: Date?,
+        joinedAt: Date? = nil,
+        viewerId: String,
+        seenIds: Set<String>,
+        unreadAtOpen: Int,
+        windowIsAtTip: Bool,
+        caughtUpMessageId: String? = nil
+    ) -> Int {
+        if let caughtUp = caughtUpMessageId.flatMap({ id in messages.first { $0.id == id } }) {
+            return remainingUnread(
+                messages: messages,
+                lastReadMessageId: caughtUp.id,
+                lastReadAt: nil,
+                lastReadMessageCreatedAt: caughtUp.createdAt,
+                joinedAt: joinedAt,
+                viewerId: viewerId,
+                seenIds: seenIds,
+                unreadAtOpen: 0,
+                windowIsAtTip: windowIsAtTip
+            )
+        }
+
+        let candidates = orderedCandidates(
+            messages: messages,
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: joinedAt,
+            viewerId: viewerId
+        )
+        let consumed = candidates.prefix { seenIds.contains($0.id) }.count
+
+        guard windowIsAtTip else { return max(0, unreadAtOpen - consumed) }
+        guard candidates.count >= unreadAtOpen else { return max(0, unreadAtOpen) }
+        return candidates.count - consumed
+    }
+
+    private static func orderedCandidates(
+        messages: [FirstUnreadCandidateMessage],
+        lastReadMessageId: String?,
+        lastReadAt: Date?,
+        lastReadMessageCreatedAt: Date?,
+        joinedAt: Date?,
+        viewerId: String
+    ) -> [FirstUnreadCandidateMessage] {
         let boundaryTime = lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt
 
-        let candidates = messages
+        return messages
             .filter { $0.senderId != viewerId }
             .filter { $0.id != lastReadMessageId }
             .filter { message in
@@ -80,9 +171,5 @@ public enum FirstUnreadBoundary {
                     ? left.id < right.id
                     : left.createdAt < right.createdAt
             }
-
-        guard let first = candidates.first else { return nil }
-
-        return Result(firstUnreadId: first.id, unreadCount: candidates.count)
     }
 }

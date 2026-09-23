@@ -17,10 +17,13 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
+import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useSettled } from '@/lib/view/use-settled';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -53,8 +56,23 @@ import { href, navigate } from '@/routes/route-table';
  *   cet écran s'y superposait (mesuré à la capture, 320 × 568) : un même état
  *   ne se dit qu'une fois, au même endroit que partout ailleurs. Seul le cache
  *   FROID a son état dessiné ici, parce qu'il n'y a alors rien d'autre à voir.
+ * - **UNE salle de publication, celle du réel où le lecteur S'ARRÊTE** (#7395,
+ *   #6485) — miroir de `ReelsViewModel.currentId` (iOS : quitter l'ancienne,
+ *   rejoindre la nouvelle, aucune pour les voisins préchargés). C'est elle qui
+ *   apporte au lecteur non ami de l'auteur la traduction du texte et les
+ *   comptes en direct. Un défilement d'un trait traverse plusieurs pages sans
+ *   s'y poser (`scroll-snap`, une image par page lue) : la salle attend que le
+ *   réel visible soit POSÉ (`REEL_ROOM_SETTLE_MS`). Chaque `post:join` et
+ *   `post:leave` puise dans le seau par utilisateur de la passerelle
+ *   (`PostReactionHandler`, 30 par minute, partagé avec les réactions) —
+ *   rejoindre les réels traversés le viderait pour rien.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
+
+/** Assez long pour qu'un défilement d'un trait ne se pose sur aucune des pages
+ * qu'il traverse, assez court pour que la salle soit tenue bien avant la fin
+ * d'un réel. */
+const REEL_ROOM_SETTLE_MS = 400;
 
 const KEY_DIRECTION: Readonly<Record<string, 'next' | 'previous'>> = {
   ArrowDown: 'next',
@@ -199,6 +217,7 @@ export default function ReelsScreen() {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
+  usePublicationRoom(useSettled(models[active]?.id ?? '', REEL_ROOM_SETTLE_MS));
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -314,12 +333,24 @@ export function ReelsFrame({
   readonly children: React.ReactNode;
 }) {
   return (
-    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
-      {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
-          absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
-          document — après le fil, il fallait traverser chaque réel monté. */}
-      <ReelsBackButton language={language} onBack={onBack} />
-      {children}
+    <div data-reels className="h-dvh overflow-hidden bg-black text-white">
+      {/* LA COLONNE DES RÉELS (#7449) — `REEL_COLUMN_STYLE`
+          (`lib/view/reading-column.ts`) : un réel est en 9:16, sa largeur utile
+          est donc `hauteur × 9/16` et tout le reste n'est que du noir — du noir
+          qui éloigne le rail d'actions du regard et du pouce. Elle porte le
+          `relative` : le bouton « Retour » et les états plein cadre
+          (`StateFrame`, `ReelsSkeleton`) s'ancrent à la COLONNE, pas à la
+          fenêtre, sinon les contrôles partiraient au bord opposé.
+
+          Aux deux gabarits que les gates mesurent, elle ne retire rien :
+          844 × 9/16 = 474 (> 390) et 568 × 9/16 = 319,5 (≈ 320). */}
+      <div data-reels-column className="relative h-full" style={REEL_COLUMN_STYLE}>
+        {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
+            absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
+            document — après le fil, il fallait traverser chaque réel monté. */}
+        <ReelsBackButton language={language} onBack={onBack} />
+        {children}
+      </div>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

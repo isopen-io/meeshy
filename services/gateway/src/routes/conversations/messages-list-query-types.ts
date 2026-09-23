@@ -152,6 +152,8 @@ export type MessageProtectionRow = {
   isBlurred?: boolean | null;
   effectFlags?: number | null;
   expiresAt?: Date | null;
+  /** #7451 — la DURÉE d'un éphémère. Servie partout ; l'échéance, elle, est par lecteur. */
+  ephemeralDuration?: number | null;
 };
 
 /** Le message CITÉ (`message.replyTo`) — `QuotedMessageRow` plus ce que ce module lit en plus. */

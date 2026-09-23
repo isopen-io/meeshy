@@ -22,6 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
@@ -659,6 +660,13 @@ class MeeshySocketIOService {
     // Resolve User ID from sender (senderId from gateway is a Participant ID)
     const resolvedSenderId = getSenderUserId(sender as Record<string, unknown>) || socketMessage.senderId || '';
 
+    // Le nom affiché derrière chaque `@pseudo`, résolu par `MessageHandler` et
+    // posé sur le broadcast (#7458). Le champ a un TYPE — l'élargir à `any`
+    // pour le relire trois fois payait trois erreurs au cliquet de dette
+    // (#7480) là où une seule déclaration suffit : c'est le champ qui manque
+    // à `SocketIOMessage`, pas le type qui manque au champ.
+    const mentionedUsers = (socketMessage as { mentionedUsers?: readonly MentionedUser[] }).mentionedUsers;
+
     return {
       id: socketMessage.id,
       conversationId: socketMessage.conversationId,
@@ -691,6 +699,13 @@ class MeeshySocketIOService {
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
       validatedMentions: (socketMessage as any).validatedMentions || [],
+      // L'omettre faisait lire au destinataire le HANDLE en direct et le NOM
+      // après rechargement, pour le même message (#7458). Champ ABSENT plutôt
+      // que tableau vide quand rien n'est résolu — mêmes règles de présence
+      // conditionnelle que le transformer REST.
+      ...(Array.isArray(mentionedUsers) && mentionedUsers.length > 0
+        ? { mentionedUsers }
+        : {}),
       // Le broadcast gateway porte déjà ces champs (`MessageHandler` pose
       // `forwardedFromConversation` et `effectFlags`). Les omettre ici rendait
       // le badge « Transféré depuis {groupe} » mort sur le chemin temps réel et

@@ -3,58 +3,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-// MARK: - Views Sub-Filter
-
-private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched, opened
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoyé", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribué", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
-        case .opened: return String(localized: "message-detail.views.opened", defaultValue: "Ouvert", bundle: .main)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .sent: return "paperplane.fill"
-        case .delivered: return "checkmark.circle.fill"
-        case .read: return "eye.fill"
-        case .notSeen: return "eye.slash.fill"
-        case .listened: return "headphones"
-        case .watched: return "play.rectangle.fill"
-        case .opened: return "doc.viewfinder"
-        }
-    }
-
-    /// La famille de consommation que cet onglet montre, s'il en montre une.
-    /// Les quatre onglets de statut TEXTE (envoyé, distribué, lu, pas vu)
-    /// n'en ont aucune.
-    var family: MediaConsumptionFamily? {
-        switch self {
-        case .listened: return .listened
-        case .watched: return .watched
-        case .opened: return .opened
-        default: return nil
-        }
-    }
-
-    init(family: MediaConsumptionFamily) {
-        switch family {
-        case .listened: self = .listened
-        case .watched: self = .watched
-        case .opened: self = .opened
-        }
-    }
-}
-
 // MARK: - MessageViewsDetailView
 
 /// Onglet « Qui a vu » du détail d'un message : sous-filtres (Envoyé / Distribué /
@@ -75,22 +23,31 @@ struct MessageViewsDetailView: View {
     @State private var isLoadingReadStatus = false
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
-    @State private var readStatusError: String? = nil
+    @State private var readStatusError: MessageViewsLabels.LoadFailure? = nil
 
-    // Views sub-filter
-    @State private var viewsFilter: ViewsFilter = .sent
+    // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
+    // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
+    // juge pertinent (#7366), jamais « Envoyé » par défaut.
+    @State private var chosenViewsFilter: MessageViewsFilter? = nil
+    private var viewsFilter: MessageViewsFilter {
+        chosenViewsFilter ?? .initial(
+            readCount: message.readCount,
+            deliveredCount: message.deliveredCount,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
+    }
 
     // Historique local des tentatives d'envoi (spec 2026-07-08
     // message-send-failure-retry-flow) — vide pour les messages reçus
     // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
     @State private var sendAttempts: [SendAttemptRecord] = []
 
-    private var availableViewsFilters: [ViewsFilter] {
+    private var availableViewsFilters: [MessageViewsFilter] {
         // #7228 — un onglet par famille de consommation PRÉSENTE. La partition
         // est celle de `MediaConsumptionFamily` : audio, vidéo, et tout le
         // reste, qui s'OUVRE (image, PDF, tableur, présentation, archive…).
         let families = MessageViewsConsumption.families(in: message.attachments)
-        return [.sent, .delivered, .read, .notSeen] + families.map(ViewsFilter.init(family:))
+        return [.sent, .delivered, .read, .notSeen] + families.map(MessageViewsFilter.init(family:))
     }
 
     var body: some View {
@@ -114,6 +71,18 @@ struct MessageViewsDetailView: View {
                     .receive(on: DispatchQueue.main)
             ) { _ in
                 Task { await loadReadStatus(force: true) }
+            }
+            // I4 (#7360) — les cartes « écouté jusqu'à » / « Nx » se relancent
+            // en direct, pour CE message seulement (règle testée à part).
+            .onReceive(
+                MessageSocketManager.shared.attachmentStatusUpdated
+                    .filter { [messageId = message.id, conversationId] in
+                        MessageViewsConsumption.refreshesCards(
+                            on: $0, messageId: messageId, conversationId: conversationId)
+                    }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadAttachmentStatuses() }
             }
     }
 
@@ -162,7 +131,7 @@ struct MessageViewsDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func viewsFilterCapsule(_ filter: ViewsFilter, accent: Color) -> some View {
+    private func viewsFilterCapsule(_ filter: MessageViewsFilter, accent: Color) -> some View {
         let isSelected = viewsFilter == filter
         var count: Int? = nil
 
@@ -182,7 +151,7 @@ struct MessageViewsDetailView: View {
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                viewsFilter = filter
+                chosenViewsFilter = filter
             }
             HapticFeedback.light()
         } label: {
@@ -238,7 +207,7 @@ struct MessageViewsDetailView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(message.senderName ?? "Inconnu")
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -264,27 +233,27 @@ struct MessageViewsDetailView: View {
 
             // Message meta info (merged from old Meta tab)
             VStack(spacing: 0) {
-                metaInfoRow(icon: "number", label: "ID", value: String(message.id.prefix(12)), accent: accent)
+                metaInfoRow(icon: "number", label: String(localized: "message-detail.meta.id", bundle: .main), value: String(message.id.prefix(12)), accent: accent)
                 metaDivider
-                metaInfoRow(icon: "bubble.left.fill", label: "Type", value: message.messageType.rawValue, accent: accent)
+                metaInfoRow(icon: "bubble.left.fill", label: String(localized: "message-detail.meta.type", bundle: .main), value: message.messageType.rawValue, accent: accent)
                 metaDivider
-                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: "Source", value: message.messageSource.rawValue, accent: accent)
+                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: String(localized: "message-detail.meta.source", bundle: .main), value: message.messageSource.rawValue, accent: accent)
                 metaDivider
-                metaInfoRow(icon: "globe", label: "Langue", value: message.originalLanguage.uppercased(), accent: accent)
+                metaInfoRow(icon: "globe", label: String(localized: "message-detail.meta.language", bundle: .main), value: message.originalLanguage.uppercased(), accent: accent)
                 metaDivider
                 metaInfoRow(
                     icon: "lock.shield.fill",
-                    label: "Chiffrement",
+                    label: String(localized: "message-detail.meta.encryption", bundle: .main),
                     value: message.isEncrypted
-                        ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
-                        : "Non",
+                        ? String(localized: "message-detail.meta.encryption-yes", bundle: .main) + (message.encryptionMode.map { " (\($0))" } ?? "")
+                        : String(localized: "message-detail.meta.encryption-no", bundle: .main),
                     accent: accent,
                     valueColor: message.isEncrypted ? .green : nil
                 )
 
                 if message.isEdited {
                     metaDivider
-                    metaInfoRow(icon: "pencil", label: "Modifie", value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                    metaInfoRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
                 }
 
                 if !message.attachments.isEmpty {
@@ -294,7 +263,7 @@ struct MessageViewsDetailView: View {
                     })
                     metaInfoRow(
                         icon: "paperclip",
-                        label: "Pieces jointes",
+                        label: String(localized: "message-detail.meta.attachments", bundle: .main),
                         value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))",
                         accent: accent
                     )
@@ -316,7 +285,7 @@ struct MessageViewsDetailView: View {
 
                 if let reply = message.replyTo {
                     metaDivider
-                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: "Reponse a", value: reply.authorName, accent: accent)
+                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: String(localized: "message-detail.meta.reply-to", bundle: .main), value: reply.authorName, accent: accent)
                 }
             }
             .background(
@@ -537,7 +506,7 @@ struct MessageViewsDetailView: View {
                 } else {
                     timelineBanner(
                         icon: "checkmark.circle.fill",
-                        text: status.receivedCount >= status.totalMembers ? "Distribue a tous" : "Distribue",
+                        text: MessageViewsLabels.deliveredBanner(receivedCount: status.receivedCount, totalMembers: status.totalMembers),
                         detail: status.receivedBy.first.map { formatTimeFR($0.receivedAt) } ?? "",
                         count: "\(status.receivedCount)/\(status.totalMembers)",
                         accent: accent
@@ -573,7 +542,7 @@ struct MessageViewsDetailView: View {
                 } else {
                     timelineBanner(
                         icon: "eye.fill",
-                        text: status.readCount >= status.totalMembers ? "Lu par tous" : "Lu",
+                        text: MessageViewsLabels.readBanner(readCount: status.readCount, totalMembers: status.totalMembers),
                         detail: status.readBy.first.map { formatTimeFR($0.readAt) } ?? "",
                         count: "\(status.readCount)/\(status.totalMembers)",
                         accent: accent
@@ -987,7 +956,7 @@ struct MessageViewsDetailView: View {
                 // Not combined into one element: the button must stay independently
                 // focusable for VoiceOver.
                 .accessibilityHidden(true)
-            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
+            Text(readStatusError.map { MessageViewsLabels.loadFailure($0) } ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
             Button {
@@ -1048,11 +1017,11 @@ struct MessageViewsDetailView: View {
             if response.success {
                 readStatusData = response.data
             } else {
-                readStatusError = "Erreur serveur"
+                readStatusError = .server
                 Logger.network.error("read-status error: success=false")
             }
         } catch {
-            readStatusError = "Erreur de connexion"
+            readStatusError = .connection
             Logger.network.error("read-status decode/network error: \(error)")
         }
     }
@@ -1094,19 +1063,15 @@ struct MessageViewsDetailView: View {
 
     // MARK: - Helpers
 
+    /// #7365 — résolu comme la bulle (`MessageViewsReadStatusRules`).
     private var deliveryStatusLevel: Int {
-        // Phase 4 spec §6.2 — `.invisible`, `.clock`, `.slow` are all visual
-        // refinements of the "still sending" phase (between optimistic apply
-        // and server ACK). They share level 0 with `.sending` so the badge
-        // collapses them to the single "Envoi..." label, matching the existing
-        // 4-bucket design (failed / sending / sent / delivered / read).
-        switch message.deliveryStatus {
-        case .failed: return -1
-        case .sending, .invisible, .clock, .slow: return 0
-        case .sent: return 1
-        case .delivered: return 2
-        case .read: return 3
-        }
+        MessageViewsReadStatusRules.deliveryStatusLevel(
+            for: message,
+            tally: readStatusData.map {
+                .init(recipientCount: $0.totalMembers, deliveredCount: $0.receivedCount, readCount: $0.readCount)
+            },
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
     }
 
     private func formatDateFR(_ date: Date) -> String {

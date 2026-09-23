@@ -266,17 +266,27 @@ extension ConversationSyncEngine {
     /// serveur. La ligne montre donc immédiatement l'auteur, la pièce jointe et
     /// les effets du message réellement envoyé — et non ceux du précédent.
     public func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
+        await updateConversationAfterSend(facet, conversationId: conversationId, replacing: [])
+    }
+
+    /// - Parameter aliases: les noms que l'accusé REMPLACE — le `cid_…` de
+    ///   l'optimiste. Sous la garde d'ordre commune (#7548), un accusé ne
+    ///   régresse pas une ligne qu'un message plus récent a déjà remontée,
+    ///   mais remplace toujours son propre optimiste, même quand l'horloge
+    ///   serveur précède celle de l'appareil.
+    public func updateConversationAfterSend(
+        _ facet: LastMessageFacet, conversationId: String, replacing aliases: [String]
+    ) async {
         await cache.conversations.update(for: "list") { conversations in
-            var updated = conversations
+            var updated = ConversationListLastMessage.applying(
+                facet, conversationId: conversationId, aliases: aliases, to: conversations
+            ) ?? conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
                 // Envoyer, c'est avoir lu : la frontière avance au-delà du
                 // message qu'on vient de poser, sinon `reconcileUnread` la
                 // trouverait périmée face au nouveau `lastMessageAt`.
                 updated[idx].userState.lastReadAt = Date()
-                let conv = updated.remove(at: idx)
-                updated.insert(conv, at: 0)
             }
             return updated
         }
@@ -285,6 +295,7 @@ extension ConversationSyncEngine {
     }
 
     public func markConversationReadLocally(_ conversationId: String) async {
+        noteUnreadRemaining(conversationId, 0)
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
@@ -299,6 +310,38 @@ extension ConversationSyncEngine {
         }
         _conversationsDidChange.send()
         await recomputeTotalUnread()
+    }
+
+    public func noteUnreadRemaining(_ conversationId: String, _ remaining: Int) {
+        stateQueue.sync {
+            guard _currentlyOpenConversationId == conversationId else { return }
+            _unreadToRestoreOnClose = max(0, remaining)
+        }
+    }
+
+    /// Redonne à la conversation qu'on QUITTE le compte que la lecture a
+    /// réellement laissé (#7350, I-2) — au lieu du 0 transitoire de
+    /// l'ouverture, que rien d'autre ne corrigeait avant le prochain
+    /// instantané serveur (le `conversation:unread-updated` reçu pendant
+    /// l'affichage est, lui, forcé à 0). Le miroir bouge dans le tour de
+    /// boucle pour que l'agrégat soit juste tout de suite ; le cache n'est
+    /// écrit que si la ligne porte encore ce 0 transitoire — une valeur non
+    /// nulle arrivée du serveur depuis la fermeture fait autorité.
+    /* partagé entre les fichiers du moteur (#4172) */ func restoreUnreadOnClose(_ conversationId: String, _ remaining: Int) {
+        guard remaining > 0 else { return }
+        stateQueue.sync { _unreadByConversation[conversationId] = remaining }
+        Task {
+            await self.cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == conversationId }),
+                   updated[idx].userState.unreadCount == 0 {
+                    updated[idx].userState.unreadCount = remaining
+                }
+                return updated
+            }
+            self._conversationsDidChange.send()
+            await self.recomputeTotalUnread()
+        }
     }
 
     /// Symétrique de `markConversationReadLocally` : « marquer comme non lu »
@@ -327,12 +370,15 @@ extension ConversationSyncEngine {
     ///
     /// Le gateway ne renvoie jamais `lastReadAt` (`APIConversation.toConversation`
     /// ne le mappe pas) : ce champ est donc une frontière purement locale, posée
-    /// par `markConversationReadLocally` et par l'entrée dans une conversation,
-    /// et qui survit au round-trip GRDB. Deux règles, dans cet ordre :
+    /// par `markConversationReadLocally` — une lecture RÉELLE, jamais la simple
+    /// entrée dans une conversation (#7350) — et qui survit au round-trip GRDB. Deux règles, dans cet ordre :
     ///
     /// 1. **Conversation ouverte** → 0. L'utilisateur la REGARDE ; tout compteur
     ///    non nul est un mensonge visuel. Même gate que `handleUnreadUpdated`,
     ///    qui l'appliquait déjà aux broadcasts socket mais pas aux syncs REST.
+    ///    Zéro TRANSITOIRE, qui ne pose AUCUNE frontière (#7350) : ouvrir n'est
+    ///    pas lire, et une frontière datée de l'ouverture ferait passer la
+    ///    règle 2 sur tout instantané postérieur à la fermeture.
     /// 2. **Lecture locale postérieure au dernier message connu du serveur** → 0.
     ///    Le compteur serveur est en retard (accusé de lecture encore dans
     ///    l'outbox, hors-ligne, 429…). Dès qu'un message VRAIMENT plus récent
@@ -371,7 +417,6 @@ extension ConversationSyncEngine {
 
         if incoming.id == openConversationId {
             result.userState.unreadCount = 0
-            result.userState.lastReadAt = max(result.userState.lastReadAt ?? .distantPast, now)
             return result
         }
 

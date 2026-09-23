@@ -56,6 +56,7 @@ import {
 } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { readDeviceServedTo } from '../../utils/read-device-visibility';
 import {
   RECEIPTS_MAX_WRITE_MESSAGE_IDS,
   RECEIPTS_MAX_READ_MESSAGE_IDS,
@@ -385,6 +386,12 @@ export async function applyReceipt(
         userId: actorKey,
         isAnonymous,
         type: params.type === 'read' ? 'read' : 'received',
+        // G-5 (#7347, G-8) — le lot RÉELLEMENT figé par CETTE écriture (le
+        // VETTÉ de `vetReportedMessages`, jamais le lot brut rapporté par le
+        // client) : `broadcastReadStatus` en tire un résumé PAR message.
+        // Réservé à `read` — `received`/`delivered` gardent leur repli
+        // agrégé, cf. sa doc-comment.
+        messageIds: params.type === 'read' ? targeted : undefined,
       }
     );
   } catch (error) {
@@ -661,7 +668,7 @@ async function readPeople(
       deliveredAt: iso(row.deliveredAt),
       receivedAt: iso(row.receivedAt),
       readAt: iso(row.readAt),
-      readDevice: row.readDevice ?? null,
+      readDevice: readDeviceServedTo(row, reader.membership.id),
     }));
 
   const { total, limit: served, offset: from, hasMore } = page.pagination;

@@ -4,6 +4,7 @@
  */
 
 import * as path from 'path';
+import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
@@ -24,7 +25,6 @@ import { deriveMessageTypeForAttachments } from './attachmentMessageType';
 import { attachmentFullSelect, attachmentSocketSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   buildPostReplyTo,
   POST_REPLY_SNAPSHOT_SELECT,
@@ -301,6 +301,8 @@ export class MessageProcessor {
     isBlurred?: boolean;
     effectFlags?: number;
     expiresAt?: Date;
+    /** Durée d'un éphémère en secondes (#7451) — le décompte part de la RÉCEPTION. */
+    ephemeralDuration?: number;
     isViewOnce?: boolean;
     maxViewOnceCount?: number;
     clientMessageId?: string;
@@ -366,11 +368,7 @@ export class MessageProcessor {
       );
     }
 
-    // Compute effectFlags: use provided value or derive from legacy fields
-    let effectFlags = data.effectFlags ?? 0;
-    if (data.isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
-    if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
-    if (data.isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+    const effectFlags = composeMessageEffectFlags(data);
 
     // Réponse à un post (status/story/reel/post) : GELER un snapshot du post
     // cité MAINTENANT, pendant qu'il existe encore. Sans ça, à l'expiration
@@ -425,7 +423,8 @@ export class MessageProcessor {
       encryptedContent: encryptionContext.encryptedContent,
       encryptionMetadata: encryptionContext.encryptionMetadata,
       isBlurred: data.isBlurred || false,
-      expiresAt: data.expiresAt || null,
+      // #7451 — la DURÉE s'enregistre ; `expiresAt` devient interne.
+      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, now: new Date() }),
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
@@ -714,7 +713,7 @@ export class MessageProcessor {
     try {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
-        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id);
+        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
         // Déclencher le traitement audio si nécessaire
         if (this.translationService) {

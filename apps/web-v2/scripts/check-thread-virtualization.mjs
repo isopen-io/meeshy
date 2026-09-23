@@ -14,7 +14,9 @@
  *    C'est la mesure qui distingue une virtualisation d'une intention.
  * 2. Que le fil s'ouvre EN BAS — sur le dernier message. Un fil qui s'ouvre en
  *    haut oblige à faire défiler cinq cents messages pour lire le dernier ; la
- *    virtualisation la mieux réglée ne rachète pas ça.
+ *    virtualisation la mieux réglée ne rachète pas ça. Et, sur ce fil qu'aucun
+ *    curseur ne borne (#7351, D-L2), qu'il s'ouvre SUR son séparateur de
+ *    non-lus, devant les deux derniers messages d'autrui (§ 2 bis).
  * 3. Que le défilement vers le haut atteint le PREMIER message, et que le
  *    nombre de cellules reste borné pendant tout le trajet — une fenêtre qui
  *    s'élargit au lieu de glisser rend le gate vert au départ et l'application
@@ -132,6 +134,25 @@ expect(
 expect(
   (await page.getByText('Je pousse la mesure ce soir.').count()) > 0,
   "le dernier message n'est pas rendu à l'ouverture",
+);
+
+/**
+ * --- 2 bis : L'APPAREIL NEUF (#7351, D-L2). `c-deploiement` n'a AUCUN curseur
+ * de lecture et la liste l'annonce à 2 non-lus : c'est le fil que reçoit un
+ * appareil qui ne l'a jamais ouvert. Il s'ouvre SUR son séparateur, posé devant
+ * les 2 DERNIERS messages d'autrui — jamais devant le premier des 500 (le fil
+ * ouvert à 8 400 px du bas qu'une frontière sans curseur produisait) : le
+ * séparateur est dans l'écran ET le bas est atteint (§ 2 ci-dessus).
+ */
+const separator = await page.evaluate(() => {
+  const el = document.querySelector('[data-unread-separator]');
+  if (el === null) return null;
+  const r = el.getBoundingClientRect();
+  return { top: Math.round(r.top), bottom: Math.round(r.bottom), viewport: innerHeight, text: el.textContent?.trim() ?? '' };
+});
+expect(
+  separator !== null && separator.top >= 0 && separator.bottom <= separator.viewport && /\b2\b/.test(separator.text),
+  `un appareil neuf (2 non-lus, aucun curseur) n'ouvre pas le fil sur « 2 messages non lus » dans l'écran : ${JSON.stringify(separator)}`,
 );
 
 /**

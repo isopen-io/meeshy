@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Garde d'analyse de source : dans la surface CONVERSATION, une fonction
@@ -441,5 +442,589 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
                 "\(name) est revenue dans la surface conversation. Elle n'a jamais eu de site d'appel : la monter, ou ne pas la réécrire."
             )
         }
+    }
+}
+
+// MARK: - #7452 — le chrome de protection, dans les cinq modes de lecture
+//
+// Cette garde vit dans CE fichier, et non dans le sien, pour une raison
+// d'outillage : `check_test_registration.sh` exige qu'un fichier de test soit
+// inscrit dans le `project.pbxproj` COMMITTÉ, et cette inscription se produit
+// par `xcodegen generate` — indisponible hors d'un Mac. Un fichier neuf ne
+// s'exécuterait donc nulle part. Le voisinage n'est pas arbitraire : les deux
+// gardes interrogent la même surface, « ce que la conversation rend vraiment ».
+
+/// **La garde du « tout autre affichage plus tard »** (#7452).
+///
+/// ## Ce qu'elle empêche, et pourquoi une garde plutôt qu'un correctif
+///
+/// Relevé sur `dev` 3ff99d3aa3 : la conversation se lit de CINQ façons, et le
+/// décompte d'un message éphémère n'existait que dans trois d'entre elles —
+/// Focal et Script (`FocalEphemeralBadge`), Bulle (`BubbleEphemeralBadge`).
+/// **Rivière et Résumé n'affichaient rien** : un message qui allait disparaître
+/// dans trente secondes ne le disait pas à deux lecteurs sur cinq.
+///
+/// Ce n'était pas une négligence, c'était structurel. Rivière et Résumé sont
+/// nés APRÈS la bulle, et rien, en les écrivant, n'obligeait à déclarer ce
+/// qu'ils faisaient des messages protégés. Ajouter deux badges aujourd'hui
+/// referme le trou d'aujourd'hui ; le sixième mode le rouvrira, exactement
+/// comme les deux précédents. La directive porteur nomme ce risque : « il est
+/// important de s'assurer que cette feature a un décompte en Script, Focal ou
+/// bulle **ou tout autre affichage plus tard** ».
+///
+/// La garde parcourt donc `ConversationReadingMode.allCases` — jamais une
+/// liste recopiée — et exige, pour CHAQUE cas, un fichier qui monte
+/// `MessageProtectionChrome` avec un descripteur RÉSOLU. Un sixième mode ne
+/// peut naître ni sans entrée dans `ReadingModeProtectionChrome` (le `switch`
+/// ne compilerait pas), ni sans rendre le chrome (ce test rougirait).
+final class ReadingModeProtectionChromeGuardTests: XCTestCase {
+
+    private func appRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // …/Unit/Architecture
+            .deletingLastPathComponent()  // …/Unit
+            .deletingLastPathComponent()  // …/MeeshyTests
+            .deletingLastPathComponent()  // …/apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        let url = appRoot().appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Les cinq modes, et le sixième
+
+    func test_chaqueModeDeLecture_rendLeChromeDeProtection() throws {
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let path = ReadingModeProtectionChrome.rendererPath(for: mode)
+            let code = try source(at: path)
+            XCTAssertTrue(
+                code.contains("MessageProtectionChrome(descriptor:"),
+                """
+                Le mode « \(mode.rawValue) » ne rend PAS le chrome de protection. \
+                `\(path)` doit monter `MessageProtectionChrome(descriptor:…)` — le \
+                décompte d'un éphémère ET la désignation d'une vue unique en \
+                dépendent. C'est la garde du « tout autre affichage plus tard » : \
+                deux modes sur cinq (Rivière, Résumé) étaient muets avant #7452, \
+                et un badge peint à la main ici rouvrirait la divergence.
+                """
+            )
+        }
+    }
+
+    /// Le descripteur monté ne doit pas être FABRIQUÉ par la vue : il vient de
+    /// la résolution unique (`MeeshyMessage.protection`), directement ou via la
+    /// projection du mode (`BubbleContent.protection`, `RiverBubbleContent
+    /// .protection`, `SummaryProtectionEntry.descriptor`).
+    func test_chaqueModeDeLecture_consommeUnDescripteurRésolu() throws {
+        let resolvedSources = [
+            ".protection",          // BubbleContent / RiverBubbleContent / MeeshyMessage
+            "entry.descriptor",     // SummaryProtectionEntry
+        ]
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let path = ReadingModeProtectionChrome.rendererPath(for: mode)
+            let code = try source(at: path)
+            XCTAssertTrue(
+                resolvedSources.contains(where: code.contains),
+                """
+                Le mode « \(mode.rawValue) » monte un chrome dont le descripteur \
+                n'est pas résolu par le site unique. `\(path)` doit lire la \
+                projection de `MeeshyMessage.protection` — une vue qui compose \
+                son propre descripteur réécrit la règle d'échéance du contrat \
+                #7451, et c'est précisément ainsi que trois lectures différentes \
+                de `expiresAt` ont coexisté.
+                """
+            )
+        }
+    }
+
+    // MARK: - La destruction se voit, dans les cinq modes (#7467)
+
+    func test_chaqueModeDeLecture_monteLaCombustionDUnÉphémère() throws {
+        // Un message qui disparaît d'une liste sans transition ne se lit pas
+        // comme une destruction : il se lit comme un SAUT — la liste se
+        // réorganise et le lecteur croit avoir raté un défilement. L'effet est
+        // donc une INFORMATION, pas un ornement, et il se doit d'exister
+        // partout où le message s'affiche.
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let path = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            let code = try source(at: path)
+            XCTAssertTrue(
+                code.contains(".ephemeralBurn(isBurning:"),
+                "Le mode « \(mode.rawValue) » retire un éphémère échu SANS le montrer. "
+                    + "`\(path)` doit poser `.ephemeralBurn(isBurning:…)` — le modificateur "
+                    + "lit lui-même « Réduire les animations », il n'y a rien d'autre à câbler."
+            )
+        }
+    }
+
+    /// La combustion ne se pose JAMAIS deux fois sur le même message : elle
+    /// doublerait l'opacité et l'échelle. En peau bulle, l'hôte est
+    /// `ThemedMessageBubble` (sticker compris) et non `BubbleStandardLayout`,
+    /// où vit le chrome — c'est pourquoi les deux tables existent.
+    func test_laCombustion_nEstPoséeQuUneFoisParPeau() throws {
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let chromePath = ReadingModeProtectionChrome.rendererPath(for: mode)
+            let burnPath = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            guard chromePath != burnPath else { continue }
+            let chromeCode = try source(at: chromePath)
+            XCTAssertFalse(
+                chromeCode.contains(".ephemeralBurn(isBurning:"),
+                "`\(chromePath)` ne doit pas poser la combustion : `\(burnPath)` la pose déjà "
+                    + "pour le mode « \(mode.rawValue) », et deux poses se multiplient."
+            )
+        }
+    }
+
+    // MARK: - Plus aucun minuteur par cellule
+
+    func test_aucuneCelluleNeFaitTournerSonPropreMinuteurÉphémère() throws {
+        // Le décompte bat côté système (`Text(timerInterval:)`) et la
+        // disparition est ordonnancée UNE fois pour tout le fil
+        // (`EphemeralExpiryCoordinator`). Un `Timer.publish` réintroduit dans
+        // une cellule de message ferait exactement ce que ce lot a retiré :
+        // un réveil du MainActor par seconde et par éphémère à l'écran.
+        let watched = [
+            "Features/Main/Views/Bubble/BubbleStandardLayout.swift",
+            "Features/Main/Views/ThemedMessageBubble.swift",
+            "Features/Main/Focal/Row/FocalRow.swift",
+            "Features/Main/Riviere/View/RiverBubbleView.swift",
+            "Features/Main/Focal/Summary/SummaryProtectionsView.swift",
+        ]
+        for path in watched {
+            let code = try source(at: path)
+            XCTAssertFalse(
+                code.contains("Timer.publish"),
+                "`\(path)` fait tourner un minuteur de cellule. Le décompte est rendu par "
+                    + "`Text(timerInterval:)` et la disparition par `EphemeralExpiryCoordinator`."
+            )
+        }
+    }
+
+    // MARK: - Un pictogramme par sens
+
+    /// **La table des trois protections, arrêtée par le porteur le 2026-09-22 :**
+    /// « vue unique c'est "1" cerclé plutôt, et l'œil représente le flou ! »,
+    /// l'éphémère restant la flamme.
+    ///
+    /// Le défaut réel n'était pas qu'un pictogramme soit laid : c'est que
+    /// `flame` désignait la VUE UNIQUE dans la ligne de liste pendant qu'il
+    /// désignait l'ÉPHÉMÈRE dans la bulle — un même dessin pour deux sens
+    /// opposés. Et le COMPOSEUR lui-même se contredisait : sa barre montrait
+    /// `flame.fill`, sa feuille d'effets `hourglass`, son état inactif
+    /// `timer.circle`. Trois images pour un sens, dans l'écran où
+    /// l'utilisateur apprend le vocabulaire.
+    func test_lesPictogrammesDeProtection_suiventLaTableDuPorteur() throws {
+        XCTAssertEqual(MessageProtectionSymbols.ephemeral, "flame")
+        XCTAssertEqual(MessageProtectionSymbols.viewOnce, "1.circle")
+        XCTAssertEqual(MessageProtectionSymbols.blurred, "eye.slash")
+    }
+
+    /// Les DEUX surfaces de CHOIX lisent la table, plutôt que de la recopier.
+    /// Un littéral y reviendrait sans rien faire rougir — c'est exactement
+    /// ainsi que la barre et la feuille ont divergé.
+    func test_lesSurfacesDeChoix_lisentLaTableEtNePeignentAucunLittéral() throws {
+        let surfaces = [
+            "Features/Main/Components/EffectsPickerView.swift",
+            "Features/Main/Components/UniversalComposerBar+Protections.swift",
+        ]
+        let bannedLiterals = ["\"flame\"", "\"flame.fill\"", "\"1.circle\"", "\"1.circle.fill\"",
+                              "\"eye.slash\"", "\"eye.slash.fill\"", "\"hourglass\"", "\"timer.circle\""]
+        for path in surfaces {
+            let code = try source(at: path)
+            XCTAssertTrue(
+                code.contains("MessageProtectionSymbols."),
+                "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
+                    + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
+            )
+            for literal in bannedLiterals {
+                XCTAssertFalse(
+                    code.contains(literal),
+                    "`\(path)` peint \(literal) à la main. La table est la source unique — "
+                        + "un littéral y revient sans rien faire rougir, et c'est ainsi que la "
+                        + "barre et la feuille du composeur ont fini par se contredire."
+                )
+            }
+        }
+    }
+}
+
+
+/// **Un contrôle monté derrière un drapeau qu'aucun écran de production n'arme
+/// est un contrôle ABSENT** (#7472).
+///
+/// Il ne rougit nulle part : il compile, il se teste en isolation, il s'affiche
+/// en aperçu. Seul un témoin qui regarde le SITE DE MONTAGE peut le voir — d'où
+/// la place de cette suite, à côté de la garde d'atteignabilité des fonctions
+/// de la surface conversation, qui ferme la même famille de défaut un cran plus
+/// bas.
+final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
+
+    private func appRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // …/Unit/Architecture
+            .deletingLastPathComponent()  // …/Unit
+            .deletingLastPathComponent()  // …/MeeshyTests
+            .deletingLastPathComponent()  // …/apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    // MARK: - #7472 — la vue unique se pose d'un seul geste, à côté du flou
+
+    /// **Le bouton existait, à la bonne place, et personne ne pouvait le voir.**
+    ///
+    /// > « Il faut mettre "1" cerclé à côté du flou dans l'universal composer
+    /// > bar ! afin de facilement envoyer des vues unique ! »
+    ///
+    /// `viewOnceToggleButton` était écrit, stylé, localisé et monté dans la
+    /// rangée haute juste après `blurToggleButton` — mais derrière
+    /// `if showViewOnce`, un drapeau qu'un SEUL site d'appel arme, et pour
+    /// l'aperçu de notification : `showViewOnce: previewMode`. Dans le
+    /// composeur de conversation, il valait `false` depuis toujours.
+    ///
+    /// La vue unique se choisissait donc par la feuille des effets — trois
+    /// gestes — pendant que le flou, sa jumelle de masquage, s'armait d'un tap
+    /// à dix points de là. Ce n'est pas un bouton à écrire, c'est une porte à
+    /// ouvrir : d'où la bascule d'un drapeau d'OPT-IN vers un drapeau
+    /// d'OPT-OUT, `hideViewOnce`, exactement celui du flou.
+    ///
+    /// > Un contrôle monté derrière un drapeau qu'aucun écran de production
+    /// > n'arme est un contrôle absent — et il ne rougit nulle part, puisqu'il
+    /// > compile, se teste en isolation et s'affiche en aperçu.
+    func test_leComposeur_exposeLaBasculeDeVueUniqueParDéfaut() throws {
+        let composer = try source(at: "Features/Main/Components/UniversalComposerBar.swift")
+        XCTAssertTrue(
+            composer.contains("var hideViewOnce: Bool = false"),
+            "La vue unique doit s'afficher PAR DÉFAUT, comme le flou : un drapeau "
+                + "d'opt-in la laissait invisible dans le composeur de conversation."
+        )
+        XCTAssertFalse(
+            composer.contains("var showViewOnce"),
+            "`showViewOnce` était le drapeau d'OPT-IN. Le garder à côté de "
+                + "`hideViewOnce` rouvrirait la porte par deux sens contraires."
+        )
+    }
+
+    /// Les deux protections de masquage sont VOISINES dans la rangée, et
+    /// gardées par le même genre de drapeau. Le voisinage est la moitié de la
+    /// demande : « à côté du flou ».
+    func test_lesDeuxBasculesDeMasquage_sontVoisinesEtGardéesPareil() throws {
+        let toolbar = try source(at: "Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        guard let blur = toolbar.range(of: "blurToggleButton"),
+              let viewOnce = toolbar.range(of: "viewOnceToggleButton") else {
+            return XCTFail("Les deux bascules de masquage ont quitté la rangée haute.")
+        }
+        XCTAssertTrue(blur.lowerBound < viewOnce.lowerBound,
+                      "La vue unique se pose À CÔTÉ du flou, après lui.")
+        let between = String(toolbar[blur.upperBound..<viewOnce.lowerBound])
+        XCTAssertFalse(
+            between.contains("ToggleButton"),
+            "Aucune autre bascule ne doit s'insérer entre le flou et la vue unique : "
+                + "« à côté » est la moitié de la demande."
+        )
+        XCTAssertTrue(toolbar.contains("if !hideViewOnce"),
+                      "La vue unique se cache par opt-OUT, comme le flou (`if !hideBlur`).")
+    }
+
+    /// L'ÉTAT armé part bien dans le message. Sans ce versant, la bascule
+    /// pourrait s'afficher et ne rien envoyer — loi 4 : un contrôle existe
+    /// s'il a un effet.
+    func test_lÉtatArmé_atteintLEnvoi() throws {
+        let mount = try source(at: "Features/Main/Views/ConversationView+Composer.swift")
+        XCTAssertTrue(mount.contains("isViewOnceEnabled: $viewModel.isViewOnceEnabled"),
+                      "La bascule doit écrire dans l'état du ViewModel, pas dans un `@State` local.")
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("isViewOnceEnabled"),
+                      "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
+    }
+}
+
+// MARK: - #7498 — la protection armée voyage avec TOUT ce qu'on envoie
+
+/// « Cela ne fonctionne que sur les textes » (recette 1.1.0).
+///
+/// Un tap produit souvent PLUSIEURS messages : un par groupe de pièces
+/// jointes, plus le texte en dernier. Les trois bascules étaient relues à
+/// chaque envoi et désarmées au PREMIER acquittement — tout ce qui suivait
+/// partait donc sans protection, la rangée pourtant allumée au tap.
+///
+/// Les témoins ci-dessous gardent la FORME qui rend ce défaut impossible,
+/// parce que la seule autre façon de le voir demande deux simulateurs et un
+/// envoi multi-pièces : une valeur saisie une fois, passée à chaque message,
+/// et une bulle optimiste qui la porte.
+final class ComposerProtectionTravelsGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// Le désarmement se fait AU TAP, jamais à l'acquittement d'un message.
+    ///
+    /// C'est la moitié du défaut qui ne se voit dans aucune vue : à
+    /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
+    func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("func consumeArmedProtection()"),
+                      "La saisie-et-désarmement doit être UNE fonction nommée, appelée par le tap.")
+
+        guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
+            return XCTFail("Impossible de localiser la finalisation d'un envoi acquitté.")
+        }
+        let après = String(send[finalize.upperBound...].prefix(3000))
+        XCTAssertFalse(après.contains("isViewOnceEnabled = false"),
+                       "Désarmer à l'acquittement laisse partir sans protection tout ce qui suit "
+                           + "le premier message du même tap.")
+        XCTAssertFalse(après.contains("isBlurEnabled = false"),
+                       "Idem pour le flou : un tap, un désarmement.")
+    }
+
+    /// La bulle optimiste PORTE la protection. Sans cela l'expéditeur envoie un
+    /// éphémère et voit un message ordinaire — ni flamme, ni décompte, ni
+    /// voile — jusqu'à la réconciliation serveur, ce qui se lit comme « la
+    /// protection n'a pas été appliquée ».
+    /// **La sonde est BORNÉE au corps de `insertOptimisticMediaMessage`**, et
+    /// c'est le correctif d'un défaut de cette garde elle-même : écrite en
+    /// balayage de FICHIER, elle interdisait le littéral
+    /// `expiresAt: nil, effectFlags: 0` partout — alors que sa phrase ne parle
+    /// que de la bulle d'un MÉDIA. Le chemin HORS LIGNE porte le même littéral,
+    /// légitimement (voir plus bas), et la garde tombait donc sur du code
+    /// qu'elle n'a jamais prétendu décrire.
+    ///
+    /// > Une garde dont la SONDE est plus large que sa PHRASE finit par rougir
+    /// > pour du code qu'elle ne gouverne pas — et le réflexe est alors
+    /// > d'élargir le code au lieu de resserrer la sonde.
+    ///
+    /// **Pourquoi la ligne hors ligne reste telle quelle** : sa protection ne
+    /// voyage pas encore sur le fil (`OfflineQueueItem` ne porte aucun champ de
+    /// protection — #7507). Lui faire porter la flamme ici afficherait une
+    /// protection que le drain n'applique pas : « une protection annoncée et
+    /// non appliquée est pire que pas de protection » (relevé porteur). Les
+    /// deux moitiés partent ENSEMBLE, dans #7507, ou pas du tout.
+    func test_laBulleOptimiste_porteLaProtection() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        guard let insert = send.range(of: "func insertOptimisticMediaMessage") else {
+            return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
+        }
+        let corps = String(send[insert.lowerBound...])
+        XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
+                       "La ligne optimiste d'un média ne doit plus naître sans protection.")
+        XCTAssertTrue(corps.contains("expiresAt: protection.expiresAt(from: now)"),
+                      "Elle doit dater son échéance depuis l'intention saisie au tap.")
+        XCTAssertTrue(corps.contains("effectFlags: protection.lifecycleFlags.rawValue"),
+                      "Et porter les bits de cycle de vie correspondants.")
+    }
+
+    /// La ligne optimiste d'un TEXTE porte les DEUX axes, unis.
+    ///
+    /// Le serveur recompose ses bits depuis les colonnes déclarées ; la ligne
+    /// locale, elle, est lue telle quelle, et `MessageProtectionDescriptor` lit
+    /// les BITS pour la vue unique et le flou. Un texte armé « ① » n'avait donc
+    /// ni puce ni voile jusqu'à la réponse serveur. L'éphémère s'en sortait par
+    /// la porte de derrière — `expiresAt` suffit à le prouver — ce qui est
+    /// exactement ce qui a rendu ses deux voisins invisibles au relevé.
+    func test_laBulleOptimisteDUnTexte_unitLesDeuxAxes() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("func optimisticEffectFlags(_ intent: MessageProtectionIntent)"),
+                      "L'union des deux axes doit être UNE fonction nommée, pas un ternaire recopié.")
+        XCTAssertTrue(send.contains(".union(intent.lifecycleFlags)"),
+                      "Elle doit UNIR le cycle de vie, jamais le remplacer par l'axe apparition.")
+        XCTAssertFalse(send.contains("effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0"),
+                       "Un record optimiste qui ne lit QUE `pendingEffects` perd la vue unique et le flou.")
+    }
+
+    /// **Aucun `insertOptimisticMediaMessage` sans protection NOMMÉE.** Le
+    /// paramètre n'a délibérément PAS de valeur par défaut : un défaut ferait
+    /// qu'un nouveau chemin d'envoi hériterait de « rien de protégé » en
+    /// silence, ce qui est exactement le défaut qu'on corrige.
+    func test_chaqueBulleOptimiste_nommeSaProtection() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("protection: MessageProtectionIntent\n"),
+                      "Le paramètre doit être NON optionnel et sans défaut.")
+
+        for chemin in ["Features/Main/Views/ConversationView+AttachmentHandlers.swift",
+                       "Features/Main/Views/ConversationView+Sticker.swift"] {
+            let src = try source(at: chemin)
+            let poses = src.components(separatedBy: "insertOptimisticMediaMessage(").count - 1
+            guard poses > 0 else { continue }
+            let nommées = src.components(separatedBy: "protection: protection").count - 1
+            XCTAssertGreaterThanOrEqual(
+                nommées, poses,
+                "\(chemin) pose \(poses) bulle(s) optimiste(s) : chacune doit nommer la protection "
+                    + "saisie au tap."
+            )
+        }
+    }
+
+    /// Le tap saisit la protection UNE fois, et chaque groupe de cet envoi la
+    /// reçoit. Le témoin compte : autant d'envois que de passages.
+    func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
+        let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
+        XCTAssertEqual(
+            src.components(separatedBy: "viewModel.consumeArmedProtection()").count - 1, 1,
+            "Une seule saisie par tap : deux saisies rendraient la seconde vide."
+        )
+        let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
+        let servis = src.components(separatedBy: "protection: protection").count - 1
+        XCTAssertGreaterThanOrEqual(
+            servis, envois - 1,
+            "Chaque envoi de ce tap — média comme texte — doit recevoir la protection saisie. "
+                + "Le -1 tolère l'envoi de repli qui ne part pas d'un tap."
+        )
+    }
+}
+
+
+// MARK: - #7499 — toucher un média à vue unique l'OUVRE ; la fermeture consomme
+
+/// « lorsqu'on tap pour afficher, ça supprime directement au lieu d'afficher le
+/// contenu en plein écran ! » — relevé du porteur, recette 1.1.0.
+///
+/// La garde est de FORME parce que l'autre façon de voir ce défaut est de
+/// perdre un média pour de bon : la consommation est irréversible, et un témoin
+/// qui l'exerce vraiment détruirait ce qu'il vérifie.
+final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// La révélation d'un média n'APPELLE PLUS la consommation.
+    ///
+    /// C'est le défaut lui-même : `handleReveal` appelait `onConsumeViewOnce`
+    /// avant d'afficher quoi que ce soit, puis révélait cinq secondes en
+    /// vignette. Le contenu était détruit sans avoir été montré.
+    func test_laRévélation_nAppellePlusLaConsommation() throws {
+        let grille = try source(at: "Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        guard let reveal = grille.range(of: "private func handleReveal()") else {
+            return XCTFail("Impossible de localiser la révélation d'un média.")
+        }
+        let corps = String(grille[reveal.upperBound...].prefix(1200))
+        XCTAssertFalse(corps.contains("onConsumeViewOnce?("),
+                       "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
+        XCTAssertTrue(corps.contains("openFullscreen()"),
+                      "La révélation doit ouvrir le plein écran dans le même geste.")
+    }
+
+    /// Et la consommation part bien de la FERMETURE, depuis le seul site qui la
+    /// voie : l'hôte de la galerie. La bulle sait qu'on ouvre ; elle ne sait
+    /// pas quand on sort.
+    func test_laFermeture_consommeCeQuiAÉtéOuvert() throws {
+        let galerie = try source(at: "Features/Main/Views/ConversationView+MediaGallery.swift")
+        XCTAssertTrue(galerie.contains("onDismiss: handleGalleryDismiss"),
+                      "La fermeture du plein écran doit être observée par l'hôte.")
+        XCTAssertTrue(galerie.contains("pendingViewOnceConsumption.takeAll()"),
+                      "Elle doit consommer ce qui a été ouvert, et VIDER dans le même geste.")
+        XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
+                      "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
+
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
+                      "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
+    }
+
+    /// **L'idempotence est la garde centrale**, et elle est portée par le type,
+    /// pas par la discipline des sites : le serveur COMPTE les ouvertures, donc
+    /// deux fermetures ne doivent brûler qu'un crédit.
+    func test_lAttente_estVidéeParLaLecture() throws {
+        var pending = ViewOnceConsumption.Pending()
+        pending.arm("msg-1")
+        pending.arm("msg-1")
+        XCTAssertEqual(pending.takeAll(), ["msg-1"])
+        XCTAssertTrue(pending.isEmpty, "La lecture vide l'attente — sinon la seconde sortie reconsomme.")
+    }
+}
+
+
+// MARK: - #7500 — un texte à vue unique se consomme en QUITTANT la conversation
+
+/// > « pour le texte, le faire disparaître lorsqu'on quitte la conversation
+/// > uniquement » — directive porteur, recette 1.1.0.
+///
+/// Un texte n'a pas de plein écran : sa consommation ne peut partir ni du
+/// toucher — qui le détruisait avant lecture — ni d'un minuteur de cinq
+/// secondes, qui décide à la place du lecteur combien de temps il lui faut
+/// pour comprendre une phrase.
+final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// Une vue unique révélée RESTE lisible : elle ne repasse pas par le
+    /// minuteur de disparition, qui appartient au FLOU (on révèle, on regarde,
+    /// ça se referme — et rien n'est consommé, on peut recommencer).
+    func test_uneVueUniqueRévélée_neSeReferméPasTouteSeule() throws {
+        let cycle = try source(at: "Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift")
+        XCTAssertTrue(cycle.contains("private func revealUntilLeaving()"),
+                      "Une vue unique doit avoir sa propre révélation, SANS disparition programmée.")
+        guard let demande = cycle.range(of: "func requestReveal(") else {
+            return XCTFail("Impossible de localiser la demande de révélation.")
+        }
+        let corps = String(cycle[demande.upperBound...].prefix(600))
+        XCTAssertTrue(corps.contains("revealUntilLeaving()"),
+                      "Le chemin vue unique doit révéler sans programmer la disparition.")
+        XCTAssertTrue(corps.contains("guard request.requiresConsume else"),
+                      "Le flou garde son va-et-vient : seul le chemin vue unique change.")
+    }
+
+    /// Le canal de consommation ARME au lieu de détruire, et confirme aussitôt
+    /// pour que la révélation se fasse. C'est le défaut lui-même : la
+    /// révélation dépendait d'un aller-retour serveur pour afficher ce que ce
+    /// même aller-retour venait de détruire.
+    func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        guard let canal = hôte.range(of: "onConsumeViewOnce: { messageId, completion in") else {
+            return XCTFail("Impossible de localiser le canal de consommation de l'hôte.")
+        }
+        let corps = String(hôte[canal.upperBound...].prefix(1400))
+        XCTAssertTrue(corps.contains("pendingViewOnceConsumption.arm(messageId)"),
+                      "La révélation doit ARMER la consommation, pas la déclencher.")
+        XCTAssertTrue(corps.contains("completion(true)"),
+                      "Et confirmer aussitôt : sinon la révélation n'a jamais lieu.")
+        XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
+                       "Le serveur n'est plus appelé au moment de la révélation.")
+    }
+
+    /// **Les DEUX portes de sortie**, et elles sont jumelles : « quitter, c'est
+    /// quitter ». N'en câbler qu'une laisse une vue unique survivre à un
+    /// verrouillage d'écran, c'est-à-dire au cas le plus probable.
+    func test_lesDeuxSorties_consommentToutesLesDeux() throws {
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        XCTAssertEqual(
+            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 2,
+            "La navigation (`onDisappear`) ET l'arrière-plan (`scenePhase`) doivent consommer."
+        )
+
+        guard let fond = hôte.range(of: "if phase == .background {") else {
+            return XCTFail("Impossible de localiser la sortie par arrière-plan.")
+        }
+        let corpsFond = String(hôte[fond.upperBound...].prefix(700))
+        XCTAssertTrue(corpsFond.contains("consumeOpenedViewOnceOnExit()"),
+                      "Le passage en arrière-plan est une sortie au même titre que le retour.")
+    }
+
+    /// Le geste vit HORS de l'hôte : `ConversationView.swift` est dans la dette
+    /// héritée du cliquet de taille, où ajouter est interdit — on extrait
+    /// d'abord, on ajoute ensuite.
+    func test_leGesteDeSortie_vitHorsDeLHôte() throws {
+        let extension_ = try source(at: "Features/Main/Views/ConversationView+ViewOnceExit.swift")
+        XCTAssertTrue(extension_.contains("func consumeOpenedViewOnceOnExit()"),
+                      "Le geste appartient à son fichier d'extension.")
+        XCTAssertTrue(extension_.contains("pendingViewOnceConsumption.takeAll()"),
+                      "Il vide l'attente en la lisant — la seconde porte ne trouve plus rien.")
     }
 }

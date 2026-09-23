@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { Badges, EditedMark } from './message-blocks';
+import { Badges, Check, EditedMark } from './message-blocks';
 
 /**
  * T11 (#5936) — `Badges` peint épinglé + transféré, dans l'ordre reçu ;
@@ -45,9 +45,9 @@ describe('Badges', () => {
     expect(html).toBe('');
   });
 
-  test('ephemeral/edited ne sont PAS peints ici — chacun a son propre composant', () => {
+  test('« modifié » n’est PAS peint ici — il a son propre composant', () => {
     const html = renderToStaticMarkup(
-      <Badges badges={[{ kind: 'ephemeral', expiresAt: new Date() }, { kind: 'edited' }]} />,
+      <Badges badges={[{ kind: 'edited' }]} />,
     );
     expect(html).toBe('');
   });
@@ -74,5 +74,33 @@ describe('EditedMark', () => {
     expect(offBubble).toContain('var(--color-ios-ink-2)');
     expect(offBubble).not.toContain('var(--color-day-ink)');
     expect(offBubble).not.toContain('var(--color-meta-mine)');
+  });
+});
+
+/**
+ * « LA COCHE OUVRE LA FICHE » (#7352, V4) — `Check` reste un glyphe PUR tant
+ * qu'aucun hôte ne lui donne d'effet (loi 4) ; `onOpen` fourni le transforme
+ * en un vrai `<button>`, jamais l'inverse. `renderToStaticMarkup` suffit :
+ * cette moitié du témoin ne mesure que la FORME du DOM, l'autre moitié
+ * (le clic déclenche l'effet) vit dans `bubble-open-detail.test.tsx`, seul
+ * fichier de ce lot à monter un DOM interactif.
+ */
+describe('Check — #7352', () => {
+  test('sans `onOpen` : un glyphe NU, jamais un bouton (comportement inchangé)', () => {
+    const html = renderToStaticMarkup(<Check status="read" isMine />);
+    expect(html).not.toContain('<button');
+    expect(html).toContain('role="img"');
+  });
+
+  test('avec `onOpen` : un vrai `<button>`, nommé par son EFFET', () => {
+    const html = renderToStaticMarkup(<Check status="read" isMine onOpen={() => {}} />);
+    expect(html).toContain('<button');
+    expect(html).toContain('type="button"');
+    expect(html).toContain('aria-label="Voir les détails du message"');
+  });
+
+  test('un message REÇU (`isMine={false}`) reste `null` même avec `onOpen` — l’accusé n’a de sens que sur SON PROPRE envoi', () => {
+    const html = renderToStaticMarkup(<Check status="read" isMine={false} onOpen={() => {}} />);
+    expect(html).toBe('');
   });
 });

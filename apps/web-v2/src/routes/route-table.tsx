@@ -116,13 +116,22 @@ export const ROUTES = {
      voir » et « voir les siennes », parce que c'est le même écran avec un
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
-  storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/story-compose') },
+  /* LE COMPOSER UNIQUE (#7497) — `/stories/new` et `/posts/new` montent le
+     MÊME studio ; le format d'entrée est celui que la capsule
+     `[Publier … | ▾]` publie si l'auteur ne touche pas au chevron. */
+  storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.StoryComposeRoute })) },
   /* MON HUMEUR (#6150) — la SECONDE porte de ma cellule du rail. Adresse
      PROPRE, pas un mode de `/stories/new` : une humeur n'est pas une story
      (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
      `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
      « retour » doit refermer la composition d'humeur seule. */
   statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
+  /* PUBLIER DANS LE FIL (#7449, composer unique depuis #7497) — la porte de
+     création de l'en-tête du Flux : `/posts/new` ouvre le studio au format
+     post, `/posts/new?type=reel` au format réel. PLURIEL, comme
+     `/conversations/new`, et SANS collision avec le détail, qui est au
+     SINGULIER (`/post/$post`). */
+  postCompose: { pattern: '/posts/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.PostComposeRoute })) },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
