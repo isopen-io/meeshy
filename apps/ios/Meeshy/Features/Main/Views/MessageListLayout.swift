@@ -217,10 +217,10 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// des corrections self-sizing) est AVALÉE pour la transaction : la
     /// passe de cellules visibles converge au lieu de franchir la garde de
     /// ré-entrance d'UIKit (assertion à ~7 passes imbriquées). Les cellules
-    /// concernées gardent leur hauteur UNE frame de plus, et le contexte
-    /// avalé est REJOUÉ tel quel au tour suivant (`replayDeferredPartialInvalidations`),
-    /// budget réarmé. Les invalidations complètes (rotation, reload,
-    /// adoption d'estimation) passent TOUJOURS.
+    /// concernées gardent leur hauteur UNE frame de plus, et une passe de
+    /// layout est demandée au tour suivant (`scheduleDeferredRelayout`), budget
+    /// réarmé : UIKit y ré-émet la correction. Les invalidations complètes
+    /// (rotation, reload, adoption d'estimation) passent TOUJOURS.
     ///
     /// **#7624 — le plafond DIFFÈRE, il ne remplace plus par une invalidation
     /// COMPLÈTE.** Le rattrapage d'origine était une invalidation complète ;
@@ -230,19 +230,13 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// repos. La re-mesure de la fenêtre dépassait à son tour le plafond et
     /// replanifiait un rattrapage : 22 invalidations complètes en cascade sur
     /// 25 s de flings, 2,4 s de fil principal (Time Profiler, Debug), des
-    /// gels de 100 à 400 ms à chaque pose. Rejouer le contexte avalé livre
-    /// exactement la correction qu'UIKit avait calculée, sans rien oublier.
+    /// gels de 100 à 400 ms à chaque pose. Une simple passe de layout suffit
+    /// à faire ré-émettre la correction, sans rien oublier.
     static let maxPartialInvalidationsPerTransaction = 4
-
-    /// Borne de la file des contextes différés : au-delà, les plus anciens
-    /// tombent — ils visent des rangées que le défilement a déjà quittées, et
-    /// une rangée qui revient à l'écran se re-mesure d'elle-même.
-    static let maxDeferredPartialInvalidations = 32
 
     private(set) var partialInvalidationsThisTransaction = 0
     private var transactionResetScheduled = false
-    private var deferredPartialInvalidations: [UICollectionViewLayoutInvalidationContext] = []
-    private var deferredReplayScheduled = false
+    private var deferredRelayoutScheduled = false
 
     private func scheduleTransactionReset() {
         guard !transactionResetScheduled else { return }
@@ -253,26 +247,25 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         }
     }
 
-    private func deferPartialInvalidation(_ context: UICollectionViewLayoutInvalidationContext) {
-        deferredPartialInvalidations.append(context)
-        let overflow = deferredPartialInvalidations.count - Self.maxDeferredPartialInvalidations
-        if overflow > 0 { deferredPartialInvalidations.removeFirst(overflow) }
-        guard !deferredReplayScheduled else { return }
-        deferredReplayScheduled = true
+    /// Le contexte avalé n'est PAS rejouable : celui qu'UIKit fabrique pour
+    /// une correction self-sizing appartient à la mise à jour en cours
+    /// (`_queueDeferredResolveForInvalidationWithContext:` exige
+    /// `currentUpdate != nil` — SIGABRT mesuré au simulateur en le rejouant au
+    /// tour suivant). Ce qui se rejoue, c'est la QUESTION : une passe de
+    /// layout au tour suivant, où UIKit re-mesure les cellules visibles et
+    /// ré-émet la correction de celles dont la hauteur diffère encore —
+    /// budget réarmé, sans rien oublier de ce qui est déjà mesuré.
+    private func scheduleDeferredRelayout() {
+        guard !deferredRelayoutScheduled else { return }
+        deferredRelayoutScheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.replayDeferredPartialInvalidations()
+            self?.relayoutAfterDeferredInvalidations()
         }
     }
 
-    /// Rejoue, dans une transaction neuve, les contextes que le plafond a
-    /// différés — chacun repasse par l'entonnoir, donc par le budget : ce qui
-    /// déborde encore est différé au tour d'après. Aucune invalidation
-    /// complète, aucune hauteur mesurée oubliée.
-    func replayDeferredPartialInvalidations() {
-        deferredReplayScheduled = false
-        let pending = deferredPartialInvalidations
-        deferredPartialInvalidations.removeAll()
-        pending.forEach { invalidateLayout(with: $0) }
+    func relayoutAfterDeferredInvalidations() {
+        deferredRelayoutScheduled = false
+        collectionView?.setNeedsLayout()
     }
 
     /// L'invalidation COMPLÈTE ancrée — depuis #7624, le seul client est
@@ -387,14 +380,9 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
 
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
         let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
-        if !isPartial {
-            // Une invalidation complète ou un changement de comptes rend les
-            // chemins d'index différés caducs — elle re-mesure tout elle-même.
-            deferredPartialInvalidations.removeAll()
-        }
         if isPartial {
             guard partialInvalidationsThisTransaction < Self.maxPartialInvalidationsPerTransaction else {
-                deferPartialInvalidation(context)
+                scheduleDeferredRelayout()
                 return
             }
             partialInvalidationsThisTransaction += 1
