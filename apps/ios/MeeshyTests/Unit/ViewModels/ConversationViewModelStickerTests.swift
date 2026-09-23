@@ -156,7 +156,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
 
         fx.sut.insertOptimisticMediaMessage(
             tempId: ClientMessageId.generate(), content: "", attachments: [makeLocalAttachment()],
-            messageType: .image, replyToId: nil, sticker: sticker
+            messageType: .image, replyToId: nil, sticker: sticker, protection: .none
         )
 
         let surfaced = await awaitFirstMessageSticker(in: fx.sut)

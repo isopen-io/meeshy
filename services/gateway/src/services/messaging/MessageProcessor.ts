@@ -713,7 +713,7 @@ export class MessageProcessor {
     try {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {
-        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id);
+        await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
 
         // Déclencher le traitement audio si nécessaire
         if (this.translationService) {
