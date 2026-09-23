@@ -246,6 +246,19 @@ extension ConversationViewModel {
         // calcule : le compte du séparateur et celui de la ligne de liste ne
         // peuvent plus diverger, puisqu'ils lisent désormais le MÊME champ.
         //
+        // CE QUE CE VERROU FERME EN PLUS, et qui est VOULU : un fil dont
+        // AUCUN compte serveur n'est connu — la conversation STUB que
+        // `GuestConversationContainer` construit pour un invité de lien
+        // partagé (ni `userState`, ni curseur de lecture, ni `joinedAt`) —
+        // n'affiche plus de séparateur du tout. `initialUnreadCount` y vaut 0
+        // par DÉFAUT et non parce qu'un serveur l'a dit ; le type ne
+        // distingue pas les deux, et c'est ASSUMÉ ici : sans curseur, la loi
+        // fenêtrée élisait le premier message de tout l'historique et
+        // annonçait la fenêtre entière à quelqu'un qui n'avait encore rien
+        // lu. Un invité n'a pas de ligne de liste, donc rien à ne pas faire
+        // diverger — le silence est la bonne réponse, et il est gardé par
+        // `test_loadMessages_guestStubConversationWithoutServerCount_showsNoSeparator`.
+        //
         // `messageStore.domainMessages(currentUserId:)`, PAS `messages` : le
         // `@Published var messages` de ce ViewModel n'est peuplé que par
         // `subscribeToMessageStore()`, qui DIFFÈRE la mutation d'un tour de

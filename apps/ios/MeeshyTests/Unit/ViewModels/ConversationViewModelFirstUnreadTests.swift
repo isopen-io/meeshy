@@ -43,8 +43,14 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
 
         await sut.loadMessages()
 
-        XCTAssertEqual(sut.firstUnreadMessageId, "m-old")
-        XCTAssertEqual(sut.unreadSeparatorCount, 2, "m-mine (l'auteur) ne compte jamais")
+        // La POSITION porte, seule, la règle « jamais l'auteur » : `m-mine`
+        // est le plus ancien message postérieur à `m-old`, et il n'est
+        // JAMAIS élu. Le COMPTE, lui, ne la mesure plus depuis #7525 — il
+        // rend `serverUnreadCount` tel quel, et l'assertion ci-dessous reste
+        // verte si l'on annule le correctif : ne lui faire dire QUE ce
+        // qu'elle prouve.
+        XCTAssertEqual(sut.firstUnreadMessageId, "m-old", "m-mine (l'auteur) n'est jamais élu")
+        XCTAssertEqual(sut.unreadSeparatorCount, 2, "le compte annoncé est celui du serveur")
     }
 
     /// **G1 est la source PRIMAIRE (rang 1)** : `lastReadMessageCreatedAt`
@@ -165,6 +171,29 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
 
         XCTAssertEqual(sut.firstUnreadMessageId, "m-after-1", "la POSITION reste celle de la loi fenêtrée")
         XCTAssertEqual(sut.unreadSeparatorCount, 1, "le COMPTE annoncé est celui du serveur, jamais les 3 candidats de la fenêtre")
+    }
+
+    /// **Le fil SANS compte serveur connu — la conversation STUB d'un invité
+    /// (`GuestConversationContainer`, qui construit un `Conversation` sans
+    /// `userState`).** `initialUnreadCount` y vaut 0 par DÉFAUT, jamais parce
+    /// qu'un serveur l'a dit, et aucun curseur de lecture n'existe : sans le
+    /// verrou de #7525, la loi fenêtrée élit le PREMIER message de tout
+    /// l'historique et annonce la fenêtre entière (« 312 messages non lus »
+    /// à un invité qui ouvre le lien pour la première fois). Le silence est
+    /// ici la bonne réponse — et il se GARDE, pour qu'un lot ultérieur ne
+    /// « répare » pas l'invité en rebranchant `boundary.unreadCount`.
+    func test_loadMessages_guestStubConversationWithoutServerCount_showsNoSeparator() async throws {
+        let (sut, pool) = try makeSUTWithSeams()
+        try await seed(pool, [
+            (localId: "m-1", senderId: otherUserId, offset: 0),
+            (localId: "m-2", senderId: otherUserId, offset: 10),
+            (localId: "m-3", senderId: otherUserId, offset: 20)
+        ])
+
+        await sut.loadMessages()
+
+        XCTAssertNil(sut.firstUnreadMessageId, "aucun compte serveur ⇒ aucun séparateur")
+        XCTAssertEqual(sut.unreadSeparatorCount, 0)
     }
 
     // MARK: - Helpers
