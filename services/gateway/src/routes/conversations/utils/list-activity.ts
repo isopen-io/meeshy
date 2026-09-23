@@ -80,12 +80,12 @@ export async function loadConversationListActivity(
     reactionIds.length === 0
       ? []
       : prisma.reaction
-          .findMany({ where: { id: { in: reactionIds } }, select: LAST_REACTION_SELECT })
+          .findMany({ where: { id: { in: reactionIds } }, take: reactionIds.length, select: LAST_REACTION_SELECT })
           .catch(() => []),
     callIds.length === 0
       ? []
       : prisma.callSession
-          .findMany({ where: { id: { in: callIds } }, select: ACTIVE_CALL_SELECT })
+          .findMany({ where: { id: { in: callIds } }, take: callIds.length, select: ACTIVE_CALL_SELECT })
           .catch(() => []),
   ]);
 
