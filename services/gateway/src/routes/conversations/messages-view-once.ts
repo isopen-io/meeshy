@@ -13,6 +13,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
 import { computeViewOnceStates, type ViewOnceReaderState } from '../../services/messaging/viewOnceAudience';
+import { emitViewOnceConsumedPreview } from '../../socketio/emitConversationPreviewUpdate';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -166,7 +167,16 @@ export function registerMessageViewOnceRoutes(
       // (`userId`, `participantId`) : chaque client n'en tire « ouvert » que
       // pour lui-même, jamais un retrait pour les autres.
       if (socketIOHandler && firstConsumption) {
-        fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
+        const io = fastify.socketIOHandler.getManager()?.getIO();
+        // La ligne de liste de CE lecteur passe à « 👁 Ouvert » (#7594) — et
+        // de lui seul : ce qu'il a ouvert ne change rien chez les autres.
+        await emitViewOnceConsumedPreview(
+          prisma,
+          io,
+          { conversationId, messageId, readerParticipantId: viewParticipant.id, actorUserId: userId },
+          (error) => logger.warn(`[CONSUME] view-once list preview failed for ${messageId}`, error)
+        );
+        io?.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
           messageId,
           conversationId,
           userId,

@@ -54,6 +54,12 @@ jest.mock('../../../services/PrivacyPreferencesService', () => ({
   PrivacyPreferencesService: jest.fn().mockImplementation(() => ({})),
 }));
 
+const mockEmitViewOnceConsumedPreview = jest.fn(async () => undefined);
+jest.mock('../../../socketio/emitConversationPreviewUpdate', () => ({
+  ...(jest.requireActual('../../../socketio/emitConversationPreviewUpdate') as Record<string, unknown>),
+  emitViewOnceConsumedPreview: (...args: unknown[]) => (mockEmitViewOnceConsumedPreview as any)(...args),
+}));
+
 import { registerMessagesRoutes } from '../../../routes/conversations/messages';
 import { messageSchema } from '@meeshy/shared/types/api-schemas';
 import {
@@ -221,6 +227,22 @@ describe('#7578 — une vue unique se consomme PAR PERSONNE', () => {
     const byBob = await openAs(world, BOB);
 
     expect(byBob.res.json().data).toMatchObject({ viewOnceCount: 1, maxViewOnceCount: 1, isFullyConsumed: true });
+  });
+
+  it('la ligne de liste de CELUI qui ouvre passe à « Ouvert » — et de lui seul (#7594)', async () => {
+    mockEmitViewOnceConsumedPreview.mockClear();
+    const world = buildWorld([AUTHOR, BOB, CAROL]);
+
+    await openAs(world, BOB);
+    await openAs(world, BOB);
+
+    expect(mockEmitViewOnceConsumedPreview).toHaveBeenCalledTimes(1);
+    expect((mockEmitViewOnceConsumedPreview.mock.calls[0] as unknown[])[2]).toEqual({
+      conversationId: CONV_ID,
+      messageId: MESSAGE_ID,
+      readerParticipantId: BOB.id,
+      actorUserId: BOB.userId,
+    });
   });
 
   it("l'annonce dit QUI a ouvert — l'auteur est signalé comme tel", async () => {
