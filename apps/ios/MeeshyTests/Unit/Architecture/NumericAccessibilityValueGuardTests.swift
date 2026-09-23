@@ -245,7 +245,11 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Services/CallManager.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
-            "Features/Main/Views/ThemedConversationRow.swift",
+            // #7548 — `ThemedConversationRow` n'a plus de minuterie : la durée
+            // d'un média dans la ligne de liste est composée par le SDK
+            // (`ConversationPreviewStrings.clock`), miroir de `formatClock` que
+            // rejoue le fichier de cas commun au web. Elle quitte donc l'app
+            // entière, et cette liste avec elle.
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)

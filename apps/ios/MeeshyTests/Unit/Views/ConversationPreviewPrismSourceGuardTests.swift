@@ -227,17 +227,25 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
 
     /// La ligne de liste et la recherche globale restent les deux lecteurs
     /// canoniques : la garde ne doit pas les laisser régresser non plus.
+    ///
+    /// #7548 — la ligne de liste ne résout plus l'aperçu elle-même : elle
+    /// monte `ConversationPreviewLine`, qui le fait COMPOSER par le SDK
+    /// (`ConversationPreviewComposer`, dont le corps descend le Prisme par
+    /// `PrismTranslationResolver` et rejoue le fichier de cas commun au web).
+    /// Le témoin suit la chaîne jusqu'au composeur, maillon par maillon.
     func test_canonicalReaders_stillResolveThroughThePrism() throws {
         let expectations = [
-            "Features/Main/Views/ThemedConversationRow.swift",
-            "Features/Main/ViewModels/GlobalSearchViewModel.swift",
+            ("Features/Main/Views/ThemedConversationRow.swift", "ConversationPreviewLine("),
+            ("Features/Main/Lentille/Row/LentilleConversationRow.swift", "ConversationPreviewLine("),
+            ("Features/Main/Views/ConversationPreviewLine.swift", "ConversationPreviewComposer.compose("),
+            ("Features/Main/ViewModels/GlobalSearchViewModel.swift", "resolvedLastMessagePreview"),
         ]
-        for relative in expectations {
+        for (relative, resolver) in expectations {
             let url = appSourcesDirectory.appendingPathComponent(relative)
             let code = strippingComments(try String(contentsOf: url, encoding: .utf8))
             XCTAssertTrue(
-                code.contains("resolvedLastMessagePreview"),
-                "\(relative) est un lecteur canonique du Prisme — son appel a disparu"
+                code.contains(resolver),
+                "\(relative) est un lecteur canonique du Prisme — son appel (\(resolver)) a disparu"
             )
         }
     }

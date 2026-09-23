@@ -118,12 +118,6 @@ struct ThemedConversationRow: View {
         return (visibleTags, remaining)
     }
 
-    // MARK: - Last Message Summary
-
-    private var lastMessageSummary: LastMessageSummaryKind {
-        conversation.lastMessageSummaryKind()
-    }
-
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             // Dynamic Avatar
@@ -262,32 +256,13 @@ struct ThemedConversationRow: View {
     var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append(String(format: String(localized: "accessibility.conversation_with", bundle: .main), conversation.name))
-        // B1 (Prisme Linguistique) — VoiceOver must read exactly what the
-        // visible preview shows (`standardMessageContent`, below), which
-        // already resolves through `resolvedLastMessagePreview`. Reading
-        // the raw `lastMessagePreview` here always announced the ORIGINAL
-        // language even when the row visibly displayed a translation.
-        let resolvedPreview = conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages)
-        switch lastMessageSummary {
-        case .expired:
-            parts.append(String(localized: "accessibility.last_message_expired", bundle: .main))
-        case .hidden:
-            parts.append(String(localized: "accessibility.last_message_hidden", bundle: .main))
-        case .viewOnce:
-            parts.append(String(localized: "accessibility.last_message_view_once", bundle: .main))
-        case .ephemeralActive:
-            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                parts.append(String(format: String(localized: "accessibility.last_message_ephemeral", bundle: .main), preview))
-            }
-        case .standard:
-            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), preview))
-            } else if let place = conversation.lastMessageLocation {
-                // Parité avec le visuel : VoiceOver annonce la position que la
-                // ligne affiche, nom du lieu compris quand il existe.
-                parts.append(place.name
-                    ?? String(localized: "conversation.summary.location", defaultValue: "Position", bundle: .main))
-            }
+        // VoiceOver dit ce que l'œil lit : la MÊME valeur composée que la
+        // ligne visible (`ConversationPreviewLine`), Prisme et protections
+        // compris — jamais une seconde lecture des champs bruts.
+        if let spoken = ConversationPreviewLine.spokenPreview(
+            for: conversation, preferredLanguages: preferredContentLanguages, now: Date()
+        ) {
+            parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), spoken))
         }
         parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
         if conversation.userState.unreadCount > 0 {
@@ -505,54 +480,8 @@ struct ThemedConversationRow: View {
 
     // MARK: - Last Message Preview
 
-    /// B1 (Prisme Linguistique) — l'aperçu TEL QU'IL SERA RENDU.
-    ///
-    /// Le test d'existence (`hasText`, qui arbitre entre texte, pièce jointe et
-    /// position) lisait le champ BRUT pendant que le rendu, lui, affichait la
-    /// valeur résolue. Les deux ne peuvent pas diverger sur un même écran :
-    /// une conversation dont la traduction est vide aurait réservé la place
-    /// d'un texte pour n'en afficher aucun, au lieu de retomber sur son
-    /// libellé de position ou de pièce jointe.
-    private var resolvedPreviewText: String {
-        conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? ""
-    }
-
-    @ViewBuilder
-    private func standardMessageContent(showEphemeralIcon: Bool) -> some View {
-        let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let attachments = conversation.lastMessageAttachments
-        let totalCount = conversation.lastMessageAttachmentCount
-        HStack(spacing: 4) {
-            if showEphemeralIcon {
-                Image(systemName: MessageProtectionSymbols.ephemeral)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(accent)
-            }
-            senderLabel
-            if !hasText && !attachments.isEmpty {
-                let att = attachments[0]
-                attachmentIcon(for: att.mimeType)
-                attachmentMeta(for: att)
-                if totalCount > 1 {
-                    Text("+\(totalCount - 1)")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent)
-                }
-            } else if hasText {
-                if !attachments.isEmpty {
-                    attachmentIcon(for: attachments[0].mimeType)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                }
-                // B1 — apply Prisme Linguistique. Falls back to the raw
-                // preview when no translations are attached.
-                Text(resolvedPreviewText)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
+    /// La préview — COMPOSÉE par le SDK (`ConversationPreviewComposer`, #7548).
+    /// Le frappeur et le brouillon restent à la rangée, qui seule les tient.
     @ViewBuilder
     private var lastMessagePreviewView: some View {
         if typingUsername != nil {
@@ -560,123 +489,14 @@ struct ThemedConversationRow: View {
         } else if let draftSummary {
             draftPreviewView(draftSummary)
         } else {
-            switch lastMessageSummary {
-            case .expired:
-                HStack(spacing: 4) {
-                    Image(systemName: "timer.badge.xmark")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(textMuted)
-                    Text(String(localized: "message.expired", ))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
-                        .foregroundColor(textMuted)
-                        .lineLimit(1)
-                }
-
-            case .hidden:
-                HStack(spacing: 4) {
-                    senderLabel
-                    Image(systemName: "eye.slash")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(textSecondary)
-                    Text(String(localized: "conversation.summary.hidden", ))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
-                        .foregroundColor(textSecondary)
-                        .lineLimit(1)
-                }
-
-            case .viewOnce:
-                HStack(spacing: 4) {
-                    senderLabel
-                    Image(systemName: MessageProtectionSymbols.viewOnce)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(accent)
-                    Text(String(localized: "conversation.summary.view_once", ))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
-                        .foregroundColor(accent)
-                        .lineLimit(1)
-                }
-
-            case .ephemeralActive:
-                standardMessageContent(showEphemeralIcon: true)
-
-            case .standard:
-                let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let attachments = conversation.lastMessageAttachments
-                if hasText || !attachments.isEmpty {
-                    standardMessageContent(showEphemeralIcon: false)
-                } else if let place = conversation.lastMessageLocation {
-                    // Message position-seule : `content` vide par construction
-                    // (le serveur ne fabrique aucun texte de repli) — la ligne
-                    // compose son libellé depuis la position hissée.
-                    HStack(spacing: 4) {
-                        senderLabel
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                            .foregroundColor(accent)
-                        Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))
-                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                            .foregroundColor(textSecondary)
-                            .lineLimit(1)
-                    }
-                } else {
-                    Text("")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(textSecondary)
-                }
-            }
+            ConversationPreviewLine(
+                conversation: conversation,
+                preferredLanguages: preferredContentLanguages,
+                accent: accent,
+                isDark: isDark,
+                font: MeeshyFont.relative(MeeshyFont.subheadSize)
+            )
         }
-    }
-
-    @ViewBuilder
-    private var senderLabel: some View {
-        if let name = conversation.lastMessageSenderName, !name.isEmpty {
-            Text(name)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                .foregroundColor(accent)
-                .lineLimit(1)
-                .layoutPriority(1)
-        }
-    }
-
-    // MARK: - Attachment Helpers
-
-    private func attachmentIcon(for mimeType: String) -> some View {
-        let display = AttachmentDisplay.make(for: mimeType)
-        return Image(systemName: display.icon)
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-            .foregroundColor(display.tintColor)
-    }
-
-    private func attachmentMeta(for attachment: MessageAttachment) -> some View {
-        let kind = AttachmentKind(mimeType: attachment.mimeType)
-        let meta: String
-
-        switch kind {
-        case .image:
-            if let w = attachment.width, let h = attachment.height {
-                meta = "\(w)x\(h)"
-            } else { meta = kind.shortLabel }
-        case .video, .audio:
-            if let d = attachment.duration {
-                meta = formatDurationMs(d)
-            } else { meta = kind.shortLabel }
-        case .pdf, .spreadsheet, .document, .presentation,
-             .archive, .code, .text, .other:
-            // Prefer the original file name (e.g. "rapport.xlsx") since the
-            // user picked it deliberately; fall back to the family label
-            // ("Excel", "Word", ...) so unnamed payloads still convey
-            // something more useful than "Fichier".
-            meta = attachment.originalName.isEmpty ? kind.shortLabel : attachment.originalName
-        }
-
-        return Text(meta)
-            .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-            .foregroundColor(textSecondary)
-            .lineLimit(1)
-    }
-
-    private func formatDurationMs(_ ms: Int) -> String {
-        LocalizedNumber.duration(seconds: ms / 1000)
     }
 }
 

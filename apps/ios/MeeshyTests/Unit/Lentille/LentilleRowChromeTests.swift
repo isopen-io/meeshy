@@ -33,6 +33,7 @@ final class LentilleRowChromeTests: XCTestCase {
     private func rowSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift") }
     private func skeletonSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift") }
     private func magnificationSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift") }
+    private func previewLineSource() throws -> String { try source("Meeshy/Features/Main/Views/ConversationPreviewLine.swift") }
 
     /// Le corps d'une déclaration, de son en-tête à la prochaine déclaration
     /// de même niveau. Une garde de forme doit viser le BLOC, jamais le
@@ -55,20 +56,18 @@ final class LentilleRowChromeTests: XCTestCase {
 
     // MARK: - « auteur : message » (repos ET magnificence)
 
-    func test_authorPrefix_isNameColonSpace_orNothing() {
-        XCTAssertEqual(LentilleConversationRow.authorPrefix(name: "Andre Tabeth"), "Andre Tabeth : ")
-        XCTAssertNil(LentilleConversationRow.authorPrefix(name: ""))
-        XCTAssertNil(LentilleConversationRow.authorPrefix(name: "   "))
-        XCTAssertNil(LentilleConversationRow.authorPrefix(name: nil))
-    }
-
-    func test_flatRow_textPreview_isOneText_authorColonMessage_noOutline() throws {
-        let code = try rowSource()
-        XCTAssertTrue(code.contains("(senderPrefix + Text(resolvedPreviewText)"), "« Auteur : texte » en UN seul texte, comme la carte")
-        XCTAssertTrue(code.contains("LentilleConversationRow.authorPrefix(name:") || code.contains("Self.authorPrefix(name:"), "le préfixe vient de la règle pure")
-        let preview = try block("private func standardPreview(showEphemeralIcon: Bool) -> some View {", in: code)
+    /// « Auteur : message » en UN seul texte (#7548) : la ligne partagée
+    /// concatène auteur, glyphe et corps composés par le SDK. Le séparateur
+    /// vient du catalogue (`line.author` — « Alice : » en français, « Alice: »
+    /// ailleurs), jamais d'un littéral de la rangée.
+    func test_flatRow_preview_isOneText_authorColonMessage_noOutline() throws {
+        XCTAssertTrue(try rowSource().contains("ConversationPreviewLine("), "la rangée monte la ligne partagée")
+        let line = try previewLineSource()
+        let text = try block("private func styledText(_ preview: ConversationPreview) -> Text {", in: line)
+        XCTAssertTrue(text.contains("(author + glyph + direction + styledBody)"), "« Auteur : texte » en UN seul texte")
+        XCTAssertTrue(text.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
         for outline in ["strokeBorder", ".border(", "RoundedRectangle", "background("] {
-            XCTAssertFalse(preview.contains(outline), "aucun contour ni fond sur le dernier message au repos (« \(outline) »)")
+            XCTAssertFalse(text.contains(outline), "aucun contour ni fond sur le dernier message au repos (« \(outline) »)")
         }
     }
 
@@ -82,7 +81,7 @@ final class LentilleRowChromeTests: XCTestCase {
         XCTAssertFalse(mode.contains("authorPrefix"), "aucune seconde règle « auteur : » dans Lentille/Mode/")
         XCTAssertFalse(mode.contains("senderPrefix"))
         XCTAssertTrue(
-            try rowSource().contains(".lineLimit(isMagnified ? 2 : 1)"),
+            try rowSource().contains("lineLimit: isMagnified ? 2 : 1"),
             "… la magnification ne fait qu'élargir l'aperçu de la MÊME vue : une ligne au repos, deux sous la loupe."
         )
     }
