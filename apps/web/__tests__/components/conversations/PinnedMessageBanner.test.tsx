@@ -87,6 +87,12 @@ const pinnedMessage = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+/** Plusieurs épingles, dans l'ordre servi par la route : la plus récente d'abord. */
+const pinnedResponseMany = (messages: Record<string, unknown>[]) => ({
+  success: true,
+  data: messages,
+});
+
 function renderBanner(conversationId: string = CONV_ID) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
@@ -338,5 +344,106 @@ describe('PinnedMessageBanner — portée de l\'invalidation', () => {
     });
 
     await waitFor(() => expect(mockApiGet.mock.calls.length).toBeGreaterThan(callsAfterMount));
+  });
+});
+
+/**
+ * Une conversation peut porter PLUSIEURS épingles — la route en sert 50 par
+ * défaut, triées par la dernière posée. La bannière n'en demandait qu'une
+ * (`{ limit: 1 }`) et n'en rendait qu'une : les autres étaient non seulement
+ * invisibles, mais impossibles à soupçonner. iOS, lui, montre un aperçu puis
+ * ouvre la liste complète (#7520).
+ *
+ * Ce que ces témoins tiennent est le MANQUE, pas une maquette : que le compte
+ * soit dit, et qu'on puisse atteindre chaque épingle. La forme du contrôle
+ * (flèches, pastille, liste) reste au design.
+ */
+describe('PinnedMessageBanner — plusieurs épingles', () => {
+  const three = () => [
+    pinnedMessage({ id: 'msg-3', content: 'La plus récente', pinnedAt: '2026-09-03T00:00:00Z' }),
+    pinnedMessage({ id: 'msg-2', content: 'Celle du milieu', pinnedAt: '2026-09-02T00:00:00Z' }),
+    pinnedMessage({ id: 'msg-1', content: 'La plus ancienne', pinnedAt: '2026-09-01T00:00:00Z' }),
+  ];
+
+  it('demande toutes les épingles au serveur, pas une seule', async () => {
+    mockApiGet.mockResolvedValue(pinnedResponseMany(three()));
+
+    renderBanner();
+
+    await waitFor(() => expect(mockApiGet).toHaveBeenCalled());
+    const [, params] = mockApiGet.mock.calls[0];
+    expect((params as { limit?: unknown } | undefined)?.limit).not.toBe(1);
+  });
+
+  it('dit combien il y en a', async () => {
+    mockApiGet.mockResolvedValue(pinnedResponseMany(three()));
+
+    renderBanner();
+
+    expect(await screen.findByText(/La plus récente/)).toBeInTheDocument();
+    expect(screen.getByTestId('pinned-counter')).toHaveTextContent('1');
+    expect(screen.getByTestId('pinned-counter')).toHaveTextContent('3');
+  });
+
+  it("passe à l'épingle suivante, et revient à la première après la dernière", async () => {
+    mockApiGet.mockResolvedValue(pinnedResponseMany(three()));
+
+    renderBanner();
+    expect(await screen.findByText(/La plus récente/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('pinned-next'));
+    expect(await screen.findByText(/Celle du milieu/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('pinned-next'));
+    expect(await screen.findByText(/La plus ancienne/)).toBeInTheDocument();
+
+    // Le cycle se referme : depuis la dernière, « suivante » revient à la première.
+    fireEvent.click(screen.getByTestId('pinned-next'));
+    expect(await screen.findByText(/La plus récente/)).toBeInTheDocument();
+  });
+
+  it("ouvre l'épingle AFFICHÉE, pas la première de la liste", async () => {
+    mockApiGet.mockResolvedValue(pinnedResponseMany(three()));
+    const navigated: string[] = [];
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PinnedMessageBanner conversationId={CONV_ID} onNavigateToMessage={(id) => navigated.push(id)} />
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByText(/La plus récente/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('pinned-next'));
+    expect(await screen.findByText(/Celle du milieu/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Celle du milieu/));
+
+    expect(navigated).toEqual(['msg-2']);
+  });
+
+  it('ne montre ni compteur ni navigation quand il n’y a qu’une épingle', async () => {
+    mockApiGet.mockResolvedValue(pinnedResponse(pinnedMessage()));
+
+    renderBanner();
+
+    expect(await screen.findByText(/Hello everyone/)).toBeInTheDocument();
+    expect(screen.queryByTestId('pinned-counter')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pinned-next')).not.toBeInTheDocument();
+  });
+
+  it('rejeter masque la bannière entière, quelle que soit l’épingle affichée', async () => {
+    mockApiGet.mockResolvedValue(pinnedResponseMany(three()));
+
+    renderBanner();
+    expect(await screen.findByText(/La plus récente/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('pinned-next'));
+    expect(await screen.findByText(/Celle du milieu/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('pinnedBanner.close'));
+
+    await waitFor(() => expect(screen.queryByText(/Celle du milieu/)).not.toBeInTheDocument());
+    expect(screen.queryByText(/La plus récente/)).not.toBeInTheDocument();
   });
 });
