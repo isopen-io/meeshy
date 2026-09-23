@@ -68,16 +68,16 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     expect(root.style.getPropertyValue('--accent')).toBe('');
   });
 
-  test('flou armé ⇒ `--accent` de la racine devient `var(--color-i600)`', () => {
+  test('flou armé ⇒ `--accent` de la racine devient `var(--ios-state-concealed)`', () => {
     const el = mount(() => {});
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-i600)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
   });
 
-  test('éphémère armé ⇒ `--accent` de la racine devient `var(--color-error)`, et REVIENT à rien une fois désarmé', () => {
+  test('éphémère armé ⇒ `--accent` de la racine devient `var(--ios-state-ephemeral)`, et REVIENT à rien une fois désarmé', () => {
     const el = mount(() => {});
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
@@ -87,7 +87,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
       buttons[1]!.click(); // « 30s »
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-ephemeral)');
 
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click(); // désarme.
@@ -108,7 +108,7 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
       buttons[1]!.click();
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-error)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-ephemeral)');
   });
 
   test('après un envoi, la substitution retombe — la protection est remise à zéro', () => {
@@ -119,10 +119,53 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
       el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
     });
     const root = el.querySelector<HTMLElement>('[data-composer]')!;
-    expect(root.style.getPropertyValue('--accent')).toBe('var(--color-i600)');
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-concealed)');
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
     });
     expect(root.style.getPropertyValue('--accent')).toBe('');
+  });
+
+  /**
+   * #7667 — la vue unique colore la barre, prime sur le flou, et les deux
+   * sont EXCLUSIFS : armer l'un éteint l'autre, jusqu'au `aria-pressed` de la
+   * bascule qu'on n'a pas touchée.
+   */
+  test('vue unique armée ⇒ `--accent` devient `var(--ios-state-view-once)` et le champ l’annonce', () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!.click();
+    });
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--accent')).toBe('var(--ios-state-view-once)');
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(field.getAttribute('aria-description')).toBe('Mode vue unique actif');
+  });
+
+  test('flou puis vue unique ⇒ le flou s’ÉTEINT (exclusifs), la barre prend la vue unique', () => {
+    const el = mount(() => {});
+    const blur = el.querySelector<HTMLButtonElement>('[data-composer-blur]')!;
+    const viewOnce = el.querySelector<HTMLButtonElement>('[data-composer-view-once]')!;
+    act(() => {
+      blur.click();
+    });
+    act(() => {
+      viewOnce.click();
+    });
+    expect(el.querySelector('[data-composer-blur]')!.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('[data-composer-view-once]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector<HTMLElement>('[data-composer]')!.style.getPropertyValue('--accent')).toBe('var(--ios-state-view-once)');
+
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    expect(el.querySelector('[data-composer-view-once]')!.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('[data-composer-blur]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('sans protection, le champ n’annonce rien', () => {
+    const el = mount(() => {});
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(field.hasAttribute('aria-description')).toBe(false);
   });
 });

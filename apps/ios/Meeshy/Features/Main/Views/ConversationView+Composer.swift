@@ -46,17 +46,19 @@ extension ConversationView {
         composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore)))
     }
 
-    /// Accent RÉSOLU du composer : substitué (éphémère → rouge d'alerte, flou →
-    /// accent de traçage, effet en attente → bleu de marque) sinon celui de la
-    /// conversation. Sans dériver `composerSecondaryColor` de CETTE valeur, le
-    /// second arrêt du dégradé reste `secondaryColor` (celui de la conversation)
-    /// pendant que le premier bascule sur une teinte de garde — un dégradé
+    /// Accent RÉSOLU que l'hôte remet au composer : le bleu de marque quand un
+    /// effet est en attente, sinon celui de la conversation. Sans dériver
+    /// `composerSecondaryColor` de CETTE valeur, le second arrêt du dégradé
+    /// resterait `secondaryColor` pendant que le premier bascule — un dégradé
     /// HYBRIDE qui a l'air d'un bug de teinte plutôt que d'un état volontaire.
+    ///
+    /// Les PROTECTIONS ne se substituent plus ici (#7667) : la barre lit ses
+    /// propres bascules et prend la teinte de la plus forte (éphémère > vue
+    /// unique > flou, `ComposerProtection.dominant`). Substituer chez l'hôte
+    /// laissait la vue unique sans couleur et les quatre autres hôtes de la
+    /// barre sans aucune.
     private var composerAccent: String {
-        viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex
-        : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex
-        : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex
-        : accentColor
+        viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor
     }
 
     /// Second arrêt du dégradé servi au composer. Dérivé de `composerAccent`

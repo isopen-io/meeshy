@@ -70,7 +70,7 @@ extension UniversalComposerBar {
         // Cible de dépôt sur le conteneur externe : couvre toute la bande
         // (champ, barre d'outils, bandeaux édition/réponse, tiroir
         // d'attachements). Voir UniversalComposerBar+Drop.swift.
-        .modifier(ComposerDropTargetModifier(accentColor: accentColor, onIngest: onIngest))
+        .modifier(ComposerDropTargetModifier(accentColor: servedAccentHex, onIngest: onIngest))
         .onAppear {
             isMinimized = startMinimized
         }
@@ -131,12 +131,12 @@ extension UniversalComposerBar {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                    colors: [servedAccent, servedSecondary],
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 )
                             )
                             .frame(width: 50, height: 50)
-                            .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 3)
+                            .shadow(color: servedAccent.opacity(0.4), radius: 8, y: 3)
 
                         Image(systemName: "square.and.pencil")
                             .font(.title3.weight(.semibold))
@@ -263,6 +263,7 @@ extension UniversalComposerBar {
             .background(composerBackground)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showAttachOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
@@ -423,7 +424,7 @@ extension UniversalComposerBar {
         .sheet(isPresented: $showTextStickerSheet) {
             ComposerTextStickerSheet(
                 text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                accentColor: accentColor,
+                accentColor: servedAccentHex,
                 onPick: { gabarit in sendTextSticker(gabarit) }
             )
             .presentationDetents([.medium, .large])
@@ -443,7 +444,11 @@ extension UniversalComposerBar {
     // MARK: - Background
     // ========================================================================
 
+    /// Transparent sans protection — l'hôte fournit son verre. Une protection
+    /// armée y pose un voile de SA teinte (#7667) : toute la barre dit l'état,
+    /// pas seulement la pastille qui l'a allumé.
     private var composerBackground: some View {
-        Color.clear
+        (dominantProtection?.tint ?? Color.clear)
+            .opacity(isDark ? 0.10 : 0.06)
     }
 }

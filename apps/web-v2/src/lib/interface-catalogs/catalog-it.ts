@@ -980,6 +980,8 @@ const it = {
   'composer.viewOnce.activate': 'Attiva la modalità visione unica',
   'composer.viewOnce.active': 'Modalità visione unica attiva',
   'composer.viewOnce.label': 'Visione unica',
+  'composer.protection.ephemeral.state': 'Modalità effimera attiva',
+  'composer.protection.blur.state': 'Modalità sfocatura attiva',
   'message.location.shared': 'Posizione condivisa',
   'message.location.open': 'Apri in Mappe',
   'message.location.a11y': 'Posizione: {place}',

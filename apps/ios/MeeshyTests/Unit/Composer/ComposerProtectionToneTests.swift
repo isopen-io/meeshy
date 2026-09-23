@@ -118,6 +118,32 @@ final class ComposerProtectionToneTests: XCTestCase {
         XCTAssertEqual(etat.viewOnce, false)
     }
 
+    // MARK: - TOUTE la barre lit l'accent servi
+
+    /// « Toute la barre », pas seulement la pastille : une lecture directe de
+    /// l'accent de l'hôte dans un fichier de la barre est une surface qui
+    /// resterait à la couleur de la conversation sous une protection armée.
+    /// Les deux seules lectures admises sont celles des getters servis
+    /// (`servedAccent`, `servedSecondary`) ; le modificateur de dépôt porte
+    /// son PROPRE `accentColor`, reçu de la barre déjà servi.
+    func test_barre_neLitJamaisLAccentDeLHoteEnDirect() throws {
+        let parties = AppSourceGuard.unitURLs("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
+            .filter { !$0.lastPathComponent.hasSuffix("+Drop.swift") }
+        XCTAssertGreaterThan(parties.count, 5, "la garde ne voit plus les extensions de la barre")
+        let source = try parties
+            .map { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)) }
+            .joined(separator: "\n")
+        let lecturesDirectes = source.components(separatedBy: "Color(hex: accentColor)").count - 1
+            + source.components(separatedBy: "Color(hex: secondaryColor)").count - 1
+        XCTAssertEqual(lecturesDirectes, 2, "seuls servedAccent et servedSecondary lisent l'accent de l'hôte")
+        XCTAssertFalse(source.contains("accentColor: accentColor"),
+                       "un enfant de la barre reçoit l'accent de l'hôte au lieu de l'accent servi")
+        XCTAssertFalse(source.contains("isBlurEnabled.wrappedValue.toggle()"),
+                       "la bascule du flou contourne l'exclusivité avec la vue unique")
+        XCTAssertFalse(source.contains("isViewOnceEnabled.wrappedValue.toggle()"),
+                       "la bascule de la vue unique contourne l'exclusivité avec le flou")
+    }
+
     // MARK: - Le lecteur d'écran entend l'état dominant
 
     func test_etatAnnonce_nonVidePourChaqueProtection() {

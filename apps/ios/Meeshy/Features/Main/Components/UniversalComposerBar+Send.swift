@@ -118,7 +118,7 @@ extension UniversalComposerBar {
                 ComposerTextStickerButton(
                     template: gabarit,
                     text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                    accentColor: accentColor,
+                    accentColor: servedAccentHex,
                     isDark: style == .dark,
                     onSend: { sendTextSticker(gabarit) },
                     onBrowse: { showTextStickerSheet = true }
@@ -280,7 +280,7 @@ extension UniversalComposerBar {
         // Le bouton d'envoi porte l'accent de la CONVERSATION (ou du post /
         // de la story qui héberge le composer), miroir exact du bouton
         // « Écrire » de la variante minimisée. `editColors` reste sémantique.
-        let sendColors = [Color(hex: accentColor), Color(hex: secondaryColor)]
+        let sendColors = [servedAccent, servedSecondary]
         let colors = isEditMode ? editColors : sendColors
         let icon = isEditMode ? "checkmark" : "paperplane.fill"
 

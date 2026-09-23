@@ -109,7 +109,7 @@ extension UniversalComposerBar {
             if let onRecentMediaSelected {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
-                    accentColor: accentColor,
+                    accentColor: servedAccentHex,
                     onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
                     onSelect: onRecentMediaSelected,
                     onEdit: onRecentMediaEdit,
@@ -356,7 +356,7 @@ extension UniversalComposerBar {
     /// - When the carousel is shown it shows a `keyboard` glyph — tapping hides
     ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
-        let accent = Color(hex: accentColor)
+        let accent = servedAccent
         let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
         let bgFill = style == .dark ? Color.white.opacity(0.1) : accent.opacity(0.1)
         let borderColor = style == .dark ? Color.white.opacity(0.2) : accent.opacity(0.2)

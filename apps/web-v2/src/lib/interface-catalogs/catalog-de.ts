@@ -980,6 +980,8 @@ const de = {
   'composer.viewOnce.activate': 'Einmalansicht aktivieren',
   'composer.viewOnce.active': 'Einmalansicht aktiv',
   'composer.viewOnce.label': 'Einmalansicht',
+  'composer.protection.ephemeral.state': 'Ephemerer Modus aktiv',
+  'composer.protection.blur.state': 'Unschärfemodus aktiv',
   'message.location.shared': 'Geteilter Standort',
   'message.location.open': 'In Karten öffnen',
   'message.location.a11y': 'Standort: {place}',

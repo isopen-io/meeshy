@@ -1081,6 +1081,8 @@ const fr = {
   'composer.viewOnce.activate': 'Activer le mode vue unique',
   'composer.viewOnce.active': 'Mode vue unique actif',
   'composer.viewOnce.label': 'Vue unique',
+  'composer.protection.ephemeral.state': 'Mode éphémère actif',
+  'composer.protection.blur.state': 'Mode flou actif',
 
   /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
      (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,

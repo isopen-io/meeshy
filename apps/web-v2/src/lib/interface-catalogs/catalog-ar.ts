@@ -977,6 +977,8 @@ const ar = {
   'composer.viewOnce.activate': 'تفعيل وضع المشاهدة لمرة واحدة',
   'composer.viewOnce.active': 'وضع المشاهدة لمرة واحدة نشط',
   'composer.viewOnce.label': 'مشاهدة لمرة واحدة',
+  'composer.protection.ephemeral.state': 'الوضع المؤقت مفعّل',
+  'composer.protection.blur.state': 'وضع التمويه مفعّل',
   'message.location.shared': 'موقع مشترك',
   'message.location.open': 'فتح في الخرائط',
   'message.location.a11y': 'الموقع: {place}',
