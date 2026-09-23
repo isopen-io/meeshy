@@ -279,7 +279,7 @@ nonisolated enum RiverConversationMapping {
                 // lit sans second voile.
                 protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
-                isViewOnceSealed: message.isViewOnceSealed,
+                viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -444,7 +444,7 @@ nonisolated enum RiverConversationMapping {
     /// unique scellée. La clé de mémo lit la même valeur, pour que l'ouverture
     /// d'une vue unique recompose la bulle.
     static func displayedText(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> String {
-        message.isViewOnceSealed ? "" : text(message)
+        message.isViewOnceSealed || message.isViewOnceOpened ? "" : text(message)
     }
 
     static func fingerprint(messages: [MeeshyMessage]) -> Fingerprint {

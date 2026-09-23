@@ -21,14 +21,21 @@ extension ConversationViewModel {
         case fullscreen(MessageAttachment)
         /// Le texte est révélé à sa place dans le fil.
         case inPlace
-        /// Rien à ouvrir : message inconnu ou sans vue unique.
+        /// Le texte révélé a été RETOUCHÉ : il passe à « déjà ouvert » (#7579).
+        case closed
+        /// Rien à ouvrir : message inconnu, sans vue unique, ou déjà ouvert.
         case unavailable
     }
 
     func openViewOnce(messageId: String) -> ViewOnceOpening {
         guard let index = messages.firstIndex(where: { $0.id == messageId }),
-              messages[index].holdsViewOnce else {
+              messages[index].holdsViewOnce,
+              !messages[index].isViewOnceOpened else {
             return .unavailable
+        }
+        if revealedViewOnceIds[messageId] == true {
+            closeViewOnce(messageId: messageId)
+            return .closed
         }
         if let media = messages[index].openableViewOnceMedia {
             return .fullscreen(media)
@@ -36,6 +43,50 @@ extension ConversationViewModel {
         revealedViewOnceIds[messageId] = true
         messages[index].isViewOnceRevealed = true
         return .inPlace
+    }
+
+    /// **Un texte lu sur place passe à « déjà ouvert »** (#7579) — quand on le
+    /// RETOUCHE, quand il SORT DE L'ÉCRAN au défilement, ou quand on quitte la
+    /// conversation. Sans effet sur un message qui n'est pas révélé : les trois
+    /// portes peuvent se déclencher ensemble, la consommation ne part qu'une
+    /// fois.
+    ///
+    /// L'ouverture se grave en base AVANT que la révélation ne tombe : la
+    /// cellule passe directement du texte à `(1) · Déjà ouvert`, sans repasser
+    /// par la puce « Touchez pour afficher ».
+    func closeViewOnce(messageId: String) {
+        guard revealedViewOnceIds[messageId] == true,
+              let index = messages.firstIndex(where: { $0.id == messageId }),
+              messages[index].viewOnceOpenedAt == nil else { return }
+        messages[index].viewOnceOpenedAt = Date()
+        Task { [weak self] in
+            guard let self else { return }
+            _ = await self.consumeViewOnce(messageId: messageId)
+            self.revealedViewOnceIds.removeValue(forKey: messageId)
+            if let index = self.messages.firstIndex(where: { $0.id == messageId }) {
+                self.messages[index].isViewOnceRevealed = false
+            }
+        }
+    }
+
+    /// Referme toutes les vues uniques révélées — la sortie de conversation.
+    func closeAllRevealedViewOnce() {
+        for (messageId, isRevealed) in revealedViewOnceIds where isRevealed {
+            closeViewOnce(messageId: messageId)
+        }
+    }
+
+    /// Grave l'ouverture sur CET appareil et purge ce qui en reste : médias en
+    /// cache, traductions, transcription, pistes traduites, puis la ligne GRDB
+    /// elle-même (`markViewOnceOpened`). Seule l'enveloppe survit.
+    func markViewOnceOpenedLocally(messageId: String) async {
+        if let message = messages.first(where: { $0.id == messageId }) {
+            evictViewOnceMedia(message: message)
+        }
+        messageTranslations.removeValue(forKey: messageId)
+        messageTranscriptions.removeValue(forKey: messageId)
+        messageTranslatedAudios.removeValue(forKey: messageId)
+        try? await messagePersistence.markViewOnceOpened(localId: messageId)
     }
 
     /// Pose la révélation de la visite sur des messages relus du magasin : une

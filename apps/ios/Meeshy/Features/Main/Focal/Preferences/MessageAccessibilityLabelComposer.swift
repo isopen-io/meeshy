@@ -44,8 +44,8 @@ enum MessageAccessibilityLabelComposer {
 
         // #7618 — une vue unique non ouverte ne se DIT pas plus qu'elle ne se
         // montre : son libellé est la puce, l'heure et l'éphémère qui court.
-        if content.kind == .viewOnceSealed {
-            parts.append(ViewOnceChip.accessibilityLabel(for: .sealed))
+        if let chip = content.viewOnceChipState {
+            parts.append(ViewOnceChip.accessibilityLabel(for: chip))
             parts.append(content.meta.timeString)
             parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.chromeProtection))
             return parts.joined(separator: ", ")

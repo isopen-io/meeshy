@@ -177,7 +177,7 @@ final class DependencyContainer {
                     callSummaryJson: callSummaryJson, serverUpdatedAt: serverUpdatedAt
                 )
             case let .deleted(messageId, deletedAt):
-                try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt)
+                try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: true)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):
                 try await persistence.appendReaction(
                     localId: messageId, reactionId: reactionId, messageId: messageId,

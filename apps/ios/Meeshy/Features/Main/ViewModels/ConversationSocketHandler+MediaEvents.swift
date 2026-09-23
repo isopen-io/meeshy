@@ -155,13 +155,14 @@ extension ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                // Capture the current message snapshot for eviction BEFORE
-                // the persistence write updates the record and the store
-                // observation refreshes delegate.messages.
-                let messageForEviction: Message? = event.isFullyConsumed
-                    ? delegate.messages.first(where: { $0.id == event.messageId })
-                    : nil
+                guard let self else { return }
+                // #7579 — une vue unique se consomme PAR PERSONNE : ce qu'un
+                // autre ouvre ne retire RIEN chez moi. Ce site vidait le
+                // contenu et évinçait le média dès `isFullyConsumed` — le
+                // compteur GLOBAL du serveur —, si bien qu'un destinataire qui
+                // n'avait rien ouvert perdait le message. Seul le compteur est
+                // tenu ; la destruction, quand tous l'ont ouverte, arrive par
+                // `message:deleted`, qui rend la bulle « déjà ouverte ».
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the count update.
                     Task {
@@ -174,13 +175,6 @@ extension ConversationSocketHandler {
                             Logger.messages.error("Persistence updateViewOnceCount failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
                         }
                     }
-                }
-                // Eviction is media-cache housekeeping; not a messages array mutation.
-                if event.isFullyConsumed {
-                    if let msg = messageForEviction {
-                        delegate.evictViewOnceMedia(message: msg)
-                    }
-                    delegate.markMessageAsConsumed(messageId: event.messageId)
                 }
             }
             .store(in: &cancellables)

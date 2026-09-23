@@ -59,6 +59,7 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
         && a.locationJson == b.locationJson
         && a.stickerJson == b.stickerJson
         && ephemeralClock
+        && a.viewOnceOpenedAt == b.viewOnceOpenedAt
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras && kindAndSource
 }

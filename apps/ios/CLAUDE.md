@@ -150,7 +150,7 @@ MediaCacheManager.shared    // Disk caching
 ### Bubble Component Architecture
 La bulle de message est decomposee sous `Meeshy/Features/Main/Views/Bubble/`. Le god object historique a ete elimine — `ThemedMessageBubble.swift` est un orchestrateur fin (~265 lignes) qui :
 1. Construit un `BubbleContent` (value model immuable) depuis le `Message` + contexte de traduction.
-2. Dispatche sur `content.kind` (`.deleted` / `.burned` / `.standard`) vers `BubbleDeletedView`, `BubbleBurnedView`, ou `BubbleStandardLayout`.
+2. Dispatche sur `content.kind` (`.deleted` / `.viewOnceSealed` / `.viewOnceOpened` / `.standard`) vers `BubbleDeletedView`, `BubbleViewOnceSealedView` (la puce `(1) · …`, #7618/#7579), ou `BubbleStandardLayout`.
 3. Possede les `@StateObject` de cycle de vie (`BubbleEphemeralController`, `BubbleBlurRevealController`) et les `@State` de presentation (sheets, fullscreen) — passes aux sous-vues comme `@ObservedObject`/`@Binding`.
 
 `BubbleStandardLayout` est l'orchestrateur du chemin standard. Il lit `content.text`, `content.attachments`, `content.reply`, `content.translation`, `content.reactions` via des `if let`/`switch` qui early-exit. Une bulle "Salut" n'instancie que le texte + meta-row : pas de quoted-reply, pas de panneau de traduction, pas de grille visuelle.

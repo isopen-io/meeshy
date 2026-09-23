@@ -15,7 +15,7 @@ import MeeshyUI
 /// réutilisation verbatim de leur CHROME. Résolu comme pour
 /// `FocalQuotedReplyView`/`FocalAttachmentBlock` : le TEXTE et les CLÉS DE
 /// LOCALISATION sont réutilisés à l'identique (`bubble.system.deleted`,
-/// `bubble.system.burned` — un seul domicile i18n, jamais dupliqué) ; le
+/// un seul domicile i18n, jamais dupliqué) ; le
 /// CHROME (capsule → texte plat) est natif Focal, seule façon de tenir
 /// « sans capsule » sans éditer un fichier non possédé par WS-3.
 ///
@@ -34,21 +34,6 @@ struct FocalDeletedRow: View, Equatable {
 
     var body: some View {
         Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
-            .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
-            .italic()
-            .foregroundColor(ThemeManager.shared.textMuted)
-            .padding(.leading, FocalMetrics.Text.indent)
-            .accessibilityElement(children: .combine)
-    }
-}
-
-/// Message éphémère vu puis effacé — même traitement fantôme que
-/// `FocalDeletedRow`, clé i18n de `BubbleBurnedView` (`bubble.system.burned`).
-struct FocalBurnedRow: View, Equatable {
-    let isDark: Bool
-
-    var body: some View {
-        Text(String(localized: "bubble.system.burned", defaultValue: "Vu et supprimé", bundle: .main))
             .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
             .italic()
             .foregroundColor(ThemeManager.shared.textMuted)
@@ -135,8 +120,6 @@ enum FocalSystemRows {
         switch content.kind {
         case .deleted:
             FocalDeletedRow(isDark: isDark)
-        case .burned:
-            FocalBurnedRow(isDark: isDark)
         case .system:
             if let notice = content.callNotice {
                 FocalCallNoticeRow(notice: notice, accentHex: accentHex, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPress)
@@ -152,7 +135,7 @@ enum FocalSystemRows {
             } else {
                 EmptyView()
             }
-        case .standard, .viewOnceSealed, .ephemeralExpired:
+        case .standard, .viewOnceSealed, .viewOnceOpened, .ephemeralExpired:
             EmptyView()
         }
     }

@@ -77,9 +77,9 @@ struct RiverBubbleContent: Equatable {
     /// (#7467) — projeté par `RiverConversationMapping`, jamais lu ici.
     let isBurning: Bool
 
-    /// Vue unique pas encore ouverte (#7618) : la bulle ne porte QUE la puce,
-    /// `text` est vide par la projection, jamais masqué par la vue.
-    let isViewOnceSealed: Bool
+    /// Vue unique scellée (#7618) ou déjà ouverte (#7579) : la bulle ne porte
+    /// QUE la puce, `text` est vide par la projection, jamais masqué par la vue.
+    let viewOnceChip: ViewOnceChip.State?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -103,7 +103,7 @@ struct RiverBubbleContent: Equatable {
         storyCitation: ReplyReference? = nil,
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
-        isViewOnceSealed: Bool = false,
+        viewOnceChip: ViewOnceChip.State? = nil,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -120,7 +120,7 @@ struct RiverBubbleContent: Equatable {
         self.storyCitation = storyCitation
         self.protection = protection
         self.isBurning = isBurning
-        self.isViewOnceSealed = isViewOnceSealed
+        self.viewOnceChip = viewOnceChip
     }
 }
 
@@ -454,7 +454,7 @@ struct RiverBubbleView: View, Equatable {
                 Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
             }
         }
-        if !content.isViewOnceSealed {
+        if content.viewOnceChip == nil {
             Button {
                 UIPasteboard.general.string = content.text
             } label: {
@@ -526,8 +526,8 @@ struct RiverBubbleView: View, Equatable {
             // le texte d'une vue unique EN CLAIR, exactement comme la rangée
             // plate avant ce lot. Le wrapper est le même que celui de Focal :
             // il possède l'état de révélation, la rivière reste sans `@State`.
-            if content.isViewOnceSealed {
-                ViewOnceChip(state: .sealed, isDark: isDark) {
+            if let chip = content.viewOnceChip {
+                ViewOnceChip(state: chip, isDark: isDark) {
                     onConsumeViewOnce?(content.bubble.messageId) { _ in }
                 }
             } else if content.protection.requiresVeil {
@@ -787,7 +787,7 @@ struct RiverBubbleView: View, Equatable {
     // MARK: - Accessibilité
 
     private var accessibilityLabel: String {
-        let body = content.isViewOnceSealed ? ViewOnceChip.accessibilityLabel(for: .sealed) : content.text
+        let body = content.viewOnceChip.map(ViewOnceChip.accessibilityLabel(for:)) ?? content.text
         var parts = [content.senderDisplayName, body, content.timeString]
         if let reply = content.replyPreview {
             parts.append(

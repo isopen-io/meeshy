@@ -710,7 +710,7 @@ final class ConversationSocketHandler {
                     let msgId = event.messageId
                     Task {
                         do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
+                            try await persistence.markDeleted(localId: msgId, deletedAt: now, sparingOpenedViewOnce: true)
                         } catch {
                             Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         }
