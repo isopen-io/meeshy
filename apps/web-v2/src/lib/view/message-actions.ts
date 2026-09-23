@@ -1,4 +1,5 @@
 import type { Message, MessageTranslation } from '@/lib/api/types';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
@@ -12,16 +13,51 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * dépôt (« un contrôle existe s'il a un effet ») interdit de les lister.
  *
  * Ce fichier ne rend RIEN — c'est `message-menu.tsx` qui consomme cette loi.
+ * Il ne porte donc AUCUN libellé : une loi PURE ne connaît pas la langue de
+ * son lecteur, elle nomme ce qu'il faut dire et laisse le rendu le dire.
  */
 
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'compose' | 'more';
+/**
+ * `reply` ARME UNE RÉPONSE, ET NE S'APPELLE PLUS `compose` (#7555).
+ *
+ * Le mot « composer » a un sens ARRÊTÉ sur iOS, et ce n'est pas celui-là :
+ * `PrimaryAction.compose` (`MessageActionResolver.swift:14`) ouvre l'atelier
+ * sur le MÉDIA d'un message pour en faire une story ou un post, quand
+ * répondre y est `MoreItem.reply`. Le même mot pour deux effets était le
+ * défaut de cohérence de positionnement (dimension 6) que ce lot ferme :
+ * web-v2 dit désormais `reply`, et le nom « composer » reste disponible pour
+ * le jour où le port web du geste iOS arrivera — sans collision.
+ *
+ * Le GLYPHE, lui, n'a pas suivi : `reply` porte encore la baguette magique
+ * choisie du temps de « Composer ». `glyphs-thread-menu.ts` est généré, et
+ * régénérer dix modules dans un lot de renommage aurait noyé un diff
+ * relisible — dette consignée, #7564.
+ */
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'reply' | 'more';
 
 /** Les cinq glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
 export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'magicWand' | 'dotsThree';
 
+/**
+ * UNE CLÉ, JAMAIS UN LIBELLÉ (#7555). `as const satisfies` plutôt qu'une
+ * annotation large, même discipline que `feed-post-card.tsx` : la table est
+ * VÉRIFIÉE contre le catalogue (une clé absente des sept langues ne compile
+ * pas) tout en gardant ses littéraux, si bien que `MessageMenuLabelKey` dit
+ * QUELLES clés ce menu emploie — et pas « n'importe laquelle du catalogue ».
+ */
+const MENU_LABEL_KEYS = {
+  select: 'message.menu.select',
+  translate: 'message.menu.translate',
+  copy: 'message.menu.copy',
+  reply: 'message.menu.reply',
+  more: 'message.menu.more',
+} as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
+
+export type MessageMenuLabelKey = (typeof MENU_LABEL_KEYS)[MessageActionId];
+
 export type MessageMenuItem = {
   readonly id: MessageActionId;
-  readonly label: string;
+  readonly labelKey: MessageMenuLabelKey;
   readonly glyph: MessageMenuGlyph;
 };
 
@@ -62,20 +98,19 @@ export function messageMenuContextOf(
 /**
  * `MessageActionResolver.primaryActions` réduit : `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
- * (`translate` de plus par `languageCount > 1`), `compose` inconditionnel
- * (v3.1 : « Composer » = répondre, § question 2 de la spécification —
- * toujours disponible, aucune capacité manquante ne le retire).
+ * (`translate` de plus par `languageCount > 1`), `reply` inconditionnel —
+ * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
 export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
-  const items: MessageMenuItem[] = [{ id: 'select', label: 'Sélectionner', glyph: 'checkCircle' }];
+  const items: MessageMenuItem[] = [{ id: 'select', labelKey: MENU_LABEL_KEYS.select, glyph: 'checkCircle' }];
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
-    items.push({ id: 'translate', label: 'Traduire', glyph: 'globe' });
+    items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }
   if (ctx.hasText && !ctx.isProtected) {
-    items.push({ id: 'copy', label: 'Copier', glyph: 'copy' });
+    items.push({ id: 'copy', labelKey: MENU_LABEL_KEYS.copy, glyph: 'copy' });
   }
-  items.push({ id: 'compose', label: 'Composer', glyph: 'magicWand' });
-  items.push({ id: 'more', label: 'Plus…', glyph: 'dotsThree' });
+  items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
+  items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
 }
 

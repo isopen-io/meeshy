@@ -3,6 +3,8 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { flag, languageName } from '@/lib/languages';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
@@ -115,6 +117,10 @@ export function MessageMenu({
   readonly onPickLanguage: (code: string) => void;
 }) {
   const [panel, setPanel] = useState<'actions' | 'translate'>('actions');
+  /* LA LANGUE D'INTERFACE, LUE UNE FOIS PAR RENDU (#7555) — `message-actions.ts`
+     rend des CLÉS, ce composant les DIT. Même porte que le reste de l'écran
+     (`currentInterfaceLanguage()`), jamais une seconde résolution. */
+  const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
   const listRows = panel === 'actions' ? items.length : choices.length;
 
@@ -360,7 +366,14 @@ export function MessageMenu({
       >
         <div
           role="group"
-          aria-label="Réagir"
+          aria-label={translate(language, 'message.menu.react')}
+          /* UN GATE N'ÉPINGLE PAS UNE CHAÎNE TRADUISIBLE (#7141, appliqué ici
+             par #7555) — depuis que ce cluster lit le catalogue, son nom
+             accessible suit la langue du LECTEUR, et la CI tourne en `en-US`.
+             Ces marqueurs sont posés POUR être trouvés et ne changent avec
+             aucune langue ; le nom accessible, lui, reste ce que le lecteur
+             d'écran entend. */
+          data-message-menu-rail
           className="message-menu-rail"
           style={{
             position: 'fixed',
@@ -383,7 +396,8 @@ export function MessageMenu({
                 type="button"
                 role="menuitem"
                 tabIndex={index === roving.activeIndex ? 0 : -1}
-                aria-label={isPlus ? 'Ajouter une réaction' : tile}
+                aria-label={isPlus ? translate(language, 'message.menu.addReaction') : tile}
+                {...(isPlus ? { 'data-add-reaction': '' } : {})}
                 className="tap-target-34 grid place-items-center rounded-full"
                 style={{ width: RAIL_TILE, height: RAIL_TILE, fontSize: 22 }}
                 onClick={() => {
@@ -479,13 +493,14 @@ export function MessageMenu({
                   }}
                   type="button"
                   role="menuitem"
+                  data-action={item.id}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-left text-title font-medium"
                   style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onListItemChosen(item)}
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
-                  <span className="flex-1">{item.label}</span>
+                  <span className="flex-1">{translate(language, item.labelKey)}</span>
                   {item.id === 'more' ? (
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
@@ -508,7 +523,8 @@ export function MessageMenu({
              sous-menu. */
           <div
             role="group"
-            aria-label="Traduire"
+            aria-label={translate(language, 'message.menu.translate')}
+            data-message-menu-languages
             className="message-menu-list"
             style={{
               position: 'fixed',

@@ -972,6 +972,22 @@ const de = {
   'attachment.protected.audio': 'Geschützte Sprachnachricht',
   'attachment.protected.file': 'Geschützter Anhang',
 
+  /* Le menu du message, sa barre de sélection et sa feuille « Plus… » (#7555). */
+  'message.menu.select': 'Auswählen',
+  'message.menu.translate': 'Übersetzen',
+  'message.menu.copy': 'Kopieren',
+  'message.menu.reply': 'Antworten',
+  'message.menu.more': 'Mehr…',
+  'message.menu.react': 'Reagieren',
+  'message.menu.addReaction': 'Reaktion hinzufügen',
+  'message.selection.toolbar': 'Nachrichtenauswahl',
+  'message.selection.count': '{count} ausgewählt',
+  'message.detail.title': 'Nachrichtendetails',
+  'message.detail.languages': 'Sprachen',
+  'message.detail.reactions': 'Reaktionen',
+  'message.detail.sent': 'Gesendet',
+  'message.detail.language.original': '{language} (Original)',
+
 } satisfies InterfaceCatalog;
 
 export default de;

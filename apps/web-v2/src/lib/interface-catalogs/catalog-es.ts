@@ -972,6 +972,22 @@ const es = {
   'attachment.protected.audio': 'Audio protegido',
   'attachment.protected.file': 'Archivo protegido',
 
+  /* Le menu du message, sa barre de sélection et sa feuille « Plus… » (#7555). */
+  'message.menu.select': 'Seleccionar',
+  'message.menu.translate': 'Traducir',
+  'message.menu.copy': 'Copiar',
+  'message.menu.reply': 'Responder',
+  'message.menu.more': 'Más…',
+  'message.menu.react': 'Reaccionar',
+  'message.menu.addReaction': 'Añadir una reacción',
+  'message.selection.toolbar': 'Selección de mensajes',
+  'message.selection.count': '{count} seleccionados',
+  'message.detail.title': 'Detalles del mensaje',
+  'message.detail.languages': 'Idiomas',
+  'message.detail.reactions': 'Reacciones',
+  'message.detail.sent': 'Enviado',
+  'message.detail.language.original': '{language} (original)',
+
 } satisfies InterfaceCatalog;
 
 export default es;
