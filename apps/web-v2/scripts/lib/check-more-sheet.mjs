@@ -128,7 +128,11 @@ export async function checkMoreSheet({ browser, BASE, expect }) {
     expect,
     label: 'Plus…',
     openLayer: async (p) => {
-      const item = p.locator('.message-menu-list [role="menuitem"]').filter({ hasText: 'Plus…' }).first();
+      // VISER LE MARQUEUR, JAMAIS LE MOT (#7141). Le menu suit la langue du
+      // lecteur depuis #7555, et Chromium tourne en `en-US` ici comme en CI :
+      // un filtre sur « Plus… » rougissait sur un menu parfaitement correct,
+      // simplement parce qu'il disait « More… ». `data-action` est stable.
+      const item = p.locator('.message-menu-list [role="menuitem"][data-action="more"]').first();
       if ((await item.count()) === 0) return false;
       await item.click();
       return true;
@@ -147,7 +151,8 @@ export async function checkMoreSheet({ browser, BASE, expect }) {
     expect,
     label: '＋ Ajouter une réaction',
     openLayer: async (p) => {
-      const rail = p.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]');
+      // Même règle : `aria-label` est TRADUIT, `data-message-menu-rail` ne l'est pas.
+      const rail = p.locator('[data-message-menu-rail] [role="menuitem"]');
       if ((await rail.count()) === 0) return false;
       await rail.last().click();
       return true;
