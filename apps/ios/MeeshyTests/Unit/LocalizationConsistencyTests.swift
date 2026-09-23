@@ -41,7 +41,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/MeeshyNotificationExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
-        "apps/ios/MeeshyContextMenu",
         "packages/MeeshySDK/Sources",
     ]
 

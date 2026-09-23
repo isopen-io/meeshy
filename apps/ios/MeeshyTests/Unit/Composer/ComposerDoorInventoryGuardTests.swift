@@ -104,7 +104,7 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     private func sourcesDeProduction() throws -> [String] {
         var codes: [String] = []
         for cible in ["Meeshy", "MeeshyShareExtension", "MeeshyNotificationExtension",
-                      "MeeshyWidgets", "MeeshyContextMenu"] {
+                      "MeeshyWidgets"] {
             let dossier = Self.racine.appendingPathComponent(cible)
             guard let enumerateur = FileManager.default.enumerator(at: dossier,
                                                                    includingPropertiesForKeys: nil)

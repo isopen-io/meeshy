@@ -139,7 +139,6 @@ const SEARCH_ROOTS = [
   'packages/MeeshySDK/Sources',
   'apps/ios/Meeshy',
   'apps/ios/MeeshyNotificationExtension',
-  'apps/ios/MeeshyContextMenu',
   'apps/ios/MeeshyShareExtension',
   'apps/ios/MeeshyWidgets',
 ];
