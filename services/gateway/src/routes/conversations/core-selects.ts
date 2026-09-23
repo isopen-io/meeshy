@@ -6,6 +6,7 @@
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
+import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -101,6 +102,11 @@ export const conversationLastMessagePreviewSelect = {
   // #7451 — dit à `resolveLastMessageSummaryKind` que `expiresAt` est l'heure
   // INTERNE de destruction, et non l'échéance d'un lecteur.
   ephemeralDuration: true,
+  // #7545 — la protection (chiffré) et la NATURE du message (système, appel,
+  // transfert) que `resolveLastMessageNature` lit.
+  isEncrypted: true,
+  messageSource: true,
+  forwardedFromId: true,
   // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
   // MÊME document Mongo que le message (`translations` est une
   // colonne JSON, pas une relation) : les sélectionner ne coûte ni
@@ -131,7 +137,10 @@ export const conversationLastMessagePreviewSelect = {
     }
   },
   attachments: {
-    take: 1, // Optimized: only first attachment for preview
+    // #7545 — bornée, plus plafonnée à 1 : `attachmentSummary` (« 3 photos ·
+    // 1,4 Mo ») lit toutes les pièces jointes ; la liste n'en SERT que la
+    // première (`core-list.ts`). Même borne que le socket.
+    take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
     select: {
       id: true,
       mimeType: true,
@@ -142,6 +151,7 @@ export const conversationLastMessagePreviewSelect = {
       duration: true,    // Audio/Video duration in ms
       width: true,       // Image/Video width
       height: true,      // Image/Video height
+      pageCount: true,   // Documents
       bitrate: true,     // Audio/Video bitrate
       sampleRate: true,  // Audio sample rate
       metadata: true     // Additional metadata (effects, etc.)
@@ -261,6 +271,10 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   isAnnouncementChannel: true,
   slowModeSeconds: true,
   autoTranslateEnabled: true,
+  // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
+  // lecture batchée par page (`loadConversationListActivity`).
+  lastReactionId: true,
+  activeCallId: true,
   participants: {
     take: 5,
     where: {

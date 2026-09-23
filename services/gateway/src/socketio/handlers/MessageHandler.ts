@@ -54,11 +54,8 @@ import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
 import { fetchParticipantSuperset } from '../participant-superset';
-import {
-  resolveLastMessagePreviewPrism,
-  resolvePreviewMediaFields,
-  toIsoOrNull,
-} from '../utils/lastMessagePreviewPrism';
+import { toIsoOrNull } from '../utils/lastMessagePreviewPrism';
+import { resolveLastMessagePreviewGroup } from '../utils/lastMessagePreviewGroup';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -1598,16 +1595,9 @@ export class MessageHandler {
           // le type se décider chez l'encodeur.
           lastMessageAt: toIsoOrNull(message.createdAt),
           lastMessageId: message.id,
-          // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
-          // le reste de la paire, sous le même plafond qu'elle.
-          // Un message position-seule a un `content` vide : hisser
-          // `metadata.location` (même règle que la liste REST et
-          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
-          // client compose son libellé — aucun texte de repli côté serveur.
-          ...((): Record<string, unknown> => {
-            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-            return place ? { location: place } : {};
-          })(),
+          // `lastMessagePreview`, le lieu, le sous-groupe MÉDIA et la NATURE
+          // sortent de `resolveLastMessagePreviewGroup`, sous la protection du
+          // message (#7545) — aucun texte de repli côté serveur.
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
@@ -1629,14 +1619,7 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewPrism(participant, message),
-            // Sous-groupe MÉDIA (#3737) — identique pour toute la room, donc
-            // hors de la boucle par destinataire serait plus juste ; posé ici
-            // pour rester à un seul point d'appel, comme le Prisme ci-dessus.
-            // `message` (le type `Message` partagé) satisfait déjà la forme
-            // attendue : `attachments` NON plafonné en entrée, plafonné en
-            // sortie par la fonction elle-même.
-            ...resolvePreviewMediaFields(message)
+            ...resolveLastMessagePreviewGroup(participant, message)
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

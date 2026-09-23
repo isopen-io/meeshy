@@ -516,7 +516,8 @@
       "noResults": "No results"
     },
     "pinnedBanner": {
-      "close": "Close pinned message"
+      "close": "Close pinned message",
+      "next": "Next pinned message"
     },
     "inviteModal": {
       "searchError": "Error searching for users",

@@ -61,11 +61,17 @@ import { Link } from '@/routes/route-table';
  *
  * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le bouton rond
  * « À proximité » de l'en-tête (celui des Réels l'a rejoint avec son lecteur,
- * #6457), le menu « Plus d'options », le panneau de traduction secondaire et la
+ * #6457), le panneau de traduction secondaire et la
  * bannière temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait
  * une route ou un geste absent (loi 4), ou un compagnon de temps réel hors
  * périmètre lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par
  * le disque qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
+ *
+ * LE MENU « PLUS D'OPTIONS » A SES GESTES (#7533) — il figurait dans la
+ * liste ci-dessus faute d'actions à servir. Supprimer, épingler et signaler
+ * une publication ont désormais leur port (`lib/api/publication-actions.ts`,
+ * `reportPost`) : le « ⋯ » se pose en haut à droite de chaque carte
+ * (`feed-post-menu.tsx`), servi par `usePostGesture().menu`.
  *
  * LE PLACEHOLDER DE COMPOSEUR A UNE PORTE (#7449) — il figurait dans la liste
  * ci-dessus tant qu'aucune adresse ne créait de `Post.type = 'POST'` ni
@@ -318,7 +324,7 @@ export default function FeedScreen() {
      autres gestes de la rangée (`use-post-gesture.ts`) : l'adresse du fil
      s'écrit une seule fois pour les quatre écrans qui montent la carte. Elle
      était recopiée ici, et deux de ces écrans l'avaient oubliée. */
-  const { announcement, onGesture, onShare, onComment } = usePostGesture();
+  const { announcement, onGesture, onShare, onComment, menu } = usePostGesture();
 
   // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
   // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
@@ -397,6 +403,7 @@ export default function FeedScreen() {
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={onComment}
+                  menu={menu}
                   preferredLanguages={readerLanguages}
                   onOpenScene={sceneGallery.onOpenScene}
                   registerScene={registerScene}

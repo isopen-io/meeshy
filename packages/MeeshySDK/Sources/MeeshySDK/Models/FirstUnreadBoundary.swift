@@ -50,6 +50,16 @@ public enum FirstUnreadBoundary {
 
     public struct Result: Equatable, Sendable {
         public let firstUnreadId: String
+        /// Le compte de la FENÊTRE reçue, jamais de la conversation (borne
+        /// assumée, ci-dessus). **iOS ne l'ANNONCE plus depuis #7525** :
+        /// `ConversationViewModel+InitialLoad` ne retient de cette loi que
+        /// `firstUnreadId` (la POSITION) et affiche
+        /// `conversation.userState.unreadCount` — le compte SERVEUR, celui de
+        /// la ligne de liste — parce que le curseur serveur n'avance que sur
+        /// le préfixe contigu vu et que la fenêtre paginée gardait alors des
+        /// candidats déjà comptés lus. Le rebrancher sur le séparateur rouvre
+        /// la divergence séparateur ↔ ligne de liste. Le miroir web
+        /// (`apps/web-v2/src/lib/view/unread-boundary.ts`) le lit encore.
         public let unreadCount: Int
 
         public init(firstUnreadId: String, unreadCount: Int) {

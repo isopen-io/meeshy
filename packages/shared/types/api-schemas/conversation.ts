@@ -10,6 +10,7 @@
  */
 
 import { messageMinimalSchema } from './message.js';
+import { activeCallSchema, lastReactionSchema } from './conversation-preview.js';
 import { userMinimalSchema } from './user.js';
 
 // =============================================================================
@@ -253,6 +254,11 @@ export const conversationSchema = {
 
     // Last message
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Most recent message' },
+    // #7545 — ce qui s'est passé DEPUIS le dernier message : sa dernière réaction
+    // et l'appel en cours. Jumeaux des clés `lastReaction` / `activeCall` de
+    // `conversation:updated`.
+    lastReaction: lastReactionSchema,
+    activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
     messageCount: { type: 'number', nullable: true, description: 'Total message count' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread message count for current user' },
@@ -450,6 +456,11 @@ export const conversationMinimalSchema = {
     memberCount: { type: 'number', description: 'Member count (capped at 199 for non platform admins)' },
     memberCountCapped: { type: 'boolean', nullable: true, description: 'True when memberCount is capped at 199 — display "199+"' },
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Last message' },
+    // #7545 — ce qui s'est passé DEPUIS le dernier message : sa dernière réaction
+    // et l'appel en cours. Jumeaux des clés `lastReaction` / `activeCall` de
+    // `conversation:updated`.
+    lastReaction: lastReactionSchema,
+    activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
     // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,
     // fast-json-stringify les retirerait silencieusement du payload (même piège

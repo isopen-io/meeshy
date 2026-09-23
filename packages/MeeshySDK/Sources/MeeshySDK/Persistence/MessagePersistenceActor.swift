@@ -2002,6 +2002,14 @@ public actor MessagePersistenceActor {
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.effectFlags = effectFlags
+                    // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
+                    // porteurs arrivent par des chemins différents et jamais
+                    // ensemble : la DURÉE par `message:new` (sans échéance,
+                    // contrat #7451 point 4), `D(lecteur)` par REST. Le temps
+                    // réel écrivant la ligne en premier, la revalidation tombe
+                    // ici — et cette branche n'en touchait AUCUN.
+                    existing.expiresAt = api.expiresAt ?? existing.expiresAt
+                    existing.ephemeralDuration = api.ephemeralDuration ?? existing.ephemeralDuration
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
                     // or the server reports a newer `updatedAt` (it may bump
@@ -2095,7 +2103,9 @@ public actor MessagePersistenceActor {
                         joinNoticeJson: joinNoticeJson,
                         recipientCount: api.recipientCount ?? 0,
                         locationJson: locationJson,
-                        stickerJson: stickerJson
+                        stickerJson: stickerJson,
+                        // #7508 — le seul porteur d'horloge du temps réel.
+                        ephemeralDuration: api.ephemeralDuration
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

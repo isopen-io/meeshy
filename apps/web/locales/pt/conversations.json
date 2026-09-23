@@ -518,7 +518,8 @@
       "noResults": "Sem resultados"
     },
     "pinnedBanner": {
-      "close": "Fechar mensagem fixada"
+      "close": "Fechar mensagem fixada",
+      "next": "Próxima mensagem fixada"
     },
     "links": {
       "noDescription": "Sem descrição",

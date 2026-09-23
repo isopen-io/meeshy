@@ -37,6 +37,16 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 
     // Ephemeral / Effects
     public var expiresAt: Date?
+    /// La DURÉE d'un éphémère, en secondes (#7451 point 4, suite #7508).
+    ///
+    /// Distincte d'`expiresAt`, et pas redondante avec elle : `expiresAt` est
+    /// l'échéance SERVIE pour ce lecteur, que le temps réel ne peut pas porter
+    /// (une diffusion de room est la même pour tous, l'échéance est par
+    /// destinataire). La durée, elle, est la même pour tout le monde — elle
+    /// voyage donc sur `message:new`, et c'est elle que le client recompose
+    /// avec sa PREMIÈRE réception locale. Sans elle en base, un éphémère relu
+    /// depuis GRDB n'a plus AUCUNE horloge.
+    public var ephemeralDuration: Int?
     public var effectFlags: UInt32
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int
@@ -152,7 +162,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         joinNoticeJson: Data? = nil,
         recipientCount: Int = 0,
         locationJson: String? = nil,
-        stickerJson: String? = nil
+        stickerJson: String? = nil,
+        ephemeralDuration: Int? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -176,6 +187,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.replyToJson = replyToJson
         self.forwardedFromJson = forwardedFromJson
         self.expiresAt = expiresAt
+        self.ephemeralDuration = ephemeralDuration
         self.effectFlags = effectFlags
         self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount

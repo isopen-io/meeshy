@@ -579,6 +579,13 @@ model Conversation {
   /// check before either had committed its `CallSession`.
   activeCallId String? @db.ObjectId
 
+  /// La DERNIÈRE réaction posée sur un message de cette conversation (#7545) —
+  /// écrite par `ReactionService.addReaction`, point de convergence des quatre
+  /// transports de réaction, et remise à null quand cette réaction est retirée.
+  /// La ligne de liste la résout en `lastReaction` (auteur, emoji, extrait
+  /// protégé) sans balayer les réactions de la conversation.
+  lastReactionId String? @db.ObjectId
+
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
   community             Community?               @relation(fields: [communityId], references: [id])

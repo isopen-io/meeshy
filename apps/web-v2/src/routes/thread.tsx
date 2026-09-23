@@ -31,6 +31,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
@@ -141,6 +142,7 @@ export default function ThreadScreen() {
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const storyRingOf = useAuthorStoryRings(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -787,6 +789,7 @@ export default function ThreadScreen() {
         conversation={conversation}
         viewerId={viewer.id ?? ''}
         group={group}
+        storyRingOf={storyRingOf}
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
@@ -889,6 +892,7 @@ export default function ThreadScreen() {
           scene={scene}
           readerLanguages={readerLanguages}
           group={group}
+          storyRingOf={storyRingOf}
           highlightedId={highlightedId}
           expiredIds={expiredIds}
           destroyingIds={destroyingIds}

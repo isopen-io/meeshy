@@ -98,6 +98,26 @@ extension ConversationViewModel {
         return table
     }
 
+    /// **Les éphémères DÉJÀ échus** (#7552).
+    ///
+    /// `ephemeralDeadlines` répond à « quand me réveiller ? » ; cette table-ci
+    /// répond à « qu'est-ce qui doit partir MAINTENANT ? ». Les deux vivaient
+    /// dans une seule table, et `.expired` est le cas où elles divergent : son
+    /// échéance vaut `nil` — il n'y a plus rien à attendre —, si bien qu'un
+    /// message échu pendant que l'app était fermée n'était jamais dû, donc
+    /// jamais retiré. Le serveur le servant encore une heure après l'échéance
+    /// (contrat : indisponible à `D(u) + 1 h`), chaque démarrage à froid de
+    /// cette heure-là le réaffichait intact.
+    var elapsedEphemeralIds: Set<String> {
+        var ids: Set<String> = []
+        for message in messages {
+            guard message.effects.flags.contains(.ephemeral) || message.expiresAt != nil else { continue }
+            guard message.protection().ephemeralState.hasElapsed else { continue }
+            ids.insert(message.id)
+        }
+        return ids
+    }
+
     /// Retire de l'écran les éphémères échus, et purge ce qu'un texte DÉRIVÉ
     /// en garderait (#7452, exigence 3 : « aucun texte dérivé ne garde le
     /// contenu d'un éphémère au-delà de son échéance »).
@@ -107,9 +127,11 @@ extension ConversationViewModel {
     /// tenir cette liste à jour entre deux réveils.
     func expireEphemeralsIfNeeded(_ ids: [String] = []) {
         let now = Date()
-        let due = Set(ids).union(
-            ephemeralDeadlines.compactMap { $0.value <= now ? $0.key : nil }
-        )
+        let due = Set(ids)
+            .union(ephemeralDeadlines.compactMap { $0.value <= now ? $0.key : nil })
+            // #7552 — ce qui est DÉJÀ échu n'a plus d'échéance future : sans
+            // cette union, un éphémère expiré hors ligne restait à l'écran.
+            .union(elapsedEphemeralIds)
         guard !due.isEmpty else {
             // **Le réveil du SEUIL** (#7467). Rien n'est échu : ce réveil-ci
             // marque le passage sous la dernière minute, où la flamme gagne son
@@ -150,7 +172,7 @@ extension ConversationViewModel {
             let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard let self else { return }
-            for id in burning { EphemeralReceiptLedger.shared.forget(id) }
+            for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
             // Le repli des voisins est ANIMÉ : c'est la seconde moitié de
             // l'effet — la combustion montre la destruction, le repli montre
             // que la place est rendue.

@@ -1,15 +1,17 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   PREVIEW_MEDIA_ATTACHMENT_SELECT,
   PREVIEW_MEDIA_SENDER_SELECT,
   PREVIEW_PRISM_PARTICIPANT_SELECT,
-  resolveLastMessagePreviewPrism,
-  resolvePreviewMediaFields,
   toIsoOrNull,
+  type PreviewMediaAttachmentInput,
 } from './utils/lastMessagePreviewPrism';
+import {
+  PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
+  resolveLastMessagePreviewGroup,
+} from './utils/lastMessagePreviewGroup';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import type { ServerEmitIO } from './serverEmit';
@@ -64,8 +66,19 @@ const PREVIEW_MESSAGE_SELECT = {
   // #7451 — cf. `resolveLastMessageSummaryKind` : sans elle, un éphémère de
   // trente secondes s'affiche « actif » sept jours dans la liste.
   ephemeralDuration: true,
+  // #7545 — la NATURE du message et la protection que le groupe d'aperçu lit
+  // (`resolveLastMessagePreviewGroup`) : sans `isEncrypted`, un message
+  // chiffré partait en clair ; sans les autres, la ligne ignorait qu'il
+  // s'agissait d'un appel, d'un avis système ou d'un transfert.
+  isEncrypted: true,
+  messageType: true,
+  messageSource: true,
+  effectFlags: true,
+  forwardedFromId: true,
   sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
-  attachments: { take: 1, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
+  // Bornée, plus plafonnée à 1 : le résumé (« 3 photos · 1,4 Mo ») lit
+  // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
+  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
   _count: { select: { attachments: true } },
 } as const;
 
@@ -121,8 +134,13 @@ type PreviewMessage = {
   isViewOnce?: boolean | null;
   expiresAt?: Date | string | null;
   ephemeralDuration?: number | null;
+  isEncrypted?: boolean | null;
+  messageType?: string | null;
+  messageSource?: string | null;
+  effectFlags?: number | null;
+  forwardedFromId?: string | null;
   sender?: { displayName?: string | null; user?: { displayName?: string | null } | null } | null;
-  attachments?: ReturnType<typeof resolvePreviewMediaFields>['lastMessageAttachments'];
+  attachments?: readonly PreviewMediaAttachmentInput[];
   _count?: { attachments?: number } | null;
 };
 
@@ -320,14 +338,11 @@ export async function emitConversationPreviewUpdate(
     });
 
     // La moitié du payload qui dépend du message, donc du LECTEUR dès qu'il en
-    // a masqué un. `location` comprise : servir la position du message global à
-    // qui ne le voit pas placerait une épingle sous un aperçu qui parle d'autre
-    // chose. Un message géolocalisé sans légende a un `lastMessagePreview`
-    // vide — hisser `location` ne fabrique aucun texte de repli côté serveur ;
-    // le client décide comment rendre "" + location (ex. via messageType ou la
-    // seule présence de `location`), pas ce helper.
+    // a masqué un. `location` y appartient aussi, mais elle sort du groupe
+    // d'aperçu (`resolveLastMessagePreviewGroup`), sous la même protection que
+    // le texte : servir la position du message global à qui ne le voit pas
+    // placerait une épingle sous un aperçu qui parle d'autre chose.
     const messagePayloadFor = (message: PreviewMessage | null) => {
-      const place = sharedPlaceFromMetadata(message?.metadata);
       return {
         // Chaîne ISO — voir `toIsoOrNull`. `null` reste une VALEUR ici : c'est
         // ainsi que ce chemin dit « ce lecteur n'a plus aucun message visible ».
@@ -337,7 +352,6 @@ export async function emitConversationPreviewUpdate(
         // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
         // comme elle.
         senderId: message?.senderId ?? null,
-        ...(place ? { location: place } : {}),
       };
     };
 
@@ -386,13 +400,12 @@ export async function emitConversationPreviewUpdate(
       // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
       // l'aperçu global rendrait exactement à l'envers.
       const own = overrides.has(participant.id) ? overrides.get(participant.id) ?? null : latest;
-      const prism = resolveLastMessagePreviewPrism(participant, own);
-      if (wantedLanguage != null && !carriesLanguage(prism.lastMessageTranslations, wantedLanguage)) continue;
+      const group = resolveLastMessagePreviewGroup(participant, own);
+      if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...basePayload,
         ...messagePayloadFor(own),
-        ...prism,
-        ...resolvePreviewMediaFields(own),
+        ...group,
       });
     }
   } catch (error) {

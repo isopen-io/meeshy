@@ -422,6 +422,10 @@ struct ThemedMessageBubble: View {
             isLastReceivedMessage: isLastReceivedMessage,
             isLastInGroup: isLastInGroup,
             standalone: standalone,
+            // #7508 — la protection ENTRE dans la feuille sticker : sans elle
+            // cette branche rendait un message à vue unique en clair.
+            protection: content.protection,
+            onConsumeViewOnce: onConsumeViewOnce,
             onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
             onShowReadStatus: onShowReadStatus == nil ? nil : { onShowReadStatus?(message.id) },
             onAddReaction: onAddReaction,

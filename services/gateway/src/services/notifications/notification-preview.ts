@@ -6,7 +6,7 @@
  * gardent.
  */
 
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -262,6 +262,10 @@ export type NotificationActorProfile = {
  * Builds the sanitised body for a protected message. Returns `null` when the
  * message is NOT protected (caller should keep the original text).
  *
+ * La LECTURE des drapeaux (colonnes + bitfield) est la loi partagée
+ * `messageProtection` (#7546), commune avec la ligne d'aperçu de la liste ;
+ * la préséance ci-dessous reste propre à la bannière.
+ *
  * Precedence : ephemeral > view-once > blurred > encrypted. Only one
  * protection icon is shown to keep the body compact, but the most restrictive
  * protection always wins.
@@ -280,11 +284,10 @@ export function protectedPreview(input: {
   expiresAt?: Date | null;
   createdAt?: Date | null;
 }): { preview: string; locKey: string } | null {
-  const flags = input.effectFlags ?? 0;
-  const isEphemeral = (input.expiresAt instanceof Date) || (flags & MESSAGE_EFFECT_FLAGS.EPHEMERAL) !== 0;
-  const isViewOnce  = (input.isViewOnce === true) || (flags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0;
-  const isBlurred   = (input.isBlurred  === true) || (flags & MESSAGE_EFFECT_FLAGS.BLURRED)   !== 0;
-  const isEncrypted = input.isEncrypted === true;
+  const { ephemeral: isEphemeral, viewOnce: isViewOnce, blurred: isBlurred, encrypted: isEncrypted } = messageProtection({
+    ...input,
+    expiresAt: input.expiresAt instanceof Date ? input.expiresAt : null,
+  });
   if (!isEphemeral && !isViewOnce && !isBlurred && !isEncrypted) return null;
 
   const icon = contentTypeIcon(input.messageType);

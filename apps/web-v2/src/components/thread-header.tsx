@@ -1,6 +1,7 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
@@ -9,6 +10,7 @@ import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
+import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -28,6 +30,7 @@ export function ThreadHeader({
   conversation,
   viewerId,
   group,
+  storyRingOf,
   otherUnread,
   expanded,
   onToggleExpanded,
@@ -42,6 +45,8 @@ export function ThreadHeader({
   readonly conversation: Conversation;
   readonly viewerId: string;
   readonly group: boolean;
+  /** L'anneau de story d'un auteur (#7528) — en direct, le titre déplié mène à la story du pair, sinon à son profil. */
+  readonly storyRingOf?: StoryRingOf;
   readonly otherUnread: number;
   readonly expanded: boolean;
   readonly onToggleExpanded: () => void;
@@ -56,6 +61,13 @@ export function ThreadHeader({
      `view/conversation` qui dépendent du pair, et une prop de plus pour la
      photo aurait fait un troisième chemin pour la même donnée. */
   const photo = avatarOf(conversation, viewerId);
+  /* LE PAIR D'UNE CONVERSATION DIRECTE (#7528) — en mode Bulles, le fil ne
+     peint AUCUNE identité en direct (`bubble.tsx`, `showsIdentity`) : le
+     titre déplié est alors la seule porte vers sa story ou son profil, dans
+     les trois peaux. En groupe, `peer` est `undefined` et le titre reste du
+     texte — il nomme la conversation, pas une personne. */
+  const peer = peerOf(conversation, viewerId);
+  const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
 
   return (
     /*
@@ -126,7 +138,7 @@ export function ThreadHeader({
         {expanded ? (
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-              {title}
+              <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />
             </h1>
             {/* `--color-ios-ink` et non `-ink-2` (#6308) : l'encre secondaire, semi-
                 transparente (`color-mix(in srgb, #4338ca 80%, transparent)` en clair),
