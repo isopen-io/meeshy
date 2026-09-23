@@ -154,7 +154,7 @@ export type ConversationPreviewMessage = {
   readonly callSummary?: LastMessageCallSummary | null;
   /** Sticker hissé de `metadata.sticker` : sa présence fait du message un sticker, quel que soit son `messageType`. */
   readonly sticker?: { readonly templateId?: string | null; readonly emoji?: string | null } | null;
-  /** Lieu partagé (`location` hissé de `metadata.location`). */
+  /** Lieu partagé (`location` hissé de `metadata.location`) : sa présence fait du message une position, quel que soit son `messageType` — le serveur l’écrit en `text` (#7590). */
   readonly location?: { readonly name?: string | null; readonly address?: string | null } | null;
   readonly attachment?: ConversationPreviewAttachment | null;
   readonly attachmentSummary?: LastMessageAttachmentSummary | null;
@@ -449,7 +449,7 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
   const summary = message.attachmentSummary ?? null;
   const count = summary?.count ?? (attachment ? 1 : 0);
 
-  if (message.messageType === 'location') {
+  if (message.messageType === 'location' || message.location) {
     const place = [message.location?.name, message.location?.address, message.content]
       .filter(hasText)
       .slice(0, 1)

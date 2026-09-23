@@ -945,6 +945,97 @@
       "text": "Alice : 📍 Position"
     },
     {
+      "id": "location-in-text-message",
+      "matrix": "Position envoyée en messageType text avec location — le serveur n’écrit jamais « location » (#7590)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Demo",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "",
+          "location": {
+            "name": "Tour Eiffel",
+            "address": "Champ de Mars, Paris"
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "location",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Demo"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Position"
+          },
+          {
+            "kind": "label",
+            "text": "Tour Eiffel"
+          }
+        ]
+      },
+      "text": "Demo : 📍 Position · Tour Eiffel"
+    },
+    {
+      "id": "location-in-text-message-view-once",
+      "matrix": "Position en messageType text à vue unique — le lieu ne part pas (#7590)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Demo",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "",
+          "location": {
+            "name": "Tour Eiffel",
+            "address": "Champ de Mars, Paris"
+          },
+          "isViewOnce": true
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "view-once",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Demo"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Vue unique"
+          }
+        ]
+      },
+      "text": "Demo : 👁 Vue unique"
+    },
+    {
       "id": "sticker",
       "matrix": "Sticker — sans texte alternatif",
       "input": {
