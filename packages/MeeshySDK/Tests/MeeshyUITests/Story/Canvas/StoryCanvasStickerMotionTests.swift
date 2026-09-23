@@ -76,7 +76,7 @@ final class StoryCanvasStickerMotionTests: XCTestCase {
     func test_blink_drivesOpacity() throws {
         let vue = canvas(animation: .blink)
         joue(vue, pendant: StickerAnimation.blink.period / 2)
-        XCTAssertEqual(Double(try couche(vue).opacity), 0.4, accuracy: 1e-2)
+        XCTAssertEqual(Double(try couche(vue).opacity), 0.7, accuracy: 1e-2)
     }
 
     // MARK: - Ce qui ne bouge PAS

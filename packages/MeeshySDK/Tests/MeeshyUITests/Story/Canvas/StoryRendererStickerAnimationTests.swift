@@ -60,10 +60,11 @@ final class StoryRendererStickerAnimationTests: XCTestCase {
         XCTAssertTrue(CATransform3DIsIdentity(couche.transform))
     }
 
-    /// `blink` descend à 40 % d'opacité à mi-période.
+    /// `blink` descend à 70 % d'opacité à mi-période — plancher de lisibilité
+    /// posé par #7583 (amplitude 0,30 ; à 40 % le Néon tombait à 2,29 : 1).
     func test_blink_drivesOpacity() throws {
         let couche = try stickerLayer(slide(animation: .blink), at: StickerAnimation.blink.period / 2)
-        XCTAssertEqual(Double(couche.opacity), 0.4, accuracy: 1e-4)
+        XCTAssertEqual(Double(couche.opacity), 0.7, accuracy: 1e-4)
     }
 
     // MARK: - Ce qui n'anime PAS
