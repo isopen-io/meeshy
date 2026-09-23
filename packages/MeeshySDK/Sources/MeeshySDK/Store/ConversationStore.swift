@@ -648,7 +648,35 @@ public actor ConversationStore {
                     conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
                     changed = true
                 }
+                // Média et nature du message NOMMÉ (#7548) : ils ne valent que
+                // pour lui, donc ne s'écrivent qu'avec son identité. Sans eux,
+                // une ligne touchée par ce seul événement (conversation fermée,
+                // hors de la room) perdait icône, détails et effets.
+                if case .replaced(.some(_)) = event.lastMessage {
+                    if let media = event.media {
+                        conv.lastMessageAttachments = media.attachments
+                        conv.lastMessageAttachmentCount = media.attachmentCount
+                        conv.lastMessageIsBlurred = media.isBlurred
+                        conv.lastMessageIsViewOnce = media.isViewOnce
+                        conv.lastMessageExpiresAt = media.expiresAt
+                        changed = true
+                    }
+                    if let nature = event.nature, nature != conv.lastMessageNature {
+                        conv.lastMessageNature = nature
+                        changed = true
+                    }
+                }
             }
+        }
+        // Hors du groupe monotone : la dernière réaction et l'appel en cours ne
+        // décrivent pas le dernier message et vivent leur propre vie (#7545).
+        if case .replaced(let reaction) = event.lastReaction, reaction != conv.lastReaction {
+            conv.lastReaction = reaction
+            changed = true
+        }
+        if case .replaced(let call) = event.activeCall, call != conv.activeCall {
+            conv.activeCall = call
+            changed = true
         }
         // Un DM ne porte JAMAIS le titre de la base : `APIConversation
         // .toConversation` l'écarte explicitement et pose à la place le nom du
@@ -1050,108 +1078,5 @@ public struct ConversationDeletedEvent: Sendable, Hashable {
 
     public init(conversationId: String) {
         self.conversationId = conversationId
-    }
-}
-
-/// Store-owned input for `applyConversationUpdated`. Carries the fields
-/// the store cares about from the `conversation:updated` socket event.
-/// Both the message-driven path (bump-to-top: `lastMessageAt`,
-/// `lastMessageId`, `lastMessagePreview`) and the metadata-driven path
-/// (rename, avatar, etc.) share this type — unset fields are `nil` and
-/// skipped during application.
-public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
-    public let conversationId: String
-    public let lastMessageAt: Date?
-    /// Identité du dernier message. Tri-état — voir `LastMessageIdentity` :
-    /// `.unchanged` (clé absente) et `.replaced(nil)` (« plus aucun message
-    /// visible pour ce lecteur ») ne sont pas le même ordre.
-    public let lastMessage: LastMessageIdentity
-    public let lastMessagePreview: String?
-    /// L'AUTEUR du dernier message, et de quoi décider comment le nommer
-    /// (#6921). Tri-état pour la même raison que les deux voisins : `.unchanged`
-    /// (clé absente) ne doit pas effacer, `.replaced(nil)` le doit.
-    public let lastMessageSenderName: LastMessageSenderName
-    /// L'émetteur, pour le repli « nom du pair » d'un direct quand l'événement
-    /// ne porte pas de nom.
-    public let senderId: String?
-    /// **Qui LIT.** Ce store est, par construction, le cache des conversations
-    /// d'UN utilisateur : le préfixe d'auteur dépend de lui (« Toi » plutôt que
-    /// mon propre nom d'affichage), et le lui cacher obligerait à trancher
-    /// ailleurs, donc à tenir deux règles. Vide tant que l'authentification
-    /// n'est pas résolue — le résolveur l'écarte alors.
-    public let readerId: String?
-    /// Le mot qui désigne le lecteur, déjà localisé — le SDK ne lit pas le
-    /// catalogue de l'app.
-    public let youLabel: String
-    /// Prisme de la ligne de liste. Tri-état — voir
-    /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
-    /// `.replaced([:])` (carte périmée par le serveur) ne sont PAS le même
-    /// ordre, et c'est la seule façon de rendre une édition applicable.
-    public let lastMessageTranslations: LastMessagePreviewTranslations
-    public let lastMessageOriginalLanguage: String?
-    /// Épingle du dernier message, quand il en porte une. Membre du groupe
-    /// d'aperçu au même titre que le texte et le Prisme : un message
-    /// position-seule a un `lastMessagePreview` VIDE, donc c'est le seul champ
-    /// dont la ligne dispose pour composer son libellé.
-    ///
-    /// Les trois émetteurs du payload la hissent depuis `metadata.location` du
-    /// message NOMMÉ par `lastMessage` — jamais du message précédent. Elle
-    /// s'applique donc avec l'identité, et jamais seule.
-    public let location: SharedPlace?
-    /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
-    /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
-    /// de RECULER dans le temps — voir `merging(_:with:)`.
-    public let previewRecalculated: Bool
-    public let title: String?
-    public let avatar: String?
-    public let description: String?
-    public let banner: String?
-    public let isAnnouncementChannel: Bool?
-    public let defaultWriteRole: String?
-    public let slowModeSeconds: Int?
-    public let autoTranslateEnabled: Bool?
-
-    public init(
-        conversationId: String,
-        lastMessageAt: Date? = nil,
-        lastMessage: LastMessageIdentity = .unchanged,
-        lastMessagePreview: String? = nil,
-        lastMessageSenderName: LastMessageSenderName = .unchanged,
-        senderId: String? = nil,
-        readerId: String? = nil,
-        youLabel: String = "",
-        lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
-        lastMessageOriginalLanguage: String? = nil,
-        location: SharedPlace? = nil,
-        previewRecalculated: Bool = false,
-        title: String? = nil,
-        avatar: String? = nil,
-        description: String? = nil,
-        banner: String? = nil,
-        isAnnouncementChannel: Bool? = nil,
-        defaultWriteRole: String? = nil,
-        slowModeSeconds: Int? = nil,
-        autoTranslateEnabled: Bool? = nil
-    ) {
-        self.conversationId = conversationId
-        self.lastMessageAt = lastMessageAt
-        self.lastMessage = lastMessage
-        self.lastMessagePreview = lastMessagePreview
-        self.lastMessageSenderName = lastMessageSenderName
-        self.senderId = senderId
-        self.readerId = readerId
-        self.youLabel = youLabel
-        self.lastMessageTranslations = lastMessageTranslations
-        self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
-        self.location = location
-        self.previewRecalculated = previewRecalculated
-        self.title = title
-        self.avatar = avatar
-        self.description = description
-        self.banner = banner
-        self.isAnnouncementChannel = isAnnouncementChannel
-        self.defaultWriteRole = defaultWriteRole
-        self.slowModeSeconds = slowModeSeconds
-        self.autoTranslateEnabled = autoTranslateEnabled
     }
 }

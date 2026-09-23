@@ -90,11 +90,37 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     /// position-seule a un `content` vide : c'est ce champ qui permet à la
     /// ligne d'aperçu de composer son libellé côté client.
     public let location: SharedPlace?
+    /// Sous-groupe NATURE du contrat #7545 — mêmes champs que les clés plates
+    /// `lastMessage*` de `conversation:updated`.
+    public let effectFlags: Int?
+    public let ephemeralDuration: Int?
+    public let isEncrypted: Bool?
+    public let isForwarded: Bool?
+    public let systemEvent: LastMessageSystemEvent?
+    public let callSummary: LastMessageCallSummary?
+    public let attachmentSummary: LastMessageAttachmentSummary?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
         case isBlurred, isViewOnce, expiresAt, location
+        case effectFlags, ephemeralDuration, isEncrypted, isForwarded
+        case systemEvent, callSummary, attachmentSummary
+    }
+
+    /// La nature telle que le serveur la sert ; `nil` sur un serveur antérieur.
+    public var nature: LastMessageNature? {
+        let nature = LastMessageNature(
+            messageType: messageType,
+            effectFlags: effectFlags,
+            ephemeralDuration: ephemeralDuration,
+            isEncrypted: isEncrypted ?? false,
+            isForwarded: isForwarded ?? false,
+            systemEvent: systemEvent,
+            callSummary: callSummary,
+            attachmentSummary: attachmentSummary
+        )
+        return nature.isEmpty ? nil : nature
     }
 }
 
@@ -173,6 +199,10 @@ public struct APIConversation: Decodable, Sendable {
     /// d'avant, jamais sur « pas membre ».
     public let isMember: Bool?
     public let lastMessage: APIConversationLastMessage?
+    /// Ce qui s'est passé DEPUIS le dernier message (#7545) : sa dernière
+    /// réaction et l'appel en cours. `var` : décodés sans élargir l'init.
+    public var lastReaction: ConversationLastReaction? = nil
+    public var activeCall: ConversationActiveCall? = nil
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
     /// au même plafond que `lastMessage.content`.
@@ -468,6 +498,9 @@ extension APIConversation {
             )
         }
         conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        conversation.lastMessageNature = lastMessage?.nature
+        conversation.lastReaction = lastReaction
+        conversation.activeCall = activeCall
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
         // ci-dessus : arrivée après l'init memberwise, projetée post-init pour

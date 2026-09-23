@@ -34,6 +34,9 @@ public struct LastMessageFacet: Sendable {
     /// même raison que les autres : écrite à part, une pastille du message
     /// PRÉCÉDENT survivrait au texte tout neuf qui la remplace.
     public let location: SharedPlace?
+    /// Nature du message (#7545) — type, effets, chiffrement, transfert,
+    /// appel, événement système, résumé des pièces jointes.
+    public let nature: LastMessageNature?
 
     public init(
         id: String?,
@@ -47,7 +50,8 @@ public struct LastMessageFacet: Sendable {
         expiresAt: Date? = nil,
         translations: [String: String]? = nil,
         originalLanguage: String? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        nature: LastMessageNature? = nil
     ) {
         self.id = id
         self.preview = preview
@@ -61,6 +65,7 @@ public struct LastMessageFacet: Sendable {
         self.translations = (translations?.isEmpty ?? true) ? nil : translations
         self.originalLanguage = originalLanguage
         self.location = location
+        self.nature = (nature?.isEmpty ?? true) ? nil : nature
     }
 
     /// Facette complète dérivée d'un message reçu ou envoyé — le chemin normal.
@@ -102,7 +107,8 @@ public struct LastMessageFacet: Sendable {
             expiresAt: message.expiresAt,
             translations: translations,
             originalLanguage: message.originalLanguage,
-            location: message.location
+            location: message.location,
+            nature: LastMessageNature(message: message)
         )
     }
 
@@ -136,7 +142,10 @@ public struct LastMessageFacet: Sendable {
             isViewOnce: isViewOnce,
             expiresAt: expiresAt,
             originalLanguage: originalLanguage,
-            location: location
+            location: location,
+            nature: LastMessageNature(
+                attachmentSummary: LastMessageAttachmentSummary(attachments: attachments)
+            )
         )
     }
 
@@ -156,7 +165,8 @@ public struct LastMessageFacet: Sendable {
             expiresAt: conversation.lastMessageExpiresAt,
             translations: conversation.lastMessageTranslations,
             originalLanguage: conversation.lastMessageOriginalLanguage,
-            location: conversation.lastMessageLocation
+            location: conversation.lastMessageLocation,
+            nature: conversation.lastMessageNature
         )
     }
 
@@ -196,6 +206,7 @@ public extension MeeshyConversation {
         lastMessageTranslations = facet.translations
         lastMessageOriginalLanguage = facet.originalLanguage
         lastMessageLocation = facet.location
+        lastMessageNature = facet.nature
     }
 
     /// **La garde d'ordre du groupe « dernier message »** (#7548) — la même
@@ -260,6 +271,7 @@ public extension MeeshyConversation {
         lastMessageIsViewOnce = false
         lastMessageExpiresAt = nil
         lastMessageLocation = nil
+        lastMessageNature = nil
         return true
     }
 }
