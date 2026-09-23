@@ -381,10 +381,10 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'رد', 'المزيد…']);
-    expect(document.querySelector('[role="group"].message-menu-rail')?.getAttribute('aria-label')).toBe(
+    expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.react'),
     );
-    expect(document.querySelector('.message-menu-rail button:last-of-type')?.getAttribute('aria-label')).toBe(
+    expect(document.querySelector('[data-add-reaction]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.addReaction'),
     );
   });

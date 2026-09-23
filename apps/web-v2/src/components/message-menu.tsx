@@ -397,7 +397,7 @@ export function MessageMenu({
                 role="menuitem"
                 tabIndex={index === roving.activeIndex ? 0 : -1}
                 aria-label={isPlus ? translate(language, 'message.menu.addReaction') : tile}
-                {...(isPlus ? { 'data-add-reaction': '' } : {})}
+                data-add-reaction={isPlus ? '' : undefined}
                 className="tap-target-34 grid place-items-center rounded-full"
                 style={{ width: RAIL_TILE, height: RAIL_TILE, fontSize: 22 }}
                 onClick={() => {
