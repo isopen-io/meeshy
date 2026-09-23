@@ -7,6 +7,7 @@ import { LargeLogo } from '@/components/branding';
 import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 // Composants inline légers pour éviter les imports lourds
 const SimpleCard = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -126,7 +127,7 @@ function VerifyEmailContent() {
 
       try {
         const apiUrl = buildApiUrl(API_ENDPOINTS.auth.verifyEmail);
-        console.log('[VERIFY_EMAIL] Appel API:', apiUrl);
+        logger.debug('[VERIFY_EMAIL]', 'Appel API:', apiUrl);
 
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -134,17 +135,17 @@ function VerifyEmailContent() {
           body: JSON.stringify({ token, email }),
         });
 
-        console.log('[VERIFY_EMAIL] Réponse HTTP:', response.status);
+        logger.debug('[VERIFY_EMAIL]', 'Réponse HTTP:', response.status);
 
         const data = await response.json();
 
         if (response.ok && data.success) {
-          console.log('[VERIFY_EMAIL] ✅ Email vérifié avec succès');
+          logger.debug('[VERIFY_EMAIL]', 'Email vérifié avec succès');
           setIsVerified(true);
 
           // Gérer le cas où l'email était déjà vérifié
           if (data.data?.alreadyVerified) {
-            console.log('[VERIFY_EMAIL] ℹ️ Email déjà vérifié le:', data.data.verifiedAt);
+            logger.debug('[VERIFY_EMAIL]', 'Email déjà vérifié');
             setAlreadyVerified(true);
             setVerifiedAt(data.data.verifiedAt);
             toast.info(getText('verifyEmail.alreadyVerified', 'Votre email est déjà vérifié !'));
@@ -174,7 +175,7 @@ function VerifyEmailContent() {
     setIsResending(true);
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.auth.resendVerification);
-      console.log('[VERIFY_EMAIL] Renvoi à:', apiUrl);
+      logger.debug('[VERIFY_EMAIL]', 'Renvoi du courriel de vérification');
 
       const response = await fetch(apiUrl, {
         method: 'POST',

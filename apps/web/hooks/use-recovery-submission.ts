@@ -5,6 +5,7 @@ import { magicLinkService } from '@/services/magic-link.service';
 import { phonePasswordResetService } from '@/services/phone-password-reset.service';
 import { resolveMagicLinkRequestOutcome } from '@/lib/auth/magic-link-request-outcome';
 import type { RecoveryMethod } from './use-recovery-flow';
+import { logger } from '@/utils/logger';
 
 interface UseRecoverySubmissionProps {
   setIsLoading: (loading: boolean) => void;
@@ -47,9 +48,9 @@ export function useRecoverySubmission({
     setError(null);
 
     try {
-      console.log('[AccountRecovery] Sending magic link request for:', email.trim());
+      logger.debug('[AccountRecovery]', 'Demande de lien magique');
       const result = await magicLinkService.requestMagicLink(email.trim(), true);
-      console.log('[AccountRecovery] Magic link response:', result);
+      logger.debug('[AccountRecovery]', 'Réponse du lien magique:', { success: result.success });
 
       if (result.success) {
         setStoredEmail(email.trim());
