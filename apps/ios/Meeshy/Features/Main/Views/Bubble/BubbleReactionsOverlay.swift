@@ -23,6 +23,31 @@ struct BubbleReactionsOverlay: View, Equatable {
         hasReactions || (!isMe && isLastReceivedMessage)
     }
 
+    // MARK: - Pose sous la bulle (#7620)
+
+    /// Hauteur de mise en page du strip (pills et bouton d'ajout).
+    nonisolated static let stripHeight: CGFloat = 22
+    /// Diamètre visible du bouton d'ajout ; sa cible de toucher fait 40 pt.
+    nonisolated static let chipDiameter: CGFloat = 24
+    nonisolated static let hitDiameter: CGFloat = 40
+    /// Marge basse du pied de bulle : la ligne heure + coche finit là.
+    nonisolated static let footerBottomInset: CGFloat = 8
+    /// Descente du strip, aligné sur le BAS de la bulle. À 8 pt, le disque du
+    /// bouton d'ajout montait de 15 pt dans la bulle et couvrait l'heure ;
+    /// à 18 pt il commence sous la ligne de méta et chevauche encore le bord.
+    nonisolated static let restingOffset: CGFloat = 18
+
+    /// Haut du disque visible, relatif au bord bas de la bulle (négatif =
+    /// dans la bulle).
+    nonisolated static func chipTop(offset: CGFloat) -> CGFloat {
+        offset - stripHeight / 2 - chipDiameter / 2
+    }
+
+    /// Bas de la cible de toucher, relatif au bord bas de la bulle.
+    nonisolated static func hitBottom(offset: CGFloat) -> CGFloat {
+        offset - stripHeight / 2 + hitDiameter / 2
+    }
+
     let messageId: String
     let summaries: [ReactionSummary]
     let isMe: Bool
