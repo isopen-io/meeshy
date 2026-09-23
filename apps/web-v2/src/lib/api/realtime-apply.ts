@@ -526,7 +526,7 @@ export function isMessageTranslationEvent(payload: unknown): payload is Translat
  * revues).
  */
 function mergeMessageTranslations(message: Message, incoming: TranslationEvent['translations']): Message {
-  const byLanguage = new Map(message.translations.map((t) => [t.targetLanguage, t]));
+  const byLanguage = new Map((message.translations ?? []).map((t) => [t.targetLanguage, t]));
   for (const t of incoming) byLanguage.set(t.targetLanguage, t as unknown as Message['translations'][number]);
   return { ...message, translations: Array.from(byLanguage.values()) };
 }

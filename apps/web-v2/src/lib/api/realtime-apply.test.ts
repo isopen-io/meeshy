@@ -822,6 +822,25 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
     applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
     expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
   });
+
+  test('#7526 — message sans champ translations fusionné par message:translation ne jette pas', () => {
+    const client = new QueryClient();
+    const messageWithoutTranslationsField = localMessage({ id: 'm-1' });
+    const { translations: _translations, ...messageWithoutField } = messageWithoutTranslationsField;
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([messageWithoutField as Message]));
+
+    expect(() => {
+      applyMessageTranslation(client, {
+        messageId: 'm-1',
+        translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })],
+      });
+    }).not.toThrow();
+
+    const page = threadOf(client, 'c-a');
+    const patched = page?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.translations).toHaveLength(1);
+    expect(patched?.translations[0]?.targetLanguage).toBe('fr');
+  });
 });
 
 /**
