@@ -504,7 +504,12 @@ export const FocalRow = memo(function FocalRow({
           {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
         />
       ) : message.replyTo ? (
-        <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
+        <Quote
+          quote={message.replyTo}
+          isMine={false}
+          languages={languages}
+          onJump={() => onJumpToMessage(message.replyTo!.id)}
+        />
       ) : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments

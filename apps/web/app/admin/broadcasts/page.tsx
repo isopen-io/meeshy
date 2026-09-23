@@ -27,6 +27,7 @@ const getStatusBadge = (status: string, t: (key: string) => string) => {
 export default function AdminBroadcastsPage() {
   const router = useRouter();
   const { t, locale } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [broadcasts, setBroadcasts] = useState<unknown[]>([]);
   const [, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -149,6 +150,7 @@ export default function AdminBroadcastsPage() {
           </div>
           <div className="flex space-x-2">
             <Button
+              aria-label={tA11y('a11y.refresh')}
               variant="outline"
               size="sm"
               onClick={() => loadBroadcasts(false)}
@@ -329,6 +331,7 @@ export default function AdminBroadcastsPage() {
                       </Button>
                       {(broadcast.status === 'DRAFT' || broadcast.status === 'READY') && (
                         <Button
+                          aria-label={tA11y('a11y.delete')}
                           variant="outline"
                           size="sm"
                           className="text-xs text-red-600 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"

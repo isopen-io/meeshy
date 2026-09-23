@@ -975,6 +975,26 @@ const pt = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Áudio protegido',
   'attachment.protected.file': 'Anexo protegido',
+  'attachment.kind.image': 'Foto',
+  'attachment.kind.video': 'Vídeo',
+  'attachment.kind.audio': 'Áudio',
+  'attachment.kind.file': 'Ficheiro',
+
+  /* Le menu du message, sa barre de sélection et sa feuille « Plus… » (#7555). */
+  'message.menu.select': 'Selecionar',
+  'message.menu.translate': 'Traduzir',
+  'message.menu.copy': 'Copiar',
+  'message.menu.reply': 'Responder',
+  'message.menu.more': 'Mais…',
+  'message.menu.react': 'Reagir',
+  'message.menu.addReaction': 'Adicionar uma reação',
+  'message.selection.toolbar': 'Seleção de mensagens',
+  'message.selection.count': '{count} selecionadas',
+  'message.detail.title': 'Detalhes da mensagem',
+  'message.detail.languages': 'Idiomas',
+  'message.detail.reactions': 'Reações',
+  'message.detail.sent': 'Enviada',
+  'message.detail.language.original': '{language} (original)',
 
 } satisfies InterfaceCatalog;
 

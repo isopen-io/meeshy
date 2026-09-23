@@ -144,9 +144,17 @@ final class EphemeralDurationPersistenceTests: XCTestCase {
 
 /// Registre de réception injecté — le vrai vit dans les `UserDefaults` du
 /// groupe d'application et ferait dépendre le témoin de l'état de la machine.
+///
+/// **Aucun message n'est détruit ici, et le double le DIT** (#7575). Ce témoin
+/// exerce la persistance de la DURÉE à travers GRDB ; la destruction est le
+/// sujet d'une autre suite. Rendre `nil` est donc la réponse juste, pas un
+/// remplissage : un éphémère vivant n'a pas de mort gravée, et c'est
+/// exactement la branche que ces témoins doivent parcourir.
 private struct StubReceiptLedger: EphemeralReceiptRecording {
     let reception: Date
     func firstReception(of messageId: String) -> Date? { reception }
     @discardableResult
     func noteReception(of messageId: String, at date: Date) -> Date { reception }
+    func destruction(of messageId: String) -> Date? { nil }
+    func noteDestruction(of messageId: String, at date: Date) {}
 }

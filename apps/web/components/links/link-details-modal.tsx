@@ -51,6 +51,7 @@ interface LinkDetailsModalProps {
 
 export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProps) {
   const { t, locale } = useI18n('links');
+  const { t: tA11y } = useI18n('common');
 
   const handleCopyLink = async () => {
     const linkUrl = buildShareLinkUrl(link.linkId);
@@ -122,6 +123,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
                 <p className="font-medium flex-1">{link.conversation.title}</p>
                 {link.conversation.conversationUrl && (
                   <Button 
+                    aria-label={tA11y('a11y.openInNewTab')}
                     size="sm" 
                     variant="outline" 
                     onClick={handleOpenConversation}
@@ -143,7 +145,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
                   className="bg-muted px-2 py-1 rounded text-xs flex-1 min-w-0 max-w-[300px] border-0 focus:ring-0 focus:outline-none"
                   onClick={(e) => e.currentTarget.select()}
                 />
-                <Button size="sm" variant="outline" onClick={handleCopyLink} className="h-8 px-2 shrink-0">
+                <Button aria-label={tA11y('a11y.copy')} size="sm" variant="outline" onClick={handleCopyLink} className="h-8 px-2 shrink-0">
                   <Copy className="h-3 w-3" />
                 </Button>
               </div>

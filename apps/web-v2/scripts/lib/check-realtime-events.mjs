@@ -42,6 +42,8 @@
  * déjà au-delà du seuil de 1000 lignes. `expect`, `setScheme`,
  * `AA_THRESHOLD` sont REMIS par l'hôte.
  */
+import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
+
 import { contrastOf } from './contrast.mjs';
 import { INSTANT } from './instant.mjs';
 import { pausedChronology } from './paused-chronology.mjs';
@@ -472,9 +474,13 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   );
 
   await chrono.advanceTo(listOrigin + 6500); // T+6,5 s — la frappe de Kwame PRIME sur l'aperçu.
-  await chrono.factBefore(listOrigin + 7500, async () => (await rowLine2Text(listPage, 'c-live')).includes('écrit'));
+  /* #7547 — la ligne 2 parle la langue d'INTERFACE résolue : l'attendu se lit
+     dans le catalogue partagé, jamais le mot français recopié. */
+  const pageLanguage = await listPage.evaluate(() => document.documentElement.lang || 'fr');
+  const typingLabel = conversationPreviewString(pageLanguage, 'typing.one', { name: 'Kwame Mensah' });
+  await chrono.factBefore(listOrigin + 7500, async () => (await rowLine2Text(listPage, 'c-live')).includes(typingLabel));
   expect(
-    (await rowLine2Text(listPage, 'c-live')).includes('écrit'),
+    (await rowLine2Text(listPage, 'c-live')).includes(typingLabel),
     `${label} liste, T+6,5 s : la frappe PRIME sur l'aperçu (Line2Kind)`,
   );
 
