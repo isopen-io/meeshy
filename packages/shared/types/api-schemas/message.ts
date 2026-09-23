@@ -532,6 +532,8 @@ export const messageMinimalSchema = {
     isViewOnce: { type: 'boolean', nullable: true, description: 'View-once message (disappears after view)' },
     isBlurred: { type: 'boolean', nullable: true, description: 'Content blurred until tap to reveal' },
     effectFlags: { type: 'number', nullable: true, description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    // #7594 — par LECTEUR : sans déclaration, fast-json-stringify le retire.
+    viewOnceConsumed: { type: 'boolean', nullable: true, description: 'Le lecteur a déjà ouvert ce message à vue unique (MessageStatusEntry.viewedOnceAt) — false pour l’expéditeur et hors vue unique' },
     // #7545 — la NATURE du dernier message, pour le composeur partagé
     // (`composeConversationPreview`, #7546). Mêmes champs que les clés plates
     // `lastMessage*` de `conversation:updated`.
@@ -575,6 +577,13 @@ export const messageMinimalSchema = {
           lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
           fileSize: { type: 'number', nullable: true, description: 'Taille en octets (#7545)' },
           thumbnailUrl: { type: 'string', nullable: true, description: 'Vignette (#7545)' },
+          // #7594 — le texte alternatif (phrase d'un sticker de texte), null
+          // quand le message ou la pièce est protégé ; et la protection de la
+          // PIÈCE elle-même, pour que le composeur dessine son placeholder.
+          alt: { type: 'string', nullable: true, description: 'Texte alternatif — null si absent ou si le message ou la pièce est protégé (#7594)' },
+          isViewOnce: { type: 'boolean', nullable: true, description: 'Pièce à vue unique (protection propre à la pièce)' },
+          isBlurred: { type: 'boolean', nullable: true, description: 'Pièce floutée (protection propre à la pièce)' },
+          effectFlags: { type: 'number', nullable: true, description: 'Bitfield d’effets de la pièce (vue unique / flou)' },
           // La JUMELLE de `messageAttachmentSchema.metadata` — celle de
           // l'APERÇU de conversation, pas celle du fil — et elle portait le
           // même objet NU, avec une description qui NOMMAIT
