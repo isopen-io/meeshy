@@ -115,6 +115,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
         <div className="flex items-center justify-center gap-4 p-4 border-t border-red-300 dark:border-red-800 bg-red-100/50 dark:bg-red-900/30">
           {/* Bouton Annuler (X) */}
           <Button
+            aria-label={t('cancel')}
             onClick={onCancel}
             disabled={isDeleting}
             size="lg"
@@ -126,6 +127,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
 
           {/* Bouton Supprimer (Check) - rouge */}
           <Button
+            aria-label={t('confirmDelete')}
             onClick={handleConfirm}
             disabled={isDeleting}
             size="lg"

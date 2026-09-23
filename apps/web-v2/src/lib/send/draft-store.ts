@@ -71,9 +71,17 @@ function isComposerDraft(value: unknown): value is ComposerDraft {
   return typeof raw.text === 'string' && typeof raw.language === 'string' && typeof raw.protection === 'object' && raw.protection !== null;
 }
 
+export type DraftListener = (scope: string, conversationId: string) => void;
+
 export type DraftStore = {
   readonly getDraft: (scope: string, conversationId: string) => ComposerDraft | null;
   readonly setDraft: (scope: string, conversationId: string, draft: ComposerDraft) => void;
+  /**
+   * LA LIGNE DE LISTE SUIT LE BROUILLON (#7547) — prévenu à chaque écriture
+   * ou effacement, avec la conversation touchée : un abonné relit ce qui le
+   * concerne et ignore le reste. Rend la fonction de désabonnement.
+   */
+  readonly subscribe: (listener: DraftListener) => () => void;
 };
 
 /**
@@ -83,6 +91,10 @@ export type DraftStore = {
  */
 export function createDraftStore(backend: StorageLike | null | undefined = resolveBrowserStorage()): DraftStore {
   const memory = new Map<string, string>();
+  const listeners = new Set<DraftListener>();
+  const notify = (scope: string, conversationId: string): void => {
+    for (const listener of listeners) listener(scope, conversationId);
+  };
 
   const read = (key: string): string | null => {
     if (memory.has(key)) return memory.get(key) ?? null;
@@ -124,14 +136,19 @@ export function createDraftStore(backend: StorageLike | null | undefined = resol
 
   const setDraft = (scope: string, conversationId: string, draft: ComposerDraft): void => {
     const key = draftKey(scope, conversationId);
-    if (isDraftEmpty(draft)) {
-      remove(key);
-      return;
-    }
-    write(key, JSON.stringify(draft));
+    if (isDraftEmpty(draft)) remove(key);
+    else write(key, JSON.stringify(draft));
+    notify(scope, conversationId);
   };
 
-  return { getDraft, setDraft };
+  const subscribe = (listener: DraftListener): (() => void) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  };
+
+  return { getDraft, setDraft, subscribe };
 }
 
 /** Le magasin de l'application — résout le `localStorage` réel une seule fois. */

@@ -66,6 +66,7 @@ interface ModerationStats {
 export default function AdminModerationPage() {
   const router = useRouter();
   const { t, locale } = useI18n('admin');
+  const { t: tA11y } = useI18n('common');
   const [actions, setActions] = useState<ModerationAction[]>([]);
   const [stats, setStats] = useState<ModerationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -502,6 +503,7 @@ export default function AdminModerationPage() {
                     <div className="flex-shrink-0 flex space-x-2">
                       {action.relatedReportId && (
                         <Button
+                          aria-label={tA11y('a11y.view')}
                           variant="outline"
                           size="sm"
                           onClick={() => router.push(`/admin/reports#${action.relatedReportId}`)}
@@ -523,6 +525,7 @@ export default function AdminModerationPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
+                    aria-label={tA11y('a11y.previousPage')}
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -531,6 +534,7 @@ export default function AdminModerationPage() {
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button
+                    aria-label={tA11y('a11y.nextPage')}
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}

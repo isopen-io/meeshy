@@ -60,6 +60,7 @@ export function ConversationDropdown({
 }: ConversationDropdownProps) {
   const router = useRouter();
   const { t, locale } = useI18n('contacts');
+  const { t: tA11y } = useI18n('common');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -146,6 +147,7 @@ export function ConversationDropdown({
         {/* Bouton dropdown */}
         <DropdownMenuTrigger asChild>
           <Button
+            aria-label={tA11y('a11y.openMenu')}
             size="sm"
             variant={variant}
             className={dropdownButtonClasses}

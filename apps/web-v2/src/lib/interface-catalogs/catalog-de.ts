@@ -971,6 +971,10 @@ const de = {
   'attachment.protected.video': 'Geschütztes Video',
   'attachment.protected.audio': 'Geschützte Sprachnachricht',
   'attachment.protected.file': 'Geschützter Anhang',
+  'attachment.kind.image': 'Foto',
+  'attachment.kind.video': 'Video',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'Datei',
 
 } satisfies InterfaceCatalog;
 

@@ -102,7 +102,9 @@ export function typistsOf(state: TypingState, conversationId: string, now: numbe
 
 /**
  * LE NOM À AFFICHER SUR CHAQUE LIGNE DE LISTE (#5793, ligne 2 de la Lentille)
- * — `conversationId → nom du PREMIER frappeur vivant qui n'est pas le lecteur`.
+ * — `conversationId → noms des frappeurs vivants qui ne sont pas le lecteur`,
+ * dans l'ordre d'arrivée : le composeur partagé en tire « X écrit… », « X et Y
+ * écrivent… » ou « N personnes écrivent… » (#7547).
  *
  * Rendu par CONVERSATION plutôt que par entrée : une rangée ne peut pas
  * appeler de hook (elle est rendue dans un `.map`), donc c'est l'ÉCRAN qui
@@ -116,11 +118,11 @@ export function typistNamesOf(
   state: Pick<TypingState, 'byConversation'>,
   viewerId: string,
   now: number,
-): Readonly<Record<string, string>> {
-  const names: Record<string, string> = {};
+): Readonly<Record<string, readonly string[]>> {
+  const names: Record<string, readonly string[]> = {};
   for (const [conversationId, entries] of Object.entries(state.byConversation)) {
-    const first = entries.find((e) => e.userId !== viewerId && e.expiresAt > now);
-    if (first !== undefined) names[conversationId] = first.displayName;
+    const alive = entries.filter((e) => e.userId !== viewerId && e.expiresAt > now).map((e) => e.displayName);
+    if (alive.length > 0) names[conversationId] = alive;
   }
   return names;
 }

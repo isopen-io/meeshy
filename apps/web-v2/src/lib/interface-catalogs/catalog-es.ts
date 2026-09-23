@@ -971,6 +971,10 @@ const es = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Audio protegido',
   'attachment.protected.file': 'Archivo protegido',
+  'attachment.kind.image': 'Foto',
+  'attachment.kind.video': 'Vídeo',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'Archivo',
 
 } satisfies InterfaceCatalog;
 

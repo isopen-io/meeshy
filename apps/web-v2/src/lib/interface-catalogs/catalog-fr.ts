@@ -1089,6 +1089,17 @@ const fr = {
   'attachment.protected.video': 'Vidéo protégée',
   'attachment.protected.audio': 'Vocal protégé',
   'attachment.protected.file': 'Pièce protégée',
+  /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
+     (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
+     COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).
+     DISTINCT d'`attachment.protected.*` juste au-dessus, qui qualifie le
+     SUBSTITUT d'une piece masquee — deux etats, donc deux jeux de mots : « un
+     second vocabulaire ferait dire deux choses differentes a l'oeil et a
+     l'oreille pour un meme etat ». */
+  'attachment.kind.image': 'Photo',
+  'attachment.kind.video': 'Vidéo',
+  'attachment.kind.audio': 'Audio',
+  'attachment.kind.file': 'Fichier',
 
 } as const;
 

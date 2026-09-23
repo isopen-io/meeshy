@@ -277,6 +277,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                             autoFocus
                           />
                           <Button
+                            aria-label={t('conversationDetails.save')}
                             size="sm"
                             variant="ghost"
                             className="h-6 w-6 p-0"
@@ -288,6 +289,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                             <Check className="h-3 w-3 text-green-600" />
                           </Button>
                           <Button
+                            aria-label={t('conversationDetails.cancel')}
                             size="sm"
                             variant="ghost"
                             className="h-6 w-6 p-0"
