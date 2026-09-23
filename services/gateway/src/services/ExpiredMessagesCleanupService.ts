@@ -11,6 +11,12 @@ import {
   type MessageMutationManager,
 } from '../socketio/broadcastMessageMutation';
 import { unsetOrNull } from '../utils/prisma-unset';
+import {
+  isLegacyViewOnceBurn,
+  purgeDueViewOnceContent,
+  reevaluateLegacyViewOnceBurn,
+} from './messaging/purgeViewOnceContent';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
 
@@ -102,6 +108,10 @@ interface ExpiredMessageRow {
   messageType: string | null;
   expiresAt: Date | null;
   attachments: Array<{ id: string; mimeType: string | null }>;
+  createdAt?: Date;
+  isViewOnce?: boolean | null;
+  ephemeralDuration?: number | null;
+  effectFlags?: number | null;
 }
 
 export interface ExpiredMessagesCleanupOptions {
@@ -149,8 +159,10 @@ export class ExpiredMessagesCleanupService {
     // service était arrêté est précisément celui qui a le plus dépassé son
     // échéance.
     void this.cleanup().catch((err) => log.warn('initial sweep failed', { err }));
+    void this.purgeViewOnce().catch((err) => log.warn('initial view-once purge failed', { err }));
     this.interval = setInterval(() => {
       void this.cleanup().catch((err) => log.warn('scheduled sweep failed', { err }));
+      void this.purgeViewOnce().catch((err) => log.warn('scheduled view-once purge failed', { err }));
     }, intervalMs);
     this.interval.unref?.();
     log.info('expired-messages sweep started', { intervalMs, batchSize: this.batchSize });
@@ -201,6 +213,12 @@ export class ExpiredMessagesCleanupService {
           messageType: true,
           expiresAt: true,
           attachments: { select: { id: true, mimeType: true } },
+          // #7578 — de quoi reconnaître une vue unique NON éphémère que l'ancien
+          // chemin avait programmée pour destruction par cette colonne.
+          createdAt: true,
+          isViewOnce: true,
+          ephemeralDuration: true,
+          effectFlags: true,
         },
         orderBy: { expiresAt: 'asc' },
         take: this.batchSize,
@@ -223,10 +241,25 @@ export class ExpiredMessagesCleanupService {
       this.suppressedRefusalLogs = 0;
     }
 
-    if (lapsed.length === 0) return { burned: 0 };
+    // #7578 — une vue unique NON éphémère n'a rien à faire dans ce balayage :
+    // seul l'ancien `scheduleViewOnceBurn` y posait `expiresAt`, dès la
+    // PREMIÈRE ouverture, auteur compris. La détruire effacerait la bulle pour
+    // tous et le message chez qui ne l'a jamais vu. On la réévalue : son
+    // échéance devient une échéance de PURGE, que `purgeViewOnce` exécute.
+    const legacyViewOnce = lapsed.filter((message) => this._isLegacyViewOnce(message));
+    for (const message of legacyViewOnce) {
+      await reevaluateLegacyViewOnceBurn(
+        this.prisma,
+        { ...message, createdAt: message.createdAt ?? now },
+        now,
+      ).catch((err) => log.warn('legacy view-once burn re-evaluation failed', { messageId: message.id, err }));
+    }
+    const toBurn = lapsed.filter((message) => !this._isLegacyViewOnce(message));
+
+    if (toBurn.length === 0) return { burned: 0 };
 
     let burned = 0;
-    for (const message of lapsed) {
+    for (const message of toBurn) {
       if (await this._burn(message, now, announcer)) burned += 1;
     }
 
@@ -285,6 +318,33 @@ export class ExpiredMessagesCleanupService {
       expiresAtType,
       expiresAtValue: JSON.stringify(expiresAt) ?? 'undefined',
     };
+  }
+
+  private _isLegacyViewOnce(message: ExpiredMessageRow): boolean {
+    return isLegacyViewOnceBurn({ ...message, createdAt: message.createdAt ?? new Date(0) });
+  }
+
+  /**
+   * #7578 — la purge du CONTENU des vues uniques dont l'échéance est passée
+   * (tous les destinataires ont ouvert, ou plafond de rétention). La bulle
+   * reste : ni `deletedAt`, ni `message:expired` — l'annonce est
+   * `message:view-once-purged`.
+   */
+  async purgeViewOnce(): Promise<{ purged: number }> {
+    return purgeDueViewOnceContent(this.prisma, {
+      now: this.now(),
+      attachmentRemover: this.attachmentRemover,
+      onError: (messageId, err) => log.warn('view-once purge failed', { messageId, err }),
+      announce: (purged) => {
+        this.resolveManager()
+          ?.getIO()
+          ?.to(ROOMS.conversation(purged.conversationId))
+          .emit(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, {
+            messageId: purged.id,
+            conversationId: purged.conversationId,
+          });
+      },
+    });
   }
 
   /** L'échéance est une DATE, et elle est passée. Tout le reste survit. */

@@ -1,15 +1,18 @@
 /**
  * Surface CONSOMMATION VUE-UNIQUE (issue #4284 — découpage de `messages.ts`,
  * 2945 lignes, en fichiers frères par responsabilité). Porte la route
- * `POST /conversations/:id/messages/:messageId/consume` (incrémente le
- * compteur de vues d'un message à vue unique et programme sa destruction une
- * fois le budget épuisé). Voir `messages.ts` pour le composeur
- * (`registerMessagesRoutes`), qui appelle `registerMessageViewOnceRoutes`.
+ * `POST /conversations/:id/messages/:messageId/consume`.
+ *
+ * #7578 — la consommation est PAR PERSONNE. Chaque participant ouvre une fois ;
+ * l'ouverture de l'AUTEUR s'enregistre (il ne rouvre pas) mais ne compte jamais ;
+ * la purge du CONTENU n'est programmée que lorsque TOUS les destinataires actifs
+ * ont ouvert (`computeViewOnceStates`). La bulle survit chez chacun.
  */
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
+import { computeViewOnceStates, type ViewOnceReaderState } from '../../services/messaging/viewOnceAudience';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -35,7 +38,7 @@ export function registerMessageViewOnceRoutes(
     Params: { id: string; messageId: string };
   }>('/conversations/:id/messages/:messageId/consume', {
     schema: {
-      description: 'Consume a view-once message (increment view count)',
+      description: 'Open a view-once message once, for the caller only (#7578)',
       tags: ['conversations', 'messages'],
       summary: 'Consume view-once message',
       params: {
@@ -57,7 +60,8 @@ export function registerMessageViewOnceRoutes(
                 messageId: { type: 'string' },
                 viewOnceCount: { type: 'number' },
                 maxViewOnceCount: { type: 'number' },
-                isFullyConsumed: { type: 'boolean' }
+                isFullyConsumed: { type: 'boolean' },
+                consumedByMe: { type: 'boolean' }
               }
             }
           }
@@ -119,57 +123,62 @@ export function registerMessageViewOnceRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
-      // Une unité par SPECTATEUR, pas par ouverture. Le compteur était
-      // incrémenté à chaque appel : un rejeu de la requête, ou un destinataire
-      // qui rouvre la photo, épuisait le budget des autres membres du groupe.
-      const { viewOnceCount: newViewOnceCount, firstConsumption } = await recordViewOnceConsumption(prisma, {
+      // Une unité par SPECTATEUR, pas par ouverture — et l'AUTEUR n'est pas un
+      // spectateur de l'audience (#7578) : son ouverture s'enregistre, pour
+      // qu'il ne rouvre pas, sans jamais compter pour la purge.
+      const byAuthor = message.senderId === viewParticipant.id;
+      const { firstConsumption } = await recordViewOnceConsumption(prisma, {
         messageId,
         conversationId: message.conversationId,
         participantId: viewParticipant.id,
         currentViewOnceCount: message.viewOnceCount ?? 0,
-        at: now
+        at: now,
+        countsTowardAudience: !byAuthor
       });
 
-      const maxViewOnceCount = message.maxViewOnceCount ?? 1;
-      const isFullyConsumed = newViewOnceCount >= maxViewOnceCount;
+      // L'audience se RELIT (qui, parmi les destinataires ACTIFS, a ouvert) :
+      // le compteur dénormalisé a pu être gonflé par une ouverture d'auteur
+      // avant ce lot. Une relecture qui échoue ne programme rien — on ne purge
+      // pas ce qu'on n'a pas su compter.
+      let audience: ViewOnceReaderState | undefined;
+      try {
+        audience = (await computeViewOnceStates(prisma, [message], viewParticipant.id)).get(messageId);
+      } catch (error) {
+        logger.warn(`[CONSUME] view-once audience read failed for ${messageId}`, error);
+      }
+      const viewOnceCount = audience?.openedCount ?? message.viewOnceCount ?? 0;
+      const recipientCount = audience?.recipientCount ?? 0;
+      const isFullyConsumed = audience?.isFullyConsumed ?? false;
 
-      logger.info(`[CONSUME] User ${userId} consumed view-once message ${messageId} (${newViewOnceCount}/${maxViewOnceCount})`);
+      logger.info(`[CONSUME] ${byAuthor ? 'Author' : 'Recipient'} ${userId} opened view-once message ${messageId} (${viewOnceCount}/${recipientCount} recipients)`);
 
-      // Le budget épuisé programme la destruction, il ne l'exécute pas : le
-      // spectateur qui vient de payer sa vue n'a pas encore fini de regarder.
-      // Le balayage éphémère détruira — c'est déjà son métier, fichiers et
-      // annonce `message:deleted` comprises. Sans cette ligne, `isFullyConsumed`
-      // ne masquait le média que dans l'UI des clients qui l'implémentent, et le
-      // clair restait servi indéfiniment à tous les autres.
-      //
-      // Non gardé par `firstConsumption` : la programmation est idempotente, et
-      // la rejouer répare aussi bien un échec d'écriture qu'un message épuisé
-      // AVANT la mise en service de ce chemin.
+      // La purge est programmée, pas exécutée : celui qui vient d'ouvrir n'a
+      // pas forcément fini de télécharger. Le balayage purge le CONTENU et garde
+      // la bulle. Idempotent (l'échéance ne se repousse jamais), donc rejoué
+      // sans garde : une tentative échouée se répare à la suivante.
       if (isFullyConsumed) {
-        // Best-effort. Échouer ici retirerait au spectateur le média dont la
-        // revendication est déjà dépensée — sans rendre pour autant le contenu
-        // plus sûr. La tentative suivante repose l'échéance.
         await scheduleViewOnceBurn(prisma, { messageId, at: now }).catch((error) =>
           logger.warn(`[CONSUME] view-once burn scheduling failed for ${messageId}`, error)
         );
       }
 
-      // Annoncé seulement quand l'état a CHANGÉ. Rediffuser un compte identique
-      // à toute la room n'apprend rien à personne et, sur un rejeu, ferait
-      // clignoter chez les pairs un événement qui ne correspond à aucune
-      // ouverture nouvelle.
+      // Annoncé seulement quand l'état a CHANGÉ. L'annonce dit QUI a ouvert
+      // (`userId`, `participantId`) : chaque client n'en tire « ouvert » que
+      // pour lui-même, jamais un retrait pour les autres.
       if (socketIOHandler && firstConsumption) {
         fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_CONSUMED, {
           messageId,
           conversationId,
           userId,
-          viewOnceCount: newViewOnceCount,
-          maxViewOnceCount,
+          participantId: viewParticipant.id,
+          byAuthor,
+          viewOnceCount,
+          maxViewOnceCount: recipientCount,
           isFullyConsumed
         });
       }
 
-      return sendSuccess(reply, { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed });
+      return sendSuccess(reply, { messageId, viewOnceCount, maxViewOnceCount: recipientCount, isFullyConsumed, consumedByMe: true });
     } catch (error) {
       logger.error('Error consuming view-once message', error);
       return sendInternalError(reply, 'Error consuming view-once message');

@@ -31,11 +31,19 @@ import {
 export interface EphemeralSendFields {
   readonly ephemeralDuration: number | null;
   readonly expiresAt: Date | null;
+  /**
+   * #7578 — le PLAFOND DE RÉTENTION d'une vue unique (#7450) : son contenu est
+   * purgé à cette échéance même si un destinataire ne l'ouvre jamais. Absent
+   * pour un message ordinaire. La grâce posée quand tous les destinataires ont
+   * ouvert (`scheduleViewOnceBurn`) ne peut que la RAPPROCHER.
+   */
+  readonly viewOnceBurnAt?: Date;
 }
 
 export function ephemeralSendFields(input: {
   readonly ephemeralDuration?: number | null;
   readonly expiresAt?: Date | null;
+  readonly isViewOnce?: boolean | null;
   readonly now: Date;
 }): EphemeralSendFields {
   const duration = normalizeEphemeralDuration({
@@ -43,18 +51,14 @@ export function ephemeralSendFields(input: {
     expiresAt: input.expiresAt,
     now: input.now,
   });
+  const retentionCap = new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
+  const viewOnce = input.isViewOnce === true ? { viewOnceBurnAt: retentionCap } : {};
 
-  // Pas d'éphémère : la colonne garde son AUTRE écrivain — la grâce de la vue
-  // unique (`scheduleViewOnceBurn`), qui la pose à la consommation. L'écraser
-  // ici aurait rallongé la vie d'un contenu que l'émetteur a voulu plus court.
   if (duration === null) {
-    return { ephemeralDuration: null, expiresAt: input.expiresAt ?? null };
+    return { ephemeralDuration: null, expiresAt: input.expiresAt ?? null, ...viewOnce };
   }
 
-  return {
-    ephemeralDuration: duration,
-    expiresAt: new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS),
-  };
+  return { ephemeralDuration: duration, expiresAt: retentionCap, ...viewOnce };
 }
 
 /**

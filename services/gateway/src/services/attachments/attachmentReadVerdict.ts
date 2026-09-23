@@ -51,7 +51,7 @@ export async function resolveAttachmentReadVerdict(
     where: { id: attachment.messageId },
     // `deletedAt`/`expiresAt` voyagent avec `conversationId` : la garde de
     // cycle de vie ne coûte aucun aller-retour de plus.
-    select: { conversationId: true, deletedAt: true, expiresAt: true }
+    select: { conversationId: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true }
   });
   if (!message) return 'forbidden';
 

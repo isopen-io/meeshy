@@ -846,8 +846,17 @@ model Message {
   isViewOnce       Boolean @default(false)
   /// Max unique viewers allowed (null = all members can view once each)
   maxViewOnceCount Int?
-  /// Number of unique users who have viewed (denormalized for performance)
+  /// Number of RECIPIENTS who have viewed — the author's own opening never
+  /// counts (#7578). Denormalized; readers serve the count recomputed from
+  /// `MessageStatusEntry.viewedOnceAt`.
   viewOnceCount    Int     @default(0)
+  /// When the CONTENT of a view-once message is purged (#7578): the grace after
+  /// every active recipient has opened it, or the retention cap (#7450) posed
+  /// at send. Unset once purged. The bubble survives — only the content goes.
+  viewOnceBurnAt   DateTime?
+  /// When the content was purged. The row stays, so every participant keeps
+  /// its « opened » bubble; null = content still held.
+  viewOnceBurnedAt DateTime?
   /// Content is blurred until user taps to reveal
   isBlurred        Boolean @default(false)
   /// Bitfield for message effects (lifecycle, appearance, persistent)
@@ -965,6 +974,7 @@ model Message {
   @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
   @@index([forwardedFromId]) // Forwarded messages lookup in broadcastNewMessage
   @@index([createdAt])
+  @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
 }
 
 /// Traduction d'un message

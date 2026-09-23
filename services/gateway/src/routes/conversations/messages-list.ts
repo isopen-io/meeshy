@@ -76,6 +76,7 @@ import {
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
 } from './ephemeralReaderDeadlines';
+import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -729,6 +730,19 @@ export function registerMessagesListRoute(
         // animée depuis `sticker`, le PNG joint n'est que le repli.
         const sticker = stickerFromMetadata(m.metadata);
         if (sticker) m.sticker = sticker;
+      }
+
+      // #7578 — une vue unique se sert PAR LECTEUR : qui l'a déjà ouverte ne
+      // reçoit plus que l'état (`consumedByMe`), ni texte, ni traduction, ni
+      // pièce jointe. Après le hissage ci-dessus, pour retenir aussi le lieu et
+      // le sticker. Aucune requête quand la page ne porte aucune vue unique.
+      const viewOnceStates = await loadViewOnceReaderStates(prisma, messages, currentParticipantId, (err) =>
+        logger.warn('view-once reader states failed — served closed', err)
+      );
+      if (viewOnceStates.size > 0) {
+        mappedMessages.forEach((m, index) => {
+          mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
+        });
       }
 
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
