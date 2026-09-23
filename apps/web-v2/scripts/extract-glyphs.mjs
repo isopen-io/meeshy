@@ -622,6 +622,9 @@ const SETTINGS = [
      porte deja, mais le tirer d'ici ferait entrer toute sa table dans le chunk
      des reglages pour un seul trace. */
   'bookmark-fill',
+  /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
+     `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
+  'star-fill',
 ];
 
 emit({
@@ -630,6 +633,29 @@ emit({
   constant: 'SETTINGS_GLYPHS',
   type: 'SettingsGlyphName',
   role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES MESSAGES FAVORIS (#7286) — miroir de
+ * `StarredMessagesView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `star.circle` (etat vide) | `star` |
+ * | `star.fill` (en favori — toucher pour retirer) | `star-fill` |
+ * | `bubble.left.and.bubble.right.fill` (la conversation d'une ligne) | `chats-circle` |
+ *
+ * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
+ * `/me/starred-messages`, jamais dans le socle.
+ */
+const STARRED = ['star', 'star-fill', 'chats-circle'];
+
+emit({
+  ids: STARRED,
+  output: join(HERE, '../src/components/glyphs-starred.ts'),
+  constant: 'STARRED_GLYPHS',
+  type: 'StarredGlyphName',
+  role: "LE JEU D'ECRAN des messages favoris (#7286) : charge avec la route /me/starred-messages, jamais dans le socle.",
 });
 
 /**

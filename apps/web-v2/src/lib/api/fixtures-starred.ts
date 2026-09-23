@@ -4,7 +4,7 @@ import type { StarredMessageItem } from '@meeshy/shared/types/message-star';
 import { BLURRED_WITNESS_ID, PROTECTION_CONVERSATION_ID, VIEWER_ID, conversationById, messagesOf } from './fixtures';
 import { CONVERSATION_ID, minutesAgo } from './fixtures-base';
 import type { ApiResult } from './http';
-import type { StarredMembership } from './starred-messages-cache';
+import type { StarredMembership, StarredPage } from './starred-messages-cache';
 import type { Message } from './types';
 
 /**
@@ -121,6 +121,20 @@ export function fixtureStarredRows(now: number = Date.now()): readonly StarredMe
       const line = rowOf(entry, now);
       return line === null ? [] : [line];
     });
+}
+
+/**
+ * UNE PAGE, comme `GET /me/starred-messages?limit=&cursor=` : le curseur est
+ * OPAQUE pour le client (ici un rang préfixé, jamais relu comme un nombre par
+ * l'écran), et `hasMore` dit s'il reste des lignes.
+ */
+export function fixtureStarredPage(params: { readonly limit: number; readonly cursor?: string }): StarredPage {
+  const rows = fixtureStarredRows();
+  const start = params.cursor?.startsWith('f:') === true ? Number.parseInt(params.cursor.slice(2), 10) || 0 : 0;
+  const items = rows.slice(start, start + params.limit);
+  const next = start + items.length;
+  const hasMore = next < rows.length;
+  return { items, pagination: { limit: params.limit, hasMore, nextCursor: hasMore ? `f:${next}` : null } };
 }
 
 export function fixtureStarredMembership(): StarredMembership {

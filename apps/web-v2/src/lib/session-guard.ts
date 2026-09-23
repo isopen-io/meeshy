@@ -48,6 +48,13 @@ export type RouteKey =
    * — la classe de défaut que les trois entrées voisines décrivent.
    */
   | 'bookmarks'
+  /**
+   * LES MESSAGES FAVORIS (#7286) — PRIVÉE : les trois routes
+   * `/me/starred-messages` refusent un contexte sans compte (le favori est
+   * réservé aux inscrits, décision serveur de #7377). Publique par défaut,
+   * elle peindrait un écran qui reçoit un 401 en silence.
+   */
+  | 'starredMessages'
   | 'stories'
   | 'storyCompose'
   | 'story'
@@ -214,6 +221,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
      `RouteKey` plus haut. */
   'bookmarks',
+  /* LES MESSAGES FAVORIS (#7286) — voir la raison écrite sur `RouteKey`. */
+  'starredMessages',
   'stories',
   'storyCompose',
   'story',
