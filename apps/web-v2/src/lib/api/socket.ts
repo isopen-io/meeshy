@@ -44,6 +44,7 @@ import {
   applyConversationUpdated,
   applyMessageAttachmentUpdated,
   applyMessageConsumed,
+  applyMessageViewOncePurged,
   applyMessageNew,
   applyMessageTranslation,
   applyReadStatusUpdated,
@@ -51,6 +52,7 @@ import {
   isConversationUnreadUpdated,
   isConversationUpdated,
   isMessageConsumedEvent,
+  isMessageViewOncePurgedEvent,
   isMessageTranslationEvent,
   isReadStatusUpdated,
   isSocketMessage,
@@ -400,6 +402,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageConsumed = (payload: unknown): void => {
     if (!isMessageConsumedEvent(payload)) return;
     applyMessageConsumed(deps.queryClient, payload, deps.viewerId());
+  };
+
+  /** `message:view-once-purged` (#7578, #7644) — le contenu est purgé, la bulle reste « déjà ouverte ». */
+  const onMessageViewOncePurged = (payload: unknown): void => {
+    if (!isMessageViewOncePurgedEvent(payload)) return;
+    applyMessageViewOncePurged(deps.queryClient, payload);
   };
 
 
@@ -821,6 +829,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
@@ -894,6 +903,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);

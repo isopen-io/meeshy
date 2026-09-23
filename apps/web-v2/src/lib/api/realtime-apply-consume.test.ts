@@ -4,7 +4,13 @@ import { describe, expect, test } from 'bun:test';
 import { localMessage, threadPages } from '@/test-support/thread-cache';
 
 import { messagesQueryKey } from './messages';
-import { applyMessageConsumed, isMessageConsumedEvent } from './realtime-apply';
+import {
+  applyMessageConsumed,
+  applyMessageViewOncePurged,
+  isMessageConsumedEvent,
+  isMessageViewOncePurgedEvent,
+} from './realtime-apply';
+import { sealedIfOpened } from './view-once-seal';
 
 /**
  * `message:consumed` (#7354, V6) — L'ÉVÉNEMENT PAIR DE `consumeViewOnceOptimistic`
@@ -124,5 +130,51 @@ describe('applyMessageConsumed — la vue unique se consomme PAR PERSONNE (#7578
     applyMessageConsumed(client, consumedBy(''), '');
 
     expect(cachedMessages(client)?.find((m) => m.id === 'm-1')).toBe(target);
+  });
+});
+
+describe('applyMessageViewOncePurged — le contenu part, la bulle reste (#7578, #7644)', () => {
+  test('la rangée perd son contenu, reste dans le fil, et se lit « déjà ouverte »', () => {
+    const client = new QueryClient();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    const other = localMessage({ id: 'm-2', conversationId: 'c-a', content: 'voisin' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([target, other]));
+
+    applyMessageViewOncePurged(client, { messageId: 'm-1', conversationId: 'c-a' });
+
+    const rows = cachedMessages(client) ?? [];
+    const row = rows.find((m) => m.id === 'm-1');
+    expect(rows.map((m) => m.id)).toEqual(['m-1', 'm-2']);
+    expect(row?.content).toBe('');
+    expect(row?.attachments).toEqual([]);
+    expect(row?.translations).toEqual([]);
+    expect(row?.isFullyConsumed).toBe(true);
+    expect(rows.find((m) => m.id === 'm-2')).toBe(other);
+  });
+
+  test('la purge ne prétend pas que JE l\'ai ouverte : consumedByMe reste ce qu\'il était', () => {
+    const client = new QueryClient();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, consumedByMe: false, content: 'secret' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+
+    applyMessageViewOncePurged(client, { messageId: 'm-1', conversationId: 'c-a' });
+
+    expect(cachedMessages(client)?.find((m) => m.id === 'm-1')?.consumedByMe).toBe(false);
+  });
+
+  test('garde de forme : une charge sans conversation est rejetée', () => {
+    expect(isMessageViewOncePurgedEvent({ messageId: 'm-1' })).toBe(false);
+    expect(isMessageViewOncePurgedEvent(null)).toBe(false);
+    expect(isMessageViewOncePurgedEvent({ messageId: 'm-1', conversationId: 'c-a' })).toBe(true);
+  });
+});
+
+describe('sealedIfOpened — une page qui arrive PURGÉE ne garde rien (#7644)', () => {
+  test('isFullyConsumed sans consumedByMe : le contenu résiduel est retiré au chargement', () => {
+    const row = sealedIfOpened(
+      localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, consumedByMe: false, isFullyConsumed: true, content: 'secret' }),
+    );
+    expect(row.content).toBe('');
+    expect(row.consumedByMe).toBe(false);
   });
 });
