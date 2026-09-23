@@ -22,6 +22,15 @@
  *    un effet comportemental ne s'affiche que sur un message non protégé.
  */
 
+import type {
+  ConversationActiveCall,
+  ConversationLastReaction,
+  LastMessageAttachmentSummary,
+  LastMessageCallSummary,
+  PreviewProtection,
+} from '../types/conversation-preview.js';
+import type { LastMessagePreviewAttachment } from '../types/socketio-events/conversation.js';
+import type { AttachmentProtectionFlags } from './attachment-protection.js';
 import { resolvePrismTranslation } from './conversation-helpers.js';
 import { formatClock } from './duration-format.js';
 import { ephemeralDeadline } from './ephemeral-deadline.js';
@@ -95,31 +104,25 @@ type Instant = Date | string | number;
 
 /**
  * La première pièce jointe, avec ses détails TELS QU'ILS EXISTENT — chacun
- * n'apparaît dans la ligne que s'il est renseigné. `duration` est en
- * MILLISECONDES, comme `MessageAttachment.duration`.
+ * n'apparaît dans la ligne que s'il est renseigné. Les champs de détail sont
+ * ceux du contrat de fil (`LastMessagePreviewAttachment`, #7545) ; `duration`
+ * est en MILLISECONDES, comme `MessageAttachment.duration`. Les trois drapeaux
+ * de protection sont ceux de `AttachmentProtectionFlags`.
  */
-export type ConversationPreviewAttachment = {
-  readonly mimeType?: string | null;
-  readonly originalName?: string | null;
-  readonly fileSize?: number | null;
-  readonly duration?: number | null;
-  readonly width?: number | null;
-  readonly height?: number | null;
-  readonly pageCount?: number | null;
-  readonly isViewOnce?: boolean | null;
-  readonly isBlurred?: boolean | null;
-  readonly effectFlags?: number | null;
-};
+export type ConversationPreviewAttachment = Partial<
+  Pick<LastMessagePreviewAttachment, 'mimeType' | 'originalName' | 'fileSize' | 'duration' | 'width' | 'height' | 'pageCount'>
+> & AttachmentProtectionFlags;
 
-export type ConversationPreviewAttachmentSummary = {
-  readonly count: number;
-  readonly kinds: Readonly<Record<string, number>>;
-  readonly totalSize?: number | null;
-};
-
+/**
+ * Le dernier message tel que le client le tient — projection de `lastMessage`
+ * (REST) ou des clés plates `lastMessage*` de `conversation:updated` (socket),
+ * dont les types viennent du contrat #7545 (`types/conversation-preview.ts`).
+ */
 export type ConversationPreviewMessage = {
   readonly id: string;
+  /** `Participant.id` ou `User.id` de l'expéditeur — l'un des deux suffit à reconnaître « Vous ». */
   readonly senderId: string | null;
+  readonly senderUserId?: string | null;
   readonly senderName?: string | null;
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
@@ -133,30 +136,23 @@ export type ConversationPreviewMessage = {
   readonly isEncrypted?: boolean | null;
   readonly isViewOnce?: boolean | null;
   readonly isBlurred?: boolean | null;
+  /** Le lecteur a déjà ouvert ce message à vue unique. */
   readonly viewOnceConsumed?: boolean | null;
   readonly isForwarded?: boolean | null;
+  /**
+   * `LastMessageSystemEvent`, élargi à une clé quelconque : une clé que ce
+   * composeur ne connaît pas encore se rend en `system.generic`, jamais en texte brut.
+   */
   readonly systemEvent?: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> | null } | null;
-  readonly callSummary?: {
-    readonly kind: 'audio' | 'video';
-    readonly outcome: 'completed' | 'missed' | 'declined';
-    readonly durationSec?: number | null;
-  } | null;
+  readonly callSummary?: LastMessageCallSummary | null;
+  /** Lieu partagé (`location` hissé de `metadata.location`). */
+  readonly location?: { readonly name?: string | null; readonly address?: string | null } | null;
   readonly attachment?: ConversationPreviewAttachment | null;
-  readonly attachmentSummary?: ConversationPreviewAttachmentSummary | null;
-};
-
-export type ConversationPreviewReaction = {
-  readonly emoji: string;
-  readonly reactorId: string;
-  readonly reactorName?: string | null;
-  readonly messageId: string;
-  readonly targetSenderId?: string | null;
-  /** Déjà protégé par le serveur : placeholder pour un message protégé. */
-  readonly excerpt?: string | null;
-  readonly createdAt: Instant;
+  readonly attachmentSummary?: LastMessageAttachmentSummary | null;
 };
 
 export type ConversationPreviewInput = {
+  /** `User.id` du lecteur. */
   readonly viewerId: string;
   /** Langue de CADRAGE : celle des libellés. */
   readonly language: string;
@@ -165,16 +161,11 @@ export type ConversationPreviewInput = {
   readonly now: Instant;
   /** Première réception locale du dernier message — le départ du décompte d'un éphémère (#7451). */
   readonly receivedAt?: Instant | null;
-  readonly activeCall?: {
-    readonly id?: string;
-    readonly kind: 'audio' | 'video';
-    readonly participantCount: number;
-    readonly startedAt?: Instant | null;
-  } | null;
+  readonly activeCall?: ConversationActiveCall | null;
   /** Noms des personnes qui écrivent, lecteur exclu. */
   readonly typing?: readonly string[] | null;
   readonly draft?: string | null;
-  readonly lastReaction?: ConversationPreviewReaction | null;
+  readonly lastReaction?: ConversationLastReaction | null;
   readonly lastMessage?: ConversationPreviewMessage | null;
 };
 
@@ -214,7 +205,7 @@ export function composeConversationPreview(input: ConversationPreviewInput): Con
 
   const reaction = input.lastReaction ?? null;
   if (reaction && (!lastMessage || msOf(reaction.createdAt) > msOf(lastMessage.createdAt))) {
-    return reactionLine(reaction, input.viewerId, str);
+    return reactionLine(reaction, input, str);
   }
 
   if (!lastMessage) return preview({ kind: 'empty', segments: [label(str('conversation.empty'))] });
@@ -222,7 +213,7 @@ export function composeConversationPreview(input: ConversationPreviewInput): Con
   return messageLine(lastMessage, input, str);
 }
 
-function activeCallLine(call: NonNullable<ConversationPreviewInput['activeCall']>, str: Str): ConversationPreview {
+function activeCallLine(call: ConversationActiveCall, str: Str): ConversationPreview {
   const count = Math.max(0, Math.floor(call.participantCount));
   return preview({
     kind: 'active-call',
@@ -246,10 +237,34 @@ function typingLine(names: readonly string[], str: Str): ConversationPreview {
   return preview({ kind: 'typing', tone: 'accent', segments: [label(text)] });
 }
 
-function reactionLine(reaction: ConversationPreviewReaction, viewerId: string, str: Str): ConversationPreview {
-  const isSelf = reaction.reactorId === viewerId;
+const PROTECTION_PLACEHOLDER: Readonly<Record<Exclude<PreviewProtection, 'ephemeral'>, ConversationPreviewStringKey>> = {
+  expired: 'protection.expired',
+  'view-once': 'protection.viewOnce',
+  blurred: 'protection.hidden',
+  encrypted: 'protection.encrypted',
+};
+
+/**
+ * L'extrait du message réagi : servi par le Prisme comme un contenu, ou
+ * remplacé par le placeholder de sa protection — le serveur l'a déjà retenu
+ * (`excerptProtection`), le composeur ne fait que le nommer.
+ */
+function reactionExcerpt(reaction: ConversationLastReaction, input: ConversationPreviewInput, str: Str): string | null {
+  const protection = reaction.excerptProtection;
+  if (protection && protection !== 'ephemeral') return str(PROTECTION_PLACEHOLDER[protection]);
+  if (!hasText(reaction.excerpt)) return null;
+  const served = resolvePrismTranslation({
+    translations: reaction.excerptTranslations,
+    originalLanguage: reaction.excerptOriginalLanguage,
+    preferredLanguages: input.preferredLanguages,
+  });
+  return (served?.text ?? reaction.excerpt).trim();
+}
+
+function reactionLine(reaction: ConversationLastReaction, input: ConversationPreviewInput, str: Str): ConversationPreview {
+  const isSelf = reaction.reactorUserId !== null && reaction.reactorUserId === input.viewerId;
   const actor = hasText(reaction.reactorName) ? reaction.reactorName : str('message.author.unknown');
-  const excerpt = hasText(reaction.excerpt) ? reaction.excerpt.trim() : null;
+  const excerpt = reactionExcerpt(reaction, input, str);
   const key: ConversationPreviewStringKey = isSelf
     ? excerpt ? 'reaction.self' : 'reaction.self.bare'
     : excerpt ? 'reaction.member' : 'reaction.member.bare';
@@ -259,8 +274,13 @@ function reactionLine(reaction: ConversationPreviewReaction, viewerId: string, s
   });
 }
 
+function isMine(message: ConversationPreviewMessage, viewerId: string): boolean {
+  return (message.senderUserId != null && message.senderUserId === viewerId)
+    || (message.senderId !== null && message.senderId === viewerId);
+}
+
 function authorOf(message: ConversationPreviewMessage, viewerId: string, str: Str): PreviewAuthor {
-  if (message.senderId !== null && message.senderId === viewerId) {
+  if (isMine(message, viewerId)) {
     return { kind: 'self', label: str('message.author.self') };
   }
   return {
@@ -271,7 +291,7 @@ function authorOf(message: ConversationPreviewMessage, viewerId: string, str: St
 }
 
 function messageLine(message: ConversationPreviewMessage, input: ConversationPreviewInput, str: Str): ConversationPreview {
-  if (message.callSummary) return callLine(message, input.viewerId, str);
+  if (message.callSummary) return callLine(message.callSummary, input.viewerId, str);
   if (message.messageType === 'system') return systemLine(message, input, str);
 
   const author = authorOf(message, input.viewerId, str);
@@ -337,7 +357,7 @@ function protectionOf(message: ConversationPreviewMessage, input: ConversationPr
       ephemeralDuration: message.ephemeralDuration ?? null,
       servedExpiresAt: message.expiresAt ?? null,
       receivedAtMs: input.receivedAt != null ? msOf(input.receivedAt) : null,
-      isMine: message.senderId === input.viewerId,
+      isMine: isMine(message, input.viewerId),
     })
     : { state: 'none' as const };
 
@@ -421,7 +441,10 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
   const count = summary?.count ?? (attachment ? 1 : 0);
 
   if (message.messageType === 'location') {
-    const place = hasText(message.content) ? [label(message.content.trim())] : [];
+    const place = [message.location?.name, message.location?.address, message.content]
+      .filter(hasText)
+      .slice(0, 1)
+      .map((name) => label(name.trim()));
     const segments = [label(str('attachment.location')), ...place];
     return { icon: 'location', segments, labelled: segments };
   }
@@ -494,41 +517,58 @@ function effectSegments(effects: readonly BehavioralEffect[], str: Str): readonl
   return [];
 }
 
-function callLine(message: ConversationPreviewMessage, viewerId: string, str: Str): ConversationPreview {
-  const call = message.callSummary;
-  const kind = call?.kind === 'video' ? 'video' : 'audio';
-  const direction = message.senderId === viewerId ? 'outgoing' : 'incoming';
-  const icon: PreviewIcon = kind === 'video' ? 'call-video' : 'call-audio';
-  if (call?.outcome === 'missed') {
-    return preview({ kind: 'call', tone: 'danger', icon, direction, segments: [label(str('call.missed'))] });
+/**
+ * Un appel terminé, localisé depuis sa synthèse (`LastMessageCallSummary`),
+ * jamais depuis le texte français stocké. La flèche vient de l'appelant :
+ * `initiatorId` est un `User.id`, comparé au lecteur.
+ */
+function callLine(call: LastMessageCallSummary, viewerId: string, str: Str): ConversationPreview {
+  const outgoing = call.initiatorId === viewerId;
+  const direction = outgoing ? 'outgoing' : 'incoming';
+  const icon: PreviewIcon = call.kind === 'video' ? 'call-video' : 'call-audio';
+  const line = (tone: PreviewTone, segments: readonly PreviewSegment[]) =>
+    preview({ kind: 'call', tone, icon, direction, segments });
+
+  switch (call.outcome) {
+    case 'ongoing':
+      return line('success', [label(str('call.active'))]);
+    case 'missed':
+      if (!outgoing) return line('danger', [label(str('call.missed'))]);
+      return line('default', [label(str(call.endedByInitiator ? 'call.cancelled' : 'call.unanswered'))]);
+    case 'rejected':
+      return line('default', [label(str('call.declined'))]);
+    case 'failed':
+      return line('default', [label(str('call.failed'))]);
+    case 'completed': {
+      const duration = positive(call.durationSec) ? [label(formatClock(Math.round(call.durationSec)))] : [];
+      return line('default', [label(str(call.kind === 'video' ? 'call.video' : 'call.audio')), ...duration]);
+    }
   }
-  if (call?.outcome === 'declined') {
-    return preview({ kind: 'call', icon, direction, segments: [label(str('call.declined'))] });
-  }
-  const duration = positive(call?.durationSec) ? [label(formatClock(Math.round(call.durationSec)))] : [];
-  return preview({
-    kind: 'call',
-    icon,
-    direction,
-    segments: [label(str(kind === 'video' ? 'call.video' : 'call.audio')), ...duration],
-  });
 }
 
-const SYSTEM_KEYS: Readonly<Record<string, ConversationPreviewStringKey>> = {
-  'member.added': 'system.member.added',
-  'member.removed': 'system.member.removed',
-  'member.left': 'system.member.left',
-  'member.joined': 'system.member.joined',
-  'conversation.renamed': 'system.conversation.renamed',
-  'conversation.image': 'system.conversation.image',
+/**
+ * Les clés d'événement système que ce composeur sait dire. Les deux premières
+ * sont celles que le serveur pose aujourd'hui (`SystemEventKey`, #7545) ; les
+ * suivantes sont celles de la matrice (#7546) que le serveur posera — une clé
+ * absente d'ici se rend en `system.generic`, jamais en texte brut.
+ */
+const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, string | number>>) => ConversationPreviewStringKey>> = {
+  'system.member-joined': () => 'system.member.joined',
+  'system.encryption-enabled': (params) => (params['mode'] === 'e2ee' ? 'system.encryption.e2ee' : 'system.encryption.enabled'),
+  'system.member-added': () => 'system.member.added',
+  'system.member-removed': () => 'system.member.removed',
+  'system.member-left': () => 'system.member.left',
+  'system.conversation-renamed': () => 'system.conversation.renamed',
+  'system.conversation-image': () => 'system.conversation.image',
 };
 
 function systemLine(message: ConversationPreviewMessage, input: ConversationPreviewInput, str: Str): ConversationPreview {
   const event = message.systemEvent ?? null;
   if (event) {
-    const key = SYSTEM_KEYS[event.key] ?? 'system.generic';
+    const raw = event.params ?? {};
+    const key = SYSTEM_KEYS[event.key]?.(raw) ?? 'system.generic';
     const someone = str('message.author.unknown');
-    const params = { actor: someone, target: someone, ...(event.params ?? {}) };
+    const params = { actor: raw['name'] ?? someone, target: someone, ...raw };
     return preview({ kind: 'system', tone: 'system', segments: [label(str(key, params))] });
   }
   const text = servedText(message, input);

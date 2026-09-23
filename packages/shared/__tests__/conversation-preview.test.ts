@@ -171,16 +171,33 @@ describe('cas limites du composeur', () => {
     createdAt: new Date('2026-09-23T09:59:00.000Z'),
     ...overrides,
   });
+  const reaction = (overrides: Partial<NonNullable<ConversationPreviewInput['lastReaction']>> = {}) => ({
+    emoji: '❤️',
+    reactorId: 'p-alice',
+    reactorUserId: 'u-alice',
+    reactorName: 'Alice',
+    messageId: 'm-1',
+    targetSenderId: 'p-me',
+    targetSenderUserId: 'u-me',
+    excerpt: null,
+    excerptOriginalLanguage: null,
+    excerptTranslations: null,
+    excerptProtection: null,
+    createdAt: '2026-09-23T09:59:30.000Z',
+    ...overrides,
+  });
   const text = (input: ConversationPreviewInput) =>
     renderConversationPreviewText(composeConversationPreview(input), input.language);
 
   it('accepte des instants en Date, en ISO ou en millisecondes', () => {
-    const reaction = { emoji: '❤️', reactorId: 'u-alice', reactorName: 'Alice', messageId: 'm-1', createdAt: Date.parse('2026-09-23T09:59:30.000Z') };
-    expect(text(baseInput({ lastReaction: reaction, lastMessage: message({ content: 'Bonjour' }) }))).toBe('Alice a réagi ❤️');
+    expect(text(baseInput({ now: Date.parse('2026-09-23T10:00:00.000Z'), lastReaction: reaction(), lastMessage: message({ content: 'Bonjour' }) })))
+      .toBe('Alice a réagi ❤️');
+    expect(text(baseInput({ now: '2026-09-23T10:00:00.000Z', lastMessage: message({ content: 'Bonjour' }) }))).toBe('Alice : Bonjour');
   });
 
   it('un appel en cours sans participant compté ne dit pas « 0 participant »', () => {
-    expect(text(baseInput({ activeCall: { kind: 'audio', participantCount: 0 } }))).toBe('📞 Appel en cours');
+    expect(text(baseInput({ activeCall: { id: 'c-1', kind: 'audio', participantCount: 0, startedAt: '2026-09-23T09:58:00.000Z' } })))
+      .toBe('📞 Appel en cours');
   });
 
   it('une frappe ignore les noms vides', () => {
@@ -193,11 +210,18 @@ describe('cas limites du composeur', () => {
   });
 
   it('une réaction d’un réacteur sans nom, et ma réaction sans extrait', () => {
-    const at = '2026-09-23T09:59:30.000Z';
-    expect(text(baseInput({ lastReaction: { emoji: '🔥', reactorId: 'u-x', reactorName: null, messageId: 'm-1', excerpt: 'Hé', createdAt: at } })))
+    expect(text(baseInput({ lastReaction: reaction({ emoji: '🔥', reactorId: 'p-x', reactorUserId: null, reactorName: '', excerpt: 'Hé' }) })))
       .toBe('Quelqu’un a réagi 🔥 à « Hé »');
-    expect(text(baseInput({ lastReaction: { emoji: '👍', reactorId: 'u-me', messageId: 'm-1', createdAt: at } })))
+    expect(text(baseInput({ lastReaction: reaction({ emoji: '👍', reactorId: 'p-me', reactorUserId: 'u-me' }) })))
       .toBe('Vous avez réagi 👍');
+  });
+
+  it('« Vous » se reconnaît par le User.id quand senderId porte un Participant.id', () => {
+    expect(text(baseInput({ lastMessage: message({ senderId: 'p-me', senderUserId: 'u-me', content: 'Salut' }) }))).toBe('Vous : Salut');
+  });
+
+  it('un extrait réagi éphémère reste lisible — l’éphémère ne retient rien', () => {
+    expect(text(baseInput({ lastReaction: reaction({ excerpt: 'Vite', excerptProtection: 'ephemeral' }) }))).toBe('Alice a réagi ❤️ à « Vite »');
   });
 
   it('un expéditeur inconnu (anonyme purgé) reste un membre, sans identifiant', () => {
@@ -220,7 +244,7 @@ describe('cas limites du composeur', () => {
   });
 
   it('un événement système sans paramètres nomme « Quelqu’un », et un système vide reste lisible', () => {
-    expect(text(baseInput({ lastMessage: message({ messageType: 'system', systemEvent: { key: 'member.left', params: null } }) })))
+    expect(text(baseInput({ lastMessage: message({ messageType: 'system', systemEvent: { key: 'system.member-left', params: null } }) })))
       .toBe('Quelqu’un a quitté la conversation');
     expect(text(baseInput({ lastMessage: message({ messageType: 'system', content: '' }) }))).toBe('Conversation mise à jour');
   });

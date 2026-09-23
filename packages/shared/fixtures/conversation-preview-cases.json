@@ -829,7 +829,11 @@
           "createdAt": "2026-09-23T09:59:00.000Z",
           "messageType": "location",
           "originalLanguage": "fr",
-          "content": "Place de la Bastille"
+          "content": "",
+          "location": {
+            "name": "Place de la Bastille",
+            "address": "75011 Paris"
+          }
         }
       },
       "expected": {
@@ -853,6 +857,53 @@
         ]
       },
       "text": "Alice : 📍 Position · Place de la Bastille"
+    },
+    {
+      "id": "location-address-only",
+      "matrix": "Position — adresse seule",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "location",
+          "originalLanguage": "fr",
+          "content": "",
+          "location": {
+            "name": null,
+            "address": "75011 Paris"
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "location",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Position"
+          },
+          {
+            "kind": "label",
+            "text": "75011 Paris"
+          }
+        ]
+      },
+      "text": "Alice : 📍 Position · 75011 Paris"
     },
     {
       "id": "location-without-place",
@@ -2082,9 +2133,12 @@
           "originalLanguage": "fr",
           "content": "Appel audio · 04:12",
           "callSummary": {
+            "callId": "call-1",
             "kind": "audio",
             "outcome": "completed",
-            "durationSec": 252
+            "durationSec": 252,
+            "initiatorId": "u-alice",
+            "endedByInitiator": false
           }
         }
       },
@@ -2127,9 +2181,12 @@
           "originalLanguage": "fr",
           "content": "Appel vidéo",
           "callSummary": {
+            "callId": "call-1",
             "kind": "video",
             "outcome": "completed",
-            "durationSec": null
+            "durationSec": 0,
+            "initiatorId": "u-me",
+            "endedByInitiator": false
           }
         }
       },
@@ -2168,9 +2225,12 @@
           "originalLanguage": "fr",
           "content": "Appel audio manqué",
           "callSummary": {
+            "callId": "call-1",
             "kind": "audio",
             "outcome": "missed",
-            "durationSec": 0
+            "durationSec": 0,
+            "initiatorId": "u-alice",
+            "endedByInitiator": false
           }
         }
       },
@@ -2209,9 +2269,12 @@
           "originalLanguage": "fr",
           "content": "Appel refusé",
           "callSummary": {
+            "callId": "call-1",
             "kind": "video",
-            "outcome": "declined",
-            "durationSec": 0
+            "outcome": "rejected",
+            "durationSec": 0,
+            "initiatorId": "u-me",
+            "endedByInitiator": false
           }
         }
       },
@@ -2229,6 +2292,304 @@
         ]
       },
       "text": "📹 Appel refusé"
+    },
+    {
+      "id": "call-cancelled-by-me",
+      "matrix": "Appel manqué — annulé par moi, l’appelant",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio manqué",
+          "callSummary": {
+            "callId": "call-1",
+            "kind": "audio",
+            "outcome": "missed",
+            "durationSec": 0,
+            "initiatorId": "u-me",
+            "endedByInitiator": true
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "call-audio",
+        "author": null,
+        "kind": "call",
+        "direction": "outgoing",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Appel annulé"
+          }
+        ]
+      },
+      "text": "📞 Appel annulé"
+    },
+    {
+      "id": "call-unanswered",
+      "matrix": "Appel manqué — le mien, resté sans réponse",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel vidéo manqué",
+          "callSummary": {
+            "callId": "call-1",
+            "kind": "video",
+            "outcome": "missed",
+            "durationSec": 0,
+            "initiatorId": "u-me",
+            "endedByInitiator": false
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "call-video",
+        "author": null,
+        "kind": "call",
+        "direction": "outgoing",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Appel sans réponse"
+          }
+        ]
+      },
+      "text": "📹 Appel sans réponse"
+    },
+    {
+      "id": "call-failed",
+      "matrix": "Appel interrompu",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio interrompu",
+          "callSummary": {
+            "callId": "call-1",
+            "kind": "audio",
+            "outcome": "failed",
+            "durationSec": 31,
+            "initiatorId": "u-alice",
+            "endedByInitiator": false
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "call-audio",
+        "author": null,
+        "kind": "call",
+        "direction": "incoming",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Appel interrompu"
+          }
+        ]
+      },
+      "text": "📞 Appel interrompu"
+    },
+    {
+      "id": "call-ongoing-summary",
+      "matrix": "Synthèse d’appel encore ouverte",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Appel audio en cours",
+          "callSummary": {
+            "callId": "call-1",
+            "kind": "audio",
+            "outcome": "ongoing",
+            "durationSec": 0,
+            "initiatorId": "u-alice",
+            "endedByInitiator": false
+          }
+        }
+      },
+      "expected": {
+        "tone": "success",
+        "icon": "call-audio",
+        "author": null,
+        "kind": "call",
+        "direction": "incoming",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Appel en cours"
+          }
+        ]
+      },
+      "text": "📞 Appel en cours"
+    },
+    {
+      "id": "system-member-joined",
+      "matrix": "Système — arrivée (clé serveur)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Bob a rejoint",
+          "systemEvent": {
+            "key": "system.member-joined",
+            "params": {
+              "name": "Bob"
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Bob a rejoint la conversation"
+          }
+        ]
+      },
+      "text": "Bob a rejoint la conversation"
+    },
+    {
+      "id": "system-encryption-e2ee",
+      "matrix": "Système — chiffrement activé (clé serveur)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Chiffrement activé",
+          "systemEvent": {
+            "key": "system.encryption-enabled",
+            "params": {
+              "mode": "e2ee"
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Chiffrement de bout en bout activé"
+          }
+        ]
+      },
+      "text": "Chiffrement de bout en bout activé"
+    },
+    {
+      "id": "system-encryption-server",
+      "matrix": "Système — chiffrement serveur",
+      "input": {
+        "viewerId": "u-me",
+        "language": "en",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "system",
+          "originalLanguage": "fr",
+          "content": "Chiffrement activé",
+          "systemEvent": {
+            "key": "system.encryption-enabled",
+            "params": {
+              "mode": "server"
+            }
+          }
+        }
+      },
+      "expected": {
+        "tone": "system",
+        "icon": null,
+        "author": null,
+        "kind": "system",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Encryption enabled"
+          }
+        ]
+      },
+      "text": "Encryption enabled"
     },
     {
       "id": "system-member-added",
@@ -2250,7 +2611,7 @@
           "originalLanguage": "fr",
           "content": "Alice a ajouté Bob",
           "systemEvent": {
-            "key": "member.added",
+            "key": "system.member-added",
             "params": {
               "actor": "Alice",
               "target": "Bob"
@@ -2292,7 +2653,7 @@
           "originalLanguage": "fr",
           "content": "x",
           "systemEvent": {
-            "key": "conversation.renamed",
+            "key": "system.conversation-renamed",
             "params": {}
           }
         }
@@ -2331,7 +2692,7 @@
           "originalLanguage": "fr",
           "content": "x",
           "systemEvent": {
-            "key": "conversation.something-new",
+            "key": "system.something-new",
             "params": {}
           }
         }
@@ -2365,7 +2726,7 @@
           "id": "c-2",
           "kind": "video",
           "participantCount": 1,
-          "startedAt": null
+          "startedAt": "2026-09-23T09:59:55.000Z"
         }
       },
       "expected": {
@@ -2632,13 +2993,18 @@
         "now": "2026-09-23T10:00:00.000Z",
         "draft": "Je pensais que…",
         "lastReaction": {
-          "emoji": "❤️",
-          "reactorId": "u-alice",
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
           "reactorName": "Alice",
           "messageId": "m-1",
-          "targetSenderId": "u-me",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
           "excerpt": "Bonjour…",
-          "createdAt": "2026-09-23T09:59:59.000Z"
+          "excerptOriginalLanguage": "fr",
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "❤️"
         },
         "lastMessage": {
           "id": "m-1",
@@ -2680,13 +3046,18 @@
         ],
         "now": "2026-09-23T10:00:00.000Z",
         "lastReaction": {
-          "emoji": "❤️",
-          "reactorId": "u-alice",
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
           "reactorName": "Alice",
           "messageId": "m-1",
-          "targetSenderId": "u-me",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
           "excerpt": "Bonjour…",
-          "createdAt": "2026-09-23T09:59:59.000Z"
+          "excerptOriginalLanguage": "fr",
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "❤️"
         },
         "lastMessage": {
           "id": "m-1",
@@ -2724,13 +3095,18 @@
         ],
         "now": "2026-09-23T10:00:00.000Z",
         "lastReaction": {
-          "emoji": "👍",
-          "reactorId": "u-me",
+          "reactorId": "p-me",
+          "reactorUserId": "u-me",
           "reactorName": "Moi",
           "messageId": "m-1",
-          "targetSenderId": "u-alice",
+          "targetSenderId": "p-alice",
+          "targetSenderUserId": "u-alice",
           "excerpt": "On se voit demain",
-          "createdAt": "2026-09-23T09:59:59.000Z"
+          "excerptOriginalLanguage": "fr",
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "👍"
         },
         "lastMessage": {
           "id": "m-1",
@@ -2768,13 +3144,18 @@
         ],
         "now": "2026-09-23T10:00:00.000Z",
         "lastReaction": {
-          "emoji": "😂",
-          "reactorId": "u-alice",
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
           "reactorName": "Alice",
           "messageId": "m-1",
-          "targetSenderId": "u-me",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
           "excerpt": null,
-          "createdAt": "2026-09-23T09:59:59.000Z"
+          "excerptOriginalLanguage": null,
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "😂"
         },
         "lastMessage": {
           "id": "m-1",
@@ -2803,6 +3184,108 @@
       "text": "Alice a réagi 😂"
     },
     {
+      "id": "reaction-excerpt-prism-rank-2",
+      "matrix": "Priorité 4 — l’extrait réagi passe par le Prisme (rang 2)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "de",
+          "fr"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": "See you tomorrow",
+          "excerptOriginalLanguage": "en",
+          "excerptTranslations": {
+            "fr": "À demain",
+            "es": "Hasta mañana"
+          },
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "❤️"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "en",
+          "content": "See you tomorrow"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Alice a réagi ❤️ à « À demain »"
+          }
+        ]
+      },
+      "text": "Alice a réagi ❤️ à « À demain »"
+    },
+    {
+      "id": "reaction-excerpt-protected",
+      "matrix": "Priorité 4 — l’extrait d’un message protégé est son placeholder",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": null,
+          "excerptOriginalLanguage": null,
+          "excerptTranslations": null,
+          "excerptProtection": "view-once",
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "😮"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Le code",
+          "isViewOnce": true
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Alice a réagi 😮 à « Vue unique »"
+          }
+        ]
+      },
+      "text": "Alice a réagi 😮 à « Vue unique »"
+    },
+    {
       "id": "reaction-older-than-message",
       "matrix": "Priorité 4 — réaction plus ancienne que le message",
       "input": {
@@ -2814,13 +3297,18 @@
         ],
         "now": "2026-09-23T10:00:00.000Z",
         "lastReaction": {
-          "emoji": "❤️",
-          "reactorId": "u-alice",
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
           "reactorName": "Alice",
           "messageId": "m-0",
-          "targetSenderId": "u-me",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
           "excerpt": "Salut",
-          "createdAt": "2026-09-23T09:00:00.000Z"
+          "excerptOriginalLanguage": null,
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:00:00.000Z",
+          "emoji": "❤️"
         },
         "lastMessage": {
           "id": "m-1",
@@ -3116,9 +3604,12 @@
           "originalLanguage": "fr",
           "content": "Appel audio manqué",
           "callSummary": {
+            "callId": "call-1",
             "kind": "audio",
             "outcome": "missed",
-            "durationSec": 0
+            "durationSec": 0,
+            "initiatorId": "u-alice",
+            "endedByInitiator": false
           }
         }
       },
