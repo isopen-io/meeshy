@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -301,6 +302,43 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
     func test_neighbours_sansCourantOuInconnu_neRendRien() {
         XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: nil, in: ["a", "b"]), [])
         XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "z", in: ["a", "b"]), [])
+    }
+
+    /// **Préchauffer, c'est aussi TÉLÉCHARGER** (#7625). La surface vidéo d'un
+    /// réel attend `availability == .ready` — le fichier SUR DISQUE — avant
+    /// de charger le moteur : un lecteur préparé en streaming ne suffisait
+    /// pas, le swipe montrait le poster et un indicateur le temps du
+    /// téléchargement. Le préchauffage pose donc le fichier dans le registre
+    /// partagé, là où la surface le rejoindra.
+    func test_prepare_reelVideo_startsItsDiskDownloadInTheSharedRegistry() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/reel-\(UUID().uuidString).mp4"
+        let post = makeVideoReel(url: url)
+
+        await ReelPrewarm.prepare(post, preroll: false, center: center)
+
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: url)),
+                        "le fichier du voisin doit être en cours de téléchargement avant le swipe")
+        center.cancel(key: AttachmentDownloadCenter.key(for: url))
+    }
+
+    func test_prepare_reelWithoutVideo_downloadsNothing() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/photo-\(UUID().uuidString).jpg"
+        let post = makeVideoReel(url: url, mime: "image/jpeg")
+
+        await ReelPrewarm.prepare(post, preroll: false, center: center)
+
+        XCTAssertNil(center.progress(for: AttachmentDownloadCenter.key(for: url)))
+    }
+
+    private func makeVideoReel(url: String, mime: String = "video/mp4") -> FeedPost {
+        let post: APIPost = JSONStub.decode("""
+        {"id":"reel-\(UUID().uuidString)","type":"REEL","content":"","createdAt":"2026-09-23T10:00:00.000Z",
+         "author":{"id":"a1","username":"alice"},
+         "media":[{"id":"m1","fileUrl":"\(url)","mimeType":"\(mime)","fileSize":1000}]}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
     }
 
     // MARK: - #7010 — `FeedView` n'OBSERVE pas le coordinateur

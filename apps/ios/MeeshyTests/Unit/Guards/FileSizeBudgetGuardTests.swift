@@ -68,7 +68,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "ProfileUserPostsList.swift",
-        "ReelsPlayerView.swift",
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
@@ -457,7 +456,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `legacyOverBudget` pour toujours, et le plafond baisse d'EXACTEMENT les
     // 1 140 lignes qu'il pesait. Le mou antérieur (636 lignes après cette
     // sortie) n'est PAS repris ici : il appartient aux lots qui l'ont créé.
-    private static let legacyLineCeiling = 53_109
+    //
+    // **52 144 depuis #7625.** `ReelsPlayerView.swift` est repassé SOUS le
+    // budget — 965 lignes — quand son chrome (rangée méta, barre de lecture,
+    // poster) et sa couche audio l'ont quitté pour `ReelPageChrome.swift` et
+    // `ReelAudioLayer.swift` : le préchauffage du pager devait y entrer. Il sort
+    // de `legacyOverBudget`, et le plafond baisse d'EXACTEMENT les 965 lignes
+    // qu'il pesait à la sortie.
+    private static let legacyLineCeiling = 52_144
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
