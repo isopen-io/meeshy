@@ -373,24 +373,29 @@ const noRowCarriesContinuousPerspective = (page) =>
      correcte, dans une autre langue. Un gate n'épingle pas une chaîne
      TRADUISIBLE : `data-prism-toggle` est posé pour être trouvé, et il ne
      change avec aucune langue. */
-  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
-  expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme');
-  const langOf = async () =>
-    pastille.evaluate((btn) => btn.closest('[data-reading-mode]')?.querySelector('p[lang]')?.getAttribute('lang') ?? null);
+  /* LES DRAPEAUX PORTENT LE GESTE (#7599) — un message traduit montre ses
+     drapeaux, et la pastille 🌐 se tait devant eux (chaque état dit une fois,
+     miroir iOS #7603). Le contrôle mesuré est donc le drapeau NON pressé de
+     la rangée, puis le drapeau qui l'était, pour revenir. */
+  const row = page.locator('main li [data-reading-mode]:has(button[data-prism-flag][aria-pressed="false"])').first();
+  expect((await row.count()) > 0, 'un message traduit porte ses drapeaux');
+  const otherFlag = row.locator('button[data-prism-flag][aria-pressed="false"]').first();
+  const servedFlag = row.locator('button[data-prism-flag][aria-pressed="true"]').first();
+  const servedCode = (await servedFlag.count()) > 0 ? await servedFlag.getAttribute('data-prism-flag') : null;
+  const langOf = async () => row.evaluate((el) => el.querySelector('p[lang]')?.getAttribute('lang') ?? null);
   const beforeLang = await langOf();
-  await pastille.click();
+  await otherFlag.click();
   await page.waitForTimeout(200);
   const afterLang = await langOf();
   expect(
     afterLang !== null && afterLang !== beforeLang,
-    `cliquer la pastille du Prisme OUVRE la langue d’origine (le contrôle a un effet) — ${beforeLang} → ${afterLang}`,
+    `toucher un autre drapeau CHANGE la langue lue (le contrôle a un effet) — ${beforeLang} → ${afterLang}`,
   );
-  await pastille.click();
-  await page.waitForTimeout(200);
-  expect(
-    (await langOf()) === beforeLang,
-    'la recliquer referme — le contrôle est une bascule, pas un aller simple',
-  );
+  if (servedCode !== null) {
+    await row.locator(`button[data-prism-flag="${servedCode}"]`).first().click();
+    await page.waitForTimeout(200);
+    expect((await langOf()) === beforeLang, 'retoucher le drapeau servi ramène la langue d’avant');
+  }
 
   /**
    * --- défaut 10 : le SAUT de citation a un EFFET (le bouton ne faisait
