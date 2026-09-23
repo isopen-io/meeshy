@@ -423,10 +423,15 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     // complète. Ce témoin fait la preuve pour les DEUX producteurs
     // message-driven ; le troisième (`emitConversationPreviewUpdate`) a le
     // sien dans `emitConversationPreviewUpdate.test.ts`.
+    //
+    // #7545 — le message est NON protégé : ce témoin portait un vue unique
+    // flouté, et attestait donc que sa pièce jointe PARTAIT sur le socket —
+    // la fuite que le témoin suivant ferme.
     const message = makeContractMessage({
-      isViewOnce: true,
-      isBlurred: true,
-      expiresAt: new Date('2026-08-22T11:00:00.000Z'),
+      isViewOnce: false,
+      isBlurred: false,
+      isEncrypted: false,
+      expiresAt: new Date('2099-08-22T11:00:00.000Z'),
       attachments: [
         {
           id: 'att-1',
@@ -447,11 +452,12 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
 
     for (const payload of [socketPayload, restPayload]) {
       expect(payload.lastMessageSenderName).toBe('Alice');
-      expect(payload.lastMessageIsBlurred).toBe(true);
-      expect(payload.lastMessageIsViewOnce).toBe(true);
-      expect(payload.lastMessageExpiresAt).toBe('2026-08-22T11:00:00.000Z');
-      // Plafonnée à la première pièce jointe, comptée sur les DEUX.
+      expect(payload.lastMessageIsBlurred).toBe(false);
+      expect(payload.lastMessageIsViewOnce).toBe(false);
+      expect(payload.lastMessageExpiresAt).toBe('2099-08-22T11:00:00.000Z');
+      // Plafonnée à la première pièce jointe, comptée et résumée sur les DEUX.
       expect(payload.lastMessageAttachmentCount).toBe(2);
+      expect(payload.lastMessageAttachmentSummary).toEqual({ count: 2, kinds: { image: 2 }, totalSize: 13344 });
       expect(payload.lastMessageAttachments).toEqual([
         {
           id: 'att-1',
@@ -462,8 +468,29 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
           duration: null,
           width: 800,
           height: 600,
+          pageCount: null,
         },
       ]);
+    }
+  });
+
+  it('les DEUX producteurs retiennent le contenu d’un vue unique flouté (#7545)', async () => {
+    const message = makeContractMessage({
+      isViewOnce: true,
+      isBlurred: true,
+      attachments: [
+        { id: 'att-1', mimeType: 'image/jpeg', thumbnailUrl: 'https://cdn.example/secret-thumb.jpg', originalName: 'photo.jpg', fileSize: 12345 },
+      ],
+    });
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.lastMessageIsViewOnce).toBe(true);
+      expect(payload.lastMessagePreview).toBe('');
+      expect(payload.lastMessageTranslations).toBeNull();
+      expect(payload.lastMessageAttachments).toEqual([]);
+      expect(payload.lastMessageAttachmentCount).toBe(0);
+      expect(payload.lastMessageAttachmentSummary).toBeNull();
+      expect(JSON.stringify(payload)).not.toContain('secret-thumb');
     }
   });
 
