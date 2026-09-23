@@ -40,9 +40,14 @@ class BookmarksViewModel: ObservableObject {
                 return
             case .stale(let data, _):
                 posts = data
-                // vm-bookmarks-pagination-01 — router par loadMore : un seul
-                // point de vérité pour le guard concurrentiel isLoading.
-                Task { [weak self] in await self?.loadMore() }
+                // Revalidation SILENCIEUSE. Elle passait par `loadMore()`, qui
+                // lève `isLoading` — et `BookmarksView` rend un `ProgressView`
+                // dessus : l'utilisateur voyait ses favoris AVEC un spinner par-
+                // dessus, exactement ce que le cache-first existe pour éviter.
+                // `loadMore()` AJOUTE de surcroît, en dédoublonnant : un favori
+                // retiré depuis un autre appareil ne disparaissait jamais de
+                // cette liste.
+                Task { [weak self] in await self?.revalidateFirstPage() }
                 return
             case .expired, .empty:
                 break
@@ -54,7 +59,19 @@ class BookmarksViewModel: ObservableObject {
         await fetchBookmarksFromNetwork()
     }
 
-    private func fetchBookmarksFromNetwork() async {
+    /// Relit la PREMIÈRE page en arrière-plan, sans lever `isLoading`.
+    private func revalidateFirstPage() async {
+        guard !isLoading else { return }
+        nextCursor = nil
+        await fetchBookmarksFromNetwork(replacingExisting: true)
+    }
+
+    /// - Parameter replacingExisting: la page reçue REMPLACE la liste au lieu de
+    ///   s'y ajouter. C'est ce qu'une première page veut dire — et c'est la
+    ///   seule forme qui fait disparaître un favori retiré ailleurs. Le
+    ///   remplacement n'a lieu qu'APRÈS la réponse : une panne laisse la liste
+    ///   et le cache exactement où ils étaient.
+    private func fetchBookmarksFromNetwork(replacingExisting: Bool = false) async {
         do {
             let response = try await postService.getBookmarks(cursor: nextCursor, limit: 20)
             // Decode off the main actor — toFeedPost decodes each post's media /
@@ -67,11 +84,15 @@ class BookmarksViewModel: ObservableObject {
             }.value
             let existingIds = Set(posts.map(\.id))
             let unique = newPosts.filter { !existingIds.contains($0.id) }
-            posts.append(contentsOf: unique)
+            if replacingExisting {
+                posts = newPosts
+            } else {
+                posts.append(contentsOf: unique)
+            }
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
 
-            if nextCursor == nil || posts.count == unique.count {
+            if replacingExisting || nextCursor == nil || posts.count == unique.count {
                 try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
             }
         } catch {
@@ -138,11 +159,18 @@ class BookmarksViewModel: ObservableObject {
         await fetchBookmarksFromNetwork()
     }
 
+    /// Fetch-then-replace : NI l'écran NI le cache ne se vident avant que le
+    /// réseau ait répondu.
+    ///
+    /// Le geste vidait `posts` puis INVALIDAIT le cache, et ne partait chercher
+    /// qu'ensuite : un tirer-pour-rafraîchir hors ligne laissait « aucun
+    /// favori » à l'écran ET un cache détruit — l'ouverture suivante repartait
+    /// elle aussi du réseau, alors que la liste était sur le disque une seconde
+    /// plus tôt. Même loi que `ConversationListViewModel.forceRefresh`.
     func refresh() async {
-        posts = []
+        guard !isLoading else { return }
         nextCursor = nil
         hasMore = true
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        await loadBookmarks()
+        await fetchBookmarksFromNetwork(replacingExisting: true)
     }
 }
