@@ -55,6 +55,10 @@ import {
   persistTranscriptionSegment,
   translateAndEmitSegment,
 } from './call-transcription-relay';
+import {
+  registerCallClientReportEvents,
+  type CallClientReportDeps,
+} from './call-client-reports';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
@@ -75,10 +79,6 @@ import {
   socketTranscriptionSegmentSchema,
   socketTranscriptionActiveSchema,
   socketRequestIceServersSchema,
-  socketCallBackgroundedSchema,
-  socketCallForegroundedSchema,
-  socketCallScreenCaptureDetectedSchema,
-  socketCallAnalyticsSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
@@ -91,7 +91,6 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleClientEvent,
-  CallAnalyticsEvent,
   CallError,
   CallHeartbeatEvent,
   CallQualityReportEvent,
@@ -106,7 +105,6 @@ import type {
   CallTranscriptionSegmentEvent,
   CallTranscriptionActiveEvent,
   CallIceServersRefreshedEvent,
-  CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
 
 /**
@@ -1656,6 +1654,23 @@ export class CallEventsHandler {
   // ==============================================
 
   /** Ce que le relais de sous-titres emprunte à l'instance — `zmqClient` en ACCESSEUR, parce qu'un setter le pose APRÈS la construction. */
+  /**
+   * Ce que les gestionnaires de rapport client empruntent à l'instance
+   * (`call-client-reports.ts`). Les trois résolveurs partent en méthodes liées :
+   * ils relisent la base à chaque appel, et une valeur capturée figerait un
+   * participant qui vient de partir dans l'état « actif ».
+   */
+  private clientReportDependencies(): CallClientReportDeps {
+    return {
+      prisma: this.prisma,
+      callService: this.callService,
+      rateLimiter: this.rateLimiter,
+      resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
+      resolveActiveCallParticipantId: (userId, callId) => this.resolveActiveCallParticipantId(userId, callId),
+      resolveEverCallParticipantId: (userId, callId) => this.resolveEverCallParticipantId(userId, callId),
+    };
+  }
+
   private transcriptionRelayDependencies(): CallTranscriptionRelayDeps {
     return { prisma: this.prisma, zmqClient: () => this.zmqClient };
   }
@@ -4143,266 +4158,12 @@ export class CallEventsHandler {
       }
     });
 
-    // ─── call:backgrounded ───────────────────────────────────────────────────
-    // The iOS app signals it is going to background while a call is active.
-    // We flip socket.data.appForeground so the ringing logic knows to use VoIP
-    // push for future incoming calls instead of socket delivery.
-    socket.on(CALL_EVENTS.BACKGROUNDED, async (data: { callId: string; participantId: string }) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_BACKGROUNDED,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Resolve the caller's own participantId rather than trusting the
-        // client-supplied one — otherwise a participant could flag a peer's
-        // participantId as backgrounded and skew that peer's heartbeat
-        // tolerance / ringing delivery (socket vs VoIP push). Must be an
-        // active participant of THIS call, not merely its conversation.
-        const backgroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!backgroundedParticipantId) return;
-
-        socket.data.appForeground = false;
-        this.callService.recordParticipantBackgrounded(data.callId, backgroundedParticipantId);
-
-        logger.debug('📞 Socket: call:backgrounded', {
-          callId: data.callId,
-          participantId: backgroundedParticipantId,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:backgrounded', { error });
-      }
-    });
-
-    // ─── call:foregrounded ───────────────────────────────────────────────────
-    // The iOS app has returned to foreground. Reset the flag so future ringing
-    // can be delivered via socket again.
-    socket.on(CALL_EVENTS.FOREGROUNDED, async (data: { callId: string; participantId: string }) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_FOREGROUNDED,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallForegroundedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Same rationale as call:backgrounded — resolve the caller's own
-        // participantId instead of trusting the client-supplied one.
-        const foregroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!foregroundedParticipantId) return;
-
-        socket.data.appForeground = true;
-        this.callService.clearParticipantBackgrounded(data.callId, foregroundedParticipantId);
-
-        logger.debug('📞 Socket: call:foregrounded', {
-          callId: data.callId,
-          participantId: foregroundedParticipantId,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:foregrounded', { error });
-      }
-    });
-
-    // ─── call:screen-capture-detected ────────────────────────────────────────
-    // A participant started or stopped screen capture. Relay to everyone else
-    // in the call room so they can display/dismiss the capture warning.
-    socket.on(CALL_EVENTS.SCREEN_CAPTURE_DETECTED, async (data: CallScreenCaptureEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_SCREEN_CAPTURE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        if (!socket.rooms.has(ROOMS.call(data.callId))) {
-          return;
-        }
-
-        // Security fix 2026-07-03: resolve the caller's own participantId
-        // server-side rather than trusting the client-supplied one — same
-        // rationale as call:backgrounded/call:foregrounded. Otherwise either
-        // participant in a call could impersonate the other, forging or
-        // suppressing that peer's screen-capture privacy alert.
-        const screenCaptureReporter = await this.resolveActiveCallParticipant(userId, data.callId);
-        if (!screenCaptureReporter) return;
-
-        const alertEvent: CallScreenCaptureEvent = {
-          callId: data.callId,
-          participantId: screenCaptureReporter.participantId,
-          // Vague 132 — same mismatch as call:quality-alert: without this, a
-          // registered peer's roster lookup (keyed by User.id) can never
-          // match `participantId` alone (a Participant.id).
-          userId: screenCaptureReporter.userId,
-          isCapturing: data.isCapturing,
-        };
-        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
-
-        logger.info('📞 Socket: call:screen-capture-detected relayed', {
-          callId: data.callId,
-          participantId: screenCaptureReporter.participantId,
-          isCapturing: data.isCapturing,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:screen-capture-detected', { error });
-      }
-    });
-
-    // ─── call:analytics ──────────────────────────────────────────────────────
-    // Fire-and-forget lifecycle telemetry emitted once at call end by iOS.
-    // Validated and logged; no response sent back to the client.
-    // Cycle 107 — la forme vient du contrat (`CallAnalyticsEvent`), plus d'une
-    // transcription de dix-neuf champs dans cette signature. L'événement était
-    // écouté, validé et agrégé sans figurer dans `ClientToServerEvents` : c'est
-    // le cast d'`io` qui le rendait possible, et c'est le seul défaut de ce lot
-    // que la porte typée aurait attrapé toute seule.
-    socket.on(CALL_EVENTS.ANALYTICS, async (data: CallAnalyticsEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_ANALYTICS,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Authorization — was previously unchecked, letting any authenticated
-        // user submit telemetry against an arbitrary callId, then scoped to
-        // conversation membership via `resolveParticipantIdFromCall` — which
-        // still let ANY member of the conversation submit fabricated
-        // telemetry for a call they never joined, since it never looks at
-        // CallParticipant rows at all. `resolveEverCallParticipantId` checks
-        // the caller actually has a CallParticipant row for THIS call
-        // (regardless of `leftAt`, since analytics fires after the sender
-        // has already left — `resolveActiveCallParticipantId`'s `leftAt:
-        // null` requirement would reject the legitimate sender).
-        const analyticsParticipantId = await this.resolveEverCallParticipantId(userId, data.callId);
-        if (!analyticsParticipantId) return;
-
-        logger.info('📞 Socket: call:analytics received', {
-          callId: data.callId,
-          platform: data.platform,
-          durationSeconds: data.durationSeconds,
-          setupTimeMs: data.setupTimeMs,
-          negotiationTimeMs: data.negotiationTimeMs ?? -1,
-          reconnectionCount: data.reconnectionCount,
-          networkTransitions: data.networkTransitions,
-          averageRtt: data.averageRtt,
-          averagePacketLoss: data.averagePacketLoss,
-          maxPacketLoss: data.maxPacketLoss,
-          codec: data.codec,
-          isVideo: data.isVideo,
-          endReason: data.endReason,
-          qualityDistribution: data.qualityDistribution,
-          userId,
-        });
-
-        // Persist the VALIDATED payload on this participant's CallParticipant
-        // row so reliability can be tracked on real calls (reconnectionCount,
-        // qualityDistribution, negotiationTimeMs…) — log-only telemetry is
-        // invisible to dashboards. Per-participant row: both ends emit at
-        // hangup within the same second and must never clobber each other.
-        // Best-effort — telemetry loss must stay invisible to the client.
-        //
-        // Scoped to the most-recently-joined row for this participantId, not
-        // a blanket updateMany: a participant who left and rejoined mid-call
-        // (churn) has MULTIPLE CallParticipant rows sharing the same
-        // participantId, and a broad updateMany stamped this same final
-        // analytics blob onto every prior row too — corrupting per-session
-        // telemetry for any dashboard built off this field.
-        try {
-          const targetParticipant = await this.prisma.callParticipant.findFirst({
-            where: { callSessionId: data.callId, participantId: analyticsParticipantId },
-            orderBy: { joinedAt: 'desc' },
-            select: { id: true }
-          });
-          if (targetParticipant) {
-            await this.prisma.callParticipant.update({
-              where: { id: targetParticipant.id },
-              data: { analytics: validation.data }
-            });
-          }
-        } catch (persistError) {
-          logger.error('call:analytics persistence failed (telemetry lost, client unaffected)', {
-            callId: data.callId, participantId: analyticsParticipantId, error: persistError
-          });
-        }
-      } catch (error) {
-        logger.error('Error handling call:analytics', { error });
-      }
-    });
+    // ─── Ce que l'app cliente RAPPORTE sur elle-même ─────────────────────────
+    // Premier plan, capture d'écran, télémétrie de fin — quatre événements qui
+    // ne font ni naître ni terminer un appel. Extraits dans
+    // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
+    // `participantId` du client n'est jamais cru sur parole — y est écrite.
+    registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
 
     /**
      * Handle disconnect - auto-leave any active calls
