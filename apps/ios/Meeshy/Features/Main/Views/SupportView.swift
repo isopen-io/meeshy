@@ -12,8 +12,6 @@ struct SupportView: View {
     // un bouton explicite, requestReview restant soumis à ses heuristiques).
     @Environment(\.requestReview) private var requestReview
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
 
     private let accentColor = MeeshyColors.successHex
 

@@ -12,8 +12,6 @@ struct AffiliateView: View {
     private var back: PanelBackAction {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false

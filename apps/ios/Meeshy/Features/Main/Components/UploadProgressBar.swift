@@ -7,8 +7,6 @@ struct UploadProgressBar: View {
     let progress: UploadQueueProgress
     let accentColor: String
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var percentage: Int {

@@ -13,8 +13,6 @@ import MeeshyUI
 /// no longer clutter the Contacts tab — they live in `PeopleDiscoveryView`,
 /// reachable from the floating menu ladder.
 struct ContactsHubView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @State private var scrollRelay = ScrollOffsetRelay()

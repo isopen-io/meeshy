@@ -5,8 +5,6 @@ import MeeshyUI
 
 struct BlockedUsersView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     // Wired onto the conformant, cache-first + outbox `BlockedViewModel`

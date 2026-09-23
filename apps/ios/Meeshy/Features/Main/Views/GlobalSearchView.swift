@@ -7,8 +7,6 @@ import MeeshyUI
 
 struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
