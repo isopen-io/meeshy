@@ -245,7 +245,12 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         guard let conversationId = userInfo["conversationId"] as? String,
               !conversationId.isEmpty else { return }
         let messageId = (userInfo["messageId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        let isMessage = (userInfo["type"] as? String) == "message" || messageId != nil
+        let type = userInfo["type"] as? String
+        // Une réaction porte le `messageId` du message RÉAGI, pas d'un message
+        // neuf : la lire comme une arrivée avançait la date de la ligne et
+        // vidait son aperçu (#7615).
+        let isReaction = type.map { $0 == "reaction" || $0.hasSuffix("_reaction") } ?? false
+        let isMessage = type == "message" || (messageId != nil && !isReaction)
         guard isMessage else { return }
         messageNotificationReceived.send(
             MessageActivitySignal(conversationId: conversationId, messageId: messageId)

@@ -21,6 +21,9 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// L'émetteur, pour le repli « nom du pair » d'un direct quand l'événement
     /// ne porte pas de nom.
     public let senderId: String?
+    /// Le `User.id` de l'auteur, quand l'événement le dit
+    /// (`ConversationUpdatedEvent.messageSenderUserId`, #7612).
+    public let senderUserId: String?
     /// **Qui LIT.** Ce store est, par construction, le cache des conversations
     /// d'UN utilisateur : le préfixe d'auteur dépend de lui (« Toi » plutôt que
     /// mon propre nom d'affichage), et le lui cacher obligerait à trancher
@@ -71,6 +74,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessagePreview: String? = nil,
         lastMessageSenderName: LastMessageSenderName = .unchanged,
         senderId: String? = nil,
+        senderUserId: String? = nil,
         readerId: String? = nil,
         youLabel: String = "",
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
@@ -96,6 +100,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageSenderName = lastMessageSenderName
         self.senderId = senderId
+        self.senderUserId = senderUserId
         self.readerId = readerId
         self.youLabel = youLabel
         self.lastMessageTranslations = lastMessageTranslations

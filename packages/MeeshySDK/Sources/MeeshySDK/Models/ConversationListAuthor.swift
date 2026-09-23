@@ -106,8 +106,15 @@ public enum ConversationListAuthor {
     /// 3. **le pair d'un direct** — le repli local, seul recours quand
     ///    l'événement ne porte pas de nom (les payloads antérieurs au champ).
     /// 4. **rien** — la garde anti-périmé.
+    ///
+    /// `eventSenderUserId` : le `User.id` de l'auteur quand l'événement le
+    /// porte (`ConversationUpdatedEvent.messageSenderUserId`). `eventSenderId`
+    /// est souvent un `Participant.id`, qui ne vaut jamais l'id du lecteur :
+    /// mon message envoyé depuis un autre client se disait alors par mon nom
+    /// (#7612).
     public static func resolve(
         eventSenderId: String?,
+        eventSenderUserId: String? = nil,
         eventSenderName: LastMessageSenderName,
         currentUserId: String?,
         conversationType: MeeshyConversation.ConversationType,
@@ -119,7 +126,7 @@ public enum ConversationListAuthor {
         // quelque chose : comparer deux `nil` ferait dire « Toi » au premier
         // message dont l'auteur est inconnu, sur l'écran de quelqu'un dont
         // l'authentification n'est pas encore résolue.
-        if let me = currentUserId, !me.isEmpty, eventSenderId == me {
+        if let me = currentUserId, !me.isEmpty, eventSenderId == me || eventSenderUserId == me {
             return .display(youLabel)
         }
 
@@ -142,5 +149,26 @@ public enum ConversationListAuthor {
         }
 
         return .unchanged
+    }
+
+    /// Ce que `conversation:updated` affirme de l'auteur, pour la ligne `row`
+    /// que lit `readerId` — la même règle que la fusion du store, sans que
+    /// l'appelant ait à recopier les champs un à un.
+    public static func resolve(
+        _ event: ConversationUpdatedEvent,
+        readerId: String?,
+        row: MeeshyConversation,
+        youLabel: String
+    ) -> Resolution {
+        resolve(
+            eventSenderId: event.senderId,
+            eventSenderUserId: event.messageSenderUserId,
+            eventSenderName: event.lastMessageSenderName,
+            currentUserId: readerId,
+            conversationType: row.type,
+            peerUserId: row.participantUserId,
+            peerUsername: row.participantUsername,
+            youLabel: youLabel
+        )
     }
 }

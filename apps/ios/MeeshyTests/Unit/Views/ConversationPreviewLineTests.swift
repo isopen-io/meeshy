@@ -16,11 +16,18 @@ final class ConversationPreviewLineTests: XCTestCase {
 
     // MARK: - Le décompte d'un éphémère
 
-    func test_countdownSchedule_ticksEachSecond_andLandsExactlyOnTheDeadline() {
-        let deadline = start.addingTimeInterval(2.5)
+    /// #7614 — la ligne ne se réveille qu'aux instants où son libellé change :
+    /// une frontière de minute, le seuil de la dernière minute (le compte à la
+    /// seconde est rendu par le système), puis l'échéance. Jamais chaque seconde.
+    func test_countdownSchedule_wakesOnlyWhenTheLabelChanges_thenAtTheDeadline() {
+        let deadline = start.addingTimeInterval(150)
         let entries = Array(CountdownSchedule(until: deadline).entries(from: start, mode: .normal))
 
-        XCTAssertEqual(entries, [start, start.addingTimeInterval(1), start.addingTimeInterval(2), deadline])
+        XCTAssertEqual(entries.count, 4, "départ, 2 min, seuil de la dernière minute, échéance")
+        XCTAssertEqual(entries[0], start)
+        XCTAssertEqual(entries[1].timeIntervalSince(deadline.addingTimeInterval(-120)), 0.05, accuracy: 0.001)
+        XCTAssertEqual(entries[2].timeIntervalSince(deadline.addingTimeInterval(-60)), 0.05, accuracy: 0.001)
+        XCTAssertEqual(entries[3].timeIntervalSince(deadline), 0.05, accuracy: 0.001)
     }
 
     func test_countdownSchedule_stopsOnceTheDeadlineHasPassed() {

@@ -72,6 +72,12 @@ public enum ConversationListLastMessage {
     /// Chaque ligne déjà connue du cache garde donc le groupe que le cache
     /// porte ; une ligne que le cache ne connaît pas encore garde le sien.
     /// L'ordre reste celui du cache : `lastMessageAt` décroissant.
+    ///
+    /// Même règle pour l'ACTIVITÉ de la ligne — dernière réaction, appel en
+    /// cours (#7615, #7616) : le moteur l'écrit depuis `conversation:updated`,
+    /// le ViewModel n'en tient qu'une copie antérieure. La graver par-dessus
+    /// effaçait l'appel et la réaction du cache, donc de l'écran au
+    /// rechargement suivant et après un démarrage à froid.
     public static func persisting(
         _ viewState: [MeeshyConversation],
         over persisted: [MeeshyConversation]
@@ -81,6 +87,9 @@ public enum ConversationListLastMessage {
             guard let engineRow = owned[row.id] else { return row }
             var copy = row
             copy.applyLastMessage(LastMessageFacet(conversation: engineRow))
+            copy.lastReaction = engineRow.lastReaction
+            copy.lastReactionTargetsReader = engineRow.lastReactionTargetsReader
+            copy.activeCall = engineRow.activeCall
             return copy
         }
         return sortedNewestFirst(merged)

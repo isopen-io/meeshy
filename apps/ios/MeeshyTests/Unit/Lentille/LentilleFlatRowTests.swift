@@ -59,46 +59,37 @@ final class LentilleFlatRowTests: XCTestCase {
         )
     }
 
-    // MARK: - Précédence de ligne 2 (contrat §LWS-7 : typing > brouillon > pont > préview)
-    // behaviour-matrix:L02 — précédence typing > brouillon > pont > préview,
-    // couverte par les quatre témoins ci-dessous.
+    // MARK: - Précédence de ligne 2 : typing > brouillon > préview
+    // behaviour-matrix:L02 — le pont ✦ a quitté la précédence (#7613).
 
     func test_line2Kind_typing_beatsEverything() {
-        XCTAssertEqual(
-            LentilleConversationRow.Line2Kind.resolve(hasTyping: true, hasDraft: true, showsBridge: true),
-            .typing
-        )
+        XCTAssertEqual(LentilleConversationRow.Line2Kind.resolve(hasTyping: true, hasDraft: true), .typing)
     }
 
-    func test_line2Kind_draft_beatsBridgeAndPreview() {
-        XCTAssertEqual(
-            LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: true, showsBridge: true),
-            .draft
-        )
-    }
-
-    func test_line2Kind_bridge_beatsPreview() {
-        XCTAssertEqual(
-            LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: false, showsBridge: true),
-            .bridge
-        )
+    func test_line2Kind_draft_beatsPreview() {
+        XCTAssertEqual(LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: true), .draft)
     }
 
     func test_line2Kind_preview_whenNothingElse() {
-        XCTAssertEqual(
-            LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: false, showsBridge: false),
-            .preview
-        )
+        XCTAssertEqual(LentilleConversationRow.Line2Kind.resolve(hasTyping: false, hasDraft: false), .preview)
     }
 
-    // MARK: - Pont ✦ — condition d'apparition (contrat §3.2/§LWS-7)
+    // MARK: - #7613 — une conversation NON LUE dit son aperçu, pas le pont
 
-    func test_showsBridge_requiresBothUnreadCountAndBridge() {
-        let bridge = makeFallbackBridge()
-        XCTAssertTrue(LentilleConversationRow.showsBridge(unreadCount: 4, bridge: bridge))
-        XCTAssertFalse(LentilleConversationRow.showsBridge(unreadCount: 0, bridge: bridge), "unreadCount == 0 ⇒ jamais de pont, même si bridge != nil")
-        XCTAssertFalse(LentilleConversationRow.showsBridge(unreadCount: 4, bridge: nil), "bridge == nil ⇒ jamais de pont, même si unreadCount > 0")
-        XCTAssertFalse(LentilleConversationRow.showsBridge(unreadCount: 0, bridge: nil))
+    func test_accessibilityLabel_unreadWithBridge_saysTheComposedPreview_notTheBridge() {
+        let unread = makeConversation(unreadCount: 4, bridge: makeFallbackBridge())
+        let read = makeConversation(unreadCount: 0, bridge: nil)
+        let row = LentilleConversationRow(conversation: unread, preferredContentLanguages: ["fr"])
+        let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: makeFallbackBridge(), preferredLanguages: ["fr"])
+
+        XCTAssertTrue(row.accessibilityLabel.contains("Hello"), "la ligne dit le dernier message")
+        XCTAssertFalse(bridgeText.isEmpty, "témoin de contrôle : le pont a bien un texte à dire")
+        XCTAssertFalse(row.accessibilityLabel.contains(bridgeText), "le décompte du pont ne remplace plus l'aperçu")
+        XCTAssertEqual(
+            ConversationPreviewLine.preview(for: unread, viewerId: "u-me", preferredLanguages: ["fr"], now: Self.pinnedDate).kind,
+            ConversationPreviewLine.preview(for: read, viewerId: "u-me", preferredLanguages: ["fr"], now: Self.pinnedDate).kind,
+            "non lue ou lue, la ligne compose le même aperçu"
+        )
     }
 
     // MARK: - `==` — COPIÉ depuis `ThemedConversationRow.==` puis ÉTENDU au bridge
