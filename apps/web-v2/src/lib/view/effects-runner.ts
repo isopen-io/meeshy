@@ -62,25 +62,43 @@ function radiusOf(surface: HTMLElement, host: HTMLElement): number {
   return surface === host ? DEFAULT_FLAT_RADIUS : 18;
 }
 
-/** Un calque posé EXACTEMENT sur la surface, dans le repère de l'hôte (`position: relative`). */
-function layerOver(host: HTMLElement, surface: HTMLElement, marker: string, cleanups: Cleanup[]): HTMLDivElement {
-  const layer = document.createElement('div');
-  layer.setAttribute('aria-hidden', 'true');
-  layer.setAttribute(marker.split('=')[0] ?? marker, marker.split('=')[1] ?? '');
+function placeLayer(layer: HTMLElement, host: HTMLElement, surface: HTMLElement): void {
   const hostBox = host.getBoundingClientRect();
   const box = surface.getBoundingClientRect();
   Object.assign(layer.style, {
-    position: 'absolute',
-    pointerEvents: 'none',
-    zIndex: '1',
     top: `${box.top - hostBox.top}px`,
     left: `${box.left - hostBox.left}px`,
     width: `${box.width}px`,
     height: `${box.height}px`,
+  });
+}
+
+/**
+ * Un calque posé EXACTEMENT sur la surface, dans le repère de l'hôte
+ * (`position: relative`). Il suit la surface quand elle change de taille
+ * (une traduction qui arrive, un média qui se charge) : un `ResizeObserver`
+ * le replace, sans quoi l'aurore d'une bulle qui s'allonge resterait à
+ * l'ancienne taille jusqu'à la prochaine entrée à l'écran.
+ */
+function layerOver(host: HTMLElement, surface: HTMLElement, marker: string, cleanups: Cleanup[]): HTMLDivElement {
+  const layer = document.createElement('div');
+  layer.setAttribute('aria-hidden', 'true');
+  layer.setAttribute(marker.split('=')[0] ?? marker, marker.split('=')[1] ?? '');
+  Object.assign(layer.style, {
+    position: 'absolute',
+    pointerEvents: 'none',
+    zIndex: '1',
     borderRadius: `${radiusOf(surface, host)}px`,
   });
+  placeLayer(layer, host, surface);
   host.appendChild(layer);
   cleanups.push(() => layer.remove());
+  const Observer = globalThis.ResizeObserver;
+  if (typeof Observer === 'function' && surface !== host) {
+    const observer = new Observer(() => placeLayer(layer, host, surface));
+    observer.observe(surface);
+    cleanups.push(() => observer.disconnect());
+  }
   return layer;
 }
 
@@ -341,10 +359,10 @@ export function playMessageEffects(host: HTMLElement, effectFlags: number): () =
   const surface = host.querySelector<HTMLElement>(SURFACE_SELECTOR) ?? host;
   const cleanups: Cleanup[] = [];
 
-  if (plan.flash) animate(surface, REDUCED_MOTION_FLASH, cleanups);
+  /* Les CALQUES d'abord, les animations de la surface ensuite : un calque se
+     cale sur la boîte de la surface, et une surface déjà lancée à
+     `scale(0.3)` (zoom, explosion) rendrait une boîte trois fois trop petite. */
   for (const effect of plan.appearance) {
-    const spec = ENTRANCE_SURFACE_ANIMATIONS[effect];
-    if (spec !== undefined) animate(surface, spec, cleanups);
     if (effect === 'confetti') runParticles(host, surface, 'confetti', confettiParticles(), cleanups);
     if (effect === 'fireworks') runParticles(host, surface, 'fireworks', fireworkParticles(), cleanups);
     if (effect === 'explode') explodeBurst(host, surface, cleanups);
@@ -352,10 +370,16 @@ export function playMessageEffects(host: HTMLElement, effectFlags: number): () =
   }
   for (const effect of plan.persistent) {
     if (effect === 'glow') glowLayer(host, surface, plan.animatesPersistent, cleanups);
-    if (effect === 'pulse') animate(surface, PULSE_ANIMATION, cleanups);
     if (effect === 'rainbow') rainbowAurora(host, surface, plan.animatesPersistent, cleanups);
     if (effect === 'sparkle') runParticles(host, surface, 'sparkle', sparkleParticles(), cleanups);
   }
+
+  if (plan.flash) animate(surface, REDUCED_MOTION_FLASH, cleanups);
+  for (const effect of plan.appearance) {
+    const spec = ENTRANCE_SURFACE_ANIMATIONS[effect];
+    if (spec !== undefined) animate(surface, spec, cleanups);
+  }
+  if (plan.persistent.includes('pulse')) animate(surface, PULSE_ANIMATION, cleanups);
 
   const playing = [...plan.appearance, ...plan.persistent, ...(plan.flash ? ['flash'] : [])];
   host.setAttribute('data-effects-playing', playing.join(' '));
