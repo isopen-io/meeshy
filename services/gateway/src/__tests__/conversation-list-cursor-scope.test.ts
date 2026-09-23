@@ -42,7 +42,13 @@ const UNE_CONVERSATION = '68f3808baf186ffd9583b0fa';
 const QUAND = new Date('2026-09-18T09:00:00.000Z');
 
 /** Un Prisma qui ne rend une conversation QUE si la requête porte le scope. */
-const prismaQuiRespecteLeScope = (ligne: { lastMessageAt: Date | null } | null) => {
+type LigneCurseur = {
+  lastMessageAt: Date | null;
+  lastReactionAt?: Date | null;
+  lastReactionTargetKey?: string | null;
+};
+
+const prismaQuiRespecteLeScope = (ligne: LigneCurseur | null) => {
   const findFirst = jest.fn(async (args: { where: Record<string, unknown> }) => {
     const scope = args.where.participants as { some?: { userId?: string } } | undefined;
     if (scope?.some?.userId !== LECTEUR) return null;
@@ -63,7 +69,27 @@ describe('le curseur de GET /conversations', () => {
 
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',
-      lastMessageAt: QUAND,
+      rang: QUAND,
+    });
+  });
+
+  it("#7592 — borne sur le RANG du lecteur : une réaction à SON message a remonté la ligne curseur", async () => {
+    const reaction = new Date('2026-09-18T09:05:00.000Z');
+    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastReactionAt: reaction, lastReactionTargetKey: LECTEUR });
+
+    expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
+      genre: 'borne',
+      rang: reaction,
+    });
+  });
+
+  it("#7592 — une réaction entre tiers ne déplace pas la borne", async () => {
+    const reaction = new Date('2026-09-18T09:05:00.000Z');
+    const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND, lastReactionAt: reaction, lastReactionTargetKey: 'u-tiers' });
+
+    expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
+      genre: 'borne',
+      rang: QUAND,
     });
   });
 

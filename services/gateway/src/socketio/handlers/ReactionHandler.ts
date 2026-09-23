@@ -188,7 +188,7 @@ export class ReactionHandler {
           // l'appel qu'on venait d'écrire, pas à la famille.
           void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent)
             .catch(err => logger.error('reaction:add offline enqueue rejected', { error: err, conversationId: message.conversationId }));
-          this._emitListLastReaction(message.conversationId, userId);
+          this._emitListLastReaction(message.conversationId, userId, validated.messageId);
         }
       } catch (sideEffectError) {
         // Reaction is persisted and the client already ACKed; the broadcast is
@@ -309,7 +309,7 @@ export class ReactionHandler {
             .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
           void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent)
             .catch(err => logger.error('reaction:remove offline enqueue rejected', { error: err, conversationId: message.conversationId }));
-          this._emitListLastReaction(message.conversationId, userId);
+          this._emitListLastReaction(message.conversationId, userId, validated.messageId);
         }
       } catch (sideEffectError) {
         // Removal is persisted and the client already ACKed; the broadcast is
@@ -453,11 +453,12 @@ export class ReactionHandler {
    * La ligne de LISTE apprend la dernière réaction (#7545), relue depuis la
    * base — un ajout comme un retrait convergent sur la même valeur.
    */
-  private _emitListLastReaction(conversationId: string, userId: string): void {
+  private _emitListLastReaction(conversationId: string, userId: string, reactedMessageId: string): void {
     void emitConversationActivityUpdate(this.prisma, this.io, {
       conversationId,
       updatedByUserId: userId,
       reaction: true,
+      reactedMessageId,
       onError: (error) => logger.error('conversation:updated lastReaction failed', { error, conversationId }),
     }).catch((error: unknown) => logger.error('conversation:updated lastReaction rejected', { error, conversationId }));
   }
