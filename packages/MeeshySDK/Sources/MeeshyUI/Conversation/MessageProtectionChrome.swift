@@ -73,6 +73,7 @@ public struct MessageProtectionChrome: View, Equatable {
     public struct Presentation: Equatable, Sendable {
         public let symbol: String
         public let tintHex: String
+        public let tint: Color
         public let showsCountdown: Bool
     }
 
@@ -83,14 +84,17 @@ public struct MessageProtectionChrome: View, Equatable {
             if case .imminent = state { isImminent = true } else { isImminent = false }
             return Presentation(symbol: MessageProtectionSymbols.ephemeral,
                                 tintHex: MeeshyColors.stateEphemeralHex,
+                                tint: MeeshyColors.stateEphemeral,
                                 showsCountdown: isImminent)
         case .viewOnce:
             return Presentation(symbol: MessageProtectionSymbols.viewOnceFilled,
                                 tintHex: MeeshyColors.stateViewOnceHex,
+                                tint: MeeshyColors.stateViewOnce,
                                 showsCountdown: false)
         case .blurred:
             return Presentation(symbol: MessageProtectionSymbols.blurred,
                                 tintHex: MeeshyColors.stateConcealedHex,
+                                tint: MeeshyColors.stateConcealed,
                                 showsCountdown: false)
         }
     }
@@ -102,7 +106,7 @@ public struct MessageProtectionChrome: View, Equatable {
             EmptyView()
         default:
             let presentation = Self.presentation(for: badge)
-            let tint = Color(hex: presentation.tintHex)
+            let tint = presentation.tint
             chrome(tint: tint) {
                 Image(systemName: presentation.symbol)
                     .font(.caption2.weight(.semibold))
