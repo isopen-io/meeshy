@@ -123,12 +123,23 @@ export async function checkMoreSheet({ browser, BASE, expect }) {
   await page.goto(`${BASE}${THREAD_PATH}`, { waitUntil: 'load' });
   await page.waitForSelector('[data-message]');
 
+  /**
+   * ON TROUVE PAR LE CROCHET, ON NOMME PAR LE LIBELLÉ (#7600). Depuis #7567 le
+   * menu lit le catalogue d'interface : son texte suit la langue du LECTEUR, et
+   * la CI tourne en `en-US`. Chercher « Plus… » au littéral revenait à exiger
+   * que le produit reste français — un gate qui vote contre la localisation
+   * qu'il est censé laisser passer.
+   *
+   * `data-action` est posé POUR être trouvé et ne change avec aucune langue.
+   * Le libellé reste dans `label`, qui n'alimente que les MESSAGES : c'est lui
+   * qui rend le journal lisible quand le témoin tombe.
+   */
   await checkHandoff({
     page,
     expect,
     label: 'Plus…',
     openLayer: async (p) => {
-      const item = p.locator('.message-menu-list [role="menuitem"]').filter({ hasText: 'Plus…' }).first();
+      const item = p.locator('.message-menu-list [role="menuitem"][data-action="more"]').first();
       if ((await item.count()) === 0) return false;
       await item.click();
       return true;
@@ -147,9 +158,13 @@ export async function checkMoreSheet({ browser, BASE, expect }) {
     expect,
     label: '＋ Ajouter une réaction',
     openLayer: async (p) => {
-      const rail = p.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]');
-      if ((await rail.count()) === 0) return false;
-      await rail.last().click();
+      /* `data-add-reaction` ne marque QUE la tuile « + » : on vise la porte
+         elle-même au lieu de la dernière du rail, ce qui survit en prime à un
+         réordonnancement des emojis. Le nom accessible, lui, reste traduit —
+         c'est ce que le lecteur d'écran entend, et le gate ne le lit pas. */
+      const plus = p.locator('[data-message-menu-rail] [role="menuitem"][data-add-reaction]').first();
+      if ((await plus.count()) === 0) return false;
+      await plus.click();
       return true;
     },
   });
