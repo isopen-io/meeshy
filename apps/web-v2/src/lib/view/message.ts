@@ -122,11 +122,24 @@ export const PROTECTED_ATTACHMENT_KEY = {
 export const kindOf = (attachment: Pick<Attachment, 'mimeType'>): 'image' | 'audio' | 'video' | 'file' =>
   messageTypeFromMimeTypes([attachment.mimeType]) ?? 'file';
 
-/** Les traductions d'un message, ramenées à ce qu'une puce de langue affiche. */
+/**
+ * Les traductions d'un message, ramenées à ce qu'une puce de langue affiche —
+ * et LE SEUL LECTEUR de `Message.translations` de cette couche (#7526).
+ *
+ * La garde `?? []` tient MALGRÉ le type `required`, pour la raison que
+ * `decodeMessage` porte déjà (`api/decode.ts`, #5650) : `@meeshy/shared`
+ * décrit le message COMPLET de `GET …/messages`, pas les formes ALLÉGÉES que
+ * la passerelle sert ailleurs, et le cache du fil tient ce que chaque
+ * écrivain y pose. Ici la conséquence n'est pas un champ manquant mais un
+ * `TypeError` à la PEINTURE : `bubble.tsx` et `focal-row.tsx` appellent
+ * `translatedLanguagesOf` sur CHAQUE rangée, donc le fil entier tombe avant
+ * qu'un `message:translation` n'arrive — le symptôme que `realtime-apply.ts`
+ * garde de son côté (`mergeMessageTranslations`).
+ */
 export const translationsOf = (
   message: Message,
 ): readonly { readonly language: string; readonly text: string }[] =>
-  message.translations.map((t) => ({ language: t.targetLanguage, text: t.translatedContent }));
+  (message.translations ?? []).map((t) => ({ language: t.targetLanguage, text: t.translatedContent }));
 
 /**
  * Une onde de vocal DÉTERMINISTE, dérivée de l'identifiant de la pièce.
@@ -165,7 +178,11 @@ export const translatedLanguagesOf = (message: Message): readonly string[] => {
     languages.push(language);
   };
 
-  for (const t of message.translations) push(t.targetLanguage);
+  // `translationsOf`, jamais une seconde lecture du champ (#7526) : un
+  // deuxième `message.translations` ici serait une deuxième réponse à « ce
+  // champ peut-il manquer ? », et c'est cette duplication qui laisse un site
+  // en arrière au lot suivant.
+  for (const t of translationsOf(message)) push(t.language);
   for (const attachment of message.attachments ?? []) {
     // AUDIO SEULEMENT — `translatedAudios`, jamais « toute pièce traduite »
     // (revue #5805). `buildAvailableFlags` prend DEUX sources et deux

@@ -6,7 +6,7 @@ import type { Attachment } from '@/lib/api/types';
 
 import { served } from '@/lib/api/prism';
 
-import { checkStatusOf, deliveryOf, servedRowLanguage, translatedLanguagesOf } from './message';
+import { checkStatusOf, deliveryOf, servedRowLanguage, translatedLanguagesOf, translationsOf } from './message';
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -184,6 +184,35 @@ describe('translatedLanguagesOf — le texte ET les pièces jointes (#5805)', ()
       ],
     });
     expect(translatedLanguagesOf(m)).toEqual([]);
+  });
+});
+
+/**
+ * #7526 — LA FABRIQUE `message()` POSE TOUJOURS `translations: []`, donc
+ * aucun témoin ci-dessus ne fait VARIER l'absence du champ : ils restent tous
+ * verts sur le défaut. Ces deux-là retirent la clé, la seule dimension que la
+ * fabrique ne bouge pas, et mesurent le COMPORTEMENT rendu — pas la présence
+ * d'un `??` dans la source, qui reverdirait sur un correctif annulé.
+ *
+ * L'enjeu est la PEINTURE : `bubble.tsx:222` et `focal-row.tsx:315` appellent
+ * `translatedLanguagesOf` sur chaque rangée, donc un seul message de cette
+ * forme abattait le fil entier AVANT qu'un `message:translation` n'arrive.
+ */
+describe('#7526 — un message dont la copie en cache ne porte pas `translations`', () => {
+  const sansChampTranslations = (partial: Partial<Message> = {}): Message => {
+    const { translations: _absent, ...reste } = message(partial);
+    return reste as Message;
+  };
+
+  test('`translationsOf` lit l’absence comme une liste vide, sans jeter', () => {
+    expect(translationsOf(sansChampTranslations())).toEqual([]);
+  });
+
+  test('`translatedLanguagesOf` monte quand même la bande d’un vocal traduit', () => {
+    const m = sansChampTranslations({
+      attachments: [voiceAttachment({ de: { type: 'audio', transcription: 'Hallo', createdAt: new Date() } })],
+    });
+    expect(translatedLanguagesOf(m)).toEqual(['de']);
   });
 });
 
