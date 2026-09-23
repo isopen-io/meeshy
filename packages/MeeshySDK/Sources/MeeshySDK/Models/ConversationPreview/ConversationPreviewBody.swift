@@ -195,7 +195,7 @@ struct ConversationPreviewBody {
         let summary = message.attachmentSummary
         let count = summary?.count ?? (attachment != nil ? 1 : 0)
 
-        if message.messageType == "location" {
+        if message.messageType == "location" || message.location != nil {
             let place = [message.location?.name, message.location?.address, message.content]
                 .compactMap { $0 }
                 .first(where: ConversationPreviewComposer.hasText)
