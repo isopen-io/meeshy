@@ -628,6 +628,7 @@ public actor ConversationStore {
                 // déjà tranché le cas du message neuf juste au-dessus.
                 if case .display(let auteur) = ConversationListAuthor.resolve(
                     eventSenderId: event.senderId,
+                    eventSenderUserId: event.senderUserId,
                     eventSenderName: event.lastMessageSenderName,
                     currentUserId: event.readerId,
                     conversationType: conv.type,

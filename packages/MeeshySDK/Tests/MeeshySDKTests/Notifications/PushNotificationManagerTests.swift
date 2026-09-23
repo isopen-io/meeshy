@@ -117,6 +117,21 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertNil(received.first?.messageId)
     }
 
+    /// #7615 — une réaction porte le `messageId` du message RÉAGI. La lire comme
+    /// l'arrivée d'un message avançait la date de la ligne à l'heure de la
+    /// réaction et vidait son aperçu : la réaction n'était alors plus « plus
+    /// récente que le dernier message », et ne s'affichait plus.
+    @MainActor
+    func test_noteMessageActivity_reactionCarryingAMessageId_emitsNothing() {
+        let sut = PushNotificationManager.shared
+        var received: [MessageActivitySignal] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message_reaction", "conversationId": "conv-1", "messageId": "msg-9"])
+        sut.noteMessageActivity(userInfo: ["type": "reaction", "conversationId": "conv-1", "messageId": "msg-9"])
+        c.cancel()
+        XCTAssertTrue(received.isEmpty)
+    }
+
     @MainActor
     func test_noteMessageActivity_friendRequest_emitsNothing() {
         let sut = PushNotificationManager.shared
