@@ -271,6 +271,10 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   isAnnouncementChannel: true,
   slowModeSeconds: true,
   autoTranslateEnabled: true,
+  // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
+  // lecture batchée par page (`loadConversationListActivity`).
+  lastReactionId: true,
+  activeCallId: true,
   participants: {
     take: 5,
     where: {

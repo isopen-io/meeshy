@@ -18,6 +18,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
+import { loadConversationListActivity } from './utils/list-activity';
 import {
   isPreviewWithheld,
   resolveLastMessageNature,
@@ -582,6 +583,24 @@ export function registerConversationListRoute(
           })
         : [];
 
+      // #7545 — dernière réaction et appel en cours, deux lectures pour la
+      // page. La réaction est bornée par le MÊME plancher que l'aperçu : un
+      // message que ce lecteur ne peut pas lire ne se révèle pas par elle.
+      t0 = performance.now();
+      const clearHistoryBeforeById = new Map(
+        conversations.map((c) => [c.id, c.userPreferences[0]?.clearHistoryBefore ?? null] as const)
+      );
+      const activityByConversation = await loadConversationListActivity(prisma, conversations, {
+        viewerLanguages,
+        historyFloorFor: (conversationId) => {
+          if (unreadableFloors.has(conversationId)) return new Date(8.64e15);
+          const floors = [historyFloors.get(conversationId), clearHistoryBeforeById.get(conversationId)]
+            .filter((d): d is Date => d instanceof Date);
+          return floors.length === 0 ? null : new Date(Math.max(...floors.map((d) => d.getTime())));
+        }
+      });
+      perfTimings.listActivity = performance.now() - t0;
+
       // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
       // Attaché DANS cette passe, jamais dans une passe séparée : `buildBridgeData`
       // a besoin d'`unreadCountMap`, qui vient d'être calculé ci-dessus — le
@@ -894,6 +913,8 @@ export function registerConversationListRoute(
             };
           })(),
           unreadCount,
+          lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
+          activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
           // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
           // quand `unreadCount === 0` ou que la passe n'a rien à annoncer
           // (contrat gelé §3.2).
