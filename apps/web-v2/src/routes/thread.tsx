@@ -548,6 +548,7 @@ export default function ThreadScreen() {
     readerLanguages,
     readerLocale,
     viewerId: viewer.id ?? '',
+    canStar: !viewer.isAnonymous,
     onReply: (messageId) => setReplyTarget(messageId),
     announce: announcer.announce,
   });
@@ -1157,6 +1158,7 @@ export default function ThreadScreen() {
             conversationId={conversationId}
             messageId={detailMessage.id}
             attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
+            star={messageMenu.starOf(detailFor)}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);

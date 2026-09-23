@@ -90,6 +90,15 @@ const OVERRIDES = {
    * Le contour et le PLEIN disent l'état que `aria-pressed` annonce.
    */
   'number-circle-one-fill': join(CORE, 'fill/number-circle-one-fill.svg'),
+  /**
+   * `star-fill` (#7378, #7286) — l'étoile PLEINE d'un message en favori :
+   * « Retirer des favoris » dans « Plus… », la rangée de Réglages › Outils et
+   * le bouton de retrait de l'écran des favoris (`star.fill` iOS,
+   * `SettingsView.swift`, `StarredMessagesView.swift`). Phosphor ne publie
+   * pas de `star-slash` : l'étoile PLEINE dit « en favori, toucher pour
+   * retirer », le CONTOUR (`star`) dit « ajouter ».
+   */
+  'star-fill': join(CORE, 'fill/star-fill.svg'),
 };
 
 /**
@@ -290,8 +299,12 @@ emit({
  * `arrow-bend-up-right` (#5866) est le plus proche de `arrowshape.turn.up.right`
  * que iOS pose sur « Transferer » (`MessageActionsMenu.swift`) : phosphor ne
  * publie pas la fleche PLEINE en chevron, et le contour lit mieux a 18 px.
+ *
+ * `star` / `star-fill` (#7378) — le favori de la feuille « Plus... »
+ * (`action.star` / `action.unstar`, `star.fill` iOS) : Ajouter (contour),
+ * Retirer (plein). La feuille vit dans le chunk du fil, comme ce jeu.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three'];
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three', 'star', 'star-fill'];
 
 emit({
   ids: THREAD_MENU,
@@ -642,6 +655,9 @@ const SETTINGS = [
      porte deja, mais le tirer d'ici ferait entrer toute sa table dans le chunk
      des reglages pour un seul trace. */
   'bookmark-fill',
+  /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
+     `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
+  'star-fill',
 ];
 
 emit({
@@ -650,6 +666,29 @@ emit({
   constant: 'SETTINGS_GLYPHS',
   type: 'SettingsGlyphName',
   role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES MESSAGES FAVORIS (#7286) — miroir de
+ * `StarredMessagesView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `star.circle` (etat vide) | `star` |
+ * | `star.fill` (en favori — toucher pour retirer) | `star-fill` |
+ * | `bubble.left.and.bubble.right.fill` (la conversation d'une ligne) | `chats-circle` |
+ *
+ * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
+ * `/me/starred-messages`, jamais dans le socle.
+ */
+const STARRED = ['star', 'star-fill', 'chats-circle'];
+
+emit({
+  ids: STARRED,
+  output: join(HERE, '../src/components/glyphs-starred.ts'),
+  constant: 'STARRED_GLYPHS',
+  type: 'StarredGlyphName',
+  role: "LE JEU D'ECRAN des messages favoris (#7286) : charge avec la route /me/starred-messages, jamais dans le socle.",
 });
 
 /**

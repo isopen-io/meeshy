@@ -27,7 +27,6 @@ import {
   Badges,
   Check,
   EditedMark,
-  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -480,7 +479,6 @@ export function Bubble({
             .swift:522-541`). */}
         <div className={`flex items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
           <Badges badges={badges} />
-          <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
         {/* LE CHROME DE PROTECTION — AU-DESSUS de la bulle, HORS du fond
@@ -557,6 +555,7 @@ export function Bubble({
           </>
         ) : (
           <div
+            data-effects-surface
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine

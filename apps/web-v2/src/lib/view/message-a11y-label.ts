@@ -3,7 +3,6 @@ import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
-import { activeDecorativeEffects } from '@/lib/effects';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -319,15 +318,9 @@ export function composeMessageLabel({
   if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution, language), language));
   if (message.expiresAt !== undefined) segments.push('éphémère');
 
-  /**
-   * LES EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1) — l'œil
-   * les voit désormais via `EffectsIndicator` (`message-blocks.tsx`), rendu
-   * `aria-hidden` précisément pour que ce segment soit le SEUL endroit qui
-   * les prononce (même discipline que « modifié »/« épinglé » ci-dessus).
-   */
-  const effects = activeDecorativeEffects(message.effectFlags);
-  if (effects.length > 0) segments.push(`effets : ${effects.map((effect) => effect.label.toLowerCase()).join(', ')}`);
-
+  /* LES EFFETS DÉCORATIFS ne se prononcent plus (#7596) : ils s'EXÉCUTENT à
+     l'écran, et les énumérer au lecteur d'écran ferait d'une décoration une
+     information — la même chose que le compteur que l'œil ne voit plus. */
   const reactions = reactionsSegment(message.reactionSummary);
   if (reactions !== undefined) segments.push(reactions);
 

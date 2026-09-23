@@ -749,6 +749,11 @@ export class PostService {
   /// View recording is NOT triggered here — callers that want to record a view
   /// must call `recordView()` explicitly (e.g., the dedicated POST /:id/view
   /// route). Previously, every fetch silently inflated viewCount.
+  ///
+  /// The result still CARRIES `visibilityUserIds` : the creation replay feeds it
+  /// to `runPublicationEffects`, which routes the broadcast and the notifications
+  /// with it. It is stripped where the post is SERVED — `servePublishedPost`
+  /// keeps it for the author only (#7407, `posts/audienceList.ts`).
   async getPostById(postId: string, viewerUserId?: string) {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
     // Un `select`, jamais un `include` : `postInclude` est un `PostSelect`
@@ -1522,32 +1527,10 @@ export class PostService {
       throw err;
     }
 
-    const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: NOT_DELETED },
-      select: postInclude,
-    });
-    if (!post) return null;
-
-    const reactions = await this.prisma.postReaction.findMany({
-      where: { postId },
-      select: { userId: true, emoji: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const reactionsJson = reactions.map(r => ({
-      userId: r.userId,
-      emoji: r.emoji,
-      createdAt: r.createdAt.toISOString(),
-    }));
-
-    await this.prisma.post.update({
-      where: { id: postId },
-      data: {
-        reactions: reactionsJson as Prisma.InputJsonValue,
-        likeCount: reactions.length,
-      },
-    });
-
+    // `likeCount`/`reactionSummary` sont recalculés depuis la table par
+    // `addReaction`. Le Json legacy `Post.reactions` n'est plus réécrit (#7406) :
+    // plus aucune lecture ne le sert, et le recopier relisait toutes les
+    // réactions du post, sans borne, à chaque like.
     return this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
       select: postInclude,
@@ -1622,26 +1605,8 @@ export class PostService {
       log.warn('post unlike: notification retraction failed', { postId, userId, err });
     }
 
-    const remainingReactions = await this.prisma.postReaction.findMany({
-      where: { postId },
-      select: { userId: true, emoji: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const reactionsJson = remainingReactions.map(r => ({
-      userId: r.userId,
-      emoji: r.emoji,
-      createdAt: r.createdAt.toISOString(),
-    }));
-
-    await this.prisma.post.update({
-      where: { id: postId },
-      data: {
-        reactions: reactionsJson as Prisma.InputJsonValue,
-        likeCount: remainingReactions.length,
-      },
-    });
-
+    // Même règle que `likePost` : les compteurs sont recalculés par
+    // `removeReaction`, le Json legacy n'est plus réécrit (#7406).
     const refreshed = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
       select: postInclude,

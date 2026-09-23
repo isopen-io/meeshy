@@ -996,21 +996,16 @@ describe('FocalRow — « modifié » d’un message ENVOYÉ reste lisible', () 
 });
 
 /**
- * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
- * — même loi que `bubble.test.tsx`, une seule fois (`EffectsIndicator`,
- * `message-blocks.tsx`).
+ * PLUS AUCUN COMPTEUR D'EFFETS (#7596) — les effets s'EXÉCUTENT
+ * (`MessageEffectsHost`, monté par `ThreadModes` autour de chaque peau) ; la
+ * peau ne les compte ni ne les nomme. Témoin de comportement complet :
+ * `routes/thread-modes-effects.test.tsx`.
  */
-describe('FocalRow — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
-  test('aucun effet ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('RAINBOW actif ⇒ badge « effects » rendu, aria-hidden', () => {
+describe('FocalRow — les effets ne se comptent plus (#7596)', () => {
+  test('RAINBOW actif ⇒ aucun badge, aucun libellé d’effet', () => {
     const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.RAINBOW });
-    expect(html).toContain('data-badge="effects"');
-    expect(html).toContain('aria-hidden');
-    expect(html).toContain('title="Arc-en-ciel"');
+    expect(html).not.toContain('data-badge="effects"');
+    expect(html).not.toMatch(/title="(Confettis|Arc-en-ciel)"/);
   });
 });
 

@@ -814,37 +814,16 @@ describe('Bubble — le corps nu d’un message envoyé reste lisible', () => {
 });
 
 /**
- * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
- * — `message.effectFlags` voyageait jusqu'au serveur sans qu'aucune surface
- * ne le rende. Voir le doc-comment de `EffectsIndicator` (`message-blocks.tsx`)
- * pour ce que ce lot rend (un badge statique) et diffère (le célébratoire
- * animé, sous réserve de la règle 32 de la charte).
+ * PLUS AUCUN COMPTEUR D'EFFETS (#7596) — les effets s'EXÉCUTENT
+ * (`MessageEffectsHost`, monté par `ThreadModes` autour de chaque peau) ; la
+ * peau ne les compte ni ne les nomme. Témoin de comportement complet :
+ * `routes/thread-modes-effects.test.tsx`.
  */
-describe('Bubble — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
-  test('aucun effet ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('un bit de CYCLE DE VIE seul (BLURRED) ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, isBlurred: true });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('CONFETTI actif ⇒ badge « effects » rendu, aria-hidden (le libellé vit dans rowLabel)', () => {
+describe('Bubble — les effets ne se comptent plus (#7596)', () => {
+  test('CONFETTI actif ⇒ aucun badge, aucun libellé d’effet', () => {
     const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI });
-    expect(html).toContain('data-badge="effects"');
-    expect(html).toContain('aria-hidden');
-    expect(html).toContain('title="Confettis"');
-    expect(html).toContain('>1<');
-  });
-
-  test('deux bits décoratifs ⇒ le compte est 2, pas 1', () => {
-    const html = render({
-      ...BASE_MESSAGE,
-      effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.SPARKLE,
-    });
-    expect(html).toContain('>2<');
+    expect(html).not.toContain('data-badge="effects"');
+    expect(html).not.toMatch(/title="(Confettis|Arc-en-ciel)"/);
   });
 });
 
