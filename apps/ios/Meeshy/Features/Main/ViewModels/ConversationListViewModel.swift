@@ -375,7 +375,7 @@ class ConversationListViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             // Un seul écrivain du groupe « dernier message », le moteur (#7548) :
             // voir `ConversationListLastMessage.persisting`.
-            let store = CacheCoordinator.shared.conversations
+            let store = await CacheCoordinator.shared.conversations
             if await store.load(for: "list").snapshot() == nil {
                 try? await store.savePreservingFreshness(snapshot, for: "list")
             } else {
