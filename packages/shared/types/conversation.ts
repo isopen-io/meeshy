@@ -167,13 +167,10 @@ export interface Message {
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
   readonly viewOnceCount: number;
-  /**
-   * Le LECTEUR a-t-il déjà ouvert cette vue unique ? La consommation est PAR
-   * PERSONNE (#7578) : ce qu'un participant ouvre ne retire rien aux autres,
-   * et qui l'a ouverte ne reçoit plus que cet état, jamais le contenu. Absent
-   * d'une passerelle antérieure à #7578.
-   */
+  /** Vue unique (#7578) : CE lecteur l'a déjà ouverte — le contenu n'est plus servi. */
   readonly consumedByMe?: boolean;
+  /** Vue unique (#7578) : tous les destinataires actifs l'ont ouverte. Ne retire jamais la bulle. */
+  readonly isFullyConsumed?: boolean;
   readonly isBlurred: boolean;
 
   // ===== PINNING =====

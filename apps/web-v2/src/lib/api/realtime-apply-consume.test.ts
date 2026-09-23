@@ -4,7 +4,12 @@ import { describe, expect, test } from 'bun:test';
 import { localMessage, threadPages } from '@/test-support/thread-cache';
 
 import { messagesQueryKey } from './messages';
-import { applyMessageConsumed, isMessageConsumedEvent } from './realtime-apply';
+import {
+  applyMessageConsumed,
+  applyMessageViewOncePurged,
+  isMessageConsumedEvent,
+  isMessageViewOncePurgedEvent,
+} from './realtime-apply';
 
 /**
  * `message:consumed` (#7354, V6) — L'ÉVÉNEMENT PAIR DE `consumeViewOnceOptimistic`
@@ -124,5 +129,24 @@ describe('applyMessageConsumed — la vue unique se consomme PAR PERSONNE (#7578
     applyMessageConsumed(client, consumedBy(''), '');
 
     expect(cachedMessages(client)?.find((m) => m.id === 'm-1')).toBe(target);
+  });
+});
+
+describe('applyMessageViewOncePurged — le contenu part, la bulle reste (#7578)', () => {
+  test('la rangée passe « déjà ouverte », purgée, et reste dans le fil', () => {
+    const client = new QueryClient();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+
+    applyMessageViewOncePurged(client, { messageId: 'm-1', conversationId: 'c-a' });
+
+    const row = cachedMessages(client)?.find((m) => m.id === 'm-1');
+    expect(row?.consumedByMe).toBe(true);
+    expect(row?.content).toBe('');
+  });
+
+  test('garde de forme : une charge sans conversation est rejetée', () => {
+    expect(isMessageViewOncePurgedEvent({ messageId: 'm-1' })).toBe(false);
+    expect(isMessageViewOncePurgedEvent({ messageId: 'm-1', conversationId: 'c-a' })).toBe(true);
   });
 });
