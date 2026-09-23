@@ -50,12 +50,15 @@ describe('carrierMessageStillServesBytes', () => {
     });
 
     /**
-     * `scheduleViewOnceBurn` writes the exhausted view-once budget as an
-     * `expiresAt`. The gate therefore covers the burn without knowing anything
-     * about view-once — the deadline IS the burn.
+     * #7578 — the view-once purge has its OWN column (`viewOnceBurnAt`), never
+     * `expiresAt`: the bytes stop at that deadline too.
      */
-    it('refuses a burned view-once message, whose burn is written as a deadline', () => {
-      expect(carrierMessageStillServesBytes({ expiresAt: EARLIER }, NOW)).toBe(false);
+    it('refuses a view-once message whose purge deadline has passed', () => {
+      expect(carrierMessageStillServesBytes({ viewOnceBurnAt: EARLIER }, NOW)).toBe(false);
+    });
+
+    it('still serves a view-once message whose purge deadline is ahead', () => {
+      expect(carrierMessageStillServesBytes({ viewOnceBurnAt: LATER }, NOW)).toBe(true);
     });
 
     /**
