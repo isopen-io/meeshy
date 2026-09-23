@@ -83,6 +83,13 @@ const OVERRIDES = {
    * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
    */
   'coin-fill': join(CORE, 'fill/coin-fill.svg'),
+  /**
+   * `number-circle-one-fill` (#7597) — la vue unique ARMÉE : iOS pose
+   * `1.circle.fill` sur la capsule armée et `1.circle` au repos
+   * (`UniversalComposerBar+Protections.swift`, `MessageProtectionSymbols`).
+   * Le contour et le PLEIN disent l'état que `aria-pressed` annonce.
+   */
+  'number-circle-one-fill': join(CORE, 'fill/number-circle-one-fill.svg'),
 };
 
 /**
@@ -143,6 +150,15 @@ const USED = [
    * socle de glyphes déjà établi par ce dépôt pour cette famille.
    */
   'eye',
+  /**
+   * `number-circle-one` / `number-circle-one-fill` (#7597, #7580) — le « 1 »
+   * cerclé de la vue unique, pendant EXACT de `1.circle` / `1.circle.fill`
+   * (SF Symbol, `MessageProtectionSymbols`). Phosphor le publie : l'ancienne
+   * traduction par `eye` (#7354) n'a plus lieu d'être, et le porteur exige
+   * le « 1 » cerclé au composeur comme dans le fil (#7580).
+   */
+  'number-circle-one',
+  'number-circle-one-fill',
   /**
    * `timer` (revue #5676) — iOS distingue dans la LIGNE DE LISTE l'éphémère
    * (`timer`) de la vue unique (`flame`)
