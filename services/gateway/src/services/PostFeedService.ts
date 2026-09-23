@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { postInclude, statusPostSelect, storyPostInclude, trayStorySelect, NOT_DELETED, type PostPayload } from './posts/postIncludes';
+import { withAudienceListFor } from './posts/audienceList';
 import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
@@ -496,7 +497,7 @@ export class PostFeedService {
         : 'none';
       const author = (s as { author?: { id: string; isOnline: boolean | null; lastActiveAt: Date | null } | null }).author;
       return withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
+        ...this.enrichWithLikeStatus(withAudienceListFor(s, userId), userReactionsMap.get(s.id) ?? []),
         ...(author ? { author: applyPresenceVisibilityAsOffline(author, authorVisibility.get(author.id)) } : {}),
         isViewedByMe: viewedSet.has(s.id),
         currentUserReactions: userReactionsMap.get(s.id) ?? [],
@@ -553,17 +554,14 @@ export class PostFeedService {
 
     const statuses = await this.prisma.post.findMany({
       where: whereClause,
-      include: {
-        author: { select: authorSelect },
-        postMentions: postMentionInclude,
-      },
+      select: statusPostSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p), reader));
+      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -571,7 +569,7 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
-  async getDiscoverStatuses(_userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
+  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
@@ -595,17 +593,14 @@ export class PostFeedService {
 
     const statuses = await this.prisma.post.findMany({
       where,
-      include: {
-        author: { select: authorSelect },
-        postMentions: postMentionInclude,
-      },
+      select: statusPostSelect,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p), reader));
+      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -737,7 +732,7 @@ export class PostFeedService {
   }
 
   /** Enrichit des réels avec l'état viewer (réactions + like + favori). */
-  private async enrichReelsForViewer(items: any[], viewerUserId: string, reader?: WireReader) {
+  private async enrichReelsForViewer(items: PostPayload[], viewerUserId: string, reader?: WireReader) {
     // Aligné sur `getFeed` PAR LA MÊME FONCTION, et non par une recopie : la
     // version précédente disait déjà « aligné sur getFeed » tout en n'exposant
     // que `isBookmarkedByMe` — le rail du reel viewer ne pouvait donc pas

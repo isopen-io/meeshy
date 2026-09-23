@@ -173,6 +173,16 @@ describe('CreatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // #7407 — une republication `EXCEPT`/`ONLY` HÉRITE la liste de sa source :
+  // `PostService.createPost` REMPLACE ce que le client envoie
+  // (`repostVisibilityInheritsAudienceList`). Exiger la liste du client, c'était
+  // exiger une donnée qu'il ne peut plus lire — elle n'est servie qu'à l'auteur
+  // de la source, jamais à celui qui la republie.
+  it.each(['EXCEPT', 'ONLY'])('accepts a %s repost without visibilityUserIds — the list comes from the source', (visibility) => {
+    const result = CreatePostSchema.safeParse({ type: 'STORY', visibility, repostOfId: '507f1f77bcf86cd799439011' });
+    expect(result.success).toBe(true);
+  });
+
   it('defaults type to POST when not specified', () => {
     const result = CreatePostSchema.safeParse({ content: 'Hello' });
     expect(result.success).toBe(true);

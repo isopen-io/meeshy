@@ -313,7 +313,18 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
 
 /**
  * Every Post scalar EXCEPT `storyViews` — the embedded viewer list reserved
- * for the author-only `GET /posts/:id/views` route (`routes/posts/interactions.ts`).
+ * for the author-only `GET /posts/:id/views` route (`routes/posts/interactions.ts`)
+ * — and EXCEPT `reactions`, the legacy Json `[{ userId, emoji, createdAt }]`
+ * (#7406) : it handed every reader of every card the id of everyone who
+ * reacted, unbounded, while `GET /posts/:postId/interactions` reserves that to
+ * the author. No client reads it : `reactionSummary`/`reactionCount` carry the
+ * aggregate, and the viewer's own reactions come from the `PostReaction` table
+ * (`viewerPostState.ts`). It is no longer written by `likePost`/`unlikePost`
+ * either ; only the moderation detail (`routes/admin/posts.ts`) still selects it.
+ *
+ * `visibilityUserIds` IS loaded — the gateway routes its broadcasts and its
+ * notifications with it — but loading is not serving : every read served to
+ * someone else than the author strips it (`audienceList.ts`, #7407).
  *
  * `postInclude` used to be a `Prisma.PostInclude` (a relations-only shape):
  * Prisma always returns EVERY scalar of the model under `include`, so
@@ -349,7 +360,6 @@ export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
   expiresAt: true,
   reactionSummary: true,
   reactionCount: true,
-  reactions: true,
   likeCount: true,
   commentCount: true,
   repostCount: true,
@@ -386,6 +396,18 @@ export const postInclude = Prisma.validator<Prisma.PostSelect>()({
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
+  postMentions: postMentionInclude,
+});
+
+/**
+ * Status (mood) shape — the explicit scalars plus author and visible
+ * references. The status lists used `include`, which returns EVERY scalar of
+ * the model — `storyViews`, `reactions` and all — whatever `postScalarSelect`
+ * decides (#7406).
+ */
+export const statusPostSelect = Prisma.validator<Prisma.PostSelect>()({
+  ...postScalarSelect,
+  author: { select: authorSelect },
   postMentions: postMentionInclude,
 });
 
