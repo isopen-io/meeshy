@@ -443,20 +443,18 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('delegates to addReaction and syncs Json mirror with 1 entry', async () => {
+    // #7406 — le Json legacy `Post.reactions` (`[{ userId, emoji, createdAt }]`)
+    // n'a plus aucun lecteur : il n'est plus servi, et le chemin socket ne l'a
+    // jamais tenu à jour. Le réécrire à chaque like relisait TOUTES les
+    // réactions du post (sans borne) pour recopier des identifiants que plus
+    // personne ne lit. `likeCount` est tenu par `PostReactionService`
+    // (`updatePostReactionSummary`, recalcul depuis la table).
+    it('délègue à addReaction et ne réécrit plus le Json legacy des réactions (#7406)', async () => {
       const createdAt = new Date('2025-01-01T00:00:00Z');
       (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
         .mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '🔥', createdAt, updatedAt: createdAt });
-
       const post = makePost({ likeCount: 1, reactionCount: 1 });
-      // findFirst: first call returns post for Json rebuild, second call returns enriched post
-      prisma.post.findFirst
-        .mockResolvedValueOnce(post)
-        .mockResolvedValueOnce(post);
-      prisma.postReaction.findMany.mockResolvedValue([
-        { userId: 'user-liker', emoji: '🔥', createdAt },
-      ]);
-      prisma.post.update.mockResolvedValue(post);
+      prisma.post.findFirst.mockResolvedValue(post);
 
       const result = await service.likePost('post-1', 'user-liker', '🔥');
 
@@ -465,43 +463,22 @@ describe('PostService', () => {
         userId: 'user-liker',
         emoji: '🔥',
       });
-      expect(prisma.post.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'post-1' },
-          data: expect.objectContaining({
-            reactions: [{ userId: 'user-liker', emoji: '🔥', createdAt: createdAt.toISOString() }],
-            likeCount: 1,
-          }),
-        }),
-      );
+      expect(prisma.post.update).not.toHaveBeenCalled();
+      expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
       expect(result).toEqual(post);
     });
 
-    it('is idempotent — addReaction returns existing reaction, Json shows 1 entry (no duplication)', async () => {
+    it('is idempotent — addReaction returns the existing reaction, nothing else is written', async () => {
       const createdAt = new Date('2025-01-01T00:00:00Z');
       (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
-        .mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '❤️', createdAt, updatedAt: createdAt });
-
-      const post = makePost({ likeCount: 1, reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: createdAt.toISOString() }] });
-      prisma.post.findFirst
-        .mockResolvedValueOnce(post)
-        .mockResolvedValueOnce(post);
-      prisma.postReaction.findMany.mockResolvedValue([
-        { userId: 'user-liker', emoji: '❤️', createdAt },
-      ]);
-      prisma.post.update.mockResolvedValue(post);
+        .mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '❤️', createdAt, updatedAt: createdAt, unchanged: true });
+      const post = makePost({ likeCount: 1 });
+      prisma.post.findFirst.mockResolvedValue(post);
 
       const result = await service.likePost('post-1', 'user-liker');
 
       expect(mockReactionService.addReaction).toHaveBeenCalledTimes(1);
-      expect(prisma.post.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: createdAt.toISOString() }],
-            likeCount: 1,
-          }),
-        }),
-      );
+      expect(prisma.post.update).not.toHaveBeenCalled();
       expect(result).toEqual(post);
     });
 
@@ -535,19 +512,11 @@ describe('PostService', () => {
       expect(result).toBeNull();
     });
 
-    it('removes the reaction and syncs Json mirror with 0 entries', async () => {
+    it('retire la réaction du lecteur sans réécrire le Json legacy des réactions (#7406)', async () => {
       (mockReactionService.removeReaction as ReturnType<typeof jest.fn>).mockResolvedValue(true);
-
       const post = makePost({ likeCount: 0 });
-      prisma.post.findFirst
-        .mockResolvedValueOnce(post)
-        .mockResolvedValueOnce(post);
-      prisma.postReaction.findMany
-        // First call: fetch user's existing reaction to find emoji
-        .mockResolvedValueOnce([{ userId: 'user-liker', emoji: '❤️', createdAt: new Date() }])
-        // Second call: after removeReaction, rebuild Json mirror (0 rows)
-        .mockResolvedValueOnce([]);
-      prisma.post.update.mockResolvedValue(post);
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.postReaction.findMany.mockResolvedValueOnce([{ userId: 'user-liker', emoji: '❤️', createdAt: new Date() }]);
 
       const result = await service.unlikePost('post-1', 'user-liker');
 
@@ -557,15 +526,12 @@ describe('PostService', () => {
         emoji: '❤️',
       });
       expect(result?.removedEmoji).toBe('❤️');
-      expect(prisma.post.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'post-1' },
-          data: expect.objectContaining({
-            reactions: [],
-            likeCount: 0,
-          }),
-        }),
-      );
+      expect(prisma.post.update).not.toHaveBeenCalled();
+      // Une seule lecture : la pile du LECTEUR, jamais celle de tous les réacteurs.
+      expect(prisma.postReaction.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ postId: 'post-1', userId: 'user-liker' }),
+      }));
       expect(result?.post).toEqual(post);
     });
 

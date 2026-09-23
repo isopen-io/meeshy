@@ -1036,7 +1036,7 @@ describe('registerCoreRoutes', () => {
 
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ lastMessageAt: { lt: cursorDate } }),
+          where: expect.objectContaining({ AND: expect.arrayContaining([{ lastMessageAt: { lt: cursorDate } }]) }),
         })
       );
     });

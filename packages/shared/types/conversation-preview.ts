@@ -21,6 +21,16 @@
  */
 
 import type { CallSummaryMediaType, CallSummaryOutcome } from '../utils/call-summary.js';
+import type { MessageSticker } from './message-sticker.js';
+
+/**
+ * Le sticker du dernier message (#7591, #7594), hissé de `metadata.sticker` et
+ * revalidé serveur (`parseMessageSticker`). `lastMessage.sticker` en REST,
+ * `lastMessageSticker` sur `conversation:updated`. Sa présence fait du message
+ * un sticker quel que soit son `messageType` ; `null` sans sticker ou quand le
+ * message ou sa pièce jointe est protégé.
+ */
+export type LastMessageSticker = MessageSticker;
 
 /**
  * Famille d'une pièce jointe pour le décompte de la ligne (« 3 photos »,
@@ -78,13 +88,26 @@ export interface LastMessageCallSummary {
  * Les clés d'événement système que le serveur sait nommer. Une clé inconnue
  * d'un client ancien se rend comme `system.generic`.
  *
- * - `system.member-joined` — params `{ name }` (le nom affiché de l'arrivant)
+ * - `system.member-joined` — params `{ name }` (le nom affiché de l'arrivant),
+ *   pour une arrivée de SOI-MÊME (lien d'invitation, conversation globale)
+ * - `system.member-added` — params `{ actor, target }` (noms affichés) : un
+ *   membre en a ajouté un autre (#7593)
+ * - `system.member-removed` — params `{ actor, target }` : un membre en a
+ *   retiré un autre
+ * - `system.member-left` — params `{ actor }` : départ volontaire
+ * - `system.conversation-renamed` — params `{ actor }` : le titre a changé
+ * - `system.conversation-image` — params `{ actor }` : l'image a changé
  * - `system.encryption-enabled` — params `{ mode }` (`e2ee` | `server` | `hybrid`)
  * - `system.generic` — un message système que le serveur ne sait pas typer ;
  *   aucun paramètre, le client rend un libellé neutre.
  */
 export type SystemEventKey =
   | 'system.member-joined'
+  | 'system.member-added'
+  | 'system.member-removed'
+  | 'system.member-left'
+  | 'system.conversation-renamed'
+  | 'system.conversation-image'
   | 'system.encryption-enabled'
   | 'system.generic';
 
@@ -114,8 +137,8 @@ export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted
  * anonyme) — c'est EUX qu'un client compare au sien pour « Vous avez réagi » et
  * « à votre message ».
  *
- * Rang de la ligne (règle CLIENT, identique REST et socket) :
- * max(`lastMessageAt`, `createdAt` quand `targetSenderUserId` est le lecteur).
+ * Rang de la ligne : règle SERVEUR, servie en `listRankAt` (#7592,
+ * `utils/conversation-list-rank.ts`).
  *
  * `excerpt` suit la MÊME protection que l'aperçu : pour un message réagi
  * protégé, `excerpt` est `null`, `excerptTranslations` est `null` et

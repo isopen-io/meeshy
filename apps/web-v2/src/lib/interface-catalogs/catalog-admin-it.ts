@@ -13,7 +13,6 @@ const it = {
   'admin.counters.reports': 'Segnalazioni',
   'admin.counters.newUsers': 'Nuovi (24 h)',
   'admin.sections.title': 'Sezioni',
-  'admin.sections.legacy': 'interfaccia precedente',
   'admin.nav.dashboard': 'Cruscotto',
   'admin.nav.users': 'Account',
   'admin.nav.moderation': 'Moderazione',

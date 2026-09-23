@@ -548,6 +548,7 @@ export default function ThreadScreen() {
     readerLanguages,
     readerLocale,
     viewerId: viewer.id ?? '',
+    canStar: !viewer.isAnonymous,
     onReply: (messageId) => setReplyTarget(messageId),
     announce: announcer.announce,
   });
@@ -1144,18 +1145,20 @@ export default function ThreadScreen() {
         const servedDetail = messageMenu.servedOf(detailFor);
         return (
           <MessageDetailSheet
-            choices={translationChoices({
-              message: detailMessage,
-              preferredLanguages: readerLanguages,
-              servedLanguage: servedDetail?.language ?? '',
-            })}
+            /* Une vue unique (#7580) : ni langues ni pièces — rien de son contenu. */
+            choices={
+              detailMessage.isViewOnce
+                ? []
+                : translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+            }
             reactions={reactionEntries(detailMessage.reactionSummary)}
             sentAt={new Date(detailMessage.createdAt)}
             delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
             locale={readerLocale}
             conversationId={conversationId}
             messageId={detailMessage.id}
-            attachments={detailMessage.attachments ?? []}
+            attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
+            star={messageMenu.starOf(detailFor)}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);

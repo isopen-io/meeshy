@@ -16,7 +16,16 @@ const makeManager = (sink: Emitted[]) => ({
 });
 
 const makePrisma = () => ({
-  conversation: { findUnique: jest.fn(async () => ({ lastReactionId: 'r1', activeCallId: null })) },
+  conversation: {
+    findUnique: jest.fn(async () => ({
+      lastReactionId: 'r1',
+      activeCallId: null,
+      lastMessageAt: new Date('2026-09-23T10:00:00Z'),
+      lastReactionAt: new Date('2026-09-23T11:00:00Z'),
+      lastReactionTargetKey: 'u-bob',
+    })),
+  },
+  message: { findUnique: jest.fn(async () => ({ senderId: 'p-bob', sender: { userId: 'u-bob' } })) },
   reaction: {
     findUnique: jest.fn(async () => ({
       id: 'r1',
@@ -50,5 +59,7 @@ describe('broadcastReactionMutation — troisième audience : la liste (#7545)',
 
     const listUpdate = emitted.find((e) => e.room === 'user:u-bob' && e.event === SERVER_EVENTS.CONVERSATION_UPDATED);
     expect(listUpdate?.payload.lastReaction).toMatchObject({ emoji: '🔥', reactorName: 'Alice', targetSenderUserId: 'u-bob' });
+    // #7592 — Bob est l'auteur du message réagi : sa ligne remonte, servie par le serveur.
+    expect(listUpdate?.payload.listRankAt).toBe('2026-09-23T11:00:00.000Z');
   });
 });

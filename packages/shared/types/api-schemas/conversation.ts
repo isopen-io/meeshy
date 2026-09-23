@@ -260,6 +260,7 @@ export const conversationSchema = {
     lastReaction: lastReactionSchema,
     activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
+    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne pour CE lecteur (#7592) : max(lastMessageAt, dernière réaction à un message du lecteur). Trier dessus.' },
     messageCount: { type: 'number', nullable: true, description: 'Total message count' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread message count for current user' },
 
@@ -462,6 +463,7 @@ export const conversationMinimalSchema = {
     lastReaction: lastReactionSchema,
     activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
+    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne pour CE lecteur (#7592) : max(lastMessageAt, dernière réaction à un message du lecteur). Trier dessus.' },
     // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,
     // fast-json-stringify les retirerait silencieusement du payload (même piège
     // que `_count` et `location` plus haut) et l'aperçu resterait dans la langue

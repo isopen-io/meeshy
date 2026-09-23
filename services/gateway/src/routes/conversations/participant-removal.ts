@@ -13,6 +13,7 @@ import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant';
 import { participantActionRefusal } from './utils/participant-authority';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 
 const logger = enhancedLogger.child({ module: 'ConversationParticipantRemovalRoute' });
 
@@ -163,6 +164,19 @@ export function registerParticipantRemovalRoute(
         }
       });
       invalidateParticipantLookup(removedParticipant.id, conversationId);
+
+      // #7593 — la ligne de liste des restants dit « Demo a retiré Bob ».
+      await postConversationNotice(
+        { prisma, broadcast: noticeBroadcast(fastify.socketIOHandler) },
+        {
+          conversationId,
+          notice: {
+            kind: 'member-removed',
+            actor: noticeActor(currentUserParticipant),
+            target: noticeActor({ id: removedParticipant.id, displayName: removedParticipant.displayName ?? '' }),
+          },
+        },
+      );
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE

@@ -2,6 +2,7 @@ import { sortConversations } from '@meeshy/shared/utils/conversation-sections';
 
 import { effectiveFlagsOf, effectiveUnreadOf, type ConversationOverride } from '@/lib/conversation-store';
 import { isGroup, titleOf } from '@/lib/view/conversation';
+import { listRankField } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 
 /**
@@ -96,7 +97,8 @@ export function orderConversations(
     // Date | null`, donc écrire explicitement `undefined` est refusé — on
     // n'écrit la clé que lorsqu'elle a une valeur (même garde que
     // `api/prism.ts` sur `originalLanguage`).
-    ...(c.lastMessageAt === undefined ? {} : { lastMessageAt: c.lastMessageAt }),
+    // LE RANG SERVI (#7592) : max(rang du lecteur, `lastMessageAt`).
+    ...listRankField(c),
     updatedAt: c.updatedAt,
   }));
   return sortConversations(sectionable)

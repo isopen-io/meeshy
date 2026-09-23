@@ -132,6 +132,12 @@ const countOf = (client: QueryClient, conversationId: string, messageId: string)
     ?.pages.flatMap((p) => [...p.messages])
     .find((m) => m.id === messageId)?.viewOnceCount;
 
+const rowOf = (client: QueryClient, conversationId: string, messageId: string): Message | undefined =>
+  client
+    .getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId))
+    ?.pages.flatMap((p) => [...p.messages])
+    .find((m) => m.id === messageId);
+
 const respondingWith = (status: number, body: unknown) =>
   createHttpTransport({
     base: '',
@@ -139,6 +145,39 @@ const respondingWith = (status: number, body: unknown) =>
   });
 
 describe('consumeViewOnceOptimistic — la révélation se dit au serveur (#7224)', () => {
+  test('l\'ouverture PURGE la rangée : « déjà ouverte », sans texte, traduction ni pièce (#7580)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const transport = createHttpTransport({ base: '', fetchImpl: (() => new Promise(() => {})) as unknown as typeof fetch });
+
+    void consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    const row = rowOf(client, 'c-a', 'm1');
+    expect(row?.consumedByMe).toBe(true);
+    expect(row?.content).toBe('');
+    expect(row?.translations).toEqual([]);
+    expect(row?.attachments).toEqual([]);
+  });
+
+  test('refus PERMANENT : la rangée d\'AVANT revient entière, contenu compris', async () => {
+    const client = new QueryClient();
+    const before = viewOnce('m1');
+    seedThread(client, 'c-a', [before]);
+    const transport = respondingWith(403, { success: false, error: 'Access denied' });
+
+    await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      deps: { source: 'gateway', transport, queryClient: client },
+    });
+
+    expect(rowOf(client, 'c-a', 'm1')).toEqual(before);
+  });
+
   test('le cache porte la consommation AVANT toute réponse réseau (optimiste)', () => {
     const client = new QueryClient();
     seedThread(client, 'c-a', [viewOnce('m1')]);

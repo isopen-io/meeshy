@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  closeViewOnce,
   formatRemaining,
+  openViewOnce,
   protectionOf,
   requiresConsume,
   rendersContent,
@@ -19,9 +21,16 @@ import type { ProtectionKind, RevealPhase } from './protection';
  * part d'une base « rien de protégé » et ne surcharge que ce que le test
  * nomme.
  */
-const fields = (
-  overrides: Partial<{ deletedAt: Date; isViewOnce: boolean; viewOnceCount: number; isBlurred: boolean; expiresAt: Date }> = {},
-): { deletedAt?: Date; isViewOnce: boolean; viewOnceCount: number; isBlurred: boolean; expiresAt?: Date } => ({
+type Fields = {
+  deletedAt?: Date;
+  isViewOnce: boolean;
+  viewOnceCount: number;
+  isBlurred: boolean;
+  expiresAt?: Date;
+  consumedByMe?: boolean;
+  ephemeralDuration?: number;
+};
+const fields = (overrides: Partial<Fields> = {}): Fields => ({
   isViewOnce: false,
   viewOnceCount: 0,
   isBlurred: false,
@@ -35,8 +44,24 @@ describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
     ).toBe('deleted');
   });
 
-  test('vue unique consommée ⇒ burned, même isBlurred: false, même pour l’émetteur', () => {
-    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1 }), 1000)).toBe('burned');
+  test('vue unique que J\'AI ouverte (consumedByMe) ⇒ opened, jamais un mot de suppression (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: true }), 1000)).toBe('opened');
+  });
+
+  test('vue unique ouverte par un AUTRE : compteur global à 1 mais consumedByMe: false ⇒ encore à ouvrir chez moi (#7578)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1, consumedByMe: false }), 1000)).toBe('viewOnce');
+  });
+
+  test('passerelle antérieure à #7578 (consumedByMe absent) : le compteur global reste le repli', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1 }), 1000)).toBe('opened');
+  });
+
+  test('vue unique NON éphémère dont l\'échéance serveur passe ⇒ opened, la bulle RESTE (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, expiresAt: new Date(1000) }), 1000)).toBe('opened');
+  });
+
+  test('vue unique ET éphémère à l\'échéance ⇒ expired : elle part avec l\'éphémère', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: true, ephemeralDuration: 60, expiresAt: new Date(1000) }), 1000)).toBe('expired');
   });
 
   test('expiresAt <= now ⇒ expired', () => {
@@ -51,8 +76,9 @@ describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
     expect(protectionOf(fields({ isBlurred: true }), 1000)).toBe('veiled');
   });
 
-  test('isViewOnce SANS isBlurred, non consommé ⇒ veiled (forme SDK declaredProtection, fail-closed)', () => {
-    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 0 }), 1000)).toBe('veiled');
+  test('vue unique non ouverte ⇒ viewOnce, flouée ou non : UNE puce, jamais le flou en plus (#7580)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 0 }), 1000)).toBe('viewOnce');
+    expect(protectionOf(fields({ isViewOnce: true, isBlurred: true }), 1000)).toBe('viewOnce');
   });
 
   test('tout à false/absent ⇒ standard', () => {
@@ -172,6 +198,28 @@ describe('reveal — hidden → revealed(until) → fogging(until,next) → hidd
   });
 });
 
+describe('openViewOnce / closeViewOnce — la vue unique n\'a pas d\'horloge (#7580)', () => {
+  test('ouverte, elle ne se referme jamais seule : settle la laisse, quel que soit le temps écoulé', () => {
+    const opened = openViewOnce({ phase: 'hidden' });
+    expect(opened.phase).toBe('revealed');
+    expect(settle(opened, { now: Number.MAX_SAFE_INTEGER, isViewOnce: true })).toBe(opened);
+  });
+
+  test('retouchée, elle passe par le brouillard puis « déjà ouvert »', () => {
+    const closing = closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000 });
+    expect(closing).toEqual({ phase: 'fogging', until: 1400, next: 'consumed' });
+    expect(settleFog(closing, { now: 1400 })).toEqual({ phase: 'consumed' });
+  });
+
+  test('le plein écran d\'un média fermé passe directement à « déjà ouvert »', () => {
+    expect(closeViewOnce(openViewOnce({ phase: 'hidden' }), { now: 1000, immediate: true })).toEqual({ phase: 'consumed' });
+  });
+
+  test('une vue unique déjà ouverte ne se rouvre pas', () => {
+    expect(openViewOnce({ phase: 'consumed' })).toEqual({ phase: 'consumed' });
+  });
+});
+
 describe('rendersContent / showsAffordance — la matrice kind × phase', () => {
   const hidden = { phase: 'hidden' as const };
   const revealed = { phase: 'revealed' as const, until: 6000 };
@@ -188,10 +236,13 @@ describe('rendersContent / showsAffordance — la matrice kind × phase', () => 
     ['veiled', revealed, true],
     ['veiled', fogging, true],
     ['veiled', consumed, false],
-    ['burned', hidden, false],
-    ['burned', revealed, true],
-    ['burned', foggingToConsumed, true],
-    ['burned', consumed, false],
+    ['viewOnce', hidden, false],
+    ['viewOnce', revealed, true],
+    ['viewOnce', consumed, false],
+    ['opened', hidden, false],
+    ['opened', revealed, true],
+    ['opened', foggingToConsumed, true],
+    ['opened', consumed, false],
     ['deleted', hidden, false],
     ['deleted', revealed, false],
     ['deleted', fogging, false],
@@ -207,11 +258,12 @@ describe('rendersContent / showsAffordance — la matrice kind × phase', () => 
     });
   }
 
-  test('showsAffordance : SEULEMENT veiled + hidden — jamais pendant fogging', () => {
+  test('showsAffordance : un état À OUVRIR, au repos — jamais pendant fogging, jamais une fois ouvert', () => {
     expect(showsAffordance('veiled', hidden)).toBe(true);
+    expect(showsAffordance('viewOnce', hidden)).toBe(true);
     expect(showsAffordance('veiled', revealed)).toBe(false);
     expect(showsAffordance('veiled', fogging)).toBe(false);
-    expect(showsAffordance('burned', hidden)).toBe(false);
+    expect(showsAffordance('opened', hidden)).toBe(false);
     expect(showsAffordance('standard', hidden)).toBe(false);
   });
 });

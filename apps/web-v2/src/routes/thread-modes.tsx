@@ -5,6 +5,7 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
+import { MessageEffectsHost } from '@/components/message-effects-host';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
 import { UnreadSeparator } from '@/components/unread-separator';
@@ -673,59 +674,64 @@ export function ThreadModes({
                   ? {}
                   : { onClick: () => onRowTap(p.message.id) })}
               >
-                {usesFlatRow(mode) ? (
-                  <FocalRow
-                    mode={mode}
-                    place={p}
-                    languages={readerLanguages}
-                    viewerId={viewerId}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    elected={isElected}
-                    expired={rowExpired}
-                    ephemeralDeadline={rowDeadline}
-                    revealable={!rowWithheld}
-                    {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                    {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    {...(onPickLanguage === undefined
-                      ? {}
-                      : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                    {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                    {...(rowSelected === undefined || onRowTap === undefined
-                      ? {}
-                      : { selected: rowSelected, onToggleSelect: onRowTap })}
-                    {...sendProps}
-                  />
-                ) : (
-                  <Bubble
-                    place={p}
-                    languages={readerLanguages}
-                    isGrouped={group}
-                    viewerId={viewerId}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    expired={rowExpired}
-                    ephemeralDeadline={rowDeadline}
-                    revealable={!rowWithheld}
-                    {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                    {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    {...(onPickLanguage === undefined
-                      ? {}
-                      : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                    {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                    {...(rowSelected === undefined || onRowTap === undefined
-                      ? {}
-                      : { selected: rowSelected, onToggleSelect: onRowTap })}
-                    {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
-                    {...sendProps}
-                  />
-                )}
+                {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
+                    LES DEUX peaux — même raison que la destruction ci-dessus :
+                    un mode ajouté demain les joue sans rien câbler. */}
+                <MessageEffectsHost effectFlags={p.message.effectFlags}>
+                  {usesFlatRow(mode) ? (
+                    <FocalRow
+                      mode={mode}
+                      place={p}
+                      languages={readerLanguages}
+                      viewerId={viewerId}
+                      onJumpToMessage={jumpToMessage}
+                      highlighted={highlightedId === p.message.id}
+                      elected={isElected}
+                      expired={rowExpired}
+                      ephemeralDeadline={rowDeadline}
+                      revealable={!rowWithheld}
+                      {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                      {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                      {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                      {...(onPickLanguage === undefined
+                        ? {}
+                        : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                      {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                      {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                      {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                      {...(rowSelected === undefined || onRowTap === undefined
+                        ? {}
+                        : { selected: rowSelected, onToggleSelect: onRowTap })}
+                      {...sendProps}
+                    />
+                  ) : (
+                    <Bubble
+                      place={p}
+                      languages={readerLanguages}
+                      isGrouped={group}
+                      viewerId={viewerId}
+                      onJumpToMessage={jumpToMessage}
+                      highlighted={highlightedId === p.message.id}
+                      expired={rowExpired}
+                      ephemeralDeadline={rowDeadline}
+                      revealable={!rowWithheld}
+                      {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                      {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                      {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                      {...(onPickLanguage === undefined
+                        ? {}
+                        : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                      {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                      {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                      {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                      {...(rowSelected === undefined || onRowTap === undefined
+                        ? {}
+                        : { selected: rowSelected, onToggleSelect: onRowTap })}
+                      {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
+                      {...sendProps}
+                    />
+                  )}
+                </MessageEffectsHost>
               </div>
             </li>
           );

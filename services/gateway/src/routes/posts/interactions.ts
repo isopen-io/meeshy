@@ -22,6 +22,7 @@ import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLo
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
 import { withMentions } from '../../services/posts/postReferences';
+import { withAudienceListFor } from '../../services/posts/audienceList';
 import { servePublishedPost, hoistLocation } from './publication';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { registerBookmarkRoutes } from './bookmarks';
@@ -768,7 +769,10 @@ export function registerInteractionRoutes(
       // aplatissement des mentions sur les deux charges ; seul `storyEffects`
       // diverge — négocié pour la réponse (O17), tel quel sur le broadcast
       // (F3 : une seule charge pour une audience hétérogène).
-      const payload = withMentions(republished, wireReaderFromRequest(request as UnifiedAuthRequest));
+      const payload = withMentions(
+        withAudienceListFor(republished, authContext.registeredUser.id),
+        wireReaderFromRequest(request as UnifiedAuthRequest),
+      );
       const broadcastPayload = withMentions(republished, WIRE_BROADCAST);
 
       // Un rejeu resert la story ; il ne la republie pas. Refanner
