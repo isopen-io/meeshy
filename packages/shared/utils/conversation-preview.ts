@@ -53,6 +53,7 @@ export type PreviewIcon =
   | 'photo'
   | 'file'
   | 'location'
+  | 'sticker'
   | 'attachments'
   | 'effect'
   | 'forward'
@@ -111,7 +112,13 @@ type Instant = Date | string | number;
  */
 export type ConversationPreviewAttachment = Partial<
   Pick<LastMessagePreviewAttachment, 'mimeType' | 'originalName' | 'fileSize' | 'duration' | 'width' | 'height' | 'pageCount'>
-> & AttachmentProtectionFlags;
+> & AttachmentProtectionFlags & {
+  /**
+   * Texte alternatif (`MessageAttachment.alt`). Pour un sticker de texte, c'est
+   * la phrase tapée, dessinée dans l'image (décision porteur 2026-09-23).
+   */
+  readonly alt?: string | null;
+};
 
 /**
  * Le dernier message tel que le client le tient — projection de `lastMessage`
@@ -145,6 +152,8 @@ export type ConversationPreviewMessage = {
    */
   readonly systemEvent?: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> | null } | null;
   readonly callSummary?: LastMessageCallSummary | null;
+  /** Sticker hissé de `metadata.sticker` : sa présence fait du message un sticker, quel que soit son `messageType`. */
+  readonly sticker?: { readonly templateId?: string | null; readonly emoji?: string | null } | null;
   /** Lieu partagé (`location` hissé de `metadata.location`). */
   readonly location?: { readonly name?: string | null; readonly address?: string | null } | null;
   readonly attachment?: ConversationPreviewAttachment | null;
@@ -448,9 +457,12 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
     const segments = [label(str('attachment.location')), ...place];
     return { icon: 'location', segments, labelled: segments };
   }
-  if (message.messageType === 'sticker') {
-    const segments = [label(str('attachment.sticker'))];
-    return { icon: null, segments, labelled: segments };
+  if (message.messageType === 'sticker' || message.sticker) {
+    const alt = attachment?.alt;
+    const segments: readonly PreviewSegment[] = hasText(alt)
+      ? [{ kind: 'text', text: alt.trim(), language: null }]
+      : [label(str('attachment.sticker'))];
+    return { icon: 'sticker', segments, labelled: segments };
   }
   if (count === 0) {
     const segments = text ? [text] : [];
@@ -589,6 +601,7 @@ export const PREVIEW_ICON_GLYPH: Readonly<Record<PreviewIcon, string>> = {
   photo: '📷',
   file: '📄',
   location: '📍',
+  sticker: '🏷',
   attachments: '📎',
   effect: '✨',
   forward: '↪',

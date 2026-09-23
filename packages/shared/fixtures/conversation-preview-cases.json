@@ -946,7 +946,7 @@
     },
     {
       "id": "sticker",
-      "matrix": "Sticker",
+      "matrix": "Sticker — sans texte alternatif",
       "input": {
         "viewerId": "u-me",
         "language": "fr",
@@ -967,7 +967,7 @@
       },
       "expected": {
         "tone": "default",
-        "icon": null,
+        "icon": "sticker",
         "author": {
           "kind": "member",
           "id": "u-alice",
@@ -981,7 +981,250 @@
           }
         ]
       },
-      "text": "Alice : Sticker"
+      "text": "Alice : 🏷 Sticker"
+    },
+    {
+      "id": "sticker-text",
+      "matrix": "Sticker de texte — la phrase tapée, lue dans le texte alternatif (décision porteur 2026-09-23)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "sticker": {
+            "templateId": "bubble-pop"
+          },
+          "attachment": {
+            "mimeType": "image/png",
+            "width": 512,
+            "height": 512,
+            "fileSize": 48000,
+            "alt": "Bonjour à tous"
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "sticker",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bonjour à tous",
+            "language": null
+          }
+        ]
+      },
+      "text": "Alice : 🏷 Bonjour à tous"
+    },
+    {
+      "id": "sticker-text-not-translated",
+      "matrix": "Sticker de texte — hors Prisme : la phrase est dessinée dans l’image",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "translations": {
+            "en": "Hello everyone"
+          },
+          "sticker": {
+            "templateId": "bubble-pop"
+          },
+          "attachment": {
+            "mimeType": "image/png",
+            "alt": "Bonjour à tous"
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "sticker",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bonjour à tous",
+            "language": null
+          }
+        ]
+      },
+      "text": "Alice : 🏷 Bonjour à tous"
+    },
+    {
+      "id": "sticker-emoji-without-alt",
+      "matrix": "Sticker emoji — sans texte alternatif",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "sticker": {
+            "emoji": "🎉"
+          },
+          "attachment": {
+            "mimeType": "image/png",
+            "alt": null
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "sticker",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Sticker"
+          }
+        ]
+      },
+      "text": "Alice : 🏷 Sticker"
+    },
+    {
+      "id": "sticker-text-view-once",
+      "matrix": "Sticker de texte à vue unique — le texte alternatif ne part pas",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "isViewOnce": true,
+          "sticker": {
+            "templateId": "bubble-pop"
+          },
+          "attachment": {
+            "mimeType": "image/png",
+            "alt": "Code 4242"
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "view-once",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Vue unique"
+          }
+        ]
+      },
+      "text": "Alice : 👁 Vue unique"
+    },
+    {
+      "id": "sticker-text-blurred-attachment",
+      "matrix": "Sticker de texte flouté par sa pièce jointe — le texte alternatif ne part pas",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "sticker": {
+            "templateId": "bubble-pop"
+          },
+          "attachment": {
+            "mimeType": "image/png",
+            "alt": "Spoiler final",
+            "isBlurred": true
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "hidden",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "Message masqué"
+          },
+          {
+            "kind": "label",
+            "text": "ouvrir pour lire"
+          }
+        ]
+      },
+      "text": "Alice : 🙈 Message masqué · ouvrir pour lire"
     },
     {
       "id": "photos-same-kind",
