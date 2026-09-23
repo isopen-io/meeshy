@@ -315,6 +315,12 @@ const SEMANTIQUES = [
   ['neutral600', '--ios-neutral-600'],
   // L'argent de la pièce Meesh (#6427) — le web ne le recopie pas.
   ['meeshSilver', '--ios-meesh-silver'],
+  // Les états d'un message dans le fil (#7599) — un code, deux plateformes.
+  ['stateViewOnce', '--ios-state-view-once'],
+  ['stateOpened', '--ios-state-opened'],
+  ['stateEphemeral', '--ios-state-ephemeral'],
+  ['stateConcealed', '--ios-state-concealed'],
+  ['stateFailed', '--ios-state-failed'],
 ];
 const semantiques = SEMANTIQUES.map(([swift, css]) => {
   if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
