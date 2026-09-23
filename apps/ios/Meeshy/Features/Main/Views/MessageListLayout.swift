@@ -217,16 +217,32 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// des corrections self-sizing) est AVALÉE pour la transaction : la
     /// passe de cellules visibles converge au lieu de franchir la garde de
     /// ré-entrance d'UIKit (assertion à ~7 passes imbriquées). Les cellules
-    /// concernées gardent leur hauteur estimée UNE frame — invisible à
-    /// vitesse de fling — et se rattrapent au tour suivant : une invalidation
-    /// COMPLÈTE est planifiée (jamais avalée, budget réarmé). Les
-    /// invalidations complètes (rotation, reload, notre rattrapage) passent
-    /// TOUJOURS.
+    /// concernées gardent leur hauteur UNE frame de plus, et le contexte
+    /// avalé est REJOUÉ tel quel au tour suivant (`replayDeferredPartialInvalidations`),
+    /// budget réarmé. Les invalidations complètes (rotation, reload,
+    /// adoption d'estimation) passent TOUJOURS.
+    ///
+    /// **#7624 — le plafond DIFFÈRE, il ne remplace plus par une invalidation
+    /// COMPLÈTE.** Le rattrapage d'origine était une invalidation complète ;
+    /// or le layout compositionnel y JETTE toutes les hauteurs mesurées —
+    /// mesuré au simulateur, chaque cellule visible re-mesurée depuis
+    /// l'estimation (`in=62.7` pour toutes), `contentSize` 7155 → 6445 au
+    /// repos. La re-mesure de la fenêtre dépassait à son tour le plafond et
+    /// replanifiait un rattrapage : 22 invalidations complètes en cascade sur
+    /// 25 s de flings, 2,4 s de fil principal (Time Profiler, Debug), des
+    /// gels de 100 à 400 ms à chaque pose. Rejouer le contexte avalé livre
+    /// exactement la correction qu'UIKit avait calculée, sans rien oublier.
     static let maxPartialInvalidationsPerTransaction = 4
+
+    /// Borne de la file des contextes différés : au-delà, les plus anciens
+    /// tombent — ils visent des rangées que le défilement a déjà quittées, et
+    /// une rangée qui revient à l'écran se re-mesure d'elle-même.
+    static let maxDeferredPartialInvalidations = 32
 
     private(set) var partialInvalidationsThisTransaction = 0
     private var transactionResetScheduled = false
-    private var recoveryInvalidationScheduled = false
+    private var deferredPartialInvalidations: [UICollectionViewLayoutInvalidationContext] = []
+    private var deferredReplayScheduled = false
 
     private func scheduleTransactionReset() {
         guard !transactionResetScheduled else { return }
@@ -237,15 +253,31 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         }
     }
 
-    private func scheduleRecoveryInvalidation() {
-        guard !recoveryInvalidationScheduled else { return }
-        recoveryInvalidationScheduled = true
+    private func deferPartialInvalidation(_ context: UICollectionViewLayoutInvalidationContext) {
+        deferredPartialInvalidations.append(context)
+        let overflow = deferredPartialInvalidations.count - Self.maxDeferredPartialInvalidations
+        if overflow > 0 { deferredPartialInvalidations.removeFirst(overflow) }
+        guard !deferredReplayScheduled else { return }
+        deferredReplayScheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.fireOrDeferRecoveryInvalidation()
+            self?.replayDeferredPartialInvalidations()
         }
     }
 
-    /// Le rattrapage (invalidation COMPLÈTE) ne tombe JAMAIS pendant que la
+    /// Rejoue, dans une transaction neuve, les contextes que le plafond a
+    /// différés — chacun repasse par l'entonnoir, donc par le budget : ce qui
+    /// déborde encore est différé au tour d'après. Aucune invalidation
+    /// complète, aucune hauteur mesurée oubliée.
+    func replayDeferredPartialInvalidations() {
+        deferredReplayScheduled = false
+        let pending = deferredPartialInvalidations
+        deferredPartialInvalidations.removeAll()
+        pending.forEach { invalidateLayout(with: $0) }
+    }
+
+    /// L'invalidation COMPLÈTE ancrée — depuis #7624, le seul client est
+    /// l'adoption d'une nouvelle estimation (`invalidateForAdoptedEstimate`) ;
+    /// le plafond ci-dessus ne l'appelle plus. Elle ne tombe JAMAIS pendant que la
     /// liste bouge : une invalidation complète en plein momentum tue la
     /// décélération — chaque fling semblait « avalé » dès qu'une tempête
     /// avait laissé un refus derrière elle (rouleau, user 2026-08-18).
@@ -265,12 +297,11 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// relance en vol — si aucun arrêt n'est signalé (défilement programmé).
     private(set) var recoveryInvalidationPending = false
 
-    /// Portée non-`private` : appelée par `scheduleRecoveryInvalidation()`
-    /// (asynchrone, chemin réel) ET directement par les tests — le
+    /// Portée non-`private` : appelée par `invalidateForAdoptedEstimate()`
+    /// (chemin réel) ET directement par les tests — le
     /// mécanisme d'ancrage ci-dessous ne dépend d'aucun timing, seul le
     /// DÉCLENCHEMENT (planification async) l'est.
     func fireOrDeferRecoveryInvalidation() {
-        recoveryInvalidationScheduled = false
         if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
             recoveryInvalidationPending = true
             scheduleRecoveryRetry()
@@ -356,9 +387,14 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
 
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
         let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
+        if !isPartial {
+            // Une invalidation complète ou un changement de comptes rend les
+            // chemins d'index différés caducs — elle re-mesure tout elle-même.
+            deferredPartialInvalidations.removeAll()
+        }
         if isPartial {
             guard partialInvalidationsThisTransaction < Self.maxPartialInvalidationsPerTransaction else {
-                scheduleRecoveryInvalidation()
+                deferPartialInvalidation(context)
                 return
             }
             partialInvalidationsThisTransaction += 1

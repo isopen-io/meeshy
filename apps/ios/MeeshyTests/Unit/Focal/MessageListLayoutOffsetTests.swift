@@ -413,6 +413,148 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         )
     }
 
+    // MARK: - Budget dépassé (#7624) — le layout n'OUBLIE jamais ce qu'il a mesuré
+
+    /// Harnais self-sizing RÉEL : estimation 100 pt, rangées de 50 pt. Les
+    /// hauteurs de `heights` sont lues par la contrainte de chaque cellule à
+    /// sa configuration — une cellule visible re-mesurée après
+    /// `invalidateIntrinsicContentSize()` rend donc la nouvelle cote.
+    private func makeSelfSizingHarness(
+        itemCount: Int,
+        heights: HeightBox
+    ) -> (collectionView: UICollectionView, dataSource: UICollectionViewDiffableDataSource<Int, String>, window: UIWindow) {
+        let layout = MessageListLayout { _, _ in
+            let size = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(100))
+            let item = NSCollectionLayoutItem(layoutSize: size)
+            let group = NSCollectionLayoutGroup.vertical(layoutSize: size, subitems: [item])
+            return NSCollectionLayoutSection(group: group)
+        }
+        let collectionView = UICollectionView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            collectionViewLayout: layout
+        )
+        let registration = UICollectionView.CellRegistration<SelfSizingProbeCell, String> { cell, indexPath, _ in
+            cell.heights = heights
+            cell.item = indexPath.item
+        }
+        let dataSource = UICollectionViewDiffableDataSource<Int, String>(
+            collectionView: collectionView
+        ) { collectionView, indexPath, item in
+            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.addSubview(collectionView)
+        window.makeKeyAndVisible()
+        var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
+        snapshot.appendSections([0])
+        snapshot.appendItems((0..<itemCount).map { "m\($0)" })
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
+        return (collectionView, dataSource, window)
+    }
+
+    /// Cellule dont la hauteur préférée est lue à CHAQUE mesure dans
+    /// `heights` — le contenu SwiftUI d'une rangée qui change de cote.
+    private final class SelfSizingProbeCell: UICollectionViewCell {
+        var heights: HeightBox?
+        var item = 0
+        override func preferredLayoutAttributesFitting(
+            _ layoutAttributes: UICollectionViewLayoutAttributes
+        ) -> UICollectionViewLayoutAttributes {
+            let attributes = layoutAttributes.copy() as! UICollectionViewLayoutAttributes
+            attributes.frame.size.height = heights?.height(for: item) ?? 50
+            return attributes
+        }
+    }
+
+    /// Les rangées VISIBLES changent de cote dans la même transaction : un
+    /// contexte self-sizing RÉEL par rangée — celui qu'UIKit fabrique quand le
+    /// contenu SwiftUI d'une cellule `UIHostingConfiguration` change de cote —
+    /// livré par l'entonnoir `invalidateLayout(with:)`, comme en production.
+    private func resizeVisibleRows(of collectionView: UICollectionView, heights: HeightBox, to height: CGFloat) -> [Int] {
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        let visible = collectionView.indexPathsForVisibleItems.sorted()
+        for indexPath in visible {
+            heights.heights[indexPath.item] = height
+            guard let original = layout.layoutAttributesForItem(at: indexPath) else { continue }
+            let preferred = original.copy() as! UICollectionViewLayoutAttributes
+            preferred.frame.size.height = height
+            let context = layout.invalidationContext(
+                forPreferredLayoutAttributes: preferred,
+                withOriginalAttributes: original
+            )
+            layout.invalidateLayout(with: context)
+        }
+        return visible.map(\.item)
+    }
+
+    private func spinMainLoop(_ seconds: TimeInterval = 0.4) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    /// Mesuré au simulateur (#7624, fil « Meeshy Global ») : chaque
+    /// dépassement du plafond de 4 invalidations partielles planifiait une
+    /// invalidation COMPLÈTE — et le layout compositionnel y jette TOUTES les
+    /// hauteurs mesurées (chaque cellule re-mesurée depuis l'estimation,
+    /// `in=62.7` pour toutes). La re-mesure de la fenêtre dépassait à son tour
+    /// le plafond : 22 invalidations complètes en cascade sur 25 s de flings,
+    /// 2,4 s de fil principal, et le contenu non visible retombé à
+    /// l'estimation (`contentSize` 7155 → 6445 au repos).
+    func test_invalidateLayout_partialBudgetExceeded_keepsMeasuredHeights() {
+        let heights = HeightBox()
+        for index in 0..<30 { heights.heights[index] = 50 }
+        let (collectionView, dataSource, _) = makeSelfSizingHarness(itemCount: 30, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        // Les rangées de l'ouverture sont MESURÉES (50 pt) puis sortent de la
+        // fenêtre.
+        spinMainLoop()
+        collectionView.contentOffset = CGPoint(x: 0, y: 700)
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        XCTAssertFalse(collectionView.indexPathsForVisibleItems.contains(IndexPath(item: 0, section: 0)),
+                       "précondition : la rangée 0 est sortie de la fenêtre")
+        let measuredBefore = layout.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame.height ?? 0
+        XCTAssertEqual(measuredBefore, 50, accuracy: 0.5, "précondition : la rangée 0 a été mesurée à l'ouverture")
+
+        let resized = resizeVisibleRows(of: collectionView, heights: heights, to: 80)
+        XCTAssertGreaterThan(resized.count, MessageListLayout.maxPartialInvalidationsPerTransaction,
+                             "précondition : plus de rangées retaillées que le plafond")
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        collectionView.layoutIfNeeded()
+
+        XCTAssertEqual(
+            layout.layoutAttributesForItem(at: IndexPath(item: 0, section: 0))?.frame.height ?? 0, measuredBefore, accuracy: 0.5,
+            "un dépassement du plafond d'invalidations partielles ne doit jamais faire oublier au layout les hauteurs déjà mesurées — une invalidation complète les ramène toutes à l'estimation et relance la tempête qu'elle devait éteindre."
+        )
+    }
+
+    /// Le plafond DIFFÈRE une correction, il ne la perd pas : des rangées
+    /// VISIBLES qui changent toutes de cote dans la même transaction (plus
+    /// que le plafond) atteignent leur hauteur réelle au tour suivant.
+    func test_invalidateLayout_partialBudgetExceeded_visibleRowsConvergeToTheirHeight() {
+        let heights = HeightBox()
+        for index in 0..<20 { heights.heights[index] = 50 }
+        let (collectionView, dataSource, _) = makeSelfSizingHarness(itemCount: 20, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+        spinMainLoop()
+
+        let resized = resizeVisibleRows(of: collectionView, heights: heights, to: 80)
+        XCTAssertGreaterThan(resized.count, MessageListLayout.maxPartialInvalidationsPerTransaction,
+                             "précondition : plus de rangées retaillées que le plafond")
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+        collectionView.layoutIfNeeded()
+        spinMainLoop()
+
+        for item in resized where collectionView.indexPathsForVisibleItems.contains(IndexPath(item: item, section: 0)) {
+            XCTAssertEqual(layout.layoutAttributesForItem(at: IndexPath(item: item, section: 0))?.frame.height ?? 0, 80, accuracy: 0.5,
+                           "rangée \(item) : la correction avalée par le plafond doit être rejouée au tour suivant")
+        }
+    }
+
     // MARK: - Hôte — le contrôleur monte bien la sous-classe
 
     private func makeEmptyStore() throws -> MessageStore {
