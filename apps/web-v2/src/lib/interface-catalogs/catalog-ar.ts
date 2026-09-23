@@ -12,12 +12,6 @@ const ar = {
   'message.excerpt.protected': 'محتوى محمي',
   'a11y.message.menu.subject': 'إجراءات رسالة {author}: {excerpt}',
 
-  'message.action.select': 'تحديد',
-  'message.action.translate': 'ترجمة',
-  'message.action.copy': 'نسخ',
-  'message.action.forward': 'إعادة توجيه',
-  'message.action.compose': 'تحرير',
-  'message.action.more': 'المزيد…',
   'selection.toolbar': 'تحديد الرسائل',
   'selection.cancel': 'إلغاء',
   'selection.count': 'تم تحديد {count}',
