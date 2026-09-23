@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Lecture / non-lecture (notifications, conversations, messages, separateur « messages non lus » en couleur primaire) et accuses + progression media (emis, recu, vu, ouvertures, audio/video lus jusqu ou) — sur iOS ET web-v2, trois chaines paralleles (gateway, web-v2, iOS) en lots TDD, revue-correction opus, PR auto-merge vers dev, validation a deux comptes sur staging (Chrome + simulateur), en boucle jusqu a un etat acceptable — sonnet DEVELOPPE, haiku fait le MECANIQUE, opus RELIT, CORRIGE, VALIDE et LIVRE',
   whenToUse:
-    "Lancer un tour du chantier « lecture et accuses » (directive porteur 2026-09-21, spec docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md). Args : { repo_web, repo_gw, repo_ios, repo_principal, base, date, attribution, tours, lots, sauter, sim_native, sim_coque, valider, livrer_main, modeles }.",
+    "Lancer un tour du chantier « lecture et accuses » (directive porteur 2026-09-21, spec docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md). Args : { repo_web, repo_gw, repo_ios, repo_principal, recette, base, date, attribution, tours, lots, sauter, sim_native, sim_coque, valider, livrer_main, modeles }.",
   phases: [
     { title: 'Synchroniser', detail: 'fetch origin/dev dans les trois worktrees de chaine, releve de ce que les autres sessions tiennent', model: 'sonnet' },
     { title: 'Cadrer', detail: 'chaque lot verifie contre l arbre VIVANT : deja livre, tenu ailleurs, ou a faire', model: 'sonnet' },
@@ -42,6 +42,12 @@ const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
 const SIM_NATIVE = typeof A.sim_native === 'string' && A.sim_native ? A.sim_native : '171765AF-36FD-45B1-9B9D-570E24C72E11'
 const SIM_COQUE = typeof A.sim_coque === 'string' && A.sim_coque ? A.sim_coque : '138B8B8D-0B3B-44E5-98B0-B62723B884BC'
 const SCRATCH = `${REPO_WEB}/.cache/lecture-workflow` // .cache est gitignore
+// Ce qui doit SURVIVRE d'un tour à l'autre — comptes de recette, profils de navigateur — ne vit dans
+// AUCUN dépôt (#7608). SCRATCH est ancré sur un worktree, et un worktree se supprime : le ménage du
+// 2026-09-23 a emporté v2_meeshy-lecture avec le comptes.env qu'il était seul à détenir. Le clone
+// principal ne corrige pas cela — on n'y écrit pas (voir REPO_PRINCIPAL). D'où un chemin hors dépôt,
+// que ni `git worktree remove --force` ni un `git clean` n'atteignent.
+const RECETTE = typeof A.recette === 'string' && A.recette ? A.recette : '/Users/smpceo/.cache/meeshy-recette-lecture'
 // La spec et ce script vivent sur feat/lecture-et-accuses, dans un worktree qui NE CHANGE JAMAIS de branche.
 // Le clone principal : seul détenteur des fichiers gitignorés (comptes de recette). On y LIT, jamais on n'y écrit.
 const REPO_PRINCIPAL = typeof A.repo_principal === 'string' && A.repo_principal ? A.repo_principal : '/Users/smpceo/Documents/v2_meeshy'
@@ -751,7 +757,7 @@ B. LES DEUX COMPTES ET LES DEUX SURFACES :
   le fichier, N'IMPRIME JAMAIS le mot de passe. Compte B : cherche un second compte de recette sur staging
   (\`POST https://gate.staging.meeshy.me/api/v1/auth/login\`) parmi ceux que le README ou tasks/ documentent ;
   à défaut, crée \`recette-lecture\` par \`POST /api/v1/auth/register\` (lis le schéma dans routes/auth) avec un
-  mot de passe généré que tu gardes dans ${SCRATCH}/recette/comptes.env (hors dépôt). Assure-toi qu'A et B
+  mot de passe généré que tu gardes dans ${RECETTE}/comptes.env (hors dépôt). Assure-toi qu'A et B
   ont une conversation directe (crée-la par l'API si besoin : routes/conversations).
 - WEB (compte A) : Chrome sur https://staging.meeshy.me via les outils mcp__claude-in-chrome__* (charge-les
   par ToolSearch « select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,
@@ -759,9 +765,9 @@ B. LES DEUX COMPTES ET LES DEUX SURFACES :
   mcp__claude-in-chrome__read_console_messages,mcp__claude-in-chrome__find,mcp__claude-in-chrome__get_page_text »).
   Nouvel onglet, jamais un onglet existant. Si l'extension ne répond pas après 3 tentatives
   (\`list_connected_browsers\` rend \`[]\`, \`tabs_context_mcp\` refuse — c'est arrivé le 2026-09-21), REPLIE-TOI sur
-  Chromium Playwright local (\`npx playwright\`, profil persistant sous ${SCRATCH}/recette/web/profil-*), dis-le dans le
+  Chromium Playwright local (\`npx playwright\`, profil persistant sous ${RECETTE}/web/profil-*), dis-le dans le
   rapport, et sache qu'il n'a pas de codec AAC : l'étape audio se rejoue alors par l'API. Captures dans
-  ${SCRATCH}/recette/web/. Ne déclenche aucun alert/confirm.
+  ${RECETTE}/web/. Ne déclenche aucun alert/confirm.
 - iOS (compte B) : simulateur NATIF ${SIM_NATIVE} (jamais Meeshy-iOS26). \`xcrun simctl boot ${SIM_NATIVE}\` ;
   bâtis l'app depuis ${REPO_IOS} à la tête de origin/${BASE} (\`git fetch origin ${BASE} && git checkout -B recette origin/${BASE}\`,
   \`./apps/ios/meeshy.sh build\`, un seul build à la fois, retry ×1 s'il est tué) ; installe le .app ;
@@ -770,7 +776,7 @@ B. LES DEUX COMPTES ET LES DEUX SURFACES :
   puis \`xcrun simctl launch ${SIM_NATIVE} me.meeshy.app\`. Pilote par la skill ios-simulator (Skill
   « ios-simulator » : navigation sémantique par accessibilité) et \`idb\` (\`idb ui describe-all\`, \`idb ui tap\`,
   \`idb ui swipe\` — coordonnées en POINTS) ; captures \`xcrun simctl io ${SIM_NATIVE} screenshot\` dans
-  ${SCRATCH}/recette/ios/. Connecte B. Vérifie l'environnement affiché (Réglages) avant toute écriture.
+  ${RECETTE}/ios/. Connecte B. Vérifie l'environnement affiché (Réglages) avant toute écriture.
 
 C. LE SCÉNARIO — chaque étape rend passe/echoue/non-jouee avec sa PREUVE (capture, réponse d'API) :
 1. A (web) envoie un texte à B → sur le web, coche simple puis double coche grise quand B est en ligne
