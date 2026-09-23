@@ -19,6 +19,7 @@ import {
   truncateMessagePreview
 } from './utils/last-message-preview';
 import { loadConversationListActivity } from './utils/list-activity';
+import { loadListEphemeralExpiries } from './utils/list-ephemeral-expiry';
 import {
   isPreviewWithheld,
   resolveLastMessageNature,
@@ -392,7 +393,7 @@ export function registerConversationListRoute(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+            select: { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
@@ -583,9 +584,8 @@ export function registerConversationListRoute(
           })
         : [];
 
-      // #7545 — dernière réaction et appel en cours, deux lectures pour la
-      // page. La réaction est bornée par le MÊME plancher que l'aperçu : un
-      // message que ce lecteur ne peut pas lire ne se révèle pas par elle.
+      // #7545 — dernière réaction (bornée par le plancher de l'aperçu) et
+      // appel en cours, deux lectures pour la page.
       t0 = performance.now();
       const clearHistoryBeforeById = new Map(
         conversations.map((c) => [c.id, c.userPreferences[0]?.clearHistoryBefore ?? null] as const)
@@ -599,6 +599,13 @@ export function registerConversationListRoute(
           return floors.length === 0 ? null : new Date(Math.max(...floors.map((d) => d.getTime())));
         }
       });
+      // #7451 — l'échéance d'un éphémère servie à CE lecteur, comme le fil.
+      const readerParticipantByConversation = new Map(readerJoins.map((j) => [j.conversationId, j.id] as const));
+      const servedEphemeralExpiry = await loadListEphemeralExpiries(
+        prisma,
+        conversations.map((c) => ({ conversationId: c.id, message: c.messages[0] })),
+        (conversationId) => readerParticipantByConversation.get(conversationId)
+      );
       perfTimings.listActivity = performance.now() - t0;
 
       // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
@@ -809,8 +816,12 @@ export function registerConversationListRoute(
         // `ephemeralDuration` compris : sans elle, l'heure interne de
         // destruction d'un éphémère (#7451) se lisait comme son échéance. Le
         // chiffrement retient aussi le contenu (« 🔒 Message chiffré »).
+        const lastMessage = conversation.messages[0];
+        const servedExpiresAt = lastMessage && servedEphemeralExpiry.has(lastMessage.id)
+          ? servedEphemeralExpiry.get(lastMessage.id) ?? null
+          : undefined;
         const lastMessageProtected = latestMessage
-          ? isPreviewWithheld(resolvePreviewProtection(latestMessage))
+          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt }))
           : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
@@ -878,15 +889,15 @@ export function registerConversationListRoute(
             const { attachments: loadedAttachments, ...msgWithoutAttachments } = msgRest;
             return {
               ...msgWithoutAttachments,
-              // #7545 — la NATURE (transfert, chiffrement, avis système,
-              // appel) et le RÉSUMÉ de toutes les pièces jointes ; la liste
-              // n'en SERT que la première en détail.
+              // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ;
+              // la liste n'en SERT que la première en détail.
               ...resolveLastMessageNature(msg),
               attachments: loadedAttachments.slice(0, 1),
               attachmentSummary: lastMessageProtected
                 ? null
                 : summarizeAttachments(loadedAttachments, msg._count?.attachments),
               content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
+              ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),
               // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
               // continuent de partir : ce sont eux qui qualifient le
               // placeholder que le client compose (« Message à vue unique »).

@@ -21,6 +21,12 @@ describe('resolvePreviewProtection — un prédicat pour REST, la recherche et l
     expect(resolvePreviewProtection({ isEncrypted: true, ephemeralDuration: 60 }, NOW)).toBe('encrypted');
   });
 
+  it("un éphémère dont l'échéance SERVIE au lecteur est passée est expiré (#7451)", () => {
+    expect(resolvePreviewProtection({ ephemeralDuration: 240, servedExpiresAt: PAST }, NOW)).toBe('expired');
+    expect(resolvePreviewProtection({ ephemeralDuration: 240, servedExpiresAt: new Date('2026-09-23T12:03:00Z') }, NOW)).toBe('ephemeral');
+    expect(resolvePreviewProtection({ ephemeralDuration: 240, servedExpiresAt: null }, NOW)).toBe('ephemeral');
+  });
+
   it('un message chiffré retient son contenu', () => {
     expect(isPreviewWithheld(resolvePreviewProtection({ isEncrypted: true }, NOW))).toBe(true);
   });
