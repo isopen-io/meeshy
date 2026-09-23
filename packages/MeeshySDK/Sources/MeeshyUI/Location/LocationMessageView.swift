@@ -12,8 +12,6 @@ public struct LocationMessageView: View {
     let onTapFullscreen: (() -> Void)?
     let thumbnailProvider: any LocationMapThumbnailProviding
 
-    private static let thumbnailSize = CGSize(width: 260, height: 150)
-
     public init(latitude: Double, longitude: Double, placeName: String? = nil,
                 address: String? = nil, accentColor: String = MeeshyColors.brandPrimaryHex,
                 onTapFullscreen: (() -> Void)? = nil,
@@ -45,64 +43,129 @@ public struct LocationMessageView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            mapContent
-                .frame(height: Self.thumbnailSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .allowsHitTesting(false)
+        LocationCardLayout {
+            VStack(spacing: 0) {
+                mapContent
+                    .frame(height: LocationCardMetrics.mapHeight)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .allowsHitTesting(false)
 
-            if placeName != nil || address != nil {
                 locationInfoBar
+                    .frame(height: LocationCardMetrics.infoBarHeight)
             }
         }
-        .frame(width: Self.thumbnailSize.width)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: LocationCardMetrics.cornerRadius, style: .continuous)
                 .fill(Color(.systemBackground).opacity(0.95))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(Rectangle())
+        .clipShape(RoundedRectangle(cornerRadius: LocationCardMetrics.cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: LocationCardMetrics.cornerRadius, style: .continuous))
         .onTapGesture {
             onTapFullscreen?()
         }
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "location.a11y.label", defaultValue: "Position : \(placeName ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))", bundle: .module))
         .accessibilityHint(String(localized: "location.a11y.hint", defaultValue: "Touchez pour ouvrir la carte en plein écran", bundle: .module))
+        .accessibilityAction(named: Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))) {
+            openInMaps()
+        }
     }
 
     private var mapContent: some View {
         LocationMapThumbnailView(coordinate: coordinate, accentColor: accentColor,
-                                 size: Self.thumbnailSize, provider: thumbnailProvider)
+                                 size: LocationCardMetrics.thumbnailSize, provider: thumbnailProvider)
+    }
+
+    private var infoLines: (title: String?, subtitle: String?) {
+        LocationCardMetrics.infoLines(name: placeName, address: address)
     }
 
     private var locationInfoBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
-
             VStack(alignment: .leading, spacing: 1) {
-                if let name = placeName {
-                    Text(name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                }
-                if let addr = address {
-                    Text(addr)
+                Text(infoLines.title ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                if let subtitle = infoLines.subtitle {
+                    Text(subtitle)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: accentColor).opacity(0.7))
+            Button(action: openInMaps) {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                    .frame(width: LocationCardMetrics.infoBarHeight, height: LocationCardMetrics.infoBarHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.leading, 10)
+    }
+
+    private func openInMaps() {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        item.name = infoLines.title
+        item.openInMaps()
+    }
+}
+
+// MARK: - Card geometry (#7598)
+
+/// Géométrie de la carte d'un lieu — FIXE, connue avant la tuile et avant les
+/// données. La hauteur ne dépend ni de la vignette (qui arrive après), ni de
+/// la présence d'un nom ou d'une adresse (qui peuvent arriver avec l'écho
+/// serveur) : une cellule mesurée une fois reste juste. La largeur se BORNE à
+/// ce que le parent propose : un enfant plus large que son parent déborde un
+/// `.frame(maxWidth:)` au lieu d'être contenu par lui.
+public nonisolated enum LocationCardMetrics {
+    public static let idealWidth: CGFloat = 260
+    public static let mapHeight: CGFloat = 150
+    public static let infoBarHeight: CGFloat = 44
+    public static let cornerRadius: CGFloat = 14
+    public static var height: CGFloat { mapHeight + infoBarHeight }
+    static var thumbnailSize: CGSize { CGSize(width: idealWidth, height: mapHeight) }
+
+    public static func size(proposedWidth: CGFloat?) -> CGSize {
+        guard let proposedWidth, proposedWidth.isFinite, proposedWidth > 0 else {
+            return CGSize(width: idealWidth, height: height)
+        }
+        return CGSize(width: min(idealWidth, proposedWidth), height: height)
+    }
+
+    /// Le nom, puis l'adresse — jamais la même valeur sur les deux lignes.
+    public static func infoLines(name: String?, address: String?) -> (title: String?, subtitle: String?) {
+        let cleanName = meaningful(name)
+        let cleanAddress = meaningful(address)
+        guard let cleanName else { return (cleanAddress, nil) }
+        return (cleanName, cleanAddress == cleanName ? nil : cleanAddress)
+    }
+
+    private static func meaningful(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+}
+
+/// Pose la carte à la taille de `LocationCardMetrics` : le seul sous-arbre
+/// reçoit exactement cette taille, quel que soit ce qu'il réclamerait.
+private struct LocationCardLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        LocationCardMetrics.size(proposedWidth: proposal.width)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let size = LocationCardMetrics.size(proposedWidth: bounds.width)
+        for subview in subviews {
+            subview.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(size))
+        }
     }
 }
 
@@ -129,10 +192,14 @@ private struct LocationMapThumbnailView: View {
                 Image(uiImage: thumbnail)
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
             } else {
                 placeholder
             }
+            // La POINTE de l'épingle désigne le lieu, pas le centre du disque.
             LocationPinView(accentColor: accentColor, size: .small)
+                .alignmentGuide(VerticalAlignment.center) { $0[.bottom] + LocationPinSize.small.triangleOffset }
         }
         .task(id: colorScheme) {
             thumbnail = await provider.thumbnail(coordinate: coordinate, size: size,
