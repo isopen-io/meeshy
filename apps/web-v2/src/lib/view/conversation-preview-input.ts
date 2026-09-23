@@ -30,12 +30,14 @@ type Hoisted = {
   readonly forwardedFromId?: string;
   readonly maxViewOnceCount?: number;
   readonly location?: { readonly name?: string | null; readonly address?: string | null } | null;
+  readonly sticker?: { readonly templateId?: string | null; readonly emoji?: string | null } | null;
 };
 
 type ProtectedAttachment = Attachment & {
   readonly isViewOnce?: boolean;
   readonly isBlurred?: boolean;
   readonly effectFlags?: number;
+  readonly alt?: string | null;
 };
 
 const nonEmpty = (value: string | null | undefined): string | null =>
@@ -73,6 +75,7 @@ function attachmentOf(attachment: ProtectedAttachment): ConversationPreviewAttac
     width: attachment.width ?? null,
     height: attachment.height ?? null,
     pageCount: attachment.pageCount ?? null,
+    alt: attachment.alt ?? null,
     ...(attachment.isViewOnce === undefined ? {} : { isViewOnce: attachment.isViewOnce }),
     ...(attachment.isBlurred === undefined ? {} : { isBlurred: attachment.isBlurred }),
     ...(attachment.effectFlags === undefined ? {} : { effectFlags: attachment.effectFlags }),
@@ -111,6 +114,7 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
     systemEvent: message.systemEvent ?? null,
     callSummary: message.callSummary ?? null,
     location: message.location ?? null,
+    sticker: message.sticker ?? null,
     attachment: first === undefined ? null : attachmentOf(first),
     attachmentSummary: summary,
   };

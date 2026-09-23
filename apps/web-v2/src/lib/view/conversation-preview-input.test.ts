@@ -129,6 +129,18 @@ describe('previewInputOf (#7547)', () => {
     ).toBe('Alice : 🔥 30 s · Rendez-vous à 18h');
   });
 
+  test('un sticker de texte se lit par sa phrase (`alt`), hissé de `metadata.sticker`', () => {
+    const c = conversation({
+      lastMessage: message({
+        content: '',
+        messageType: 'image',
+        sticker: { templateId: 'bubble-pop' },
+        attachments: [{ id: 'a1', mimeType: 'image/png', originalName: 's.png', fileName: 's.png', fileSize: 48_000, alt: 'Bonjour à tous' }],
+      }),
+    });
+    expect(line(c)).toBe('Alice : 🏷 Bonjour à tous');
+  });
+
   test('un vue unique brûlé se lit « Ouvert »', () => {
     const c = conversation({ lastMessage: message({ content: '', isViewOnce: true, viewOnceCount: 1, maxViewOnceCount: 1 }) });
     expect(line(c)).toBe('Alice : 👁 Ouvert');

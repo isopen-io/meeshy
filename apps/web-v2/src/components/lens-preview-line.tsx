@@ -30,6 +30,7 @@ const ICONS: Readonly<Record<PreviewIcon, GlyphShape | GlyphName>> = {
   attachments: LENS_PREVIEW_GLYPHS.paperclip,
   effect: LENS_PREVIEW_GLYPHS.sparkle,
   forward: LENS_PREVIEW_GLYPHS.arrowBendUpRight,
+  sticker: LENS_PREVIEW_GLYPHS.sticker,
   'view-once': 'eye',
   ephemeral: 'flameFill',
   expired: 'timer',

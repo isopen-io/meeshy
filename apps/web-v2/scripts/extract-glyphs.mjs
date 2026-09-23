@@ -772,6 +772,7 @@ emit({
  * | `attachments` | `paperclip` |
  * | `effect` | `sparkle` |
  * | `forward` | `arrow-bend-up-right` |
+ * | `sticker` | `sticker` |
  * | direction d'un appel (entrant / sortant) | `arrow-down-left` / `arrow-up-right` |
  */
 const LENS_PREVIEW = [
@@ -784,6 +785,7 @@ const LENS_PREVIEW = [
   'arrow-bend-up-right',
   'arrow-down-left',
   'arrow-up-right',
+  'sticker',
 ];
 
 emit({

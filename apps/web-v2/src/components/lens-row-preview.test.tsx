@@ -84,6 +84,7 @@ function conversationOf(input: ConversationPreviewInput): Conversation {
       systemEvent: m.systemEvent,
       callSummary: m.callSummary,
       location: m.location,
+      sticker: m.sticker,
       attachmentSummary: m.attachmentSummary,
     }).filter(([, value]) => value !== undefined && value !== null),
   );
