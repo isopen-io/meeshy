@@ -34,7 +34,7 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
     /// de `joinedAt`) : tout message de l'AUTRE est non lu — jamais un
     /// message de MOI (rang « jamais l'auteur » de la loi).
     func test_loadMessages_noBoundaryKnown_firstUnreadIsEarliestOtherMessage() async throws {
-        let (sut, pool) = try makeSUTWithSeams()
+        let (sut, pool) = try makeSUTWithSeams(serverUnreadCount: 2)
         try await seed(pool, [
             (localId: "m-old", senderId: otherUserId, offset: 0),
             (localId: "m-mine", senderId: myUserId, offset: 5),
@@ -52,6 +52,7 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
     /// `lastReadAt` (rang 2, à défaut) dirait autre chose de plus permissif.
     func test_loadMessages_lastReadMessageCreatedAtFromG1_excludesEverythingUpToIt() async throws {
         let (sut, pool) = try makeSUTWithSeams(
+            serverUnreadCount: 1,
             // Rang 2, PLUS PERMISSIF (plus ancien) : ne doit JAMAIS gagner
             // quand le rang 1 est servi.
             lastReadAt: t0.addingTimeInterval(-100),
@@ -74,7 +75,7 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
     /// servie par la route qui le porte) — la frontière retombe sur
     /// `lastReadAt`, jamais sur « tout est non lu ».
     func test_loadMessages_noG1_fallsBackToLastReadAt() async throws {
-        let (sut, pool) = try makeSUTWithSeams(lastReadAt: t0.addingTimeInterval(3))
+        let (sut, pool) = try makeSUTWithSeams(serverUnreadCount: 1, lastReadAt: t0.addingTimeInterval(3))
         try await seed(pool, [
             (localId: "m-before", senderId: otherUserId, offset: 0),
             (localId: "m-after", senderId: otherUserId, offset: 10)
@@ -89,7 +90,7 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
     // MARK: - Rang 3 : joinedAt (aucun curseur connu du tout)
 
     func test_loadMessages_noCursorAtAll_fallsBackToJoinedAt() async throws {
-        let (sut, pool) = try makeSUTWithSeams(memberJoinedAt: t0.addingTimeInterval(3))
+        let (sut, pool) = try makeSUTWithSeams(serverUnreadCount: 1, memberJoinedAt: t0.addingTimeInterval(3))
         try await seed(pool, [
             (localId: "m-before", senderId: otherUserId, offset: 0),
             (localId: "m-after", senderId: otherUserId, offset: 10)
@@ -119,9 +120,57 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
         XCTAssertEqual(sut.unreadSeparatorCount, 0)
     }
 
+    // MARK: - #7525 — le compte annoncé suit le SERVEUR, jamais la fenêtre locale
+
+    /// Le cas exact du relevé (V1-séparateur-fantôme) : une conversation
+    /// chargée de messages supprimés laisse, DANS LA FENÊTRE PAGINÉE, des
+    /// candidats postérieurs à la frontière connue localement — alors que le
+    /// serveur (curseur `lastReadMessageId`/`unreadCount`, la MÊME valeur que
+    /// la ligne de liste) a DÉJÀ tout compté comme lu. `unreadCount serveur
+    /// == 0` doit fermer le séparateur, quoi que la loi locale calcule.
+    func test_loadMessages_serverUnreadCountZero_neverShowsSeparatorEvenWhenWindowHasCandidates() async throws {
+        let (sut, pool) = try makeSUTWithSeams(
+            serverUnreadCount: 0,
+            lastReadMessageCreatedAt: t0.addingTimeInterval(-1)
+        )
+        try await seed(pool, [
+            (localId: "m-after-1", senderId: otherUserId, offset: 5),
+            (localId: "m-after-2", senderId: otherUserId, offset: 10)
+        ])
+
+        await sut.loadMessages()
+
+        XCTAssertNil(sut.firstUnreadMessageId, "unreadCount serveur = 0 ⇒ aucun séparateur")
+        XCTAssertEqual(sut.unreadSeparatorCount, 0)
+    }
+
+    /// La divergence exacte du relevé (8/9/10/12 affiché vs 5/1/2/0 côté
+    /// serveur) : la fenêtre locale voit 3 candidats après la frontière,
+    /// mais le curseur serveur (arrêté par un message sauté/supprimé,
+    /// `MessageReadStatusService` mode exact) n'en compte qu'1. Le compte
+    /// ANNONCÉ est celui du serveur — jamais celui de la fenêtre — pour que
+    /// le séparateur et la ligne de liste ne puissent plus diverger.
+    func test_loadMessages_separatorCountFollowsServerCount_neverTheWindowedCandidateCount() async throws {
+        let (sut, pool) = try makeSUTWithSeams(
+            serverUnreadCount: 1,
+            lastReadMessageCreatedAt: t0.addingTimeInterval(-1)
+        )
+        try await seed(pool, [
+            (localId: "m-after-1", senderId: otherUserId, offset: 5),
+            (localId: "m-after-2", senderId: otherUserId, offset: 10),
+            (localId: "m-after-3", senderId: otherUserId, offset: 15)
+        ])
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(sut.firstUnreadMessageId, "m-after-1", "la POSITION reste celle de la loi fenêtrée")
+        XCTAssertEqual(sut.unreadSeparatorCount, 1, "le COMPTE annoncé est celui du serveur, jamais les 3 candidats de la fenêtre")
+    }
+
     // MARK: - Helpers
 
     private func makeSUTWithSeams(
+        serverUnreadCount: Int = 0,
         lastReadMessageId: String? = nil,
         lastReadAt: Date? = nil,
         lastReadMessageCreatedAt: Date? = nil,
@@ -139,7 +188,7 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
 
         let sut = ConversationViewModel(
             conversationId: conversationId,
-            unreadCount: 0,
+            unreadCount: serverUnreadCount,
             isDirect: false,
             participantUserId: nil,
             memberJoinedAt: memberJoinedAt,
