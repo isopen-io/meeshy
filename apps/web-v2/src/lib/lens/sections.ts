@@ -1,7 +1,7 @@
 import { resolveConversationSections, type ConversationSection, type SectionableConversation } from '@meeshy/shared/utils/conversation-sections';
 
 import { effectiveFlagsOf, type ConversationOverride } from '@/lib/conversation-store';
-import { listRankOf } from '@/lib/api/list-preview';
+import { listRankField } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 
 /**
@@ -81,7 +81,7 @@ function toSectionable(conversation: Conversation, overrides: Overrides): Sectio
     // `exactOptionalPropertyTypes` : n'écrire la clé QUE si elle a une valeur
     // (même garde que `filters.ts::orderConversations`).
     // LE RANG SERVI (#7592) : max(rang du lecteur, `lastMessageAt`).
-    ...(listRankOf(conversation) === undefined ? {} : { lastMessageAt: listRankOf(conversation) }),
+    ...listRankField(conversation),
     updatedAt: conversation.updatedAt,
   };
 }

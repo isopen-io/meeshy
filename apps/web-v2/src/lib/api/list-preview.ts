@@ -77,6 +77,12 @@ export function listRankOf(conversation: Conversation): Date | undefined {
   return last === null ? undefined : last;
 }
 
+/** Le rang comme CHAMP de la loi de tri partagée — la clé n'existe que si elle a une valeur (`exactOptionalPropertyTypes`). */
+export function listRankField(conversation: Conversation): { readonly lastMessageAt: Date } | Record<string, never> {
+  const rank = listRankOf(conversation);
+  return rank === undefined ? {} : { lastMessageAt: rank };
+}
+
 /** Le rang servi par `conversation:updated` : posé tel quel, retiré sur `null`, intact si la clé est absente. */
 export function withListRank(conversation: Conversation, data: ConversationUpdatedEventData): Conversation {
   if (!('listRankAt' in data)) return conversation;
