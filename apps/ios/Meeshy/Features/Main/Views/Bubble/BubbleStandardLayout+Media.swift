@@ -558,6 +558,17 @@ fileprivate struct BubbleGridCell: View {
 
     private func handleTap() {
         guard !attachmentIsProtected || isRevealed else { return }
+        openFullscreen()
+        HapticFeedback.light()
+    }
+
+    /// L'ouverture elle-même, sans la garde de révélation.
+    ///
+    /// Extraite parce que `handleReveal` doit ouvrir DANS LE MÊME geste que la
+    /// révélation (#7499) : repasser par `handleTap` relirait `isRevealed` à
+    /// travers la liaison qu'on vient d'écrire, ce qui fait dépendre
+    /// l'ouverture d'un ordre de propagation SwiftUI au lieu du code.
+    private func openFullscreen() {
         if overflowCount > 0 {
             carouselIndex = allVisualAttachments.firstIndex(where: { $0.id == attachment.id }) ?? 0
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -566,24 +577,28 @@ fileprivate struct BubbleGridCell: View {
         } else {
             fullscreenAttachment = attachment
         }
-        HapticFeedback.light()
     }
 
     private func handleReveal() {
         HapticFeedback.medium()
         if attachment.isViewOnce {
-            onConsumeViewOnce?(messageId) { success in
-                guard success else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    _ = revealedAttachmentIds.insert(attachment.id)
-                }
-                let attachmentId = attachment.id
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    withAnimation(.easeOut(duration: 0.5)) {
-                        _ = revealedAttachmentIds.remove(attachmentId)
-                    }
-                }
+            // #7499 — **on OUVRE, on ne consomme pas.**
+            //
+            // Ce site appelait `onConsumeViewOnce` AVANT d'afficher quoi que ce
+            // soit : le contenu était détruit sans avoir été montré, puis
+            // révélé cinq secondes en vignette. « lorsqu'on tap pour afficher,
+            // ça supprime directement au lieu d'afficher le contenu en plein
+            // écran » — le geste n'avait aucun sens, on touche pour VOIR.
+            //
+            // La consommation part à la FERMETURE du plein écran
+            // (`ViewOnceConsumption.moment(hasOpenableMedia: true)`), depuis
+            // l'hôte qui possède la galerie — le seul qui sache quand on en
+            // sort. La révélation locale n'est donc plus conditionnée au
+            // serveur : elle ne fait qu'ouvrir.
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                _ = revealedAttachmentIds.insert(attachment.id)
             }
+            openFullscreen()
         } else {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 _ = revealedAttachmentIds.insert(attachment.id)
