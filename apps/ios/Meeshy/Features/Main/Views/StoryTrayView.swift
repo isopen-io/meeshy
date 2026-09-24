@@ -17,11 +17,9 @@ struct StoryTrayView: View {
     var onAddStatus: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
     /// U1 — namespace zoom injecté par RootView (nil hors de ce sous-arbre
     /// ou < iOS 18 : les helpers sont no-op, transition historique).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
-    private var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }

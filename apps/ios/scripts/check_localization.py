@@ -47,7 +47,6 @@ SOURCE_ROOTS = [
     "apps/ios/MeeshyNotificationExtension",
     "apps/ios/MeeshyWidgets",
     "apps/ios/MeeshyShareExtension",
-    "apps/ios/MeeshyContextMenu",
     "apps/ios/MeeshyIntents",
     "packages/MeeshySDK/Sources",
 ]

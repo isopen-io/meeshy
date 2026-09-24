@@ -36,6 +36,11 @@ nonisolated enum MessageListCellSizingLaw {
 /// un `UICollectionViewCell` qui ne demande jamais une correction self-sizing
 /// pour un bruit de mesure, ni pour l'endroit de l'écran qu'il traverse.
 class MessageListCell: UICollectionViewCell {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// **Une rangée du fil n'a pas de zone non sûre** (#7660).
     ///

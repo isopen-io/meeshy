@@ -463,7 +463,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `ReelAudioLayer.swift` : le préchauffage du pager devait y entrer. Il sort
     // de `legacyOverBudget`, et le plafond baisse d'EXACTEMENT les 965 lignes
     // qu'il pesait à la sortie.
-    private static let legacyLineCeiling = 52_144
+    //
+    // **52 072 depuis #7681.** Code sans appelant retiré de deux fichiers hors
+    // budget — `FeedCommentsSheet.postPreview` (−71) et une lecture morte de
+    // `colorScheme` dans `StoryViewerView` (−1) : le plafond reprend les 72
+    // lignes dans le même lot.
+    private static let legacyLineCeiling = 52_072
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

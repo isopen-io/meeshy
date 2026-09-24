@@ -7,8 +7,6 @@ struct RequestsTab: View {
     @ObservedObject var viewModel: RequestsViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 

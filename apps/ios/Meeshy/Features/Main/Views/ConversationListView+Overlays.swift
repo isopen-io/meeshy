@@ -902,8 +902,8 @@ final class ChipAutoScrollDriver {
     func update(fingerLocation location: CGPoint) {
         fingerLocation = location
         guard timer == nil else { return }
-        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            // Timer main-runloop → déjà sur le main thread.
+        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] firing in
+            guard self != nil else { return firing.invalidate() }
             MainActor.assumeIsolated { self?.tick() }
         }
         RunLoop.main.add(tick, forMode: .common)

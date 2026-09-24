@@ -12,8 +12,6 @@ struct DataExportView: View {
     private var back: PanelBackAction {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var selectedFormat: ExportFormat = .json

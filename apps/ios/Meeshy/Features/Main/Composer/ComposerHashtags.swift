@@ -33,10 +33,12 @@ nonisolated enum ComposerHashtags {
     /// **Comparée en minuscules, RENDUE telle qu'écrite.** `#Voyage` et
     /// `#voyage` sont le même hashtag pour le serveur ; les afficher deux fois
     /// dans la feuille ferait croire à l'auteur qu'il en a posé deux.
+    private static let tagRegex = try? NSRegularExpression(
+        pattern: "(?<![\\p{L}\\p{N}_])#([\\p{L}\\p{N}_]+)"
+    )
+
     static func tags(in text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(
-            pattern: "(?<![\\p{L}\\p{N}_])#([\\p{L}\\p{N}_]+)"
-        ) else { return [] }
+        guard let regex = tagRegex else { return [] }
         let plage = NSRange(text.startIndex..<text.endIndex, in: text)
         var vues: Set<String> = []
         var ordonnes: [String] = []
