@@ -229,7 +229,7 @@ export function peopleMentionCandidates(
  * LES CONTACTS EN CANDIDATS (#7846) — l'autre partie de chaque amitié
  * acceptée, par `friendsOf` (le site UNIQUE qui la résout, celui de
  * « Nouvelle conversation »), marquée `friend` : la rangée porte la même
- * pastille « Ami » que celle que la passerelle aurait servie.
+ * pastille « Contact » que celle que la passerelle aurait servie.
  */
 export function contactMentionCandidates(
   accepted: readonly FriendRequestRecord[],
