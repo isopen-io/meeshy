@@ -114,8 +114,9 @@ enum OnboardingFlow {
 /// jamais l'inverse ; la carte 4 ne montre que les trois profils que son texte
 /// demande, le reste derrière « Voir plus ».
 enum OnboardingCardFit {
-    /// En deçà, une illustration réduite n'est plus lisible : on la retire.
-    static let minimumIllustrationHeight: CGFloat = 72
+    /// En deçà, une illustration réduite n'est plus lisible — la bulle du
+    /// Prisme devient un timbre-poste : on la retire plutôt que la montrer.
+    static let minimumIllustrationScale: CGFloat = 0.6
     static let suggestionsShown = 3
 
     /// L'échelle de l'illustration pour la place qui reste (`room`), dans
@@ -123,8 +124,8 @@ enum OnboardingCardFit {
     /// mesurée (`natural` ≤ 0), rien ne change.
     static func illustrationScale(natural: CGFloat, room: CGFloat) -> CGFloat {
         guard natural > 0, room < natural else { return 1 }
-        guard room >= minimumIllustrationHeight else { return 0 }
-        return room / natural
+        let scale = room / natural
+        return scale >= minimumIllustrationScale ? scale : 0
     }
 
     static func visibleSuggestions(_ all: [APIOnboardingSuggestion], expanded: Bool) -> [APIOnboardingSuggestion] {

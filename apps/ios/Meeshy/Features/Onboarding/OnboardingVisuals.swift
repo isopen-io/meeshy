@@ -21,7 +21,7 @@ struct OnboardingAction {
 /// carte, jamais par-dessus : rien de ce que la carte montre — la jauge du
 /// niveau 1, la note « +7 chacun » — ne peut passer derrière eux. Pour tenir,
 /// c'est l'illustration, décorative, qui cède : elle se réduit à la place qui
-/// reste, puis disparaît sous `OnboardingCardFit.minimumIllustrationHeight`.
+/// reste, puis disparaît sous `OnboardingCardFit.minimumIllustrationScale`.
 /// Si le contenu déborde encore (iPhone SE, grandes tailles de texte), la
 /// barre de défilement est MONTRÉE et un fondu signale la suite.
 ///

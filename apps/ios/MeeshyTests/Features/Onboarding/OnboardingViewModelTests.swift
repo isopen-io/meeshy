@@ -560,7 +560,14 @@ final class OnboardingViewModelTests: XCTestCase {
     }
 
     func test_illustrationScale_belowTheLegibleMinimum_dropsTheIllustration() {
-        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 210, room: OnboardingCardFit.minimumIllustrationHeight - 1), 0)
+        let tooSmall = 210 * OnboardingCardFit.minimumIllustrationScale - 1
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 210, room: tooSmall), 0)
+    }
+
+    func test_illustrationScale_atTheLegibleMinimum_keepsTheIllustrationReduced() {
+        let atMinimum = 210 * OnboardingCardFit.minimumIllustrationScale
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 210, room: atMinimum),
+                       OnboardingCardFit.minimumIllustrationScale, accuracy: 0.0001)
     }
 
     func test_illustrationScale_beforeMeasuring_changesNothing() {
