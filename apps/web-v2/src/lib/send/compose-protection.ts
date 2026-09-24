@@ -11,13 +11,9 @@ import { DECORATIVE_EFFECTS } from '@/lib/effects';
  * bulle optimiste et le corps envoyé au serveur portent TOUJOURS la même
  * vérité (D-41 : ce qu'on envoie flouté se rend flouté chez soi).
  *
- * `viewOnce` a désormais un contrôle dans la rangée haute d'une conversation
- * standard (#7354, V6 — décision RENVERSÉE : jusque-là réservé au composeur
- * de prévisualisation de notification, iOS `showViewOnce: previewMode`),
- * GATÉ côté `composer.tsx` sur la présence d'une pièce jointe IMAGE en
- * attente (« envoie une IMAGE à vue unique », #7354) — cette LOI, elle,
- * reste agnostique du contrôle qui l'arme (loi 4 : elle sert aussi
- * `EffectsPickerView`/d'autres composeurs côté iOS, même sans bouton web).
+ * `viewOnce` a un contrôle permanent dans la rangée haute (#7597), valable
+ * pour tout ce qui part (#7498) — cette LOI reste agnostique du contrôle
+ * qui l'arme.
  */
 export type ComposeProtection = {
   /** Durée en SECONDES avant expiration — `undefined` = pas d'éphémère.
@@ -79,13 +75,17 @@ export type ProtectionFields = {
 };
 
 export function protectionFieldsOf(protection: ComposeProtection, now: number): ProtectionFields {
+  // Flou et vue unique sont EXCLUSIFS (#7667) : la vue unique, plus forte,
+  // gagne — second verrou derrière `toggledVeil`, miroir
+  // `MessageProtectionIntent.init` (SDK iOS).
+  const blurred = protection.blurred === true && protection.viewOnce !== true;
   let flags = protection.effectFlags ?? 0;
-  if (protection.blurred === true) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+  if (blurred) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
   if (protection.ephemeralSeconds !== undefined) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
   if (protection.viewOnce === true) flags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
   return {
-    isBlurred: protection.blurred === true,
+    isBlurred: blurred,
     isViewOnce: protection.viewOnce === true,
     effectFlags: flags,
     ...(protection.ephemeralSeconds === undefined
@@ -95,20 +95,38 @@ export function protectionFieldsOf(protection: ComposeProtection, now: number): 
 }
 
 /**
- * L'ACCENT SUBSTITUÉ DU COMPOSEUR — miroir `composerAccent`
- * (`ConversationView+Composer.swift:49-59`) : éphémère armé PRIME sur flou,
- * qui PRIME sur un effet en attente, sinon `null` (l'appelant garde alors
- * l'accent de la conversation). Lu depuis les TROIS bascules — jamais depuis
+ * L'ACCENT SUBSTITUÉ DU COMPOSEUR — la protection la plus forte colore TOUTE
+ * la barre (#7667, directive porteur 2026-09-24) : éphémère > vue unique >
+ * flou, miroir `ComposerProtection.dominant` (iOS) ; un effet en attente ne
+ * colore que si aucune protection n'est armée, sinon `null` (l'appelant garde
+ * l'accent de la conversation). Lu depuis les bascules — jamais depuis
  * `effectFlags` recomposé (qui porterait aussi les bits de cycle de vie et
- * ferait gagner « effects » sur « ephemeral »/« blur » par erreur).
+ * ferait gagner « effects » sur une protection par erreur).
  */
-export type ComposerAccentState = 'ephemeral' | 'blur' | 'effects' | null;
+export type ComposerAccentState = 'ephemeral' | 'viewOnce' | 'blur' | 'effects' | null;
 
 export function composerAccentOf(protection: ComposeProtection): ComposerAccentState {
   if (protection.ephemeralSeconds !== undefined) return 'ephemeral';
+  if (protection.viewOnce === true) return 'viewOnce';
   if (protection.blurred === true) return 'blur';
   if ((protection.effectFlags ?? 0) !== 0) return 'effects';
   return null;
+}
+
+/**
+ * LA BASCULE D'UN VOILE (#7667) — « le message ne peut pas être flou et vue
+ * unique » : armer l'un éteint l'autre, désarmer ne touche qu'à lui. Miroir
+ * `ComposerProtection.togglingVeil` (iOS).
+ */
+export type VeilState = { readonly blurred: boolean; readonly viewOnce: boolean };
+
+export function toggledVeil(veil: 'blurred' | 'viewOnce', state: VeilState): VeilState {
+  if (veil === 'blurred') {
+    const blurred = !state.blurred;
+    return { blurred, viewOnce: blurred ? false : state.viewOnce };
+  }
+  const viewOnce = !state.viewOnce;
+  return { blurred: viewOnce ? false : state.blurred, viewOnce };
 }
 
 /**

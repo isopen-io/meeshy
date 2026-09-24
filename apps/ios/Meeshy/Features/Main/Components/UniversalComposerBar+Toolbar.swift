@@ -120,13 +120,13 @@ extension UniversalComposerBar {
                     .fill(
                         style == .dark
                             ? Color.white.opacity(0.15)
-                            : Color(hex: accentColor).opacity(0.15)
+                            : servedAccent.opacity(0.15)
                     )
             )
             .foregroundColor(
                 style == .dark
                     ? .white.opacity(0.9)
-                    : Color(hex: accentColor)
+                    : servedAccent
             )
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))

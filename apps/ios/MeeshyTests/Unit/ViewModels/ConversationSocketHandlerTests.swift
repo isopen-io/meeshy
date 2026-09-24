@@ -48,7 +48,6 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
 
     // Track calls
     var evictedMessages: [Message] = []
-    var consumedMessageIds: [String] = []
     var syncMissedCalled = false
 
     func evictViewOnceMedia(message: Message) {
@@ -64,9 +63,6 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         messageTranslations.removeValue(forKey: messageId)
     }
 
-    func markMessageAsConsumed(messageId: String) {
-        consumedMessageIds.append(messageId)
-    }
 
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         // no-op in tests
@@ -1497,6 +1493,25 @@ final class ConversationSocketHandlerTests: XCTestCase {
         sut.onTextChanged("Hello")
 
         XCTAssertTrue(socket.typingStartConversationIds.contains(conversationId))
+    }
+
+    func test_onTextChanged_continuousTyping_reemitsTypingStartOnSchedule() async throws {
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket
+        )
+
+        sut.onTextChanged("H")
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+        sut.onTextChanged("He")
+        try await Task.sleep(nanoseconds: 1_900_000_000)
+        sut.onTextChanged("Hel")
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertGreaterThanOrEqual(socket.typingStartConversationIds.count, 2)
+        sut.stopTypingEmission()
     }
 
     func test_stopTypingEmission_emitsTypingStop() {

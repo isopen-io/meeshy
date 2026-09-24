@@ -2,6 +2,11 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+/// **Depuis #7613 (décision porteur 2026-09-23), le pont ne remplace plus
+/// l'aperçu** : ni à l'écran, ni dans l'oreille. L'historique ci-dessous dit
+/// pourquoi l'aria avait suivi le pont ; les témoins disent désormais qu'elle
+/// suit l'aperçu.
+///
 /// Q-140/L16-iOS — trou découvert par la recette Q-140 (2026-08-17) : l'aria
 /// iOS de la rangée Lentille n'annonçait JAMAIS le pont ✦ même quand il
 /// s'affichait. RE-PREUVE avant ce lot (`git show <avant> -- LentilleConversationRow.swift`,
@@ -86,38 +91,20 @@ final class LentilleFlatRowBridgeAriaTests: XCTestCase {
         )
     }
 
-    // MARK: - Pont présent ⇒ annoncé, préview remplacée jamais annoncée
+    // MARK: - #7613 — pont présent ⇒ l'aperçu reste annoncé, comme il reste lu
 
-    func test_accessibilityLabel_bridgePresent_announcesBridgeText_notThePreviewItReplaces() {
-        let bridge = makeFallbackBridge(messageCount: 3)
-        let conversation = makeConversation(unreadCount: 4, bridge: bridge, lastMessagePreview: "Hello there")
-        let row = LentilleConversationRow(conversation: conversation)
-
-        let label = row.accessibilityLabel
-
-        XCTAssertTrue(label.contains("Marie"), "Le libellé doit annoncer l'auteur du pont : \(label)")
-        XCTAssertTrue(label.contains("3"), "Le libellé doit annoncer le compte du pont : \(label)")
-        XCTAssertFalse(
-            label.contains("Hello there"),
-            "La préview REMPLACÉE par le pont à l'écran ne doit plus être annoncée : \(label)"
-        )
-    }
-
-    /// Le libellé doit contenir EXACTEMENT ce que `LentilleBridgeLine`
-    /// affiche — même résolution, jamais une seconde loi de langue (contrat
-    /// §5.2, conséquence 2). Couvre aussi le suffixe de partialité
-    /// (`isComplete == false`), composé identiquement des deux côtés.
-    func test_accessibilityLabel_bridgePresent_matchesExactLentilleBridgeLineText() {
+    /// Décision porteur 2026-09-23 : la ligne 2 d'une conversation non lue
+    /// montre son aperçu composé, et l'oreille entend ce que l'œil voit.
+    func test_accessibilityLabel_bridgePresent_announcesThePreview_notTheBridge() {
         let bridge = makeFallbackBridge(messageCount: 3, isComplete: false)
         let conversation = makeConversation(unreadCount: 4, bridge: bridge, lastMessagePreview: "Hello there")
         let row = LentilleConversationRow(conversation: conversation)
 
-        let expectedBridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: [])
-        XCTAssertFalse(expectedBridgeText.isEmpty, "témoin de contrôle : la phrase attendue ne doit pas être vide")
-        XCTAssertTrue(
-            row.accessibilityLabel.contains(expectedBridgeText),
-            "Le libellé doit contenir EXACTEMENT \"\(expectedBridgeText)\" : \(row.accessibilityLabel)"
-        )
+        let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: [])
+        XCTAssertFalse(bridgeText.isEmpty, "témoin de contrôle : le pont a bien un texte à dire")
+        XCTAssertTrue(row.accessibilityLabel.contains("Hello there"), "l'aperçu est annoncé : \(row.accessibilityLabel)")
+        XCTAssertFalse(row.accessibilityLabel.contains(bridgeText), "le décompte du pont ne l'est plus : \(row.accessibilityLabel)")
+        XCTAssertEqual(row.accessibilityLabel, expectedFlatRowBaseLabel(conversation))
     }
 
     // MARK: - Pont absent ⇒ comportement inchangé au caractère près
@@ -146,10 +133,7 @@ final class LentilleFlatRowBridgeAriaTests: XCTestCase {
         )
     }
 
-    /// `showsBridge` exige `unreadCount > 0` (contrat §3.2) — un pont non
-    /// nil sur une conversation à zéro non-lu ne doit RIEN changer au
-    /// libellé, exactement comme la ligne 2 visible retombe sur la préview
-    /// dans ce cas (`Line2Kind.resolve`).
+    /// Un pont sur une conversation à zéro non-lu ne change RIEN au libellé.
     func test_accessibilityLabel_bridgeConditionUnmet_unreadCountZero_unchanged() {
         let bridge = makeFallbackBridge()
         let conversation = makeConversation(unreadCount: 0, bridge: bridge, lastMessagePreview: "Hello there")

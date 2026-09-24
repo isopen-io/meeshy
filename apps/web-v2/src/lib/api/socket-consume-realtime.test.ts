@@ -80,7 +80,7 @@ function buildDeps(overrides: Partial<RealtimeDeps> = {}): {
 }
 
 describe('`message:consumed` met la bulle à jour EN DIRECT (#7354)', () => {
-  test('le fil ouvert de la conversation voit son viewOnceCount bouger, sans recharger', () => {
+  test('un AUTRE l\'ouvre : ma bulle ne bouge pas (#7580, consommation par personne)', () => {
     const { deps, socket, queryClient } = buildDeps();
     const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0 });
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
@@ -92,11 +92,31 @@ describe('`message:consumed` met la bulle à jour EN DIRECT (#7354)', () => {
       userId: 'u-other',
       viewOnceCount: 1,
       maxViewOnceCount: 1,
-      isFullyConsumed: true,
+      isFullyConsumed: false,
     });
 
     const messages = queryClient.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
-    expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(1);
+    expect(messages?.find((m) => m.id === 'm-1')).toBe(target);
+  });
+
+  test('je l\'ouvre sur un autre appareil : le fil ouvert passe « déjà ouvert », sans recharger', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MESSAGE_CONSUMED, {
+      messageId: 'm-1',
+      conversationId: 'c-a',
+      userId: 'u-viewer',
+      viewOnceCount: 1,
+      maxViewOnceCount: 1,
+      isFullyConsumed: false,
+    });
+
+    const sealed = queryClient.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages.find((m) => m.id === 'm-1');
+    expect(sealed?.consumedByMe).toBe(true);
+    expect(sealed?.content).toBe('');
   });
 
   test('une charge mal formée (sans messageId) est ignorée, aucune exception', () => {
@@ -109,5 +129,21 @@ describe('`message:consumed` met la bulle à jour EN DIRECT (#7354)', () => {
 
     const messages = queryClient.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
     expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(0);
+  });
+});
+
+describe('`message:view-once-purged` vide la bulle EN DIRECT, sans la retirer (#7644)', () => {
+  test('la purge serveur atteint le fil ouvert : contenu retiré, rangée gardée', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, { messageId: 'm-1', conversationId: 'c-a' });
+
+    const rows = queryClient.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages ?? [];
+    expect(rows.map((m) => m.id)).toEqual(['m-1']);
+    expect(rows[0]?.content).toBe('');
+    expect(rows[0]?.isFullyConsumed).toBe(true);
   });
 });

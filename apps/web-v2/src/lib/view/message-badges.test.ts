@@ -270,3 +270,43 @@ describe('systemRowText', () => {
     );
   });
 });
+
+describe('les avis de vie du groupe se disent dans la langue du lecteur (#7673)', () => {
+  const notice = (metadata: Record<string, unknown>, content: string) =>
+    systemRowOf(message({ messageType: 'system', messageSource: 'system', content, metadata }));
+  const demo = { participantId: 'p-demo', displayName: 'Demo' };
+  const bob = { participantId: 'p-bob', displayName: 'Bob' };
+
+  test('un retrait nomme QUI a retiré QUI, en anglais pour un lecteur anglais', () => {
+    const row = notice({ kind: 'member-removed', actor: demo, target: bob }, 'Demo a retiré Bob');
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Demo removed Bob');
+  });
+
+  test('un départ se dit « Bob left the conversation »', () => {
+    const row = notice({ kind: 'member-left', actor: bob }, 'Bob a quitté la conversation');
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Bob left the conversation');
+  });
+
+  test('un renommage et un changement de photo se disent comme sur la liste', () => {
+    const renamed = notice({ kind: 'conversation-renamed', actor: demo }, 'Demo a modifié le nom du groupe');
+    const image = notice({ kind: 'conversation-image', actor: demo }, 'Demo a modifié la photo du groupe');
+    expect(renamed === null ? null : systemRowText(renamed, 'en')).toBe('Group name changed');
+    expect(image === null ? null : systemRowText(image, 'en')).toBe('Group photo changed');
+  });
+
+  test('un ajout par un tiers se dit « Demo added Bob », jamais « Bob joined »', () => {
+    const row = notice(
+      { kind: 'member-joined', participantId: 'p-bob', displayName: 'Bob', isAnonymous: false, viaShareLink: false, addedBy: demo },
+      'Bob a rejoint la conversation',
+    );
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Demo added Bob');
+  });
+
+  test('une arrivée d\'elle-même se dit dans la langue du lecteur', () => {
+    const row = notice(
+      { kind: 'member-joined', participantId: 'p-bob', displayName: 'Bob', isAnonymous: false, viaShareLink: true },
+      'Bob a rejoint la conversation',
+    );
+    expect(row === null ? null : systemRowText(row, 'en')).toBe('Bob joined the conversation');
+  });
+});

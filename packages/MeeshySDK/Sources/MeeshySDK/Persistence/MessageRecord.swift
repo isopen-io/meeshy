@@ -112,6 +112,13 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// persisté ici disparaîtrait au relaunch (principe Cache-First).
     public var stickerJson: String?
 
+    /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
+    /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
+    /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
+    /// ligne reste « déjà ouverte », son contenu purgé, jusqu'à l'échéance d'un
+    /// éphémère ou une suppression explicite.
+    public var viewOnceOpenedAt: Date?
+
     // Pre-computed layout (CTFramesetter)
     public var cachedBubbleWidth: Double?
     public var cachedBubbleHeight: Double?
@@ -163,8 +170,10 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         recipientCount: Int = 0,
         locationJson: String? = nil,
         stickerJson: String? = nil,
-        ephemeralDuration: Int? = nil
+        ephemeralDuration: Int? = nil,
+        viewOnceOpenedAt: Date? = nil
     ) {
+        self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
         self.serverId = serverId
         self.conversationId = conversationId

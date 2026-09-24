@@ -5,8 +5,6 @@ import MeeshyUI
 
 struct ActiveSessionsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = ActiveSessionsViewModel()
     /// Référence stable, jamais observée par la racine : seul l'en-tête se

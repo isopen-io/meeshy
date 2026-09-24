@@ -40,12 +40,20 @@ import XCTest
 /// deinit écrite ; la famille À deinit écrite reste OUVERTE (voir la revue Opus
 /// de la vague 1c et la leçon SE-0466).
 ///
-/// Restreindre l'in-scope à `ObservableObject` (et non « toute classe
-/// `@MainActor` ») est délibéré : ce sont les types que SwiftUI détruit hors
-/// tâche (démontage de vue) et que les suites construisent en synchrone. Le
-/// pendant SDK (`MeeshyUIDeinitSourceGuardTests`) élargit le critère parce que
-/// `MeeshyUI` isole TOUTE classe par défaut et que des crashers mesurés y sont
-/// non-`ObservableObject` (`MediaAltCollection`, `ImageFilterEngine`).
+/// **L'in-scope N'EST PAS restreint à `ObservableObject`** — il l'a été, et le
+/// critère a été ÉLARGI à « toute classe non `nonisolated` » (constat 4 de la
+/// revue Opus, `inScope` ci-dessous) : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, donc une classe sans
+/// annotation ni conformité — `BubbleHeightCache`, une cellule de collection —
+/// porte la même deinit isolée. Le pendant SDK
+/// (`MeeshyUIDeinitSourceGuardTests`) applique le même critère large.
+///
+/// Le NOM de la garde principale et celui de ses méta-tests gardent leur
+/// formulation d'origine (« MainActorObservableObject ») ; ils DATENT du
+/// critère étroit et ne le décrivent plus. Lire `inScope`, jamais le nom :
+/// l'écart a coûté une enquête entière (#7685), où l'absence de conformité
+/// `ObservableObject` au site de déclaration de `MessageListCell` a été prise
+/// pour la preuve d'un faux positif du parseur.
 final class MainActorDeinitSourceGuardTests: XCTestCase {
 
     // MARK: - Arborescence
@@ -232,9 +240,11 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             .map { "\($0.relativePath): \($0.name)" }
         XCTAssertTrue(
             offenders.isEmpty,
-            "Ces classes @MainActor ObservableObject n'écrivent aucune `deinit` : leur deinit " +
-            "synthétisée est ISOLÉE et double-libère sur iOS 26.1 (abrt). Ajouter " +
-            "`nonisolated deinit {}`.\n" + offenders.joined(separator: "\n")
+            "Ces classes ne sont PAS marquées `nonisolated` et n'écrivent aucune `deinit` : " +
+            "sous SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, leur deinit synthétisée est " +
+            "ISOLÉE et double-libère sur iOS 26.1 (abrt). Le critère est l'ISOLATION seule — " +
+            "ni `@MainActor` écrit, ni conformité `ObservableObject` ne sont requis pour être " +
+            "in-scope. Ajouter `nonisolated deinit {}`.\n" + offenders.joined(separator: "\n")
         )
     }
 
@@ -275,6 +285,28 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         let baz = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Baz" }
         XCTAssertNotNil(baz)
         XCTAssertTrue(baz!.isNonisolated, "une classe nonisolated est hors scope — pas de deinit isolée")
+    }
+
+    /// La forme qui a produit #7685 : une sous-classe UIKit SANS `@MainActor`
+    /// écrit et SANS `ObservableObject`. Aucun méta-test ne faisait VARIER ces
+    /// deux dimensions — tous leurs échantillons portaient les deux — si bien
+    /// que `inScope` n'était couvert par rien et que le nom de la garde a pu
+    /// passer pour son critère. Un `inScope` re-restreint à
+    /// `isMainActor && conformsObservableObject` rougirait ICI, et nulle part
+    /// ailleurs tant que l'arbre reste propre.
+    func test_inScope_coversPlainClass_withNeitherMainActorNorObservableObject() {
+        let sample = """
+        class Cell: UICollectionViewCell {
+            override var safeAreaInsets: UIEdgeInsets { .zero }
+        }
+        """
+        let cell = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Cell" }
+        XCTAssertNotNil(cell)
+        XCTAssertFalse(cell!.isMainActor, "aucun @MainActor écrit — l'isolation vient de la cible")
+        XCTAssertFalse(cell!.conformsObservableObject, "aucune conformité ObservableObject au site de déclaration")
+        XCTAssertFalse(cell!.hasDeinit)
+        XCTAssertTrue(inScope(cell!),
+                      "le critère est l'ISOLATION (classe non `nonisolated`), pas @MainActor + ObservableObject")
     }
 
     func test_parser_ignoresClassMemberDeclarations() {

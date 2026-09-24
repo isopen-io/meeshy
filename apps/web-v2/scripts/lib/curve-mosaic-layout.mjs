@@ -19,13 +19,15 @@ import { readFileSync } from 'node:fs';
  * déclarée plus haut. Rend ses défauts ; l'hôte reste le seul à les imprimer
  * (motif PARTIE 11, `curve-media-grid.mjs`).
  */
-export const MOSAIC_LAYOUT_COTES = 19;
+export const MOSAIC_LAYOUT_COTES = 20;
 
 export function mosaicLayoutCurveFailures({ root, count }) {
   const failures = [];
   const canvasSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`, 'utf8');
   const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshyUI/Story/MosaicLayout.swift`, 'utf8');
   const mosaicSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift`, 'utf8');
+  const choiceSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Composer/ComposerMosaicChoice.swift`, 'utf8');
+  const publicationLayout = readFileSync(`${root}apps/web-v2/src/lib/stories/publication-layout.ts`, 'utf8');
   const sharedSchema = readFileSync(`${root}packages/shared/types/canvas-v3.ts`, 'utf8');
   const derived = readFileSync(`${root}apps/web-v2/src/lib/feed/mosaic-layout.ts`, 'utf8');
 
@@ -69,6 +71,14 @@ export function mosaicLayoutCurveFailures({ root, count }) {
     first(canvasSwift, /static let fallback: MosaicLayoutMode = \.(\w+)/),
     first(derived, /MOSAIC_FALLBACK_LAYOUT: MosaicLayoutMode = '(\w+)'/),
   );
+
+  // --- L'ORDRE du sous-menu de disposition (#7684) — ORDONNÉ, pas un
+  //     ensemble : le repli en tête est « ce qu'on obtient sans rien choisir »
+  //     (`ComposerMosaicChoice.ordered`), et le menu web le recopierait sinon
+  //     à la main.
+  const swiftOrder = [...(first(choiceSwift, /static let ordered: \[MosaicLayoutMode\] = \[([^\]]*)\]/) ?? '').matchAll(/\.(\w+)/g)].map((m) => m[1]);
+  const derivedOrder = quoted(first(publicationLayout, /PUBLICATION_LAYOUT_ORDER: readonly MosaicLayoutMode\[\] = \[([^\]]*)\]/));
+  check('disposition : ORDRE du sous-menu (ComposerMosaicChoice.ordered)', swiftOrder.length === 0 ? null : swiftOrder.join(','), derivedOrder.length === 0 ? null : derivedOrder.join(','));
 
   // --- La géométrie ---
   check('mosaïque : plafond de tuiles (maxVisible)', swiftNumber(layoutSwift, 'maxVisible'), count(derived, 'MOSAIC_MAX_VISIBLE'));

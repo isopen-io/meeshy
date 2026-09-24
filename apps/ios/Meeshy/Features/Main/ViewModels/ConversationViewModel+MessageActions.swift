@@ -423,8 +423,13 @@ extension ConversationViewModel {
     /// persistence write under one optimistic transaction. Returns `true`
     /// on success so the view can advance its UI (reveal + auto-dismiss
     /// timer); `false` keeps the bubble blurred.
+    ///
+    /// #7579 — l'ouverture se grave D'ABORD sur cet appareil, contenu purgé :
+    /// ce lecteur a vu le message, et ce qu'il a vu ne doit plus être relisible
+    /// ici, que le serveur réponde ou non.
     func consumeViewOnce(messageId: String) async -> Bool {
-        await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
+        await markViewOnceOpenedLocally(messageId: messageId)
+        return await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {
@@ -434,18 +439,13 @@ extension ConversationViewModel {
                 Task {
                     let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
                     await CacheCoordinator.shared.images.remove(for: resolved)
+                    await CacheCoordinator.shared.video.remove(for: resolved)
+                    await CacheCoordinator.shared.audio.remove(for: resolved)
                 }
             }
         }
     }
 
-    func markMessageAsConsumed(messageId: String) {
-        // Write through persistence; the store observation will surface the
-        // updated effectFlags (blurred) and cleared content to the view.
-        Task { [weak self] in
-            try? await self?.messagePersistence.markConsumed(localId: messageId)
-        }
-    }
 
     // MARK: - Edit Message
 

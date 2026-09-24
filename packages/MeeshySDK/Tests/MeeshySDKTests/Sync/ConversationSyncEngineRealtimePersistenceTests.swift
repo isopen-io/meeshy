@@ -398,6 +398,56 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         } }
         XCTAssertTrue(received, "message:consumed n'était souscrit nulle part hors conversation ouverte")
     }
+
+    // MARK: - Vue unique par personne (#7579, contrat #7578)
+
+    private func consumed(by userId: String) -> MessageConsumedEvent {
+        MessageConsumedEvent(
+            messageId: "m-vu", conversationId: "c1", userId: userId,
+            viewOnceCount: 1, maxViewOnceCount: 3, isFullyConsumed: false
+        )
+    }
+
+    func test_viewOnceOpenedMutation_consumedByTheReader_marksItOpened() {
+        XCTAssertEqual(
+            ConversationSyncEngine.viewOnceOpenedMutation(for: consumed(by: "me"), readerId: "me"),
+            .viewOnceOpened(messageId: "m-vu"),
+            "ouverte depuis un autre appareil du même lecteur : « déjà ouvert » ici aussi"
+        )
+    }
+
+    func test_viewOnceOpenedMutation_consumedBySomeoneElse_changesNothing() {
+        XCTAssertNil(ConversationSyncEngine.viewOnceOpenedMutation(for: consumed(by: "other"), readerId: "me"),
+                     "ce qu'un autre ouvre ne retire rien chez moi")
+    }
+
+    func test_viewOnceOpenedMutation_unknownReader_changesNothing() {
+        XCTAssertNil(ConversationSyncEngine.viewOnceOpenedMutation(for: consumed(by: ""), readerId: ""))
+    }
+
+    func test_viewOncePurgedRelay_purgesTheContentAndKeepsTheBubble() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+
+        socket.viewOncePurged.send(ViewOncePurgedEvent(messageId: "m-vu", conversationId: "c1"))
+
+        let received = await waitUntil { await collector.mutations.contains(.viewOnceOpened(messageId: "m-vu")) }
+        XCTAssertTrue(received, "message:view-once-purged doit vider le contenu local sans retirer la bulle")
+        let deleted = await collector.mutations.contains {
+            if case .deleted = $0 { return true }
+            return false
+        }
+        XCTAssertFalse(deleted, "une purge de vue unique n'est pas un retrait")
+    }
+
+    func test_viewOncePurgedEvent_decodesTheServerPayload() throws {
+        let json = #"{"messageId":"m-vu","conversationId":"c1"}"#.data(using: .utf8)!
+        let event = try JSONDecoder().decode(ViewOncePurgedEvent.self, from: json)
+        XCTAssertEqual(event.messageId, "m-vu")
+        XCTAssertEqual(event.conversationId, "c1")
+    }
 }
 
 /// Collecteur thread-safe du hook `realtimeMessagePersistor` (`@Sendable`

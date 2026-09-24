@@ -121,7 +121,7 @@ extension MessageRecord {
 
         let resolvedColor = senderName.map { DynamicColorGenerator.colorForName($0) }
 
-        return MeeshyMessage(
+        var message = MeeshyMessage(
             id: serverId ?? localId,
             conversationId: conversationId,
             senderId: senderId,
@@ -168,5 +168,9 @@ extension MessageRecord {
             location: uiLocation,
             sticker: uiSticker
         )
+        // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
+        // le fil, qui ne lit que GRDB, le reçoit d'ici.
+        message.viewOnceOpenedAt = viewOnceOpenedAt
+        return message
     }
 }

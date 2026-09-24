@@ -40,7 +40,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
       content: 'Bonjour',
       originalLanguage: 'fr',
       storyEffects: effects,
-      mediaIds: studioMediaIds({ background: BACKGROUND }),
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
     });
 
     expect(result.ok).toBe(true);
@@ -60,7 +60,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     for (const type of ['POST', 'REEL'] as const) {
       const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
       const transport = createHttpTransport({ base: '', fetchImpl: impl });
-      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds({ background: BACKGROUND }) });
+      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds([{ background: BACKGROUND }]) });
       const body = JSON.parse(String(calls[0]!.init.body));
       expect(body.type).toBe(type);
       expect(body.storyEffects.v).toBe(3);
@@ -107,7 +107,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
       originalLanguage: 'fr',
       mediaCaption: { 'pm-bg': 'Au lever du jour' },
       storyEffects: effects,
-      mediaIds: studioMediaIds({ background: BACKGROUND }),
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
     });
 
     const body = JSON.parse(String(calls[0]!.init.body));
@@ -135,6 +135,29 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
       expect(result.status).toBe(400);
       expect(result.code).toBe('CANVAS_INVALID');
     }
+  });
+
+  /** #7683, D-115 — `visibility` PART uniquement quand l'auteur l'a choisie ;
+   * sans choix, la clé est ABSENTE du corps (D-111), jamais un défaut
+   * recopié côté client. */
+  test('`visibility` part dans le corps quand elle est fournie', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, visibility: 'FRIENDS', originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect(JSON.parse(String(calls[0]!.init.body)).visibility).toBe('FRIENDS');
+  });
+
+  test('aucune `visibility` fournie ⇒ AUCUNE clé `visibility` dans le corps', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect('visibility' in JSON.parse(String(calls[0]!.init.body))).toBe(false);
   });
 
   test('un échec serveur (429) traverse tel quel — le composeur affiche sa raison', async () => {

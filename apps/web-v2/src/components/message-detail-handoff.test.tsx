@@ -83,6 +83,9 @@ function Harness() {
         <MessageDetailSheet
           choices={[]}
           reactions={[]}
+          /* #7378 — ce témoin garde le PASSAGE de main vers la feuille, pas le
+             favori : `null` dit « état inconnu », et l'étoile ne s'affiche pas. */
+          star={null}
           sentAt={new Date('2026-09-22T09:00:00.000Z')}
           delivery={null}
           locale="fr-FR"

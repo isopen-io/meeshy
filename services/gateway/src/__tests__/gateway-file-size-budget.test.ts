@@ -105,7 +105,40 @@ const MAX_LINES = 1000;
  * `fanout/*.ts`, dans le même dossier — la mesure descend, jamais un fichier
  * ne quitte la classe elle-même. Puis 4494 → 4477 (#7342, 2026-09-21) : la
  * carte `data` du push reproduit est partie vers `reproducedNotificationPush.ts`
- * avant d'y recevoir son marqueur — le fichier mesurait 4490.
+ * avant d'y recevoir son marqueur — le fichier mesurait 4490. Puis 4477 → 3761
+ * (#7632, 2026-09-23) : les quatorze BÂTISSEURS à destinataire NOMMÉ sont
+ * partis vers `builders/`, en trois responsabilités — l'engagement sur un post
+ * ou un commentaire (`social-engagement.ts`), l'appartenance à une conversation
+ * (`conversation-membership.ts`) et la sécurité du compte
+ * (`account-security.ts`). Le fichier MESURAIT 4473 avant le lot : la marge de
+ * 4 lignes que le gel d'origine portait est rendue au dépôt par ce
+ * rabaissement, comme au découpage précédent. Le premier module ne s'appelle
+ * PAS `post-engagement.ts` — le `.gitignore` racine porte un `post-*` NON
+ * QUALIFIÉ, qui matche par BASENAME à toute profondeur et l'avait avalé en
+ * silence : vert en local, absent du dépôt.
+ *
+ * `socketio/CallEventsHandler.ts` : entrée 5181 → 4631 (#7632, 2026-09-23 ; le
+ * fichier MESURAIT 5069 avant le lot — le gel d'origine portait 112 lignes de
+ * marge, rendues au dépôt par ce rabaissement), puis 4631 → 4392 (#7632,
+ * 2026-09-24). Ce second pas sort une QUATRIÈME responsabilité, et son
+ * discriminant n'est plus « ce que le code sait » mais **de quoi il parle** :
+ * `call-client-reports.ts` ne fait ni naître, ni joindre, ni terminer un appel
+ * — il reçoit ce que l'APPLICATION cliente rapporte sur elle-même (premier
+ * plan, capture d'écran, télémétrie de fin). Les quatre gestionnaires
+ * partagent une doctrine qui se perdait, diluée, dans les 4631 lignes : le
+ * `participantId` du client n'est jamais cru sur parole, et chacun paie une
+ * raison DIFFÉRENTE de le résoudre côté serveur. Le cliquet descend par
+ * MESURE (`wc -l`), pas par estimation. Trois responsabilités sont
+ * parties, et le discriminant est ce que chacune SAIT : `call-recipients.ts`
+ * (dans quelle langue parler à un destinataire, depuis quel pays il décroche,
+ * son appareil sait-il recevoir un VoIP), `call-participants.ts` (par QUEL
+ * identifiant la passerelle connaît un appelant, et à quel titre il a le droit
+ * d'écrire sur CET appel — huit gardes distinctes), `call-transcription-relay.ts`
+ * (graver un segment, le faire traduire, le servir à chaque auditeur dans SA
+ * langue). Le tampon d'offres, le sursis de déconnexion et les notifications
+ * d'appel manqué restent : ils partagent des `Map` avec le constructeur, avec
+ * `destroy()` / `prepareForShutdown()`, ou sont atteints par 33 sites de
+ * témoins — leur sortie ne serait pas mécanique.
  *
  * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
  * réservation d'appel (claim / reprise / libération) est partie vers
@@ -113,20 +146,24 @@ const MAX_LINES = 1000;
  *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
- * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi.
+ * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi. Puis
+ * 1204 → 1199 (#7406, 2026-09-22) : les humeurs lisent `statusPostSelect`.
+ *
+ * `services/PostService.ts` : entrée 2663 → 2628 (#7406, 2026-09-22) — le like
+ * et le retrait ne réécrivent plus le Json legacy `Post.reactions`.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
-  'services/notifications/NotificationService.ts': 4477,
-  'socketio/CallEventsHandler.ts': 5181,
+  'services/notifications/NotificationService.ts': 3761,
+  'socketio/CallEventsHandler.ts': 4392,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
   'services/CallService.ts': 3064,
-  'services/PostService.ts': 2663,
+  'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2336,
   'services/EmailService.ts': 1032,
   'server.ts': 1406,
-  'services/PostFeedService.ts': 1204,
+  'services/PostFeedService.ts': 1199,
   'services/AuthService.ts': 1324,
   'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,

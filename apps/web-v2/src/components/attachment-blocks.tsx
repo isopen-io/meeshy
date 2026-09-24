@@ -1,6 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
 
-import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -22,6 +21,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { useAttachmentMasked } from './view-once-opened';
 
 /**
  * LES WIDGETS DE MÉDIA DU FIL (#5805, redécoupé #6221 « la grille de
@@ -425,6 +425,7 @@ export function Attachments({
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const maskedAttachment = useAttachmentMasked();
 
   return (
     <>

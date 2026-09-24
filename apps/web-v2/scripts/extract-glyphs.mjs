@@ -83,6 +83,22 @@ const OVERRIDES = {
    * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
    */
   'coin-fill': join(CORE, 'fill/coin-fill.svg'),
+  /**
+   * `number-circle-one-fill` (#7597) — la vue unique ARMÉE : iOS pose
+   * `1.circle.fill` sur la capsule armée et `1.circle` au repos
+   * (`UniversalComposerBar+Protections.swift`, `MessageProtectionSymbols`).
+   * Le contour et le PLEIN disent l'état que `aria-pressed` annonce.
+   */
+  'number-circle-one-fill': join(CORE, 'fill/number-circle-one-fill.svg'),
+  /**
+   * `star-fill` (#7378, #7286) — l'étoile PLEINE d'un message en favori :
+   * « Retirer des favoris » dans « Plus… », la rangée de Réglages › Outils et
+   * le bouton de retrait de l'écran des favoris (`star.fill` iOS,
+   * `SettingsView.swift`, `StarredMessagesView.swift`). Phosphor ne publie
+   * pas de `star-slash` : l'étoile PLEINE dit « en favori, toucher pour
+   * retirer », le CONTOUR (`star`) dit « ajouter ».
+   */
+  'star-fill': join(CORE, 'fill/star-fill.svg'),
 };
 
 /**
@@ -143,6 +159,15 @@ const USED = [
    * socle de glyphes déjà établi par ce dépôt pour cette famille.
    */
   'eye',
+  /**
+   * `number-circle-one` / `number-circle-one-fill` (#7597, #7580) — le « 1 »
+   * cerclé de la vue unique, pendant EXACT de `1.circle` / `1.circle.fill`
+   * (SF Symbol, `MessageProtectionSymbols`). Phosphor le publie : l'ancienne
+   * traduction par `eye` (#7354) n'a plus lieu d'être, et le porteur exige
+   * le « 1 » cerclé au composeur comme dans le fil (#7580).
+   */
+  'number-circle-one',
+  'number-circle-one-fill',
   /**
    * `timer` (revue #5676) — iOS distingue dans la LIGNE DE LISTE l'éphémère
    * (`timer`) de la vue unique (`flame`)
@@ -274,8 +299,12 @@ emit({
  * `arrow-bend-up-right` (#5866) est le plus proche de `arrowshape.turn.up.right`
  * que iOS pose sur « Transferer » (`MessageActionsMenu.swift`) : phosphor ne
  * publie pas la fleche PLEINE en chevron, et le contour lit mieux a 18 px.
+ *
+ * `star` / `star-fill` (#7378) — le favori de la feuille « Plus... »
+ * (`action.star` / `action.unstar`, `star.fill` iOS) : Ajouter (contour),
+ * Retirer (plein). La feuille vit dans le chunk du fil, comme ce jeu.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three'];
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three', 'star', 'star-fill'];
 
 emit({
   ids: THREAD_MENU,
@@ -626,6 +655,9 @@ const SETTINGS = [
      porte deja, mais le tirer d'ici ferait entrer toute sa table dans le chunk
      des reglages pour un seul trace. */
   'bookmark-fill',
+  /* LES MESSAGES FAVORIS (#7286) — la PREMIERE rangee « Outils », miroir du
+     `star.fill` d'iOS (`SettingsView.swift`, teinte `warning`). */
+  'star-fill',
 ];
 
 emit({
@@ -634,6 +666,29 @@ emit({
   constant: 'SETTINGS_GLYPHS',
   type: 'SettingsGlyphName',
   role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES MESSAGES FAVORIS (#7286) — miroir de
+ * `StarredMessagesView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `star.circle` (etat vide) | `star` |
+ * | `star.fill` (en favori — toucher pour retirer) | `star-fill` |
+ * | `bubble.left.and.bubble.right.fill` (la conversation d'une ligne) | `chats-circle` |
+ *
+ * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
+ * `/me/starred-messages`, jamais dans le socle.
+ */
+const STARRED = ['star', 'star-fill', 'chats-circle'];
+
+emit({
+  ids: STARRED,
+  output: join(HERE, '../src/components/glyphs-starred.ts'),
+  constant: 'STARRED_GLYPHS',
+  type: 'StarredGlyphName',
+  role: "LE JEU D'ECRAN des messages favoris (#7286) : charge avec la route /me/starred-messages, jamais dans le socle.",
 });
 
 /**
@@ -801,4 +856,44 @@ emit({
   constant: 'LENS_PREVIEW_GLYPHS',
   type: 'LensPreviewGlyphName',
   role: "LE JEU de la ligne d'apercu de la Lentille (#7547) : les icones du composeur partage que le socle ne porte pas.",
+});
+
+/**
+ * LES DEUX JEUX DE L'AUDIENCE DU STUDIO (#7683) — miroir des six
+ * `PostVisibility.icon` (`packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift:22-31`,
+ * SF Symbols `globe`, `person.3.fill`, `person.2.fill`, `person.fill.xmark`,
+ * `person.fill.checkmark`, `lock.fill`) :
+ *
+ * | iOS | phosphor | jeu |
+ * |---|---|---|
+ * | `globe` (public) | `globe` | `STORY_AUDIENCE` (la pastille) |
+ * | `person.3.fill` (communautes) | `users-three` | `STORY_AUDIENCE` (la pastille) |
+ * | `person.2.fill` (contacts) | `users` | SOCLE (`glyphs.ts`) |
+ * | `person.fill.xmark` (sauf...) | `user-minus` | `STORY_AUDIENCE_PEOPLE` (la feuille) |
+ * | `person.fill.checkmark` (seulement...) | `user-check` | `STORY_AUDIENCE_PEOPLE` (la feuille) |
+ * | `lock.fill` (prive) | `lock` | SOCLE (`glyphs.ts`) |
+ *
+ * `users` et `lock` ne sont PAS repris : le socle les paie deja avant le
+ * premier pixel. Et les deux modes NOMINATIFS ont leur propre jeu : la
+ * pastille ne les peint jamais (le studio ne sait pas les choisir), seule la
+ * feuille — chargee A LA DEMANDE — les montre, grises avec leur raison. Les
+ * lier au chunk du studio ferait payer a chaque ouverture deux icones que la
+ * plupart des auteurs ne verront pas (revue-correction #7683 : la premiere
+ * forme dupliquait le socle et liait les six, et le chunk du studio franchissait
+ * son plafond).
+ */
+emit({
+  ids: ['globe', 'users-three'],
+  output: join(HERE, '../src/components/glyphs-story-audience.ts'),
+  constant: 'STORY_AUDIENCE_GLYPHS',
+  type: 'StoryAudienceGlyphName',
+  role: "LE JEU DE LA PASTILLE D'AUDIENCE DU STUDIO (#7683) : les deux audiences choisissables que le socle ne porte pas, charge avec /stories/new et /posts/new.",
+});
+
+emit({
+  ids: ['user-minus', 'user-check'],
+  output: join(HERE, '../src/components/glyphs-story-audience-people.ts'),
+  constant: 'STORY_AUDIENCE_PEOPLE_GLYPHS',
+  type: 'StoryAudiencePeopleGlyphName',
+  role: "LE JEU DE LA FEUILLE D'AUDIENCE (#7683) : les deux modes NOMINATIFS, charges avec la feuille a la demande, jamais avec le studio.",
 });

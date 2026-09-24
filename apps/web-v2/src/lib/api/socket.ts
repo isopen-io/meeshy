@@ -44,6 +44,7 @@ import {
   applyConversationUpdated,
   applyMessageAttachmentUpdated,
   applyMessageConsumed,
+  applyMessageViewOncePurged,
   applyMessageNew,
   applyMessageTranslation,
   applyReadStatusUpdated,
@@ -51,6 +52,7 @@ import {
   isConversationUnreadUpdated,
   isConversationUpdated,
   isMessageConsumedEvent,
+  isMessageViewOncePurgedEvent,
   isMessageTranslationEvent,
   isReadStatusUpdated,
   isSocketMessage,
@@ -62,6 +64,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
+import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
@@ -398,8 +401,15 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    */
   const onMessageConsumed = (payload: unknown): void => {
     if (!isMessageConsumedEvent(payload)) return;
-    applyMessageConsumed(deps.queryClient, payload);
+    applyMessageConsumed(deps.queryClient, payload, deps.viewerId());
   };
+
+  /** `message:view-once-purged` (#7578, #7644) — le contenu est purgé, la bulle reste « déjà ouverte ». */
+  const onMessageViewOncePurged = (payload: unknown): void => {
+    if (!isMessageViewOncePurgedEvent(payload)) return;
+    applyMessageViewOncePurged(deps.queryClient, payload);
+  };
+
 
   /**
    * L'ÉCHÉANCE D'UN ÉPHÉMÈRE, DES DEUX CÔTÉS (#7454) — `message:expired` la
@@ -618,6 +628,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `message:starred` (#7378) — LE FAVORI D'UN MESSAGE, posé ou retiré sur un
+   * AUTRE appareil (ou l'écho de ce geste-ci). PERSONNEL : la passerelle
+   * n'émet que vers `user:<id>`. La loi (l'étoile du fil, la ligne de l'écran
+   * des favoris) vit dans `starred-messages-cache.ts`, importé STATIQUEMENT :
+   * il ne tient aucune requête, comme `feed-realtime.ts` ; cet écouteur ne
+   * tient que le branchement (D-98).
+   */
+  const onMessageStarred = (payload: unknown): void => {
+    applyStarredEvent(deps.queryClient, payload);
+  };
+
+  /**
    * `post:reaction-added` / `post:reaction-removed` (#7227, W8) — GARDÉS au
    * ❤️, miroir EXACT d'iOS (`FeedView.swift:1307-1325`). Le ❤️ sur un
    * POST/REEL part en pratique par `post:liked`/`post:unliked`
@@ -789,6 +811,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        coupure n'a jamais atteint ce socket, et la pastille du barreau
        « Découvrir » la compterait trop tard. */
     void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+    /* LES MESSAGES FAVORIS AUSSI (#7378) : un `message:starred` émis pendant
+       la coupure n'a jamais atteint ce socket, et l'étoile du fil mentirait
+       jusqu'à la prochaine relecture. L'ensemble ET la liste de l'écran. */
+    void deps.queryClient.invalidateQueries({ queryKey: STARRED_MESSAGES_QUERY_ROOT });
   };
 
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -803,6 +829,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
@@ -824,6 +851,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
@@ -875,6 +903,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
@@ -896,6 +925,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);

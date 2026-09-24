@@ -154,7 +154,13 @@ export const conversationLastMessagePreviewSelect = {
       pageCount: true,   // Documents
       bitrate: true,     // Audio/Video bitrate
       sampleRate: true,  // Audio sample rate
-      metadata: true     // Additional metadata (effects, etc.)
+      metadata: true,    // Additional metadata (effects, etc.)
+      // #7594 — le texte alternatif (phrase d'un sticker de texte) et la
+      // protection propre de la pièce, qui décide s'il peut partir.
+      alt: true,
+      isViewOnce: true,
+      isBlurred: true,
+      effectFlags: true
     }
   },
   _count: {
@@ -275,6 +281,9 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,
   activeCallId: true,
+  // #7592 — le rang du lecteur (`listRankAt`, `utils/list-rank.ts`).
+  lastReactionAt: true,
+  lastReactionTargetKey: true,
   participants: {
     take: 5,
     where: {

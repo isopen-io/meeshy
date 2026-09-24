@@ -967,7 +967,7 @@ struct ConversationView: View {
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-                    isForwardable: msg.isForwardable
+                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -1700,24 +1700,10 @@ struct ConversationView: View {
                     scrollState.galleryStartAttachment = attachment
                 },
                 onConsumeViewOnce: { messageId, completion in
-                    // #7500 — **on ARME, on ne détruit pas.**
-                    //
-                    // Ce canal appelait le serveur au moment de la révélation :
-                    // le contenu était consommé avant d'avoir été lu, et la
-                    // révélation dépendait d'un aller-retour pour afficher ce
-                    // que ce même aller-retour venait de détruire.
-                    //
-                    // La consommation part maintenant de la SORTIE de la
-                    // conversation — retour, arrière-plan, verrouillage :
-                    // quitter, c'est quitter. On confirme donc aussitôt, pour
-                    // que la révélation se fasse, et c'est l'hôte qui sait
-                    // quand on s'en va.
-                    //
-                    // Ce site couvre les DEUX chemins qui passaient par lui :
-                    // le TEXTE à vue unique, et l'appui long du mode Focal sur
-                    // un média — le reste nommé par #7499.
-                    scrollState.pendingViewOnceConsumption.arm(messageId)
-                    completion(true)
+                    // #7618 — la puce d'une vue unique OUVRE : plein écran pour
+                    // un média, lecture sur place pour un texte. On arme, on ne
+                    // détruit pas (#7500) : `openViewOnce` en tient la règle.
+                    completion(openViewOnce(messageId: messageId))
                 },
                 onRequestTranslation: { messageId, targetLang in
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
@@ -1860,15 +1846,10 @@ struct ConversationView: View {
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
                     },
-                    // #7452 — MÊME canal que le Fil. Sans lui le voile d'une
-                    // vue unique ne se lèverait jamais en Rivière : le
-                    // contrôleur de révélation est fail-closed sur un message
-                    // qui exige l'accusé serveur.
+                    // #7618 — MÊME canal que le Fil : la puce OUVRE, la
+                    // sortie consomme. La Rivière consommait au toucher.
                     onConsumeViewOnce: { messageId, completion in
-                        Task {
-                            let success = await viewModel.consumeViewOnce(messageId: messageId)
-                            completion(success)
-                        }
+                        completion(openViewOnce(messageId: messageId))
                     },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
@@ -2781,7 +2762,7 @@ struct ConversationView: View {
             // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
             // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
             // unique, et la clause O13 tomberait par un simple défaut.
-            isForwardable: msg.isForwardable
+            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide

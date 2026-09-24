@@ -7,8 +7,6 @@ struct BlockedTab: View {
     @ObservedObject var viewModel: BlockedViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var unblockTarget: BlockedUser?

@@ -23,6 +23,28 @@ import MeeshySDK
 /// donc que les deux appels, à l'endroit où les sorties se lisent déjà.
 extension ConversationView {
 
+    /// **Le toucher de la puce d'une vue unique** (#7618), dans les cinq modes.
+    ///
+    /// Le média s'ouvre en PLEIN ÉCRAN et passe à « déjà ouvert » à la
+    /// fermeture (#7499). Le texte se révèle à sa place et passe à « déjà
+    /// ouvert » quand on le RETOUCHE, quand il SORT de l'écran ou quand on
+    /// quitte la conversation (#7579, qui remplace la règle de #7500) : le
+    /// ViewModel tient ces trois portes. Rend `true` quand un texte vient
+    /// d'être révélé sur place.
+    func openViewOnce(messageId: String) -> Bool {
+        switch viewModel.openViewOnce(messageId: messageId) {
+        case .fullscreen(let attachment):
+            GalleryPrewarm.warm(attachment)
+            scrollState.pendingViewOnceConsumption.arm(messageId)
+            scrollState.galleryStartAttachment = attachment
+            return false
+        case .inPlace:
+            return true
+        case .closed, .unavailable:
+            return false
+        }
+    }
+
     /// Consomme, côté serveur, les vues uniques révélées pendant la visite.
     ///
     /// `takeAll()` VIDE dans le même geste : la seconde porte ne trouve plus
@@ -35,7 +57,8 @@ extension ConversationView {
     /// elle échoue, le message reste consommable, ce qui est le bon sens de
     /// l'échec : on ne détruit pas ce qu'on n'a pas pu confirmer.
     func consumeOpenedViewOnceOnExit() {
-        let lues = scrollState.pendingViewOnceConsumption.takeAll()
+        viewModel.closeAllRevealedViewOnce()
+        let lues = viewModel.viewOnceConsumableOnExit(scrollState.pendingViewOnceConsumption.takeAll())
         guard !lues.isEmpty else { return }
         let vm = viewModel
         Task {

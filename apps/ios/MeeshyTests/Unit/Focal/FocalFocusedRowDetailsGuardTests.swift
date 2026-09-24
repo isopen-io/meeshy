@@ -17,6 +17,13 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             .deletingLastPathComponent()
     }
 
+    /// L'hôte et ses extensions : la scène Focal vit dans
+    /// `MessageListViewController+FocalScene.swift` depuis #7624.
+    private func normalizedController() throws -> String {
+        try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+            + " " + normalized("Meeshy/Features/Main/Views/MessageListViewController+FocalScene.swift")
+    }
+
     private func normalized(_ relativePath: String) throws -> String {
         let raw = try String(
             contentsOf: Self.iosRoot.appendingPathComponent(relativePath),
@@ -105,8 +112,14 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // qui garantit qu'aucune largeur ne change à l'élection.
         XCTAssertTrue(row.contains("FocalMetaColumn("), "la méta reste montée, focus ou pas")
         XCTAssertTrue(row.contains("if let precomputed = input.focusTimestamp { return precomputed }"), "date pré-calculée")
-        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        XCTAssertTrue(controller.contains("if electionChanged { syncFocalFocusDetails() }"), "détails synchronisés au tick d'élection")
+        let controller = try normalizedController()
+        // #7624 : synchronisés dès que l'élu diffère de la rangée détaillée ET
+        // que le défilement est à vitesse de lecture — jamais en plein fling
+        // (706 ms de reconfigurations mesurées sur 25 s de flings).
+        XCTAssertTrue(
+            controller.contains("if focalDetailedLocalId != focused, FocalFocusDetailsMotionLaw.revealsDetails(speed: focalScrollSpeedMeter.speed) { syncFocalFocusDetails() }"),
+            "détails synchronisés à l'élection, différés tant que le défilement est trop rapide pour lire"
+        )
         // Jamais un `apply` imbriqué (crash UIKit « APPLYING_SNAPSHOTS_REENTRANTLY »,
         // payé au simulateur) : la reconfiguration est différée et coalescée.
         XCTAssertTrue(controller.contains("guard !focalDetailsSyncScheduled else { return }"), "coalescée")
@@ -139,7 +152,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(iTranslate < iFlags && iFlags < iPlus && iPlus < iReactions, "ordre : traduction, drapeaux, (+), réactions")
         XCTAssertTrue(row.contains("focusChip(filled: mine)"), "fond PLEIN quand j'ai réagi")
         XCTAssertTrue(row.contains(".fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))"), "une seule coquille de chip")
-        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let controller = try normalizedController()
         XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
         XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))
         let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
@@ -376,7 +389,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// La peau doit CONSULTER la loi, pas la réimplémenter : sans élection,
     /// pas de carte ni de chips.
     func test_theController_asksTheLaw_beforeElecting() throws {
-        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let controller = try normalizedController()
         XCTAssertTrue(controller.contains("FocalMagnificationLaw.isArmed("), "la loi est consultée")
         XCTAssertTrue(controller.contains("focalMagnificationArmed"), "son verdict est retenu")
         // La garde a suivi l'implémentation : l'élection n'est plus protégée
@@ -435,7 +448,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// retardé la seule élection en laissant le relief s'appliquer — c'était
     /// la moitié de la règle.
     func test_withoutArming_theRowsStayFlat_asInScript() throws {
-        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let controller = try normalizedController()
         XCTAssertTrue(controller.contains("guard focalMagnificationArmed else {"), "la passe s'arrête AVANT les poses")
         XCTAssertTrue(
             controller.contains("for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }"),
@@ -564,7 +577,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// la rangée. Le démontage d'une carte héritée d'un recyclage reste
     /// assuré par la registration et par `flattenFocalScene`.
     func test_perspectivePass_buildsGeometriesAfterTheArmingGuard_andHasNoPerFrameHideFocusCardLoop() throws {
-        let host = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let host = try normalizedController()
         let pass = try Self.body(of: "func applyFocalPerspectiveToVisibleCells() {", in: host)
         XCTAssertTrue(
             Self.perspectivePassHasNoDeadPerFrameWork(pass),

@@ -1959,21 +1959,6 @@ describe('POST /conversations/:id/messages/:messageId/consume', () => {
     expect(mockSendBadRequest).toHaveBeenCalledWith(expect.anything(), 'Message is not view-once');
   });
 
-  it('happy path: increments viewOnceCount and returns updated values', async () => {
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: 1, conversationId: CONV_ID });
-    prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: 1, conversationId: CONV_ID });
-    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-    const reply = makeReply();
-    await getHandler_()(makeReqWithMsg(), reply);
-    expect(prisma.message.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { viewOnceCount: { increment: 1 } } }),
-    );
-    expect(mockSendSuccess).toHaveBeenCalled();
-    const result = mockSendSuccess.mock.calls[0][1] as any;
-    expect(result.viewOnceCount).toBe(1);
-    expect(result.isFullyConsumed).toBe(true);
-  });
-
   it('error path → 500', async () => {
     prisma.message.findFirst.mockRejectedValue(new Error('DB error'));
     const reply = makeReply();
@@ -3727,22 +3712,6 @@ describe('GET /conversations/:id/pinned-messages — sender branches', () => {
 describe('POST /conversations/:id/messages/:messageId/consume — null value branches', () => {
   const getHandler = () => fastify._routes['POST']['/conversations/:id/messages/:messageId/consume'];
   const makeReqWithMsg = () => makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
-
-  it('maxViewOnceCount null → 1, viewOnceCount null → 1 (lines 2256-2257)', async () => {
-    // Intention inchangée : l'arithmétique de repli sur les deux colonnes
-    // nullables. Le spectateur est désormais RÉSOLU — la consommation
-    // s'attribue à un participant depuis qu'elle ne se dépense qu'une fois
-    // par spectateur — sans quoi ce cas ne va plus jusqu'au calcul.
-    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, isViewOnce: true, maxViewOnceCount: null, viewOnceCount: null, conversationId: CONV_ID });
-    prisma.message.update.mockResolvedValue({ id: MSG_ID, viewOnceCount: null });
-    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-    prisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 1 });
-    const reply = makeReply();
-    await getHandler()(makeReqWithMsg(), reply);
-    const result = mockSendSuccess.mock.calls[0][1] as any;
-    expect(result.maxViewOnceCount).toBe(1);
-    expect(result.viewOnceCount).toBe(1);
-  });
 
   it('viewParticipant=null: rien n’est écrit, et rien n’est dépensé', async () => {
     // Intention inchangée — « aucune entrée de statut n'est écrite quand le

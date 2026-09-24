@@ -99,6 +99,14 @@ export const ROUTES = {
      est littéral et aucune adresse paramétrée à deux segments n'existe sous
      `/me`. */
   bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
+  /* LES MESSAGES FAVORIS (#7286) — miroir `Route.starredMessages`
+     (`Router.swift`), atteinte depuis Réglages › Outils, en PREMIÈRE rangée,
+     comme sur iOS. Sous `/me` pour la raison des enregistrées : un corpus qui
+     n'existe que pour le lecteur connecté, d'où `starredMessages` dans
+     `PRIVATE_ROUTES`. Adresse NEUVE — le legacy ne sert aucun écran de
+     favoris de messages (D-5) ; elle reprend le nom de la route du contrat
+     (`/api/v1/me/starred-messages`). */
+  starredMessages: { pattern: '/me/starred-messages', screen: () => import('@/routes/starred-messages') },
   /* LES STORIES (#6080) — le rail de la liste ouvre ces DEUX adresses, et
      c'est ce qui en fait des contrôles plutôt que des promesses. Jusqu'ici
      chaque tuile du rail pointait vers un FIL sous un anneau de story, faute

@@ -6,6 +6,9 @@ const MESSAGE_ID = '507f1f77bcf86cd799439011';
 const CONVERSATION_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 const REACTION_ID = '507f1f77bcf86cd799439044';
+const AUTHOR_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
+const AUTHOR_USER_ID = '507f1f77bcf86cd799439066';
+const REACTED_AT = new Date('2026-09-23T10:00:00Z');
 
 const makePrisma = () => {
   const conversationUpdate = jest.fn(async (_args: unknown) => ({}));
@@ -15,6 +18,8 @@ const makePrisma = () => {
       findUnique: jest.fn(async () => ({
         id: MESSAGE_ID,
         conversationId: CONVERSATION_ID,
+        senderId: AUTHOR_PARTICIPANT_ID,
+        sender: { userId: AUTHOR_USER_ID } as { userId: string | null } | null,
         deletedAt: null,
         messageType: 'text',
         conversation: { id: CONVERSATION_ID, isActive: true, closedAt: null, participants: [{ id: PARTICIPANT_ID }] },
@@ -30,8 +35,8 @@ const makePrisma = () => {
         messageId: MESSAGE_ID,
         participantId: PARTICIPANT_ID,
         emoji: '❤️',
-        createdAt: new Date('2026-09-23T10:00:00Z'),
-        updatedAt: new Date('2026-09-23T10:00:00Z'),
+        createdAt: REACTED_AT,
+        updatedAt: REACTED_AT,
       })),
       deleteMany: jest.fn(async () => ({ count: 1 })),
     },
@@ -50,8 +55,28 @@ describe('ReactionService — la dernière réaction de la conversation (#7545)'
 
     expect(conversationUpdate).toHaveBeenCalledWith({
       where: { id: CONVERSATION_ID },
-      data: { lastReactionId: REACTION_ID },
+      data: { lastReactionId: REACTION_ID, lastReactionAt: REACTED_AT, lastReactionTargetKey: AUTHOR_USER_ID },
     });
+  });
+
+  it("l'auteur réagi est désigné par son Participant.id quand c'est un invité (#7592)", async () => {
+    const { prisma, conversationUpdate } = makePrisma();
+    prisma.message.findUnique.mockImplementationOnce(async () => ({
+      id: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      senderId: AUTHOR_PARTICIPANT_ID,
+      sender: null,
+      deletedAt: null,
+      messageType: 'text',
+      conversation: { id: CONVERSATION_ID, isActive: true, closedAt: null, participants: [{ id: PARTICIPANT_ID }] },
+    }));
+    const service = new ReactionService(prisma as unknown as PrismaClient);
+
+    await service.addReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️' });
+
+    expect(conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ lastReactionTargetKey: AUTHOR_PARTICIPANT_ID }),
+    }));
   });
 
   it("un ajout sans effet (emoji déjà posé) ne réécrit rien", async () => {
@@ -83,7 +108,7 @@ describe('ReactionService — la dernière réaction de la conversation (#7545)'
 
     expect(conversationUpdateMany).toHaveBeenCalledWith({
       where: { id: CONVERSATION_ID, lastReactionId: REACTION_ID },
-      data: { lastReactionId: null },
+      data: { lastReactionId: null, lastReactionAt: null, lastReactionTargetKey: null },
     });
   });
 });

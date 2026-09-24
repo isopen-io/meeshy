@@ -3,7 +3,6 @@ import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
-import { activeDecorativeEffects } from '@/lib/effects';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -56,9 +55,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 const PROTECTED_LABEL_KEY = {
   deleted: 'message.deleted',
-  burned: 'message.burned.a11y',
   expired: 'message.expired.a11y',
   veiled: 'message.veiled',
+  /** La vue unique (#7580) — les DEUX phrases de sa puce, jamais son contenu. */
+  viewOnce: 'message.viewOnce.sealed.a11y',
+  opened: 'message.viewOnce.opened.a11y',
   /** Le contenu N'EST PAS dans la charge — voir `ProtectedContent.revealable`
    * (#6862). Distinct de `veiled`, où le texte est là et se révèle : annoncer
    * « masqué » ferait attendre un geste qui n'existe pas. */
@@ -199,7 +200,7 @@ export function composeMessageLabel({
    * (`SystemNotice`) ne montre rien d'autre.
    */
   const systemRow = systemRowOf(message);
-  if (systemRow !== null) return systemRowText(systemRow);
+  if (systemRow !== null) return systemRowText(systemRow, language);
 
   /**
    * TROIS ÉTATS NE PEIGNENT AUCUN CHROME — un tombstone plat, ou rien du
@@ -207,7 +208,7 @@ export function composeMessageLabel({
    * est le tombstone SEUL : ni auteur, ni heure, ni pièce jointe — rien de ce
    * que la rangée ne montre pas.
    */
-  if (protection === 'deleted' || protection === 'burned' || protection === 'expired') {
+  if (protection === 'deleted' || protection === 'expired') {
     return translate(language, PROTECTED_LABEL_KEY[protection]);
   }
 
@@ -249,7 +250,11 @@ export function composeMessageLabel({
   if (contentWithheld) {
     segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
   } else if (!rendersContent(protection, phase)) {
-    segments.push(translate(language, PROTECTED_LABEL_KEY.veiled));
+    /* LA VUE UNIQUE SE NOMME PAR SA PUCE (#7580) — « Message à vue unique,
+       touchez pour afficher » ou « … déjà ouvert » ; le flou reste « Contenu
+       masqué ». Jamais le texte, jamais l'inventaire des pièces. */
+    const key = protection === 'viewOnce' || protection === 'opened' ? protection : 'veiled';
+    segments.push(translate(language, PROTECTED_LABEL_KEY[key]));
   } else {
     /**
      * LA CITATION EST UN ENFANT DE LA RANGÉE, DONC ELLE SUIT SA MATRICE
@@ -313,15 +318,9 @@ export function composeMessageLabel({
   if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution, language), language));
   if (message.expiresAt !== undefined) segments.push('éphémère');
 
-  /**
-   * LES EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1) — l'œil
-   * les voit désormais via `EffectsIndicator` (`message-blocks.tsx`), rendu
-   * `aria-hidden` précisément pour que ce segment soit le SEUL endroit qui
-   * les prononce (même discipline que « modifié »/« épinglé » ci-dessus).
-   */
-  const effects = activeDecorativeEffects(message.effectFlags);
-  if (effects.length > 0) segments.push(`effets : ${effects.map((effect) => effect.label.toLowerCase()).join(', ')}`);
-
+  /* LES EFFETS DÉCORATIFS ne se prononcent plus (#7596) : ils s'EXÉCUTENT à
+     l'écran, et les énumérer au lecteur d'écran ferait d'une décoration une
+     information — la même chose que le compteur que l'œil ne voit plus. */
   const reactions = reactionsSegment(message.reactionSummary);
   if (reactions !== undefined) segments.push(reactions);
 

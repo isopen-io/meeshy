@@ -1,9 +1,6 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { JOIN_NOTICE_KIND, type JoinNoticeMetadata, type JoinNoticeLinkRules } from '@meeshy/shared/utils/join-notice';
-import { enhancedLogger } from '../../utils/logger-enhanced';
-
-const logger = enhancedLogger.child({ module: 'JoinSystemMessage' });
+import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
+import { postSystemNotice, type SystemNoticeDeps } from './conversationNotice';
 
 /**
  * Discriminant du message système d'arrivée — DÉFINI DANS `@meeshy/shared`
@@ -27,39 +24,21 @@ export type JoinSystemMessageInput = {
   readonly givenName?: string;
   /** Règles du lien emprunté — seules les portes `viaShareLink` les fournissent. */
   readonly linkRules?: JoinNoticeLinkRules;
-};
-
-export type JoinSystemMessageDeps = {
-  /** `conversation` s'ajoute à `message` depuis #5914 : l'avis d'arrivée
-   *  DEVIENT le dernier message du fil, il doit donc avancer son horloge. */
-  readonly prisma: Pick<PrismaClient, 'message' | 'conversation'>;
-  /** `MeeshySocketIOManager.broadcastMessage`. Absent = pas de socket, l'avis reste persisté. */
-  readonly broadcast?: (message: unknown, conversationId: string) => Promise<void>;
+  /**
+   * Le membre qui a fait entrer l'arrivant (#7593) — ajout ou invitation par un
+   * tiers. La ligne de liste dit alors « Demo a ajouté X » au lieu de « X a
+   * rejoint ». Absent pour une arrivée de soi-même (lien, conversation globale).
+   */
+  readonly addedBy?: NoticeActor;
 };
 
 /**
- * L'horloge du message qui vient d'être écrit (#5914).
- *
- * `message.create()` est appelé avec un `as never` — le délégué Prisma rend
- * donc `unknown` ici, et `createdAt` doit être RECONNU plutôt que supposé. Le
- * repli sur `new Date()` n'est pas une commodité : sans lui, un double de test
- * ou un client partiel qui ne rendrait pas la colonne ferait écrire
- * `undefined` dans `lastMessageAt` — c'est-à-dire EFFACER l'horloge du fil au
- * lieu de l'avancer. La direction de l'erreur est choisie : quelques
- * microsecondes d'écart valent mieux qu'une conversation qui remonte à
- * l'époque zéro.
+ * `conversation` s'ajoute à `message` depuis #5914 : l'avis d'arrivée DEVIENT le
+ * dernier message du fil, il doit donc avancer son horloge. Écriture, horloge et
+ * diffusion passent par `postSystemNotice`, commun à tous les avis de vie du
+ * groupe (#7593).
  */
-function messageCreatedAt(message: unknown): Date {
-  if (typeof message === 'object' && message !== null && 'createdAt' in message) {
-    const brut = (message as { createdAt: unknown }).createdAt;
-    if (brut instanceof Date) return brut;
-    if (typeof brut === 'string' || typeof brut === 'number') {
-      const d = new Date(brut);
-      if (!Number.isNaN(d.getTime())) return d;
-    }
-  }
-  return new Date();
-}
+export type JoinSystemMessageDeps = SystemNoticeDeps;
 
 /**
  * Repli TEXTE, jamais la vérité affichée : les clients rendent depuis
@@ -68,6 +47,7 @@ function messageCreatedAt(message: unknown): Date {
  * export — et aux clients plus anciens que ce `kind`.
  */
 function fallbackContent(input: JoinSystemMessageInput): string {
+  if (input.addedBy) return `${input.addedBy.displayName} a ajouté ${input.displayName}`;
   return input.isAnonymous
     ? `${input.displayName} a rejoint la conversation — visiteur sans compte`
     : `${input.displayName} a rejoint la conversation`;
@@ -80,6 +60,11 @@ function fallbackContent(input: JoinSystemMessageInput): string {
  * condition : renvoyer une erreur à un anonyme déjà admis le laisserait sans
  * recours — ce lien est sa seule identité et sa seule porte. Une panne se solde
  * par un `null` et une ligne de log, jamais par un join refusé.
+ *
+ * L'avis reste attribué à l'ARRIVANT, même ajouté par un tiers : les couloirs
+ * du fil (`river-lanes.ts`) et la réparation des expéditeurs orphelins
+ * (`repairOrphanedMessageSenders`) en dépendent. L'acteur voyage dans
+ * `metadata.addedBy`.
  */
 export async function postJoinSystemMessage(
   deps: JoinSystemMessageDeps,
@@ -96,77 +81,13 @@ export async function postJoinSystemMessage(
     ...(input.username ? { username: input.username } : {}),
     ...(input.givenName ? { givenName: input.givenName } : {}),
     ...(input.linkRules ? { linkRules: input.linkRules } : {}),
+    ...(input.addedBy ? { addedBy: input.addedBy } : {}),
   };
 
-  let message: unknown;
-  try {
-    message = await deps.prisma.message.create({
-      data: {
-        conversationId: input.conversationId,
-        senderId: input.participantId,
-        content: fallbackContent(input),
-        originalLanguage: 'fr',
-        messageType: 'system',
-        messageSource: 'system',
-        metadata: metadata as unknown as Record<string, unknown>,
-        ...LIVE_MESSAGE_MARK,
-      },
-    } as never);
-  } catch (error) {
-    logger.warn('join notice not written', {
-      conversationId: input.conversationId,
-      participantId: input.participantId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-
-  // L'HORLOGE DE LA CONVERSATION SUIT SON DERNIER MESSAGE (#5914). Cette
-  // fonction appelle `message.create()` en direct et court-circuite donc
-  // `messagePostSaveEffects`, seul site qui maintenait `lastMessageAt` sur le
-  // chemin d'un message ordinaire. Sans ce bump, la conversation servait un
-  // `lastMessage` à l'instant et un `lastMessageAt` de la veille — mesuré sur
-  // staging : un compte de sept minutes voyait sa seule conversation datée
-  // « 1j ».
-  //
-  // Le client ne peut pas réparer : `conversation-sections.ts` porte la garde
-  // E11 (« lastMessageAt, repli updatedAt — JAMAIS lastMessage.createdAt »),
-  // parce que ce champ est la CLÉ DE TRI de la liste et la borne des passes de
-  // delta-sync. Une horloge en retard ne fausse donc pas qu'une date : elle
-  // range la conversation au mauvais rang.
-  //
-  // On écrit le `createdAt` DU MESSAGE, jamais `new Date()` : c'est la valeur
-  // que le client compare, et la seule qui rende les deux champs cohérents
-  // (même choix que `messageRemovalEffects`, qui recalcule depuis le dernier
-  // message vivant). Gardé SÉPARÉMENT, comme la diffusion ci-dessous : l'avis
-  // est un accessoire de l'entrée, et un anonyme admis par lien n'a pas de
-  // seconde tentative.
-  const horloge = messageCreatedAt(message);
-  try {
-    await deps.prisma.conversation.update({
-      where: { id: input.conversationId },
-      data: { lastMessageAt: horloge },
-    } as never);
-  } catch (error) {
-    logger.warn('join notice written but conversation clock not advanced', {
-      conversationId: input.conversationId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  // La diffusion est gardée SÉPARÉMENT de l'écriture : un fil sans socket, ou
-  // un socket tombé, ne doit pas effacer un avis déjà persisté — les présents
-  // le verront au prochain chargement.
-  if (deps.broadcast) {
-    try {
-      await deps.broadcast(message, input.conversationId);
-    } catch (error) {
-      logger.warn('join notice written but not broadcast', {
-        conversationId: input.conversationId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return message;
+  return postSystemNotice(deps, {
+    conversationId: input.conversationId,
+    senderParticipantId: input.participantId,
+    content: fallbackContent(input),
+    metadata,
+  });
 }

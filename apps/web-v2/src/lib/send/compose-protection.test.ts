@@ -8,6 +8,7 @@ import {
   composerAccentOf,
   ephemeralDurationLabelOf,
   protectionFieldsOf,
+  toggledVeil,
   type ComposeProtection,
 } from './compose-protection';
 
@@ -71,6 +72,69 @@ describe('composerAccentOf — éphémère > flou > effets > null (ConversationV
 
   test('flou ET effets ⇒ blur gagne', () => {
     expect(composerAccentOf({ blurred: true, effectFlags: MESSAGE_EFFECT_FLAGS.GLOW })).toBe('blur');
+  });
+});
+
+/**
+ * LA BARRE PREND LA COULEUR DE LA PROTECTION LA PLUS FORTE (#7667) —
+ * éphémère > vue unique > flou, miroir `ComposerProtection.dominant`
+ * (`apps/ios/.../ComposerProtection.swift`). Les HUIT combinaisons des trois
+ * bascules : une priorité éprouvée sur trois cas laisse passer l'ordre
+ * inverse dès que deux bascules sont allumées ensemble.
+ */
+describe('composerAccentOf — éphémère > vue unique > flou, sur les huit combinaisons (#7667)', () => {
+  const cas: ReadonlyArray<readonly [ComposeProtection, ReturnType<typeof composerAccentOf>]> = [
+    [{}, null],
+    [{ blurred: true }, 'blur'],
+    [{ viewOnce: true }, 'viewOnce'],
+    [{ viewOnce: true, blurred: true }, 'viewOnce'],
+    [{ ephemeralSeconds: 60 }, 'ephemeral'],
+    [{ ephemeralSeconds: 60, blurred: true }, 'ephemeral'],
+    [{ ephemeralSeconds: 60, viewOnce: true }, 'ephemeral'],
+    [{ ephemeralSeconds: 60, viewOnce: true, blurred: true }, 'ephemeral'],
+  ];
+  for (const [protection, attendu] of cas) {
+    test(`${JSON.stringify(protection)} ⇒ ${String(attendu)}`, () => {
+      expect(composerAccentOf(protection)).toBe(attendu);
+    });
+  }
+
+  test('vue unique ET effets ⇒ viewOnce gagne (une protection prime sur un effet)', () => {
+    expect(composerAccentOf({ viewOnce: true, effectFlags: MESSAGE_EFFECT_FLAGS.GLOW })).toBe('viewOnce');
+  });
+});
+
+/**
+ * « LE MESSAGE NE PEUT PAS ÊTRE FLOU ET VUE UNIQUE ! » (directive porteur
+ * 2026-09-24, #7667) — le composeur éteint l'un quand on allume l'autre
+ * (`toggledVeil`), et la loi d'envoi est le SECOND verrou : un brouillon
+ * restauré avec les deux n'émet jamais les deux drapeaux. La vue unique, plus
+ * forte, gagne — miroir `MessageProtectionIntent.init`.
+ */
+describe('flou et vue unique sont exclusifs (#7667)', () => {
+  test('armer le flou éteint la vue unique', () => {
+    expect(toggledVeil('blurred', { blurred: false, viewOnce: true })).toEqual({ blurred: true, viewOnce: false });
+  });
+
+  test('armer la vue unique éteint le flou', () => {
+    expect(toggledVeil('viewOnce', { blurred: true, viewOnce: false })).toEqual({ blurred: false, viewOnce: true });
+  });
+
+  test('désarmer le flou ne touche pas à la vue unique', () => {
+    expect(toggledVeil('blurred', { blurred: true, viewOnce: false })).toEqual({ blurred: false, viewOnce: false });
+  });
+
+  test('désarmer la vue unique ne touche pas au flou', () => {
+    expect(toggledVeil('viewOnce', { blurred: false, viewOnce: true })).toEqual({ blurred: false, viewOnce: false });
+  });
+
+  test('flou ET vue unique armés ensemble ⇒ seule la vue unique part', () => {
+    const fields = protectionFieldsOf({ blurred: true, viewOnce: true, ephemeralSeconds: 60 }, NOW);
+    expect(fields.isBlurred).toBe(false);
+    expect(fields.isViewOnce).toBe(true);
+    expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED).toBe(0);
+    expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE).toBe(MESSAGE_EFFECT_FLAGS.VIEW_ONCE);
+    expect(fields.effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
   });
 });
 

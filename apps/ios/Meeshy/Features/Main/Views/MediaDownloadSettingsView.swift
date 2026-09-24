@@ -11,8 +11,6 @@ import MeeshyUI
 
 struct MediaDownloadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared

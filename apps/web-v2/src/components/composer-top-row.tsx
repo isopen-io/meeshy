@@ -64,13 +64,12 @@ const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
  * (`maxLength == nil` en conversation) corrigent le libellé initial de
  * l'issue #6175. Voir `docs/product/…/composeur-du-fil.md` § 1.2.
  *
- * **« VUE UNIQUE » (#7354, V6)** — décision antérieure RENVERSÉE :
- * `showViewOnce: previewMode` (iOS, `ConversationView+Composer.swift:214-215`)
- * réservait ce contrôle au composeur de prévisualisation de notification ;
- * #7354 l'exige en conversation standard, GATÉE côté appelant sur la
- * présence d'une pièce jointe IMAGE (`composer.tsx`) — jamais dans ce
- * composant, qui reste un simple RENDU des props reçues (§ « ce composant
- * n'a AUCUNE règle », motif `onSend`).
+ * **« VUE UNIQUE » (#7354, puis #7597)** — TOUJOURS là, d'un seul tap,
+ * juste après le flou, comme iOS (#7472 : `hideViewOnce` ne la cache qu'en
+ * ÉDITION, que ce composeur n'a pas). #7354 la gatait sur une image en
+ * attente ; #7498 a tranché qu'elle vaut pour TOUT ce qu'on envoie, et le
+ * porteur l'a constatée absente de la barre (#7597). Le « 1 » cerclé
+ * (`1.circle` / `1.circle.fill`) dit l'état : contour au repos, plein armé.
  *
  * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
  * tonalité · langue · spacer · compteur — le groupe MENANT d'iOS
@@ -84,7 +83,6 @@ export function ComposerTopRow({
   onSelectEphemeral,
   blurred,
   onToggleBlur,
-  showViewOnce,
   viewOnce,
   onToggleViewOnce,
   effectCount,
@@ -106,10 +104,6 @@ export function ComposerTopRow({
   readonly onSelectEphemeral: (seconds: number | undefined) => void;
   readonly blurred: boolean;
   readonly onToggleBlur: () => void;
-  /** La capsule « vue unique » n'existe QUE si l'appelant la demande (#7354) —
-   * gate PRODUIT décidée par `composer.tsx` (présence d'une image en
-   * attente), jamais par ce composant. */
-  readonly showViewOnce: boolean;
   readonly viewOnce: boolean;
   readonly onToggleViewOnce: () => void;
   /** Nombre d'effets décoratifs actifs — la capsule affiche ce compte,
@@ -223,33 +217,31 @@ export function ComposerTopRow({
           aria-pressed={blurred}
           data-composer-blur
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={blurred ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
         >
           <Glyph name="eyeSlash" size={16} />
           {blurred ? <span className="text-title font-bold">Flou</span> : null}
         </button>
 
-        {/* « VUE UNIQUE » (#7354, V6) — n'existe QUE si `composer.tsx` la
-            demande (une image est en attente) : `showViewOnce` est la gate
-            PRODUIT, ce composant ne fait que la RESPECTER (loi 4, motif
-            `!hideBlur ? blurToggleButton` iOS). Même famille visuelle que
-            « Flou » (`indigo600`, `+Protections.swift:161-238` : les DEUX
-            bascules partagent cette teinte côté iOS). */}
-        {showViewOnce ? (
-          <button
-            type="button"
-            onClick={onToggleViewOnce}
-            aria-pressed={viewOnce}
-            data-composer-view-once
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-            style={viewOnce ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
-            aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
-          >
-            <Glyph name="eye" size={16} />
-            {viewOnce ? <span className="text-title font-bold">{translate(language, 'composer.viewOnce.label')}</span> : null}
-          </button>
-        ) : null}
+        {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Chaque
+            protection porte SA couleur (#7667) : flamme rouge d'alerte
+            (directive porteur ; décision #7677), « 1 » violet et flou gris
+            du fil (#7599) — et le flou et la vue unique sont exclusifs
+            (`toggledVeil`). */}
+        <button
+          type="button"
+          onClick={onToggleViewOnce}
+          aria-pressed={viewOnce}
+          data-composer-view-once
+          data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
+          aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
+        >
+          <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
+          {viewOnce ? <span className="text-title font-bold">{translate(language, 'composer.viewOnce.label')}</span> : null}
+        </button>
 
         <button
           type="button"

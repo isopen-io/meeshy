@@ -839,7 +839,7 @@ console.log(
     `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
     `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
     `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).` +
-    `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift` +
+    `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift/ComposerMosaicChoice.swift` +
     ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).` +
     `\n  Le cadrage d'une scène de fil est conforme à SceneFraming.swift` +
     ` (${SCENE_FRAMING_COTES} cotes ; les valeurs sont gardées par scene-framing.test.ts).` +

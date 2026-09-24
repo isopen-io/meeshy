@@ -239,7 +239,7 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).toContain('Message supprimé');
   });
 
-  test('vue unique consommée : « Vu et supprimé », sans le contenu', () => {
+  test('vue unique déjà ouverte par moi : la puce « (1) · Déjà ouvert », sans le contenu ni un mot de suppression (#7580)', () => {
     const html = render({
       ...BASE_MESSAGE,
       isViewOnce: true,
@@ -248,7 +248,10 @@ describe('Bubble — protection (D-23, #5676)', () => {
       viewOnceCount: 1,
       content: 'Contenu brûlé',
     });
-    expect(html).toContain('Vu et supprimé');
+    expect(html).toContain('data-view-once-chip="opened"');
+    expect(html).toContain('Déjà ouvert');
+    expect(html).toContain('Message à vue unique, déjà ouvert');
+    expect(html).not.toContain('supprimé');
     expect(html).not.toContain('Contenu brûlé');
   });
 
@@ -281,10 +284,21 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).toContain('En attente de réception');
   });
 
-  test('une VUE UNIQUE est nommée même SANS pièce jointe', () => {
-    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true }, { state: 'none' });
-    expect(html).toContain('data-view-once');
-    expect(html).toContain('Vue unique');
+  test('une VUE UNIQUE non ouverte : UNE puce « (1) · Touchez pour afficher », sans le mot « Vue unique » ni le contenu (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true, content: 'SECRET-VU' }, { state: 'none' });
+    expect(html.match(/data-view-once-chip=/g)?.length).toBe(1);
+    expect(html).toContain('data-view-once-chip="sealed"');
+    expect(html).toContain('Touchez pour afficher');
+    expect(html).toContain('Message à vue unique, touchez pour afficher');
+    expect(html).not.toContain('Vue unique');
+    expect(html).not.toContain('SECRET-VU');
+  });
+
+  test('un FLOU n\'a ni puce ni œil : la ligne floutée seule (#7580)', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-FLOU' }, { state: 'none' });
+    expect(html).toContain('data-surrogate');
+    expect(html).not.toContain('data-view-once-chip');
+    expect(html).not.toContain('SECRET-FLOU');
   });
 
   /**
@@ -800,37 +814,16 @@ describe('Bubble — le corps nu d’un message envoyé reste lisible', () => {
 });
 
 /**
- * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
- * — `message.effectFlags` voyageait jusqu'au serveur sans qu'aucune surface
- * ne le rende. Voir le doc-comment de `EffectsIndicator` (`message-blocks.tsx`)
- * pour ce que ce lot rend (un badge statique) et diffère (le célébratoire
- * animé, sous réserve de la règle 32 de la charte).
+ * PLUS AUCUN COMPTEUR D'EFFETS (#7596) — les effets s'EXÉCUTENT
+ * (`MessageEffectsHost`, monté par `ThreadModes` autour de chaque peau) ; la
+ * peau ne les compte ni ne les nomme. Témoin de comportement complet :
+ * `routes/thread-modes-effects.test.tsx`.
  */
-describe('Bubble — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
-  test('aucun effet ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('un bit de CYCLE DE VIE seul (BLURRED) ⇒ aucun badge « effects »', () => {
-    const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, isBlurred: true });
-    expect(html).not.toContain('data-badge="effects"');
-  });
-
-  test('CONFETTI actif ⇒ badge « effects » rendu, aria-hidden (le libellé vit dans rowLabel)', () => {
+describe('Bubble — les effets ne se comptent plus (#7596)', () => {
+  test('CONFETTI actif ⇒ aucun badge, aucun libellé d’effet', () => {
     const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI });
-    expect(html).toContain('data-badge="effects"');
-    expect(html).toContain('aria-hidden');
-    expect(html).toContain('title="Confettis"');
-    expect(html).toContain('>1<');
-  });
-
-  test('deux bits décoratifs ⇒ le compte est 2, pas 1', () => {
-    const html = render({
-      ...BASE_MESSAGE,
-      effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.SPARKLE,
-    });
-    expect(html).toContain('>2<');
+    expect(html).not.toContain('data-badge="effects"');
+    expect(html).not.toMatch(/title="(Confettis|Arc-en-ciel)"/);
   });
 });
 
@@ -1094,9 +1087,52 @@ describe('Bubble — la prise de langue absente retire le GESTE, pas le fait (#6
     expect(html).toContain('data-prism-indicator');
   });
 
-  test('CONTRASTE — le fil, lui, porte la capacité : les deux contrôles sont là', () => {
+  test('CONTRASTE — le fil, lui, porte la capacité : les drapeaux sont là, et la pastille se tait devant eux (#7599)', () => {
     const html = render(TRADUIT, { tail: true });
-    expect(html).toContain('data-prism-toggle');
+    expect(html).not.toContain('data-prism-toggle');
     expect(html).toContain('data-prism-flag');
+  });
+});
+
+/**
+ * CHAQUE ÉTAT UNE SEULE FOIS, PAR SA COULEUR (#7599) — aligné sur l'inventaire
+ * iOS (#7603) : « modifié » et « épinglé » se réduisent à leur pictogramme (le
+ * mot reste dans le nom accessible de la rangée), et un message traduit montre
+ * ses drapeaux SANS la pastille 🌐, qui n'apparaît que s'il n'y a aucun drapeau.
+ */
+describe('un état est dit UNE fois (#7599)', () => {
+  const translatedMessage = (): Message => ({
+    ...BASE_MESSAGE,
+    originalLanguage: 'en',
+    content: 'Hello there!',
+    translations: [
+      {
+        id: 't1',
+        messageId: BASE_MESSAGE.id,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour !',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+  });
+
+  test('traduit : les drapeaux, SANS la pastille de traduction à côté', () => {
+    const html = render(translatedMessage());
+    expect(html).toContain('data-prism-flag');
+    expect(html).not.toContain('data-prism-toggle');
+  });
+
+  test('modifié : le crayon seul, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, isEdited: true });
+    expect(html).toContain('data-badge="edited"');
+    expect(html).not.toContain('modifié');
+  });
+
+  test('épinglé : l’épingle seule, droite, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, pinnedAt: new Date('2026-09-08T09:00:00.000Z') });
+    expect(html).toContain('data-badge="pinned"');
+    expect(html).not.toContain('épinglé<');
+    expect(html).not.toContain('rotate(45deg)');
   });
 });

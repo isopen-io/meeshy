@@ -8,8 +8,6 @@ struct DiscoverTab: View {
     @ObservedObject var viewModel: DiscoverViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var router: Router

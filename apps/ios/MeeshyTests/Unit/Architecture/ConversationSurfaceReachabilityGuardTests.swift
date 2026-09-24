@@ -277,7 +277,6 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
             "apps/ios/MeeshyShareExtension",
             "apps/ios/MeeshyNotificationExtension",
             "apps/ios/MeeshyWidgets",
-            "apps/ios/MeeshyContextMenu",
             "packages/MeeshySDK/Sources",
         ].map { root.appendingPathComponent($0) }
 
@@ -981,22 +980,31 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
                       "Le flou garde son va-et-vient : seul le chemin vue unique change.")
     }
 
-    /// Le canal de consommation ARME au lieu de détruire, et confirme aussitôt
-    /// pour que la révélation se fasse. C'est le défaut lui-même : la
-    /// révélation dépendait d'un aller-retour serveur pour afficher ce que ce
-    /// même aller-retour venait de détruire.
+    /// Le canal de consommation OUVRE au lieu de détruire. C'est le défaut
+    /// lui-même : la révélation dépendait d'un aller-retour serveur pour
+    /// afficher ce que ce même aller-retour venait de détruire.
+    ///
+    /// Depuis #7618, le canal délègue à `openViewOnce(messageId:)` (fichier
+    /// d'extension — l'hôte est dans la dette héritée du cliquet de taille) :
+    /// un média ARME sa consommation et ouvre le plein écran, un texte se
+    /// révèle et confirme. Les DEUX canaux de l'hôte (fil et Rivière) passent
+    /// par lui ; la Rivière consommait au toucher.
     func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        guard let canal = hôte.range(of: "onConsumeViewOnce: { messageId, completion in") else {
-            return XCTFail("Impossible de localiser le canal de consommation de l'hôte.")
+        let canaux = hôte.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
+        XCTAssertEqual(canaux.count, 2, "Le fil et la Rivière ont chacun leur canal.")
+        for canal in canaux {
+            let corps = String(canal.prefix(600))
+            XCTAssertTrue(corps.contains("completion(openViewOnce(messageId: messageId))"),
+                          "Le canal délègue à l'ouverture de la vue unique.")
+            XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
+                           "Le serveur n'est plus appelé au moment de la révélation.")
         }
-        let corps = String(hôte[canal.upperBound...].prefix(1400))
-        XCTAssertTrue(corps.contains("pendingViewOnceConsumption.arm(messageId)"),
-                      "La révélation doit ARMER la consommation, pas la déclencher.")
-        XCTAssertTrue(corps.contains("completion(true)"),
-                      "Et confirmer aussitôt : sinon la révélation n'a jamais lieu.")
-        XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
-                       "Le serveur n'est plus appelé au moment de la révélation.")
+        let ouverture = try source(at: "Features/Main/Views/ConversationView+ViewOnceExit.swift")
+        XCTAssertTrue(ouverture.contains("pendingViewOnceConsumption.arm(messageId)"),
+                      "Le média ouvert ARME la consommation, qui part à la fermeture.")
+        XCTAssertFalse(ouverture.contains("await viewModel.consumeViewOnce"),
+                       "L'ouverture ne consomme jamais elle-même.")
     }
 
     /// **Les DEUX portes de sortie**, et elles sont jumelles : « quitter, c'est

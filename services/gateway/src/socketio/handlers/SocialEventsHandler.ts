@@ -10,6 +10,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
+import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import type {
   Post,
   PostLikedEventData,
@@ -242,6 +243,48 @@ export class SocialEventsHandler {
     emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
   }
 
+  /**
+   * Une PUBLICATION vers son audience — sa liste d'audience ne part qu'à la
+   * salle de son AUTEUR (#7407).
+   *
+   * `visibilityUserIds` route la diffusion (`getVisibilityFilteredRecipients`
+   * a décidé des salles) ; la charge, elle, atteint les amis et, pour une mise
+   * à jour, la salle de la publication, où se tient n'importe quel spectateur.
+   * Un ami non exclu y apprenait QUI l'auteur avait écarté. L'auteur garde sa
+   * liste : ses autres appareils la persistent depuis cet écho. Une
+   * republication, dont la liste est HÉRITÉE de sa source, ne la rend à
+   * personne, son auteur compris (`audienceList.ts`).
+   *
+   * Chaque socket reçoit l'événement UNE fois, sous la forme qui lui revient.
+   * Sans salle de publication, l'émission garde la forme d'`emitToFriends` :
+   * une par salle de fil, personnelle (`feed:subscribe` ne rejoint que la
+   * sienne). Avec elle, celle d'`emitToFeedsAndPostRoom` : UNE émission sur
+   * l'union — Socket.IO dédoublonne l'ami présent dans sa salle de fil ET dans
+   * la salle de la publication — SAUF les sockets de l'auteur (`except`), qui
+   * s'y tient quand il regarde sa propre publication et reçoit la sienne.
+   *
+   * Cinquième seam, contraint comme les quatre du cycle 100 : `payloadFor` rend
+   * un `SocialEventPayload<E>`, le couple (événement, charge) reste vérifié.
+   */
+  private emitPostToAudience<E extends SocialEventName>(
+    recipientIds: readonly string[],
+    authorId: string,
+    event: E,
+    payloadFor: (post: Post) => SocialEventPayload<E>,
+    post: Post,
+    postRoomId?: string,
+  ): void {
+    const authorRoom = ROOMS.feed(authorId);
+    const audiencePayload = payloadFor(withoutAudienceList(post));
+    const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
+    if (postRoomId) {
+      emitServerEvent(this.io.to([...audienceRooms, ROOMS.post(postRoomId)]).except(authorRoom), event, audiencePayload);
+    } else {
+      for (const room of audienceRooms) emitServerEvent(this.io.to(room), event, audiencePayload);
+    }
+    emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
+  }
+
   // ==============================================
   // FEED ROOM MANAGEMENT
   // ==============================================
@@ -319,7 +362,7 @@ export class SocialEventsHandler {
     logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} recipients=${recipients.length}`);
     // U1 — echo the cmid so the author's offline-created optimistic post (keyed
     // by cmid) reconciles to the server id instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_CREATED, (p) => ({ post: p, clientMutationId }), post);
   }
 
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {
@@ -328,11 +371,11 @@ export class SocialEventsHandler {
       post.visibility as string | undefined,
       (post.visibilityUserIds as string[] | undefined) ?? [],
     );
-    // Feed rooms filtrées par visibilité + post room, UN SEUL emit dédoublonné
-    // (miroir broadcastPostLiked). Caveat assumé : si l'édition RESTREINT la
+    // Feed rooms filtrées par visibilité + post room, chaque socket servi UNE
+    // fois (`emitPostToAudience`). Caveat assumé : si l'édition RESTREINT la
     // visibilité, les membres déjà joints à la post room reçoivent encore
     // cette update — même sémantique que comment:added, pas d'éviction de room.
-    this.emitToFeedsAndPostRoom(recipients, authorId, post.id, SERVER_EVENTS.POST_UPDATED, { post });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, post.id);
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
@@ -374,7 +417,11 @@ export class SocialEventsHandler {
       repost?.visibility as string | undefined,
       (repost?.visibilityUserIds as string[] | undefined) ?? [],
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+    if (!repost) {
+      this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
+      return;
+    }
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, (p) => ({ ...data, repost: p }), repost);
   }
 
   /**
@@ -404,7 +451,7 @@ export class SocialEventsHandler {
     );
     // U1 parity — echo the cmid so an offline author's optimistic story
     // (keyed by cmid) reconciles to the server story instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_CREATED, (p) => ({ story: p, clientMutationId }), story);
   }
 
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
@@ -420,10 +467,8 @@ export class SocialEventsHandler {
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, {
-      story,
-      engagementReset: options?.engagementReset ?? false,
-    });
+    const engagementReset = options?.engagementReset ?? false;
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, (p) => ({ story: p, engagementReset }), story);
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have
@@ -463,14 +508,14 @@ export class SocialEventsHandler {
     );
     // U1 parity — echo the cmid so an offline author's optimistic status
     // (keyed by cmid) reconciles to the server status instead of duplicating.
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status, clientMutationId });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, (p) => ({ status: p, clientMutationId }), status);
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {
     const visibility = status.visibility;
     const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, { status });
+    this.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, (p) => ({ status: p }), status);
   }
 
   async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string | null | undefined, visibilityUserIds: string[]): Promise<void> {

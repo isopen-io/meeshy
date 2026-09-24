@@ -62,6 +62,8 @@ interface MessageRow {
   messageType: string;
   expiresAt: Date | null;
   attachments: Array<{ id: string; mimeType: string | null }>;
+  isViewOnce?: boolean;
+  ephemeralDuration?: number | null;
 }
 
 function messageRow(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -461,21 +463,43 @@ describe('ExpiredMessagesCleanupService', () => {
     expect(calls[1][1]).toMatchObject({ suppressedOccurrences: 0 });
   });
 
+  it("ne DÉTRUIT pas une vue unique non éphémère que l'ancien chemin avait programmée (#7578)", async () => {
+    // L'ancien `scheduleViewOnceBurn` posait `expiresAt` dès la PREMIÈRE
+    // ouverture, auteur compris. La détruire ici supprimerait la bulle pour
+    // tous et le message chez qui ne l'a jamais vu.
+    const { service, prisma, manager } = buildService([
+      messageRow({ isViewOnce: true, ephemeralDuration: null }),
+    ]);
+
+    const result = await service.cleanup();
+
+    expect(result).toEqual({ burned: 0 });
+    expect(updateCalls(prisma).some(([args]) => 'deletedAt' in args.data)).toBe(false);
+    expect(manager?.emit).not.toHaveBeenCalled();
+  });
+
   it('`start` balaye immédiatement puis à intervalle, `stop` désarme', async () => {
     jest.useFakeTimers();
     try {
       const { service, prisma } = buildService([messageRow()]);
       const findMany = (prisma as unknown as { message: { findMany: jest.Mock } }).message.findMany;
+      // Deux balayages par passe : l'éphémère (`expiresAt`) et la purge des vues
+      // uniques (`viewOnceBurnAt`, #7578). Chacun se compte par sa question.
+      const passes = (column: string) =>
+        findMany.mock.calls.filter((call) => JSON.stringify(call[0]).includes(column)).length;
 
       service.start(60_000);
-      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(passes('expiresAt')).toBe(1);
+      expect(passes('viewOnceBurnAt')).toBe(1);
 
       jest.advanceTimersByTime(60_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(passes('expiresAt')).toBe(2);
+      expect(passes('viewOnceBurnAt')).toBe(2);
 
       service.stop();
       jest.advanceTimersByTime(180_000);
-      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(passes('expiresAt')).toBe(2);
+      expect(passes('viewOnceBurnAt')).toBe(2);
     } finally {
       jest.useRealTimers();
     }

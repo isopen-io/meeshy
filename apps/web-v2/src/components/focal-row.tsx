@@ -44,7 +44,6 @@ import {
   Badges,
   Check,
   EditedMark,
-  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -683,12 +682,10 @@ export const FocalRow = memo(function FocalRow({
         ) : null}
 
         {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de
-            l'identité, `FocalRow.swift:233`. LES EFFETS DÉCORATIFS (#6175,
-            revue-correction défaut majeur 1) rejoignent la même rangée —
-            voir le doc-comment de `EffectsIndicator`, `message-blocks.tsx`. */}
+            l'identité, `FocalRow.swift:233`. Les effets décoratifs ne s'y
+            comptent plus : ils s'EXÉCUTENT (#7596, `MessageEffectsHost`). */}
         <div className="flex flex-wrap items-center gap-1.5">
           <Badges badges={badges} />
-          <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
         {/* LE CHROME DE PROTECTION — AU-DESSUS de l'identité (F11,
@@ -699,7 +696,6 @@ export const FocalRow = memo(function FocalRow({
             (`secondClock`) — cette rangée ne re-rend jamais pour elle. */}
         <ProtectionChrome
           deadline={ephemeralDeadline}
-          isViewOnce={message.isViewOnce}
           {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
         />
 
@@ -829,16 +825,20 @@ export const FocalRow = memo(function FocalRow({
               >
                 {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
                     voir la jumelle de `bubble.tsx`. */}
-                <PrismPastille
-                  language={currentInterfaceLanguage()}
-                  subject="message"
-                  servedLanguage={naturalServedLanguage}
-                  originalLanguage={message.originalLanguage}
-                  active={activeLanguage}
-                  {...(onPickLanguage === undefined
-                    ? {}
-                    : { onToggle: () => onPickLanguage(message.originalLanguage) })}
-                />
+                {/* LES DRAPEAUX DISENT DÉJÀ LA TRADUCTION (#7599, miroir iOS #7603) —
+                    la pastille 🌐 ne se pose que s'il n'y a aucun drapeau. */}
+                {onPickLanguage === undefined || footerLanguages.length === 0 ? (
+                  <PrismPastille
+                    language={currentInterfaceLanguage()}
+                    subject="message"
+                    servedLanguage={naturalServedLanguage}
+                    originalLanguage={message.originalLanguage}
+                    active={activeLanguage}
+                    {...(onPickLanguage === undefined
+                      ? {}
+                      : { onToggle: () => onPickLanguage(message.originalLanguage) })}
+                  />
+                ) : null}
                 {onPickLanguage === undefined ? null : (
                   <Flags
                     languages={footerLanguages}

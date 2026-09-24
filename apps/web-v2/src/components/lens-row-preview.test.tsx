@@ -98,8 +98,11 @@ function conversationOf(input: ConversationPreviewInput): Conversation {
       originalLanguage: m.originalLanguage ?? '',
       translations: [],
       createdAt: m.createdAt,
-      viewOnceCount: m.viewOnceConsumed ? 1 : 0,
-      ...(m.viewOnceConsumed ? { maxViewOnceCount: 1 } : {}),
+      viewOnceCount: 0,
+      /* LE CHAMP SERVI, TEL QUEL (#7671) — le traduire en compteurs globaux
+         gardait le défaut : la ligne se lisait « Ouvert » dès qu'un AUTRE
+         ouvrait, et jamais sur la donnée que la passerelle sert. */
+      ...(m.viewOnceConsumed === undefined ? {} : { viewOnceConsumed: m.viewOnceConsumed }),
       ...sender,
       ...attachments,
       ...optional,

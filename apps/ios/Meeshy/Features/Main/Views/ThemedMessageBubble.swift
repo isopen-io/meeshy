@@ -8,7 +8,7 @@
 //
 // Kind dispatch (mirrors legacy `body`):
 //   - `.deleted`         → `BubbleDeletedView`
-//   - `.burned`          → `BubbleBurnedView`
+//   - `.viewOnceSealed` / `.viewOnceOpened` → `BubbleViewOnceSealedView`
 //   - `.ephemeralExpired`→ `EmptyView`
 //   - `.standard` + `content.sticker` → `BubbleSticker` (Bubble/BubbleSticker.swift, #4823)
 //   - `.standard`        → `BubbleStandardLayout` (Bubble/BubbleStandardLayout.swift)
@@ -59,14 +59,16 @@ nonisolated enum QuickReactionGesture {
     /// de marcher, ce que la loi 4 de la doctrine composer interdit :
     ///
     /// - `.deleted` — le contenu n'existe plus ;
-    /// - `.burned` — une vue unique consommée ne se réagit pas après coup ;
+    /// - `.viewOnceOpened` — une vue unique déjà ouverte n'a plus de contenu ;
     /// - `.ephemeralExpired` — le message n'est plus là ;
-    /// - `.system` — un avis n'est la parole de personne.
+    /// - `.system` — un avis n'est la parole de personne ;
+    /// - `.viewOnceSealed` — le toucher d'une vue unique l'OUVRE (#7618) :
+    ///   un second geste sur la même puce ne doit rien faire d'autre.
     static func acceptsDoubleTap(kind: BubbleContent.Kind) -> Bool {
         switch kind {
         case .standard:
             return true
-        case .deleted, .burned, .ephemeralExpired, .system:
+        case .deleted, .viewOnceOpened, .viewOnceSealed, .ephemeralExpired, .system:
             return false
         }
     }
@@ -289,11 +291,9 @@ struct ThemedMessageBubble: View {
 
         // Kind dispatch (mirrors legacy `body`):
         //   - `.deleted`         → `BubbleDeletedView`
-        //   - `.burned` && !blurController.isRevealed → `BubbleBurnedView`
+        //   - `.viewOnceSealed` / `.viewOnceOpened` → la puce de vue unique
         //   - ephemeral expired  → `EmptyView`
-        //   - otherwise (`.standard`, or `.burned` + revealed) → `BubbleStandardLayout`
-        // Note: `.burned` includes `isMe` — the sender also sees "Vu et efface"
-        // once their view-once is consumed (see BubbleContentBuilder).
+        //   - otherwise (`.standard`) → `BubbleStandardLayout`
         switch content.kind {
         case .system:
             if let callNotice = content.callNotice {
@@ -308,8 +308,23 @@ struct ThemedMessageBubble: View {
             }
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
-        case .burned where !blurController.isRevealed:
-            BubbleBurnedView(isMe: message.isMe, isDark: isDark)
+        case .viewOnceSealed, .viewOnceOpened:
+            if content.protection.isExpired {
+                EmptyView()
+            } else {
+                BubbleViewOnceSealedView(
+                    state: content.viewOnceChipState ?? .sealed,
+                    isMe: message.isMe,
+                    isDark: isDark,
+                    protection: content.protection,
+                    timeString: content.meta.timeString,
+                    onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
+                        HapticFeedback.medium()
+                        onConsumeViewOnce?(messageId) { _ in }
+                    }
+                )
+                .ephemeralBurn(isBurning: content.isBurning)
+            }
         default:
             if content.protection.isExpired {
                 EmptyView()
@@ -353,7 +368,7 @@ struct ThemedMessageBubble: View {
                 // même, dans `BubbleStandardLayout` (et sur le sticker, dans
                 // `BubbleSticker`).
                 //
-                // Conséquence assumée : les chemins `.deleted` et `.burned`,
+                // Conséquence assumée : les chemins `.deleted` et de vue unique,
                 // qui ne passent pas par ici, ne portent plus d'effets. Un
                 // tombstone « message supprimé » n'a ni arc-en-ciel ni
                 // confettis.
@@ -368,6 +383,9 @@ struct ThemedMessageBubble: View {
                 // sur la bulle comme sur le sticker : un éphémère détruit sous
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
                 .ephemeralBurn(isBurning: content.isBurning)
+                .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
+                    onConsumeViewOnce?(messageId) { _ in }
+                }
                 .onAppear {
                     applyBlurRevealDurationFromPrefs()
                 }

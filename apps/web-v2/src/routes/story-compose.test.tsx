@@ -1,18 +1,26 @@
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/lib/api/http';
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { buttonNamed } from '@/test-support/act-mount';
-import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-
-import type { PublicationKind } from '@/lib/stories/publication-kind';
-
-import StoryComposeScreen, { type StoryStudioDeps } from './story-compose';
+import {
+  VIEWER_ID,
+  fakeRect,
+  flush,
+  harness,
+  image,
+  mount,
+  onePageSnapshot,
+  publishButton,
+  registerStudioBench,
+  removeButton,
+  selectFile,
+  typeText,
+  unmountAll,
+} from '@/test-support/story-studio-bench';
 
 /**
  * `StoryComposeScreen` (#6900) — le critère de fin (Publier inerte sans
@@ -27,163 +35,7 @@ import StoryComposeScreen, { type StoryStudioDeps } from './story-compose';
  * dépendance à l'ordre d'import des singletons.
  */
 
-const VIEWER_ID = 'c'.repeat(24);
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-
-beforeAll(async () => {
-  ensureHappyDomRegistered();
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
-  // Un budget de tours ne peut pas attendre un `import()` : les deux chunks
-  // à la demande de l'écran sont réchauffés avant tout montage.
-  await Promise.all([import('@/components/scene-player'), import('@/lib/api/post-media-upload')]);
-});
-
-afterAll(async () => {
-  delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await releaseHappyDomIfRegistered();
-});
-
-const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
-
-beforeEach(() => {
-  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
-  act(() => {
-    sessionStore.getState().establish({
-      user: { id: VIEWER_ID, username: 'auteur', displayName: 'Auteur', avatar: '' },
-      token: 'jeton-du-temoin',
-      sessionToken: 'session-du-temoin',
-      expiresIn: 3600,
-    });
-  });
-});
-
-afterEach(() => {
-  act(() => {
-    mounted.splice(0).forEach(({ root, container }) => {
-      root.unmount();
-      container.remove();
-    });
-    sessionStore.getState().clearSession();
-  });
-  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
-});
-
-async function flush(condition?: () => boolean): Promise<void> {
-  const limit = Date.now() + 2000;
-  for (;;) {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      for (let i = 0; i < 5; i += 1) await Promise.resolve();
-    });
-    if (condition === undefined || condition() || Date.now() >= limit) return;
-  }
-}
-
-function mount(deps: StoryStudioDeps, initialKind?: PublicationKind): HTMLDivElement {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const root = createRoot(container);
-  mounted.push({ root, container });
-  act(() => {
-    root.render(initialKind === undefined ? <StoryComposeScreen deps={deps} /> : <StoryComposeScreen deps={deps} initialKind={initialKind} />);
-  });
-  return container;
-}
-
-function unmountAll(): void {
-  act(() => {
-    mounted.splice(0).forEach(({ root, container }) => {
-      root.unmount();
-      container.remove();
-    });
-  });
-}
-
-function selectFile(host: ParentNode, door: 'visual' | 'sound', file: File): void {
-  const input = host.querySelector<HTMLInputElement>(`input[data-door="${door}"]`)!;
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  act(() => {
-    Object.defineProperty(input, 'files', { value: transfer.files, configurable: true });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
-function writeNativeValue(element: HTMLElement, prototype: object | null, value: string): boolean {
-  if (prototype === null) return false;
-  const setter: unknown = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-  if (typeof setter !== 'function') return writeNativeValue(element, Object.getPrototypeOf(prototype), value);
-  Reflect.apply(setter, element, [value]);
-  return true;
-}
-
-function typeText(host: ParentNode, value: string): void {
-  const textarea = host.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
-  act(() => {
-    if (!writeNativeValue(textarea, Object.getPrototypeOf(textarea), value)) throw new Error('aucun setter natif de value');
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
-/** Un `DOMRect` complet — `happy-dom` ne peint rien (toutes ses boîtes sont
- * `0,0,0,0`) : c'est en le SUBSTITUANT sur les deux nœuds réels (la carte,
- * le texte peint) qu'on peut prouver, hors navigateur, que la saisie ADOPTE
- * la boîte MESURÉE plutôt qu'une formule recopiée (défaut 1, revue-correction). */
-function fakeRect(box: { readonly top: number; readonly left: number; readonly width: number; readonly height: number }): DOMRect {
-  const { top, left, width, height } = box;
-  return { top, left, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) } as DOMRect;
-}
-
-const publishButton = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-publish]');
-const removeButton = (host: ParentNode, label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-
-type Harness = {
-  readonly deps: StoryStudioDeps;
-  readonly posts: Array<Record<string, unknown>>;
-  readonly uploadCreations: () => number;
-};
-
-/** Un seul banc : `POST /posts` répond `postsStatus`, la montée TUS rend
- * `pm-<n>` (ou lève tant que `uploadsFail()` est vrai). */
-function harness(options: {
-  readonly postsStatus?: () => number;
-  readonly uploadsFail?: () => boolean;
-  readonly drafts?: StudioDraftStore;
-}): Harness {
-  const posts: Array<Record<string, unknown>> = [];
-  let creations = 0;
-  const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (!url.endsWith('/api/v1/posts') || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
-    posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-    const status = options.postsStatus?.() ?? 201;
-    const body = status === 201 ? { success: true, data: { id: 'post-1' } } : { success: false, error: 'boom' };
-    return new Response(JSON.stringify(body), { status });
-  }) as typeof fetch;
-  const uploadsFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    if (options.uploadsFail?.() === true) throw new TypeError('Failed to fetch');
-    if (init?.method === 'POST') {
-      creations += 1;
-      return new Response(null, { status: 201, headers: { Location: `/api/v1/uploads/up-${creations}` } });
-    }
-    return new Response(
-      JSON.stringify({ success: true, data: { attachment: { id: `pm-${creations}`, fileUrl: `2026/09/u/f-${creations}.jpg`, mimeType: 'image/jpeg' } } }),
-      { status: 200, headers: { 'Upload-Offset': '3' } },
-    );
-  }) as typeof fetch;
-  return {
-    posts,
-    uploadCreations: () => creations,
-    deps: {
-      api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
-      upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },
-      drafts: options.drafts ?? createStudioDraftStore(null),
-    },
-  };
-}
-
-const image = () => new File([new Uint8Array([1, 2, 3])], 'fond.jpg', { type: 'image/jpeg' });
+registerStudioBench();
 
 describe('StoryComposeScreen — le bouton Publier est INERTE sans contenu (loi 4)', () => {
   test('brouillon vide : désactivé, et un clic n’envoie rien', async () => {
@@ -323,10 +175,10 @@ const SON_EMPRUNTE = '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
 
 function draftsAvecSonEmprunte(): StudioDraftStore {
   const drafts = createStudioDraftStore(null);
-  drafts.set(VIEWER_ID, {
-    texts: [{ id: 't1', text: 'Sur une piste empruntée' }],
-    sound: { postMediaId: 'pm-lib', fileUrl: SON_EMPRUNTE },
-  });
+  drafts.set(
+    VIEWER_ID,
+    onePageSnapshot({ texts: [{ id: 't1', text: 'Sur une piste empruntée' }], sound: { postMediaId: 'pm-lib', fileUrl: SON_EMPRUNTE } }),
+  );
   return drafts;
 }
 
@@ -444,7 +296,7 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     // moteur, y compris quand il est la SEULE forme posée).
     expect(el.querySelector('[data-scene-player] img')).toBeNull();
     expect(el.querySelector('[data-scene-text]')?.textContent).toBe('Sans fond finalement');
-    expect(drafts.get(VIEWER_ID)?.background).toBeUndefined();
+    expect(drafts.get(VIEWER_ID)?.pages[0]?.background).toBeUndefined();
 
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
@@ -583,5 +435,255 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
     act(() => kindChoice('REEL')!.click());
     await flush();
     expect(bench.posts).toHaveLength(0);
+  });
+});
+
+describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (#7683)', () => {
+  const pastille = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-audience]');
+  const choice = (visibility: string) => document.querySelector<HTMLButtonElement>(`[data-audience-choice="${visibility}"]`);
+  const dialogOpen = () => document.querySelector('dialog[open]');
+  const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
+  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+  /** La feuille se charge À LA DEMANDE (`lazy`, comme `LanguageSheet`) : son
+   * premier rendu attend le module, le témoin attend la feuille OUVERTE. */
+  async function openSheet(host: ParentNode): Promise<void> {
+    act(() => pastille(host)!.click());
+    await flush(() => choice('PUBLIC') !== null);
+  }
+
+  test('choisir « Amis » puis publier ⇒ le corps porte `visibility: FRIENDS`', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Pour mes contacts');
+    await openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('ne rien choisir, publier ⇒ la clé `visibility` est ABSENTE (le défaut reste une règle serveur, D-111)', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Sans audience choisie');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
+  });
+
+  test('choisir « Amis », publier ⇒ la mémoire survit à la purge du brouillon, et un remontage la relit', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    typeText(el, 'Une story pour mes amis');
+    await openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => publishButton(el)!.click());
+    await flush(() => drafts.get(VIEWER_ID) === null);
+
+    expect(drafts.get(VIEWER_ID)).toBeNull();
+    expect(drafts.lastAudience(VIEWER_ID)).toBe('FRIENDS');
+
+    unmountAll();
+    const remounted = harness({ drafts });
+    const el2 = mount(remounted.deps);
+    expect(pastille(el2)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+    expect(pastille(el2)?.getAttribute('data-audience-source')).toBe('chosen');
+
+    typeText(el2, 'Encore une story');
+    act(() => publishButton(el2)!.click());
+    await flush(() => remounted.posts.length > 0);
+    expect(remounted.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('un brouillon SEMÉ avec la mémoire seule (aucun snapshot) ⇒ la pastille lit la mémoire à l’ouverture', () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const el = mount(harness({ drafts }).deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('COMMUNITY');
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('chosen');
+  });
+
+  test('le brouillon (rang 1) prime sur la mémoire (rang 2)', () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [{ id: 't1', text: 'x' }], visibility: 'PRIVATE' }));
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const el = mount(harness({ drafts }).deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
+  });
+
+  test('un brouillon NOMINATIF (version antérieure, donnée altérée) ne part jamais : la mémoire prend le relais, le corps ne porte pas ONLY', async () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [{ id: 't1', text: 'Brouillon ancien' }], visibility: 'ONLY' }));
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('COMMUNITY');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('COMMUNITY');
+  });
+
+  test('la feuille offre les six, dans l’ordre iOS ; ONLY/EXCEPT sont grisés AVEC leur raison, sans effet', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Un texte');
+    await openSheet(el);
+
+    expect(dialogOpen()).not.toBeNull();
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('dialog[open] [data-audience-choice]'));
+    expect(rows.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']);
+
+    for (const refused of ['ONLY', 'EXCEPT']) {
+      const row = choice(refused)!;
+      expect(row.getAttribute('aria-disabled')).toBe('true');
+      expect(row.querySelector('[data-audience-caption]')?.textContent).toBe('Le choix de personnes n’est pas encore disponible sur le web.');
+    }
+
+    act(() => choice('ONLY')!.click());
+    expect(dialogOpen()).not.toBeNull();
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('default');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
+  });
+
+  test('chaque rangée porte SON glyphe — six tracés distincts (PostVisibility.icon)', async () => {
+    const el = mount(harness({}).deps);
+    await openSheet(el);
+    const traces = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice]')).map((row) => row.querySelector('svg')?.innerHTML);
+    expect(traces).toHaveLength(6);
+    expect(new Set(traces).size).toBe(6);
+  });
+
+  test('rien choisi : la feuille désigne le DÉFAUT comme rangée courante, « par défaut » — la même chose que la pastille', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    await openSheet(el);
+    const current = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice][aria-current="true"]'));
+    expect(current.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC']);
+    expect(choice('PUBLIC')?.querySelector('[data-audience-caption]')?.textContent).toBe('Tout le monde, y compris hors abonnés · par défaut');
+    expect(choice('FRIENDS')?.querySelector('[data-audience-caption]')?.textContent).toBe('Vos contacts acceptés');
+  });
+
+  test('toucher la rangée du défaut en fait un CHOIX : il part dans le corps et se mémorise', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    typeText(el, 'Un défaut assumé');
+    await openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('chosen');
+    expect(drafts.lastAudience(VIEWER_ID)).toBe('FRIENDS');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('choisir une audience CHOISISSABLE applique ET ferme la feuille ; la coche la suit', async () => {
+    const el = mount(harness({}).deps);
+    await openSheet(el);
+    act(() => choice('PRIVATE')!.click());
+    expect(dialogOpen()).toBeNull();
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
+    await openSheet(el);
+    expect(choice('PRIVATE')?.getAttribute('aria-current')).toBe('true');
+    expect(choice('PRIVATE')?.querySelector('[data-audience-caption]')?.textContent).toBe('Vous seul — rien n’est publié');
+  });
+
+  test('la note de portée est présente ; aucun titre Mentions ni Hashtags', async () => {
+    const el = mount(harness({}).deps);
+    await openSheet(el);
+    expect(document.querySelector('dialog[open] [data-audience-scope]')).not.toBeNull();
+    const heading = Array.from(document.querySelectorAll('dialog[open] h2, dialog[open] h3')).find((n) =>
+      /mentions|hashtags/i.test(n.textContent ?? ''),
+    );
+    expect(heading).toBeUndefined();
+  });
+
+  test('rien choisi : la pastille dit ce que la passerelle PARTIRAIT — FRIENDS pour une story, PUBLIC pour un post', () => {
+    const story = mount(harness({}).deps, 'STORY');
+    expect(pastille(story)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+    expect(pastille(story)?.getAttribute('data-audience-source')).toBe('default');
+    unmountAll();
+
+    const post = mount(harness({}).deps, 'POST');
+    expect(pastille(post)?.getAttribute('data-audience-value')).toBe('PUBLIC');
+    expect(pastille(post)?.getAttribute('data-audience-source')).toBe('default');
+  });
+
+  test('rien choisi : le menu « Publier comme » dit l’audience de CHAQUE format ; un choix explicite s’applique aux trois', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un texte, pour que le menu soit atteignable');
+    act(() => kindToggle(el)!.click());
+    expect(kindChoice('STORY')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+    expect(kindChoice('POST')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Public');
+    act(() => kindToggle(el)!.click());
+
+    await openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => kindToggle(el)!.click());
+    for (const kind of ['STORY', 'POST', 'REEL'] as const) {
+      expect(kindChoice(kind)?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+    }
+  });
+
+  test('la pastille annonce « Audience » comme nom, la valeur — et « par défaut » tant que rien n’est choisi — comme description', async () => {
+    const el = mount(harness({}).deps);
+    const button = pastille(el)!;
+    expect(button.getAttribute('aria-label')).toBe('Audience');
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    const describedBy = button.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Contacts · par défaut');
+
+    await openSheet(el);
+    expect(pastille(el)!.getAttribute('aria-expanded')).toBe('true');
+    act(() => choice('COMMUNITY')!.click());
+    expect(document.getElementById(pastille(el)!.getAttribute('aria-describedby')!)?.textContent).toBe('Communautés');
+  });
+
+  test('hors ligne : l’audience choisie VOYAGE avec l’intention armée, et part au retour du réseau', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Écrit hors ligne, pour mes communautés');
+    await openSheet(el);
+    act(() => choice('COMMUNITY')!.click());
+    act(() => publishButton(el)!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+
+    act(() => {
+      Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+      window.dispatchEvent(new Event('online'));
+    });
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('COMMUNITY');
+  });
+
+  test('un INVITÉ ne voit aucune pastille : rien du studio ne se peint sans session', () => {
+    act(() => {
+      sessionStore.getState().establishGuest({
+        sessionToken: 'anon',
+        guest: { participantId: null, nickname: 'Invité', conversationId: 'c1', link: 'l1', mayWrite: true },
+      });
+    });
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-story-studio-refusal]')).not.toBeNull();
+    expect(pastille(el)).toBeNull();
+  });
+
+  test('en ALLEMAND, la pastille et la feuille lisent le catalogue — jamais un libellé français en dur', async () => {
+    document.documentElement.lang = 'de';
+    try {
+      const el = mount(harness({}).deps, 'POST');
+      expect(pastille(el)?.textContent).toBe('Öffentlich · Standard');
+      await openSheet(el);
+      expect(choice('ONLY')?.querySelector('[data-audience-caption]')?.textContent).toBe('Die Personenauswahl ist im Web noch nicht verfügbar.');
+    } finally {
+      document.documentElement.lang = 'fr';
+    }
   });
 });

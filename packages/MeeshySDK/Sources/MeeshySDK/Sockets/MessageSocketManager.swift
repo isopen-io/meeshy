@@ -1012,15 +1012,6 @@ public struct ConversationClosedEvent: Decodable, Sendable {
     public let closedAt: String
 }
 
-public struct MessageConsumedEvent: Decodable, Sendable {
-    public let messageId: String
-    public let conversationId: String
-    public let userId: String
-    public let viewOnceCount: Int
-    public let maxViewOnceCount: Int
-    public let isFullyConsumed: Bool
-}
-
 // MARK: - Call Signaling Event Data
 
 public struct SocketIceServer: Decodable, Sendable {
@@ -1473,6 +1464,7 @@ public protocol MessageSocketProviding: Sendable {
     var userPreferencesConversationUpdated: PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
+    var viewOncePurged: PassthroughSubject<ViewOncePurgedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
     var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
     var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
@@ -1798,6 +1790,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — view-once
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
+    public let viewOncePurged = PassthroughSubject<ViewOncePurgedEvent, Never>()
 
     // Combine publishers — location sharing
     public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
@@ -3255,12 +3248,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        socket.on("message:consumed") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageConsumedEvent.self, from: data) { [weak self] event in
-                self?.messageConsumed.send(event)
-            }
-        }
+        registerViewOnceHandlers(on: socket)
 
         // --- Conversation participation events ---
 
@@ -3733,7 +3721,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Serial so payloads decode in arrival order, off the main thread.
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.socket.decode", qos: .userInitiated)
 
-    private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
+    nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else {
             Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
             return

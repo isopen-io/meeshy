@@ -43,8 +43,8 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         // `meeshy://call/mute`, `meeshy://call/end` (boutons de la Live
         // Activity) et `meeshy://call?contactId=…&type=…` (App Shortcut
         // « Call Contact »). Les deux premiers sont hors d'atteinte : le
-        // démarrage d'une Live Activity passe par `LiveActivityBridge`, encore
-        // un stub. Le troisième demande l'amorçage d'un appel depuis un lien.
+        // l'app ne démarre aucune Live Activity (le stub qui l'annonçait a été
+        // retiré, #7681). Le troisième demande l'amorçage d'un appel depuis un lien.
         "call",
         // `meeshy://translate?text=…&target=…` (App Shortcut « Translate
         // Text »). Traduire un texte ARBITRAIRE — hors de toute conversation —

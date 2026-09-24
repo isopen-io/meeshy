@@ -48,7 +48,7 @@ final class ComposerSendButtonAccentSourceGuardTests: XCTestCase {
     func test_sendButton_usesConversationAccent_notHardcodedIndigo() throws {
         let block = try Self.sendButtonBlock()
         XCTAssertTrue(
-            block.contains("let sendColors = [Color(hex: accentColor), Color(hex: secondaryColor)]"),
+            block.contains("let sendColors = [servedAccent, servedSecondary]"),
             "le dégradé d'envoi doit être le miroir exact du bouton « Écrire » de la variante minimisée"
         )
         XCTAssertFalse(
@@ -87,7 +87,7 @@ final class ComposerSendButtonAccentSourceGuardTests: XCTestCase {
     func test_brandIndigoScanner_recognizesTheFormItForbids() {
         XCTAssertTrue(Self.mentionsBrandIndigo("let sendColors = [MeeshyColors.indigo500, MeeshyColors.indigo400]"))
         XCTAssertTrue(Self.mentionsBrandIndigo("LinearGradient(colors: [Color(hex: MeeshyColors.indigo600Hex)])"))
-        XCTAssertFalse(Self.mentionsBrandIndigo("let sendColors = [Color(hex: accentColor), Color(hex: secondaryColor)]"))
+        XCTAssertFalse(Self.mentionsBrandIndigo("let sendColors = [servedAccent, servedSecondary]"))
         XCTAssertFalse(Self.mentionsBrandIndigo("let editColors = [MeeshyColors.warning, MeeshyColors.warning.opacity(0.75)]"))
     }
 

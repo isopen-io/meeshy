@@ -12,8 +12,6 @@ struct ContactsListTab: View {
     @ObservedObject var affiliatesViewModel: AffiliatesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -114,9 +112,10 @@ struct ContactsListTab: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
+                let friends = viewModel.filteredFriends
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(viewModel.filteredFriends.enumerated()), id: \.element.id) { index, friend in
-                        contactRow(friend, index: index)
+                    ForEach(Array(friends.enumerated()), id: \.element.id) { index, friend in
+                        contactRow(friend, index: index, total: friends.count)
                     }
                 }
                 .padding(.top, 4)
@@ -128,7 +127,7 @@ struct ContactsListTab: View {
 
     // MARK: - Contact Row
 
-    private func contactRow(_ user: FriendRequestUser, index: Int) -> some View {
+    private func contactRow(_ user: FriendRequestUser, index: Int, total: Int) -> some View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
         let presence = PresenceManager.shared.resolvedState(
@@ -184,7 +183,7 @@ struct ContactsListTab: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(contactRowAccessibilityLabel(user, presence: presence))
-        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: total)
     }
 
     private func contactRowAccessibilityLabel(_ user: FriendRequestUser, presence: PresenceState) -> String {

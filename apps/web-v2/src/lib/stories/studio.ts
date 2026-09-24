@@ -1,8 +1,38 @@
-import type { ApiFailure } from '@/lib/api/http';
-
-import { MEDIA_CAPTION_MAX } from './media-caption';
-import type { StudioMediaKind, StudioPlane } from './story-document';
-import type { StudioDraftSnapshot, StudioTextLayerSnapshot } from './studio-draft-store';
+import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
+import type { StudioPlane } from './story-document';
+import {
+  emptyStudioPage,
+  isStudioPageEmpty,
+  isStudioPagePublishable,
+  pageMediaCount,
+  pageWithAddedText,
+  pageWithMediaDuration,
+  pageWithSelected,
+  pageWithSound,
+  pageWithSoundPlane,
+  pageWithSoundUpload,
+  pageWithText,
+  pageWithTextLayer,
+  pageWithVisual,
+  pageWithVisualAspectRatio,
+  pageWithVisualCaption,
+  pageWithVisualPose,
+  pageWithVisualUpload,
+  pageWithoutSound,
+  pageWithoutText,
+  pageWithoutVisual,
+  readyAssetOf,
+  selectedTextLayerOf,
+  studioDoorAccepts,
+  studioFailureKey,
+  type StudioDoor,
+  type StudioFailureKey,
+  type StudioPage,
+  type StudioSoundAsset,
+  type StudioUploadState,
+  type StudioVisualAsset,
+} from './studio-page';
+import type { StudioDraftSnapshot, StudioPageSnapshot, StudioTextLayerSnapshot } from './studio-draft-store';
 import { IDENTITY_POSE, clampPose, type StudioPose } from './studio-pose';
 import {
   STUDIO_TEXT_ALIGNS,
@@ -10,322 +40,253 @@ import {
   STUDIO_TEXT_COLORS,
   STUDIO_TEXT_EFFECTS,
   STUDIO_TEXT_STYLES,
-  newTextLayer,
   nextTextLayerId,
   type StudioTextLayer,
 } from './studio-text';
 
 /**
- * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943) — ce que l'auteur
- * pose, et où. Le studio de #6900 avait trois valeurs : un fond, un son de
- * fond, UN texte. Il en a désormais quatre familles :
+ * **L'ÉTAT DU PLATEAU DE STORY** (#6900, élargi par #6943, #6944 puis #7684) —
+ * ce que l'auteur pose, et où. Le plateau porte désormais **plusieurs PAGES**
+ * (#7684, spécification §1.1 : « une PAGE est une slide, une slide est une
+ * SCÈNE du canvas ») : chacune avec ses propres objets texte, son fond, son
+ * calque d'avant-plan et son son — ce que `StudioDraft` portait SEUL avant ce
+ * lot (`StudioPage`, `studio-page.ts`).
  *
- *  - **plusieurs objets texte**, chacun avec sa pose, sa langue et son style ;
- *  - **un fond** (image/vidéo) et **un calque d'avant-plan**, qui répondent à
- *    « ajouter des images en fond OU en front » (directive porteur
- *    2026-09-17) ;
- *  - **un son**, qui se place en FOND (la bande-son de la scène) ou POSÉ ;
- *  - **une légende par média** (`PostMedia.caption`, #6944) — le TROISIÈME
- *    contenu du dépôt, ni `Post.content` ni `alt`.
- *
- * Poser un second fichier dans une porte REMPLACE le précédent (question 9.1
- * de #6900 : il n'y a qu'une place par porte, donc rien à demander à
- * l'auteur). Les objets texte, eux, s'ajoutent — c'est tout l'objet du lot.
- *
- * `StudioUploadState` miroir de la pré-montée iOS
- * (`MeeshyComposerHost+PreUpload.swift:1-128`) : `uploading` pendant le
- * transport, `ready` porte l'identité SERVEUR (adoptée), `failed` porte la
- * CLÉ de sa cause — traduite au RENDU, jamais figée dans la langue du moment
- * de l'échec. Un asset RESTAURÉ n'a plus de `File` : il est `ready` ou il
- * n'est pas restauré.
+ * Ce module est désormais la couche DRAFT : la gestion des pages elles-mêmes
+ * (`withAddedPage`, `withoutPage`, `withCurrentPage`, `withPage`) et la
+ * DÉLÉGATION des fonctions historiques vers la page COURANTE — leurs
+ * signatures restent celles d'avant #7684 (`withVisual(draft, door, asset)`,
+ * etc.) pour que les appelants existants n'aient qu'à lire `currentStudioPage
+ * (draft)` là où ils lisaient `draft.background` directement.
  */
-export type StudioFailureKey =
-  | 'story.studio.failure.network'
-  | 'story.studio.failure.timeout'
-  | 'story.studio.failure.session'
-  | 'story.studio.failure.account'
-  | 'story.studio.failure.forbidden'
-  | 'story.studio.failure.tooLarge'
-  | 'story.studio.failure.fileRefused'
-  | 'story.studio.failure.rateLimited'
-  | 'story.studio.failure.refused'
-  | 'story.studio.failure.unavailable';
+export type { StudioDoor, StudioFailureKey, StudioPage, StudioSoundAsset, StudioUploadState, StudioVisualAsset };
+export { readyAssetOf, studioDoorAccepts, studioFailureKey };
 
-export type StudioUploadState =
-  | { readonly phase: 'uploading'; readonly progress: number }
-  | { readonly phase: 'ready'; readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string }
-  | { readonly phase: 'failed'; readonly reasonKey: StudioFailureKey };
+/**
+ * **LE PLAFOND D'UNE PUBLICATION** — deux contraintes SERVEUR qui partagent
+ * aujourd'hui la même valeur, jamais une coïncidence à garder en dur deux
+ * fois SANS le dire : `CanvasV3Schema.scenes` plafonne à 10
+ * (`packages/shared/types/canvas-v3.ts:211`, une scène par PAGE) et
+ * `MAX_POST_MEDIA` plafonne les médias d'UNE publication
+ * (`packages/shared/types/attachment.ts:490`) — la même passerelle qui
+ * refuserait un document à 11 scènes refuserait aussi 11 médias.
+ * `STUDIO_PAGE_MAX` gouverne le NOMBRE DE PAGES ; ce même chiffre gouverne
+ * aussi le NOMBRE DE MÉDIAS déjà posés (`studioPlaceRefusal`) — deux
+ * questions distinctes, une seule valeur. **NON importé** de
+ * `@meeshy/shared` en PRODUCTION (poids, #7684 revue-correction : `attachment
+ * .ts` pèserait sur le chunk `story_studio` pour une seule constante) — le
+ * témoin `studio.test.ts` importe `MAX_POST_MEDIA` et ÉPINGLE l'égalité, ce
+ * fichier-ci n'a que la valeur.
+ */
+export const STUDIO_PAGE_MAX = 10;
 
-export type StudioVisualAsset = {
-  readonly file?: File;
-  readonly previewUrl: string;
-  readonly mediaType: StudioMediaKind;
-  readonly upload: StudioUploadState;
-  /** Largeur / hauteur du FICHIER LOCAL (§ 0, défaut 7) — mesurée dès la
-   * sélection (`measureAspectRatio`). `undefined` tant que la mesure est en
-   * vol : un document publié SANS elle laisse le lecteur cadrer sur le
-   * rapport 9:16 par défaut, jamais un blocage. */
-  readonly aspectRatio?: number;
-  /** La DURÉE du fichier local (vidéo), mesurée dès la sélection (#7497) —
-   * c'est elle que la règle du réel compare à ses trois secondes. */
-  readonly durationMs?: number;
-  /** LA LÉGENDE de CE média (#6944) — `PostMedia.caption`. */
-  readonly caption: string;
-  /** La pose du CALQUE. Le FOND n'en a pas d'utile (il remplit la scène, et
-   * iOS interdit même de le faire tourner) : elle reste à l'identité. */
-  readonly pose: StudioPose;
-};
-
-export type StudioSoundAsset = {
-  readonly file?: File;
-  readonly previewUrl: string;
-  readonly upload: StudioUploadState;
-  readonly plane: StudioPlane;
-  /** La durée du son local (#7497) — voir `StudioVisualAsset.durationMs`. */
-  readonly durationMs?: number;
-};
-
+/** LE BROUILLON — une suite de PAGES et l'identifiant de celle qu'on édite. */
 export type StudioDraft = {
-  readonly texts: readonly StudioTextLayer[];
-  /** L'objet SÉLECTIONNÉ — l'`id` d'un texte, `'overlay'`, ou `null`. C'est
-   * lui que l'éditeur du couloir droit règle et que les gestes déplacent :
-   * sans sélection explicite, un plateau à plusieurs objets ne saurait pas
-   * lequel un geste concerne. */
-  readonly selected: string | null;
+  readonly pages: readonly StudioPage[];
+  readonly currentPage: string;
+  /** La langue de COMPOSITION par défaut — un concept de SESSION, pas de
+   * page (`useComposeLanguage({ initialLanguage })`) : elle graine tout objet
+   * texte NOUVEAU, quelle que soit la page où il naît. */
   readonly language?: string;
-  readonly background: StudioVisualAsset | null;
-  readonly overlay: StudioVisualAsset | null;
-  readonly sound: StudioSoundAsset | null;
+  /**
+   * **L'AUDIENCE CHOISIE PAR L'AUTEUR** (#7683) — `null` tant que rien n'est
+   * choisi : le corps de `POST /posts` part alors SANS `visibility` (D-111).
+   * `ChoosableAudience`, jamais `PostVisibility` : un brouillon ne PEUT pas
+   * tenir `ONLY`/`EXCEPT` sans leur liste de personnes.
+   */
+  readonly visibility: ChoosableAudience | null;
 };
 
-/** Les trois PORTES du couloir gauche — le fond, le calque, le son. Le
- * vocabulaire du modèle dit « plan » pour bg/content/fg ; ici c'est la PORTE
- * par laquelle un fichier entre, et elle décide de son rôle. */
-export type StudioDoor = 'visual' | 'overlay' | 'sound';
+/** La page COURANTE — le SITE UNIQUE de lecture, pour que « quelle page ? »
+ * se réponde une fois. Un `currentPage` orphelin (donnée corrompue) retombe
+ * sur la première page plutôt que de lever une exception. */
+export function currentStudioPage(draft: StudioDraft): StudioPage {
+  return draft.pages.find((page) => page.id === draft.currentPage) ?? draft.pages[0]!;
+}
+
+const allTexts = (draft: StudioDraft): readonly StudioTextLayer[] => draft.pages.flatMap((page) => page.texts);
+
+/** Un identifiant de PAGE unique DANS CE BROUILLON — `page-1`, `page-2`…,
+ * calculé contre l'existant (même loi que `nextTextLayerId`, #5102 : « un
+ * identifiant qui ne s'alloue pas ne collisionne pas »). */
+function nextPageId(pages: readonly StudioPage[]): string {
+  const used = pages.map((page) => Number.parseInt(page.id.replace(/^page-/, ''), 10)).filter((n) => Number.isInteger(n));
+  return `page-${Math.max(0, ...used) + 1}`;
+}
 
 export function emptyStudioDraft(language: string): StudioDraft {
-  const seed = newTextLayer({ id: 'text-1', language });
-  // UN objet texte VIDE dès l'ouverture : c'est lui que la saisie du plateau
-  // édite, et il ne devient un objet du document que s'il porte du texte
-  // (`composeObjects` filtre les vides). Sans lui, le plateau n'aurait aucune
-  // cible de frappe tant que l'auteur n'a pas tapé « ajouter un texte ».
-  return { texts: [seed], selected: seed.id, background: null, overlay: null, sound: null };
+  const page = emptyStudioPage('page-1', 'text-1', language);
+  return { pages: [page], currentPage: page.id, visibility: null };
 }
 
 export function isStudioDraftEmpty(draft: StudioDraft): boolean {
-  return (
-    draft.texts.every((layer) => layer.text.trim() === '') &&
-    draft.background === null &&
-    draft.overlay === null &&
-    draft.sound === null
-  );
+  return draft.pages.every(isStudioPageEmpty);
 }
 
-/* ── LES OBJETS TEXTE ─────────────────────────────────────────────────────── */
+/** Les pages qui PARTIRONT — une page sans matière ne produit aucune scène
+ * (`composeStoryCanvasPages`). Le SITE UNIQUE de « combien de scènes ? » pour
+ * le sous-menu de disposition (`layoutIsServed`) et le refus d'une story de
+ * plusieurs pages (`studioPublishRefusal`) : compter `pages.length` offrait
+ * une disposition qu'une page vide rendait sans effet. */
+export function studioPublishablePageCount(draft: StudioDraft): number {
+  return draft.pages.filter((page) => !isStudioPageEmpty(page)).length;
+}
 
-export const selectedTextLayer = (draft: StudioDraft): StudioTextLayer | null =>
-  draft.texts.find((layer) => layer.id === draft.selected) ?? null;
+/** LE SITE UNIQUE de mutation d'UNE page — un `id` inconnu rend le brouillon
+ * INCHANGÉ (même identité), pour que la tuile mémoïsée d'une autre page ne
+ * re-rende jamais pour rien (Zero Unnecessary Re-render). */
+export function withPage(draft: StudioDraft, id: string, change: (page: StudioPage) => StudioPage): StudioDraft {
+  if (!draft.pages.some((page) => page.id === id)) return draft;
+  return { ...draft, pages: draft.pages.map((page) => (page.id === id ? change(page) : page)) };
+}
+
+const withCurrentPageChange = (draft: StudioDraft, change: (page: StudioPage) => StudioPage): StudioDraft => withPage(draft, draft.currentPage, change);
+
+/* ── LES PAGES ────────────────────────────────────────────────────────────── */
+
+/** Ajoute une page VIDE et la rend COURANTE (`StoryComposerViewModel+Slides.
+ * swift:72-77`) — inerte au plafond (`STUDIO_PAGE_MAX`), jamais une onzième
+ * page silencieuse. Son texte de graine reçoit un `id` unique contre TOUTES
+ * les pages du brouillon (`translationSetPath`, `storyEffectsV3.ts:635-643`,
+ * prend le PREMIER objet d'un `id` donné, toutes scènes confondues). */
+export function withAddedPage(draft: StudioDraft, language: string): StudioDraft {
+  if (draft.pages.length >= STUDIO_PAGE_MAX) return draft;
+  const id = nextPageId(draft.pages);
+  const textId = nextTextLayerId(allTexts(draft));
+  const page = emptyStudioPage(id, textId, language);
+  return { ...draft, pages: [...draft.pages, page], currentPage: page.id };
+}
+
+/** Retire une page — inerte sous DEUX pages (`removeSlide`,
+ * `StoryComposerViewModel+Slides.swift:79-83`) et sur un `id` inconnu.
+ * Retirer la page COURANTE fait courante la PRÉCÉDENTE (ou la première) ;
+ * retirer une AUTRE page ne change jamais la courante. */
+export function withoutPage(draft: StudioDraft, id: string): StudioDraft {
+  if (draft.pages.length <= 1) return draft;
+  const index = draft.pages.findIndex((page) => page.id === id);
+  if (index === -1) return draft;
+  const pages = draft.pages.filter((page) => page.id !== id);
+  const currentPage = draft.currentPage === id ? (pages[Math.max(0, index - 1)]?.id ?? pages[0]!.id) : draft.currentPage;
+  return { ...draft, pages, currentPage };
+}
+
+/** Change la scène courante (`selectSlide(at:)`) — un `id` inconnu ⇒ inchangé. */
+export function withCurrentPage(draft: StudioDraft, id: string): StudioDraft {
+  return draft.pages.some((page) => page.id === id) ? { ...draft, currentPage: id } : draft;
+}
+
+/** Le nombre de médias (fond/calque/son) que le DOCUMENT ENTIER porte, prêts
+ * OU en vol — comparé à `MAX_POST_MEDIA` par `studioPlaceRefusal`. */
+export function studioMediaCount(draft: StudioDraft): number {
+  return draft.pages.reduce((sum, page) => sum + pageMediaCount(page), 0);
+}
+
+export type StudioPlaceRefusal = 'door' | 'media-max';
+
+/** Le refus AVANT de poser un fichier — la porte (mauvais MIME) ou le
+ * plafond du DOCUMENT entier (les 10 médias de `MAX_POST_MEDIA`, comptés sur
+ * TOUTES les pages, jamais seulement la courante). Une porte déjà OCCUPÉE sur
+ * la page courante REMPLACE son média (question 9.1 de #6900) : le compte ne
+ * monte pas, le remplacement passe même au plafond. */
+export function studioPlaceRefusal(draft: StudioDraft, door: StudioDoor, mimeType: string): StudioPlaceRefusal | null {
+  if (!studioDoorAccepts(door, mimeType)) return 'door';
+  const page = currentStudioPage(draft);
+  const occupied = (door === 'visual' ? page.background : door === 'overlay' ? page.overlay : page.sound) !== null;
+  return !occupied && studioMediaCount(draft) >= STUDIO_PAGE_MAX ? 'media-max' : null;
+}
+
+/* ── LES OBJETS TEXTE, DÉLÉGUÉS À LA PAGE COURANTE ───────────────────────── */
+
+export const selectedTextLayer = (draft: StudioDraft): StudioTextLayer | null => selectedTextLayerOf(currentStudioPage(draft));
 
 export function withAddedText(draft: StudioDraft, language: string): StudioDraft {
-  const layer = newTextLayer({ id: nextTextLayerId(draft.texts), language });
-  return { ...draft, texts: [...draft.texts, layer], selected: layer.id };
+  const textId = nextTextLayerId(allTexts(draft));
+  return withCurrentPageChange(draft, (page) => pageWithAddedText(page, textId, language));
 }
 
 export function withSelected(draft: StudioDraft, id: string | null): StudioDraft {
-  return { ...draft, selected: id };
+  return withCurrentPageChange(draft, (page) => pageWithSelected(page, id));
 }
 
 /**
- * RETIRER un objet texte. Le dernier ne se retire pas en laissant le plateau
- * sans cible de frappe : il se VIDE, et la sélection reste sur lui — un
- * plateau où plus rien n'est sélectionnable serait un cul-de-sac au clavier.
+ * **L'AUDIENCE COMMISE** (#7683) — porte sur le BROUILLON entier, pas sur une
+ * page : une publication n'a qu'une seule audience quel que soit son nombre
+ * de pages.
  */
-export function withoutText(draft: StudioDraft, id: string): StudioDraft {
-  if (draft.texts.length <= 1) {
-    const cleared = draft.texts.map((layer) => (layer.id === id ? { ...layer, text: '' } : layer));
-    return { ...draft, texts: cleared };
-  }
-  const texts = draft.texts.filter((layer) => layer.id !== id);
-  return { ...draft, texts, selected: draft.selected === id ? (texts[texts.length - 1]?.id ?? null) : draft.selected };
+export function withAudience(draft: StudioDraft, visibility: ChoosableAudience): StudioDraft {
+  return { ...draft, visibility };
 }
 
-/** LE site unique de mutation d'un objet texte — chaque réglage passe par lui
- * plutôt que d'ouvrir son propre `setDraft`, pour que « quel objet ? » se
- * réponde une fois. */
+export function withoutText(draft: StudioDraft, id: string): StudioDraft {
+  return withCurrentPageChange(draft, (page) => pageWithoutText(page, id));
+}
+
+/** LE site unique de mutation d'un objet texte de la page COURANTE. */
 export function withTextLayer(draft: StudioDraft, id: string, change: (layer: StudioTextLayer) => StudioTextLayer): StudioDraft {
-  return { ...draft, texts: draft.texts.map((layer) => (layer.id === id ? change(layer) : layer)) };
+  return withCurrentPageChange(draft, (page) => pageWithTextLayer(page, id, change));
 }
 
 export function withText(draft: StudioDraft, id: string, text: string): StudioDraft {
-  return withTextLayer(draft, id, (layer) => ({ ...layer, text }));
+  return withCurrentPageChange(draft, (page) => pageWithText(page, id, text));
 }
 
-/* ── LES TROIS PORTES ─────────────────────────────────────────────────────── */
-
-const visualSlot = (door: Extract<StudioDoor, 'visual' | 'overlay'>): 'background' | 'overlay' =>
-  door === 'visual' ? 'background' : 'overlay';
+/* ── LES TROIS PORTES, DÉLÉGUÉES À LA PAGE COURANTE ──────────────────────── */
 
 export function withVisual(draft: StudioDraft, door: 'visual' | 'overlay', asset: StudioVisualAsset): StudioDraft {
-  return { ...draft, [visualSlot(door)]: asset };
+  return withCurrentPageChange(draft, (page) => pageWithVisual(page, door, asset));
 }
 
 export function withoutVisual(draft: StudioDraft, door: 'visual' | 'overlay'): StudioDraft {
-  const slot = visualSlot(door);
-  return { ...draft, [slot]: null, ...(slot === 'overlay' && draft.selected === 'overlay' ? { selected: null } : {}) };
+  return withCurrentPageChange(draft, (page) => pageWithoutVisual(page, door));
 }
 
 export function withVisualUpload(draft: StudioDraft, door: 'visual' | 'overlay', upload: StudioUploadState): StudioDraft {
-  const slot = visualSlot(door);
-  const asset = draft[slot];
-  return asset === null ? draft : { ...draft, [slot]: { ...asset, upload } };
+  return withCurrentPageChange(draft, (page) => pageWithVisualUpload(page, door, upload));
 }
 
-/** Posée dès que la mesure LOCALE du fichier aboutit (§ 0, défaut 7) — sans
- * garde de course : un média déjà RETIRÉ ou REMPLACÉ le temps de la mesure ne
- * doit pas hériter le rapport d'un autre fichier (le remplaçant a déjà posé
- * le sien à sa propre sélection). */
-export function withVisualAspectRatio(
-  draft: StudioDraft,
-  door: 'visual' | 'overlay',
-  previewUrl: string,
-  aspectRatio: number,
-): StudioDraft {
-  const slot = visualSlot(door);
-  const asset = draft[slot];
-  if (asset === null || asset.previewUrl !== previewUrl) return draft;
-  return { ...draft, [slot]: { ...asset, aspectRatio } };
+export function withVisualAspectRatio(draft: StudioDraft, door: 'visual' | 'overlay', previewUrl: string, aspectRatio: number): StudioDraft {
+  return withCurrentPageChange(draft, (page) => pageWithVisualAspectRatio(page, door, previewUrl, aspectRatio));
 }
 
-/** La DURÉE mesurée d'un fichier local (#7497) — adoptée seulement si
- * l'asset est toujours celui de la mesure (même garde que le rapport). */
 export function withMediaDuration(draft: StudioDraft, door: StudioDoor, previewUrl: string, durationMs: number): StudioDraft {
-  if (door === 'sound') {
-    const sound = draft.sound;
-    if (sound === null || sound.previewUrl !== previewUrl) return draft;
-    return { ...draft, sound: { ...sound, durationMs } };
-  }
-  const slot = visualSlot(door);
-  const asset = draft[slot];
-  if (asset === null || asset.previewUrl !== previewUrl) return draft;
-  return { ...draft, [slot]: { ...asset, durationMs } };
+  return withCurrentPageChange(draft, (page) => pageWithMediaDuration(page, door, previewUrl, durationMs));
 }
 
-/** La légende est TAILLÉE à la saisie, pas seulement à l'envoi : l'auteur voit
- * immédiatement la borne du contrat plutôt que de perdre la fin de sa phrase
- * au moment de publier. */
 export function withVisualCaption(draft: StudioDraft, door: 'visual' | 'overlay', caption: string): StudioDraft {
-  const slot = visualSlot(door);
-  const asset = draft[slot];
-  return asset === null ? draft : { ...draft, [slot]: { ...asset, caption: caption.slice(0, MEDIA_CAPTION_MAX) } };
+  return withCurrentPageChange(draft, (page) => pageWithVisualCaption(page, door, caption));
 }
 
 export function withVisualPose(draft: StudioDraft, door: 'visual' | 'overlay', pose: StudioPose): StudioDraft {
-  const slot = visualSlot(door);
-  const asset = draft[slot];
-  return asset === null ? draft : { ...draft, [slot]: { ...asset, pose: clampPose(pose) } };
+  return withCurrentPageChange(draft, (page) => pageWithVisualPose(page, door, pose));
 }
 
 export function withSound(draft: StudioDraft, asset: StudioSoundAsset): StudioDraft {
-  return { ...draft, sound: asset };
+  return withCurrentPageChange(draft, (page) => pageWithSound(page, asset));
 }
 
 export function withoutSound(draft: StudioDraft): StudioDraft {
-  return { ...draft, sound: null };
+  return withCurrentPageChange(draft, pageWithoutSound);
 }
 
 export function withSoundUpload(draft: StudioDraft, upload: StudioUploadState): StudioDraft {
-  if (draft.sound === null) return draft;
-  return { ...draft, sound: { ...draft.sound, upload } };
+  return withCurrentPageChange(draft, (page) => pageWithSoundUpload(page, upload));
 }
 
 export function withSoundPlane(draft: StudioDraft, plane: StudioPlane): StudioDraft {
-  if (draft.sound === null) return draft;
-  return { ...draft, sound: { ...draft.sound, plane } };
-}
-
-/** La porte décide du rôle ; `accept` n'est qu'un CONSEIL au sélecteur natif
- * (« Tous les fichiers » le contourne) — ce prédicat est la garde. Un MIME
- * vide (inconnu du navigateur) passe : la passerelle juge les octets
- * (`tus-handler.ts:384-400`) et son refus se dit (`fileRefused`). */
-export function studioDoorAccepts(door: StudioDoor, mimeType: string): boolean {
-  if (mimeType === '') return true;
-  if (door === 'sound') return mimeType.startsWith('audio/');
-  return mimeType.startsWith('image/') || mimeType.startsWith('video/');
+  return withCurrentPageChange(draft, (page) => pageWithSoundPlane(page, plane));
 }
 
 /**
- * LE BOUTON PUBLIER EST INERTE — loi 4 (« un contrôle existe s'il a un
- * effet »). `false` sur un brouillon VIDE et sur tout asset en ÉCHEC
- * (l'auteur le retire ou réessaie d'abord) — un asset EN VOL n'inhibe PAS le
- * geste : la publication ATTEND son accusé (§1.4), elle ne relance jamais un
- * second envoi.
+ * LE BOUTON PUBLIER EST INERTE — loi 4. `false` sur un brouillon VIDE (TOUTES
+ * ses pages vides) et sur tout asset en ÉCHEC, sur N'IMPORTE QUELLE page — la
+ * garde couvre le document entier, pas seulement la page à l'écran.
  */
 export function canPublishStudioDraft(draft: StudioDraft): boolean {
   if (isStudioDraftEmpty(draft)) return false;
-  if (draft.background?.upload.phase === 'failed') return false;
-  if (draft.overlay?.upload.phase === 'failed') return false;
-  if (draft.sound?.upload.phase === 'failed') return false;
-  return true;
+  return draft.pages.every(isStudioPagePublishable);
 }
 
-export function readyAssetOf(
-  upload: StudioUploadState,
-): { readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string } | null {
-  if (upload.phase !== 'ready') return null;
-  return { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl, ...(upload.thumbHash !== undefined ? { thumbHash: upload.thumbHash } : {}) };
-}
-
-/**
- * LA CAUSE D'UN ÉCHEC, dans le vocabulaire d'une STORY — `sendFailureReason`
- * (`send/failure-reason.ts`) parle d'une conversation et d'un message, en
- * français quelle que soit la langue de l'interface. `null` ⇒ rien à dire :
- * une annulation vient de l'auteur lui-même (retrait, remplacement).
- */
-export function studioFailureKey(failure: ApiFailure, stage: 'upload' | 'publish'): StudioFailureKey | null {
-  if (failure.code === 'ABORTED') return null;
-  if (failure.code === 'CANVAS_INVALID' || failure.code === 'MEDIA_NOT_CLAIMED') return 'story.studio.failure.refused';
-  if (failure.code === 'POST_MEDIA_REQUIRES_ACCOUNT') return 'story.studio.failure.account';
-  if (failure.status === 0) return failure.code === 'TIMEOUT' ? 'story.studio.failure.timeout' : 'story.studio.failure.network';
-  if (failure.status === 401) return 'story.studio.failure.session';
-  if (failure.status === 403) return 'story.studio.failure.forbidden';
-  if (failure.status === 413) return 'story.studio.failure.tooLarge';
-  if (failure.status === 429) return 'story.studio.failure.rateLimited';
-  if (failure.status === 400 && stage === 'upload') return 'story.studio.failure.fileRefused';
-  if (failure.status >= 400 && failure.status < 500) return 'story.studio.failure.refused';
-  return 'story.studio.failure.unavailable';
-}
-
-/* ── LE BROUILLON ─────────────────────────────────────────────────────────── */
-
-/** Ce qui se PERSISTE : les objets texte AVEC leur pose, les légendes, et les
- * médias PRÊTS — jamais un `File`, jamais une URL locale (morte au
- * rechargement). */
-export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDraftSnapshot {
-  const visual = (asset: StudioVisualAsset | null) => {
-    const ready = asset === null ? null : readyAssetOf(asset.upload);
-    if (asset === null || ready === null) return undefined;
-    return {
-      ...ready,
-      mediaType: asset.mediaType,
-      ...(asset.aspectRatio !== undefined ? { aspectRatio: asset.aspectRatio } : {}),
-      ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}),
-      ...(asset.caption !== '' ? { caption: asset.caption } : {}),
-      pose: asset.pose,
-    };
-  };
-  const background = visual(draft.background);
-  const overlay = visual(draft.overlay);
-  const sound = draft.sound === null ? null : readyAssetOf(draft.sound.upload);
-  return {
-    texts: draft.texts.map((layer) => ({ ...layer })),
-    ...(draft.texts.some((layer) => layer.text.trim() !== '') ? { language } : {}),
-    ...(background !== undefined ? { background } : {}),
-    ...(overlay !== undefined ? { overlay } : {}),
-    ...(sound !== null && draft.sound !== null
-      ? { sound: { ...sound, plane: draft.sound.plane, ...(draft.sound.durationMs !== undefined ? { durationMs: draft.sound.durationMs } : {}) } }
-      : {}),
-  };
-}
+/* ── LE BROUILLON PERSISTÉ ───────────────────────────────────────────────── */
 
 const oneOf = <T extends string>(table: readonly T[], value: unknown, fallback: T): T =>
   typeof value === 'string' && (table as readonly string[]).includes(value) ? (value as T) : fallback;
@@ -337,9 +298,7 @@ const poseOf = (value: unknown): StudioPose => {
   return clampPose({ x: n('x', 0.5), y: n('y', 0.5), scale: n('scale', 1), rotation: n('rotation', 0) });
 };
 
-/** UN objet texte relu — chaque champ NORMALISÉ contre la table du studio :
- * un JSON abîmé, ou écrit par une version qui servait d'autres styles, rend
- * un objet valide plutôt qu'une exception ou un style que rien ne peint. */
+/** UN objet texte relu — chaque champ NORMALISÉ contre la table du studio. */
 function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: string): StudioTextLayer {
   return {
     id: snapshot.id,
@@ -357,18 +316,11 @@ function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: stri
   };
 }
 
-/** Le brouillon RELU — chaque média restauré est PRÊT et se prévisualise
- * depuis le SERVEUR (`resolveUrl`, `attachmentSrc` en production) : c'est le
- * seul cas où l'aperçu lit le réseau, le fichier local n'existant plus. */
-export function studioDraftFromSnapshot(
-  snapshot: StudioDraftSnapshot | null,
-  resolveUrl: (fileUrl: string) => string,
-  language: string,
-): StudioDraft {
-  if (snapshot === null) return emptyStudioDraft(language);
-  const composeLanguage = snapshot.language ?? language;
+/** UNE page relue — chaque média restauré est PRÊT et se prévisualise depuis
+ * le SERVEUR (`resolveUrl`) : c'est le seul cas où l'aperçu lit le réseau. */
+function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: string) => string, language: string): StudioPage {
   const visual = (
-    ref: NonNullable<StudioDraftSnapshot['background'] | StudioDraftSnapshot['overlay']> | undefined,
+    ref: NonNullable<StudioPageSnapshot['background'] | StudioPageSnapshot['overlay']> | undefined,
   ): StudioVisualAsset | null =>
     ref === undefined
       ? null
@@ -388,12 +340,12 @@ export function studioDraftFromSnapshot(
         };
   const texts =
     snapshot.texts.length === 0
-      ? emptyStudioDraft(composeLanguage).texts
-      : snapshot.texts.map((layer) => textLayerFromSnapshot(layer, composeLanguage));
+      ? emptyStudioPage(snapshot.id, 'text-1', language).texts
+      : snapshot.texts.map((layer) => textLayerFromSnapshot(layer, language));
   return {
+    id: snapshot.id,
     texts,
     selected: texts[0]?.id ?? null,
-    ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
     sound:
@@ -410,5 +362,68 @@ export function studioDraftFromSnapshot(
               ...(snapshot.sound.thumbHash !== undefined ? { thumbHash: snapshot.sound.thumbHash } : {}),
             },
           },
+  };
+}
+
+/** Ce qui se PERSISTE pour UNE page : les objets texte AVEC leur pose, les
+ * légendes, et les médias PRÊTS — jamais un `File`, jamais une URL locale. */
+function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
+  const visual = (asset: StudioVisualAsset | null) => {
+    const ready = asset === null ? null : readyAssetOf(asset.upload);
+    if (asset === null || ready === null) return undefined;
+    return {
+      ...ready,
+      mediaType: asset.mediaType,
+      ...(asset.aspectRatio !== undefined ? { aspectRatio: asset.aspectRatio } : {}),
+      ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}),
+      ...(asset.caption !== '' ? { caption: asset.caption } : {}),
+      pose: asset.pose,
+    };
+  };
+  const background = visual(page.background);
+  const overlay = visual(page.overlay);
+  const sound = page.sound === null ? null : readyAssetOf(page.sound.upload);
+  return {
+    id: page.id,
+    texts: page.texts.map((layer) => ({ ...layer })),
+    ...(background !== undefined ? { background } : {}),
+    ...(overlay !== undefined ? { overlay } : {}),
+    ...(sound !== null && page.sound !== null
+      ? { sound: { ...sound, plane: page.sound.plane, ...(page.sound.durationMs !== undefined ? { durationMs: page.sound.durationMs } : {}) } }
+      : {}),
+  };
+}
+
+/** Ce qui se PERSISTE — les PAGES, la page courante, et l'audience choisie.
+ * `language` part SI au moins une page porte du texte : c'est la graine de
+ * `useComposeLanguage`, un concept de SESSION plutôt que par page. */
+export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDraftSnapshot {
+  return {
+    schema: 2,
+    pages: draft.pages.map(pageSnapshotOf),
+    currentPage: draft.currentPage,
+    ...(allTexts(draft).some((layer) => layer.text.trim() !== '') ? { language } : {}),
+    ...(draft.visibility !== null ? { visibility: draft.visibility } : {}),
+  };
+}
+
+/** Le brouillon RELU — `null` (aucun brouillon) rend un plateau vide dans la
+ * langue demandée. Le SCHÉMA d'un snapshot corrompu ou d'une version FUTURE
+ * est déjà écarté par le magasin (`studio-draft-store.ts`) : ce composeur ne
+ * reçoit jamais que la forme PAGES, jamais la forme précédente. */
+export function studioDraftFromSnapshot(
+  snapshot: StudioDraftSnapshot | null,
+  resolveUrl: (fileUrl: string) => string,
+  language: string,
+): StudioDraft {
+  if (snapshot === null || snapshot.pages.length === 0) return emptyStudioDraft(language);
+  const composeLanguage = snapshot.language ?? language;
+  const pages = snapshot.pages.map((page) => pageFromSnapshot(page, resolveUrl, composeLanguage));
+  const currentPage = pages.some((page) => page.id === snapshot.currentPage) ? (snapshot.currentPage as string) : pages[0]!.id;
+  return {
+    pages,
+    currentPage,
+    ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
+    visibility: isRememberableAudience(snapshot.visibility) ? snapshot.visibility : null,
   };
 }

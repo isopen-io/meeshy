@@ -259,6 +259,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
         "Features/Main/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
+        // #7625 — RELOCALISATION pure : la couche audio d'un réel (glyphe héros de
+        // 220 pt et bouton de 84 pt, cadres fixes plein écran) quitte l'hôte hors
+        // budget avec son code. La POPULATION ne bouge pas.
+        "Features/Main/Views/ReelAudioLayer.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
         // #6693 — RELOCALISATION pure : les glyphes figés du rail d'actions (26 pt dans
         // une colonne fixe de 48, doctrine 86i) quittent l'hôte avec le rail. La
@@ -268,7 +272,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ShareLinkIdentitySheet.swift",
         "Features/Main/Views/ShareLinksView.swift",
         "Features/Main/Views/SharePickerView.swift",
-        "Features/Main/Views/StatusBarView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
         "Features/Main/Views/StoryReactionFlightView.swift",

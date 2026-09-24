@@ -234,9 +234,9 @@ nonisolated enum RiverConversationMapping {
                 // bulle d'une couleur et son trait d'une autre.
                 colorSeed: displayName(of: message),
                 timeString: resolvedTime,
-                text: text(message),
+                text: displayedText(of: message, text: text),
                 layout: geometry.layout,
-                replyPreview: message.replyTo.map {
+                replyPreview: message.sealedForDisplay.replyTo.map {
                     RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
@@ -275,8 +275,12 @@ nonisolated enum RiverConversationMapping {
                 // `MeeshyMessage.protection` porte la règle du contrat #7451 ;
                 // la rivière la PROJETTE comme la bulle et la rangée plate,
                 // sans réécrire d'arithmétique d'échéance.
-                protection: message.protection(),
+                // #7618 — la puce dit la vue unique scellée ; ouverte, elle se
+                // lit sans second voile.
+                protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
+                viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
+                isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -424,7 +428,7 @@ nonisolated enum RiverConversationMapping {
         presences.reserveCapacity(messages.count)
         rings.reserveCapacity(messages.count)
         for message in messages {
-            texts.append(text(message))
+            texts.append(displayedText(of: message, text: text))
             presences.append(presence(message))
             rings.append(storyRing(message))
         }
@@ -435,6 +439,13 @@ nonisolated enum RiverConversationMapping {
             presences: presences,
             rings: rings
         )
+    }
+
+    /// Le texte que la rivière a le DROIT de rendre (#7618) : rien pour une vue
+    /// unique scellée. La clé de mémo lit la même valeur, pour que l'ouverture
+    /// d'une vue unique recompose la bulle.
+    static func displayedText(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> String {
+        message.isViewOnceSealed || message.isViewOnceOpened ? "" : text(message)
     }
 
     static func fingerprint(messages: [MeeshyMessage]) -> Fingerprint {

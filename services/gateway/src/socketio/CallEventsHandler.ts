@@ -34,12 +34,35 @@ import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/s
 import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { handleMediaToggle as handleMediaToggleBody } from './call-media-toggle';
+import {
+  resolveNotificationLangs,
+  resolveDeviceCountries,
+  resolveVoipCapableUsers,
+} from './call-recipients';
+import {
+  type CallParticipantResolverDeps,
+  resolveParticipantId,
+  resolveParticipantIdFromCall,
+  resolveActiveCallParticipant,
+  resolveActiveCallParticipantDetailed,
+  resolveActiveCallParticipantId,
+  resolvePreJoinDeclineParticipantId,
+  resolveActiveCallSpeaker,
+  resolveEverCallParticipantId,
+} from './call-participants';
+import {
+  type CallTranscriptionRelayDeps,
+  persistTranscriptionSegment,
+  translateAndEmitSegment,
+} from './call-transcription-relay';
+import {
+  registerCallClientReportEvents,
+  type CallClientReportDeps,
+} from './call-client-reports';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -56,10 +79,6 @@ import {
   socketTranscriptionSegmentSchema,
   socketTranscriptionActiveSchema,
   socketRequestIceServersSchema,
-  socketCallBackgroundedSchema,
-  socketCallForegroundedSchema,
-  socketCallScreenCaptureDetectedSchema,
-  socketCallAnalyticsSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
@@ -72,7 +91,6 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleClientEvent,
-  CallAnalyticsEvent,
   CallError,
   CallHeartbeatEvent,
   CallQualityReportEvent,
@@ -86,9 +104,7 @@ import type {
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
   CallTranscriptionActiveEvent,
-  CallTranslatedSegmentEvent,
   CallIceServersRefreshedEvent,
-  CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
 
 /**
@@ -309,79 +325,20 @@ export class CallEventsHandler {
     }, 60_000).unref();
   }
 
-  /**
-   * Langue de notification résolue (Prisme-first) pour chaque callee d'un
-   * push d'appel. Un seul findMany ; toute erreur retourne une Map vide —
-   * notificationString(undefined) retombe sur 'fr', le push part toujours.
-   */
-  private async resolveNotificationLangs(userIds: string[]): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    if (userIds.length === 0) return out;
-    try {
-      const users = await this.prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: {
-          id: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          deviceLocale: true,
-        },
-      });
-      for (const u of users) {
-        out.set(u.id, resolveUserLanguage(u, { deviceLocale: u.deviceLocale ?? undefined }));
-      }
-    } catch (error) {
-      logger.error('Notification language resolution failed — falling back to fr', { error });
-    }
-    return out;
+  // ==============================================
+  // CE QU'IL FAUT SAVOIR D'UN DESTINATAIRE (`call-recipients.ts`)
+  // ==============================================
+
+  private resolveNotificationLangs(userIds: string[]): Promise<Map<string, string>> {
+    return resolveNotificationLangs(this.prisma, userIds);
   }
 
-  /**
-   * Guideline 5 (MIIT) CallKit-in-China compliance — deviceCountry resolved
-   * per callee for an incoming-call push. A single findMany; any error
-   * returns an empty Map so the caller conservatively falls back to the
-   * (CallKit-eligible) 'voip' push type rather than silently dropping it.
-   */
-  private async resolveDeviceCountries(userIds: string[]): Promise<Map<string, string | null>> {
-    const out = new Map<string, string | null>();
-    if (userIds.length === 0) return out;
-    try {
-      const users = await this.prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, deviceCountry: true },
-      });
-      for (const u of users) {
-        out.set(u.id, u.deviceCountry);
-      }
-    } catch (error) {
-      logger.error('Device country resolution failed — falling back to voip push', { error });
-    }
-    return out;
+  private resolveDeviceCountries(userIds: string[]): Promise<Map<string, string | null>> {
+    return resolveDeviceCountries(this.prisma, userIds);
   }
 
-  /**
-   * GW6(b) — users with at least one ACTIVE `voip` push token. A callee
-   * without one (iOS-app-on-Mac, expired/never-registered PushKit token)
-   * would get a `voip` send that dies on `No active tokens found` — the call
-   * is totally silent app-killed. Those callees fall back to a standard
-   * `apns` alert with the SAME payload (data.type 'call' + callId +
-   * iceServers) so tapping the banner drives the existing
-   * `.incomingCallAlert` navigation. Fail-open toward `voip` (historical
-   * behavior) on query error.
-   */
-  private async resolveVoipCapableUsers(userIds: string[]): Promise<Set<string>> {
-    if (userIds.length === 0) return new Set();
-    try {
-      const rows = await this.prisma.pushToken.findMany({
-        where: { userId: { in: userIds }, type: 'voip', isActive: true },
-        select: { userId: true },
-      });
-      return new Set(rows.map(r => r.userId));
-    } catch (error) {
-      logger.error('VoIP token resolution failed — assuming voip-capable', { error });
-      return new Set(userIds);
-    }
+  private resolveVoipCapableUsers(userIds: string[]): Promise<Set<string>> {
+    return resolveVoipCapableUsers(this.prisma, userIds);
   }
 
   /**
@@ -1472,218 +1429,54 @@ export class CallEventsHandler {
     await this.evictCallRoomSockets(io, callId);
   }
 
-  private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
-    const participant = await this.prisma.participant.findFirst({
-      where: { userId, conversationId, isActive: true },
-      select: { id: true }
-    });
-    return participant?.id ?? null;
+  // ==============================================
+  // QUI PARLE, SOUS QUEL IDENTIFIANT (`call-participants.ts`)
+  // ==============================================
+
+  /** Ce que les résolveurs de participant empruntent à l'instance — fermé sur `this` à CHAQUE appel. */
+  private participantResolverDependencies(): CallParticipantResolverDeps {
+    return { prisma: this.prisma, callService: this.callService };
   }
 
-  private async resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
-    const call = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      select: { conversationId: true }
-    });
-    if (!call) return null;
-    return this.resolveParticipantId(userId, call.conversationId);
+  private resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
+    return resolveParticipantId(this.participantResolverDependencies(), userId, conversationId);
   }
 
-  /**
-   * Resolve the caller's own CallParticipant row, verifying they are an
-   * ACTIVE participant of THIS specific call — unlike
-   * `resolveParticipantIdFromCall`, which only checks conversation
-   * membership. A conversation member who never joined (or already left)
-   * this call must not pass authorization checks gating writes against call
-   * state/stats (quality reports, media toggles, background/foreground,
-   * reconnect status).
-   *
-   * Returns BOTH identifier spaces the caller is known by:
-   * - `participantId` — `CallParticipant.participantId`, the FK to the
-   *   conversation's `Participant.id` row. Legacy value, still relayed
-   *   verbatim on `call:quality-alert`/`call:screen-capture-alert` for
-   *   backward compat.
-   * - `userId` — `Participant.userId` for a registered user, falling back to
-   *   `participantId` for an anonymous guest (no `User` row to point at).
-   *   Mirrors `toCallParticipantResponse`'s own `userId` derivation exactly
-   *   (`call-session-response.ts`), which is what every call ROSTER entry's
-   *   `.userId` is populated from — a side-channel alert that only carries
-   *   `participantId` can never match a roster lookup keyed by `userId` for a
-   *   registered peer (Vague 132: both alert overlays silently rendered a
-   *   blank peer name because of exactly this mismatch).
-   */
-  private async resolveActiveCallParticipant(
+  private resolveParticipantIdFromCall(userId: string, callId: string): Promise<string | null> {
+    return resolveParticipantIdFromCall(this.participantResolverDependencies(), userId, callId);
+  }
+
+  private resolveActiveCallParticipant(
     userId: string,
     callId: string
   ): Promise<{ participantId: string; userId: string } | null> {
-    const resolved = await this.resolveActiveCallParticipantDetailed(userId, callId);
-    if (!resolved) return null;
-    return { participantId: resolved.participantId, userId: resolved.userId };
+    return resolveActiveCallParticipant(this.participantResolverDependencies(), userId, callId);
   }
 
-  /**
-   * Same resolution as `resolveActiveCallParticipant`, but also surfaces the
-   * call-type/roster context needed by `call:end` to tell a genuine
-   * end-for-everyone apart from a group-call participant merely hanging up
-   * on themselves (calling-stack audit 2026-08-16) — computed from the SAME
-   * `getCallSession` read every other call site here already pays for, so
-   * exposing it costs no extra query for the 9+ existing callers that only
-   * destructure `{ participantId, userId }`.
-   */
-  private async resolveActiveCallParticipantDetailed(
+  private resolveActiveCallParticipantDetailed(
     userId: string,
     callId: string
-  ): Promise<{
-    id: string;
-    participantId: string;
-    userId: string;
-    mode: Awaited<ReturnType<CallService['getCallSession']>>['mode'];
-    isDirectCall: boolean;
-    hasOtherActiveParticipants: boolean;
-  } | null> {
-    try {
-      const callSession = await this.callService.getCallSession(callId);
-      const activeParticipant = callSession.participants.find(
-        (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
-      );
-      if (!activeParticipant) return null;
-      return {
-        id: activeParticipant.id,
-        participantId: activeParticipant.participantId,
-        userId: activeParticipant.participant?.userId ?? activeParticipant.participantId,
-        mode: callSession.mode,
-        isDirectCall: callSession.conversation?.type === 'direct',
-        hasOtherActiveParticipants: callSession.participants.some(
-          (p) => !p.leftAt && p.id !== activeParticipant.id
-        )
-      };
-    } catch (error) {
-      // A genuine "not a participant" resolves via the `.find()` above
-      // returning undefined, never via this catch — reaching here means
-      // getCallSession itself failed (DB timeout, connection drop, bug), which
-      // is otherwise indistinguishable from "not a participant" and silently
-      // drops the caller's toggle/heartbeat/quality-report with zero trace.
-      logger.warn('resolveActiveCallParticipant: getCallSession failed, treating caller as unauthorized', {
-        userId,
-        callId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+  ): ReturnType<typeof resolveActiveCallParticipantDetailed> {
+    return resolveActiveCallParticipantDetailed(this.participantResolverDependencies(), userId, callId);
   }
 
-  /**
-   * Thin wrapper over `resolveActiveCallParticipant` for the (majority) call
-   * sites that only need the legacy `CallParticipant.participantId` value.
-   */
-  private async resolveActiveCallParticipantId(userId: string, callId: string): Promise<string | null> {
-    const resolved = await this.resolveActiveCallParticipant(userId, callId);
-    return resolved?.participantId ?? null;
+  private resolveActiveCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    return resolveActiveCallParticipantId(this.participantResolverDependencies(), userId, callId);
   }
 
-  /**
-   * Authorizes a callee declining a call they were invited to but never
-   * joined. `call:join` is the only path that creates a CallParticipant row
-   * for a callee — `call:initiate` creates one only for the initiator — so a
-   * callee who taps "Decline" while still ringing legitimately has NO row
-   * for `resolveActiveCallParticipantId` to find, and that check correctly
-   * (by design) returns null for them. That is a DIFFERENT case from the one
-   * 2026-07-10b actually closed: a caller who HAD a row and left it, then
-   * replayed `call:end` from a stale socket. Disambiguate explicitly — a
-   * caller who already has ANY row for this call (active or left) must keep
-   * going through `resolveActiveCallParticipantId` and stay blocked here.
-   * Decline-before-join regression fix, 2026-08-14.
-   */
-  private async resolvePreJoinDeclineParticipantId(userId: string, callId: string): Promise<string | null> {
-    try {
-      const callSession = await this.callService.getCallSession(callId);
-      // Pre-join decline only makes sense while nobody has ever answered —
-      // once the call is truly under way, a "never joined" decline has no
-      // meaning and hangup must go through the active-participant path.
-      if (callSession.answeredAt) return null;
-      const hasAnyRow = callSession.participants.some(
-        (p) => (p.participant?.userId ?? p.participantId) === userId
-      );
-      if (hasAnyRow) return null;
-      // No CallParticipant row at all: this user never joined this call.
-      // Only a genuine conversation member may decline it — keeps a
-      // stranger who merely guessed/observed the callId from ending it.
-      return this.resolveParticipantIdFromCall(userId, callId);
-    } catch (error) {
-      logger.warn('resolvePreJoinDeclineParticipantId: getCallSession failed, treating caller as unauthorized', {
-        userId,
-        callId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+  private resolvePreJoinDeclineParticipantId(userId: string, callId: string): Promise<string | null> {
+    return resolvePreJoinDeclineParticipantId(this.participantResolverDependencies(), userId, callId);
   }
 
-  /**
-   * Resolve the caller as an active participant of THIS call, returning both
-   * the authorization proof (`participantId`) and the server-trusted
-   * `displayName` (user.displayName ?? username) stamped onto relayed
-   * transcription segments. Same authorization semantics as
-   * `resolveActiveCallParticipantId`; the display name rides along because
-   * `getCallSession` already includes each participant's user record — no
-   * extra query. `null` displayName (no linked user) simply omits the field
-   * from the wire, receivers fall back to their local roster.
-   */
-  private async resolveActiveCallSpeaker(
+  private resolveActiveCallSpeaker(
     userId: string,
     callId: string
-  ): Promise<{ participantId: string; displayName: string | null } | null> {
-    try {
-      const callSession = await this.callService.getCallSession(callId);
-      const activeParticipant = callSession.participants.find(
-        (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
-      );
-      if (!activeParticipant) return null;
-      const user = activeParticipant.participant?.user;
-      return {
-        participantId: activeParticipant.participantId,
-        displayName: user?.displayName ?? user?.username ?? null
-      };
-    } catch (error) {
-      // See resolveActiveCallParticipantId — same rationale: a getCallSession
-      // failure must be logged, not silently folded into "not a participant".
-      logger.warn('resolveActiveCallSpeaker: getCallSession failed, treating caller as unauthorized', {
-        userId,
-        callId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+  ): ReturnType<typeof resolveActiveCallSpeaker> {
+    return resolveActiveCallSpeaker(this.participantResolverDependencies(), userId, callId);
   }
 
-  /**
-   * Resolve the caller's own CallParticipant.participantId for THIS call,
-   * regardless of `leftAt` — unlike `resolveActiveCallParticipantId`, a
-   * participant who has already left this call still resolves (needed by
-   * call:analytics, which fires post-hangup). Unlike
-   * `resolveParticipantIdFromCall`, which only checks conversation
-   * membership, a conversation member who never joined this specific call
-   * resolves to null — closing the gap where any member of the conversation
-   * could submit fabricated telemetry against a call they were never part
-   * of.
-   */
-  private async resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
-    try {
-      const callSession = await this.callService.getCallSession(callId);
-      const everParticipant = callSession.participants.find(
-        (p) => (p.participant?.userId ?? p.participantId) === userId
-      );
-      return everParticipant?.participantId ?? null;
-    } catch (error) {
-      // See resolveActiveCallParticipantId — same rationale: a getCallSession
-      // failure must be logged, not silently folded into "not a participant".
-      logger.warn('resolveEverCallParticipantId: getCallSession failed, treating caller as unauthorized', {
-        userId,
-        callId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      return null;
-    }
+  private resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    return resolveEverCallParticipantId(this.participantResolverDependencies(), userId, callId);
   }
 
   /**
@@ -1855,90 +1648,38 @@ export class CallEventsHandler {
     io.to(ROOMS.call(event.callId)).emit(CALL_EVENTS.PARTICIPANT_LEFT, event);
   }
 
+  // ==============================================
+  // CHAÎNE TRANSCRIPTION / TRADUCTION
+  // (`call-transcription-relay.ts`)
+  // ==============================================
+
+  /** Ce que le relais de sous-titres emprunte à l'instance — `zmqClient` en ACCESSEUR, parce qu'un setter le pose APRÈS la construction. */
   /**
-   * Translates a final transcription segment to each active participant's
-   * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
-   * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
-   * Falls back to emitting the original text if translation fails.
-   *
-   * Security fix 2026-08-13: every relayed segment is stamped with
-   * `speakerUserId` (the server-authenticated caller resolved by
-   * `resolveActiveCallParticipantId` in the caller), never the
-   * client-supplied `data.segment.speakerId`. Same rationale as
-   * call:backgrounded/call:foregrounded/call:screen-capture-detected: the
-   * gateway authorizes that the sender is an active participant of THIS
-   * call, but that says nothing about who the free-form `speakerId` field
-   * names — trusting it let any participant put words in another
-   * participant's mouth in the live-caption UI and, for final segments, in
-   * the persisted call transcript.
+   * Ce que les gestionnaires de rapport client empruntent à l'instance
+   * (`call-client-reports.ts`). Les trois résolveurs partent en méthodes liées :
+   * ils relisent la base à chaque appel, et une valeur capturée figerait un
+   * participant qui vient de partir dans l'état « actif ».
    */
-  /**
-   * Single builder for every `TRANSLATED_SEGMENT` emission (untranslated
-   * relay, no-target, no-zmq, translation success, timeout and error paths) —
-   * the journal metadata (`id`, `speakerDisplayName`, `capturedAtMs`) must be
-   * identical on all of them for cross-transport merge on the clients.
-   * `capturedAtMs` falls back to reception time for legacy clients that don't
-   * stamp their capture wall clock yet.
-   */
-  /**
-   * Persiste un segment FINAL du journal (modèle Transcription) pour le
-   * replay post-appel — décision produit 2026-08-13 : le transcript survit
-   * à la suppression de l'app et de ses caches locaux. Ne REJETTE jamais
-   * (échec → null + warn, le relais temps réel n'en dépend pas) ; le texte
-   * n'est jamais loggé (donnée sensible).
-   */
+  private clientReportDependencies(): CallClientReportDeps {
+    return {
+      prisma: this.prisma,
+      callService: this.callService,
+      rateLimiter: this.rateLimiter,
+      resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
+      resolveActiveCallParticipantId: (userId, callId) => this.resolveActiveCallParticipantId(userId, callId),
+      resolveEverCallParticipantId: (userId, callId) => this.resolveEverCallParticipantId(userId, callId),
+    };
+  }
+
+  private transcriptionRelayDependencies(): CallTranscriptionRelayDeps {
+    return { prisma: this.prisma, zmqClient: () => this.zmqClient };
+  }
+
   private persistTranscriptionSegment(
     data: CallTranscriptionSegmentEvent,
     participantId: string
   ): Promise<string | null> {
-    try {
-      return this.prisma.transcription.create({
-        data: {
-          callSessionId: data.callId,
-          participantId,
-          source: 'client',
-          segmentId: data.segment.id ?? null,
-          text: data.segment.text,
-          language: data.segment.language,
-          confidence: data.segment.confidence,
-          timestamp: new Date(data.segment.capturedAtMs ?? Date.now()),
-          offsetMs: data.segment.startMs
-        },
-        select: { id: true }
-      }).then(
-        (row) => row.id,
-        (err) => {
-          logger.warn('Failed to persist call transcription segment', { callId: data.callId, err });
-          return null;
-        }
-      );
-    } catch (err) {
-      logger.warn('Failed to persist call transcription segment', { callId: data.callId, err });
-      return Promise.resolve(null);
-    }
-  }
-
-  /**
-   * Accroche la traduction ZMQ réussie au segment persisté (TranslationCall).
-   * Fire-and-forget avec `.catch` propre (Leçon 230 : `void p` sans `.catch`
-   * détache la promesse — un rejet tuerait le process sous Node 22).
-   */
-  private persistTranslation(
-    persistedTranscriptionId: Promise<string | null> | null,
-    targetLanguage: string,
-    translatedText: string
-  ): void {
-    if (!persistedTranscriptionId) return;
-    persistedTranscriptionId
-      .then((transcriptionId) => {
-        if (!transcriptionId) return null;
-        return this.prisma.translationCall.create({
-          data: { transcriptionId, targetLanguage, translatedText, model: 'nllb' }
-        });
-      })
-      .catch((err) => {
-        logger.warn('Failed to persist call transcription translation', { targetLanguage, err });
-      });
+    return persistTranscriptionSegment(this.transcriptionRelayDependencies(), data, participantId);
   }
 
   private async translateAndEmitSegment(
@@ -1947,177 +1688,13 @@ export class CallEventsHandler {
     speaker: { userId: string; displayName: string | null },
     persistedTranscriptionId: Promise<string | null> | null = null
   ): Promise<void> {
-    const activeParticipants = await this.prisma.callParticipant.findMany({
-      where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
-      select: {
-        participant: {
-          select: {
-            userId: true,
-            user: {
-              select: {
-                systemLanguage: true,
-                regionalLanguage: true,
-                customDestinationLanguage: true,
-                deviceLocale: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    // Prisme-first (systemLanguage > regionalLanguage > customDestinationLanguage
-    // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
-    // Reading only `systemLanguage` here used to strand any listener who
-    // configured a regional/custom language instead into a hardcoded 'fr'.
-    //
-    // Grouped BY target language, listener userIds and all — the per-language
-    // relay below must reach ONLY the listeners who resolved to that language,
-    // never the whole call room (see `emitTranslatedSegmentTo`).
-    // The client-declared source language arrives VERBATIM (socket schema is a
-    // bare 2–10 char string, so `en-US`/mixed case pass through) while listener
-    // languages are canonical. Canonicalise ONCE via the SSOT, like the chat twin
-    // (`MessageTranslationService._normalizeSourceLanguage`). Without it, `en-US
-    // !== en` strands same-language listeners AND feeds NLLB an unknown SOURCE
-    // code — every target falls back to the original (a Prisme violation).
-    const segmentLanguage = normalizeLanguageForDedup(data.segment.language);
-    const listenersByLanguage = new Map<string, string[]>();
-    // Auditeurs qui lisent DÉJÀ la langue du locuteur : rien à traduire pour
-    // eux, mais ils ont droit aux sous-titres comme tout le monde. Les
-    // `continue` les écartaient de `listenersByLanguage`, et la diffusion à
-    // la salle ci-dessous ne se déclenche que si PERSONNE ne demande de
-    // traduction — donc dès qu'un SEUL auditeur en demandait une, tous les
-    // auditeurs de même langue que le locuteur ne recevaient plus RIEN
-    // (appel fr+fr+en : le francophone était muet côté sous-titres).
-    // Ils sont désormais servis en ORIGINAL, sans aller-retour ZMQ.
-    const sameLanguageListeners: string[] = [];
-    for (const p of activeParticipants) {
-      // Même prudence que `resolveActiveCallSpeaker` : la relation
-      // `participant` peut manquer sur une ligne, et l'accès nu jetait —
-      // l'exception remontait au try/catch du handler, tuant le relais
-      // pour TOUS les auditeurs, pas seulement celui dont la ligne est
-      // incomplète.
-      const userId = p.participant?.userId;
-      if (!userId || userId === speaker.userId) continue;
-      const lang = resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined });
-      if (typeof lang !== 'string' || lang === segmentLanguage) {
-        sameLanguageListeners.push(userId);
-        continue;
-      }
-      const listeners = listenersByLanguage.get(lang);
-      if (listeners) listeners.push(userId);
-      else listenersByLanguage.set(lang, [userId]);
-    }
-    const targetLanguages: string[] = [...listenersByLanguage.keys()];
-
-    if (targetLanguages.length === 0) {
-      socket.to(ROOMS.call(data.callId)).emit(
-        CALL_EVENTS.TRANSLATED_SEGMENT,
-        buildTranslatedSegment(data, speaker, data.segment.language)
-      );
-      return;
-    }
-
-    // Capture zmqClient once so TypeScript can narrow the type and inner
-    // lambdas don't need force-unwrap (zmqClient could theoretically be
-    // cleared between the outer check in handleTranscriptionSegment and the
-    // async Promise execution inside Promise.allSettled).
-    const zmqClient = this.zmqClient;
-    if (!zmqClient) {
-      logger.warn('[CallEventsHandler] translateAndEmitSegment called without zmqClient — relaying original', { callId: data.callId });
-      socket.to(ROOMS.call(data.callId)).emit(
-        CALL_EVENTS.TRANSLATED_SEGMENT,
-        buildTranslatedSegment(data, speaker, data.segment.language)
-      );
-      return;
-    }
-
-    // Les auditeurs de même langue sont servis TOUT DE SUITE, en original :
-    // leur sous-titre n'attend pas le retour ZMQ des autres langues.
-    this.emitTranslatedSegmentTo(
+    return translateAndEmitSegment(
+      this.transcriptionRelayDependencies(),
       socket,
-      sameLanguageListeners,
-      buildTranslatedSegment(data, speaker, data.segment.language)
+      data,
+      speaker,
+      persistedTranscriptionId,
     );
-
-    // Scoped to this call+segment (shared across the segment's target
-    // languages, disambiguated below by taskId) — NOT the global
-    // `translationCompleted` bus. Subscribing to the global event here used
-    // to leave a listener (per segment × target language, up to 10s) on a
-    // process-wide EventEmitter with no cap, so every translation completing
-    // anywhere (chat messages, stories, other calls) re-ran every pending
-    // call's taskId filter. Listener count is now bounded by this call's
-    // active target languages instead of process-wide traffic.
-    const messageId = `call-${data.callId}-${data.segment.startMs}`;
-    const scopedEvent = `translationCompleted:${messageId}`;
-
-    await Promise.allSettled(
-      targetLanguages.map(async (targetLanguage) => {
-        const listeners = listenersByLanguage.get(targetLanguage) ?? [];
-        try {
-          const taskId = await zmqClient.translateText(
-            data.segment.text,
-            segmentLanguage,
-            targetLanguage,
-            messageId,
-            data.callId
-          );
-
-          logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
-
-          return new Promise<void>((resolve) => {
-            const TIMEOUT_MS = 10_000;
-            const timer = setTimeout(() => {
-              zmqClient.off(scopedEvent, onResult);
-              this.emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
-              resolve();
-            }, TIMEOUT_MS);
-            timer.unref?.();
-
-            const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
-              if (event.taskId !== taskId) return;
-              clearTimeout(timer);
-              zmqClient.off(scopedEvent, onResult);
-              this.persistTranslation(persistedTranscriptionId, targetLanguage, event.result.translatedText);
-              this.emitTranslatedSegmentTo(
-                socket, listeners,
-                buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
-              );
-              resolve();
-            };
-            zmqClient.on(scopedEvent, onResult);
-          });
-        } catch (err) {
-          logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-          this.emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
-        }
-      })
-    );
-  }
-
-  /**
-   * Broadcast one translated segment to exactly the listeners who resolved
-   * to `targetLanguage` — never the whole call room. `translateAndEmitSegment`
-   * used to relay every target language's translation to `ROOMS.call(callId)`
-   * wholesale: in a 3+-language group call every peer received EVERY
-   * language's caption event, and the client-side journal merge
-   * (`upsertCallTranscriptEntry`, keyed on speaker+timing — not
-   * `targetLanguage`) let whichever language arrived last silently overwrite
-   * the others, so the reader's own Prisme language was not guaranteed to
-   * win. Chained `.to()` calls (never a loop of separate `.emit()`s) so a
-   * listener sitting in more than one addressed room still receives the
-   * event exactly once.
-   */
-  private emitTranslatedSegmentTo(
-    socket: Socket,
-    userIds: readonly string[],
-    payload: CallTranslatedSegmentEvent
-  ): void {
-    if (userIds.length === 0) return;
-    const [first, ...rest] = userIds;
-    rest
-      .reduce((broadcast, userId) => broadcast.to(ROOMS.user(userId)), socket.to(ROOMS.user(first)))
-      .emit(CALL_EVENTS.TRANSLATED_SEGMENT, payload);
   }
 
   /**
@@ -4581,266 +4158,12 @@ export class CallEventsHandler {
       }
     });
 
-    // ─── call:backgrounded ───────────────────────────────────────────────────
-    // The iOS app signals it is going to background while a call is active.
-    // We flip socket.data.appForeground so the ringing logic knows to use VoIP
-    // push for future incoming calls instead of socket delivery.
-    socket.on(CALL_EVENTS.BACKGROUNDED, async (data: { callId: string; participantId: string }) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_BACKGROUNDED,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Resolve the caller's own participantId rather than trusting the
-        // client-supplied one — otherwise a participant could flag a peer's
-        // participantId as backgrounded and skew that peer's heartbeat
-        // tolerance / ringing delivery (socket vs VoIP push). Must be an
-        // active participant of THIS call, not merely its conversation.
-        const backgroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!backgroundedParticipantId) return;
-
-        socket.data.appForeground = false;
-        this.callService.recordParticipantBackgrounded(data.callId, backgroundedParticipantId);
-
-        logger.debug('📞 Socket: call:backgrounded', {
-          callId: data.callId,
-          participantId: backgroundedParticipantId,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:backgrounded', { error });
-      }
-    });
-
-    // ─── call:foregrounded ───────────────────────────────────────────────────
-    // The iOS app has returned to foreground. Reset the flag so future ringing
-    // can be delivered via socket again.
-    socket.on(CALL_EVENTS.FOREGROUNDED, async (data: { callId: string; participantId: string }) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_FOREGROUNDED,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallForegroundedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Same rationale as call:backgrounded — resolve the caller's own
-        // participantId instead of trusting the client-supplied one.
-        const foregroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!foregroundedParticipantId) return;
-
-        socket.data.appForeground = true;
-        this.callService.clearParticipantBackgrounded(data.callId, foregroundedParticipantId);
-
-        logger.debug('📞 Socket: call:foregrounded', {
-          callId: data.callId,
-          participantId: foregroundedParticipantId,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:foregrounded', { error });
-      }
-    });
-
-    // ─── call:screen-capture-detected ────────────────────────────────────────
-    // A participant started or stopped screen capture. Relay to everyone else
-    // in the call room so they can display/dismiss the capture warning.
-    socket.on(CALL_EVENTS.SCREEN_CAPTURE_DETECTED, async (data: CallScreenCaptureEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_SCREEN_CAPTURE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        if (!socket.rooms.has(ROOMS.call(data.callId))) {
-          return;
-        }
-
-        // Security fix 2026-07-03: resolve the caller's own participantId
-        // server-side rather than trusting the client-supplied one — same
-        // rationale as call:backgrounded/call:foregrounded. Otherwise either
-        // participant in a call could impersonate the other, forging or
-        // suppressing that peer's screen-capture privacy alert.
-        const screenCaptureReporter = await this.resolveActiveCallParticipant(userId, data.callId);
-        if (!screenCaptureReporter) return;
-
-        const alertEvent: CallScreenCaptureEvent = {
-          callId: data.callId,
-          participantId: screenCaptureReporter.participantId,
-          // Vague 132 — same mismatch as call:quality-alert: without this, a
-          // registered peer's roster lookup (keyed by User.id) can never
-          // match `participantId` alone (a Participant.id).
-          userId: screenCaptureReporter.userId,
-          isCapturing: data.isCapturing,
-        };
-        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
-
-        logger.info('📞 Socket: call:screen-capture-detected relayed', {
-          callId: data.callId,
-          participantId: screenCaptureReporter.participantId,
-          isCapturing: data.isCapturing,
-          userId,
-        });
-      } catch (error) {
-        logger.error('Error handling call:screen-capture-detected', { error });
-      }
-    });
-
-    // ─── call:analytics ──────────────────────────────────────────────────────
-    // Fire-and-forget lifecycle telemetry emitted once at call end by iOS.
-    // Validated and logged; no response sent back to the client.
-    // Cycle 107 — la forme vient du contrat (`CallAnalyticsEvent`), plus d'une
-    // transcription de dix-neuf champs dans cette signature. L'événement était
-    // écouté, validé et agrégé sans figurer dans `ClientToServerEvents` : c'est
-    // le cast d'`io` qui le rendait possible, et c'est le seul défaut de ce lot
-    // que la porte typée aurait attrapé toute seule.
-    socket.on(CALL_EVENTS.ANALYTICS, async (data: CallAnalyticsEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) return;
-        rememberAuth(userId);
-
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.CALL_ANALYTICS,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
-        if (isValidationFailure(validation)) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validation.error,
-            details: validation.details ? { issues: validation.details } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Authorization — was previously unchecked, letting any authenticated
-        // user submit telemetry against an arbitrary callId, then scoped to
-        // conversation membership via `resolveParticipantIdFromCall` — which
-        // still let ANY member of the conversation submit fabricated
-        // telemetry for a call they never joined, since it never looks at
-        // CallParticipant rows at all. `resolveEverCallParticipantId` checks
-        // the caller actually has a CallParticipant row for THIS call
-        // (regardless of `leftAt`, since analytics fires after the sender
-        // has already left — `resolveActiveCallParticipantId`'s `leftAt:
-        // null` requirement would reject the legitimate sender).
-        const analyticsParticipantId = await this.resolveEverCallParticipantId(userId, data.callId);
-        if (!analyticsParticipantId) return;
-
-        logger.info('📞 Socket: call:analytics received', {
-          callId: data.callId,
-          platform: data.platform,
-          durationSeconds: data.durationSeconds,
-          setupTimeMs: data.setupTimeMs,
-          negotiationTimeMs: data.negotiationTimeMs ?? -1,
-          reconnectionCount: data.reconnectionCount,
-          networkTransitions: data.networkTransitions,
-          averageRtt: data.averageRtt,
-          averagePacketLoss: data.averagePacketLoss,
-          maxPacketLoss: data.maxPacketLoss,
-          codec: data.codec,
-          isVideo: data.isVideo,
-          endReason: data.endReason,
-          qualityDistribution: data.qualityDistribution,
-          userId,
-        });
-
-        // Persist the VALIDATED payload on this participant's CallParticipant
-        // row so reliability can be tracked on real calls (reconnectionCount,
-        // qualityDistribution, negotiationTimeMs…) — log-only telemetry is
-        // invisible to dashboards. Per-participant row: both ends emit at
-        // hangup within the same second and must never clobber each other.
-        // Best-effort — telemetry loss must stay invisible to the client.
-        //
-        // Scoped to the most-recently-joined row for this participantId, not
-        // a blanket updateMany: a participant who left and rejoined mid-call
-        // (churn) has MULTIPLE CallParticipant rows sharing the same
-        // participantId, and a broad updateMany stamped this same final
-        // analytics blob onto every prior row too — corrupting per-session
-        // telemetry for any dashboard built off this field.
-        try {
-          const targetParticipant = await this.prisma.callParticipant.findFirst({
-            where: { callSessionId: data.callId, participantId: analyticsParticipantId },
-            orderBy: { joinedAt: 'desc' },
-            select: { id: true }
-          });
-          if (targetParticipant) {
-            await this.prisma.callParticipant.update({
-              where: { id: targetParticipant.id },
-              data: { analytics: validation.data }
-            });
-          }
-        } catch (persistError) {
-          logger.error('call:analytics persistence failed (telemetry lost, client unaffected)', {
-            callId: data.callId, participantId: analyticsParticipantId, error: persistError
-          });
-        }
-      } catch (error) {
-        logger.error('Error handling call:analytics', { error });
-      }
-    });
+    // ─── Ce que l'app cliente RAPPORTE sur elle-même ─────────────────────────
+    // Premier plan, capture d'écran, télémétrie de fin — quatre événements qui
+    // ne font ni naître ni terminer un appel. Extraits dans
+    // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
+    // `participantId` du client n'est jamais cru sur parole — y est écrite.
+    registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
 
     /**
      * Handle disconnect - auto-leave any active calls

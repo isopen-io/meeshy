@@ -11,8 +11,6 @@ struct StatusBubbleOverlay: View {
     /// Touché du CONTENU du mood (pas la zone extérieure) → amorce la réponse.
     var onReplyTapped: (() -> Void)? = nil
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false

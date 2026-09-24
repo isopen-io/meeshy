@@ -11,10 +11,13 @@ import MeeshyUI
 /// que la ligne iOS lit comme la ligne web — le composeur rejoue le même
 /// fichier de cas que `composeConversationPreview()`.
 ///
-/// Un éphémère vivant se décompte LUI-MÊME : un `TimelineView` limité à cette
-/// ligne recompose chaque seconde jusqu'à l'échéance, puis la ligne bascule
-/// sur « expiré » sans attendre un événement — et l'horloge s'arrête là. Hors
-/// éphémère, aucune horloge.
+/// Un éphémère vivant se décompte LUI-MÊME (#7614), sans horloge par seconde :
+/// la ligne ne se recompose qu'aux instants où son libellé change
+/// (`ConversationPreviewCountdown` — une frontière de minute, puis l'échéance),
+/// et le compte à la seconde de la dernière minute est rendu par le système
+/// (`Text(timerInterval:)`). À l'échéance, la ligne bascule seule sur
+/// « Message expiré » — et plus rien ne la réveille. Hors éphémère, aucune
+/// horloge.
 struct ConversationPreviewLine: View {
     let conversation: Conversation
     let preferredLanguages: [String]
@@ -30,10 +33,10 @@ struct ConversationPreviewLine: View {
         let preview = compose(at: now)
         if let deadline = preview.liveUntil {
             TimelineView(CountdownSchedule(until: deadline)) { context in
-                line(compose(at: context.date))
+                line(compose(at: context.date), at: context.date)
             }
         } else {
-            line(preview)
+            line(preview, at: now)
         }
     }
 
@@ -48,21 +51,47 @@ struct ConversationPreviewLine: View {
 
     /// La valeur composée pour une rangée — pure, pour les témoins et pour le
     /// libellé VoiceOver, qui DOIT dire ce que l'œil lit.
+    ///
+    /// `receipts` : la première réception de l'éphémère sur cet appareil, la
+    /// MÊME que celle du fil (`MeeshyMessage.protection`). `message:new` ne
+    /// porte pas d'échéance pour un éphémère (#7451) : sans elle, la ligne
+    /// n'affichait que sa DURÉE (« 1 min »), figée, et ne basculait jamais.
     nonisolated static func preview(
         for conversation: Conversation,
         viewerId: String,
         preferredLanguages: [String],
         now: Date,
-        strings: ConversationPreviewStrings = ConversationPreviewCatalog.strings()
+        strings: ConversationPreviewStrings = ConversationPreviewCatalog.strings(),
+        receipts: EphemeralReceiptRecording = EphemeralReceiptLedger.shared
     ) -> ConversationPreview {
         let input = ConversationPreviewInput(
             conversation: conversation,
             viewerId: viewerId,
             language: strings.language.rawValue,
             preferredLanguages: preferredLanguages,
-            now: now
+            now: now,
+            receivedAt: receivedAt(of: conversation, now: now, receipts: receipts)
         )
         return ConversationPreviewComposer.compose(input, strings: strings)
+    }
+
+    /// La réception locale du dernier message quand c'est un éphémère REÇU —
+    /// jamais le mien, dont l'horloge ne part qu'à la réception d'un autre
+    /// (contrat #7451 point 6). La ligne ne tient pas l'id de l'auteur : elle
+    /// tient le mot qui le désigne, tranché à la fusion (`ConversationListAuthor`).
+    nonisolated static func receivedAt(
+        of conversation: Conversation, now: Date, receipts: EphemeralReceiptRecording
+    ) -> Date? {
+        let nature = conversation.lastMessageNature
+        let flags = MessageEffectFlags(rawValue: UInt32(truncatingIfNeeded: nature?.effectFlags ?? 0))
+        let isEphemeral = (nature?.ephemeralDuration ?? 0) > 0
+            || conversation.lastMessageExpiresAt != nil
+            || flags.contains(.ephemeral)
+        guard isEphemeral,
+              let messageId = conversation.lastMessageId, !messageId.isEmpty,
+              conversation.lastMessageSenderName != ConversationListAuthor.readerLabel
+        else { return nil }
+        return receipts.noteReception(of: messageId, at: now)
     }
 
     /// Ce que VoiceOver dit de la ligne — la même valeur que l'œil lit, sans
@@ -107,9 +136,9 @@ struct ConversationPreviewLine: View {
     // MARK: - Rendu
 
     @ViewBuilder
-    private func line(_ preview: ConversationPreview) -> some View {
+    private func line(_ preview: ConversationPreview, at now: Date) -> some View {
         HStack(spacing: 6) {
-            styledText(preview)
+            styledText(preview, at: now)
                 .lineLimit(lineLimit)
             if preview.offersJoin, let onJoin {
                 Button(action: onJoin) {
@@ -130,7 +159,7 @@ struct ConversationPreviewLine: View {
 
     /// UN seul `Text` — auteur, glyphe et corps — pour que la troncature
     /// morde sur la fin du message, jamais sur une colonne d'auteur.
-    private func styledText(_ preview: ConversationPreview) -> Text {
+    private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {
         let strings = ConversationPreviewCatalog.strings()
         let author = preview.author.map { author -> Text in
             let prefix = strings(.lineAuthor, ["author": author.label, "line": ""])
@@ -145,10 +174,22 @@ struct ConversationPreviewLine: View {
             Text(Image(systemName: direction == .outgoing ? "arrow.up.right" : "arrow.down.left"))
                 .foregroundColor(toneColor(preview.tone)) + Text(" ")
         } ?? Text("")
-        let content = Text(preview.segments.map(\.text).joined(separator: " · "))
+        let content = segmentsText(preview.segments, at: now)
             .foregroundColor(toneColor(preview.tone))
         let styledBody = Self.isItalic(preview) ? content.italic() : content
         return (author + glyph + direction + styledBody).font(font)
+    }
+
+    /// Le corps de la ligne. Dans la dernière minute d'un éphémère, son
+    /// décompte est rendu par le système, à la seconde, sans réveiller la vue.
+    private func segmentsText(_ segments: [ConversationPreviewSegment], at now: Date) -> Text {
+        segments.enumerated().reduce(Text("")) { text, entry in
+            let separator = entry.offset == 0 ? Text("") : Text(" · ")
+            guard case .countdown(_, let deadline) = entry.element,
+                  ConversationPreviewCountdown.showsSeconds(at: now, deadline: deadline)
+            else { return text + separator + Text(entry.element.text) }
+            return text + separator + Text(timerInterval: now...deadline, countsDown: true)
+        }
     }
 
     private func authorColor(_ author: ConversationPreviewAuthor) -> Color {
@@ -209,8 +250,11 @@ struct ConversationPreviewLine: View {
     }
 }
 
-/// Une entrée par seconde jusqu'à l'échéance, la dernière POSÉE sur elle — puis
-/// plus rien : une ligne expirée ne recompose plus.
+/// Les seuls instants où la ligne d'un éphémère change — une frontière de
+/// minute, puis l'échéance (`ConversationPreviewCountdown`) — et plus rien
+/// ensuite : une ligne expirée ne recompose plus. Chaque entrée est posée un
+/// souffle APRÈS sa frontière, pour que la ligne recomposée lise le nouveau
+/// libellé et non l'ancien.
 nonisolated struct CountdownSchedule: TimelineSchedule {
     let until: Date
 
@@ -218,7 +262,8 @@ nonisolated struct CountdownSchedule: TimelineSchedule {
         var next: Date? = startDate
         return AnyIterator {
             guard let current = next else { return nil }
-            next = current >= until ? nil : min(current.addingTimeInterval(1), until)
+            next = ConversationPreviewCountdown.nextChange(after: current, deadline: until)
+                .map { $0.addingTimeInterval(0.05) }
             return current
         }
     }

@@ -10,7 +10,6 @@ struct SettingsView: View {
     @EnvironmentObject private var authManager: AuthManager
     @ObservedObject private var prefs = UserPreferencesManager.shared
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
     @State private var showSwitchAccountConfirm = false

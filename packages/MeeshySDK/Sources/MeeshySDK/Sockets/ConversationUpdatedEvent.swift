@@ -310,4 +310,18 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         guard case .replaced(let id) = lastMessage else { return nil }
         return id
     }
+
+    /// Le `User.id` de l'auteur du message NOMMÉ, quand l'événement le dit
+    /// (#7612).
+    ///
+    /// `senderId` est un `Participant.id` ; comparé à l'id UTILISATEUR du
+    /// lecteur, il ne reconnaît jamais « moi ». Les deux émetteurs
+    /// message-driven posent `updatedBy.id` = l'auteur du message. Un recalcul
+    /// (`previewRecalculated`) y met l'ACTEUR — qui a supprimé ou masqué —, et
+    /// une mise à jour de métadonnées ou d'activité ne nomme aucun message :
+    /// dans ces deux cas, rien n'est affirmé.
+    public var messageSenderUserId: String? {
+        guard !previewRecalculated, case .replaced(.some) = lastMessage else { return nil }
+        return updatedBy?.id
+    }
 }

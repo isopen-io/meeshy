@@ -340,7 +340,9 @@ struct AudioMediaView: View, Equatable {
             && lhs.chrome == rhs.chrome
     }
 
-    @State private var resolvedAvailability: AudioAvailability = .needsDownload
+    /// `nil` tant que la résolution du `.task` n'a pas rendu : la disponibilité
+    /// se lit alors sur le disque, sans attendre (`availableOnDeviceAtFirstRender`).
+    @State private var resolvedAvailability: AudioAvailability?
     @State private var isAudioPlaying = false
     @State private var showAudioFullscreen = false
     @State private var selectedAudioLangCode: String? = nil
@@ -359,8 +361,37 @@ struct AudioMediaView: View, Equatable {
             progress: downloader.progress,
             downloadedBytes: downloader.downloadedBytes,
             totalBytes: downloader.totalBytes,
-            resting: resolvedAvailability
+            resting: resolvedAvailability ?? Self.availableOnDeviceAtFirstRender(urlString: currentAudioUrl)
         )
+    }
+
+    /// **La disponibilité au PREMIER rendu se lit sur le disque** (#7660).
+    ///
+    /// Elle valait `.needsDownload` jusqu'à ce que le `.task` la résolve de
+    /// façon asynchrone : un vocal déjà présent sur l'appareil se dessinait
+    /// donc d'abord « à télécharger » — bouton ↓ ET libellé de taille sous le
+    /// bouton, 10 pt de plus — puis rétrécissait quelques images plus tard.
+    /// Dans le fil, chaque réalisation de la rangée jouait ce
+    /// redimensionnement, animé, sous le doigt (89 → 79 pt, mesuré au
+    /// simulateur sur « Meeshy Global »).
+    ///
+    /// Mêmes branches que `resolveAvailability`, en synchrone : un `stat`, sans
+    /// saut d'acteur. Le `.task` garde le dernier mot — il consulte aussi le
+    /// cache mémoire.
+    nonisolated static func availableOnDeviceAtFirstRender(
+        urlString: String,
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        isOnDisk: (String) -> Bool = { CacheCoordinator.audioLocalFileURL(for: $0) != nil }
+    ) -> AudioAvailability {
+        if urlString.hasPrefix("file://") {
+            return AudioAvailability.resolve(
+                isLocalFile: true,
+                localFileExists: fileExists(URL(string: urlString)?.path ?? ""),
+                isServerCached: false
+            )
+        }
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        return AudioAvailability.resolve(isLocalFile: false, localFileExists: false, isServerCached: isOnDisk(resolved))
     }
 
     /// URL de la langue actuellement sélectionnée (orig ou traduite).

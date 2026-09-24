@@ -411,9 +411,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// canvas, le thumbHash, le dessin legacy et le stylage racine — s'y fier
     /// seul rendrait le canvas aveugle à ces éditions, exactement le défaut
     /// que l'empreinte a été écrite pour fermer.
-    private static func canvasFingerprint(_ slide: StorySlide) -> Data? {
+    private static let fingerprintEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    private static func canvasFingerprint(_ slide: StorySlide) -> Data? {
+        let encoder = fingerprintEncoder
         guard let wire = try? encoder.encode(slide),
               let runtime = try? encoder.encode(slide.effects.runtimeSnapshot) else {
             return nil

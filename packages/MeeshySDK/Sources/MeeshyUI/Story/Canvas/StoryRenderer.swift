@@ -360,9 +360,15 @@ public enum StoryRenderer {
     /// pratique pour ces structs Codable) retourne un hash unique par appel
     /// pour forcer le rebuild plutôt que servir une layer périmée.
     @MainActor
-    private static func editContentHash(for item: any RenderableItem) -> Int {
+    private static let editContentEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    @MainActor
+    private static func editContentHash(for item: any RenderableItem) -> Int {
+        let encoder = editContentEncoder
         let data: Data?
         if let text = item as? StoryTextObject {
             data = try? encoder.encode(text)

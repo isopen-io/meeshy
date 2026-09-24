@@ -221,43 +221,57 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
     );
   }
 
-  // 5 — vue unique : révélation puis consommation (5 s de fenêtre + 400 ms
-  // de fermeture du brouillard, `FOG_DURATION_MS`), plus jamais révélable.
-  const viewOnceVeil = rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="hidden"]');
+  // 5 — vue unique (#7580) : UNE puce « (1) · Touchez pour afficher » ; le
+  // toucher ouvre le texte À SA PLACE, sans horloge ; un second toucher le
+  // referme (brouillard, `FOG_DURATION_MS`) et la puce passe « Déjà ouvert »,
+  // pour toujours.
+  const viewOnceVeil = rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-view-once-chip="sealed"]');
   const viewOnceVeilPresent = (await viewOnceVeil.count()) > 0;
-  expect(viewOnceVeilPresent, `[${skin}] le bouton-voile de la vue unique existe`);
+  expect(viewOnceVeilPresent, `[${skin}] la puce « Touchez pour afficher » de la vue unique existe`);
+  expect(
+    !(await rowOf(VIEW_ONCE_WITNESS_ID).innerHTML()).includes(VIEW_ONCE_SECRET),
+    `[${skin}] rien du contenu de la vue unique n'est dans la rangée avant l'ouverture`,
+  );
   if (viewOnceVeilPresent) {
     await viewOnceVeil.first().click();
     await chrono.advanceBy(250);
     expect(
       (await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="revealed"]').count()) > 0,
-      `[${skin}] la vue unique révèle son contenu au tap`,
+      `[${skin}] la vue unique s'ouvre à sa place au toucher`,
     );
-    await chrono.advanceBy(5500);
+    await chrono.advanceBy(6000);
+    expect(
+      (await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="revealed"]').count()) > 0,
+      `[${skin}] le texte ouvert n'a pas d'horloge : il reste lisible tant qu'on ne le retouche pas`,
+    );
+    await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-view-once-open]').first().click();
+    await chrono.advanceBy(600);
     expect(
       (await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="consumed"]').count()) > 0,
-      `[${skin}] la vue unique consommée porte data-protected="consumed"`,
+      `[${skin}] retouché, le texte se referme : la rangée porte data-protected="consumed"`,
     );
-    /* LE TOMBSTONE PAR SA POIGNÉE, PAS PAR SON MOT (#7337) — l'assertion
-       cherchait « Vu et supprimé » dans tout `main` : le Chromium de ce gate
-       est `en-US`, elle était verte parce que le libellé était EN DUR. Ce
-       qu'elle garde se dit sans langue : SUR la rangée consommée, le
-       tombstone `burned` est rendu, son texte et son nom accessible ne sont
-       ni vides ni une clé de catalogue, et le contenu n'y est pas. */
-    burnedNotice = await noticeOf(VIEW_ONCE_WITNESS_ID, 'burned');
+    /* LA PUCE « DÉJÀ OUVERT » PAR SA POIGNÉE, PAS PAR SON MOT (#7337) : le
+       Chromium de ce gate est `en-US`. Ce qu'elle garde se dit sans langue :
+       SUR la rangée ouverte, la puce est rendue, son texte et son nom
+       accessible ne sont ni vides ni une clé de catalogue, et le contenu n'y
+       est pas. */
+    burnedNotice = await rowOf(VIEW_ONCE_WITNESS_ID).evaluate((row) => {
+      const chip = row.querySelector('[data-view-once-chip="opened"]');
+      return chip === null ? null : { text: (chip.textContent ?? '').trim(), aria: chip.getAttribute('aria-label') ?? '' };
+    });
     expect(
       burnedNotice !== null &&
         isSpokenLabel(burnedNotice.text, 'message.') &&
         isSpokenLabel(burnedNotice.aria, 'message.') &&
         !burnedNotice.text.includes(VIEW_ONCE_SECRET),
-      `[${skin}] le tombstone « vu et supprimé » est affiché SUR la rangée consommée (${JSON.stringify(burnedNotice)})`,
+      `[${skin}] la puce « déjà ouvert » est affichée SUR la rangée ouverte (${JSON.stringify(burnedNotice)})`,
     );
-    // Second clic sur la rangée — plus rien à cliquer, l'état reste consumed.
+    // Second clic sur la rangée — plus rien à ouvrir, l'état reste consumed.
     await rowOf(VIEW_ONCE_WITNESS_ID).click({ force: true });
     await chrono.advanceBy(250);
     expect(
       (await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="consumed"]').count()) > 0,
-      `[${skin}] un second clic ne révèle plus jamais la vue unique`,
+      `[${skin}] un second clic ne rouvre plus jamais la vue unique`,
     );
   }
 
@@ -383,7 +397,7 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
   if (skin === 'focal') {
     // 9 — hors ligne : le tap sur un second témoin de vue unique échoue proprement.
     await protectionContext.setOffline(true);
-    const offlineVeil = rowOf(VIEW_ONCE_OFFLINE_WITNESS_ID).locator('[data-protected="hidden"]');
+    const offlineVeil = rowOf(VIEW_ONCE_OFFLINE_WITNESS_ID).locator('[data-view-once-chip="sealed"]');
     if ((await offlineVeil.count()) > 0) {
       await offlineVeil.first().click();
       await chrono.advanceBy(250);

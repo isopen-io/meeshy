@@ -15,8 +15,6 @@ struct UserStatsView: View {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = UserStatsViewModel()
 
     private let accentColor = MeeshyColors.brandPrimaryHex

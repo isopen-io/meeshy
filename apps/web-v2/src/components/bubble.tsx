@@ -27,7 +27,6 @@ import {
   Badges,
   Check,
   EditedMark,
-  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -480,7 +479,6 @@ export function Bubble({
             .swift:522-541`). */}
         <div className={`flex items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
           <Badges badges={badges} />
-          <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
         {/* LE CHROME DE PROTECTION — AU-DESSUS de la bulle, HORS du fond
@@ -489,7 +487,6 @@ export function Bubble({
             l'éphémère et désignation de la vue unique, une seule écriture. */}
         <ProtectionChrome
           deadline={ephemeralDeadline}
-          isViewOnce={message.isViewOnce}
           align={isMine ? 'end' : 'start'}
           {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
         />
@@ -558,6 +555,7 @@ export function Bubble({
           </>
         ) : (
           <div
+            data-effects-surface
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine
@@ -643,16 +641,20 @@ export function Bubble({
                           (l'administration) : cliquer ne changeait pas le
                           texte lu. La pastille RESTE, en indicateur muet ; les
                           drapeaux, eux, ne sont qu'un contrôle. */}
-                      <PrismPastille
-                  language={currentInterfaceLanguage()}
-                  subject="message"
-                        servedLanguage={naturalServedLanguage}
-                        originalLanguage={message.originalLanguage}
-                        active={activeLanguage}
-                        {...(onPickLanguage === undefined
-                          ? {}
-                          : { onToggle: () => onPickLanguage(message.originalLanguage) })}
-                      />
+                      {/* LES DRAPEAUX DISENT DÉJÀ LA TRADUCTION (#7599, miroir iOS #7603) —
+                          la pastille 🌐 ne se pose que s'il n'y a aucun drapeau. */}
+                      {onPickLanguage === undefined || footerLanguages.length === 0 ? (
+                        <PrismPastille
+                    language={currentInterfaceLanguage()}
+                    subject="message"
+                          servedLanguage={naturalServedLanguage}
+                          originalLanguage={message.originalLanguage}
+                          active={activeLanguage}
+                          {...(onPickLanguage === undefined
+                            ? {}
+                            : { onToggle: () => onPickLanguage(message.originalLanguage) })}
+                        />
+                      ) : null}
                       {onPickLanguage === undefined ? null : (
                         <Flags languages={footerLanguages} active={activeLanguage} onPick={onPickLanguage} />
                       )}

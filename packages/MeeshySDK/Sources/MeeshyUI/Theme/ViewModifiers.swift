@@ -100,14 +100,19 @@ public struct ShimmerEffect: ViewModifier {
                     )
                     .frame(width: geo.size.width * 0.6)
                     .offset(x: -geo.size.width * 0.3 + phase * (geo.size.width * 1.6))
+                    .animation(ShimmerCycle.sweep(duration: 2.0, running: phase == 1), value: phase)
                     .mask(content)
                 }
             )
+            // **L'animation est PORTÉE par le reflet, jamais par une transaction**
+            // (#7625). Un `withAnimation` à courbe infinie posé dans `onAppear` anime
+            // TOUTE la transaction en cours — dans un fil paresseux, celle qui fait
+            // aussi naître les rangées voisines, qui hériteraient d'une animation sans
+            // fin. `.animation(_:value:)` borne la courbe au seul reflet ; l'état se
+            // pose sans animation.
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
+                phase = 1
             }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
