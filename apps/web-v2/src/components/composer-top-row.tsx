@@ -217,16 +217,18 @@ export function ComposerTopRow({
           aria-pressed={blurred}
           data-composer-blur
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={blurred ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
         >
           <Glyph name="eyeSlash" size={16} />
           {blurred ? <span className="text-title font-bold">Flou</span> : null}
         </button>
 
-        {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Même
-            famille visuelle que « Flou » (`indigo600`, les DEUX bascules
-            partagent cette teinte côté iOS). */}
+        {/* « VUE UNIQUE » (#7597) — sans condition, à côté du flou. Chaque
+            protection porte SA couleur (#7667) : flamme rouge d'alerte
+            (directive porteur ; décision #7677), « 1 » violet et flou gris
+            du fil (#7599) — et le flou et la vue unique sont exclusifs
+            (`toggledVeil`). */}
         <button
           type="button"
           onClick={onToggleViewOnce}
@@ -234,7 +236,7 @@ export function ComposerTopRow({
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={viewOnce ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
           <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />

@@ -1015,6 +1015,8 @@ const pt = {
   'composer.viewOnce.activate': 'Ativar o modo de visualização única',
   'composer.viewOnce.active': 'Modo de visualização única ativo',
   'composer.viewOnce.label': 'Visualização única',
+  'composer.protection.ephemeral.state': 'Modo efêmero ativo',
+  'composer.protection.blur.state': 'Modo desfoque ativo',
   'message.location.shared': 'Localização compartilhada',
   'message.location.open': 'Abrir no Mapas',
   'message.location.a11y': 'Localização: {place}',

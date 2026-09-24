@@ -37,7 +37,11 @@ public struct MessageProtectionIntent: Equatable, Sendable {
         maxViewOnceCount: Int? = nil
     ) {
         self.ephemeralDurationSeconds = (ephemeralDurationSeconds ?? 0) > 0 ? ephemeralDurationSeconds : nil
-        self.isBlurred = isBlurred
+        // Flou et vue unique sont EXCLUSIFS (directive porteur 2026-09-24,
+        // #7667) : le composeur éteint l'un quand on allume l'autre, et ce
+        // site-ci est le second verrou que traverse tout chemin d'envoi. La vue
+        // unique, plus forte, gagne.
+        self.isBlurred = isBlurred && !isViewOnce
         self.isViewOnce = isViewOnce
         self.maxViewOnceCount = maxViewOnceCount
     }
