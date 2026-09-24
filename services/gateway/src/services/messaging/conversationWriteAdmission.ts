@@ -142,6 +142,11 @@
  * plutôt que « ce salon est en mode lent » — pour les comptes établis, il ne
  * l'est pas.
  *
+ * Contrairement à la règle 3, la fenêtre ne fait pas que se LIRE : elle se
+ * RÉSERVE (`newcomerSendReservations`). La ligne `Message` n'existe qu'après
+ * `saveMessage`, et une rafale simultanée d'un compte jetable lisait « rien »
+ * à chaque envoi — c'est précisément le scénario que la règle doit arrêter.
+ *
  * ═══ CE QUE LA DÉCISION RETIENT ════════════════════════════════════════════
  *
  * - **L'état terminal ne connaît AUCUNE dispense** — ni la conversation
