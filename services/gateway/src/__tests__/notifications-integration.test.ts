@@ -67,6 +67,12 @@ describe('Notifications Integration - Sans Firebase', () => {
     // Reset all mocks
     jest.clearAllMocks();
 
+    // Un témoin qui FIGE l'horloge ne la rend pas s'il tombe : son
+    // `useRealTimers()` final est sauté par l'assertion qui échoue, et tous
+    // les témoins suivants héritent de son instant. La restitution appartient
+    // donc au démarrage de CHAQUE témoin, jamais à la sortie du précédent.
+    jest.useRealTimers();
+
     // Tracker les erreurs console
     errorLogs = [];
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation((...args) => {
@@ -424,6 +430,15 @@ describe('Notifications Integration - Sans Firebase', () => {
 
   describe('Préférences utilisateur sans Firebase', () => {
     it('Respecte Do Not Disturb', async () => {
+      // `isWithinDnd` borne la fin de fenêtre par une comparaison STRICTE
+      // (`currentTime < end`). `00:00`–`23:59` n'est donc PAS « toute la
+      // journée » : la minute 23:59 en est exclue, et ce témoin tombait
+      // pendant ces soixante secondes — accusant au passage des PR qui n'y
+      // étaient pour rien. Aucune fenêtre ne couvre 24 h (la forme nocturne
+      // exclut `[end, start)`, la forme diurne exclut `end`), donc c'est
+      // l'INSTANT qu'il faut fixer, pas la fenêtre qu'il faut élargir.
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T12:00:00Z'));
+
       const preferences = {
         userId: 'user123',
         dndEnabled: true,
