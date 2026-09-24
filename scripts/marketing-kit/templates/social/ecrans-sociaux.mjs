@@ -159,7 +159,7 @@ const ondeCercle = raw('<svg viewBox="0 0 64 64" width="64" height="64" aria-hid
 
 // VoiceProfileWizardView — étape de consentement. Les lignes « intro » et « use » du catalogue
 // promettent « votre voix naturelle » / « avec votre voix », contraires au § 2 de la campagne :
-// elles ne sont PAS montrées (défaut de copie consigné dans une issue), le reste est fidèle.
+// elles ne sont PAS montrées (défaut de copie consigné dans #7766), le reste est fidèle.
 export const ecranConsentementVoix = (ctx) =>
   html`<div class="ecran iphone voix ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
     <div class="p-bg"></div>
