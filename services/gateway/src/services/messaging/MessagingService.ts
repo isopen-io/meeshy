@@ -9,6 +9,7 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types';
+import { ErrorCode } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -241,9 +242,13 @@ export class MessagingService {
           ...corr, conversationId, reason: conversationAdmission.reason,
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
-        return this.createErrorResponse(
-          describeConversationWriteRefusal(conversationAdmission)
-        );
+        return conversationAdmission.reason === 'newcomer-slow-mode'
+          ? this.createErrorResponse(
+              describeConversationWriteRefusal(conversationAdmission),
+              ErrorCode.NEWCOMER_SLOW_MODE,
+              conversationAdmission.retryAfterSeconds
+            )
+          : this.createErrorResponse(describeConversationWriteRefusal(conversationAdmission));
       }
 
       // 3.7. Droit D'ÉCRITURE DU PARTICIPANT (#4855) — distinct de l'état du
@@ -680,11 +685,12 @@ export class MessagingService {
   /**
    * Génère une réponse d'erreur
    */
-  private createErrorResponse(error: string, code?: string): MessageResponse {
+  private createErrorResponse(error: string, code?: string, retryAfter?: number): MessageResponse {
     return {
       success: false,
       error,
       ...(code ? { code } : {}),
+      ...(retryAfter !== undefined ? { retryAfter } : {}),
       data: null as any
     };
   }

@@ -303,7 +303,9 @@ describe('admitConversationWriteFor — conversation globale', () => {
     );
 
     expect(isConversationWriteRefused(await result)).toBe(false);
-    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+    // Le participant y est lu depuis #7740 — pour l'ANCIENNETÉ du compte
+    // (`globalNewcomerSlowMode.test.ts`), jamais pour un rang.
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 });
 

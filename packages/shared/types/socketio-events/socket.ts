@@ -13,6 +13,8 @@ export interface SocketIOResponse<T = unknown> {
   readonly error?: string;
   /** Machine-readable error code (e.g. ErrorCode.USER_BLOCKED) when success === false. */
   readonly code?: string;
+  /** Seconds to wait before retrying — only on a temporary refusal (`NEWCOMER_SLOW_MODE`, #7740). */
+  readonly retryAfter?: number;
 }
 
 // ===== TYPES POUR LES CONNEXIONS =====
