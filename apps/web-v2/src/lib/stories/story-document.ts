@@ -1,6 +1,7 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
+import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
 import type { StudioPose } from './studio-pose';
 import { textLayerPayload, type StudioTextLayer } from './studio-text';
@@ -250,6 +251,33 @@ type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; 
 type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
 
+/** Un emplacement du studio CONVERTI en `StoryComposition` — l'ADRESSE
+ * (identité serveur ou URL locale) est le SEUL point qui varie entre l'aperçu
+ * et la publication (loi 6, « le PLAYER est l'aperçu »). Partagée par
+ * `compose` (une scène) et `composeStoryCanvasPages` (plusieurs) : deux
+ * conversions auraient divergé au premier ajustement. */
+function storyCompositionOf<A>(
+  params: {
+    readonly texts: readonly StudioTextLayer[];
+    readonly background?: VisualSlot<A>;
+    readonly overlay?: OverlaySlot<A>;
+    readonly sound?: SoundSlot<A>;
+  },
+  addressOf: (source: A) => StoryMediaAddress,
+): StoryComposition {
+  const visual = (slot: VisualSlot<A>): StoryVisual => ({
+    address: addressOf(slot.source),
+    mediaType: slot.mediaType,
+    ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
+  });
+  return {
+    texts: params.texts,
+    ...(params.background !== undefined ? { background: visual(params.background) } : {}),
+    ...(params.overlay !== undefined ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose } } : {}),
+    ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
+  };
+}
+
 function compose<A>(
   params: {
     readonly texts: readonly StudioTextLayer[];
@@ -259,17 +287,7 @@ function compose<A>(
   },
   addressOf: (source: A) => StoryMediaAddress,
 ): CanvasV3 | null {
-  const visual = (slot: VisualSlot<A>): StoryVisual => ({
-    address: addressOf(slot.source),
-    mediaType: slot.mediaType,
-    ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
-  });
-  return composeStoryCanvas({
-    texts: params.texts,
-    ...(params.background !== undefined ? { background: visual(params.background) } : {}),
-    ...(params.overlay !== undefined ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose } } : {}),
-    ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
-  });
+  return composeStoryCanvas(storyCompositionOf(params, addressOf));
 }
 
 export function buildStoryCanvasEffects(params: {
@@ -323,13 +341,64 @@ export function unclaimedStoryMediaIds(effects: CanvasV3, mediaIds: readonly str
  *
  * **Le calque d'avant-plan DOIT y figurer** : un objet qui adresse un
  * `postMediaId` absent de cette liste fait refuser la publication entière
- * (`MEDIA_NOT_CLAIMED`, `core.ts:146-158`, rejouée par `publishStory`). */
-export function studioMediaIds(params: {
-  readonly background?: StudioReadyAsset | undefined;
-  readonly overlay?: StudioReadyAsset | undefined;
-  readonly sound?: StudioReadyAsset | undefined;
-}): readonly string[] {
-  return [params.background?.postMediaId, params.overlay?.postMediaId, params.sound?.postMediaId].filter(
-    (id): id is string => id !== undefined,
+ * (`MEDIA_NOT_CLAIMED`, `core.ts:146-158`, rejouée par `publishStory`).
+ *
+ * **`pages` (#7684)** — l'ordre est PAGE PAR PAGE, fond → calque → son sur
+ * chacune, dans l'ordre des pages : miroir de `StoryViewModel+
+ * PublicationUpload.swift:336-338` étendu à plusieurs slides. */
+export function studioMediaIds(
+  pages: readonly {
+    readonly background?: StudioReadyAsset | undefined;
+    readonly overlay?: StudioReadyAsset | undefined;
+    readonly sound?: StudioReadyAsset | undefined;
+  }[],
+): readonly string[] {
+  return pages.flatMap((page) =>
+    [page.background?.postMediaId, page.overlay?.postMediaId, page.sound?.postMediaId].filter((id): id is string => id !== undefined),
   );
+}
+
+/**
+ * **PLUSIEURS PAGES, PLUSIEURS SCÈNES, UN SEUL DOCUMENT** (#7684, §1.1) —
+ * miroir de `publishedSlide` (`ComposerStoryCanvas.swift:184-199`) : une page
+ * du studio EST une scène, dans l'ORDRE où l'auteur les a posées, sous SON
+ * PROPRE identifiant de PAGE (jamais `scene-0` littéral). `layout` ne voyage
+ * que si le document porte AU MOINS DEUX scènes ET qu'un mode a été CHOISI —
+ * miroir de « une mosaïque d'un élément n'en est pas une »
+ * (`canvas-v3.ts:212-214`) et de `layout: MosaicLayoutMode?` posé SEULEMENT
+ * quand `scenes.length ≥ 2` (`ComposerStoryCanvas.swift:191-195`).
+ *
+ * Une page SANS matière (texte vide, aucun média) ne produit AUCUNE scène —
+ * ni un cadre vide, ni un trou dans la numérotation ; si TOUTES les pages
+ * sont ainsi, le document ENTIER est `null` (même contrat que
+ * `composeStoryCanvas` pour une page seule — d'ailleurs réutilisé ici :
+ * une SEULE page produit exactement le document qu'il aurait produit).
+ */
+export type StoryPageComposition = StoryComposition & { readonly id: string };
+
+export function composeStoryCanvasPages(pages: readonly StoryPageComposition[], layout: MosaicLayoutMode | null): CanvasV3 | null {
+  const scenes = pages.map((page) => ({ id: page.id, objects: composeObjects(page) })).filter((scene) => scene.objects.length > 0);
+  if (scenes.length === 0) return null;
+  return { v: 3, scenes, ...(scenes.length >= 2 && layout !== null ? { layout } : {}) };
+}
+
+/** LE DOCUMENT À PUBLIER, à PLUSIEURS pages — chaque média y porte son
+ * identité SERVEUR (`StudioReadyAsset`), comme `buildStoryCanvasEffects`. */
+export function buildStoryCanvasEffectsPages(
+  pages: readonly {
+    readonly id: string;
+    readonly texts: readonly StudioTextLayer[];
+    readonly background?: VisualSlot<StudioReadyAsset>;
+    readonly overlay?: OverlaySlot<StudioReadyAsset>;
+    readonly sound?: SoundSlot<StudioReadyAsset>;
+  }[],
+  layout: MosaicLayoutMode | null,
+): CanvasV3 | null {
+  const addressOf = (ready: StudioReadyAsset): StoryMediaAddress => ({
+    postMediaId: ready.postMediaId,
+    mediaURL: ready.fileUrl,
+    ...(ready.thumbHash !== undefined ? { thumbHash: ready.thumbHash } : {}),
+  });
+  const compositions: StoryPageComposition[] = pages.map((page) => ({ id: page.id, ...storyCompositionOf(page, addressOf) }));
+  return composeStoryCanvasPages(compositions, layout);
 }

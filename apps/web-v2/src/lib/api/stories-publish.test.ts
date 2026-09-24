@@ -40,7 +40,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
       content: 'Bonjour',
       originalLanguage: 'fr',
       storyEffects: effects,
-      mediaIds: studioMediaIds({ background: BACKGROUND }),
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
     });
 
     expect(result.ok).toBe(true);
@@ -60,7 +60,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     for (const type of ['POST', 'REEL'] as const) {
       const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
       const transport = createHttpTransport({ base: '', fetchImpl: impl });
-      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds({ background: BACKGROUND }) });
+      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds([{ background: BACKGROUND }]) });
       const body = JSON.parse(String(calls[0]!.init.body));
       expect(body.type).toBe(type);
       expect(body.storyEffects.v).toBe(3);
@@ -107,7 +107,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
       originalLanguage: 'fr',
       mediaCaption: { 'pm-bg': 'Au lever du jour' },
       storyEffects: effects,
-      mediaIds: studioMediaIds({ background: BACKGROUND }),
+      mediaIds: studioMediaIds([{ background: BACKGROUND }]),
     });
 
     const body = JSON.parse(String(calls[0]!.init.body));

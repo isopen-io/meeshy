@@ -1,39 +1,46 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  STUDIO_PAGE_MAX,
   canPublishStudioDraft,
+  currentStudioPage,
   emptyStudioDraft,
   isStudioDraftEmpty,
-  readyAssetOf,
   selectedTextLayer,
-  studioDoorAccepts,
   studioDraftFromSnapshot,
-  studioFailureKey,
+  studioMediaCount,
+  studioPlaceRefusal,
   studioSnapshotOf,
+  withAddedPage,
   withAddedText,
   withAudience,
-  withSelected,
+  withCurrentPage,
+  withPage,
   withSound,
-  withSoundPlane,
   withSoundUpload,
   withText,
-  withTextLayer,
   withVisual,
-  withVisualAspectRatio,
-  withVisualCaption,
-  withVisualPose,
   withVisualUpload,
-  withoutSound,
-  withoutText,
-  withoutVisual,
+  withoutPage,
   type StudioDraft,
 } from './studio';
 import { IDENTITY_POSE } from './studio-pose';
 
+/**
+ * **CE FICHIER PORTE LA DÉLÉGATION VERS LA PAGE COURANTE ET LA GESTION DES
+ * PAGES** (#7684). Les cas qui vérifiaient les objets texte, les trois portes
+ * et le son SUR le brouillon directement ont DÉMÉNAGÉ dans
+ * `studio-page.test.ts` (même comportement, sur `StudioPage`) — ils ne sont
+ * PAS dupliqués ici.
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- @meeshy/shared importé UNIQUEMENT pour épingler l'égalité des deux plafonds (voir plus bas), jamais en production.
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+
 const file = (name: string, type: string): File => new File([new Uint8Array([1, 2, 3])], name, { type });
 
 const empty = (): StudioDraft => emptyStudioDraft('fr');
-const seedId = (draft: StudioDraft): string => draft.texts[0]!.id;
+const seedId = (draft: StudioDraft): string => currentStudioPage(draft).texts[0]!.id;
 const typed = (text: string): StudioDraft => {
   const draft = empty();
   return withText(draft, seedId(draft), text);
@@ -55,393 +62,249 @@ const soundAsset = () => ({
 });
 
 describe('emptyStudioDraft / isStudioDraftEmpty', () => {
-  test('un plateau neuf est vide, mais porte DÉJÀ un objet texte sélectionné', () => {
+  test('un brouillon neuf porte UNE page, courante, avec DÉJÀ un objet texte sélectionné', () => {
     const draft = empty();
     expect(isStudioDraftEmpty(draft)).toBe(true);
-    expect(draft.texts).toHaveLength(1);
-    expect(draft.selected).toBe(seedId(draft));
+    expect(draft.pages).toHaveLength(1);
+    expect(draft.currentPage).toBe(draft.pages[0]!.id);
+    expect(currentStudioPage(draft).selected).toBe(seedId(draft));
     expect(selectedTextLayer(draft)?.text).toBe('');
   });
   test('l’objet texte naît dans la langue de composition, pas dans celle du navigateur', () => {
-    expect(emptyStudioDraft('ar').texts[0]!.language).toBe('ar');
+    expect(currentStudioPage(emptyStudioDraft('ar')).texts[0]!.language).toBe('ar');
   });
   test('un texte seul le rend NON vide', () => expect(isStudioDraftEmpty(typed('x'))).toBe(false));
   test('un texte fait d’espaces reste VIDE (miroir du serveur, .trim())', () => expect(isStudioDraftEmpty(typed('   '))).toBe(true));
-  test('un fond seul le rend NON vide', () => expect(isStudioDraftEmpty(withVisual(empty(), 'visual', visualAsset()))).toBe(false));
-  test('un CALQUE seul le rend NON vide', () => expect(isStudioDraftEmpty(withVisual(empty(), 'overlay', visualAsset()))).toBe(false));
-  test('un son seul le rend NON vide', () => expect(isStudioDraftEmpty(withSound(empty(), soundAsset()))).toBe(false));
 });
 
-describe('les objets TEXTE s’AJOUTENT — c’est tout l’objet du lot (#6943)', () => {
-  test('ajouter un texte crée un objet NEUF, d’identifiant distinct, et le SÉLECTIONNE', () => {
-    const draft = withAddedText(typed('Bonjour'), 'en');
-    expect(draft.texts).toHaveLength(2);
-    expect(new Set(draft.texts.map((l) => l.id)).size).toBe(2);
-    expect(draft.selected).toBe(draft.texts[1]!.id);
-    expect(draft.texts[1]!.language).toBe('en');
+describe('les fonctions déléguées atteignent la page COURANTE, jamais une autre (#7684)', () => {
+  test('withText/withVisual/withSound écrivent sur `currentStudioPage`', () => {
+    const withMedia = withSound(withVisual(typed('Bonjour'), 'visual', visualAsset()), soundAsset());
+    const page = currentStudioPage(withMedia);
+    expect(page.texts[0]!.text).toBe('Bonjour');
+    expect(page.background?.previewUrl).toBe('blob:bg');
+    expect(page.sound?.previewUrl).toBe('blob:snd');
   });
 
-  test('l’identifiant se calcule contre l’EXISTANT — un brouillon relu ne fait pas renaître `text-1`', () => {
-    const restored = studioDraftFromSnapshot(
-      { texts: [{ id: 'text-1', text: 'a' }, { id: 'text-7', text: 'b' }] },
-      (u) => u,
-      'fr',
-    );
-    expect(withAddedText(restored, 'fr').texts[2]!.id).toBe('text-8');
+  test('withAddedText calcule l’identifiant CONTRE TOUTES LES PAGES — deux pages ne partagent jamais un `id` de texte', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    // La nouvelle page porte déjà `text-2` (graine) — ajouter un texte sur
+    // elle doit sauter par-dessus, jamais re-servir `text-2`.
+    const withMore = withAddedText(twoPages, 'fr');
+    const allIds = withMore.pages.flatMap((page) => page.texts.map((layer) => layer.id));
+    expect(new Set(allIds).size).toBe(allIds.length);
+    expect(allIds).toContain('text-3');
   });
 
-  test('chaque texte garde SA pose, SA langue et SON style — un réglage n’en touche qu’un', () => {
-    const two = withAddedText(typed('Bonjour'), 'en');
-    const first = two.texts[0]!.id;
-    const second = two.texts[1]!.id;
-    const styled = withTextLayer(two, second, (layer) => ({ ...layer, effect: 'neon', pose: { x: 0.1, y: 0.2, scale: 3, rotation: 45 } }));
-    expect(styled.texts[0]!.effect).toBe('none');
-    expect(styled.texts[0]!.pose).toEqual(IDENTITY_POSE);
-    expect(styled.texts[1]!.effect).toBe('neon');
-    expect(styled.texts[1]!.pose).toEqual({ x: 0.1, y: 0.2, scale: 3, rotation: 45 });
-    expect(first).not.toBe(second);
-  });
-
-  test('retirer un texte parmi PLUSIEURS le retire et reporte la sélection', () => {
-    const two = withAddedText(typed('Bonjour'), 'fr');
-    const removed = withoutText(two, two.texts[1]!.id);
-    expect(removed.texts).toHaveLength(1);
-    expect(removed.selected).toBe(removed.texts[0]!.id);
-  });
-
-  test('retirer le DERNIER texte le VIDE sans le supprimer — un plateau sans cible de frappe serait un cul-de-sac', () => {
-    const one = typed('Bonjour');
-    const cleared = withoutText(one, seedId(one));
-    expect(cleared.texts).toHaveLength(1);
-    expect(cleared.texts[0]!.text).toBe('');
-    expect(cleared.selected).toBe(seedId(one));
-  });
-
-  test('la sélection se pose et se retire', () => {
-    expect(withSelected(empty(), null).selected).toBeNull();
-    expect(selectedTextLayer(withSelected(empty(), 'inconnu'))).toBeNull();
+  test('withAddedText retombe sur `currentStudioPage` même après un changement de page', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    const backToFirst = withCurrentPage(twoPages, twoPages.pages[0]!.id);
+    const added = withAddedText(backToFirst, 'fr');
+    expect(currentStudioPage(added).texts).toHaveLength(2);
+    expect(added.pages[1]!.texts).toHaveLength(1);
   });
 });
 
-describe('withVisual / withoutVisual — REMPLACE, ne s’empile pas (P1, une seule place par porte)', () => {
-  test('poser un second fond REMPLACE le premier', () => {
-    const first = withVisual(empty(), 'visual', visualAsset());
-    const second = withVisual(first, 'visual', { ...visualAsset(), previewUrl: 'blob:bg2' });
-    expect(second.background?.previewUrl).toBe('blob:bg2');
+describe('withPage — LE SITE UNIQUE de mutation d’une page', () => {
+  test('un `id` inconnu rend le brouillon INCHANGÉ (même identité)', () => {
+    const draft = empty();
+    expect(withPage(draft, 'page-9', (page) => ({ ...page, selected: null }))).toBe(draft);
   });
 
-  test('le FOND et le CALQUE sont deux places distinctes — poser l’un ne touche pas l’autre', () => {
-    const both = withVisual(withVisual(empty(), 'visual', visualAsset()), 'overlay', { ...visualAsset(), previewUrl: 'blob:ov' });
-    expect(both.background?.previewUrl).toBe('blob:bg');
-    expect(both.overlay?.previewUrl).toBe('blob:ov');
-  });
-
-  test('withoutVisual retire sans muter le brouillon reçu, et lâche la sélection du calque', () => {
-    const withAsset = withSelected(withVisual(empty(), 'overlay', visualAsset()), 'overlay');
-    const without = withoutVisual(withAsset, 'overlay');
-    expect(withAsset.overlay).not.toBeNull();
-    expect(without.overlay).toBeNull();
-    expect(without.selected).toBeNull();
+  test('seule la page ciblée change ; les AUTRES gardent leur IDENTITÉ (Zero Unnecessary Re-render)', () => {
+    const draft = withAddedPage(typed('Une'), 'fr');
+    const firstPageBefore = draft.pages[0]!;
+    const changed = withPage(draft, draft.pages[1]!.id, (page) => ({ ...page, selected: null }));
+    expect(changed.pages[0]).toBe(firstPageBefore);
+    expect(changed.pages[1]).not.toBe(draft.pages[1]);
   });
 });
 
-describe('withVisualUpload / withSoundUpload — met à jour le SEUL champ upload, sans toucher au fichier', () => {
-  test('idempotent sans asset (aucun effet, jamais une exception)', () => {
-    expect(withVisualUpload(empty(), 'visual', { phase: 'ready', postMediaId: 'pm-1', fileUrl: 'k' }).background).toBeNull();
+describe('withAddedPage — ajoute une page VIDE et la rend COURANTE (#7684)', () => {
+  test('la première page ajoutée devient `page-2`, courante, et vide', () => {
+    const draft = withAddedPage(typed('Une'), 'fr');
+    expect(draft.pages).toHaveLength(2);
+    expect(draft.pages[1]!.id).toBe('page-2');
+    expect(draft.currentPage).toBe('page-2');
+    expect(isStudioDraftEmpty(withoutPage(draft, 'page-1'))).toBe(true);
   });
 
-  test('fait passer uploading -> ready sans changer le fichier ni l’URL locale', () => {
-    const draft = withVisual(empty(), 'visual', visualAsset());
-    const ready = withVisualUpload(draft, 'visual', { phase: 'ready', postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg' });
-    expect(ready.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg' });
-    expect(ready.background?.previewUrl).toBe('blob:bg');
-    expect(ready.background?.file).toBe(draft.background!.file);
+  test('l’identifiant de PAGE se calcule contre l’EXISTANT — retirer puis rajouter ne fait pas renaître `page-2`', () => {
+    const draft = withoutPage(withAddedPage(withAddedPage(typed('Une'), 'fr'), 'fr'), 'page-2');
+    expect(draft.pages.map((p) => p.id)).toEqual(['page-1', 'page-3']);
+    expect(withAddedPage(draft, 'fr').pages.map((p) => p.id)).toEqual(['page-1', 'page-3', 'page-4']);
   });
 
-  test('son : idem', () => {
-    const failed = withSoundUpload(withSound(empty(), soundAsset()), { phase: 'failed', reasonKey: 'story.studio.failure.network' });
-    expect(failed.sound?.upload).toEqual({ phase: 'failed', reasonKey: 'story.studio.failure.network' });
-  });
-});
-
-describe('LE SON se place en FOND ou POSÉ (#6943)', () => {
-  test('il naît en fond — le cas nominal d’une story', () => {
-    expect(withSound(empty(), soundAsset()).sound?.plane).toBe('background');
-  });
-  test('la bascule change SON plan, et rien d’autre', () => {
-    const posed = withSoundPlane(withSound(empty(), soundAsset()), 'foreground');
-    expect(posed.sound?.plane).toBe('foreground');
-    expect(posed.sound?.previewUrl).toBe('blob:snd');
-  });
-  test('sans son, la bascule est inerte', () => expect(withSoundPlane(empty(), 'foreground').sound).toBeNull());
-});
-
-describe('LA LÉGENDE d’un média (#6944) — un TROISIÈME contenu, jamais Post.content', () => {
-  test('elle se pose sur la porte de SON média', () => {
-    const both = withVisual(withVisual(empty(), 'visual', visualAsset()), 'overlay', visualAsset());
-    const captioned = withVisualCaption(both, 'visual', 'Au lever du jour');
-    expect(captioned.background?.caption).toBe('Au lever du jour');
-    expect(captioned.overlay?.caption).toBe('');
+  test('son texte de graine reçoit un `id` UNIQUE contre TOUTES les pages (translationSetPath, storyEffectsV3.ts:635-643)', () => {
+    const withThird = withAddedPage(withAddedPage(typed('Une'), 'fr'), 'fr');
+    const allIds = withThird.pages.flatMap((page) => page.texts.map((layer) => layer.id));
+    expect(allIds).toEqual(['text-1', 'text-2', 'text-3']);
   });
 
-  test('elle est TAILLÉE à la saisie — l’auteur ne perd pas sa phrase au moment de publier', () => {
-    const captioned = withVisualCaption(withVisual(empty(), 'visual', visualAsset()), 'visual', 'x'.repeat(1500));
-    expect(captioned.background?.caption).toHaveLength(1000);
-  });
+  test('au PLAFOND, le brouillon reste INCHANGÉ (même identité) — jamais une onzième page silencieuse', () => {
+    // Le plafond de PAGES épingle CELUI de MAX_POST_MEDIA (@meeshy/shared) —
+    // les deux valent 10 pour des raisons distinctes (§ CLAUDE.md studio.ts),
+    // et ce témoin prouve qu'elles ne divergent pas en silence.
+    expect(STUDIO_PAGE_MAX).toBe(MAX_POST_MEDIA);
+    expect(STUDIO_PAGE_MAX).toBe(10);
 
-  test('sans média, aucune légende à poser', () => expect(withVisualCaption(empty(), 'visual', 'x').background).toBeNull());
-});
-
-describe('withVisualPose — le CALQUE se déplace, s’agrandit et tourne, DANS ses bornes', () => {
-  test('la pose est bornée à l’écriture, jamais au rendu', () => {
-    const posed = withVisualPose(withVisual(empty(), 'overlay', visualAsset()), 'overlay', { x: 3, y: -1, scale: 99, rotation: 540 });
-    expect(posed.overlay?.pose).toEqual({ x: 1, y: 0, scale: 4, rotation: 180 });
+    let draft = typed('Une');
+    for (let i = 1; i < STUDIO_PAGE_MAX; i += 1) draft = withAddedPage(draft, 'fr');
+    expect(draft.pages).toHaveLength(STUDIO_PAGE_MAX);
+    const atCeiling = withAddedPage(draft, 'fr');
+    expect(atCeiling).toBe(draft);
   });
 });
 
-describe('canPublishStudioDraft — loi 4, un contrôle existe s’il a un effet', () => {
+describe('withoutPage — inerte sous DEUX pages, reporte la page courante (#7684)', () => {
+  test('sous deux pages, retirer la seule page ne fait rien', () => {
+    const draft = empty();
+    expect(withoutPage(draft, draft.pages[0]!.id)).toBe(draft);
+  });
+
+  test('un `id` inconnu ne change rien', () => {
+    const draft = withAddedPage(typed('Une'), 'fr');
+    expect(withoutPage(draft, 'page-9')).toBe(draft);
+  });
+
+  test('retirer la page COURANTE fait courante la PRÉCÉDENTE', () => {
+    const threePages = withAddedPage(withAddedPage(typed('Une'), 'fr'), 'fr');
+    expect(threePages.currentPage).toBe('page-3');
+    const removed = withoutPage(threePages, 'page-3');
+    expect(removed.pages.map((p) => p.id)).toEqual(['page-1', 'page-2']);
+    expect(removed.currentPage).toBe('page-2');
+  });
+
+  test('retirer la PREMIÈRE page pendant qu’elle est courante fait courante la PREMIÈRE restante', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    const backToFirst = withCurrentPage(twoPages, 'page-1');
+    const removed = withoutPage(backToFirst, 'page-1');
+    expect(removed.pages.map((p) => p.id)).toEqual(['page-2']);
+    expect(removed.currentPage).toBe('page-2');
+  });
+
+  test('retirer une AUTRE page que la courante ne change JAMAIS la courante', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    const backToFirst = withCurrentPage(twoPages, 'page-1');
+    const threePages = withAddedPage(backToFirst, 'fr');
+    const onFirst = withCurrentPage(threePages, 'page-1');
+    const removed = withoutPage(onFirst, 'page-2');
+    expect(removed.currentPage).toBe('page-1');
+  });
+});
+
+describe('withCurrentPage — un `id` inconnu laisse le brouillon inchangé', () => {
+  test('bascule vers une page connue', () => {
+    const draft = withAddedPage(typed('Une'), 'fr');
+    expect(withCurrentPage(draft, 'page-1').currentPage).toBe('page-1');
+  });
+  test('un `id` inconnu ⇒ inchangé', () => {
+    const draft = withAddedPage(typed('Une'), 'fr');
+    expect(withCurrentPage(draft, 'page-9')).toBe(draft);
+  });
+});
+
+describe('isStudioDraftEmpty / canPublishStudioDraft — sur TOUTES les pages, pas seulement la courante', () => {
   test('vide ⇒ inerte', () => expect(canPublishStudioDraft(empty())).toBe(false));
-
   test('texte seul ⇒ publiable', () => expect(canPublishStudioDraft(typed('Bonjour'))).toBe(true));
 
-  test('fond en ÉCHEC ⇒ inerte tant que non résolu', () => {
-    const draft = withVisualUpload(withVisual(empty(), 'visual', visualAsset()), 'visual', {
+  test('une SECONDE page vide ne rend pas le brouillon vide si la première porte du texte', () => {
+    expect(isStudioDraftEmpty(withAddedPage(typed('Bonjour'), 'fr'))).toBe(false);
+  });
+
+  test('un fond en ÉCHEC sur une page NON COURANTE inhibe quand même la publication (la garde couvre TOUTES les pages)', () => {
+    const twoPages = withAddedPage(typed('Bonjour'), 'fr');
+    const onFirst = withCurrentPage(twoPages, 'page-1');
+    const withFailure = withVisualUpload(withVisual(onFirst, 'visual', visualAsset()), 'visual', {
       phase: 'failed',
       reasonKey: 'story.studio.failure.network',
     });
-    expect(canPublishStudioDraft(draft)).toBe(false);
+    const backToSecond = withCurrentPage(withFailure, 'page-2');
+    expect(canPublishStudioDraft(backToSecond)).toBe(false);
   });
 
-  test('CALQUE en échec ⇒ inerte aussi — la garde couvre les TROIS portes', () => {
-    const draft = withVisualUpload(withVisual(empty(), 'overlay', visualAsset()), 'overlay', {
-      phase: 'failed',
-      reasonKey: 'story.studio.failure.tooLarge',
-    });
-    expect(canPublishStudioDraft(draft)).toBe(false);
-  });
-
-  test('fond EN VOL ⇒ publiable (publier() attend l’accusé, ne bloque pas le geste)', () => {
-    const draft = withVisual(empty(), 'visual', visualAsset());
-    expect(draft.background?.upload.phase).toBe('uploading');
-    expect(canPublishStudioDraft(draft)).toBe(true);
-  });
-
-  test('son PRÊT + texte ⇒ publiable', () => {
+  test('un son PRÊT sur la page courante ⇒ publiable', () => {
     const draft = withSoundUpload(withSound(typed('x'), soundAsset()), { phase: 'ready', postMediaId: 'pm-2', fileUrl: 'k' });
     expect(canPublishStudioDraft(draft)).toBe(true);
   });
 });
 
-describe('readyAssetOf', () => {
-  test('phase ready ⇒ la référence', () =>
-    expect(readyAssetOf({ phase: 'ready', postMediaId: 'pm-1', fileUrl: 'k' })).toEqual({ postMediaId: 'pm-1', fileUrl: 'k' }));
-  test('phase ready avec thumbHash (accusé TUS, §0 défaut 7) ⇒ recopié', () =>
-    expect(readyAssetOf({ phase: 'ready', postMediaId: 'pm-1', fileUrl: 'k', thumbHash: 'abc' })).toEqual({
-      postMediaId: 'pm-1',
-      fileUrl: 'k',
-      thumbHash: 'abc',
-    }));
-  test('uploading/failed ⇒ null', () => {
-    expect(readyAssetOf({ phase: 'uploading', progress: 0.5 })).toBeNull();
-    expect(readyAssetOf({ phase: 'failed', reasonKey: 'story.studio.failure.network' })).toBeNull();
-  });
-});
-
-describe('withVisualAspectRatio — la mesure LOCALE (§0, défaut 7)', () => {
-  test('pose le rapport sur le média COURANT de cette porte', () => {
-    const measured = withVisualAspectRatio(withVisual(empty(), 'visual', visualAsset()), 'visual', 'blob:bg', 0.5625);
-    expect(measured.background?.aspectRatio).toBe(0.5625);
+describe('studioMediaCount / studioPlaceRefusal — le plafond du DOCUMENT ENTIER (#7684)', () => {
+  test('un MIME hors de la porte est TOUJOURS refusé, quel que soit le compte', () => {
+    expect(studioPlaceRefusal(empty(), 'sound', 'image/png')).toBe('door');
   });
 
-  test('un média déjà REMPLACÉ (autre `previewUrl`) le temps de la mesure n’hérite PAS le rapport de l’ancien fichier', () => {
-    const replaced = withVisual(withVisual(empty(), 'visual', visualAsset()), 'visual', { ...visualAsset(), previewUrl: 'blob:bg2' });
-    const stale = withVisualAspectRatio(replaced, 'visual', 'blob:bg', 0.5625);
-    expect(stale).toBe(replaced);
-    expect(stale.background?.aspectRatio).toBeUndefined();
-  });
-
-  test('un média RETIRÉ le temps de la mesure ne ressuscite pas', () => {
-    const removed = withoutVisual(withVisual(empty(), 'visual', visualAsset()), 'visual');
-    expect(withVisualAspectRatio(removed, 'visual', 'blob:bg', 0.5625)).toBe(removed);
-  });
-});
-
-describe('withoutSound — miroir de withoutVisual', () => {
-  test('retire sans muter', () => {
-    const withAsset = withSound(empty(), soundAsset());
-    const without = withoutSound(withAsset);
-    expect(withAsset.sound).not.toBeNull();
-    expect(without.sound).toBeNull();
-  });
-});
-
-describe('immuabilité — chaque transition rend une valeur NEUVE', () => {
-  test('withText ne mute pas le brouillon reçu', () => {
-    const before = empty();
-    const after = withText(before, seedId(before), 'x');
-    expect(before.texts[0]!.text).toBe('');
-    expect(after.texts[0]!.text).toBe('x');
-    expect(after).not.toBe(before);
-  });
-});
-
-describe('studioDoorAccepts — le rôle vient de la PORTE, et un fichier hors de sa porte est REFUSÉ (§ 1.3)', () => {
-  test('les deux portes visuelles prennent image et vidéo, jamais un son', () => {
-    for (const door of ['visual', 'overlay'] as const) {
-      expect(studioDoorAccepts(door, 'image/jpeg')).toBe(true);
-      expect(studioDoorAccepts(door, 'video/mp4')).toBe(true);
-      expect(studioDoorAccepts(door, 'audio/mpeg')).toBe(false);
+  test('neuf médias posés ⇒ le dixième passe encore (`null`)', () => {
+    let draft = typed('Une');
+    for (let i = 0; i < 4; i += 1) {
+      draft = withVisual(draft, 'visual', visualAsset());
+      draft = withVisual(draft, 'overlay', visualAsset());
+      if (i < 1) draft = withSound(draft, soundAsset());
+      draft = withAddedPage(draft, 'fr');
     }
+    expect(studioMediaCount(draft)).toBe(9);
+    expect(studioPlaceRefusal(draft, 'visual', 'image/jpeg')).toBeNull();
   });
-  test('la porte sonore prend un son, jamais une image', () => {
-    expect(studioDoorAccepts('sound', 'audio/mp4')).toBe(true);
-    expect(studioDoorAccepts('sound', 'image/png')).toBe(false);
-  });
-  test('un MIME INCONNU du navigateur (chaîne vide) passe : la passerelle juge les OCTETS (tus-handler.ts:384-400)', () => {
-    expect(studioDoorAccepts('visual', '')).toBe(true);
-    expect(studioDoorAccepts('sound', '')).toBe(true);
+
+  test('dix médias déjà posés (prêts OU en vol) ⇒ `media-max`', () => {
+    let draft = typed('Une');
+    for (let i = 0; i < 4; i += 1) {
+      draft = withVisual(draft, 'visual', visualAsset());
+      draft = withVisual(draft, 'overlay', visualAsset());
+      if (i < 2) draft = withSound(draft, soundAsset());
+      draft = withAddedPage(draft, 'fr');
+    }
+    expect(studioMediaCount(draft)).toBe(10);
+    expect(studioPlaceRefusal(draft, 'visual', 'image/jpeg')).toBe('media-max');
   });
 });
 
-describe('studioFailureKey — la cause se DIT dans la langue de l’interface, avec le vocabulaire d’une story', () => {
-  const failure = (status: number, code?: string) => ({ ok: false as const, status, error: 'x', ...(code !== undefined ? { code } : {}) });
-  test('réseau, délai, annulation', () => {
-    expect(studioFailureKey(failure(0, 'NETWORK'), 'upload')).toBe('story.studio.failure.network');
-    expect(studioFailureKey(failure(0, 'TIMEOUT'), 'publish')).toBe('story.studio.failure.timeout');
-    expect(studioFailureKey(failure(0, 'ABORTED'), 'upload')).toBeNull();
-  });
-  test('les refus de la montée ont leurs causes propres (413, 400, invité)', () => {
-    expect(studioFailureKey(failure(413), 'upload')).toBe('story.studio.failure.tooLarge');
-    expect(studioFailureKey(failure(400), 'upload')).toBe('story.studio.failure.fileRefused');
-    expect(studioFailureKey(failure(403, 'POST_MEDIA_REQUIRES_ACCOUNT'), 'upload')).toBe('story.studio.failure.account');
-  });
-  test('la publication : session, cadence, refus, panne serveur, garde client', () => {
-    expect(studioFailureKey(failure(401), 'publish')).toBe('story.studio.failure.session');
-    expect(studioFailureKey(failure(429), 'publish')).toBe('story.studio.failure.rateLimited');
-    expect(studioFailureKey(failure(400), 'publish')).toBe('story.studio.failure.refused');
-    expect(studioFailureKey(failure(503), 'publish')).toBe('story.studio.failure.unavailable');
-    expect(studioFailureKey(failure(0, 'MEDIA_NOT_CLAIMED'), 'publish')).toBe('story.studio.failure.refused');
-  });
-});
-
-describe('studioSnapshotOf / studioDraftFromSnapshot — ce qui survit à un remontage', () => {
-  test('les textes AVEC leur pose et les médias PRÊTS se persistent ; relus, ils sont PRÊTS sans aucun fichier local', () => {
-    const two = withTextLayer(withAddedText(typed('Salut'), 'en'), 'text-2', (layer) => ({
-      ...layer,
-      text: 'Hello',
-      effect: 'glow',
-      pose: { x: 0.25, y: 0.75, scale: 2, rotation: 30 },
-    }));
-    const draft = withSoundUpload(
-      withSound(
-        withVisualUpload(withVisual(two, 'visual', visualAsset()), 'visual', {
-          phase: 'ready',
-          postMediaId: 'pm-bg',
-          fileUrl: '2026/09/bg.jpg',
-        }),
-        soundAsset(),
-      ),
-      { phase: 'uploading', progress: 0.5 },
+describe('studioSnapshotOf / studioDraftFromSnapshot — les PAGES font l’aller-retour (#7684)', () => {
+  test('deux pages, chacune avec ses propres objets, et la page COURANTE', () => {
+    const onFirst = withCurrentPage(withAddedPage(typed('Une'), 'fr'), 'page-1');
+    const withMedia = withSound(withVisual(onFirst, 'visual', visualAsset()), soundAsset());
+    const backToSecond = withCurrentPage(
+      withVisualUpload(withSoundUpload(withMedia, { phase: 'ready', postMediaId: 'pm-snd', fileUrl: 's.m4a' }), 'visual', {
+        phase: 'ready',
+        postMediaId: 'pm-bg',
+        fileUrl: 'bg.jpg',
+      }),
+      'page-2',
     );
-    const snapshot = studioSnapshotOf(withVisualCaption(draft, 'visual', 'Au marché'), 'es');
-    expect(snapshot.language).toBe('es');
-    expect(snapshot.texts.map((l) => l.text)).toEqual(['Salut', 'Hello']);
-    expect(snapshot.background).toEqual({
-      postMediaId: 'pm-bg',
-      fileUrl: '2026/09/bg.jpg',
-      mediaType: 'image',
-      caption: 'Au marché',
-      pose: IDENTITY_POSE,
-    });
-    // Le son est EN VOL : il n'a pas d'identité serveur à conserver.
-    expect(snapshot.sound).toBeUndefined();
+    const snapshot = studioSnapshotOf(backToSecond, 'fr');
+    expect(snapshot.schema).toBe(2);
+    expect(snapshot.pages).toHaveLength(2);
+    expect(snapshot.currentPage).toBe('page-2');
+    expect(snapshot.pages[0]!.background?.postMediaId).toBe('pm-bg');
+    expect(snapshot.pages[0]!.sound?.postMediaId).toBe('pm-snd');
+    expect(snapshot.pages[1]!.background).toBeUndefined();
 
-    const restored = studioDraftFromSnapshot(snapshot, (fileUrl) => `https://cdn/${fileUrl}`, 'fr');
-    expect(restored.texts.map((l) => l.text)).toEqual(['Salut', 'Hello']);
-    expect(restored.texts[1]!.effect).toBe('glow');
-    expect(restored.texts[1]!.pose).toEqual({ x: 0.25, y: 0.75, scale: 2, rotation: 30 });
-    expect(restored.texts[1]!.language).toBe('en');
-    expect(restored.background?.caption).toBe('Au marché');
-    expect(restored.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg' });
-    expect(restored.background?.previewUrl).toBe('https://cdn/2026/09/bg.jpg');
-    expect(restored.background?.file).toBeUndefined();
-    expect(restored.sound).toBeNull();
+    const restored = studioDraftFromSnapshot(snapshot, (u) => u, 'fr');
+    expect(restored.pages).toHaveLength(2);
+    expect(restored.currentPage).toBe('page-2');
+    expect(restored.pages[0]!.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-bg', fileUrl: 'bg.jpg' });
     expect(canPublishStudioDraft(restored)).toBe(true);
   });
 
-  test('un CALQUE et un son POSÉ survivent avec leur plan et leur pose', () => {
-    const draft = withVisualPose(
-      withVisualUpload(withVisual(empty(), 'overlay', visualAsset()), 'overlay', { phase: 'ready', postMediaId: 'pm-ov', fileUrl: 'o.png' }),
-      'overlay',
-      { x: 0.2, y: 0.3, scale: 1.5, rotation: -20 },
+  test('un `currentPage` ORPHELIN (page retirée, donnée corrompue) retombe sur la PREMIÈRE page', () => {
+    const restored = studioDraftFromSnapshot(
+      { schema: 2, pages: [{ id: 'page-1', texts: [{ id: 'text-1', text: 'a' }] }], currentPage: 'page-9' },
+      (u) => u,
+      'fr',
     );
-    const withPosedSound = withSoundPlane(
-      withSoundUpload(withSound(draft, soundAsset()), { phase: 'ready', postMediaId: 'pm-snd', fileUrl: 's.m4a' }),
-      'foreground',
-    );
-    const restored = studioDraftFromSnapshot(studioSnapshotOf(withPosedSound, 'fr'), (u) => u, 'fr');
-    expect(restored.overlay?.pose).toEqual({ x: 0.2, y: 0.3, scale: 1.5, rotation: -20 });
-    expect(restored.sound?.plane).toBe('foreground');
+    expect(restored.currentPage).toBe('page-1');
   });
 
   test('aucun brouillon ⇒ un plateau vide, dans la langue demandée', () => {
     const restored = studioDraftFromSnapshot(null, (u) => u, 'pt');
     expect(isStudioDraftEmpty(restored)).toBe(true);
-    expect(restored.texts[0]!.language).toBe('pt');
+    expect(restored.pages).toHaveLength(1);
+    expect(currentStudioPage(restored).texts[0]!.language).toBe('pt');
   });
 
-  test('un objet texte ABÎMÉ est NORMALISÉ, jamais rendu tel quel — un style que rien ne peint serait pire', () => {
-    const restored = studioDraftFromSnapshot(
-      { texts: [{ id: 'text-1', text: 'a', style: 'zapfino', effect: 'licorne', color: 'nope', align: 'justifié', pose: { scale: -3 } }] },
-      (u) => u,
-      'fr',
-    );
-    const layer = restored.texts[0]!;
-    expect(layer.style).toBe('bold');
-    expect(layer.effect).toBe('none');
-    expect(layer.color).toBe('FFFFFF');
-    expect(layer.align).toBe('center');
-    expect(layer.pose).toEqual(IDENTITY_POSE);
-  });
-
-  /** DÉFAUT TROUVÉ EN RELECTURE : le rail offre les fonds de pastille dans la
-   * palette de TEXTE (huit couleurs), et la relecture les validait contre les
-   * presets iOS seuls — six des huit étaient effacés au rechargement, en
-   * silence. Une liste OFFERTE et une liste ACCEPTÉE ont un seul site
-   * (`STUDIO_TEXT_BACKGROUND_VALUES`). */
-  test('une pastille de fond prise dans la palette de TEXTE survit au remontage', () => {
-    const draft = withTextLayer(typed('Bonjour'), 'text-1', (layer) => ({ ...layer, background: 'FF2E63' }));
-    const restored = studioDraftFromSnapshot(studioSnapshotOf(draft, 'fr'), (u) => u, 'fr');
-    expect(restored.texts[0]!.background).toBe('FF2E63');
-  });
-
-  test('un preset iOS de fond survit aussi — les deux listes valent', () => {
-    const draft = withTextLayer(typed('Bonjour'), 'text-1', (layer) => ({ ...layer, background: '6366F1' }));
-    expect(studioDraftFromSnapshot(studioSnapshotOf(draft, 'fr'), (u) => u, 'fr').texts[0]!.background).toBe('6366F1');
-  });
-
-  test('une valeur de fond INCONNUE est refusée, jamais peinte au hasard', () => {
-    const restored = studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: 'a', background: 'licorne' }] }, (u) => u, 'fr');
-    expect(restored.texts[0]!.background).toBeNull();
-  });
-
-  test('aspectRatio (mesure locale) et thumbHash (accusé TUS) SURVIVENT au remontage (§0, défaut 7)', () => {
-    const withAspect = withVisualAspectRatio(withVisual(empty(), 'visual', visualAsset()), 'visual', 'blob:bg', 0.5625);
-    const draft = withVisualUpload(withAspect, 'visual', { phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });
-
-    const snapshot = studioSnapshotOf(draft, 'fr');
-    expect(snapshot.background).toEqual({
-      postMediaId: 'pm-bg',
-      fileUrl: '2026/09/bg.jpg',
-      thumbHash: 'abc123',
-      mediaType: 'image',
-      aspectRatio: 0.5625,
-      pose: IDENTITY_POSE,
-    });
-
-    const restored = studioDraftFromSnapshot(snapshot, (fileUrl) => `https://cdn/${fileUrl}`, 'fr');
-    expect(restored.background?.aspectRatio).toBe(0.5625);
-    expect(restored.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });
+  test('un média EN VOL n’est pas persisté — seuls les médias PRÊTS survivent', () => {
+    const draft = withVisual(typed('Une'), 'visual', visualAsset());
+    expect(studioSnapshotOf(draft, 'fr').pages[0]!.background).toBeUndefined();
   });
 });
 
@@ -454,8 +317,7 @@ describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopi
     const draft = typed('Bonjour');
     const next = withAudience(draft, 'COMMUNITY');
     expect(next.visibility).toBe('COMMUNITY');
-    expect(next.texts).toBe(draft.texts);
-    expect(next.selected).toBe(draft.selected);
+    expect(next.pages).toBe(draft.pages);
   });
 
   test('choisie ⇒ la clé `visibility` PART du snapshot ; sans choix ⇒ elle est ABSENTE', () => {
@@ -466,13 +328,17 @@ describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopi
   });
 
   test('relue depuis un snapshot, sinon null', () => {
-    expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: '' }], visibility: 'PRIVATE' }, (u) => u, 'fr').visibility).toBe('PRIVATE');
-    expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: '' }] }, (u) => u, 'fr').visibility).toBeNull();
+    expect(
+      studioDraftFromSnapshot({ schema: 2, pages: [{ id: 'page-1', texts: [{ id: 'text-1', text: '' }] }], visibility: 'PRIVATE' }, (u) => u, 'fr').visibility,
+    ).toBe('PRIVATE');
+    expect(studioDraftFromSnapshot({ schema: 2, pages: [{ id: 'page-1', texts: [{ id: 'text-1', text: '' }] }] }, (u) => u, 'fr').visibility).toBeNull();
   });
 
   test('un snapshot NOMINATIF (ONLY/EXCEPT, sans leur liste) se relit SANS audience — jamais un état que la passerelle refuserait', () => {
     for (const visibility of ['ONLY', 'EXCEPT'] as const) {
-      expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: 'x' }], visibility }, (u) => u, 'fr').visibility).toBeNull();
+      expect(
+        studioDraftFromSnapshot({ schema: 2, pages: [{ id: 'page-1', texts: [{ id: 'text-1', text: 'x' }] }], visibility }, (u) => u, 'fr').visibility,
+      ).toBeNull();
     }
   });
 

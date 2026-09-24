@@ -8,7 +8,7 @@ import {
   studioReelMedia,
   type PublicationKind,
 } from './publication-kind';
-import { emptyStudioDraft, withSound, withText, withVisual, type StudioDraft } from './studio';
+import { emptyStudioDraft, withAddedPage, withSound, withText, withVisual, type StudioDraft } from './studio';
 import { IDENTITY_POSE } from './studio-pose';
 
 const ready = { phase: 'ready', postMediaId: 'pm-1', fileUrl: 'f.jpg' } as const;
@@ -78,5 +78,14 @@ describe('studioReelMedia / studioPublishRefusal — le réel se REFUSE, il ne s
     const draft = withSound(textOnly(), { previewUrl: 'blob:son', upload: ready, plane: 'background', durationMs: 5000 });
     expect(studioPublishRefusal(draft, 'REEL')).toBeNull();
     expect(studioReelMedia(draft)).toEqual([{ mimeType: 'audio/*', duration: 5000 }]);
+  });
+
+  test('DEUX PAGES d’UNE image chacune qualifient le réel (#7684) — la règle APLATIT tout le document', () => {
+    const twoPages = withAddedPage(withBackground(textOnly(), 'image'), 'fr');
+    expect(studioReelMedia(twoPages)).toHaveLength(1);
+    expect(studioPublishRefusal(twoPages, 'REEL')).toBe('reel-without-qualifying-media');
+    const secondImage = withBackground(twoPages, 'image');
+    expect(studioReelMedia(secondImage)).toHaveLength(2);
+    expect(studioPublishRefusal(secondImage, 'REEL')).toBeNull();
   });
 });

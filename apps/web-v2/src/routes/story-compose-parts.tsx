@@ -33,6 +33,19 @@ export function LayerMark({ size = 20 }: { readonly size?: number }) {
   );
 }
 
+/** Créer une PAGE (#7684) — cadre 9:16 (la forme d'une scène) + un `+` : le
+ * geste du rail droit, distinct d'une porte (« ajouter des images en fond OU
+ * en front » pose un OBJET sur la page courante ; celui-ci ajoute une PAGE à
+ * la publication, `ComposerTrailingRail.swift:40-45`). */
+export function PageMark({ size = 20 }: { readonly size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+      <path d="M9 12h6M12 9v6" />
+    </svg>
+  );
+}
+
 export function SlidersMark({ size = 20 }: { readonly size?: number }) {
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">

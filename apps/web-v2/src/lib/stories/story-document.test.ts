@@ -10,6 +10,8 @@ import { resolveSceneText } from '@/lib/canvas/text';
 import {
   buildPreviewCanvasDocument,
   buildStoryCanvasEffects,
+  buildStoryCanvasEffectsPages,
+  composeStoryCanvasPages,
   referencedStoryMediaIds,
   studioMediaIds,
   studioMediaKindOf,
@@ -256,18 +258,30 @@ describe('referencedStoryMediaIds / unclaimedStoryMediaIds — la contre-épreuv
 });
 
 describe('studioMediaIds — le fond D’ABORD, puis ce qui se pose (StoryViewModel+PublicationUpload.swift:336-338)', () => {
-  test('les trois présents', () => {
-    expect(studioMediaIds({ background: BACKGROUND, overlay: OVERLAY, sound: SOUND })).toEqual([
+  test('les trois présents, sur UNE page', () => {
+    expect(studioMediaIds([{ background: BACKGROUND, overlay: OVERLAY, sound: SOUND }])).toEqual([
       BACKGROUND.postMediaId,
       OVERLAY.postMediaId,
       SOUND.postMediaId,
     ]);
   });
   test('seulement le son', () => {
-    expect(studioMediaIds({ sound: SOUND })).toEqual([SOUND.postMediaId]);
+    expect(studioMediaIds([{ sound: SOUND }])).toEqual([SOUND.postMediaId]);
   });
-  test('aucun', () => {
-    expect(studioMediaIds({})).toEqual([]);
+  test('aucune page', () => {
+    expect(studioMediaIds([])).toEqual([]);
+  });
+  test('une page vide', () => {
+    expect(studioMediaIds([{}])).toEqual([]);
+  });
+  test('PLUSIEURS PAGES (#7684) — PAGE PAR PAGE, fond puis calque puis son sur CHACUNE', () => {
+    const OTHER_BACKGROUND = { postMediaId: 'pm-bg-2', fileUrl: 'bg2.jpg' };
+    expect(studioMediaIds([{ background: BACKGROUND, sound: SOUND }, { background: OTHER_BACKGROUND, overlay: OVERLAY }])).toEqual([
+      BACKGROUND.postMediaId,
+      SOUND.postMediaId,
+      OTHER_BACKGROUND.postMediaId,
+      OVERLAY.postMediaId,
+    ]);
   });
 });
 
@@ -409,7 +423,7 @@ describe('CHAQUE forme que le composeur peut produire passe CanvasV3Schema — l
       expect(
         unclaimedStoryMediaIds(
           effects!,
-          studioMediaIds({ background: input.background?.source, overlay: input.overlay?.source, sound: input.sound?.source }),
+          studioMediaIds([{ background: input.background?.source, overlay: input.overlay?.source, sound: input.sound?.source }]),
         ),
       ).toEqual([]);
     });
@@ -418,5 +432,92 @@ describe('CHAQUE forme que le composeur peut produire passe CanvasV3Schema — l
   test('fond, calque, son et deux textes ⇒ exactement CINQ objets', () => {
     const effects = buildStoryCanvasEffects(forms['fond, calque, son et deux textes']!)!;
     expect(effects.scenes![0]!.objects).toHaveLength(5);
+  });
+});
+
+describe('composeStoryCanvasPages / buildStoryCanvasEffectsPages — plusieurs SCÈNES et la disposition (#7684)', () => {
+  const address = (ref: { readonly postMediaId: string; readonly fileUrl: string }) => ({ postMediaId: ref.postMediaId, mediaURL: ref.fileUrl });
+
+  test('deux pages ⇒ scenes.length === 2, scenes[i].id === page.id, chaque scène avec SES objets', () => {
+    const effects = composeStoryCanvasPages(
+      [
+        { id: 'page-1', texts: [], background: { address: address(BACKGROUND), mediaType: 'image' } },
+        { id: 'page-2', texts: [txt('Deux', 'fr', { id: 'text-2' })] },
+      ],
+      null,
+    )!;
+    expect(effects.scenes).toHaveLength(2);
+    expect(effects.scenes!.map((s) => s.id)).toEqual(['page-1', 'page-2']);
+    expect(effects.scenes![0]!.objects[0]!.id).toBe('background');
+    expect(effects.scenes![1]!.objects.some((o) => o.kind === 'text')).toBe(true);
+  });
+
+  test('les identifiants `background`/`overlay`/`sound` sont CONSERVÉS dans CHAQUE scène', () => {
+    const effects = composeStoryCanvasPages(
+      [
+        { id: 'page-1', texts: [], background: { address: address(BACKGROUND), mediaType: 'image' }, sound: { address: address(SOUND), plane: 'background' } },
+        { id: 'page-2', texts: [], overlay: { address: address(OVERLAY), mediaType: 'image', pose: IDENTITY_POSE } },
+      ],
+      null,
+    )!;
+    expect(effects.scenes![0]!.objects.map((o) => o.id).includes('background')).toBe(true);
+    expect(effects.scenes![0]!.objects.map((o) => o.id).includes('sound')).toBe(true);
+    expect(effects.scenes![1]!.objects.map((o) => o.id).includes('overlay')).toBe(true);
+  });
+
+  test('une page SANS matière ne produit AUCUNE scène ; toutes vides ⇒ `null`', () => {
+    const effects = composeStoryCanvasPages(
+      [
+        { id: 'page-1', texts: [txt('Une')] },
+        { id: 'page-2', texts: [txt('   ')] },
+      ],
+      null,
+    )!;
+    expect(effects.scenes).toHaveLength(1);
+    expect(effects.scenes![0]!.id).toBe('page-1');
+    expect(composeStoryCanvasPages([{ id: 'page-1', texts: [txt('   ')] }], null)).toBeNull();
+  });
+
+  test('`layout` : posé quand scenes.length >= 2 ET layout choisi ; ABSENT (clé non présente) sur une scène OU sans choix', () => {
+    const twoPages = [{ id: 'page-1', texts: [txt('Une')] }, { id: 'page-2', texts: [txt('Deux', 'fr', { id: 'text-2' })] }];
+    const withLayout = composeStoryCanvasPages(twoPages, 'hero')!;
+    expect(withLayout.layout).toBe('hero');
+
+    const withoutChoice = composeStoryCanvasPages(twoPages, null)!;
+    expect('layout' in withoutChoice).toBe(false);
+
+    const onePage = composeStoryCanvasPages([twoPages[0]!], 'hero')!;
+    expect('layout' in onePage).toBe(false);
+  });
+
+  test('le document à deux scènes + layout: "hero" passe CanvasV3Schema (le contrat exact de core.ts:112-121)', () => {
+    const effects = composeStoryCanvasPages(
+      [
+        { id: 'page-1', texts: [], background: { address: address(BACKGROUND), mediaType: 'image' } },
+        { id: 'page-2', texts: [], background: { address: address(OVERLAY), mediaType: 'image' } },
+      ],
+      'hero',
+    );
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+  });
+
+  test('buildStoryCanvasEffectsPages — chaque média porte son identité SERVEUR, ordonné par page', () => {
+    const effects = buildStoryCanvasEffectsPages(
+      [
+        { id: 'page-1', texts: [], background: { source: BACKGROUND, mediaType: 'image' } },
+        { id: 'page-2', texts: [], background: { source: OVERLAY, mediaType: 'image' } },
+      ],
+      'wave',
+    )!;
+    expect(referencedStoryMediaIds(effects)).toEqual([BACKGROUND.postMediaId, OVERLAY.postMediaId]);
+    expect(effects.layout).toBe('wave');
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+  });
+
+  test('UNE SEULE page produit exactement le document que composeStoryCanvas aurait produit', () => {
+    const single = buildStoryCanvasEffects({ texts: [txt('Bonjour')], background: { source: BACKGROUND, mediaType: 'image' } })!;
+    const paged = buildStoryCanvasEffectsPages([{ id: 'scene-0', texts: [txt('Bonjour')], background: { source: BACKGROUND, mediaType: 'image' } }], null)!;
+    expect(paged.scenes![0]!.objects).toEqual(single.scenes![0]!.objects);
+    expect('layout' in paged).toBe(false);
   });
 });

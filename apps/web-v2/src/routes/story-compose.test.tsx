@@ -6,7 +6,7 @@ import { createHttpTransport } from '@/lib/api/http';
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { createStudioDraftStore, type StudioDraftSnapshot, type StudioPageSnapshot, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { buttonNamed } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -45,6 +45,8 @@ beforeAll(async () => {
     import('@/lib/api/post-media-upload'),
     import('./story-compose-audience-sheet'),
     import('./story-compose-editor'),
+    import('./story-compose-pages'),
+    import('@/components/publish-layout-menu'),
   ]);
 });
 
@@ -195,6 +197,34 @@ function harness(options: {
 
 const image = () => new File([new Uint8Array([1, 2, 3])], 'fond.jpg', { type: 'image/jpeg' });
 
+/** UN brouillon SEMÉ à UNE page (schéma 2, #7684) — la forme que les témoins
+ * de ce fichier écrivent DIRECTEMENT dans le magasin, sans passer par
+ * l'écran. `visibility` reste au niveau du BROUILLON (pas de la page) ; tout
+ * le reste (`texts`, `background`, `overlay`, `sound`) va sur `page-1`. */
+function onePageSnapshot(fields: {
+  readonly texts: StudioPageSnapshot['texts'];
+  readonly visibility?: StudioDraftSnapshot['visibility'];
+  readonly background?: StudioPageSnapshot['background'];
+  readonly overlay?: StudioPageSnapshot['overlay'];
+  readonly sound?: StudioPageSnapshot['sound'];
+}): StudioDraftSnapshot {
+  const { texts, visibility, background, overlay, sound } = fields;
+  return {
+    schema: 2,
+    pages: [
+      {
+        id: 'page-1',
+        texts,
+        ...(background !== undefined ? { background } : {}),
+        ...(overlay !== undefined ? { overlay } : {}),
+        ...(sound !== undefined ? { sound } : {}),
+      },
+    ],
+    currentPage: 'page-1',
+    ...(visibility !== undefined ? { visibility } : {}),
+  };
+}
+
 describe('StoryComposeScreen — le bouton Publier est INERTE sans contenu (loi 4)', () => {
   test('brouillon vide : désactivé, et un clic n’envoie rien', async () => {
     const bench = harness({});
@@ -333,10 +363,10 @@ const SON_EMPRUNTE = '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
 
 function draftsAvecSonEmprunte(): StudioDraftStore {
   const drafts = createStudioDraftStore(null);
-  drafts.set(VIEWER_ID, {
-    texts: [{ id: 't1', text: 'Sur une piste empruntée' }],
-    sound: { postMediaId: 'pm-lib', fileUrl: SON_EMPRUNTE },
-  });
+  drafts.set(
+    VIEWER_ID,
+    onePageSnapshot({ texts: [{ id: 't1', text: 'Sur une piste empruntée' }], sound: { postMediaId: 'pm-lib', fileUrl: SON_EMPRUNTE } }),
+  );
   return drafts;
 }
 
@@ -454,7 +484,7 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     // moteur, y compris quand il est la SEULE forme posée).
     expect(el.querySelector('[data-scene-player] img')).toBeNull();
     expect(el.querySelector('[data-scene-text]')?.textContent).toBe('Sans fond finalement');
-    expect(drafts.get(VIEWER_ID)?.background).toBeUndefined();
+    expect(drafts.get(VIEWER_ID)?.pages[0]?.background).toBeUndefined();
 
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
@@ -664,7 +694,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
 
   test('le brouillon (rang 1) prime sur la mémoire (rang 2)', () => {
     const drafts = createStudioDraftStore(null);
-    drafts.set(VIEWER_ID, { texts: [{ id: 't1', text: 'x' }], visibility: 'PRIVATE' });
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [{ id: 't1', text: 'x' }], visibility: 'PRIVATE' }));
     drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
     const el = mount(harness({ drafts }).deps);
     expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
@@ -672,7 +702,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
 
   test('un brouillon NOMINATIF (version antérieure, donnée altérée) ne part jamais : la mémoire prend le relais, le corps ne porte pas ONLY', async () => {
     const drafts = createStudioDraftStore(null);
-    drafts.set(VIEWER_ID, { texts: [{ id: 't1', text: 'Brouillon ancien' }], visibility: 'ONLY' });
+    drafts.set(VIEWER_ID, onePageSnapshot({ texts: [{ id: 't1', text: 'Brouillon ancien' }], visibility: 'ONLY' }));
     drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
     const bench = harness({ drafts });
     const el = mount(bench.deps);
@@ -843,5 +873,161 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     } finally {
       document.documentElement.lang = 'fr';
     }
+  });
+});
+
+describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT (#7684)', () => {
+  const pageTiles = (host: ParentNode) => host.querySelectorAll<HTMLButtonElement>('[data-story-studio-page-tile]');
+  const pageRail = (host: ParentNode) => host.querySelector('[data-story-studio-page-rail]');
+  const addPage = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-option="add-page"]');
+  const pageDelete = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-studio-page-delete]');
+  const layoutToggle = () => document.querySelector<HTMLButtonElement>('[data-publish-layout-toggle]');
+  const layoutChoice = (mode: string) => document.querySelector<HTMLButtonElement>(`[data-publish-layout-choice="${mode}"]`);
+  const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
+  const another = (name: string) => new File([new Uint8Array([9, 9, 9])], name, { type: 'image/jpeg' });
+
+  test('une SEULE page : aucun rail, aucun sous-menu de disposition (loi 4)', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Une seule page');
+    expect(pageRail(el)).toBeNull();
+    act(() => kindToggle(el)!.click());
+    expect(layoutToggle()).toBeNull();
+  });
+
+  test('poser une image PUIS créer une page ⇒ le rail affiche DEUX tuiles, la NOUVELLE page est COURANTE', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    selectFile(el, 'visual', image());
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+
+    const tiles = pageTiles(el);
+    expect(tiles).toHaveLength(2);
+    expect(tiles[1]?.getAttribute('aria-current')).toBe('true');
+    expect(tiles[0]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  test('taper sur une tuile change la SCÈNE COURANTE — le fond affiché est celui de la page choisie', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    selectFile(el, 'visual', image());
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    const firstSrc = el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src');
+    expect(firstSrc?.startsWith('blob:')).toBe(true);
+
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    selectFile(el, 'visual', another('deuxieme.jpg'));
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    const secondSrc = el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src');
+    expect(secondSrc).not.toBe(firstSrc);
+
+    act(() => pageTiles(el)[0]!.click());
+    await flush();
+    expect(el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src')).toBe(firstSrc);
+  });
+
+  test('la corbeille retire la page COURANTE ; sous DEUX pages, elle disparaît avec le rail', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Page une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    expect(pageDelete(el)).not.toBeNull();
+
+    act(() => pageDelete(el)!.click());
+    await flush(() => pageRail(el) === null);
+    expect(pageTiles(el)).toHaveLength(0);
+  });
+
+  test('au PLAFOND (dix pages), le geste « créer une page » disparaît — jamais grisé (loi 4)', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Page une');
+    for (let i = 1; i < 10; i += 1) {
+      act(() => addPage(el)!.click());
+      await flush(() => pageTiles(el).length === i + 1);
+    }
+    expect(pageTiles(el)).toHaveLength(10);
+    expect(addPage(el)).toBeNull();
+  });
+
+  test('le menu ▾ Publier déplie un sous-menu de disposition — POUR POST SEUL, à partir de DEUX pages', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    typeText(el, 'Page une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    typeText(el, 'Page deux');
+
+    act(() => kindToggle(el)!.click());
+    const toggle = layoutToggle();
+    expect(toggle).not.toBeNull();
+    act(() => toggle!.click());
+    await flush(() => layoutChoice('carousel') !== null);
+    for (const mode of ['carousel', 'reel', 'hero', 'wave', 'sine']) {
+      expect(layoutChoice(mode)).not.toBeNull();
+    }
+  });
+
+  test('choisir une disposition PUBLIE en POST avec `canvas.layout` — le corps porte le mode choisi', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'POST');
+    typeText(el, 'Page une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    typeText(el, 'Page deux');
+
+    act(() => kindToggle(el)!.click());
+    act(() => layoutToggle()!.click());
+    await flush(() => layoutChoice('hero') !== null);
+    act(() => layoutChoice('hero')!.click());
+    await flush(() => bench.posts.length > 0);
+
+    expect(bench.posts[0]?.type).toBe('POST');
+    const effects = bench.posts[0]?.storyEffects as { readonly scenes: readonly unknown[]; readonly layout?: string } | undefined;
+    expect(effects?.scenes).toHaveLength(2);
+    expect(effects?.layout).toBe('hero');
+  });
+
+  test('sans toucher au chevron de disposition, un post de plusieurs pages part SANS `layout` (le repli du modèle)', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'POST');
+    typeText(el, 'Page une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    typeText(el, 'Page deux');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    const effects = bench.posts[0]?.storyEffects as { readonly layout?: string } | undefined;
+    expect(effects && 'layout' in effects).toBe(false);
+  });
+
+  test('DEUX IMAGES, une par page, qualifient le RÉEL (#7684 — la règle serveur importée, jamais réécrite)', async () => {
+    const el = mount(harness({}).deps, 'REEL');
+    selectFile(el, 'visual', image());
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    expect(el.querySelector('[data-publish-refusal]')).not.toBeNull();
+
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    selectFile(el, 'visual', another('deuxieme.jpg'));
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+
+    expect(el.querySelector('[data-publish-refusal]')).toBeNull();
+    expect(publishButton(el)?.disabled).toBe(false);
+  });
+
+  test('le brouillon PERSISTÉ survit avec ses PAGES — rechargé, il retrouve son fond, ses deux pages et la page courante', async () => {
+    const drafts = createStudioDraftStore(null);
+    const el = mount(harness({ drafts }).deps, 'POST');
+    typeText(el, 'Page une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    typeText(el, 'Page deux');
+    await flush();
+
+    unmountAll();
+    const reopened = mount(harness({ drafts }).deps, 'POST');
+    await flush(() => pageTiles(reopened).length === 2);
+    expect(pageTiles(reopened)).toHaveLength(2);
   });
 });

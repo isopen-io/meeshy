@@ -1,6 +1,7 @@
 import { qualifiesAsReel, type ReelMediaLike } from '@meeshy/shared/utils/reel-composition';
 
-import type { StudioDraft, StudioVisualAsset } from './studio';
+import type { StudioDraft } from './studio';
+import type { StudioVisualAsset } from './studio-page';
 
 /**
  * **CE QUE LE STUDIO PUBLIE** (#7497, directive porteur 2026-09-22) — un seul
@@ -33,13 +34,17 @@ const visualMedia = (asset: StudioVisualAsset | null): ReelMediaLike[] =>
   asset === null ? [] : [{ mimeType: `${asset.mediaType}/*`, duration: asset.durationMs ?? null }];
 
 /** Les médias du plateau tels que la règle du réel les lit — la durée est
- * celle MESURÉE sur le fichier local, jamais supposée. */
+ * celle MESURÉE sur le fichier local, jamais supposée. **APLATIT TOUTES LES
+ * PAGES** (#7684, directive porteur : « le réel d'images (≥ 2 pages) qualifie
+ * par la règle serveur importée ») : deux pages d'UNE image chacune qualifient
+ * exactement comme deux images sur la MÊME page — `qualifiesAsReel` ne
+ * distingue pas leur provenance, seulement leur NATURE. */
 export function studioReelMedia(draft: StudioDraft): ReelMediaLike[] {
-  return [
-    ...visualMedia(draft.background),
-    ...visualMedia(draft.overlay),
-    ...(draft.sound === null ? [] : [{ mimeType: 'audio/*', duration: draft.sound.durationMs ?? null }]),
-  ];
+  return draft.pages.flatMap((page) => [
+    ...visualMedia(page.background),
+    ...visualMedia(page.overlay),
+    ...(page.sound === null ? [] : [{ mimeType: 'audio/*', duration: page.sound.durationMs ?? null }]),
+  ]);
 }
 
 /**

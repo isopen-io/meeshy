@@ -33,6 +33,15 @@
  *     « Publier comme » dit l'audience de chaque format sans recouvrir sa
  *     capsule ; le choix survit au rechargement ; et, PUBLIÉ puis le studio
  *     ROUVERT, le brouillon est purgé mais la mémoire du lecteur relue.
+ *  9. PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT (#7684) : `/posts/new`
+ *     n'affiche AUCUN rail à une seule page (loi 4) ; poser un fond puis
+ *     « créer une page » (`[data-story-option="add-page"]`) fait apparaître
+ *     DEUX tuiles (`[data-story-studio-page-tile]`) ≥ 44 px de haut et une
+ *     corbeille (`[data-story-studio-page-delete]`) ≥ 44×44 px ; le chevron
+ *     ▾ Publier déplie, pour Post, un sous-menu de disposition
+ *     (`[data-publish-layout-toggle]`) dont chaque ligne
+ *     (`[data-publish-layout-choice]`) est une cible franche, et choisir
+ *     « Une grande, les autres à côté » publie avec `canvas.layout: "hero"`.
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -420,6 +429,62 @@ async function runScheme(colorScheme) {
 
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
     await context.close();
+
+    /* ── 9. PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT (#7684) ────────── */
+    const pagesViewerId = 'b'.repeat(24);
+    const pagesContext = await browser.newContext({ colorScheme, locale: 'fr-FR', viewport, serviceWorkers: 'block' });
+    await pagesContext.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession(pagesViewerId));
+    const pagesPage = await pagesContext.newPage();
+    const pagesErrors = [];
+    pagesPage.on('pageerror', (e) => pagesErrors.push(String(e)));
+
+    await pagesPage.goto(`${BASE}/posts/new`, { waitUntil: 'load' });
+    await pagesPage.waitForSelector('[data-story-studio]', { timeout: 8000 });
+
+    check(
+      await pagesPage.evaluate(() => document.querySelector('[data-story-studio-page-rail]') === null),
+      `${tag} : le rail des pages ne doit PAS exister avec une seule page (loi 4)`,
+    );
+
+    await pagesPage.setInputFiles('input[data-door="visual"]', { name: 'page1.png', mimeType: 'image/png', buffer: icon });
+    await pagesPage.waitForSelector('[data-asset-phase="ready"]', { timeout: 8000 });
+
+    await pagesPage.click('[data-story-option="add-page"]');
+    await pagesPage.waitForSelector('[data-story-studio-page-rail]', { timeout: 8000 });
+    const tileCount = await pagesPage.evaluate(() => document.querySelectorAll('[data-story-studio-page-tile]').length);
+    check(tileCount === 2, `${tag} : trois tuiles de page attendues après « créer une page », vu ${tileCount}`);
+
+    const tileTargets = await pagesPage.evaluate(() =>
+      Array.from(document.querySelectorAll('[data-story-studio-page-tile]')).map((el) => {
+        const r = el.getBoundingClientRect();
+        return { width: r.width, height: r.height };
+      }),
+    );
+    for (const cible of tileTargets) {
+      check(cible.height >= MIN_TARGET - 0.5, `${tag} : une tuile de page doit atteindre 44 px de haut — ${JSON.stringify(cible)}`);
+    }
+
+    const deleteTarget = await readBox(pagesPage, '[data-story-studio-page-delete]');
+    check(
+      deleteTarget !== null && deleteTarget.width >= MIN_TARGET - 0.5 && deleteTarget.height >= MIN_TARGET - 0.5,
+      `${tag} : la corbeille de page doit atteindre 44×44 px — ${JSON.stringify(deleteTarget)}`,
+    );
+
+    await pagesPage.fill('#story-studio-text', 'Page deux');
+    await pagesPage.click('[data-publish-kind-toggle]');
+    await pagesPage.waitForSelector('[data-publish-layout-toggle]', { timeout: 4000 });
+    await pagesPage.click('[data-publish-layout-toggle]');
+    await pagesPage.waitForSelector('[data-publish-layout-choice="hero"]', { timeout: 4000 });
+    const layoutTarget = await readBox(pagesPage, '[data-publish-layout-choice="hero"]');
+    check(
+      layoutTarget !== null && layoutTarget.height >= 40,
+      `${tag} : une ligne de disposition doit être une cible franche — ${JSON.stringify(layoutTarget)}`,
+    );
+    await pagesPage.click('[data-publish-layout-choice="hero"]');
+    await pagesPage.waitForURL((url) => url.pathname.startsWith('/feed'), { timeout: 8000 });
+
+    check(pagesErrors.length === 0, `${tag} : erreurs de page (plusieurs pages) — ${pagesErrors.join(' | ')}`);
+    await pagesContext.close();
   }
   return measures;
 }
@@ -445,5 +510,7 @@ console.log(
     'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
     'tapé survit à un rechargement, l’audience se choisit et voyage (pastille ≥ 44 px sans débordement, défaut FRIENDS ' +
     'désigné dans la feuille, six audiences dans l’ordre iOS, ONLY/EXCEPT grisés avec leur raison, menu sans recouvrement, ' +
-    'choix relu après rechargement ET après publication) — clair et sombre identiques.',
+    'choix relu après rechargement ET après publication), et PLUSIEURS PAGES DE MÉDIAS (#7684) : aucun rail à une page, ' +
+    'deux tuiles ≥ 44 px de haut après « créer une page », une corbeille ≥ 44×44 px, et le sous-menu de disposition ' +
+    '(chevron ▾ Publier › Post) publie avec `canvas.layout` — clair et sombre identiques.',
 );
