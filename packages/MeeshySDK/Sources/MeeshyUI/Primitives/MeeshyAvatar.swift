@@ -521,6 +521,12 @@ public struct MeeshyAvatar: View {
     /// Pure initials derivation (first letter of up to two words, uppercased,
     /// falling back to the first character). `nonisolated` so it is reachable
     /// from the `nonisolated`-friendly path and unit-testable off the MainActor.
+    /// Les initiales qu'un avatar sans image affiche — pour les surfaces qui
+    /// montrent une identité sans monter d'avatar (pastille d'un bouton).
+    public nonisolated static func initials(for name: String) -> String {
+        makeInitials(from: name)
+    }
+
     nonisolated static func makeInitials(from name: String) -> String {
         let parts = name.components(separatedBy: " ")
             .prefix(2)

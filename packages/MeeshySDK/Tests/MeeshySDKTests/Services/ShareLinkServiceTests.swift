@@ -83,7 +83,11 @@ final class ShareLinkServiceTests: XCTestCase {
             requireAccount: false, requireNickname: false,
             requireEmail: false, requireBirthday: false,
             allowedLanguages: [],
-            conversation: ShareLinkConversation(id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date()),
+            guestRights: .schemaDefaults,
+            conversation: ShareLinkConversation(
+                id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date(),
+                avatar: nil, banner: nil
+            ),
             creator: ShareLinkCreator(id: "u1", username: "alice", firstName: nil, lastName: nil, displayName: "Alice", avatar: nil),
             stats: ShareLinkStats(totalParticipants: 10, memberCount: 8, anonymousCount: 2, languageCount: 3, spokenLanguages: ["fr", "en", "es"])
         )

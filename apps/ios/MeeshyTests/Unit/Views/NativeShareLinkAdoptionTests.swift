@@ -107,28 +107,27 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
         }
     }
 
-    // MARK: - The label extraction must not break the sibling buttons
+    // MARK: - The label extraction must not break the sibling button
 
-    /// `ShareLink` needs the label body on its own, so `actionButton`'s content was
-    /// extracted into `actionButtonLabel`. The three sibling actions (copy,
-    /// activate/disable, delete) must keep going through `actionButton`, which must
-    /// keep delegating to the extracted label — otherwise the row silently loses
-    /// its uniform styling.
-    func test_shareLinkDetailView_keepsActionButtonDelegatingToExtractedLabel() throws {
+    /// `ShareLink` needs the label body on its own, so the hero card's buttons
+    /// render through one builder, `heroButtonLabel`. Since #7797 the fiche's
+    /// two link actions — Partager (the ShareLink) and Copier le lien — sit
+    /// side by side in the hero card; both must keep going through it, or the
+    /// pair silently loses its uniform styling.
+    func test_shareLinkDetailView_heroActionsShareOneLabelBuilder() throws {
         let source = try readSource(Self.shareLinkDetailView)
 
         XCTAssertTrue(
-            source.contains("private func actionButton(") && source.contains("private func actionButtonLabel("),
-            "Both actionButton and the extracted actionButtonLabel must exist."
+            source.contains("private func heroButtonLabel("),
+            "The hero card must keep a single label builder for its actions."
         )
         XCTAssertTrue(
-            source.contains("Button(action: action) {\n            actionButtonLabel(label, icon: icon, color: color)"),
-            "actionButton must render the extracted actionButtonLabel so the ShareLink and the " +
-            "three sibling buttons stay visually identical."
+            source.contains("heroButtonLabel(ShareLinkDetailCopy.share, icon: \"square.and.arrow.up\", filled: true)"),
+            "The ShareLink must reuse the hero label builder."
         )
         XCTAssertTrue(
-            source.contains("actionButtonLabel(shareLabel, icon: \"square.and.arrow.up\", color: MeeshyColors.shareAccent)"),
-            "The ShareLink must reuse the same label builder as its siblings."
+            source.contains("heroButtonLabel(copiedFeedback ? ShareLinkDetailCopy.copied : ShareLinkDetailCopy.copyLink"),
+            "The copy action must reuse the same label builder as the ShareLink."
         )
     }
 

@@ -52,7 +52,7 @@ public struct JoinFlowSheet: View {
                         InviteLandingView(
                             info: info,
                             isSignedIn: isSignedIn,
-                            onChoice: handleLandingChoice,
+                            onChoice: { handleLandingChoice($0) },
                             onClose: { dismiss() }
                         )
                         .transition(.move(edge: .trailing).combined(with: .opacity))

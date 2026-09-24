@@ -192,4 +192,43 @@ final class ShareLinkEntryResolverTests: XCTestCase {
 
         XCTAssertEqual(resolution?.intent, .chooseIdentity(conversationId: "conv-1"))
     }
+
+    // MARK: - La page d'invitation (#7795)
+
+    /// Un compte présent voit la MÊME page que sans compte, avec le lien déjà
+    /// résolu : aucun second appel, aucun indicateur de chargement.
+    func test_landing_nonMember_carriesTheResolvedLinkAndTheDormantSession() async throws {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(title: "Nova Club"))
+
+        let resolution = await resolve(provider: provider, storedGuestSession: true)
+        let landing = try XCTUnwrap(resolution?.landing(identifier: "mshy_abc"))
+
+        XCTAssertEqual(landing.identifier, "mshy_abc")
+        XCTAssertEqual(landing.conversationId, "conv-1")
+        XCTAssertEqual(landing.info.conversation.title, "Nova Club")
+        XCTAssertTrue(landing.resumesGuestSession)
+        XCTAssertEqual(provider.getLinkInfoCallCount, 1)
+    }
+
+    /// Un lien qui exige un compte engageait le compte EN SILENCE : la page
+    /// s'affiche désormais aussi, avec le seul choix du compte.
+    func test_landing_linkRequiringAccount_isShownRatherThanJoiningSilently() async throws {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(requireAccount: true))
+
+        let resolution = await resolve(provider: provider)
+        let landing = try XCTUnwrap(resolution?.landing(identifier: "mshy_abc"))
+
+        XCTAssertEqual(landing.info.landingChoices(isSignedIn: true), [.joinWithAccount])
+    }
+
+    func test_landing_alreadyMember_showsNothing() async {
+        let provider = MockShareLinkInfoProvider()
+        provider.result = .success(makeLinkInfo(conversationId: "conv-7"))
+
+        let resolution = await resolve(provider: provider, knownConversationIds: ["conv-7"])
+
+        XCTAssertNil(resolution?.landing(identifier: "mshy_abc"))
+    }
 }

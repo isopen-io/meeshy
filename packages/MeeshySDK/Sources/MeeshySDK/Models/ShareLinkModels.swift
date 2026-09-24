@@ -28,7 +28,11 @@ public struct ShareLinkInfo: Decodable, Sendable {
     /// L'adresse canonique `/chat/<linkId>` — jamais `/l/<token>` (suivi) ni
     /// le slug `identifier` (#7795, précision porteur 2026-09-24).
     public var address: ShareLinkAddress { ShareLinkAddress(linkId: linkId) }
+}
 
+// Décodage écrit dans une EXTENSION : le constructeur membre à membre reste
+// disponible (tests, aperçus).
+extension ShareLinkInfo {
     enum CodingKeys: String, CodingKey {
         case id, linkId, name, description, expiresAt, maxUses, currentUses
         case maxConcurrentUsers, currentConcurrentUsers

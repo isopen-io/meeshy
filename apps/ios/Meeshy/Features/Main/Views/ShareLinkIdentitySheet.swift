@@ -11,148 +11,53 @@ struct ShareLinkIdentityChoice: Identifiable {
     /// Une session invitée dort déjà sur ce lien : la branche anonyme la
     /// REPREND au lieu d'en ouvrir une seconde.
     let resumesGuestSession: Bool
+    /// Le lien déjà résolu par `ShareLinkEntryResolver` — la page s'affiche
+    /// avec, sans second appel ni indicateur de chargement.
+    let info: ShareLinkInfo
 
     var id: String { identifier }
 }
 
-/// « Vous entrez sous quel nom ? »
+/// La page d'invitation, quand un compte est présent (#7795).
 ///
-/// L'app rejoignait silencieusement avec le compte présent. Un lien reçu dans
-/// un groupe qu'on ne connaît pas engageait donc le compte réel — nom, photo,
-/// historique — sans que rien ne le demande, et une jointure ne se défait pas
-/// d'un geste.
+/// L'app rejoignait silencieusement avec le compte présent ; puis elle a posé
+/// la question dans une feuille à deux boutons, sans rien montrer de ce qu'on
+/// allait rejoindre. La personne voit désormais la MÊME page que sans compte —
+/// qui l'invite, le groupe, ce qu'on y parle, ce qu'un invité anonyme peut y
+/// faire — et choisit : son compte d'abord, l'anonymat si le lien l'autorise.
 ///
-/// Deux branches, jamais trois : le compte, ou l'anonymat. L'annulation est un
-/// geste, pas un bouton — la feuille se referme sans rien engager.
+/// L'annulation est un geste, pas un bouton — la feuille se referme sans rien
+/// engager. Les choix sont EXÉCUTÉS par l'hôte (`RootView`, `iPadRootView`) :
+/// la jointure par compte et la session invitée ne vivent pas ici.
 struct ShareLinkIdentitySheet: View {
     let choice: ShareLinkIdentityChoice
     let accountDisplayName: String
-    let accountUsername: String?
     let onContinueWithAccount: () -> Void
     let onJoinAnonymously: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            header
-
-            VStack(spacing: 12) {
-                identityOption(
-                    testId: "share-link-identity-account",
-                    icon: "person.crop.circle.fill",
-                    tint: MeeshyColors.indigo500,
-                    title: String(
-                        localized: "shareLink.identity.account.title",
-                        defaultValue: "Continuer en tant que \(accountDisplayName)",
-                        bundle: .main
-                    ),
-                    subtitle: accountUsername.map { "@\($0)" } ?? String(
-                        localized: "shareLink.identity.account.subtitle",
-                        defaultValue: "Votre compte, votre historique",
-                        bundle: .main
-                    ),
-                    action: {
-                        dismiss()
-                        onContinueWithAccount()
-                    }
-                )
-
-                identityOption(
-                    testId: "share-link-identity-anonymous",
-                    icon: "theatermasks.fill",
-                    tint: Color.purple,
-                    title: choice.resumesGuestSession
-                        ? String(
-                            localized: "shareLink.identity.anonymous.resume",
-                            defaultValue: "Reprendre en anonyme",
-                            bundle: .main
-                        )
-                        : String(
-                            localized: "shareLink.identity.anonymous.title",
-                            defaultValue: "Rejoindre sans compte",
-                            bundle: .main
-                        ),
-                    subtitle: String(
-                        localized: "shareLink.identity.anonymous.subtitle",
-                        defaultValue: "Votre compte reste en dehors de cette conversation",
-                        bundle: .main
-                    ),
-                    action: {
-                        dismiss()
-                        onJoinAnonymously()
-                    }
-                )
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.backgroundPrimary.ignoresSafeArea())
-        .presentationDetents([.height(320)])
+        InviteLandingView(
+            info: choice.info,
+            isSignedIn: true,
+            resumesGuestSession: choice.resumesGuestSession,
+            accountInitials: MeeshyAvatar.initials(for: accountDisplayName),
+            onChoice: { handle($0) },
+            onClose: { dismiss() }
+        )
         .presentationDragIndicator(.visible)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(String(
-                localized: "shareLink.identity.title",
-                defaultValue: "Rejoindre la conversation",
-                bundle: .main
-            ))
-            .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
-            .foregroundColor(theme.textPrimary)
-
-            if let title = choice.conversationTitle, !title.isEmpty {
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .rounded))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            }
+    private func handle(_ landingChoice: InviteLandingChoice) {
+        dismiss()
+        switch landingChoice {
+        case .joinWithAccount:
+            onContinueWithAccount()
+        case .joinAnonymously:
+            onJoinAnonymously()
+        case .signIn, .signUp:
+            break
         }
-    }
-
-    private func identityOption(
-        testId: String,
-        icon: String,
-        tint: Color,
-        title: String,
-        subtitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(tint)
-                    .frame(width: 40, height: 40)
-                    .background(tint.opacity(0.12))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                        .multilineTextAlignment(.leading)
-                    Text(subtitle)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
-                        .multilineTextAlignment(.leading)
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(theme.textSecondary.opacity(0.6))
-            }
-            .padding(14)
-            .background(theme.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(testId)
     }
 }

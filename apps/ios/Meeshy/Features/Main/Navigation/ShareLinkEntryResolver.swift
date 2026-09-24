@@ -22,6 +22,32 @@ enum ShareLinkEntryResolver {
     struct Resolution {
         let intent: ShareLinkEntryIntent
         let conversationTitle: String?
+        /// Le lien déjà résolu : la page d'invitation s'affiche avec, sans
+        /// second appel ni indicateur de chargement (#7795).
+        let info: ShareLinkInfo
+        let hasStoredGuestSession: Bool
+
+        /// La page d'invitation à présenter, ou `nil` quand il n'y a rien à
+        /// montrer (déjà membre) ou rien à décider sur elle.
+        ///
+        /// `.joinWithAccount` passe AUSSI par la page depuis #7795 : un lien
+        /// exigeant un compte engageait le compte en silence, sans que la
+        /// personne voie où elle entrait. La page ne lui propose alors que
+        /// « Rejoindre avec mon compte ».
+        func landing(identifier: String) -> ShareLinkIdentityChoice? {
+            switch intent {
+            case .chooseIdentity(let conversationId), .joinWithAccount(let conversationId):
+                return ShareLinkIdentityChoice(
+                    identifier: identifier,
+                    conversationId: conversationId,
+                    conversationTitle: conversationTitle,
+                    resumesGuestSession: hasStoredGuestSession,
+                    info: info
+                )
+            case .openConversation, .joinAnonymously, .resumeGuestSession, .requiresAccount:
+                return nil
+            }
+        }
     }
 
     /// `nil` quand le lien n'a pas pu être résolu — l'appelant retombe alors
@@ -41,17 +67,20 @@ enum ShareLinkEntryResolver {
     ) async -> Resolution? {
         guard let info = try? await service.getLinkInfo(identifier: identifier) else { return nil }
 
+        let hasStoredGuestSession = storedGuestSessionLookup(identifier)
         let facts = ShareLinkEntryFacts(
             conversationId: info.conversation.id,
             isAuthenticated: isAuthenticated,
             isAlreadyMember: knownConversationIds.contains(info.conversation.id),
             linkRequiresAccount: info.requireAccount,
-            hasStoredGuestSession: storedGuestSessionLookup(identifier)
+            hasStoredGuestSession: hasStoredGuestSession
         )
 
         return Resolution(
             intent: ShareLinkEntryPolicy.intent(for: facts),
-            conversationTitle: info.conversation.title
+            conversationTitle: info.conversation.title,
+            info: info,
+            hasStoredGuestSession: hasStoredGuestSession
         )
     }
 }

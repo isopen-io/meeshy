@@ -122,16 +122,15 @@ struct RootStatusBubbleLayer: ViewModifier {
                     StatusBubbleController.shared.dismiss()
                 }
             }
-            // Le lien de partage demande QUI entre. La feuille ne se monte que
-            // lorsque le choix existe vraiment : déjà membre, ou lien exigeant un
-            // compte, `ShareLinkEntryPolicy` a déjà tranché sans rien demander.
+            // La page d'invitation (#7795) — elle ne se monte que pour un lien
+            // qu'on n'a pas encore rejoint : déjà membre, `ShareLinkEntryPolicy`
+            // ouvre la conversation sans rien montrer.
             .sheet(item: $shareLinkChoice) { choice in
                 ShareLinkIdentitySheet(
                     choice: choice,
                     accountDisplayName: AuthManager.shared.currentUser?.displayName
                         ?? AuthManager.shared.currentUser?.username
-                        ?? String(localized: "shareLink.identity.account.fallback", defaultValue: "mon compte"),
-                    accountUsername: AuthManager.shared.currentUser?.username,
+                        ?? "",
                     onContinueWithAccount: { onContinueWithAccount(choice.identifier) },
                     // La session invitée est portée par `MeeshyApp`, au-dessus de
                     // cette vue : on lui passe l'intention plutôt que d'essayer de

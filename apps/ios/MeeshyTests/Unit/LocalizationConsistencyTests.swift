@@ -224,7 +224,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 0 — #7795 : la page vit dans MeeshyUI
         "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
@@ -386,7 +386,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
         // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
+        // #7797 — la fiche du lien a confié ses textes à `ShareLinkDetailCopy`,
+        // partagé par la carte « Configuration » et le formulaire : le cliquet
+        // suit les CLÉS jusqu'à leur nouveau fichier (leçon 578). La page
+        // d'invitation (#7795) vit dans MeeshyUI, catalogue du SDK.
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 0
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift",  // 58
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
         // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
         // propre fichier (RootView.swift dépassait le plafond dur de 1200

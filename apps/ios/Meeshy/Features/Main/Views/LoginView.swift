@@ -187,6 +187,12 @@ struct LoginView: View {
                 onSwitchToLogin: { showRegister = false }
             )
         }
+        // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
+        // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
+        .onReceive(DeepLinkRouter.shared.$requestedAccountEntry.compactMap { $0 }) { entry in
+            DeepLinkRouter.shared.requestedAccountEntry = nil
+            if entry == .signUp { showRegister = true }
+        }
         .onAppear {
             // Halo décoratif, même traitement que l'écran de démarrage : sous
             // Reduce Motion il n'a pas de valeur de repos à rejoindre, il ne

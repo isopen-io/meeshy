@@ -47,9 +47,9 @@ struct InviteChoicesPanel: View {
     @ViewBuilder
     private var secondaryButtons: some View {
         if secondary.count == 2 {
-            HStack(spacing: 10) { ForEach(secondary, id: \.self, content: secondaryButton) }
+            HStack(spacing: 10) { ForEach(secondary, id: \.self) { secondaryButton($0) } }
         } else {
-            ForEach(secondary, id: \.self, content: secondaryButton)
+            ForEach(secondary, id: \.self) { secondaryButton($0) }
         }
     }
 

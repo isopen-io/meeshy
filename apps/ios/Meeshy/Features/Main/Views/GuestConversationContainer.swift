@@ -20,6 +20,8 @@ struct GuestConversationContainer: View {
     let session: GuestSession
     let onSessionCreated: (AnonymousSessionContext) -> Void
     let onDismiss: () -> Void
+    /// « Se connecter » / « Créer un compte » depuis la page d'invitation.
+    let onAccountRequest: (InviteLandingChoice) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -35,7 +37,14 @@ struct GuestConversationContainer: View {
                 showsOwnConnectionBanner: true
             )
         } else {
-            JoinFlowSheet(identifier: session.identifier) { joinResponse in
+            // Une entrée DÉLIBÉRÉE a déjà vu la page d'invitation (#7795) et y a
+            // choisi l'anonymat : le formulaire s'ouvre directement.
+            JoinFlowSheet(
+                identifier: session.identifier,
+                isSignedIn: session.isDeliberate,
+                entry: session.isDeliberate ? .anonymousForm : .landing,
+                onAccountRequest: onAccountRequest
+            ) { joinResponse in
                 let ctx = joinResponse.toSessionContext
                 onSessionCreated(ctx)
             }
