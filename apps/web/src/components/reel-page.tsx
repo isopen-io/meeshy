@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from 'react';
-import type { UIEvent } from 'react';
 
 import { Avatar } from './avatar';
 import { PersonName } from './person-name';
@@ -21,6 +20,11 @@ import { useReelPlayback } from '@/lib/view/use-reel-playback';
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
  * images) ne paie jamais le moteur de scène. */
 const ReelSceneStage = lazy(() => import('./reel-scene-stage'));
+/** Chargée À LA DEMANDE elle aussi (revue-correction #6484, même motif) : la
+ * galerie d'un réel d'IMAGES. Son affiche — la première image — tient la page
+ * le temps du chunk ; un réel vidéo ne la paie plus, et le plafond du chunk
+ * `reels` (7 Ko, `budgets.json`) ne monte pas. */
+const ReelImages = lazy(() => import('./reel-images'));
 
 /**
  * UNE PAGE DU LECTEUR DES RÉELS (#6457) — miroir de `ReelPageView`
@@ -34,9 +38,12 @@ const ReelSceneStage = lazy(() => import('./reel-scene-stage'));
  *   que leur affiche — aucun élément de lecture hors de la fenêtre.
  * - **La vidéo n'est pas recadrée** : `.resizeAspect` côté iOS
  *   (`ReelsPlayerView+Video.swift`), `object-contain` ici.
- * - **Le rail n'offre que ce qui a un effet** (loi 4) : aimer et enregistrer
- *   (bascules optimistes, `usePostGesture`), partager, et le son quand le réel
- *   se lit. Commenter et repartager n'ont pas encore d'effet sur le web.
+ * - **Le rail n'offre que ce qui a un effet** (loi 4), dans l'ordre d'iOS
+ *   (`ReelActionRail`) : aimer, commenter (la feuille PARTAGÉE avec le lecteur
+ *   de stories, D-89), enregistrer, repartager (optimiste, append-only) — ces
+ *   deux-là à un lecteur connecté seulement (#6484) —, puis partager, et le
+ *   son quand le réel se lit. Web seul : partager et le son restent sur le
+ *   rail, faute du menu « … » et de la couche d'information d'iOS.
  */
 type GestureHandler = (postId: string, kind: PostToggleKind) => void;
 
@@ -162,40 +169,6 @@ function ReelPlayable({
   );
 }
 
-/** Les images d'un réel se parcourent d'un balayage HORIZONTAL — le vertical
- * reste au fil. Les points disent la page lue, jamais une page supposée. */
-function ReelImages({ images, language }: { readonly images: readonly FeedCardMedia[]; readonly language: InterfaceLanguage }) {
-  const [page, setPage] = useState(0);
-  const onScroll = (event: UIEvent<HTMLDivElement>) => {
-    const el = event.currentTarget;
-    if (el.clientWidth > 0) setPage(Math.round(Math.abs(el.scrollLeft) / el.clientWidth));
-  };
-
-  return (
-    <>
-      <div data-reel-images onScroll={onScroll} className="scrollbar-none absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain">
-        {images.map((image, i) => (
-          <img
-            key={image.id}
-            src={image.src}
-            alt={image.altText ?? translate(language, 'reels.image', { index: String(i + 1), count: String(images.length) })}
-            draggable={false}
-            decoding="async"
-            className="h-full w-full shrink-0 snap-start object-contain"
-          />
-        ))}
-      </div>
-      {images.length > 1 ? (
-        <div aria-hidden="true" data-reel-image-dots className="pointer-events-none absolute inset-x-0 flex justify-center gap-1.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 28px)' }}>
-          {images.map((image, i) => (
-            <span key={image.id} className="rounded-full" style={{ width: 6, height: 6, backgroundColor: i === page ? 'white' : 'rgba(255,255,255,0.45)' }} />
-          ))}
-        </div>
-      ) : null}
-    </>
-  );
-}
-
 /** `carrier.media.find(id === carrierMediaIdentity(scene))?.poster` (#6903) —
  * la vignette du média de FOND, servie tant que le chunk `reel-scene-stage`
  * n'est pas chargé (`Suspense`) et pour toute la fenêtre `far`. */
@@ -253,7 +226,14 @@ function ReelStage({
   }
   if (stage.kind === 'images') {
     const first = stage.images[0];
-    return mode === 'far' ? <ReelPoster src={first?.thumbnailSrc ?? first?.src} /> : <ReelImages images={stage.images} language={language} />;
+    const poster = <ReelPoster src={first?.thumbnailSrc ?? first?.src} />;
+    return mode === 'far' ? (
+      poster
+    ) : (
+      <Suspense fallback={poster}>
+        <ReelImages images={stage.images} language={language} />
+      </Suspense>
+    );
   }
   return <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${accent}, black 75%)` }} />;
 }

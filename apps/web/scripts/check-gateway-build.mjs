@@ -41,6 +41,7 @@ import { pathToFileURL } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { allFiles } from './lib/files.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
+import { screenRoutes } from './lib/v31-routes.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-gateway';
@@ -832,13 +833,23 @@ async function main() {
     await context.close();
   }
 
-  // --- 6. `/conversations/new` : route PRIVÉE, et un échec de recherche ------
-  //        se VOIT (jamais un écran blanc) — #5652 ---------------------------
-  {
-    /* SANS session : la garde sort le visiteur (`PRIVATE_ROUTES`,
-       `lib/session-guard.ts`). La route est arrivée avec son écran sans être
-       déclarée privée — un visiteur anonyme y trouvait une recherche que la
-       passerelle refuse, au lieu de l'écran de connexion. */
+  // --- 6. LES ADRESSES DE COMPOSITION `/…/new` : routes PRIVÉES --------------
+  //        — un visiteur SANS SESSION n'y entre pas — #5652, #7462 --------
+  /* La famille est DÉRIVÉE de la table des routes (`screenRoutes`, dont
+     `route-inventory.test.ts` prouve l'accord avec `ROUTES`), jamais
+     recopiée : la liste à la main de la première version en comptait quatre
+     quand la table en déclarait six — `/links/share/new` et
+     `/communities/new` s'ouvraient sans session, et rien ne rougissait. */
+  const composeAddresses = screenRoutes().filter((pattern) => pattern.endsWith('/new'));
+  check(
+    ['/conversations/new', '/stories/new', '/status/new', '/posts/new'].every((address) => composeAddresses.includes(address)),
+    `la famille /…/new se lit dans la table des routes (obtenu : ${composeAddresses.join(', ')})`,
+  );
+  /* L'ENTRÉE, pas « ailleurs » : la loi renvoie un visiteur sans compte vers
+     la connexion, ou vers l'accueil d'abord (`redirect-welcome`) — toute
+     autre destination (la liste, une page d'erreur) n'est pas la garde. */
+  const entrances = ['/login', '/welcome'];
+  for (const address of composeAddresses) {
     const anonContext = await browser.newContext();
     const anonPage = await anonContext.newPage();
     await anonPage.route(isConversationsList, async (route) => {
@@ -852,11 +863,15 @@ async function main() {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
     await anonPage.route('**/socket.io/**', (route) => route.abort());
-    await anonPage.goto(`${base}/conversations/new`, { waitUntil: 'networkidle' });
+    await anonPage.goto(`${base}${address}`, { waitUntil: 'networkidle' });
     const anonPath = await anonPage.evaluate(() => window.location.pathname);
-    check(anonPath !== '/conversations/new', `sans session, /conversations/new ne s'ouvre pas (obtenu : ${anonPath})`);
+    check(entrances.includes(anonPath), `sans session, ${address} renvoie vers l'entrée (obtenu : ${anonPath})`);
     await anonContext.close();
+  }
 
+  // --- 6b. `/conversations/new` : avec session, recherche en ÉCHEC -----------
+  //         l'alerte et le « Réessayer » se VOIENT (jamais un écran blanc) ----
+  {
     /* AVEC session, recherche en ÉCHEC : une ALERTE et un « Réessayer », jamais
        une liste vide — « erreur avalée en VIDE = vide légitime ». */
     const context = await browser.newContext();

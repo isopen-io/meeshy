@@ -109,7 +109,7 @@ const it = {
   'feed.post.repost.error': 'Impossibile ripubblicare',
   'feed.post.repost.already': 'Già ripubblicato',
   'feed.post.repost.offline': 'Offline — la ripubblicazione non è partita.',
-  'feed.post.repost.unconfirmed': 'Ripubblicazione non confermata — offline',
+  'feed.post.repost.unconfirmed': 'Ripubblicazione non confermata — riprova',
   'feed.post.repost.audience': 'Questo pubblico amplierebbe la portata del post originale',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel di {author}',

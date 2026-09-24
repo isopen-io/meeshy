@@ -113,7 +113,7 @@ const pt = {
   'feed.post.repost.error': 'Não foi possível republicar',
   'feed.post.repost.already': 'Já republicado',
   'feed.post.repost.offline': 'Offline — a republicação não pôde ser enviada.',
-  'feed.post.repost.unconfirmed': 'Republicação não confirmada — offline',
+  'feed.post.repost.unconfirmed': 'Republicação não confirmada — tente novamente',
   'feed.post.repost.audience': 'Esse público ampliaria o alcance da publicação original',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel de {author}',

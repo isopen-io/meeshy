@@ -126,6 +126,7 @@ import { meConsentsRoutes } from './me/consents';
 import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { meMeeshRoutes } from './me/meesh';
+import { meOnboardingRoutes } from './me/onboarding';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
@@ -290,6 +291,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // au-dessus.
   { name: 'me-engagement', prefix: `${API_PREFIX}/me`, module: meEngagementRoutes },
   { name: 'me-meesh', prefix: `${API_PREFIX}/me`, module: meMeeshRoutes },
+  // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
+  // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
+  { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },
   // Le favori de message (#7377) — l'étoile PERSONNELLE d'un lecteur, sa
   // liste et sa pose/son retrait. Montage AUTONOME, même patron que
   // `me-engagement` juste au-dessus.

@@ -144,7 +144,7 @@ const fr = {
   'feed.post.repost.error': 'Erreur lors du repost',
   'feed.post.repost.already': 'Déjà repartagé',
   'feed.post.repost.offline': 'Hors ligne — le repartage n’a pas pu partir.',
-  'feed.post.repost.unconfirmed': 'Repartage non confirmé — hors ligne',
+  'feed.post.repost.unconfirmed': 'Repartage non confirmé — réessayez',
   'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',

@@ -325,7 +325,7 @@ export default function StoryScreen() {
   const commentsOpen = commentsHost.postId !== null;
   const openComments = useCallback(() => {
     if (currentStory !== undefined) commentsHost.open(currentStory.id);
-  }, [currentStory, commentsHost]);
+  }, [currentStory, commentsHost.open]);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   /**
    * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
@@ -553,6 +553,10 @@ export default function StoryScreen() {
          bouton ne réclame qu'Espace et Entrée, sinon cliquer « muet » (ce
          qui le focalise) figerait les flèches jusqu'au clic suivant. */
       if (shortcutYieldsToTarget({ target: e.target, key: e.key })) return;
+      /* Feuille ouverte : ses touches ne pilotent pas la story recouverte —
+         la loi du doigt (`screenGestureYields`, plus haut), appliquée au
+         clavier (revue #6484). */
+      if (screenGestureYields({ target: e.target, layerOpen: commentsOpen })) return;
       if (e.key === 'ArrowLeft') advance('previous');
       else if (e.key === 'ArrowRight') advance('next');
       else if (e.key === ' ') {
@@ -565,7 +569,7 @@ export default function StoryScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [advance, paused, pause, resume, closeViewer, showsSound]);
+  }, [advance, paused, pause, resume, closeViewer, showsSound, commentsOpen]);
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
      lecteur apprend ensuite est le SON (le sondage de piste audio conclut
