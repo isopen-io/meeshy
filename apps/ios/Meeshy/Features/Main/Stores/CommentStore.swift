@@ -13,8 +13,9 @@ import MeeshySDK
 /// Fetches the top-level comments for a post, optionally before a cursor.
 /// Declared at file scope so the closure passed to `reader.read` doesn't
 /// inherit any actor isolation context (which would trigger Swift 6 strict
-/// concurrency runtime checks at GRDB invocation).
-private func fetchTopLevelComments(
+/// concurrency runtime checks at GRDB invocation). `nonisolated` because the
+/// app's default isolation is MainActor: without it the read stays on main.
+private nonisolated func fetchTopLevelComments(
     reader: any DatabaseWriter,
     postId: String,
     before: Date? = nil,
@@ -35,7 +36,7 @@ private func fetchTopLevelComments(
 
 /// Fetches the direct replies to a parent comment. Same file-scope rationale
 /// as `fetchTopLevelComments`.
-private func fetchReplies(
+private nonisolated func fetchReplies(
     reader: any DatabaseWriter,
     postId: String,
     parentId: String,
@@ -72,9 +73,14 @@ public final class CommentStore: ObservableObject {
 
     // MARK: - Load Initial
 
+    /// Read detached (same shape as `MessageStore`): it runs while the post
+    /// detail is being pushed, and must not cost the transition a frame.
     func loadInitial() async {
         let reader = persistence.reader
-        let fetched = try? fetchTopLevelComments(reader: reader, postId: postId, limit: 30)
+        let postId = postId
+        let fetched = await Task.detached(priority: .userInitiated) {
+            try? fetchTopLevelComments(reader: reader, postId: postId, limit: 30)
+        }.value
         topLevelComments = fetched ?? []
     }
 

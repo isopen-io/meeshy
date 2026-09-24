@@ -344,12 +344,37 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     public func stop() {
-        stopPip()
-        cleanup()
-        if !activeURL.isEmpty { activeURL = "" }
+        tearDown()
         // Désactivation via la source unique (call-aware) : ne coupe rien pendant
         // un appel — la session appartient alors à l'appel (RTCAudioSession).
         MediaSessionCoordinator.shared.deactivatePlaybackSync()
+    }
+
+    /// Arrête la vidéo parce qu'un AUTRE lecteur prend la main (voice note,
+    /// story) — et qui va, dans la foulée, activer la session lui-même.
+    ///
+    /// Quand le moteur vidéo ne tenait rien, désactiver la session ici était un
+    /// aller-retour bloquant vers le serveur audio SUR LE MAIN THREAD à chaque
+    /// tap de lecture et chaque ouverture de story, et `.notifyOthersOnDeactivation`
+    /// relançait la musique d'une autre app une fraction de seconde avant que
+    /// le lecteur suivant ne la coupe de nouveau.
+    public func stopForHandoff() {
+        let heldPlayback = player != nil || !activeURL.isEmpty
+        tearDown()
+        guard Self.shouldReleaseSessionOnHandoff(heldPlayback: heldPlayback) else { return }
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+    }
+
+    /// Pure, testable decision behind `stopForHandoff()`: the session is only
+    /// released when the video engine actually held a player.
+    public nonisolated static func shouldReleaseSessionOnHandoff(heldPlayback: Bool) -> Bool {
+        heldPlayback
+    }
+
+    private func tearDown() {
+        stopPip()
+        cleanup()
+        if !activeURL.isEmpty { activeURL = "" }
     }
 
     /// Libère le player POUR cette URL si elle est encore active. No-op si
