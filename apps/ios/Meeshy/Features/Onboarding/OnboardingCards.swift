@@ -33,9 +33,6 @@ struct OnboardingCardView: View {
                          identifier: "onboarding.continue") { Task { await model.advance() } }
     }
 
-    private var userName: String {
-        AuthManager.shared.currentUser.map { $0.displayName ?? $0.username } ?? "Meeshy"
-    }
 
     // MARK: 1 — langues
 
@@ -186,7 +183,7 @@ struct OnboardingCardView: View {
                 identifier: "onboarding.story.create", perform: onOpenStory
             ),
             secondary: published ? nil : later,
-            illustration: { OnboardingStoryIllustration(name: userName, isDark: isDark) },
+            illustration: { OnboardingStoryIllustration(name: model.userDisplayName, isDark: isDark) },
             content: {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     if published {
@@ -219,12 +216,14 @@ struct OnboardingCardView: View {
             message: String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main), OnboardingRewards.friendship),
             isDark: isDark,
             primary: OnboardingAction(
-                title: model.requestedProfileIds.isEmpty
-                    ? String(localized: "onboarding.later", bundle: .main)
-                    : String(localized: "onboarding.continue", bundle: .main),
-                identifier: "onboarding.friends.continue"
+                title: String(localized: "onboarding.continue", bundle: .main),
+                identifier: "onboarding.friends.continue",
+                isEnabled: !model.requestedProfileIds.isEmpty
             ) { Task { await model.continueFromFriends() } },
-            secondary: nil,
+            secondary: model.requestedProfileIds.isEmpty
+                ? OnboardingAction(title: String(localized: "onboarding.later", bundle: .main),
+                                   identifier: "onboarding.later") { Task { await model.continueFromFriends() } }
+                : nil,
             illustration: { OnboardingFriendsIllustration(names: model.suggestions.map(\.displayName), isDark: isDark) },
             content: {
                 VStack(spacing: MeeshySpacing.sm) {
@@ -317,12 +316,14 @@ struct OnboardingCardView: View {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(reward)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
                     .foregroundStyle(MeeshyColors.indigo500)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MeeshyColors.success.opacity(0.12)))
         .accessibilityElement(children: .combine)
@@ -407,10 +408,10 @@ struct OnboardingRecapStats: View {
 
     var body: some View {
         let tiles: [(icon: String, value: String, label: String)] = [
-            ("sparkles", "\(recap.points)", String(localized: "onboarding.recap.points", bundle: .main)),
-            ("star.circle.fill", "\(recap.level)", String(localized: "onboarding.recap.level", bundle: .main)),
-        ] + (recap.streakDays.map { [("flame.fill", "\($0)", String(localized: "onboarding.recap.streak", bundle: .main))] } ?? [])
-          + (recap.badges.map { [("rosette", "\($0)", String(localized: "onboarding.recap.badges", bundle: .main))] } ?? [])
+            ("sparkles", OnboardingGreeting.localizedNumber(recap.points), String(localized: "onboarding.recap.points", bundle: .main)),
+            ("star.circle.fill", OnboardingGreeting.localizedNumber(recap.level), String(localized: "onboarding.recap.level", bundle: .main)),
+        ] + (recap.streakDays.map { [("flame.fill", OnboardingGreeting.localizedNumber($0), String(localized: "onboarding.recap.streak", bundle: .main))] } ?? [])
+          + (recap.badges.map { [("rosette", OnboardingGreeting.localizedNumber($0), String(localized: "onboarding.recap.badges", bundle: .main))] } ?? [])
 
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: MeeshySpacing.sm)], spacing: MeeshySpacing.sm) {
             ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in

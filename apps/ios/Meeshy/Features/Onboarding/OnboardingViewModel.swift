@@ -92,6 +92,11 @@ final class OnboardingViewModel: ObservableObject {
 
     var stepCount: Int { plannedSteps.count }
 
+    /// Le prénom affiché (anneau de story) — celui du profil lu au démarrage.
+    var userDisplayName: String {
+        user.map { $0.displayName ?? $0.username } ?? ""
+    }
+
     var greetingLanguageNames: [String] {
         [primaryLanguage, secondaryLanguage].compactMap { $0 }.map(OnboardingGreeting.languageName(for:))
     }

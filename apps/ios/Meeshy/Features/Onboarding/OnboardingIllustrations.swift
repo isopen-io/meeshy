@@ -125,6 +125,8 @@ struct OnboardingPrismIllustration: View {
 struct OnboardingGlobalIllustration: View {
     let isDark: Bool
 
+    @ScaledMetric(relativeTo: .largeTitle) private var globeSize: CGFloat = 60
+
     @State private var appeared = false
 
     private var samples: [(flag: String, text: String)] {
@@ -142,7 +144,9 @@ struct OnboardingGlobalIllustration: View {
                 .frame(width: 118, height: 118)
                 .shadow(color: MeeshyColors.indigo500.opacity(0.45), radius: 24, y: 10)
             Image(systemName: "globe.europe.africa.fill")
-                .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 20, weight: .regular))
+                .resizable()
+                .scaledToFit()
+                .frame(width: min(globeSize, 84), height: min(globeSize, 84))
                 .foregroundStyle(.white)
             VStack(spacing: 70) {
                 sampleBubble(samples[0]).offset(x: -60)
@@ -200,7 +204,7 @@ struct OnboardingStoryIllustration: View {
                 .foregroundStyle(.white, MeeshyColors.indigo500)
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize - 4))
                 .offset(x: 50, y: 50)
-            Text(verbatim: "24 h")
+            Text(String(localized: "onboarding.story.badge", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.sm)
@@ -248,19 +252,24 @@ struct OnboardingFriendsIllustration: View {
 struct OnboardingNotificationIllustration: View {
     let isDark: Bool
 
+    @ScaledMetric(relativeTo: .largeTitle) private var bellSize: CGFloat = 72
+
     @State private var ring = false
 
     var body: some View {
         VStack(spacing: MeeshySpacing.lg) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell.fill")
-                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 16))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: min(bellSize, 110), height: min(bellSize, 110))
                     .foregroundStyle(MeeshyColors.brandGradient)
                     .rotationEffect(.degrees(ring ? 12 : 0), anchor: .top)
                 Circle()
                     .fill(MeeshyColors.error)
-                    .frame(width: 18, height: 18)
-                    .offset(x: 4, y: -2)
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                    .offset(x: 6, y: -4)
             }
             HStack(spacing: MeeshySpacing.md) {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -289,6 +298,7 @@ struct OnboardingNotificationIllustration: View {
 
 struct OnboardingTrophyIllustration: View {
     @State private var appeared = false
+    @ScaledMetric(relativeTo: .largeTitle) private var trophySize: CGFloat = 56
 
     var body: some View {
         ZStack {
@@ -297,7 +307,9 @@ struct OnboardingTrophyIllustration: View {
                 .frame(width: 124, height: 124)
                 .shadow(color: MeeshyColors.indigo500.opacity(0.5), radius: 28, y: 12)
             Image(systemName: "trophy.fill")
-                .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 14))
+                .resizable()
+                .scaledToFit()
+                .frame(width: min(trophySize, 80), height: min(trophySize, 80))
                 .foregroundStyle(MeeshyColors.warning)
             Image(systemName: "sparkles")
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))

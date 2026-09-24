@@ -86,9 +86,11 @@ struct OnboardingPreviewScreen: View {
             await model.presentPreview(state: state,
                                        user: OnboardingPreviewLaunch.fixtureUser,
                                        jumpTo: OnboardingPreviewLaunch.requestedCard)
-            if OnboardingPreviewLaunch.showsDoneVariant {
-                model.debugApplyDoneVariant()
-            }
+            // Le geste « arrive » une fois la carte à l'écran, comme en vrai :
+            // c'est ce qui laisse le « +N » s'envoler vers la pastille.
+            guard OnboardingPreviewLaunch.showsDoneVariant else { return }
+            do { try await Task.sleep(nanoseconds: 1_200_000_000) } catch { return }
+            model.debugApplyDoneVariant()
         }
     }
 }

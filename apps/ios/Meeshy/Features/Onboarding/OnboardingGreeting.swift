@@ -45,6 +45,13 @@ enum OnboardingGreeting {
         Locale(identifier: Bundle.main.preferredLocalizations.first ?? "fr")
     }
 
+    /// Un nombre écrit comme les autres nombres de l'écran — ceux que
+    /// `localizedStringWithFormat` compose avec la locale courante (« ٢٤ » en
+    /// `ar_SA`). La langue seule (`ar`) ne dit pas le système de chiffres.
+    static func localizedNumber(_ value: Int) -> String {
+        String.localizedStringWithFormat("%lld", value)
+    }
+
     /// Le nom d'une langue, dans la langue de l'interface (« espagnol »,
     /// « Spanish », « الإسبانية »).
     static func languageName(for code: String) -> String {

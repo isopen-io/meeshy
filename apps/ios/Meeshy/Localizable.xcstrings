@@ -15175,7 +15175,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أضف 3 أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld."
+            "value": "أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld."
           }
         },
         "de": {
@@ -15410,7 +15410,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld / %2$lld نقطة للمستوى 1"
+            "value": "%1$lld / %2$lld نقطة للمستوى ١"
           }
         },
         "de": {
@@ -15457,7 +15457,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وصلت إلى المستوى 1 🎉"
+            "value": "وصلت إلى المستوى ١ 🎉"
           }
         },
         "de": {
@@ -15504,7 +15504,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy Global هو المكان الذي يلتقي فيه الجميع. أرسل تحية، بلا ضغط."
+            "value": "في Meeshy Global يلتقي الجميع. أرسل تحية، بلا ضغط."
           }
         },
         "de": {
@@ -17989,13 +17989,60 @@
         }
       }
     },
+    "onboarding.story.badge": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "٢٤ س"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 Std."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24h"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 h"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 h"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 h"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "24 h"
+          }
+        }
+      }
+    },
     "onboarding.story.body": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الأصدقاء يأتون حين تُظهر من أنت. صورة وكلمة: إنها قصة تختفي خلال 24 ساعة."
+            "value": "الأصدقاء يأتون حين تُظهر من أنت. صورة وكلمة: إنها قصة تختفي خلال ٢٤ ساعة."
           }
         },
         "de": {

@@ -59,8 +59,13 @@ struct OnboardingOverlay: View {
     private var topBar: some View {
         VStack(spacing: MeeshySpacing.md) {
             HStack {
-                OnboardingPointsPill(points: model.sessionPoints, bump: pillBump)
-                    .overlay { rewardFlight }
+                // Au récapitulatif, ce sont les chiffres RELUS du serveur qui
+                // parlent : la pastille de session les contredirait.
+                if model.card != .recap {
+                    OnboardingPointsPill(points: model.sessionPoints, bump: pillBump)
+                        .overlay { rewardFlight }
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                }
                 Spacer(minLength: MeeshySpacing.md)
                 if model.card != .recap {
                     Button {
@@ -89,7 +94,7 @@ struct OnboardingOverlay: View {
     @ViewBuilder
     private var rewardFlight: some View {
         if let flight {
-            Text(verbatim: "+\(flight.points)")
+            Text(verbatim: "+" + OnboardingGreeting.localizedNumber(flight.points))
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(MeeshyColors.brandGradient)
                 .shadow(color: MeeshyColors.indigo500.opacity(0.5), radius: 12, y: 4)

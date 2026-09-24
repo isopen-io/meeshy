@@ -42,20 +42,39 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
             .padding(.top, MeeshySpacing.md)
             .padding(.bottom, MeeshySpacing.xl)
         }
+        .onboardingScrollClipDisabled()
         .safeAreaInset(edge: .bottom) {
             if !dynamicTypeSize.isAccessibilitySize {
                 actions
                     .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.xxl)
                     .padding(.bottom, MeeshySpacing.md)
+                    .background(bottomFade)
             }
         }
     }
 
+    /// Le contenu qui défile sous les boutons s'efface au lieu d'être coupé net.
+    private var bottomFade: some View {
+        LinearGradient(
+            colors: [MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0),
+                     MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0.92)],
+            startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)
+        )
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+    }
+
     private var card: some View {
         VStack(spacing: MeeshySpacing.xl) {
+            // Décorative et masquée à VoiceOver, l'illustration plafonne sa
+            // taille de texte : en AX5, ses bulles déborderaient la carte sans
+            // rien apprendre à personne. Le titre, le texte et les actions,
+            // eux, suivent Dynamic Type jusqu'au bout.
             illustration()
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 150)
+                .frame(minHeight: 110)
                 .accessibilityHidden(true)
 
             VStack(spacing: MeeshySpacing.sm) {
@@ -106,6 +125,17 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
 struct OnboardingPrimaryButton: View {
     let action: OnboardingAction
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Désactivé, le bouton reste OPAQUE : une capsule translucide laisserait
+    /// lire le contenu qui défile dessous, à travers le libellé.
+    private var fill: AnyShapeStyle {
+        guard action.isEnabled else {
+            return AnyShapeStyle(colorScheme == .dark ? MeeshyColors.indigo900 : MeeshyColors.indigo200)
+        }
+        return AnyShapeStyle(MeeshyColors.brandGradient)
+    }
+
     var body: some View {
         Button(action: action.perform) {
             HStack(spacing: MeeshySpacing.sm) {
@@ -116,12 +146,11 @@ struct OnboardingPrimaryButton: View {
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(action.isEnabled ? Color.white : (colorScheme == .dark ? Color.white.opacity(0.6) : MeeshyColors.indigo600))
             .frame(maxWidth: .infinity, minHeight: 54)
             .padding(.horizontal, MeeshySpacing.lg)
-            .background(Capsule().fill(MeeshyColors.brandGradient))
-            .opacity(action.isEnabled ? 1 : 0.5)
-            .shadow(color: MeeshyColors.indigo500.opacity(0.35), radius: 14, y: 6)
+            .background(Capsule().fill(fill))
+            .shadow(color: MeeshyColors.indigo500.opacity(action.isEnabled ? 0.35 : 0), radius: 14, y: 6)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -267,7 +296,9 @@ struct OnboardingPointsPill: View {
             Image(systemName: "sparkles")
             Text(String.localizedStringWithFormat(String(localized: "onboarding.points.pill", bundle: .main), points))
                 .monospacedDigit()
+                .lineLimit(1)
         }
+        .fixedSize()
         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
         .foregroundStyle(.white)
         .padding(.horizontal, MeeshySpacing.md)
@@ -298,5 +329,20 @@ struct OnboardingProgressBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String.localizedStringWithFormat(String(localized: "onboarding.progress.a11y", bundle: .main), position, count))
+    }
+}
+
+// MARK: - Défilement
+
+private extension View {
+    /// L'ombre de la carte déborde du défilement au lieu d'y être tranchée net
+    /// (iOS 17+ ; en iOS 16 l'ombre reste simplement coupée au bord).
+    @ViewBuilder
+    func onboardingScrollClipDisabled() -> some View {
+        if #available(iOS 17.0, *) {
+            scrollClipDisabled()
+        } else {
+            self
+        }
     }
 }
