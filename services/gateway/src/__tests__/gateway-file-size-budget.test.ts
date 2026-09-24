@@ -151,6 +151,10 @@ const MAX_LINES = 1000;
  *
  * `services/PostService.ts` : entrée 2663 → 2628 (#7406, 2026-09-22) — le like
  * et le retrait ne réécrivent plus le Json legacy `Post.reactions`.
+ *
+ * `services/MentionService.ts` : SORTI (1235 → 687, #7852, 2026-09-25). Les
+ * suggestions d'autocomplete sont parties vers `services/mentions/`, avec la
+ * portée qu'elles partagent désormais avec la validation à l'envoi.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 3761,
@@ -165,7 +169,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,
   'services/AuthService.ts': 1324,
-  'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,
   'services/PushNotificationService.ts': 1041,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
