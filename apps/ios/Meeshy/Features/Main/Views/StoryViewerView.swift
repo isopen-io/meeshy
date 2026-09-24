@@ -285,7 +285,9 @@ struct StoryViewerView: View {
     @State var contentOpacity: Double = 1 // internal for cross-file extension access
 
     // Outgoing layer for true cross-dissolve (old stays visible while new fades in)
-    @State var outgoingStory: StoryItem? = nil // internal for cross-file extension access
+    // `@Indirect` : un `StoryItem` en ligne faisait passer la vue au-dessus du
+    // budget de `ConversationViewValueSizeGuardTests` (8 208 > 8 192 octets).
+    @State @Indirect var outgoingStory: StoryItem? = nil // internal for cross-file extension access
     @State var outgoingOpacity: Double = 0 // internal for cross-file extension access
 
     // Transition lock — prevents overlapping animations
