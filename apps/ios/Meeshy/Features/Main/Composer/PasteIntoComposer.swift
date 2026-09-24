@@ -270,7 +270,11 @@ extension PasteIntoComposer {
         _ file: ComposerPastedFile,
         surface: PasteSurface
     ) async -> UIImage? {
-        guard let data = try? Data(contentsOf: file.url) else { return nil }
+        // Lu HORS du MainActor : une photo collée pèse plusieurs Mo.
+        let url = file.url
+        guard let data = await Task.detached(priority: .userInitiated, operation: {
+            try? Data(contentsOf: url)
+        }).value else { return nil }
         let budget = PasteDestination.resolve(surface: surface, ingest: .image).maxSide
         let image = await StoryMediaLoader.shared.loadImage(
             data: data, maxDimension: CGFloat(budget))

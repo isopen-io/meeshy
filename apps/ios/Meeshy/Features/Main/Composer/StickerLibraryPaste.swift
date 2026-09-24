@@ -95,9 +95,12 @@ nonisolated enum StickerLibraryPaste {
     /// qu'on garde est décidé par `keep(original:)` juste en dessous.
     @MainActor
     private static func persistIfLibraryWrite(_ file: ComposerPastedFile) async -> StoryStickerLibraryItem? {
-        guard PasteDestination.resolve(surface: .stickers, ingest: .image).libraryWrite,
-              let data = try? Data(contentsOf: file.url)
-        else { return nil }
+        guard PasteDestination.resolve(surface: .stickers, ingest: .image).libraryWrite else { return nil }
+        // Lu HORS du MainActor : une image collée pèse plusieurs Mo.
+        let url = file.url
+        guard let data = await Task.detached(priority: .userInitiated, operation: {
+            try? Data(contentsOf: url)
+        }).value else { return nil }
         defer { try? FileManager.default.removeItem(at: file.url) }
         return await keep(original: data)
     }

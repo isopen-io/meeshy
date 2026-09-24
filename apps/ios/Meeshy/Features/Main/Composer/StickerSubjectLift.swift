@@ -98,6 +98,10 @@ nonisolated enum StickerSubjectLift {
         return try bounded(pixelBuffer: masked, orientation: source.imageOrientation)
     }
 
+    /// Construit une fois : un `CIContext` est coûteux à monter et sûr à
+    /// partager entre threads (doc Apple).
+    private static let liftContext = CIContext()
+
     /// Ramène le buffer de Vision à une `UIImage` bornée par `maxSide`.
     ///
     /// Le redimensionnement passe par un rendu à échelle 1 et fond
@@ -107,8 +111,7 @@ nonisolated enum StickerSubjectLift {
     private static func bounded(pixelBuffer: CVPixelBuffer,
                                 orientation: UIImage.Orientation) throws -> UIImage {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+        guard let cgImage = liftContext.createCGImage(ciImage, from: ciImage.extent) else {
             throw Failure.unreadable
         }
         let lifted = UIImage(cgImage: cgImage, scale: 1, orientation: orientation)

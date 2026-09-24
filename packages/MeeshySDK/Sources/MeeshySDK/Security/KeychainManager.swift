@@ -153,13 +153,20 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// Migrate existing Keychain items from WhenUnlocked to AfterFirstUnlock accessibility.
     /// Items stored with WhenUnlocked are not readable by the NSE when the device is locked.
     /// This must be called once at app startup.
+    ///
+    /// The enumeration asks for ATTRIBUTES only: it runs on every cold start,
+    /// on the launch path, and almost every item is already migrated. Asking
+    /// for `kSecReturnData` made securityd decrypt and ship every secret each
+    /// launch just to skip it; the data is now fetched only for an item that
+    /// actually needs rewriting. Kept synchronous on purpose — the rewrite is a
+    /// delete + add, and a token read landing between the two would find the
+    /// item missing.
     public func migrateToAfterFirstUnlock() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true,
-            kSecReturnData as String: true,
         ]
 
         var result: AnyObject?
@@ -169,20 +176,26 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
         let targetAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String
 
         for item in items {
-            guard let account = item[kSecAttrAccount as String] as? String,
-                  let data = item[kSecValueData as String] as? Data else { continue }
+            guard let account = item[kSecAttrAccount as String] as? String else { continue }
 
             if let accessible = item[kSecAttrAccessible as String] as? String,
                accessible == targetAccessibility { continue }
 
-            let deleteQuery: [String: Any] = [
+            let itemQuery: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service,
                 kSecAttrAccount as String: account,
             ]
-            SecItemDelete(deleteQuery as CFDictionary)
+            var dataQuery = itemQuery
+            dataQuery[kSecReturnData as String] = true
+            dataQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+            var dataResult: AnyObject?
+            guard SecItemCopyMatching(dataQuery as CFDictionary, &dataResult) == errSecSuccess,
+                  let data = dataResult as? Data else { continue }
 
-            var addQuery = deleteQuery
+            SecItemDelete(itemQuery as CFDictionary)
+
+            var addQuery = itemQuery
             addQuery[kSecValueData as String] = data
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             SecItemAdd(addQuery as CFDictionary, nil)

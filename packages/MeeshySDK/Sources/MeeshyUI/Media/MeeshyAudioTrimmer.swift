@@ -70,12 +70,26 @@ public struct MeeshyAudioTrimmer: View {
         var composants = DateComponents()
         composants.minute = total / 60
         composants.second = total % 60
+        return formateurParle(locale: locale).string(from: composants) ?? "\(total)"
+    }
+
+    /// Un formateur par locale, construit une fois : la valeur parlée est
+    /// recalculée à CHAQUE image de la tête de lecture (60 Hz, deux poignées,
+    /// plus le lecteur de transcription), et un `DateComponentsFormatter` neuf
+    /// par appel coûtait une allocation et un `Calendar` à chaque rendu.
+    /// `NSCache` est thread-safe ; un formateur qu'on ne mute plus aussi.
+    private nonisolated(unsafe) static let formateursParles = NSCache<NSString, DateComponentsFormatter>()
+
+    private nonisolated static func formateurParle(locale: Locale) -> DateComponentsFormatter {
+        let cle = locale.identifier as NSString
+        if let formateur = formateursParles.object(forKey: cle) { return formateur }
         let formateur = DateComponentsFormatter()
         formateur.allowedUnits = [.minute, .second]
         formateur.unitsStyle = .spellOut
         formateur.calendar = Calendar(identifier: .gregorian)
         formateur.calendar?.locale = locale
-        return formateur.string(from: composants) ?? "\(total)"
+        formateursParles.setObject(formateur, forKey: cle)
+        return formateur
     }
 
     public init(

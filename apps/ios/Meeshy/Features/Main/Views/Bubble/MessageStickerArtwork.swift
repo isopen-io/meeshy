@@ -181,7 +181,10 @@ struct MessageStickerMotion: ViewModifier {
                 }
                 .id(appearedAt)
             } else {
-                TimelineView(.animation(paused: appearedAt == nil)) { context in
+                // 60 Hz, pas 120 : sur ProMotion chaque sticker en boucle visible
+                // ré-évaluait son corps à la cadence de l'écran, pendant le
+                // défilement du fil — un mouvement de sticker n'y gagne rien.
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: appearedAt == nil)) { context in
                     posed(content, animation.pose(at: elapsed(at: context.date)))
                 }
             }

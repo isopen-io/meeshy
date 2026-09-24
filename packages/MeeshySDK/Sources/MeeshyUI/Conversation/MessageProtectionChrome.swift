@@ -163,11 +163,7 @@ public struct MessageProtectionChrome: View, Equatable {
     /// « disparaît dans 4 minutes » — la formulation du lecteur d'écran est
     /// RELATIVE et lisible, là où la capsule montre « 3:59 ».
     public static func ephemeralA11y(deadline: Date, now: Date = Date()) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .full
-        formatter.allowedUnits = [.hour, .minute, .second]
-        formatter.maximumUnitCount = 1
-        let remaining = formatter.string(from: max(0, deadline.timeIntervalSince(now))) ?? ""
+        let remaining = remainingFormatter.string(from: max(0, deadline.timeIntervalSince(now))) ?? ""
         return String(
             localized: "protection.ephemeral.a11y",
             defaultValue: "Message éphémère, disparaît dans \(remaining)",
@@ -176,11 +172,20 @@ public struct MessageProtectionChrome: View, Equatable {
     }
 
     public static func awaitingLabel(duration: TimeInterval) -> String {
+        awaitingFormatter.string(from: duration) ?? ""
+    }
+
+    /// Construits une fois : ces libellés sont recomposés par chaque bulle
+    /// éphémère à chacun de ses rendus (étiquette d'accessibilité, décompte).
+    private static let remainingFormatter = unitFormatter(style: .full)
+    private static let awaitingFormatter = unitFormatter(style: .abbreviated)
+
+    private static func unitFormatter(style: DateComponentsFormatter.UnitsStyle) -> DateComponentsFormatter {
         let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
+        formatter.unitsStyle = style
         formatter.allowedUnits = [.hour, .minute, .second]
         formatter.maximumUnitCount = 1
-        return formatter.string(from: duration) ?? ""
+        return formatter
     }
 
     public static func awaitingA11y(duration: TimeInterval) -> String {
