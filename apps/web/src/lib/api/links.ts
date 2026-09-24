@@ -13,8 +13,12 @@ import type { ApiResult, HttpTransport } from './http';
  *   lecteur (`services/gateway/src/routes/links/user.ts` : `where: { createdBy:
  *   userId }`), et sur la première page les agrégats RÉELS dans `meta.summary`
  *   (l'alias `/links/stats` est déprécié, il n'est jamais appelé).
- * - `PATCH /api/v1/links/:linkId { isActive }` — la seule écriture canonique
- *   (`management.ts`) : désactiver révoque aussi les invités déjà entrés.
+ * - `PATCH /api/v1/links/:linkId` — la seule écriture canonique
+ *   (`management.ts`) : `{ isActive }` pour (dés)activer — désactiver révoque
+ *   aussi les invités déjà entrés — et les champs changés de la page du
+ *   créateur (#7797).
+ * - `DELETE /api/v1/links/:linkId` — « Supprimer » (#7797). La passerelle ne
+ *   fait aujourd'hui que FERMER la ligne (`admin.ts`, #6411).
  * - `POST /api/v1/links` — la création (`creation.ts`), qui sert aussi la
  *   feuille de partage d'un fil (`components/share-link-sheet.tsx`).
  *
@@ -24,8 +28,11 @@ import type { ApiResult, HttpTransport } from './http';
  * ses participants et ses messages) n'est faite ici.
  *
  * **Un lien décodé est une PROJECTION.** Le cache de requêtes est persisté
- * (`query-client.ts`) : seules les onze clés du socle y entrent. Le créateur, la
- * conversation et la politique d'accès que `PATCH` rend à côté ne passent pas.
+ * (`query-client.ts`) : les onze clés du socle, le message d'invitation et la
+ * POLITIQUE du lien (`?expand=policy`, #7797 — ce que la page du créateur
+ * montre et modifie) y entrent. Ce sont les liens DU LECTEUR, bornés par la
+ * passerelle à `createdBy`. Le créateur, la conversation, les plages IP et les
+ * pays que la charge porte à côté ne passent pas.
  *
  * **Aucun `identifier` ne part à la création** : `createLinkSchema` (gateway,
  * `routes/links/types.ts`) ne le déclare pas et zod le retire en silence. Le
@@ -42,6 +49,24 @@ export const MAX_USES_CEILING = 10_000;
 export const INACTIVE_REASONS = ['CONVERSATION_CLOSED', 'LINK_EXPIRED', 'REVOKED'] as const;
 export type ShareLinkInactiveReason = (typeof INACTIVE_REASONS)[number];
 
+/**
+ * **LA POLITIQUE D'UN LIEN** (#7797) — ce qu'il exige et concède, telle que
+ * `GET /links?expand=policy` la sert. `allowedLanguages` VIDE signifie
+ * « toutes ». `maxConcurrentUsers: null` : sans limite.
+ */
+export type ShareLinkPolicy = {
+  readonly maxConcurrentUsers: number | null;
+  readonly requireAccount: boolean;
+  readonly requireNickname: boolean;
+  readonly requireEmail: boolean;
+  readonly requireBirthday: boolean;
+  readonly allowAnonymousMessages: boolean;
+  readonly allowAnonymousImages: boolean;
+  readonly allowAnonymousFiles: boolean;
+  readonly allowViewHistory: boolean;
+  readonly allowedLanguages: readonly string[];
+};
+
 export type MyShareLink = {
   readonly id: string;
   readonly linkId: string;
@@ -54,6 +79,10 @@ export type MyShareLink = {
   readonly createdAt: string;
   readonly conversationTitle: string | null;
   readonly inactiveReason: ShareLinkInactiveReason | null;
+  /** Le message d'invitation (`description`), affiché aux invités. */
+  readonly description: string | null;
+  /** `null` : la ligne a été lue sans `?expand=policy` (cache d'avant #7797). */
+  readonly policy: ShareLinkPolicy | null;
 };
 
 export type ShareLinksSummary = { readonly totalLinks: number; readonly activeLinks: number; readonly totalUses: number };
@@ -81,6 +110,7 @@ export type ShareLinkResult = {
 
 const optionalText = z.optional(z.nullable(z.string()));
 const optionalNumber = z.optional(z.nullable(z.number()));
+const optionalFlag = z.optional(z.nullable(z.boolean()));
 
 const WireLink = z.object({
   id: z.string().check(z.minLength(1)),
@@ -94,7 +124,20 @@ const WireLink = z.object({
   createdAt: z.string().check(z.refine((value) => !Number.isNaN(Date.parse(value)))),
   conversationTitle: optionalText,
   inactiveReason: optionalText,
+  description: optionalText,
+  maxConcurrentUsers: optionalNumber,
+  requireAccount: optionalFlag,
+  requireNickname: optionalFlag,
+  requireEmail: optionalFlag,
+  requireBirthday: optionalFlag,
+  allowAnonymousMessages: optionalFlag,
+  allowAnonymousImages: optionalFlag,
+  allowAnonymousFiles: optionalFlag,
+  allowViewHistory: optionalFlag,
+  allowedLanguages: z.optional(z.nullable(z.array(z.string()))),
 });
+
+type WireLinkRow = z.infer<typeof WireLink>;
 
 const WireSummary = z.object({
   summary: z.object({ totalLinks: z.number(), activeLinks: z.number(), totalUses: z.number() }),
@@ -127,6 +170,24 @@ const limitOf = (value: number | null | undefined): number | null =>
 const reasonOf = (isActive: boolean, raw: string | null | undefined): ShareLinkInactiveReason | null =>
   isActive ? null : (INACTIVE_REASONS.find((reason) => reason === raw) ?? 'REVOKED');
 
+/** La politique n'existe que si la charge la PORTE : `requireAccount` est
+ * toujours servi par `?expand=policy`. Sans lui, rien ne s'invente. */
+function policyOf(wire: WireLinkRow): ShareLinkPolicy | null {
+  if (typeof wire.requireAccount !== 'boolean') return null;
+  return {
+    maxConcurrentUsers: limitOf(wire.maxConcurrentUsers),
+    requireAccount: wire.requireAccount,
+    requireNickname: wire.requireNickname === true,
+    requireEmail: wire.requireEmail === true,
+    requireBirthday: wire.requireBirthday === true,
+    allowAnonymousMessages: wire.allowAnonymousMessages === true,
+    allowAnonymousImages: wire.allowAnonymousImages === true,
+    allowAnonymousFiles: wire.allowAnonymousFiles === true,
+    allowViewHistory: wire.allowViewHistory === true,
+    allowedLanguages: (wire.allowedLanguages ?? []).map((code) => code.trim().toLowerCase()).filter((code) => code !== ''),
+  };
+}
+
 export function decodeMyShareLink(raw: unknown): MyShareLink | null {
   const parsed = WireLink.safeParse(raw);
   if (!parsed.success) return null;
@@ -143,6 +204,8 @@ export function decodeMyShareLink(raw: unknown): MyShareLink | null {
     createdAt: wire.createdAt,
     conversationTitle: textOrNull(wire.conversationTitle),
     inactiveReason: reasonOf(wire.isActive, wire.inactiveReason),
+    description: textOrNull(wire.description),
+    policy: policyOf(wire),
   };
 }
 
@@ -162,7 +225,7 @@ export async function loadMyShareLinks(
     const { fixtureShareLinksPage } = await import('./fixtures-links');
     return { ok: true, data: fixtureShareLinksPage(params.offset) };
   }
-  const query = new URLSearchParams({ offset: String(params.offset), limit: String(SHARE_LINKS_PAGE_SIZE) });
+  const query = new URLSearchParams({ offset: String(params.offset), limit: String(SHARE_LINKS_PAGE_SIZE), expand: 'policy' });
   if (params.offset === 0) query.set('include', 'summary');
   const result = await params.transport.request<unknown>({
     method: 'GET',
@@ -231,6 +294,47 @@ export async function setShareLinkActive(deps: LinksDeps, linkId: string, isActi
   return parsed.success ? { ok: true, data: { isActive: parsed.data.isActive } } : { ok: false, status: 0, error: 'Lien illisible' };
 }
 
+/**
+ * **CE QUE LA PAGE DU CRÉATEUR MODIFIE** (#7797) — un sous-ensemble de
+ * `updateLinkSchema` (gateway, `routes/links/types.ts`), et SEULEMENT les
+ * champs changés : un corps qui renverrait tout écraserait une modification
+ * faite ailleurs entre la lecture et l'envoi.
+ */
+export type ShareLinkPatch = {
+  readonly name?: string;
+  readonly description?: string;
+  readonly expiresAt?: string | null;
+  readonly maxUses?: number | null;
+  readonly maxConcurrentUsers?: number | null;
+  readonly requireAccount?: boolean;
+  readonly requireNickname?: boolean;
+  readonly requireEmail?: boolean;
+  readonly requireBirthday?: boolean;
+  readonly allowAnonymousMessages?: boolean;
+  readonly allowAnonymousImages?: boolean;
+  readonly allowAnonymousFiles?: boolean;
+  readonly allowViewHistory?: boolean;
+  readonly allowedLanguages?: readonly string[];
+};
+
+export async function updateShareLink(deps: LinksDeps, linkId: string, patch: ShareLinkPatch): Promise<ApiResult<{ readonly linkId: string }>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureUpdateShareLink } = await import('./fixtures-links');
+    return fixtureUpdateShareLink(linkId, patch);
+  }
+  const result = await deps.transport.request<unknown>({ method: 'PATCH', path: `/api/v1/links/${encodeURIComponent(linkId)}`, body: patch });
+  return result.ok ? { ok: true, data: { linkId } } : result;
+}
+
+export async function deleteShareLink(deps: LinksDeps, linkId: string): Promise<ApiResult<{ readonly linkId: string }>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureDeleteShareLink } = await import('./fixtures-links');
+    return fixtureDeleteShareLink(linkId);
+  }
+  const result = await deps.transport.request<unknown>({ method: 'DELETE', path: `/api/v1/links/${encodeURIComponent(linkId)}` });
+  return result.ok ? { ok: true, data: { linkId } } : result;
+}
+
 export const SHARE_LINK_EXPIRATIONS = ['never', 'h24', 'd7', 'd30', 'm3'] as const;
 export type ShareLinkExpiration = (typeof SHARE_LINK_EXPIRATIONS)[number];
 
@@ -294,7 +398,7 @@ export const defaultShareLinkDraft = (conversationId: string | null): ShareLinkD
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-const EXPIRATION_AT: Readonly<Record<ShareLinkExpiration, (now: Date) => Date | null>> = {
+export const EXPIRATION_AT: Readonly<Record<ShareLinkExpiration, (now: Date) => Date | null>> = {
   never: () => null,
   h24: (now) => new Date(now.getTime() + 24 * HOUR_MS),
   d7: (now) => new Date(now.getTime() + 7 * DAY_MS),

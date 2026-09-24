@@ -1,9 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { withLinkActive, withLinkFirst } from '../links/view';
+import { patchedLink } from '../links/edit-draft';
+import { withLinkActive, withLinkFirst, withLinkRemoved, withLinkReplaced } from '../links/view';
 import {
   createShareLinkFromDraft,
+  deleteShareLink,
   setShareLinkActive,
+  updateShareLink,
   SHARE_LINKS_QUERY_KEY,
   SHARE_LINKS_QUERY_PREFIX,
   validateShareLinkDraft,
@@ -11,6 +14,7 @@ import {
   type MyShareLink,
   type ShareLinkDraft,
   type ShareLinkDraftField,
+  type ShareLinkPatch,
   type ShareLinksData,
 } from './links';
 
@@ -77,6 +81,51 @@ export function performSetShareLinkActive({
   });
 }
 
+/**
+ * **ENREGISTRER UNE MODIFICATION EST OPTIMISTE** (#7797) — la page du créateur,
+ * sa carte de configuration et la ligne de la liste lisent le MÊME cache : ils
+ * changent au geste, et reviennent à l'instantané si la passerelle refuse (puis
+ * la famille se revalide). Un corps vide ne part pas.
+ */
+export type ShareLinkUpdateOutcome = 'done' | 'offline' | 'failed' | 'unchanged';
+
+export async function performUpdateShareLink({
+  link,
+  patch,
+  deps,
+}: {
+  readonly link: MyShareLink;
+  readonly patch: ShareLinkPatch;
+  readonly deps: LinkActionDeps;
+}): Promise<ShareLinkUpdateOutcome> {
+  if (Object.keys(patch).length === 0) return 'unchanged';
+  if (!deps.isOnline()) return 'offline';
+  const snapshot = deps.queryClient.getQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY);
+  deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, (data) => withLinkReplaced(data, patchedLink(link, patch)));
+  const result = await updateShareLink(deps, link.linkId, patch);
+  if (result.ok) return 'done';
+  deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, snapshot);
+  void deps.queryClient.invalidateQueries({ queryKey: SHARE_LINKS_QUERY_PREFIX });
+  return 'failed';
+}
+
+/**
+ * **SUPPRIMER** (#7797) — le lien quitte la liste au geste ; un refus le remet.
+ * La passerelle ne fait aujourd'hui que FERMER la ligne (`DELETE /links/:id`,
+ * `admin.ts`) : une relecture ultérieure de la liste le rendra « inactif »
+ * tant que #6411 n'a pas tranché la suppression réelle.
+ */
+export async function performDeleteShareLink({ link, deps }: { readonly link: MyShareLink; readonly deps: LinkActionDeps }): Promise<ShareLinkActionOutcome> {
+  if (!deps.isOnline()) return 'offline';
+  const snapshot = deps.queryClient.getQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY);
+  deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, (data) => withLinkRemoved(data, link.linkId));
+  const result = await deleteShareLink(deps, link.linkId);
+  if (result.ok) return 'done';
+  deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, snapshot);
+  void deps.queryClient.invalidateQueries({ queryKey: SHARE_LINKS_QUERY_PREFIX });
+  return 'failed';
+}
+
 export type CreateShareLinkOutcome =
   | { readonly status: 'created'; readonly link: MyShareLink }
   | { readonly status: 'invalid'; readonly field: ShareLinkDraftField }
@@ -115,6 +164,19 @@ export async function performCreateShareLink({
     createdAt: now.toISOString(),
     conversationTitle,
     inactiveReason: shareLink.isActive ? null : 'REVOKED',
+    description: shareLink.description,
+    policy: {
+      maxConcurrentUsers: null,
+      requireAccount: verdict.body.requireAccount,
+      requireNickname: verdict.body.requireNickname,
+      requireEmail: verdict.body.requireEmail,
+      requireBirthday: verdict.body.requireBirthday,
+      allowAnonymousMessages: verdict.body.allowAnonymousMessages,
+      allowAnonymousImages: verdict.body.allowAnonymousImages,
+      allowAnonymousFiles: verdict.body.allowAnonymousFiles,
+      allowViewHistory: verdict.body.allowViewHistory,
+      allowedLanguages: [],
+    },
   };
   deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, (data) => withLinkFirst(data, link));
   void deps.queryClient.invalidateQueries({ queryKey: SHARE_LINKS_QUERY_PREFIX, refetchType: 'none' });

@@ -24,6 +24,8 @@ const link = (overrides: Partial<MyShareLink> = {}): MyShareLink => ({
   createdAt: '2026-09-10T09:00:00.000Z',
   conversationTitle: 'Équipe',
   inactiveReason: null,
+  description: null,
+  policy: null,
   ...overrides,
 });
 

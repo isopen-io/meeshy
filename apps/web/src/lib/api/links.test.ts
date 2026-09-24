@@ -5,9 +5,11 @@ import {
   createShareLink,
   createShareLinkFromDraft,
   defaultShareLinkDraft,
+  deleteShareLink,
   loadMyShareLinks,
   setShareLinkActive,
   shareLinkUrl,
+  updateShareLink,
   validateShareLinkDraft,
 } from './links';
 
@@ -56,6 +58,21 @@ const recording = (result: ApiResult<unknown>) => {
   return { transport, last: () => transport.lastRequest as Recorded };
 };
 
+const wirePolicy = () => ({
+  description: 'Viens, on commente l’épisode.',
+  maxConcurrentUsers: 50,
+  currentConcurrentUsers: 3,
+  allowAnonymousMessages: true,
+  allowAnonymousFiles: false,
+  allowAnonymousImages: true,
+  allowViewHistory: true,
+  requireAccount: false,
+  requireNickname: true,
+  requireEmail: false,
+  requireBirthday: false,
+  allowedLanguages: ['fr', 'ko'],
+});
+
 const wireLink = (overrides: Readonly<Record<string, unknown>> = {}) => ({
   id: 'l1',
   linkId: 'mshy_l1',
@@ -80,7 +97,7 @@ describe('loadMyShareLinks — GET /api/v1/links (les SIENS, `createdBy` côté 
       meta: { summary: { totalLinks: 4, activeLinks: 2, totalUses: 131 } },
     });
     const result = await loadMyShareLinks({ source: 'gateway', transport, offset: 0 });
-    expect([last().method, last().path]).toEqual(['GET', '/api/v1/links?offset=0&limit=50&include=summary']);
+    expect([last().method, last().path]).toEqual(['GET', '/api/v1/links?offset=0&limit=50&expand=policy&include=summary']);
     expect(result.ok && result.data.summary).toEqual({ totalLinks: 4, activeLinks: 2, totalUses: 131 });
     expect(result.ok && result.data.nextOffset).toBeNull();
   });
@@ -88,23 +105,50 @@ describe('loadMyShareLinks — GET /api/v1/links (les SIENS, `createdBy` côté 
   test('une page suivante ne redemande pas le résumé, et `hasMore` donne l’offset suivant', async () => {
     const { transport, last } = recording({ ok: true, data: [wireLink()], pagination: { total: 51, offset: 50, limit: 50, hasMore: true } });
     const result = await loadMyShareLinks({ source: 'gateway', transport, offset: 50 });
-    expect(last().path).toBe('/api/v1/links?offset=50&limit=50');
+    expect(last().path).toBe('/api/v1/links?offset=50&limit=50&expand=policy');
     expect(result.ok && result.data.summary).toBeNull();
     expect(result.ok && result.data.nextOffset).toBe(51);
   });
 
-  test('la projection ne garde que ce qui se peint : créateur, conversation et politique ne passent pas', async () => {
+  test('la projection garde ce que la page du créateur peint — message et politique — jamais le créateur, la conversation ni les plages IP', async () => {
     const raw = wireLink({
       creator: { id: 'u1', username: 'moi', avatar: 'https://cdn/moi.png' },
       conversation: { id: 'c-1', title: 'Équipe', type: 'group' },
       allowedIpRanges: ['10.0.0.0/8'],
-      requireEmail: true,
+      allowedCountries: ['FR'],
+      ...wirePolicy(),
     });
     const result = await loadMyShareLinks({ source: 'gateway', transport: fakeTransport({ ok: true, data: [raw] }), offset: 0 });
     const decoded = result.ok ? result.data.links[0] : undefined;
     expect(Object.keys(decoded ?? {}).sort()).toEqual(
-      ['conversationTitle', 'createdAt', 'currentUses', 'expiresAt', 'id', 'identifier', 'inactiveReason', 'isActive', 'linkId', 'maxUses', 'name'].sort(),
+      ['conversationTitle', 'createdAt', 'currentUses', 'description', 'expiresAt', 'id', 'identifier', 'inactiveReason', 'isActive', 'linkId', 'maxUses', 'name', 'policy'].sort(),
     );
+    expect(JSON.stringify(decoded)).not.toContain('10.0.0.0');
+    expect(JSON.stringify(decoded)).not.toContain('moi.png');
+  });
+
+  test('la politique décodée : droits des invités, conditions d’entrée, concurrence et langues autorisées', async () => {
+    const result = await loadMyShareLinks({ source: 'gateway', transport: fakeTransport({ ok: true, data: [wireLink(wirePolicy())] }), offset: 0 });
+    const decoded = result.ok ? result.data.links[0] : undefined;
+    expect(decoded?.description).toBe('Viens, on commente l’épisode.');
+    expect(decoded?.policy).toEqual({
+      maxConcurrentUsers: 50,
+      requireAccount: false,
+      requireNickname: true,
+      requireEmail: false,
+      requireBirthday: false,
+      allowAnonymousMessages: true,
+      allowAnonymousImages: true,
+      allowAnonymousFiles: false,
+      allowViewHistory: true,
+      allowedLanguages: ['fr', 'ko'],
+    });
+  });
+
+  test('une ligne SANS politique servie (cache d’avant `expand=policy`) n’en invente aucune', async () => {
+    const result = await loadMyShareLinks({ source: 'gateway', transport: fakeTransport({ ok: true, data: [wireLink()] }), offset: 0 });
+    expect(result.ok && result.data.links[0]?.policy).toBeNull();
+    expect(result.ok && result.data.links[0]?.description).toBeNull();
   });
 
   test('une ligne illisible est écartée, jamais complétée', async () => {
@@ -216,5 +260,28 @@ describe('createShareLinkFromDraft — POST /api/v1/links', () => {
     expect(last().method).toBe('POST');
     expect(last().path).toBe('/api/v1/links');
     expect((last().body as Record<string, unknown>).allowViewHistory).toBe(true);
+  });
+});
+
+describe('updateShareLink — PATCH /api/v1/links/:linkId (#7797)', () => {
+  test('n’envoie que les champs CHANGÉS, à l’identifiant encodé', async () => {
+    const { transport, last } = recording({ ok: true, data: { id: 'l1', linkId: 'mshy_l1' } });
+    const result = await updateShareLink({ source: 'gateway', transport }, 'mshy_é 1', { name: 'Nouveau', maxUses: null, allowedLanguages: [] });
+    expect(result.ok).toBe(true);
+    expect([last().method, last().path, last().body]).toEqual(['PATCH', '/api/v1/links/mshy_%C3%A9%201', { name: 'Nouveau', maxUses: null, allowedLanguages: [] }]);
+  });
+
+  test('un refus reste un échec', async () => {
+    const result = await updateShareLink({ source: 'gateway', transport: fakeTransport({ ok: false, status: 403, error: 'non' }) }, 'mshy_l1', { name: 'x' });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('deleteShareLink — DELETE /api/v1/links/:linkId (#7797)', () => {
+  test('appelle DELETE à l’identifiant encodé', async () => {
+    const { transport, last } = recording({ ok: true, data: { message: 'Lien fermé avec succès' } });
+    const result = await deleteShareLink({ source: 'gateway', transport }, 'mshy_l1');
+    expect(result.ok).toBe(true);
+    expect([last().method, last().path]).toEqual(['DELETE', '/api/v1/links/mshy_l1']);
   });
 });
