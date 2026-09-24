@@ -1,8 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ApiFailure } from '@/lib/api/http';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { sendFailureReason } from './failure-reason';
+import { sendFailureReason as sendFailureReasonIn } from './failure-reason';
+
+beforeAll(async () => {
+  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
+});
+
+const sendFailureReason = (failure: ApiFailure | undefined) => sendFailureReasonIn(failure, 'fr');
 
 const failure = (status: number, extra: Partial<ApiFailure> = {}): ApiFailure => ({
   ok: false,
@@ -64,5 +72,42 @@ describe('sendFailureReason', () => {
     expect(sendFailureReason(failure(429, { code: 'NEWCOMER_SLOW_MODE' }))).toBe(
       'bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez dans un instant',
     );
+  });
+});
+
+/* #7740 — la cause se dit dans la LANGUE D'INTERFACE du lecteur, jamais en
+   français pour tous : c'est la phrase que l'annonce « Message non envoyé —
+   {reason} » (déjà au catalogue) embarque. */
+describe('sendFailureReason — dans la langue d’interface', () => {
+  test('le mode lent des nouveaux comptes se dit en anglais, délai réel compris', () => {
+    expect(sendFailureReasonIn(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }), 'en')).toBe(
+      'welcome! new accounts can send one message every 30 s — try again in 18 s',
+    );
+  });
+
+  test('chaque cause change de texte d’une langue à l’autre et garde son délai', () => {
+    const failures: readonly ApiFailure[] = [
+      failure(0),
+      failure(0, { code: 'TIMEOUT' }),
+      failure(200, { code: 'UPLOAD_PARTIAL' }),
+      failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }),
+      failure(429, { code: 'NEWCOMER_SLOW_MODE' }),
+      failure(401),
+      failure(403),
+      failure(429),
+      failure(422),
+      failure(503),
+    ];
+    for (const f of failures) {
+      const french = sendFailureReasonIn(f, 'fr');
+      for (const language of SUPPORTED_INTERFACE_LANGUAGES.filter((l) => l !== 'fr')) {
+        const served = sendFailureReasonIn(f, language);
+        expect(served).not.toBe(french);
+        expect(served).not.toContain('{');
+      }
+    }
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(sendFailureReasonIn(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }), language)).toContain('18');
+    }
   });
 });
