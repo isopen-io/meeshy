@@ -4,6 +4,7 @@ import { cadre, tailleCadre } from './cadres.mjs'
 import { directionOf } from './locales.mjs'
 import { formatOf } from './formats.mjs'
 import { langue } from './langues.mjs'
+import { typo } from './composants.mjs'
 import { createUi } from './ui.mjs'
 import { kitCss } from './styles.mjs'
 import { LEGENDES } from '../textes/legendes.mjs'
@@ -34,9 +35,9 @@ const surimpressions = {
 const fondDecor = () =>
   html`<div class="gab-bg"><i class="o1"></i><i class="o2"></i><i class="o3"></i><i class="grain"></i></div>`
 
-const legendeHtml = (texte) => {
-  const [l1, l2] = coupeLegende(texte)
-  return html`<h1 class="gab-caption"><span class="l1">${l1}</span>${l2 ? html`<span class="l2">${l2}</span>` : ''}</h1>`
+const legendeHtml = (texte, lang) => {
+  const [l1, l2] = coupeLegende(typo(texte, lang))
+  return html`<h1 class="gab-caption${[...texte].length > 30 ? ' long' : ''}"><span class="l1">${l1}</span>${l2 ? html`<span class="l2">${l2}</span>` : ''}</h1>`
 }
 
 // Gabarit App Store : fond de marque, légende en haut, appareil qui déborde en bas.
@@ -52,7 +53,7 @@ const appStore = ({ format, lang, planche }) => {
   return html`<div class="canvas appstore ${device} fond-${planche.theme === 'dark' ? 'vif' : 'nuit'}" dir="${ctx.dir}" lang="${lang}" style="width:${scene.width}px;height:${scene.height}px">
     ${fondDecor()}
     <div class="gab-brand">${logo(device === 'iphone' ? 26 : 30, { radius: 0.28 })}<span>Meeshy</span></div>
-    ${legendeHtml(texte)}
+    ${legendeHtml(texte, lang)}
     <div class="gab-device" style="width:${width}px;height:${height}px;transform:translateX(-50%) scale(${echelle})">
       ${cadre(device, ecran(planche.ecran, ctx))}
       ${surimpression}

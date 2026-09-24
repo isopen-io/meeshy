@@ -103,6 +103,11 @@ const dm = [
 const vocalCoreen = '토요일에 콘서트에서 볼까?'
 
 const groupe = [
+  { auteur: 'sofi.romero', ...contenu('nova.heure', 'es', '¿Alguien sabe a qué hora empieza el directo? 🕖', {
+    fr: 'Quelqu’un sait à quelle heure commence le live ? 🕖', en: 'Anyone know what time the livestream starts? 🕖',
+    de: 'Weiß jemand, wann der Livestream anfängt? 🕖', it: 'Qualcuno sa a che ora inizia la diretta? 🕖',
+    pt: 'Alguém sabe que horas começa a live? 🕖', ar: 'هل يعرف أحد متى يبدأ البث المباشر؟ 🕖',
+  }) },
   { auteur: 'minjun.p', ...contenu('nova.concert', 'ko', '내일 콘서트 같이 볼 사람?', {
     fr: 'Qui regarde le concert avec moi demain ?', en: 'Who’s watching the concert with me tomorrow?',
     es: '¿Quién ve el concierto conmigo mañana?', de: 'Wer schaut morgen mit mir das Konzert?',
@@ -124,6 +129,18 @@ const groupe = [
     en: 'I’m making stickers for everyone ✨', es: 'Yo hago los stickers para todos ✨',
     de: 'Ich mach Sticker für alle ✨', it: 'Faccio io gli sticker per tutti ✨',
     pt: 'Eu faço os stickers pra todo mundo ✨', ar: 'سأصمم الملصقات للجميع ✨',
+  }) },
+  { auteur: 'minjun.p', ...contenu('nova.rdv', 'ko', '좋아! 내일 저녁 7시에 여기 모이자 🎉', {
+    fr: 'Parfait ! On se retrouve ici demain à 19 h 🎉', en: 'Perfect! Let’s meet here tomorrow at 7 pm 🎉',
+    es: '¡Perfecto! Quedamos aquí mañana a las 19 h 🎉', de: 'Perfekt! Wir treffen uns morgen um 19 Uhr hier 🎉',
+    it: 'Perfetto! Ci troviamo qui domani alle 19 🎉', pt: 'Perfeito! A gente se encontra aqui amanhã às 19h 🎉',
+    ar: 'ممتاز! نلتقي هنا غدًا الساعة السابعة مساءً 🎉',
+  }), reactions: '🎉 4' },
+  { auteur: 'aiko.t', ...contenu('nova.aiko2', 'ja', 'ステッカー楽しみ！💜', {
+    fr: 'Trop hâte de voir les stickers ! 💜', en: 'Can’t wait for the stickers! 💜',
+    es: '¡Qué ganas de ver los stickers! 💜', de: 'Freu mich so auf die Sticker! 💜',
+    it: 'Non vedo l’ora di vedere gli sticker! 💜', pt: 'Doida pra ver os stickers! 💜',
+    ar: 'متحمسة جدًا لرؤية الملصقات! 💜',
   }) },
 ]
 

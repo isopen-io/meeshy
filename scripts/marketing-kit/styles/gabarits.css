@@ -40,6 +40,7 @@
 /* iPhone 6,9" : scène 440 × 956 */
 .canvas.appstore.iphone .gab-brand { top: 44px; inset-inline-start: 34px; }
 .canvas.appstore.iphone .gab-caption { top: 84px; inset-inline: 32px; font-size: 42px; }
+.canvas.appstore.iphone .gab-caption.long { font-size: 36px; }
 .canvas.appstore.iphone .gab-device { top: 232px; }
 
 /* iPad 13" paysage : scène 1376 × 1032 */

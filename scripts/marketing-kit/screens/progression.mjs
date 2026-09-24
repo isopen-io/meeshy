@@ -23,23 +23,14 @@ export const meeshEntry = (solde) =>
 
 // ProgressionLayout.blocks : dernier succès → niveau → Meesh → élans → série → sections.
 // La section « Défis » n'est pas montrée : la campagne n'emploie pas ce mot sur un écran iOS (§ 2).
-export const ecranProgression = (ctx) => {
+export const progressionCartes = (ctx) => {
   const { ui, lang } = ctx
   const warning = 'var(--ios-warning)'
   const brand = 'var(--ios-indigo-500)'
   const success = 'var(--ios-success)'
   const familles = P.elanFamilles.map((f) => ui(`progression.family.${f}`))
   const elan = `${ui('progression.elan.base', P.elan, ui('progression.elan.family.many', P.elanFamilles.length), P.elanFenetre)}. ${ui('progression.elan.effect', P.elan)}`
-  return html`<div class="ecran iphone progression ${ctx.theme}" dir="${ctx.dir}" lang="${lang}">
-    <div class="p-bg"></div>
-    ${statusBar()}
-    <div class="p-nav">
-      ${roundButton('back', { iconSize: 19, tint: 'var(--ios-indigo-500)', className: 'flip-rtl' })}
-      ${meeshEntry(P.meesh)}
-    </div>
-    <h1 class="p-title">${ui('progression.title')}</h1>
-    <div class="p-list">
-      <section class="p-card hero" style="--t:${success}">
+  return html`      <section class="p-card hero" style="--t:${success}">
         ${tuile('trophy', success)}
         <div>
           <div class="p-eyebrow">${ui('progression.hero.last')}</div>
@@ -92,10 +83,21 @@ export const ecranProgression = (ctx) => {
           <span class="flip-rtl p-chev">${icon('forward', { size: 14 })}</span>
         </section>`,
       )}
+`
+}
+
+export const ecranProgression = (ctx) =>
+  html`<div class="ecran iphone progression ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
+    <div class="p-bg"></div>
+    ${statusBar()}
+    <div class="p-nav">
+      ${roundButton('back', { iconSize: 19, tint: 'var(--ios-indigo-500)', className: 'flip-rtl' })}
+      ${meeshEntry(P.meesh)}
     </div>
+    <h1 class="p-title">${ctx.ui('progression.title')}</h1>
+    <div class="p-list">${progressionCartes(ctx)}</div>
     ${homeIndicator()}
   </div>`
-}
 
 // AchievementRevealView — médaille, bandeau, titre, explication, sorties ; le solde Meesh en
 // surimpression dans le coin (captures-app-store.md § 2, capture 8).

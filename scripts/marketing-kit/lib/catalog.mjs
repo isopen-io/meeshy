@@ -43,5 +43,9 @@ export const createCatalog = (catalogs) => {
   }
 }
 
-export const loadAppCatalog = () =>
-  createCatalog(APP_CATALOGS.map((path) => JSON.parse(readFileSync(resolve(REPO_ROOT, path), 'utf8'))))
+let appCatalog
+
+export const loadAppCatalog = () => {
+  appCatalog ??= createCatalog(APP_CATALOGS.map((path) => JSON.parse(readFileSync(resolve(REPO_ROOT, path), 'utf8'))))
+  return appCatalog
+}

@@ -1,0 +1,60 @@
+/* ─── iPad 13" paysage (iPadRootView) ─── */
+.ipad .status-bar { color: var(--kit-ink); }
+.ipad.plein .status-bar { color: #fff; }
+.ipad-split { position: absolute; inset: 0; display: flex; }
+.ipad-list { width: 420px; flex: none; padding: 40px 0 0; border-inline-end: 1px solid var(--kit-hair); background: color-mix(in srgb, var(--kit-bg-2) 70%, transparent); position: relative; z-index: 2; }
+.ipad-list-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 22px 0; }
+.ipad-list-head h2,
+.ipad-panel-head h2 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.6px; }
+.ipad-search { margin: 12px 18px 10px; height: 40px; border-radius: 12px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 15px; color: var(--kit-muted); box-shadow: none; }
+.ipad-rows { display: flex; flex-direction: column; padding: 0 10px; }
+.ipad-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 16px; }
+.ipad-row.on { background: color-mix(in srgb, var(--ios-indigo-500) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-500) 30%, transparent); }
+.ipad-row .stack-avatars .avatar { width: 34px !important; height: 34px !important; }
+.ipad-row .stack-avatars .avatar + .avatar { margin-inline-start: -20px; }
+.ipad-row .stack-avatars { width: 52px; flex: none; }
+.ipad-row-text { flex: 1; min-width: 0; }
+.ipad-row-text .t { display: flex; justify-content: space-between; gap: 8px; }
+.ipad-row-text b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ipad-row-text .t span { font-size: 12.5px; color: var(--kit-muted); flex: none; }
+.ipad-row-text .p { font-size: 14px; color: var(--kit-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.ipad-row .badge { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; background: var(--ios-indigo-500); }
+.global-avatar.big { width: 52px; height: 52px; }
+
+.ipad-panel { position: relative; flex: 1; overflow: hidden; }
+.ipad-panel.conversation .conv-header { top: 40px; padding: 4px 22px; }
+.ipad-panel.conversation .messages { top: 104px; bottom: 86px; padding: 0 28px; }
+.ipad-panel.conversation .composer { bottom: 26px; padding: 0 28px; }
+.ipad-panel .bubble { max-width: 560px; }
+.ipad-panel .bubble.audio { width: 400px; }
+.ipad-panel-head { position: absolute; top: 40px; inset-inline: 32px; display: flex; align-items: center; justify-content: space-between; height: 52px; }
+.ipad-fil { position: absolute; top: 106px; inset-inline: 28px; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 16px; align-items: start; }
+.ipad-fil .stories-tray { grid-column: 1 / -1; gap: 22px; }
+.ipad-progression { position: absolute; top: 108px; inset-inline: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.ipad-progression .p-card.level { grid-column: 1; grid-row: 2 / span 1; }
+
+.ipad-call-grid { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #000; }
+.ipad-call-grid .tile { position: relative; overflow: hidden; display: grid; place-items: center; }
+.ipad-call-grid .tile .call-illu { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ipad-call-grid .tile.alt { background: radial-gradient(circle at 50% 40%, color-mix(in srgb, #f4a261 45%, #2e1065), #0f0c29); }
+.ipad-call-grid .tag { position: absolute; bottom: 230px; inset-inline-start: 18px; padding: 6px 12px; border-radius: 999px; color: #fff; font-weight: 700; font-size: 15px; background: color-mix(in srgb, black 45%, transparent); }
+.ipad.appel .call-self { top: 56px; }
+.ipad.appel .call-captions { inset-inline: 240px; bottom: 190px; }
+.ipad.appel .call-controls { inset-inline: 330px; }
+
+.story-ipad { background: #000; }
+.reel-blur { position: absolute; inset: -40px; filter: blur(40px) brightness(0.55); }
+.reel-blur .reel-bg { width: 100%; height: 100%; }
+.reel-stage { position: absolute; top: 34px; bottom: 34px; left: 50%; width: 540px; margin-left: -270px; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 80px color-mix(in srgb, black 60%, transparent); }
+.reel-stage .reel-media { width: 100%; height: 100%; display: block; }
+.reel-caption { position: absolute; top: 34%; inset-inline: 36px; text-align: center; }
+.reel-caption span { font-size: 32px; font-weight: 800; line-height: 1.5; color: #fff; padding: 4px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ios-indigo-600) 88%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.reel-side { position: absolute; bottom: 120px; inset-inline-start: calc(50% + 300px); display: flex; flex-direction: column; gap: 18px; color: #fff; }
+[dir='rtl'] .reel-side { inset-inline-start: calc(50% + 300px); }
+.reel-author { display: flex; align-items: center; gap: 12px; }
+.reel-author > div:not(.avatar) { display: flex; flex-direction: column; }
+.reel-author b { font-size: 20px; }
+.reel-author span { font-size: 14px; opacity: 0.8; }
+.reel-side .tr-row { align-self: flex-start; color: #fff; background: color-mix(in srgb, white 16%, transparent); }
+.reel-actions { display: flex; gap: 22px; font-size: 16px; font-weight: 700; }
+.reel-actions span { display: inline-flex; align-items: center; gap: 7px; }

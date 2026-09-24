@@ -1,9 +1,9 @@
 /* ─── Progression (ProgressionView + ProgressionHub) ─── */
 
-.progression .p-bg,
+.p-bg,
 .reveal .reveal-glow { position: absolute; inset: 0; }
-.dark.progression .p-bg { background: linear-gradient(135deg, #09090b 0%, #13111c 55%, #1e1b4b 100%); }
-.light.progression .p-bg { background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 55%, #eef2ff 100%); }
+.dark > .p-bg { background: linear-gradient(135deg, #09090b 0%, #13111c 55%, #1e1b4b 100%); }
+.light > .p-bg { background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 55%, #eef2ff 100%); }
 
 .p-nav {
   position: absolute;

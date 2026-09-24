@@ -1,6 +1,6 @@
 import { html, raw } from '../lib/html.mjs'
 import { icon, logo } from '../lib/icons.mjs'
-import { avatar, flagChip, homeIndicator, roundButton, statusBar } from '../lib/composants.mjs'
+import { avatar, flagChip, homeIndicator, roundButton, statusBar, typo } from '../lib/composants.mjs'
 import { serve } from '../lib/prism.mjs'
 import { profilDe } from '../textes/demo.mjs'
 
@@ -55,7 +55,7 @@ export const bubble = ({ ctx, contenu, auteur, mine = false, accent, time, ident
   const profil = auteur ? profilDe(auteur) : null
   return html`<div class="msg-row ${mine ? 'mine' : 'theirs'}">
     <div class="bubble ${mine ? 'mine' : 'theirs'}" style="--accent:${accent}">
-      <div class="bubble-body">${servi.text}</div>
+      <div class="bubble-body">${typo(servi.text, ctx.lang)}</div>
       <div class="bubble-footer${identite && profil ? ' with-id' : ''}">
         ${identite && profil ? html`${avatar(profil, 24)}<span class="sender">${profil.prenom}</span>` : ''}
         ${footerFlags(servi, ctx)}

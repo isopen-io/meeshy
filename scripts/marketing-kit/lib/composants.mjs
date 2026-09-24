@@ -12,7 +12,7 @@ export const avatar = (profil, size, { presence = false, ring = false, storyRing
   const grad = `linear-gradient(${angle}deg, ${mix(profil.teinte, 78, '#ffffff')}, #${profil.teinte} 55%, ${mix(profil.teinte, 70, '#1e1b4b')})`
   const cx = 20 + (graine % 60)
   const cy = 15 + ((graine * 7) % 50)
-  const initiales = `${profil.prenom[0]}${profil.nom[0]}`
+  const initiales = size < 30 ? profil.prenom[0] : `${profil.prenom[0]}${profil.nom[0]}`
   const classes = ['avatar', ring && 'ring', storyRing && 'story-ring'].filter(Boolean).join(' ')
   return html`<div class="${classes}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.38)}px;--av-grad:${grad}">
     ${raw(`<svg class="motif" viewBox="0 0 100 100" preserveAspectRatio="none"><circle cx="${cx}" cy="${cy}" r="${30 + (graine % 25)}" fill="#fff" fill-opacity=".16"/><circle cx="${100 - cx}" cy="${100 - cy / 2}" r="${18 + (graine % 14)}" fill="#fff" fill-opacity=".10"/></svg>`)}
@@ -45,3 +45,10 @@ export const roundButton = (name, { size = 44, iconSize = 18, tint, className = 
   html`<div class="round-btn glass ${className}" style="width:${size}px;height:${size}px;${tint ? `color:${tint}` : ''}">${icon(name, { size: iconSize })}</div>`
 
 export const nomComplet = (profil) => `${profil.prenom} ${profil.nom}`
+
+// Typographie : espace fine insécable avant ? ! : ; en français, et un emoji final ne part
+// jamais seul à la ligne.
+export const typo = (texte, lang) => {
+  const fine = lang === 'fr' ? texte.replace(/ ([?!:;»])/g, '\u202F$1').replace(/« /g, '«\u202F') : texte
+  return fine.replace(/ (\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\uFE0F]*)$/u, '\u00A0$1')
+}

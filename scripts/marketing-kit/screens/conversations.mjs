@@ -65,7 +65,7 @@ export const ecranDm = (ctx) =>
 export const groupeCorps = (ctx) => {
   const accent = ACCENTS.nova
   const lecteur = DEMO.lecteurs[ctx.lang]
-  const heures = ['18:02', '18:03', '18:05', '18:06']
+  const heures = ['17:58', '18:02', '18:03', '18:05', '18:06', '18:07', '18:08']
   const lignes = DEMO.groupe.map((m, i) =>
     m.auteur === lecteur
       ? bubble({ ctx, contenu: m.lang === ctx.lang ? m.text : m.translations[ctx.lang], mine: true, accent, time: heures[i] })
@@ -75,7 +75,7 @@ export const groupeCorps = (ctx) => {
   return html`
     ${daySeparator(ctx)}
     ${lignes}
-    ${membre ? '' : bubble({ ctx, contenu: DEMO.miens.groupe[ctx.lang], mine: true, accent, time: '18:08' })}
+    ${membre ? '' : bubble({ ctx, contenu: DEMO.miens.groupe[ctx.lang], mine: true, accent, time: '18:10' })}
   `
 }
 
