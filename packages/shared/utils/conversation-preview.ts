@@ -22,6 +22,7 @@
  *    un effet comportemental ne s'affiche que sur un message non protégé.
  */
 
+import { arrivalsLineKey } from './arrivals-notice.js';
 import type {
   ConversationActiveCall,
   ConversationLastReaction,
@@ -566,6 +567,7 @@ function callLine(call: LastMessageCallSummary, viewerId: string, str: Str): Con
  */
 const SYSTEM_KEYS: Readonly<Record<string, (params: Readonly<Record<string, string | number>>) => ConversationPreviewStringKey>> = {
   'system.member-joined': () => 'system.member.joined',
+  'system.members-arrived': (params) => arrivalsLineKey(Number(params['count'] ?? 1)),
   'system.encryption-enabled': (params) => (params['mode'] === 'e2ee' ? 'system.encryption.e2ee' : 'system.encryption.enabled'),
   'system.member-added': () => 'system.member.added',
   'system.member-removed': () => 'system.member.removed',

@@ -68,7 +68,7 @@ async function buildApp(setUser = true): Promise<FastifyInstance> {
   app.decorate('translationService', {
     handleNewMessage: jest.fn().mockResolvedValue({ messageId: MSG_ID }),
     getTranslation: jest.fn().mockResolvedValue(mockTranslationResult),
-    translateText: jest.fn().mockResolvedValue(mockTranslationResult),
+    translateTextDirectly: jest.fn().mockResolvedValue(mockTranslationResult),
   });
 
   await translationRoutes(app);
@@ -117,12 +117,13 @@ describe('POST /translate-blocking', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns 400 when text provided but conversation_id missing', async () => {
+  it('translates a text without conversation_id: a text is translated, never sent', async () => {
     const res = await app.inject({
       method: 'POST', url: '/translate-blocking',
       payload: { text: 'Hello world', target_language: 'fr' },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect((app as any).translationService.handleNewMessage).not.toHaveBeenCalled();
   });
 
   it('returns 401 when text+conversation_id but no auth', async () => {

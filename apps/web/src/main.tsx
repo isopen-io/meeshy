@@ -78,6 +78,18 @@ function SessionGate({ children }: { children: ReactNode }) {
     if (decision === 'redirect-home') navigate(landingAfterSession(next, href('list')), true);
   }, [decision, next]);
 
+  /* L'ACCUEIL POST-INSCRIPTION (#7729) — proposé à l'ARRIVÉE sur `/` d'une
+     session, une fois par lancement (`lib/onboarding/landing.ts`). En
+     `import()` : sa lecture et sa loi restent hors de la première peinture,
+     et rien ne se charge pour qui n'arrive pas connecté sur l'accueil. */
+  const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
+  useEffect(() => {
+    if (status !== 'authenticated' || apiDeps.source !== 'gateway' || key !== 'list') return;
+    void import('@/lib/onboarding/landing-entry').then(({ onboardingLanding }) =>
+      onboardingLanding.offer({ source: apiDeps.source, sessionStatus: status, routeKey: key, viewerId }),
+    );
+  }, [status, key, viewerId]);
+
   return decision === 'allow' ? children : <Skeleton />;
 }
 

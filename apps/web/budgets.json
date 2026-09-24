@@ -368,6 +368,23 @@
         "status": "CIBLE -- MESUREE PAR #7533, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-23 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,24 Ko zlib -9 -- le PANNEAU du menu « ⋯ » des cartes du fil (`components/publication-menu-panel.tsx` : les sept entrees, leurs icones, la feuille de motifs `ReportSheet`), charge a la demande au premier toucher du bouton. Sorti du chunk `feed` AVANT la fusion : monte en ligne, il portait `feed` a 14,12 Ko, au-dessus de son plafond de 14 ; a la demande, `feed` mesure 13,80 et ne paie que le bouton (`feed-post-menu.tsx`). Le fichier s'appelle `publication-menu-panel` et non `feed-post-menu-panel` pour deux raisons : ne pas retomber dans le motif `^assets/feed-` de l'entree `feed`, et echapper a la regle `post-*` du `.gitignore` racine, qui ignore en silence tout fichier dont le nom commence par `post-`. Plafond : 1,24 arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
+    },
+    "interface_catalogs_onboarding": {
+      "pattern": "^assets/catalog-onboarding-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 14,
+        "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9 de chaque fichier) : 12,56 Ko gzip -9 pour les SEPT catalogues de l accueil post-inscription (`onboarding.*`, 69 cles dont huit saluts par langue), de 1,65 Ko (en) a 2,02 Ko (ar). Sortis du catalogue commun comme ceux de l administration : un compte ne voit ce parcours qu une fois, aucun autre lecteur n en paie les octets, et `catalog-fr.ts` depasse deja le budget de taille (1221 lignes). Un lecteur n en telecharge qu UN (~1,8 Ko). Arrondi au Ko SUPERIEUR (13) + 1 Ko de marge."
+      }
+    },
+    "onboarding": {
+      "pattern": "^assets/onboarding-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 10,
+        "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

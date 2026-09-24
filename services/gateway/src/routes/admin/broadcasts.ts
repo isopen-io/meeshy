@@ -74,7 +74,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(BroadcastsListQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      /* istanbul ignore next -- Zod BroadcastsListQuerySchema always provides offset and limit */
+      /* istanbul ignore next -- `BroadcastsListQuerySchema` pose `offset: paginationOffset()` et `limit: paginationLimit(20)`, tous deux `.prefault(…)` (`validation/admin-schemas.ts`), et `createValidator` RÉÉCRIT `request.query` avec le résultat validé (`validation/helpers.ts`, `request[source] = validated;`) : les valeurs par défaut du destructuring ne peuvent plus servir. Vérifié le 2026-09-24. */
       const { offset = '0', limit = '20', status } = request.query as {
         offset?: string;
         limit?: string;
@@ -82,7 +82,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       };
 
       const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-      const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || /* istanbul ignore next -- Zod always provides a valid limit */ 20), 100);
+      const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || /* istanbul ignore next -- `paginationLimit(20)` rend un entier borné à [1, 100] (`.pipe(z.number().int().min(1).max(100))`) : `parseInt` ne peut pas rendre 0 ni NaN ici, donc ce `|| 20` ne s'exécute jamais. Vérifié le 2026-09-24. */ 20), 100);
 
       const where: Prisma.AdminBroadcastWhereInput = {};
       if (status) {
@@ -135,7 +135,13 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         targeting?: BroadcastTargeting;
       };
 
-      /* istanbul ignore next -- Zod CreateBroadcastBodySchema enforces all required fields; guard unreachable */
+      // Ce garde est ATTEIGNABLE, contrairement à ce qu'affirmait l'annotation
+      // `istanbul ignore next` qui le couvrait (#7773) : `CreateBroadcastBodySchema`
+      // déclare `name: z.string()` SANS `.min(1)` (`validation/admin-schemas.ts`),
+      // et Zod impose la PRÉSENCE du champ, jamais sa NON-VACUITÉ — `""` est un
+      // `string` valide. Ce garde est donc le seul rempart contre un broadcast au
+      // nom vide, et un témoin le prouve désormais
+      // (`__tests__/unit/routes/admin/admin-broadcasts-empty-field-guard.test.ts`).
       if (!name || !subject || !body || !sourceLanguage) {
         return sendBadRequest(reply, 'Les champs name, subject, body et sourceLanguage sont requis');
       }

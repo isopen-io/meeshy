@@ -200,6 +200,7 @@ struct RootStoryDoorsLayer: ViewModifier {
 struct RootChromeLayer: ViewModifier {
     @ObservedObject var reelsPresenter: ReelsPresenter
     let conversationViewModel: ConversationListViewModel
+    let storyViewModel: StoryViewModel
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     @ObservedObject var router: Router
     let activeConversationId: () -> String?
@@ -278,6 +279,16 @@ struct RootChromeLayer: ViewModifier {
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)
+            // L'onboarding post-inscription (#7729), DERNIER calque du chrome :
+            // un `.overlay` ne recouvre que ce qui est chaîné avant lui. Posé
+            // plus tôt, la pastille de synchronisation — « Synchronisation »,
+            // l'état le plus probable au démarrage à froid qui suit
+            // l'inscription — flottait sur la carte, et la toucher naviguait
+            // sous le calque ; le mini-lecteur et la bannière d'appel aussi.
+            // Les présentations (célébration, composeur, appel plein écran)
+            // restent modales, donc PAR-DESSUS. Garde :
+            // `OnboardingAboveGlobalChromeGuardTests`.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
     }
 }
 

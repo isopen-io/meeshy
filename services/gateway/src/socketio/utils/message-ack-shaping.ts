@@ -53,3 +53,50 @@ export function stripClientMessageId<T extends Record<string, unknown>>(
   const { clientMessageId: _clientMessageId, ...broadcastPayload } = senderPayload;
   return broadcastPayload;
 }
+
+export type MessageRefusalSource = {
+  readonly error?: string;
+  readonly code?: string;
+  readonly retryAfter?: number;
+};
+
+export type MessageFailureAck = {
+  readonly success: false;
+  readonly error: string;
+  readonly code?: string;
+  readonly retryAfter?: number;
+};
+
+/** Les refus TEMPORAIRES — ceux dont l'expéditeur doit être prévenu hors de l'ACK aussi. */
+const TEMPORARY_REFUSAL_CODES: ReadonlySet<string> = new Set(['NEWCOMER_SLOW_MODE']);
+
+/**
+ * L'ACK d'un envoi refusé. Il gardait le seul `error` : le `code` et le
+ * décompte que `handleMessage` pose (#7740) se perdaient au dernier mètre, et
+ * le client ne pouvait pas distinguer « pas encore » de « jamais ».
+ */
+export function buildMessageFailureAck(source: MessageRefusalSource): MessageFailureAck {
+  return {
+    success: false,
+    error: source.error || 'Failed to send message',
+    ...(source.code ? { code: source.code } : {}),
+    ...(source.retryAfter !== undefined ? { retryAfter: source.retryAfter } : {}),
+  };
+}
+
+/**
+ * L'événement `error` qui double l'ACK d'un refus TEMPORAIRE — même forme que
+ * `_sendError` (`{ message, code }`), plus le décompte. `null` pour tout autre
+ * refus : ceux-là n'émettaient rien avant #7740, et continuent.
+ */
+export function messageRefusalEvent(
+  source: MessageRefusalSource,
+): { readonly message: string; readonly code: string; readonly retryAfter?: number } | null {
+  if (!source.code || !TEMPORARY_REFUSAL_CODES.has(source.code)) return null;
+  const ack = buildMessageFailureAck(source);
+  return {
+    message: ack.error,
+    code: source.code,
+    ...(ack.retryAfter !== undefined ? { retryAfter: ack.retryAfter } : {}),
+  };
+}

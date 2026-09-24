@@ -6,6 +6,7 @@ import {
   defaultAudienceOf,
   isRememberableAudience,
   offeredAudiences,
+  requestedAudienceFromSearch,
   seededAudience,
   STUDIO_AUDIENCES,
 } from './publication-audience';
@@ -98,5 +99,28 @@ describe('audienceLabelKey — une entrée par audience, toutes distinctes', () 
 
   test('les six libellés sont distincts', () => {
     expect(new Set(STUDIO_AUDIENCES.map(audienceLabelKey)).size).toBe(STUDIO_AUDIENCES.length);
+  });
+});
+
+describe('requestedAudienceFromSearch — l’audience DEMANDÉE par l’adresse (#7729)', () => {
+  test('?audience=friends et ?audience=public se lisent, rien d’autre', () => {
+    expect(requestedAudienceFromSearch(new URLSearchParams('audience=friends'))).toBe('FRIENDS');
+    expect(requestedAudienceFromSearch(new URLSearchParams('audience=public'))).toBe('PUBLIC');
+    expect(requestedAudienceFromSearch(new URLSearchParams('audience=PRIVATE'))).toBeNull();
+    expect(requestedAudienceFromSearch(new URLSearchParams(''))).toBeNull();
+  });
+});
+
+describe('seededAudience — l’audience demandée passe AVANT la mémoire, jamais avant le brouillon', () => {
+  test('le brouillon garde la main', () => {
+    expect(seededAudience({ draftVisibility: 'PUBLIC', requestedVisibility: 'FRIENDS', memoryVisibility: null })).toBe('PUBLIC');
+  });
+
+  test('la demande de l’accueil (régime protégé ⇒ amis) l’emporte sur un souvenir « public »', () => {
+    expect(seededAudience({ draftVisibility: null, requestedVisibility: 'FRIENDS', memoryVisibility: 'PUBLIC' })).toBe('FRIENDS');
+  });
+
+  test('sans demande, la mémoire', () => {
+    expect(seededAudience({ draftVisibility: null, requestedVisibility: null, memoryVisibility: 'PRIVATE' })).toBe('PRIVATE');
   });
 });

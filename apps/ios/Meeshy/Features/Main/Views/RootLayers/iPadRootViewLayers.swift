@@ -322,5 +322,10 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 miniPlayerOnTapBody: onMiniPlayerTap,
                 miniPlayerCurrentConversationId: { activeConversationId }
             ))
+            // L'onboarding post-inscription (#7729) — le même hôte que sur
+            // iPhone, au même rang : APRÈS la pastille et la présentation
+            // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
+            // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
     }
 }

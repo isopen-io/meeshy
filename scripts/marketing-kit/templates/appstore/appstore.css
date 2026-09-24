@@ -1,0 +1,168 @@
+/* ─── Gabarits App Store (#7727). Couleurs : jetons --ios-* uniquement (ios.css). ─── */
+
+.as-canvas { position: relative; overflow: hidden; isolation: isolate; }
+
+/* Écran SOMBRE ⇒ fond vif indigo → violet ; écran CLAIR ⇒ fond lumineux lavande. */
+.as-sombre {
+  color: #fff;
+  background:
+    radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--ios-indigo-400) 70%, transparent), transparent 70%),
+    linear-gradient(168deg, var(--ios-indigo-500) 0%, var(--ios-indigo-700) 48%, var(--ios-purple-700) 100%);
+  --rub-a: color-mix(in srgb, var(--ios-purple-500) 85%, white);
+  --rub-b: color-mix(in srgb, var(--ios-indigo-300) 80%, white);
+  --halo: color-mix(in srgb, white 30%, transparent);
+  --halo-b: color-mix(in srgb, var(--ios-purple-500) 75%, transparent);
+  --cap-1: #fff;
+  --cap-2: linear-gradient(90deg, var(--ios-indigo-100), color-mix(in srgb, var(--ios-purple-500) 45%, white));
+}
+.as-clair {
+  color: var(--ios-indigo-950);
+  background:
+    radial-gradient(110% 55% at 50% 0%, #fff, transparent 72%),
+    linear-gradient(172deg, var(--ios-indigo-50) 0%, var(--ios-indigo-100) 55%, color-mix(in srgb, var(--ios-purple-500) 26%, var(--ios-indigo-100)) 100%);
+  --rub-a: var(--ios-indigo-400);
+  --rub-b: var(--ios-purple-500);
+  --halo: color-mix(in srgb, white 85%, transparent);
+  --halo-b: color-mix(in srgb, var(--ios-indigo-300) 70%, transparent);
+  --cap-1: var(--ios-indigo-950);
+  --cap-2: linear-gradient(90deg, var(--ios-indigo-600), var(--ios-purple-600));
+}
+[dir='rtl'].as-sombre { --cap-2: linear-gradient(270deg, var(--ios-indigo-100), color-mix(in srgb, var(--ios-purple-500) 45%, white)); }
+[dir='rtl'].as-clair { --cap-2: linear-gradient(270deg, var(--ios-indigo-600), var(--ios-purple-600)); }
+
+/* Panorama : positionné en coordonnées de SÉQUENCE, décalé de la place de la capture. */
+.as-pano { position: absolute; top: 0; bottom: 0; left: var(--pano-x); z-index: -1; pointer-events: none; }
+[dir='rtl'] .as-pano { left: auto; right: var(--pano-x); }
+.as-halo { position: absolute; border-radius: 50%; display: block; }
+.as-halo.h { background: radial-gradient(circle, var(--halo), transparent 68%); }
+.as-halo.b { background: radial-gradient(circle, var(--halo-b), transparent 70%); }
+.as-ruban { position: absolute; inset: 0; }
+.as-ruban .r1 { opacity: 0.55; }
+.as-sombre .as-ruban .r1 { opacity: 0.42; }
+.as-ruban .r2 { opacity: 0.7; }
+
+/* Tête : marque (capture 1), légende, rangée de surimpressions — posée juste au-dessus de l'appareil. */
+.as-head {
+  position: absolute;
+  top: 26px;
+  bottom: calc(100% - var(--device-top) + 20px);
+  inset-inline: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding-block: 8px;
+  z-index: 3;
+}
+.as-head > :first-child { margin-top: auto; }
+
+.as-brand { display: flex; align-items: center; gap: 9px; font-weight: 750; font-size: 16px; letter-spacing: 0.1px; color: var(--cap-1); }
+.as-logo { display: block; flex: none; border-radius: 23%; overflow: hidden; box-shadow: 0 6px 16px color-mix(in srgb, var(--ios-indigo-950) 30%, transparent), 0 0 0 1px color-mix(in srgb, white 30%, transparent); }
+.as-logo svg { display: block; }
+
+.as-caption {
+  margin: 0;
+  width: 100%;
+  font-size: var(--as-corps, 49px);
+  font-weight: 850;
+  line-height: 1.02;
+  letter-spacing: -1.5px;
+  text-wrap: balance;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+.as-caption .l1 { color: var(--cap-1); display: block; }
+.as-caption .l2 { display: block; background: var(--cap-2); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 0.06em; }
+.as-canvas[lang='ar'] .as-caption { line-height: 1.28; font-weight: 800; }
+
+/* Rangées : drapeaux en pile, bonjours en bulles. */
+.as-rangee { flex: none; display: flex; align-items: center; flex-wrap: nowrap; max-width: 100%; padding: 2px 2px 6px; }
+.as-flag {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 19px; line-height: 1;
+  background: #fff;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--ios-indigo-950) 22%, transparent), 0 0 0 2.5px color-mix(in srgb, var(--ios-indigo-200) 60%, white);
+}
+.as-pile .as-flag + .as-flag { margin-inline-start: -8px; }
+.as-bonjours { gap: 8px; }
+.as-bonjour {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 5px 11px 5px 8px; border-radius: 16px 16px 16px 5px;
+  font-size: 14px; font-weight: 650; white-space: nowrap;
+  color: var(--ios-indigo-950); background: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ios-indigo-950) 16%, transparent);
+}
+.as-bonjour[dir='rtl'] { padding: 5px 8px 5px 11px; }
+.as-bonjour[lang='ar'] { font-family: var(--kit-font-arabic); }
+.as-bonjour:nth-child(even) { background: color-mix(in srgb, var(--ios-indigo-100) 70%, white); }
+[dir='rtl'] .as-bonjour { border-radius: 18px 18px 6px 18px; }
+
+/* Appareil : centré, qui déborde en bas. */
+.as-device { position: absolute; left: 50%; top: var(--device-top); transform-origin: 50% 0; z-index: 1; }
+
+/* 🇫🇷 → 🇰🇷 : pilule blanche ancrée au vocal. */
+.as-fleche {
+  position: absolute; z-index: 4;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border-radius: 999px;
+  color: var(--ios-indigo-600); background: #fff;
+  box-shadow: 0 18px 44px color-mix(in srgb, var(--ios-indigo-950) 42%, transparent), 0 0 0 6px color-mix(in srgb, white 28%, transparent);
+  transform: rotate(-4deg);
+}
+[dir='rtl'] .as-fleche { transform: rotate(4deg); }
+.as-fleche .as-flag { width: 30px; height: 30px; font-size: 23px; box-shadow: none; background: transparent; }
+
+/* Loupe sur le solde Meesh : l'élément d'interface, grossi, cerclé d'un halo. */
+.as-anneau { position: absolute; z-index: 3; border-radius: 999px; box-shadow: 0 0 0 2.5px #fff, 0 0 0 9px color-mix(in srgb, white 22%, transparent), 0 0 34px color-mix(in srgb, var(--ios-purple-500) 80%, transparent); }
+.as-loupe {
+  position: absolute; z-index: 4; padding: 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--ios-indigo-950) 92%, black);
+  box-shadow: 0 0 0 3px #fff, 0 22px 50px color-mix(in srgb, black 55%, transparent), 0 0 60px color-mix(in srgb, var(--ios-purple-500) 55%, transparent);
+  transform-origin: 100% 0;
+}
+[dir='rtl'] .as-loupe { transform-origin: 0 0; }
+.as-loupe .meesh-entry { zoom: 1.9; }
+
+/* Carte Meesh de Progression, flottante sous le badge (capture 8). */
+.as-carte-flottante {
+  position: absolute; z-index: 4; inset-inline: 52px; bottom: 16px;
+  border-radius: calc(var(--ios-radius-md) * 1.2); color: var(--kit-ink);
+  transform: rotate(-2.5deg);
+  box-shadow: 0 0 0 6px color-mix(in srgb, white 30%, transparent), 0 28px 60px color-mix(in srgb, black 50%, transparent), 0 0 70px color-mix(in srgb, var(--ios-warning) 35%, transparent);
+}
+[dir='rtl'] .as-carte-flottante { transform: rotate(2.5deg); }
+.as-carte-flottante .p-card.meesh { zoom: 1.04; margin: 0; background: #fff; }
+
+/* ─── iPad 13" paysage : scène 1376 × 1032 ─── */
+.as-ipad .as-head { top: 30px; inset-inline: 88px; align-items: center; text-align: center; gap: 12px; }
+.as-ipad .as-caption { font-size: var(--as-corps, 64px); letter-spacing: -2px; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.28em; text-wrap: nowrap; }
+.as-ipad .as-caption .l1,
+.as-ipad .as-caption .l2 { display: inline-block; }
+.as-ipad .as-brand { font-size: 18px; }
+.as-ipad .as-rangee { justify-content: center; }
+.as-ipad .as-flag { width: 44px; height: 44px; font-size: 24px; }
+.as-ipad .as-bonjour { font-size: 17px; }
+
+/* ─── Affiche d'App Preview : 443 × 960 ─── */
+.as-poster { position: relative; overflow: hidden; background: #000; }
+.as-poster-ecran { position: absolute; inset: 0; }
+.as-poster-ecran > .ecran { transform: scale(var(--poster-k)); transform-origin: 0 0; }
+.as-spot {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse var(--sw) var(--sh) at var(--sx) var(--sy), transparent 64%, color-mix(in srgb, #0f0c29 86%, transparent) 100%);
+}
+.as-poster-textes {
+  position: absolute; z-index: 3; top: 150px; inset-inline: 22px;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  overflow: hidden;
+}
+.as-poster-textes span { display: block; padding: 10px 18px; border-radius: 22px; font-weight: 850; letter-spacing: -0.6px; line-height: 1.08; max-width: 100%; }
+.as-poster-textes .avant { font-size: 22px; color: color-mix(in srgb, white 86%, transparent); background: color-mix(in srgb, var(--ios-indigo-950) 92%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, white 12%, transparent); }
+.as-poster-textes .apres {
+  font-size: 31px; color: #fff; align-self: flex-end; text-align: end; text-wrap: balance;
+  background: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-purple-600));
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--ios-indigo-950) 55%, transparent);
+}
+.as-poster[lang='ar'] .as-poster-textes span { letter-spacing: 0; line-height: 1.35; }
+.as-fleche.poster { transform: rotate(-4deg) scale(0.92); }
+[dir='rtl'] .as-fleche.poster { transform: rotate(4deg) scale(0.92); }

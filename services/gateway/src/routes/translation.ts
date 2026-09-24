@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -14,7 +14,7 @@ const TranslateRequestSchema = z.object({
   target_language: z.string().min(2).max(6),
   model_type: z.enum(['basic', 'medium', 'premium']).optional(), // Optional car on peut le prédire automatiquement
   message_id: z.string().optional(), // ID du message pour retraduction
-  conversation_id: z.string().optional() // ID de conversation pour nouveaux messages
+  conversation_id: z.string().optional() // Accepté pour compatibilité, ignoré : un texte traduit n'est jamais écrit
 }).refine((data) => {
   // Soit text est fourni, soit message_id est fourni
   return (data.text !== undefined && data.text.length > 0) || (data.message_id !== undefined);
@@ -82,7 +82,7 @@ const translateRequestSchema = {
     },
     conversation_id: {
       type: 'string',
-      description: 'ID of the conversation. Required when message_id is not provided.',
+      description: 'Accepted for compatibility and ignored. A text translated without message_id is never persisted as a message: sending goes through the message endpoints.',
       example: 'conv_456def'
     }
   },
@@ -210,7 +210,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
     // (socketio/MeeshySocketIOManager.ts:_handleTranslationRequest).
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
-      description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Supports both new message translation and retranslation of existing messages. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
+      description: 'Translate text synchronously with blocking behavior. This endpoint waits for the translation to complete before responding. Translates either an existing message (message_id) or a free text; a free text is translated and returned, never persisted as a message. For E2E encrypted messages, translation is not supported as the server cannot decrypt the content.',
       tags: ['translation'],
       summary: 'Translate text (blocking)',
       body: translateRequestSchema,
@@ -246,7 +246,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const startTime = Date.now();
 
       let result: any;
-      let messageId: string;
+      let messageId: string | undefined;
 
       // Gérer les deux cas : nouveau message vs retraduction
       if (validatedData.message_id) {
@@ -357,68 +357,24 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
 
       } else {
-        // Cas 2: Nouveau message (comportement WebSocket)
-
-        if (!validatedData.conversation_id) {
-          return sendBadRequest(reply, 'conversation_id is required when message_id is not provided');
-        }
-
-        // Déterminer le type de modèle pour le nouveau message
+        // Cas 2: un TEXTE à traduire, qui n'est PAS un envoi. Cette branche
+        // écrivait un message (`handleNewMessage` → `_saveMessageToDatabase`)
+        // hors de `MessagingService.handleMessage`, donc sans aucune de ses
+        // gardes : ni appartenance (`senderParticipant?.id || senderId`), ni
+        // clôture, ni rang, ni mode lent — un compte neuf écrivait dans Meeshy
+        // Global sans limite (#7740). Envoyer passe par les trois transports
+        // qui convergent sur `handleMessage` ; ici, on traduit et on rend.
         const finalModelType = validatedData.model_type === 'basic'
           ? getPredictedModelType(validatedData.text.length)
           : (validatedData.model_type || 'basic');
 
-        // Créer les données du message
-        const senderId = request.user?.userId;
-        if (!senderId) {
-          return sendUnauthorized(reply, 'Authentication required for new message translation');
-        }
-
-        // Resolve the user's participantId in this conversation
-        const senderParticipant = await fastify.prisma.participant.findFirst({
-          where: { userId: senderId, conversationId: validatedData.conversation_id, isActive: true },
-          select: { id: true }
-        });
-
-        const messageData: any = {
-          conversationId: validatedData.conversation_id,
-          content: validatedData.text,
-          senderId: senderParticipant?.id || senderId,
-          originalLanguage: validatedData.source_language || 'auto',
-          targetLanguage: validatedData.target_language,
-          modelType: finalModelType
-        };
-
-        // Appeler handleNewMessage qui gère le nouveau message
-        const handleResult = await translationService.handleNewMessage(messageData);
-        messageId = handleResult.messageId;
-
-        // Attendre la vraie traduction avec un timeout plus long
-        let translationResult2 = null;
-        const maxWaitTime2 = 10000; // 10 secondes
-        const checkInterval2 = 500; // Vérifier toutes les 500ms
-        let waitedTime2 = 0;
-
-        while (!translationResult2 && waitedTime2 < maxWaitTime2) {
-          await new Promise(resolve => setTimeout(resolve, checkInterval2));
-          waitedTime2 += checkInterval2;
-
-          translationResult2 = await translationService.getTranslation(messageId, validatedData.target_language);
-        }
-
-        if (!translationResult2) {
-          // Fallback seulement si la traduction n'est pas disponible après le timeout
-          result = {
-            translatedText: `[${validatedData.target_language.toUpperCase()}] ${validatedData.text}`,
-            sourceLanguage: validatedData.source_language || 'auto',
-            targetLanguage: validatedData.target_language,
-            confidenceScore: 0.1,
-            processingTime: 0.001,
-            modelType: 'fallback'
-          };
-        } else {
-          result = translationResult2;
-        }
+        messageId = undefined;
+        result = await translationService.translateTextDirectly(
+          validatedData.text,
+          validatedData.source_language || 'auto',
+          validatedData.target_language,
+          finalModelType
+        );
       }
 
       const processingTime = (Date.now() - startTime) / 1000;

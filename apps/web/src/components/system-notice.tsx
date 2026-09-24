@@ -85,7 +85,7 @@ export function SystemNotice({
   );
 }
 
-/** Le contenu visuel — glyphe (appel, avis d'arrivée) puis texte. */
+/** Le contenu visuel — glyphe (appel, avis d'arrivée, arrivées regroupées) puis texte. */
 function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
   if (row.kind === 'call') {
     return (
@@ -117,6 +117,14 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
             sans compte
           </span>
         ) : null}
+      </>
+    );
+  }
+  if (row.kind === 'arrivals') {
+    return (
+      <>
+        <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
+        <span>{systemRowText(row)}</span>
       </>
     );
   }

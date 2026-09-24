@@ -4,6 +4,7 @@ import {
   PUBLICATION_KINDS,
   publicationKindFromSearch,
   publicationSearchValue,
+  studioOriginFromSearch,
   studioPublishRefusal,
   studioReelMedia,
   type PublicationKind,
@@ -126,5 +127,13 @@ describe('studioPublishablePageCount — les pages qui produiront une SCÈNE', (
     const draft = withAddedPage(textOnly(), 'fr');
     expect(studioPublishablePageCount(draft)).toBe(1);
     expect(studioPublishablePageCount(withText(draft, currentStudioPage(draft).texts[0]!.id, 'Deux'))).toBe(2);
+  });
+});
+
+describe('studioOriginFromSearch — l’accueil ramène à lui (#7729)', () => {
+  test('?from=onboarding, et rien d’autre', () => {
+    expect(studioOriginFromSearch(new URLSearchParams('from=onboarding'))).toBe('onboarding');
+    expect(studioOriginFromSearch(new URLSearchParams('from=https://evil.example'))).toBeNull();
+    expect(studioOriginFromSearch(new URLSearchParams(''))).toBeNull();
   });
 });

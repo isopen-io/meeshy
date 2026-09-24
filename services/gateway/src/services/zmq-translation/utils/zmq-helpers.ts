@@ -119,7 +119,13 @@ export function mimeTypeToAudioFormat(mimeType: string): string {
  * Un seul endroit décrit donc la convention : producteurs ET consommateurs.
  */
 
-export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption'] as const;
+/**
+ * `direct-text` : un texte traduit à la volée, sans ligne à persister
+ * (`translateTextDirectly`, servi par `POST /translate-blocking` sans
+ * `message_id`). Son unique consommateur est l'écouteur que la requête pose
+ * elle-même, apparié par `taskId`.
+ */
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'direct-text'] as const;
 
 export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
 
