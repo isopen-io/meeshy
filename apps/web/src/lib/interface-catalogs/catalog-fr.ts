@@ -9,6 +9,7 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frMentions from './catalog-fr-mentions';
 import frThreadStates from './catalog-fr-thread-states';
 
 const fr = {
@@ -1154,6 +1155,7 @@ const fr = {
   'message.location.a11y': 'Position : {place}',
 
   ...frThreadStates,
+  ...frMentions,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en

@@ -34,9 +34,11 @@ export type ChromeHidingInput = {
   readonly searchOpen: boolean;
   /**
    * Le composeur est ENGAGÉ — équivalent structurel des exceptions
-   * `isEmojiPanelOpen` / `hasMentionSuggestions` iOS (:2124-2141) : web-v2 n'a
-   * ni panneau emoji ni suggestions de mention (`composer.tsx:24-31`), donc
-   * « l'outil en main » se lit au FOCUS de l'enveloppe du composeur.
+   * `isEmojiPanelOpen` / `hasMentionSuggestions` iOS (:2124-2141) : « l'outil
+   * en main » se lit au FOCUS de l'enveloppe du composeur. La liste de
+   * mentions (#7826) y est COUVERTE par construction : elle vit dans la racine
+   * du composeur et ne prend jamais le focus (le champ le garde, motif
+   * `aria-activedescendant`), donc taper `@` laisse l'enveloppe engagée.
    */
   readonly composerEngaged: boolean;
 };

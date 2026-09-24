@@ -1,5 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 
+import ptMentions from './catalog-pt-mentions';
+
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
  * d'amorçage réduit la locale du navigateur à sa langue (`pt-BR` → `pt`).
@@ -1103,6 +1105,7 @@ const pt = {
   'message.detail.sent': 'Enviada',
   'message.detail.language.original': '{language} (original)',
 
+  ...ptMentions,
 } satisfies InterfaceCatalog;
 
 export default pt;
