@@ -28,6 +28,7 @@ type Fields = {
   isBlurred: boolean;
   expiresAt?: Date;
   consumedByMe?: boolean;
+  isFullyConsumed?: boolean;
   ephemeralDuration?: number;
 };
 const fields = (overrides: Partial<Fields> = {}): Fields => ({
@@ -50,6 +51,10 @@ describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
 
   test('vue unique ouverte par un AUTRE : compteur global à 1 mais consumedByMe: false ⇒ encore à ouvrir chez moi (#7578)', () => {
     expect(protectionOf(fields({ isViewOnce: true, viewOnceCount: 1, consumedByMe: false }), 1000)).toBe('viewOnce');
+  });
+
+  test('vue unique PURGÉE que je n\'ai jamais ouverte (isFullyConsumed, consumedByMe: false) ⇒ opened : il n\'y a plus rien à ouvrir (#7644)', () => {
+    expect(protectionOf(fields({ isViewOnce: true, consumedByMe: false, isFullyConsumed: true }), 1000)).toBe('opened');
   });
 
   test('passerelle antérieure à #7578 (consumedByMe absent) : le compteur global reste le repli', () => {

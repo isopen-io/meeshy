@@ -690,7 +690,7 @@ describe('FocalRow — un seul libellé au lecteur d’écran (revue #5935)', ()
     expect(ordinary.slice(ordinaryStart - 80, ordinaryStart + 20)).toContain('aria-hidden="true"');
   });
 
-  test('la pastille du Prisme et les drapeaux restent HORS du masque (ce sont des CONTRÔLES)', () => {
+  test('les drapeaux restent HORS du masque (ce sont des CONTRÔLES ; la pastille se tait devant eux, #7599)', () => {
     const translated: Message = {
       ...BASE_MESSAGE,
       originalLanguage: 'en',
@@ -707,7 +707,7 @@ describe('FocalRow — un seul libellé au lecteur d’écran (revue #5935)', ()
       ],
     };
     const html = render(translated);
-    expect(html).toContain('langue d’origine');
+    expect(html).toContain('data-prism-flag');
     // La pastille et les drapeaux sont des `<button>` : aucun `aria-hidden`
     // ne doit précéder leur `aria-label`/`aria-pressed` immédiat.
     const buttonStart = html.indexOf('<button');
@@ -1165,9 +1165,9 @@ describe('FocalRow — la prise de langue absente retire le GESTE, pas le fait (
     expect(html).not.toContain('data-prism-toggle');
   });
 
-  test('CONTRASTE — le fil, lui, porte la capacité : les deux contrôles sont là', () => {
+  test('CONTRASTE — le fil, lui, porte la capacité : les drapeaux sont là, et la pastille se tait devant eux (#7599)', () => {
     const html = render(TRADUIT, { tail: true });
-    expect(html).toContain('data-prism-toggle');
+    expect(html).not.toContain('data-prism-toggle');
     expect(html).toContain('data-prism-flag');
   });
 });
@@ -1223,4 +1223,47 @@ describe('FocalRow — la citation ne montre que le nom de l’auteur cité (#74
       expect(quote).not.toContain('data-presence');
     });
   }
+});
+
+/**
+ * CHAQUE ÉTAT UNE SEULE FOIS, PAR SA COULEUR (#7599) — aligné sur l'inventaire
+ * iOS (#7603) : « modifié » et « épinglé » se réduisent à leur pictogramme (le
+ * mot reste dans le nom accessible de la rangée), et un message traduit montre
+ * ses drapeaux SANS la pastille 🌐, qui n'apparaît que s'il n'y a aucun drapeau.
+ */
+describe('un état est dit UNE fois (#7599)', () => {
+  const translatedMessage = (): Message => ({
+    ...BASE_MESSAGE,
+    originalLanguage: 'en',
+    content: 'Hello there!',
+    translations: [
+      {
+        id: 't1',
+        messageId: BASE_MESSAGE.id,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour !',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+  });
+
+  test('traduit : les drapeaux, SANS la pastille de traduction à côté', () => {
+    const html = render(translatedMessage());
+    expect(html).toContain('data-prism-flag');
+    expect(html).not.toContain('data-prism-toggle');
+  });
+
+  test('modifié : le crayon seul, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, isEdited: true });
+    expect(html).toContain('data-badge="edited"');
+    expect(html).not.toContain('modifié');
+  });
+
+  test('épinglé : l’épingle seule, droite, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, pinnedAt: new Date('2026-09-08T09:00:00.000Z') });
+    expect(html).toContain('data-badge="pinned"');
+    expect(html).not.toContain('épinglé<');
+    expect(html).not.toContain('rotate(45deg)');
+  });
 });

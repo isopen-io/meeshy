@@ -96,7 +96,7 @@ const sitesDangereux = async (): Promise<readonly string[]> => {
  * par un fait — et alors il se grave plus bas dans le même commit. Il ne monte
  * jamais.
  */
-const PLAFOND = 123;
+const PLAFOND = 122;
 
 describe('aucun gate n’ajoute de délai fixe suivi d’une lecture', () => {
   test(`le motif ne dépasse pas son plafond de ${PLAFOND} sites`, async () => {

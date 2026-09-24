@@ -200,7 +200,7 @@ export function composeMessageLabel({
    * (`SystemNotice`) ne montre rien d'autre.
    */
   const systemRow = systemRowOf(message);
-  if (systemRow !== null) return systemRowText(systemRow);
+  if (systemRow !== null) return systemRowText(systemRow, language);
 
   /**
    * TROIS ÉTATS NE PEIGNENT AUCUN CHROME — un tombstone plat, ou rien du

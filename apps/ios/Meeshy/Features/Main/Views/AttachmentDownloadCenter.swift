@@ -34,6 +34,29 @@ final class AttachmentDownloadCenter {
         case audio, image, video
     }
 
+    /// Les retours haptiques qu'un téléchargement DEMANDÉ produit. Injectés
+    /// pour qu'un témoin puisse prouver qu'un préchargement n'en produit
+    /// aucun (#7625) — le défaut en ligne de `HapticFeedback` ne se mesure pas.
+    enum Haptic: Equatable, Sendable {
+        case light, success, error
+    }
+
+    private let haptics: @MainActor (Haptic) -> Void
+    /// Les clés lancées par `prefetch` : leur fin et leur échec ne vibrent pas.
+    private var silentKeys: Set<String> = []
+
+    init(haptics: @escaping @MainActor (Haptic) -> Void = { AttachmentDownloadCenter.playHaptic($0) }) {
+        self.haptics = haptics
+    }
+
+    static func playHaptic(_ haptic: Haptic) {
+        switch haptic {
+        case .light: HapticFeedback.light()
+        case .success: HapticFeedback.success()
+        case .error: HapticFeedback.error()
+        }
+    }
+
     struct DownloadProgress: Equatable, Sendable {
         let downloadedBytes: Int64
         let totalBytes: Int64
@@ -85,15 +108,32 @@ final class AttachmentDownloadCenter {
     /// Lance le téléchargement de `urlString` dans le cache typé — ou rejoint
     /// celui qui tourne déjà pour la même clé.
     func start(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
-        guard !urlString.isEmpty else { return }
+        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore) else { return }
+        haptics(.light)
+    }
+
+    /// **Précharge `urlString` en SILENCE** (#7625) — le média que l'écran
+    /// montrera au geste suivant (le réel qui suit l'actif). Même registre,
+    /// même clé, même dédoublonnage que `start` : la surface montée plus tard
+    /// REJOINT ce téléchargement, ou le trouve fini. Aucune vibration, ni au
+    /// départ ni à la fin : l'utilisateur n'a rien demandé.
+    func prefetch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
         let key = Self.key(for: urlString)
-        guard tasks[key] == nil else { return }
+        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore) else { return }
+        silentKeys.insert(key)
+    }
+
+    /// `false` quand il n'y a rien à lancer — URL vide, ou clé déjà en cours.
+    private func launch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) -> Bool {
+        guard !urlString.isEmpty else { return false }
+        let key = Self.key(for: urlString)
+        guard tasks[key] == nil else { return false }
         publish(.progress(DownloadProgress(downloadedBytes: 0, totalBytes: expectedSize)), for: key)
-        HapticFeedback.light()
         tasks[key] = Task.detached { [weak self] in
             guard let self else { return }
             await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore)
         }
+        return true
     }
 
     /// Annule le téléchargement de `key` — pour TOUTES les surfaces qui le montrent.
@@ -101,8 +141,9 @@ final class AttachmentDownloadCenter {
         guard tasks[key] != nil else { return }
         byteTasks[key]?.cancel()
         tasks[key]?.cancel()
+        silentKeys.remove(key)
         publish(.cancelled, for: key)
-        HapticFeedback.light()
+        haptics(.light)
     }
 
     private func registerByteTask(_ task: Task<Data, Error>, for key: String) {
@@ -111,14 +152,16 @@ final class AttachmentDownloadCenter {
 
     private func finish(key: String, size: Int64) {
         guard tasks[key] != nil else { return }
+        let silent = silentKeys.remove(key) != nil
         publish(.finished(totalBytes: size), for: key)
-        HapticFeedback.success()
+        if !silent { haptics(.success) }
     }
 
     private func fail(key: String) {
         guard tasks[key] != nil else { return }
+        let silent = silentKeys.remove(key) != nil
         publish(.failed, for: key)
-        HapticFeedback.error()
+        if !silent { haptics(.error) }
     }
 
     private func report(key: String, downloaded: Int64? = nil, total: Int64? = nil) {

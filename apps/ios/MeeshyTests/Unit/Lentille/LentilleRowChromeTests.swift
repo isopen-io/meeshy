@@ -63,7 +63,7 @@ final class LentilleRowChromeTests: XCTestCase {
     func test_flatRow_preview_isOneText_authorColonMessage_noOutline() throws {
         XCTAssertTrue(try rowSource().contains("ConversationPreviewLine("), "la rangée monte la ligne partagée")
         let line = try previewLineSource()
-        let text = try block("private func styledText(_ preview: ConversationPreview) -> Text {", in: line)
+        let text = try block("private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {", in: line)
         XCTAssertTrue(text.contains("(author + glyph + direction + styledBody)"), "« Auteur : texte » en UN seul texte")
         XCTAssertTrue(text.contains("strings(.lineAuthor"), "le séparateur d'auteur vient du catalogue")
         for outline in ["strokeBorder", ".border(", "RoundedRectangle", "background("] {

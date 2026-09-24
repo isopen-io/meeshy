@@ -362,6 +362,7 @@ public final class ConversationStoreSocketBridge {
             // doublement — ni décodé, ni mappé.
             lastMessageSenderName: event.lastMessageSenderName,
             senderId: event.senderId,
+            senderUserId: event.messageSenderUserId,
             readerId: readerId,
             youLabel: ConversationListAuthor.readerLabel,
             lastMessageTranslations: event.lastMessageTranslations,

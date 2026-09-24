@@ -58,6 +58,7 @@ export const REVEAL_ERROR_NOTICE_MS = 2500;
  */
 export type ViewOnceConsumptionFields = Pick<Message, 'isViewOnce' | 'viewOnceCount'> & {
   readonly consumedByMe?: boolean;
+  readonly isFullyConsumed?: boolean;
 };
 
 export function viewOnceOpenedByMe(message: ViewOnceConsumptionFields): boolean {
@@ -66,8 +67,21 @@ export function viewOnceOpenedByMe(message: ViewOnceConsumptionFields): boolean 
   return (message.viewOnceCount ?? 0) > 0;
 }
 
+/**
+ * **PLUS RIEN À OUVRIR** (#7578 § 3, #7644) : je l'ai ouverte, OU le serveur
+ * en a purgé le contenu (`isFullyConsumed` — tous les destinataires l'ont
+ * ouverte, ou `message:view-once-purged`). Celui qui ne l'a jamais ouverte
+ * voit la bulle dans le MÊME état « déjà ouvert » : toucher n'ouvrirait
+ * qu'une fenêtre vide. `consumedByMe` garde, lui, sa vérité par personne.
+ */
+export function viewOnceSpent(message: ViewOnceConsumptionFields): boolean {
+  if (!message.isViewOnce) return false;
+  return message.isFullyConsumed === true || viewOnceOpenedByMe(message);
+}
+
 type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'> & {
   readonly consumedByMe?: boolean;
+  readonly isFullyConsumed?: boolean;
   readonly ephemeralDuration?: number;
 };
 
@@ -95,7 +109,7 @@ export function protectionOf(message: ProtectionFields, now: number): Protection
   const pastDeadline = message.expiresAt != null && new Date(message.expiresAt).getTime() <= now;
   if (message.isViewOnce) {
     if (pastDeadline && isEphemeral(message)) return 'expired';
-    if (pastDeadline || viewOnceOpenedByMe(message)) return 'opened';
+    if (pastDeadline || viewOnceSpent(message)) return 'opened';
     return 'viewOnce';
   }
   if (pastDeadline) return 'expired';

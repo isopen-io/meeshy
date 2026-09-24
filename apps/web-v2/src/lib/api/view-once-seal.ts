@@ -1,4 +1,4 @@
-import { viewOnceOpenedByMe } from '@/lib/reading-mode/protection';
+import { viewOnceOpenedByMe, viewOnceSpent } from '@/lib/reading-mode/protection';
 
 import type { Message } from './types';
 
@@ -32,7 +32,30 @@ export function sealViewOnceIn(messages: readonly Message[], messageId: string):
     : messages;
 }
 
-/** Une charge qui arrive DÉJÀ ouverte par moi ne garde rien de ce qu'elle porte. */
+/**
+ * **LA PURGE SERVEUR** (`message:view-once-purged`, #7578 § 3, #7644) : le
+ * contenu part, la bulle reste. Elle ne dit PAS que je l'ai ouverte —
+ * `consumedByMe` garde sa valeur — mais `isFullyConsumed` la fait lire
+ * « déjà ouverte » (`viewOnceSpent`), puisqu'il n'y a plus rien à ouvrir.
+ */
+function purgeViewOnce(message: Message): Message {
+  return {
+    ...message,
+    isFullyConsumed: true,
+    content: '',
+    translations: [],
+    attachments: [],
+  };
+}
+
+export function purgeViewOnceIn(messages: readonly Message[], messageId: string): readonly Message[] {
+  return messages.some((m) => m.id === messageId && m.isViewOnce)
+    ? messages.map((m) => (m.id === messageId ? purgeViewOnce(m) : m))
+    : messages;
+}
+
+/** Une charge qui arrive DÉJÀ ouverte par moi, ou déjà purgée, ne garde rien de ce qu'elle porte. */
 export function sealedIfOpened(message: Message): Message {
-  return viewOnceOpenedByMe(message) ? sealViewOnce(message) : message;
+  if (viewOnceOpenedByMe(message)) return sealViewOnce(message);
+  return viewOnceSpent(message) ? purgeViewOnce(message) : message;
 }

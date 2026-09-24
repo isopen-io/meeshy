@@ -11,14 +11,13 @@ import MeeshyUI
 // gradient de chaleur, ni bordure — la focus card de LWS-8 est la seule
 // carte de l'écran), rang plat `LentilleMetrics.Row.height` (64), avatar
 // `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`) +
-// anneau accent propre, `Nom · heure`, ligne 2 dont la précédence
-// (typing > brouillon > pont ✦ > préview) est **inchangée** par rapport au
-// rang historique.
+// anneau accent propre, `Nom · heure`, ligne 2 dont la précédence est
+// typing > brouillon > préview. Le pont ✦ ne remplace plus l'aperçu d'une
+// conversation non lue (décision porteur 2026-09-23, #7613) : la pastille
+// chiffrée porte déjà le nombre, la ligne dit ce qui vient de se passer.
 //
-// Le rang ne porte AUCUN `@State` de langue : la résolution du texte passe
-// exclusivement par `resolvedLastMessagePreview(preferredLanguages:)` (SDK,
-// gelé) pour la préview, et par le même algorithme copié pour l'étage agent
-// du pont (`LentilleBridgeLine.resolveAgentText`, voir ce fichier) — jamais
+// Le rang ne porte AUCUN `@State` de langue : la préview est composée par le
+// SDK (`ConversationPreviewComposer`, via `ConversationPreviewLine`) — jamais
 // un cache local de traduction.
 
 struct LentilleConversationRow: View {
@@ -80,28 +79,11 @@ struct LentilleConversationRow: View {
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
     private var textMuted: Color { MeeshyColors.textMuted(isDark: isDark) }
 
-    // MARK: - Pont ✦ — précédence (contrat §LWS-7, §3.2)
-
-    /// `unreadCount > 0 ∧ bridge != nil` — la SEULE condition d'apparition
-    /// du pont. `static` et pure pour rester testable sans construire de vue
-    /// (I-065, « tests minimaux embarqués »). `nonisolated` : la cible app
-    /// compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, et
-    /// `LentilleConversationRow` (une `View`) hérite ce défaut — sans cette
-    /// sortie explicite, un XCTest `nonisolated` ne pourrait pas appeler
-    /// cette loi pure sans `await` (même précédent que
-    /// `ConversationListView.isSectionContentVisible`/`LentilleRailPolicy`).
-    nonisolated static func showsBridge(unreadCount: Int, bridge: ConversationBridge?) -> Bool {
-        unreadCount > 0 && bridge != nil
-    }
-
-    private var showsBridge: Bool {
-        Self.showsBridge(unreadCount: conversation.userState.unreadCount, bridge: conversation.bridge)
-    }
-
     /// Opacité du rang — sourdine ⇒ `LentilleMetrics.Muted.opacity` (jamais
     /// un littéral, contrat §4.3), composée avec le retour visuel de drag
     /// existant (`isDragging`, repris du rang historique). `nonisolated`
-    /// pure pour rester testable sans vue (même raison que `showsBridge`).
+    /// pure pour rester testable sans vue : la cible app compile sous
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`.
     nonisolated static func rowOpacity(isMuted: Bool, isDragging: Bool) -> Double {
         (isMuted ? LentilleMetrics.Muted.opacity : 1.0) * (isDragging ? 0.8 : 1.0)
     }
@@ -199,58 +181,17 @@ struct LentilleConversationRow: View {
     /// interdit, ça le CONSOMME, exactement comme le reste du chantier
     /// consomme `Lentille/Core` gelé.
     ///
-    /// Q-140/L16-iOS — trou découvert par la recette Q-140 : ce libellé
-    /// hérité ignore TOUJOURS le pont ✦ (`ThemedConversationRow` n'a même
-    /// pas connaissance du concept), alors que la ligne 2 visible du rang
-    /// plat le rend à sa place dès `showsBridge` (`line2`, cas `.bridge`
-    /// ci-dessus). Inverse symétrique du défaut web corrigé par V4ter/B1
-    /// (`LentilleRow.tsx`, commit e55961fa) : là-bas l'aria retombait
-    /// toujours sur `lastMessage.content` sous `hasBridge` ; ici elle
-    /// retombe toujours sur le libellé du rang historique, qui ne sait
-    /// composer QUE `typing > brouillon > préview` (jamais `pont`). Même
-    /// remède : dériver l'aria du pont de la MÊME source que son rendu
-    /// visuel (`LentilleBridgeLine.resolveAriaText`, extraite par ce lot de
-    /// `LentilleBridgeLine.resolvedText` — une seule résolution, deux
-    /// consommateurs), jamais une seconde loi de langue. Le segment remplacé
-    /// est le SEUL que la ligne 2 remplace visuellement — la préview
-    /// résolue (`resolvedPreviewText`, MÊME propriété que `previewLine`
-    /// utilise) — épinglé dans le libellé hérité par
-    /// `accessibility.last_message_preview`/`…_ephemeral` (`ThemedConversationRow.swift`,
-    /// `%@` positionnel portant `resolvedPreview` verbatim). Pont absent ⇒
-    /// `base` retourné TEL QUEL, caractère pour caractère (témoins hérités
-    /// de `ThemedConversationRowAccessibilityLabelTests` inchangés).
+    /// Le pont ✦ ne remplace plus l'aperçu (#7613) : ce que VoiceOver dit est
+    /// ce que l'œil lit, l'aperçu composé, non lue ou pas.
     ///
     /// Internal (pas `private`) : même convention que
-    /// `ThemedConversationRow.conversationAccessibilityLabel` (voir son
-    /// commentaire ci-dessus) — lue directement par
-    /// `LentilleFlatRowBridgeAriaTests` via `@testable import`.
+    /// `ThemedConversationRow.conversationAccessibilityLabel` — lue
+    /// directement par les témoins via `@testable import`.
     var accessibilityLabel: String {
-        let base = ThemedConversationRow(
+        ThemedConversationRow(
             conversation: conversation,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
-
-        guard showsBridge, let bridge = conversation.bridge else { return base }
-        let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: preferredContentLanguages)
-        guard !bridgeText.isEmpty else { return base }
-
-        let preview = resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !preview.isEmpty, base.contains(preview) {
-            // Cas nominal : le segment préview épinglé dans `base` existe et
-            // se reconnaît verbatim (`%@` positionnel des clés
-            // `accessibility.last_message_preview`/`…_ephemeral`) — remplacé
-            // par le texte du pont, exactement comme la ligne 2 le remplace
-            // à l'écran.
-            return base.replacingOccurrences(of: preview, with: bridgeText)
-        }
-        // Repli sûr : rien à remplacer proprement (préview vide, message
-        // position-seule/expiré/masqué/vue-unique — states dont le libellé
-        // hérité ne compose aucun `%@` de contenu à retrouver). Le pont
-        // n'est JAMAIS un donnée fabriquée qu'on tairait faute de pouvoir
-        // remplacer : il complète le libellé en fin de chaîne plutôt que de
-        // rester muet (contrat « le lecteur d'écran doit entendre ce que
-        // l'œil voit »).
-        return base + ", " + bridgeText
     }
 
     // MARK: - Avatar — 44 (`.conversationHeaderCollapsed`) + anneau accent
@@ -469,7 +410,7 @@ struct LentilleConversationRow: View {
     /// `unreadCount`/`accent` restent dans la signature pour la stabilité
     /// d'appel (site d'appel + suite de tests inchangés) mais ne
     /// discriminent plus rien ; `isDark` a un défaut pour rester appelable
-    /// sans vue (tests purs, même discipline que `rowOpacity`/`showsBridge`).
+    /// sans vue (tests purs, même discipline que `rowOpacity`).
     nonisolated static func timestampColor(unreadCount: Int, accent: Color, isDark: Bool = false) -> Color {
         MeeshyColors.textMuted(isDark: isDark)
     }
@@ -497,29 +438,26 @@ struct LentilleConversationRow: View {
         .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
     }
 
-    // MARK: - Ligne 2 — précédence INCHANGÉE : typing > brouillon > pont > préview
+    // MARK: - Ligne 2 — typing > brouillon > préview
 
     /// Décision PURE de la ligne 2 — séparée du rendu pour rester testable
-    /// sans SwiftUI (I-065, « tests minimaux embarqués : précédence
-    /// ligne 2 »). Complétée par I-068. `nonisolated` — même raison que
-    /// `showsBridge` ci-dessus.
+    /// sans SwiftUI (I-065). Une conversation NON LUE montre son aperçu
+    /// composé comme une autre (décision porteur 2026-09-23, #7613) : le pont
+    /// ✦ la remplaçait par un décompte (« Demo · 1 message · 1 audio ») que la
+    /// pastille chiffrée dit déjà — la ligne ne disait alors jamais ce qui
+    /// venait de se passer, précisément quand on la regarde.
     nonisolated enum Line2Kind: Equatable {
-        case typing, draft, bridge, preview
+        case typing, draft, preview
 
-        nonisolated static func resolve(hasTyping: Bool, hasDraft: Bool, showsBridge: Bool) -> Line2Kind {
+        nonisolated static func resolve(hasTyping: Bool, hasDraft: Bool) -> Line2Kind {
             if hasTyping { return .typing }
             if hasDraft { return .draft }
-            if showsBridge { return .bridge }
             return .preview
         }
     }
 
     private var line2Kind: Line2Kind {
-        Line2Kind.resolve(
-            hasTyping: typingUsername != nil,
-            hasDraft: draftSummary != nil,
-            showsBridge: showsBridge
-        )
+        Line2Kind.resolve(hasTyping: typingUsername != nil, hasDraft: draftSummary != nil)
     }
 
     @ViewBuilder
@@ -529,15 +467,6 @@ struct LentilleConversationRow: View {
             typingLine
         case .draft:
             if let draftSummary { draftLine(draftSummary) }
-        case .bridge:
-            if let bridge = conversation.bridge {
-                LentilleBridgeLine(
-                    bridge: bridge,
-                    preferredLanguages: preferredContentLanguages,
-                    accentColor: accentColorHex,
-                    isDark: isDark
-                )
-            }
         case .preview:
             previewLine
         }
@@ -570,13 +499,6 @@ struct LentilleConversationRow: View {
                     .lineLimit(1)
             }
         }
-    }
-
-    /// B1 (Prisme Linguistique), règle 3 — la préview TELLE QU'ELLE SERA
-    /// RENDUE, résolue exclusivement par le SDK gelé. Aucun `@State` de
-    /// langue ici (contrat §LWS-7, contrainte dure).
-    private var resolvedPreviewText: String {
-        conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? ""
     }
 
     /// La préview — COMPOSÉE par le SDK (`ConversationPreviewComposer`, #7548),

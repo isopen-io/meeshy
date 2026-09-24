@@ -4,6 +4,7 @@ import type { Attachment } from '@/lib/api/types';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { Attachments } from './attachment-blocks';
 import { ProtectedContent } from './protected-content';
 
 /**
@@ -125,6 +126,42 @@ describe('un MÉDIA à vue unique s’ouvre en plein écran', () => {
     expect(host.querySelector('[data-view-once-chip]')?.getAttribute('data-view-once-chip')).toBe('opened');
     expect(document.body.innerHTML).not.toContain('SECRET-VU');
     expect(deleted).toEqual(['https://cdn.test/secret.jpg', 'https://cdn.test/secret-thumb.jpg']);
+  });
+});
+
+describe('la pièce d’une vue unique s’ouvre EN CLAIR dans le plein écran (#7672)', () => {
+  /* La passerelle pose `isViewOnce` sur les pièces d'un message à vue unique
+     (#7498) : `maskedAttachment` les masquait jusque DANS l'ouverture, et le
+     lecteur voyait « Photo protégée » au lieu de sa photo. Les enfants sont
+     ici les VRAIS blocs de pièces, jamais un substitut. */
+  const viewOncePhoto = { ...photo, isViewOnce: true } as Attachment;
+
+  test('ouvert, le plein écran montre l’image et aucun masque', async () => {
+    const host = await mounter.mount(
+      <ProtectedContent
+        messageId="m-vu"
+        kind="viewOnce"
+        isViewOnce
+        contentLength={0}
+        attachments={[viewOncePhoto]}
+        surface="bubble"
+        onConsumeViewOnce={async () => true}
+      >
+        <Attachments attachments={[viewOncePhoto]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />
+      </ProtectedContent>,
+    );
+    await mounter.click(host.querySelector('[data-view-once-chip="sealed"]'));
+
+    const stage = document.body.querySelector('[data-view-once-stage]');
+    expect(stage?.querySelector('[data-protected-attachment]')).toBe(null);
+    expect(stage?.querySelector('img')).not.toBe(null);
+  });
+
+  test('hors de l’ouverture, la même pièce reste masquée', async () => {
+    const host = await mounter.mount(
+      <Attachments attachments={[viewOncePhoto]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />,
+    );
+    expect(host.querySelector('[data-protected-attachment]')).not.toBe(null);
   });
 });
 

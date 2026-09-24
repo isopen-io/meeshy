@@ -825,16 +825,20 @@ export const FocalRow = memo(function FocalRow({
               >
                 {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
                     voir la jumelle de `bubble.tsx`. */}
-                <PrismPastille
-                  language={currentInterfaceLanguage()}
-                  subject="message"
-                  servedLanguage={naturalServedLanguage}
-                  originalLanguage={message.originalLanguage}
-                  active={activeLanguage}
-                  {...(onPickLanguage === undefined
-                    ? {}
-                    : { onToggle: () => onPickLanguage(message.originalLanguage) })}
-                />
+                {/* LES DRAPEAUX DISENT DÉJÀ LA TRADUCTION (#7599, miroir iOS #7603) —
+                    la pastille 🌐 ne se pose que s'il n'y a aucun drapeau. */}
+                {onPickLanguage === undefined || footerLanguages.length === 0 ? (
+                  <PrismPastille
+                    language={currentInterfaceLanguage()}
+                    subject="message"
+                    servedLanguage={naturalServedLanguage}
+                    originalLanguage={message.originalLanguage}
+                    active={activeLanguage}
+                    {...(onPickLanguage === undefined
+                      ? {}
+                      : { onToggle: () => onPickLanguage(message.originalLanguage) })}
+                  />
+                ) : null}
                 {onPickLanguage === undefined ? null : (
                   <Flags
                     languages={footerLanguages}

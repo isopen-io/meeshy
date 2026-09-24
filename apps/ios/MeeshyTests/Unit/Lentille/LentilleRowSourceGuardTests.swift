@@ -427,7 +427,10 @@ final class LentilleRowSourceGuardTests: XCTestCase {
     /// commun au web. Une rangée qui relirait les champs bruts du dernier
     /// message recomposerait à côté, et la ligne iOS divergerait de la ligne
     /// web sans qu'aucun cas commun ne rougisse.
-    func test_theLine2Mux_keepsItsFourBranches_andThePreviewIsComposedBySDK() throws {
+    ///
+    /// Le pont ✦ a QUITTÉ le mux (#7613, décision porteur 2026-09-23) : une
+    /// conversation non lue montre son aperçu composé, pas un décompte.
+    func test_theLine2Mux_keepsItsThreeBranches_andThePreviewIsComposedBySDK() throws {
         let code = normalizedCode(try rowSource())
         guard let muxStart = code.range(of: "private var line2: some View {") else {
             XCTFail("le mux `line2` est introuvable — la garde doit être re-pointée")
@@ -437,11 +440,11 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         for (label, needle) in [
             ("typing", "case .typing:"),
             ("brouillon", "case .draft:"),
-            ("pont ✦", "case .bridge:"),
             ("aperçu", "case .preview:"),
         ] {
             XCTAssertTrue(mux.contains(needle), "La branche « \(label) » (\(needle)) a quitté le mux `line2`.")
         }
+        XCTAssertFalse(code.contains("LentilleBridgeLine("), "le pont ne remplace plus l'aperçu de la ligne 2 (#7613)")
         XCTAssertTrue(code.contains("ConversationPreviewLine("), "la préview doit être peinte par ConversationPreviewLine")
         for relic in ["lastMessageSummaryKind()", "lastMessageAttachments", "lastMessageLocation", "AttachmentDisplay.make(", "lastMessageSenderName"] {
             XCTAssertFalse(

@@ -1087,9 +1087,52 @@ describe('Bubble — la prise de langue absente retire le GESTE, pas le fait (#6
     expect(html).toContain('data-prism-indicator');
   });
 
-  test('CONTRASTE — le fil, lui, porte la capacité : les deux contrôles sont là', () => {
+  test('CONTRASTE — le fil, lui, porte la capacité : les drapeaux sont là, et la pastille se tait devant eux (#7599)', () => {
     const html = render(TRADUIT, { tail: true });
-    expect(html).toContain('data-prism-toggle');
+    expect(html).not.toContain('data-prism-toggle');
     expect(html).toContain('data-prism-flag');
+  });
+});
+
+/**
+ * CHAQUE ÉTAT UNE SEULE FOIS, PAR SA COULEUR (#7599) — aligné sur l'inventaire
+ * iOS (#7603) : « modifié » et « épinglé » se réduisent à leur pictogramme (le
+ * mot reste dans le nom accessible de la rangée), et un message traduit montre
+ * ses drapeaux SANS la pastille 🌐, qui n'apparaît que s'il n'y a aucun drapeau.
+ */
+describe('un état est dit UNE fois (#7599)', () => {
+  const translatedMessage = (): Message => ({
+    ...BASE_MESSAGE,
+    originalLanguage: 'en',
+    content: 'Hello there!',
+    translations: [
+      {
+        id: 't1',
+        messageId: BASE_MESSAGE.id,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour !',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+  });
+
+  test('traduit : les drapeaux, SANS la pastille de traduction à côté', () => {
+    const html = render(translatedMessage());
+    expect(html).toContain('data-prism-flag');
+    expect(html).not.toContain('data-prism-toggle');
+  });
+
+  test('modifié : le crayon seul, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, isEdited: true });
+    expect(html).toContain('data-badge="edited"');
+    expect(html).not.toContain('modifié');
+  });
+
+  test('épinglé : l’épingle seule, droite, sans le mot', () => {
+    const html = render({ ...BASE_MESSAGE, pinnedAt: new Date('2026-09-08T09:00:00.000Z') });
+    expect(html).toContain('data-badge="pinned"');
+    expect(html).not.toContain('épinglé<');
+    expect(html).not.toContain('rotate(45deg)');
   });
 });

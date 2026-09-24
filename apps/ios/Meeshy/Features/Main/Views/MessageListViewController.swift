@@ -375,9 +375,9 @@ final class MessageListViewController: UIViewController {
     var focalDetailedLocalId: String?
     /// Reconfiguration des détails du focus : différée et coalescée (voir
     /// `syncFocalFocusDetails`).
-    private var focalDetailsSyncScheduled = false
-    private var focalReconfigureInFlight = false
-    private var focalDetailsPendingAfterApply = false
+    var focalDetailsSyncScheduled = false
+    var focalReconfigureInFlight = false
+    var focalDetailsPendingAfterApply = false
     /// La SCÈNE Focal est active — perspective posée — seulement pendant un
     /// geste utilisateur et `FocalMetrics.Scene.restDelay` après la pose ;
     /// au repos, tout est Script (directive user 2026-08-21).
@@ -388,6 +388,9 @@ final class MessageListViewController: UIViewController {
     /// Compte à rebours de l'aplatissement, réarmé à chaque pose, annulé au
     /// premier tick d'un nouveau geste.
     var focalFlattenWork: DispatchWorkItem?
+    /// Vitesse du défilement en cours — la décélération n'en donne aucune
+    /// autre (`FocalFocusDetailsMotionLaw`, #7624).
+    var focalScrollSpeedMeter = ScrollSpeedMeter()
 
     var readingMode: ConversationReadingMode = .bubbles {
         didSet {
@@ -514,11 +517,11 @@ final class MessageListViewController: UIViewController {
 
     /// Début du défilement en cours (ms), `nil` au repos — l'une des deux
     /// portes de `FocalMagnificationLaw`.
-    private var focalScrollStartedAt: Double?
+    var focalScrollStartedAt: Double?
     /// La magnificence est-elle armée ? Voir `FocalMagnificationLaw` : elle ne
     /// s'arme pas au premier pixel, et une fois armée elle le reste jusqu'à ce
     /// que la scène Focal reparte.
-    private var focalMagnificationArmed = false
+    var focalMagnificationArmed = false
 
     init(
         store: MessageStore,
@@ -1154,7 +1157,7 @@ final class MessageListViewController: UIViewController {
         // donc bas visuel). Pas un overlay : un message reçu en direct
         // s'insère au-dessus et remonte la conversation. La bulle anime
         // ses points en autonomie ; le contre-flip annule la transform.
-        let typingRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let typingRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
@@ -1185,7 +1188,7 @@ final class MessageListViewController: UIViewController {
         // le passage de minuit sans avoir à reconstruire la datasource.
         // Les libellés relatifs sont injectés depuis le catalogue de
         // chaînes localisées pour suivre la langue d'interface de l'app.
-        let dayHeaderRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let dayHeaderRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .dayHeader(let dayStart) = item else {
                 cell.contentConfiguration = nil
                 return
@@ -1214,7 +1217,7 @@ final class MessageListViewController: UIViewController {
         // Focal, parti avec le pass — `applySnapshot` n'appende plus jamais
         // `.conversationStart` ; cette registration est conservée INERTE
         // pour que le cas d'item reste rendable si le marqueur revient.
-        let startRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let startRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .conversationStart = item else {
                 cell.contentConfiguration = nil
                 return
@@ -1249,7 +1252,7 @@ final class MessageListViewController: UIViewController {
             cell.backgroundColor = .clear
         }
 
-        let messageRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+        let messageRegistration = UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
@@ -3294,266 +3297,5 @@ struct TypingIndicatorBubble: View {
         .onAppear { animating = true }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)
-    }
-}
-
-
-// MARK: - Focal : perspective minimale, pendant le défilement seulement (2026-08-21)
-
-extension MessageListViewController {
-
-    /// Région visible du fil dans le repère de `view` : sous le chrome haut
-    /// (`contentInset.bottom` du repère renversé) et au-dessus du composeur
-    /// (`contentInset.top`).
-    private var focalVisibleBounds: (top: CGFloat, bottom: CGFloat) {
-        (collectionView.frame.minY + collectionView.contentInset.bottom,
-         collectionView.frame.maxY - collectionView.contentInset.top)
-    }
-
-    /// Ligne de focus : le centre de la région visible, qui descend au bord
-    /// bas au repos sur le dernier message (`FocalScrollPerspective.focusY`).
-    /// `offsetFromBottom` : `contentOffset.y + contentInset.top` vaut 0 au
-    /// repos en bas du fil renversé et croît vers l'historique.
-    private var focalFocusY: CGFloat {
-        let bounds = focalVisibleBounds
-        return FocalScrollPerspective.focusY(
-            visibleTop: bounds.top,
-            visibleBottom: bounds.bottom,
-            offsetFromBottom: collectionView.contentOffset.y + collectionView.contentInset.top
-        )
-    }
-
-    private func focalGeometry(of cell: UICollectionViewCell) -> FocalScrollPerspective.CellGeometry? {
-        guard let indexPath = collectionView.indexPath(for: cell),
-              let item = dataSource?.itemIdentifier(for: indexPath) else { return nil }
-        let visual = collectionView.convert(cell.frame, to: view)
-        let id: String
-        let isMessage: Bool
-        switch item {
-        case .message(let localId):
-            id = localId
-            isMessage = true
-        case .dayHeader, .typingIndicator, .conversationStart, .firstUnreadSeparator:
-            id = "\(indexPath.item)"
-            isMessage = false
-        }
-        return FocalScrollPerspective.CellGeometry(id: id, visualMidY: visual.midY, height: visual.height, isMessage: isMessage)
-    }
-
-    /// Tick de défilement : la scène ne s'active que sur un geste UTILISATEUR
-    /// (doigt posé ou décélération) — jamais sur un défilement programmé
-    /// (message entrant, atterrissage de recherche). Le premier tick arme la
-    /// fenêtre d'entrée animée ; chaque tick annule l'aplatissement en attente.
-    func noteFocalScrollTick(_ scrollView: UIScrollView) {
-        guard readingMode == .focal, scrollView.isDragging || scrollView.isDecelerating else { return }
-        focalFlattenWork?.cancel()
-        focalFlattenWork = nil
-        if !focalSceneActive {
-            focalSceneActive = true
-            focalSceneEnteredAt = CACurrentMediaTime()
-        }
-        applyFocalPerspectiveToVisibleCells()
-    }
-
-    /// À la POSE : compte à rebours de l'aplatissement
-    /// (`FocalMetrics.Scene.restDelay`), réarmé à chaque pose.
-    func scheduleFocalFlatten() {
-        guard readingMode == .focal, focalSceneActive else { return }
-        focalFlattenWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.flattenFocalScene(animated: true) }
-        focalFlattenWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + FocalMetrics.Scene.restDelay, execute: work)
-    }
-
-    /// Retour à Script : transforms, opacités et carte rejoignent l'identité
-    /// — animés au repos (`flattenDuration`), secs au changement de mode —
-    /// puis la rangée détaillée rend ses détails (UNE reconfiguration, hors
-    /// mouvement). Un geste qui reprend pendant l'animation la reprend depuis
-    /// la valeur présentée (`beginFromCurrentState`) et garde sa carte.
-    func flattenFocalScene(animated: Bool) {
-        focalFlattenWork?.cancel()
-        focalFlattenWork = nil
-        focalSceneActive = false
-        // La scène repart de zéro : la magnificence devra se mériter à nouveau.
-        focalMagnificationArmed = false
-        focalScrollStartedAt = nil
-        focalFocusedLocalId = nil
-        guard isViewLoaded else { return }
-        let cells = collectionView.visibleCells
-        let flatten = {
-            for cell in cells {
-                FocalScrollPerspective.reset(cell.contentView.layer)
-                FocalScrollPerspective.focusCard(in: cell.contentView)?.alpha = 0
-            }
-        }
-        let finish = { [weak self] in
-            guard let self, !self.focalSceneActive else { return }
-            for cell in cells { FocalScrollPerspective.hideFocusCard(in: cell.contentView) }
-            self.syncFocalFocusDetails()
-        }
-        if animated {
-            UIView.animate(
-                withDuration: FocalMetrics.Scene.flattenDuration,
-                delay: 0,
-                options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
-                animations: flatten,
-                completion: { _ in finish() }
-            )
-        } else {
-            UIView.performWithoutAnimation(flatten)
-            finish()
-        }
-    }
-
-    /// Pose d'UNE cellule qui entre à l'écran (sur-réserve comprise) : la
-    /// passe collective — elle a besoin des voisines pour la compaction.
-    /// No-op scène inactive : la cellule arrive à plat, comme en Script.
-    func applyFocalPerspective(to cell: UICollectionViewCell) {
-        guard readingMode == .focal, focalSceneActive else { return }
-        applyFocalPerspectiveToVisibleCells()
-    }
-
-    /// Toutes les cellules visibles, une transaction — appelée par tick et
-    /// après chaque reconfiguration : loi par distance + compaction symétrique
-    /// + carte du message en focus. Dans la fenêtre d'entrée, chaque tick
-    /// anime depuis la valeur présentée (pas de saut) ; ensuite, sec.
-    func applyFocalPerspectiveToVisibleCells() {
-        guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
-        let focusY = focalFocusY
-        let cells = collectionView.visibleCells
-        // **Tant que la magnificence n'est pas armée, le fil défile comme en
-        // Script** (directive 2026-08-24 : « si la magnificence n'est pas
-        // activée, la réduction et l'effet loop non plus ; le scroll se fait
-        // naturellement en Script jusqu'à activation, où on considère TOUTES
-        // les fonctions du mode Focal »). J'avais d'abord retardé la seule
-        // élection en laissant le relief s'appliquer — c'était la moitié de la
-        // règle : la réduction et la compaction sont, elles aussi, des
-        // fonctions du mode, pas un décor neutre.
-        guard focalMagnificationArmed else {
-            for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
-            if focalFocusedLocalId != nil {
-                focalFocusedLocalId = nil
-                syncFocalFocusDetails()
-            }
-            return
-        }
-        // Les géométries ne servent QU'à l'élection, donc qu'une fois armé :
-        // les construire avant la garde, c'était une résolution d'indexPath,
-        // d'identifiant et de conversion de repère PAR CELLULE ET PAR FRAME
-        // jetée pendant les quatre secondes de défilement soutenu qui
-        // précèdent l'armement (`FocalMagnificationLaw.sustainedScrollMs`).
-        var geometries: [FocalScrollPerspective.CellGeometry] = []
-        geometries.reserveCapacity(cells.count)
-        for cell in cells {
-            guard let geometry = focalGeometry(of: cell) else { continue }
-            geometries.append(geometry)
-        }
-        // **Aucune animation ENTRE les messages** (directive 2026-08-24 :
-        // « les messages font comme des ressorts pour entrer et ressortir de
-        // l'écran ; JE NE VEUX aucune animation entre les messages — une fois
-        // dans la planche ils sont fixes »).
-        //
-        // `FocalScrollPerspective.poses` appliquait à CHAQUE rangée une échelle
-        // et une opacité fonction de sa distance à la ligne de focus, plus une
-        // compaction : c'est ce qui donnait le ressort à l'entrée et à la
-        // sortie de l'écran. La loi elle-même (spec Focal §5, courbe gelée)
-        // reste écrite et testée — elle n'est simplement plus APPLIQUÉE ; la
-        // planche est fixe.
-        //
-        // Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586,
-        // 2026-09-15) — lui seul grandit, ses voisins restent à plat.
-        let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
-        let electionChanged = focalFocusedLocalId != focused
-        for cell in cells { FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && focalGeometry(of: cell)?.id == focused, animated: electionChanged) }
-        focalFocusedLocalId = focused
-        // Les détails du message en focus apparaissent AVEC la carte, pas au
-        // posé (directive 2026-08-22) : la reconfiguration ne change aucune
-        // hauteur (chips et identité sont des superpositions sur les lignes
-        // de la carte), elle ne coûte qu'un rendu de deux cellules.
-        if electionChanged { syncFocalFocusDetails() }  // différé + coalescé, jamais réentrant
-        // La carte du focus est le FOND SwiftUI de la rangée
-        // (`FocalRow.focusCardBackground`, posée à la reconfiguration du tick
-        // d'élection) : plus AUCUNE carte UIKit n'est posée par cette passe,
-        // donc plus rien à démonter ici. Le balayage des sous-vues qui s'y
-        // trouvait tournait par cellule et par frame pour retirer une vue
-        // qui n'existe plus. Le démontage d'une carte héritée d'un recyclage
-        // reste assuré aux deux seuls points qui en produisent l'occasion :
-        // la registration (cellule (re)configurée) et `flattenFocalScene`.
-    }
-
-    /// Les détails du message en focus (identité, jour + heure, texte
-    /// plafonné) — par UNE reconfiguration ciblée, jamais par frame : posés à
-    /// la pose tant que la scène est active, rendus à l'aplatissement.
-    /// Même loi et mêmes mots que le message en focus de la rangée.
-    func focalFocusTimestamp(for sentAt: Date) -> String {
-        FocalFocusTimestamp.label(
-            sentAt: sentAt,
-            timeString: TimeStringCache.shared.format(sentAt),
-            now: Date(),
-            calendar: .current,
-            locale: .current,
-            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
-            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
-            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
-        )
-    }
-
-    /// JAMAIS un `apply` synchrone : cette méthode est appelée depuis des
-    /// complétions d'`apply` (pose, aplatissement) et, depuis le 2026-08-22,
-    /// depuis le tick d'élection — qui peut lui-même tourner dans la
-    /// complétion d'un `apply` de reconfiguration. Un `apply` imbriqué fait
-    /// abandonner UIKit (`BUG_IN_CLIENT_OF_DIFFABLE_DATA_SOURCE_…_REENTRANTLY`,
-    /// crash payé au simulateur). La reconfiguration est donc DIFFÉRÉE au
-    /// prochain tour de la boucle principale et COALESCÉE (un seul apply en
-    /// vol ; une élection qui change pendant l'apply est reprise à sa fin).
-    func syncFocalFocusDetails() {
-        guard !focalDetailsSyncScheduled else { return }
-        focalDetailsSyncScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.focalDetailsSyncScheduled = false
-            self.reconfigureFocalDetailsNow()
-        }
-    }
-
-    private func reconfigureFocalDetailsNow() {
-        // La VALEUR ne sert pas — seule son existence conditionne la suite.
-        guard dataSource != nil else { return }
-        if focalReconfigureInFlight {
-            focalDetailsPendingAfterApply = true
-            return
-        }
-        let target = (readingMode == .focal && focalSceneActive) ? focalFocusedLocalId : nil
-        guard focalDetailedLocalId != target else { return }
-        let previous = focalDetailedLocalId
-        focalDetailedLocalId = target
-        reconfigureFocalItems([previous, target].compactMap { $0 })
-    }
-
-    /// Le data source n'est plus un PARAMÈTRE : depuis #3947 l'application
-    /// passe par `applyToDataSource`, donc la propriété. Garder l'argument
-    /// aurait laissé croire qu'on peut viser un autre data source que celui
-    /// où l'on applique.
-    private func reconfigureFocalItems(_ localIds: [String]) {
-        var snapshot = dataSource.snapshot()
-        let present = Set(snapshot.itemIdentifiers)
-        let items = localIds.map { MessageListItem.message(localId: $0) }.filter { present.contains($0) }
-        guard !items.isEmpty else { return }
-        snapshot.reconfigureItems(items)
-        focalReconfigureInFlight = true
-        applyToDataSource(snapshot) { [weak self] in
-            guard let self else { return }
-            self.focalReconfigureInFlight = false
-            self.applyFocalPerspectiveToVisibleCells()
-            if self.focalDetailsPendingAfterApply {
-                self.focalDetailsPendingAfterApply = false
-                self.syncFocalFocusDetails()
-            }
-        }
-    }
-
-    /// Sortie de Focal (changement de mode) : tout à plat, sec.
-    func resetFocalPerspectiveOnVisibleCells() {
-        flattenFocalScene(animated: false)
     }
 }
