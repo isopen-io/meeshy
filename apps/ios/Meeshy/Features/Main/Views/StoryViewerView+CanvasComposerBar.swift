@@ -65,6 +65,17 @@ struct StoryComposerBarView: View {
     @State private var composerIsFocused: Bool = false
     @StateObject private var audioRecorder = AudioRecorderManager()
 
+    /// **La mention `@` d'un commentaire de story** (#7847) : contacts depuis
+    /// le cache, puis `/mentions/suggestions` sur la story (un post) dès la
+    /// deuxième lettre. Le texte est tenu ici pour que le choix puisse
+    /// remplacer le `@fragment` en cours dans la barre.
+    @StateObject private var mentionController = MentionComposerController(context: .composerDraft)
+    @State private var commentText = ""
+
+    private var mentionContext: MentionComposerController.Context {
+        storyId.map { .post(id: $0) } ?? .composerDraft
+    }
+
     /// Accent RÉSOLU du composer : celui du commentaire auquel on répond,
     /// sinon celui de la story.
     private var composerAccent: String {
@@ -80,6 +91,15 @@ struct StoryComposerBarView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            MentionSuggestionOverlay(controller: mentionController, accentColor: composerAccent) { candidate in
+                commentText = mentionController.insertMention(candidate, into: commentText)
+            }
+            composerBar
+        }
+    }
+
+    private var composerBar: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
@@ -109,6 +129,7 @@ struct StoryComposerBarView: View {
             },
             onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
             onLocationRequest: { showCommentLocationPicker = true },
+            textBinding: $commentText,
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -163,6 +184,10 @@ struct StoryComposerBarView: View {
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
                   }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
+            onTextChange: { text in
+                mentionController.retarget(mentionContext)
+                mentionController.handleQuery(in: text)
+            },
             onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
             onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
