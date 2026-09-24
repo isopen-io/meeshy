@@ -34,15 +34,26 @@ public final class JoinFlowViewModel: ObservableObject {
         case error(String)
     }
 
+    /// Où le parcours commence une fois le lien chargé : la page d'invitation,
+    /// ou directement le formulaire invité quand la personne a DÉJÀ choisi
+    /// l'anonymat sur la page (compte présent, #7795) — la lui remontrer
+    /// reposerait la question.
+    public enum Entry: Sendable {
+        case landing
+        case anonymousForm
+    }
+
     // MARK: - Private
 
     private let shareLinkService = ShareLinkService.shared
     private let identifier: String
+    public let entry: Entry
 
     // MARK: - Init
 
-    public init(identifier: String) {
+    public init(identifier: String, entry: Entry = .landing) {
         self.identifier = identifier
+        self.entry = entry
     }
 
     // MARK: - Load Link Info
@@ -54,7 +65,7 @@ public final class JoinFlowViewModel: ObservableObject {
         do {
             let info = try await shareLinkService.getLinkInfo(identifier: identifier)
             linkInfo = info
-            phase = .preview
+            phase = entry == .anonymousForm ? .form : .preview
         } catch let error as MeeshyError {
             let message: String
             switch error {

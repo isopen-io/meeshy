@@ -7,10 +7,29 @@ public struct JoinFlowSheet: View {
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
+    let isSignedIn: Bool
+    let onAccountRequest: ((InviteLandingChoice) -> Void)?
     let onJoinSuccess: (AnonymousJoinResponse) -> Void
 
-    public init(identifier: String, onJoinSuccess: @escaping (AnonymousJoinResponse) -> Void) {
-        self._viewModel = StateObject(wrappedValue: JoinFlowViewModel(identifier: identifier))
+    /// - Parameters:
+    ///   - isSignedIn: un compte est présent (entrée anonyme DÉLIBÉRÉE) — la
+    ///     page d'invitation propose alors le compte d'abord.
+    ///   - entry: `.anonymousForm` quand l'anonymat a déjà été choisi sur la
+    ///     page d'invitation de l'hôte ; le retour du formulaire ferme alors
+    ///     la feuille au lieu de reposer la question.
+    ///   - onAccountRequest: « Se connecter » / « Créer un compte » (ou
+    ///     « Rejoindre avec mon compte ») — la feuille se ferme et l'hôte
+    ///     conduit la personne vers son compte.
+    public init(
+        identifier: String,
+        isSignedIn: Bool = false,
+        entry: JoinFlowViewModel.Entry = .landing,
+        onAccountRequest: ((InviteLandingChoice) -> Void)? = nil,
+        onJoinSuccess: @escaping (AnonymousJoinResponse) -> Void
+    ) {
+        self._viewModel = StateObject(wrappedValue: JoinFlowViewModel(identifier: identifier, entry: entry))
+        self.isSignedIn = isSignedIn
+        self.onAccountRequest = onAccountRequest
         self.onJoinSuccess = onJoinSuccess
     }
 
@@ -21,22 +40,26 @@ public struct JoinFlowSheet: View {
             background
 
             VStack(spacing: 0) {
-                headerBar
+                if viewModel.phase != .preview {
+                    headerBar
+                }
 
                 switch viewModel.phase {
                 case .loading:
                     loadingState
                 case .preview:
                     if let info = viewModel.linkInfo {
-                        JoinLinkPreviewView(linkInfo: info) {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                viewModel.proceedToForm()
-                            }
-                        }
+                        InviteLandingView(
+                            info: info,
+                            isSignedIn: isSignedIn,
+                            onChoice: handleLandingChoice,
+                            onClose: { dismiss() }
+                        )
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 case .form:
                     AnonymousJoinFormView(viewModel: viewModel) {
+                        guard viewModel.entry == .landing else { return dismiss() }
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             viewModel.phase = .preview
                         }
@@ -56,6 +79,17 @@ public struct JoinFlowSheet: View {
             await viewModel.loadLinkInfo()
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.phase == .loading)
+    }
+
+    private func handleLandingChoice(_ choice: InviteLandingChoice) {
+        guard choice == .joinAnonymously else {
+            dismiss()
+            onAccountRequest?(choice)
+            return
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            viewModel.proceedToForm()
+        }
     }
 
     // MARK: - Background
