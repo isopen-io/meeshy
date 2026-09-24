@@ -38,6 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- #7844 — sans elle, la WebView n'active pas la détection des changements
+         de réseau : navigator.onLine reste true et les événements online /
+         offline ne partent jamais (pastille, socket, accusés en attente). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- #5668 — sans elles, getUserMedia() de la WebView échoue AVANT toute
          demande à l'utilisateur : le composeur n'atteint jamais l'état
          "requesting" (recette QEMU, socle du prompt). -->

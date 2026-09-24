@@ -1,44 +1,9 @@
-La plus grosse mise à jour de Meeshy à ce jour. Créer, regarder et parler : tout a été repensé.
+Meeshy 1.1.1
 
-CRÉER — UN SEUL STUDIO
-• Story, Réel ou Post : choisissez le format de l'intérieur, sans perdre ce que vous avez déjà écrit ou ajouté
-• Composez au doigt — appui long pour ouvrir l'appareil photo dans la scène, outils à gauche, historique à droite, annuler et rétablir à tout moment
-• Plusieurs scènes, plusieurs médias, chacun avec sa légende et sa langue : carrousel, mosaïque ou diapositives, à vous de choisir
-• Recadrez, pivotez, rognez sans perte. Composez depuis un message reçu, un contenu partagé depuis une autre app, ou ce que vous venez de coller
-
-DÉCORER — 200 STICKERS, 14 EFFETS DE TEXTE
-• Une vingtaine de familles — joie, humeur, salutations, fête, nature, voyage, musique, sport — et beaucoup sont animées
-• Détourez un sujet dans une photo : il rejoint votre bibliothèque personnelle
-• Le texte passe de 4 à 14 effets (lueur, ombre, relief, néon), avec 18 styles et leurs polices
-• Une décoration peut porter une donnée vivante : lieu, heure, météo, vos propres mots
-
-VOS VOCAUX, DANS LEUR LANGUE
-• Votre message vocal est transcrit sur l'appareil dès que vous relâchez : le texte est là tout de suite, sans attendre le serveur
-• Le son d'un post, d'un réel ou d'un commentaire se joue maintenant dans la langue de celui qui écoute
-• Un écran unique pour enregistrer, rogner et placer un son : fond de scène, bande-son, ou contenu à écouter sous le texte
-• Les légendes de photo et de vidéo se lisent dans votre langue, traduites en direct
-
-REGARDER
-• Le plein écran s'ouvre net sur l'image réelle, jamais sur une vignette floue
-• Une scène se présente partout de la même façon — dans une story comme dans une publication : même cadre, même sol, mêmes angles nets en plein écran
-• Parcourez les médias d'une publication puis ceux de ses commentaires, comme une pellicule
-• Réagissez, répondez ou créez une story sans quitter le plein écran
-• Double tap latéral sur une vidéo : dix secondes en arrière ou en avant
-
-CONVERSATIONS
-• Sélection multiple jusqu'à 100 messages pour transférer ou supprimer en une fois
-• Double tap pour réagir, appui long pour le menu — qui ne propose plus que les actions ayant un effet
-• Les citations montrent la miniature, la durée et la taille du média cité
-• Modes de lecture retravaillés, et « Rivière », le temps en axe vertical, ouvre en bêta
-
-VOTRE COMPTE
-• Inscription sur un seul écran : e-mail ou téléphone, mot de passe facultatif, lien magique
-• Votre statut « en ligne » n'est visible que de vos amis acceptés — ni un partage de conversation, ni une communauté, ni un lien de story ne le révèlent
-• Progression, séries et près de 120 succès ; la Meesh, notre monnaie rare, a désormais sa pièce
-
-AUTOUR DE VOUS
-• « À proximité » passe à deux niveaux, voisinage et découverte, en densité, points ou liste
-• Une pastille de lieu porte sa fenêtre horaire — et la découvrabilité reste un choix explicite, à la précision que vous réglez
-
-ET SOUS LE CAPOT
-Démarrage à froid en quelques requêtes : vos conversations s'affichent sans attendre le réseau. Neuf plantages corrigés à la racine. Une vingtaine de corrections d'accessibilité — VoiceOver, Dynamic Type, contrastes WCAG, cibles de 44 pt, interface retournée pour l'arabe. Sept langues d'interface servies sans approximation.
+• Nouvelle page d'invitation : avant de rejoindre, voyez qui vous invite, le groupe, ses langues et ce que vous pourrez y faire, même sans compte
+• Vos liens d'invitation ont leur fiche : détails, modification et arrivées (visites, langues, pays)
+• Touchez un participant actif en haut d'une conversation : sa story non vue s'ouvre, sinon son profil
+• Un lien Meeshy reçu s'ouvre directement dans l'app, iPad compris ; réels et stories s'ouvrent dans le même lecteur, d'où que vous veniez
+• En revenant dans l'app, la liste montre tout de suite le dernier message reçu en arrière-plan
+• L'arabe garde ses ligatures, et les dates suivent le calendrier grégorien dans toutes les langues
+• Corrections et gains de fluidité

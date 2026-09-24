@@ -1,44 +1,9 @@
-La mayor actualización de Meeshy hasta hoy. Crear, ver y hablar: todo se ha rehecho.
+Meeshy 1.1.1
 
-CREAR — UN SOLO ESTUDIO
-• Historia, Reel o Publicación: cambia de formato desde dentro, sin perder lo que ya habías escrito o añadido
-• Compón con el pulgar — una pulsación larga abre la cámara dentro de la escena, herramientas a la izquierda, historial a la derecha, deshacer y rehacer cuando quieras
-• Varias escenas, varios archivos, cada uno con su pie de foto y su idioma: carrusel, mosaico o diapositivas, tú eliges
-• Recorta, gira y ajusta sin perder calidad. Empieza desde un mensaje recibido, algo compartido desde otra app, o lo que acabas de pegar
-
-DECORAR — 200 PEGATINAS, 14 EFECTOS DE TEXTO
-• Una veintena de familias — alegría, ánimo, saludos, fiesta, naturaleza, viajes, música, deporte — y muchas están animadas
-• Recorta un sujeto de una foto y pasa a tu biblioteca personal
-• El texto pasa de 4 a 14 efectos (brillo, sombra, relieve, neón), con 18 estilos y sus tipografías
-• Una decoración puede llevar datos vivos: lugar, hora, tiempo, tus propias palabras
-
-TUS AUDIOS, EN SU IDIOMA
-• Tu mensaje de voz se transcribe en el dispositivo en cuanto sueltas: el texto está ahí al instante, sin esperar al servidor
-• El audio de una publicación, un reel o un comentario ahora suena en el idioma de quien escucha
-• Una sola pantalla para grabar, recortar y colocar un sonido: fondo de escena, banda sonora o contenido para escuchar bajo el texto
-• Los pies de foto y de vídeo se leen en tu idioma, traducidos en directo
-
-VER
-• La pantalla completa abre nítida sobre la imagen real, nunca sobre una miniatura borrosa
-• Una escena se presenta igual en todas partes — en una historia como en una publicación: mismo marco, mismo suelo, mismas esquinas nítidas a pantalla completa
-• Recorre los archivos de una publicación y luego los de sus comentarios, como un carrete
-• Reacciona, responde o crea una historia sin salir de la pantalla completa
-• Doble toque a los lados de un vídeo: diez segundos atrás o adelante
-
-CONVERSACIONES
-• Selección múltiple de hasta 100 mensajes para reenviar o borrar de una vez
-• Doble toque para reaccionar, pulsación larga para el menú — que ahora solo ofrece acciones con efecto real
-• Las citas muestran la miniatura, la duración y el tamaño del archivo al que apuntan
-• Modos de lectura renovados, y «Río» — el tiempo como eje vertical — se estrena en beta
-
-TU CUENTA
-• Registro en una sola pantalla: correo o teléfono, contraseña opcional, enlace mágico
-• Tu estado «en línea» solo lo ven tus amigos aceptados — ni una conversación compartida, ni una comunidad, ni un enlace de historia lo revelan
-• Progreso, rachas y casi 120 logros; la Meesh, nuestra moneda rara, ya tiene su pieza
-
-A TU ALREDEDOR
-• «Cerca de ti» pasa a dos niveles, vecindario y descubrimiento, en densidad, puntos o lista
-• Una etiqueta de lugar lleva su franja horaria — y ser descubrible sigue siendo una decisión explícita, con la precisión que tú ajustas
-
-BAJO EL CAPÓ
-Arranque en frío con un puñado de peticiones: tus conversaciones aparecen sin esperar a la red. Nueve fallos corregidos de raíz. Una veintena de mejoras de accesibilidad — VoiceOver, Dynamic Type, contraste WCAG, objetivos de 44 pt, interfaz invertida para el árabe. Siete idiomas de interfaz servidos sin aproximaciones.
+• Nueva página de invitación: antes de unirte, ve quién te invita, el grupo, sus idiomas y lo que podrás hacer, incluso sin cuenta
+• Tus enlaces de invitación tienen su propia ficha: detalles, edición y llegadas (visitas, idiomas, países)
+• Toca a un participante activo en la parte superior de una conversación: se abre su historia no vista o, si no, su perfil
+• Un enlace de Meeshy recibido se abre directamente en la app, también en iPad; reels e historias se abren en el mismo reproductor, vengas de donde vengas
+• Al volver a la app, la lista muestra al instante el último mensaje recibido en segundo plano
+• El árabe conserva sus ligaduras y las fechas siguen el calendario gregoriano en todos los idiomas
+• Correcciones y más fluidez
