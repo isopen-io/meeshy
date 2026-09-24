@@ -179,13 +179,27 @@ function journeyPositions(context: JourneyContext, current: JourneyStep): { read
   return { position: Math.max(1, index), count: Math.max(1, offered.length) };
 }
 
-export default function OnboardingScreen({ deps = defaultOnboardingScreenDeps }: { readonly deps?: OnboardingScreenDeps } = {}) {
+export default function OnboardingScreen() {
+  const [search, setSearch] = useSearch();
+  const clearSearch = useCallback(() => setSearch(new URLSearchParams(), true), [setSearch]);
+  return <OnboardingJourney deps={defaultOnboardingScreenDeps} search={search} clearSearch={clearSearch} />;
+}
+
+/** Le parcours, hors du routeur — ce que les témoins montent. */
+export function OnboardingJourney({
+  deps,
+  search,
+  clearSearch,
+}: {
+  readonly deps: OnboardingScreenDeps;
+  readonly search: URLSearchParams;
+  readonly clearSearch: () => void;
+}) {
   const lang = currentInterfaceLanguage();
   const online = useOnline();
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = resolveViewer({ source: deps.api.source, session });
   const viewerKey = viewer.id ?? 'anonyme';
-  const [search, setSearch] = useSearch();
   const query = useQuery(onboardingQueryOptions(deps.api), deps.queryClient);
   const state = query.data;
 
@@ -222,12 +236,22 @@ export default function OnboardingScreen({ deps = defaultOnboardingScreenDeps }:
       setProgress((current) => withDone(current, 'story'));
       celebrate(stepPoints('story'));
       setStep('story');
-      setSearch(new URLSearchParams(), true);
+      clearSearch();
       return;
     }
     const asked = search.get('step');
-    setStep(isStepId(asked) ? asked : resumeStep(context));
-  }, [context, step, search, setSearch, setProgress, celebrate]);
+    if (isStepId(asked)) {
+      setStep(asked);
+      return;
+    }
+    /* Un parcours CLOS (fini, passé, ou plus de sept jours) ne se rejoue pas :
+       l'adresse, tapée ou gardée en favori, rend l'accueil. */
+    if (!context.state.eligible) {
+      deps.navigate(href('list'), true);
+      return;
+    }
+    setStep(resumeStep(context));
+  }, [context, step, search, clearSearch, setProgress, celebrate, deps]);
 
   const leave = useCallback(
     (path: string) => {
@@ -253,10 +277,6 @@ export default function OnboardingScreen({ deps = defaultOnboardingScreenDeps }:
     },
     [setProgress, celebrate],
   );
-
-  if (state !== undefined && !state.eligible && search.get('step') === null && step === null) {
-    return <Leaving onLeave={() => deps.navigate(href('list'), true)} />;
-  }
 
   if (context === null || state === undefined || step === null) {
     return <OnboardingSkeleton lang={lang} failed={query.isError} onLater={() => deps.navigate(href('list'), true)} />;
@@ -373,11 +393,6 @@ export default function OnboardingScreen({ deps = defaultOnboardingScreenDeps }:
       </p>
     </main>
   );
-}
-
-function Leaving({ onLeave }: { readonly onLeave: () => void }) {
-  useEffect(onLeave, [onLeave]);
-  return <main data-onboarding className="onb" aria-busy="true" />;
 }
 
 function OnboardingSkeleton({ lang, failed, onLater }: { readonly lang: InterfaceLanguage; readonly failed: boolean; readonly onLater: () => void }) {

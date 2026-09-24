@@ -175,7 +175,15 @@ export function GlobalIllustration() {
 }
 
 /** 3 — l'anneau de story qui se remplit autour de l'avatar du lecteur. */
-export function StoryIllustration({ name, avatar }: { readonly name: string; readonly avatar: string | undefined }) {
+export function StoryIllustration({
+  name,
+  avatar,
+  published,
+}: {
+  readonly name: string;
+  readonly avatar: string | undefined;
+  readonly published: boolean;
+}) {
   return (
     <div className="onb-illu onb-story" aria-hidden="true">
       <span className="onb-story-ring">
@@ -183,8 +191,8 @@ export function StoryIllustration({ name, avatar }: { readonly name: string; rea
           <Avatar initials={initialsOf(name)} color={colorForName(name)} size={84} {...(avatar === undefined ? {} : { src: avatar })} />
         </span>
       </span>
-      <span className="onb-story-plus">
-        <Glyph name="plus" size={16} />
+      <span className={published ? 'onb-story-plus onb-story-plus-done' : 'onb-story-plus'}>
+        <Glyph name={published ? 'check' : 'plus'} size={16} />
       </span>
     </div>
   );

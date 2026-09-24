@@ -319,7 +319,7 @@ export function GlobalCard({
             maxLength={500}
             value={text}
             lang={host.lang}
-            onChange={(event) => setText(event.currentTarget.value)}
+            onInput={(event) => setText(event.currentTarget.value)}
             onFocus={selectHole}
           />
           <div className="onb-composer-foot">
@@ -367,7 +367,7 @@ export function StoryCard({
       step="story"
       title={translateOnboarding(lang, 'onboarding.story.title')}
       body={translateOnboarding(lang, 'onboarding.story.body')}
-      illustration={<StoryIllustration name={name} avatar={avatar} />}
+      illustration={<StoryIllustration name={name} avatar={avatar} published={published} />}
       actions={
         published ? (
           <PrimaryButton id="story.continue" onClick={onDone}>
@@ -486,7 +486,7 @@ export function FriendsCard({
                   />
                   <span className="onb-person-text">
                     <span className="onb-person-name">
-                      {suggestion.displayName}
+                      <bdi>{suggestion.displayName}</bdi>
                       <span className="onb-person-flags" aria-hidden="true">
                         {suggestion.languages.map(flagOf).join(' ')}
                       </span>

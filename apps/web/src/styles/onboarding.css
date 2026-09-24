@@ -833,6 +833,10 @@
   animation: onb-pop 520ms var(--onb-bounce) 1700ms both;
 }
 
+.onb-story-plus-done {
+  background: var(--ios-success-deep);
+}
+
 /* 4 — la bande */
 .onb-friends {
   display: flex;

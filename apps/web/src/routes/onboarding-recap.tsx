@@ -17,7 +17,8 @@ import { PrimaryButton, RecapTiles, SecondaryButton, TrophyIllustration, type Re
  * **Les chiffres sont RELUS du serveur** (`GET /me/engagement`), comme
  * `OnboardingViewModel.loadRecap` sur iOS : la pastille de session ne
  * contredit jamais la progression. Sans réponse, le récapitulatif retombe sur
- * ce que CE client a vu se confirmer, sans série ni badge inventés.
+ * ce que CE client a vu se confirmer : les points, la série et les badges que
+ * les règles du serveur ont crédités à ces accusés (`journey.ts § recapOf`).
  */
 
 export type RecapNumbers = {
@@ -55,7 +56,7 @@ export function RecapCard({
   readonly onDone: () => void;
 }) {
   const lang = host.lang;
-  const fallback: RecapNumbers = { points: session.points, level: session.levelReached ? 1 : 0, streakDays: 0, badges: 0 };
+  const fallback: RecapNumbers = { points: session.points, level: session.levelReached ? 1 : 0, streakDays: session.streakDays, badges: session.badges };
   const [served, setServed] = useState<RecapNumbers | null>(null);
 
   useEffect(() => {
