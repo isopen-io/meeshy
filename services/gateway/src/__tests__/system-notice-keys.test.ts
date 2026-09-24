@@ -90,6 +90,21 @@ const CASES: readonly Case[] = [
     event: { key: 'system.conversation-image', params: { actor: 'Demo' } },
     text: 'Photo du groupe modifiée',
   },
+  {
+    label: 'arrivées regroupées de Meeshy Global (#7740)',
+    metadata: {
+      kind: 'members-arrived',
+      arrivals: [
+        { participantId: 'p-aicha', displayName: 'Aïcha' },
+        { participantId: 'p-tom', displayName: 'Tom' },
+        { participantId: 'p-lea', displayName: 'Léa' },
+      ],
+      count: 14,
+      windowStartedAt: '2026-09-23T11:55:00.000Z',
+    },
+    event: { key: 'system.members-arrived', params: { first: 'Aïcha', second: 'Tom', third: '', others: 12, count: 14 } },
+    text: 'Aïcha, Tom et 12 autres viennent d’arriver — dis-leur salut',
+  },
 ];
 
 async function servedSystemEvent(systemEvent: LastMessageSystemEvent | null) {

@@ -123,12 +123,16 @@ describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans
     content: 'Hello, this is a test message!'
   };
 
-  const NEWCOMER_CREATED_AT = () => new Date(Date.now() - 2 * 3600 * 1000);
-  const ESTABLISHED_CREATED_AT = () => new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  // L'horloge est FIGÉE : un décompte calculé contre `Date.now()` qui avance
+  // entre la fabrication du témoin et la décision tomberait de 20 à 21 s sous
+  // charge — un témoin qui lit l'horloge murale est un témoin instable.
+  const FROZEN_NOW = Date.UTC(2026, 8, 24, 12, 0, 0);
+  const NEWCOMER_CREATED_AT = () => new Date(FROZEN_NOW - 2 * 3600 * 1000);
+  const ESTABLISHED_CREATED_AT = () => new Date(FROZEN_NOW - 30 * 24 * 3600 * 1000);
 
   const lastUserSendSecondsAgo = (seconds: number) => async (args: any) =>
     args?.where?.messageSource === 'user' && args?.where?.createdAt?.gt
-      ? { createdAt: new Date(Date.now() - seconds * 1000) }
+      ? { createdAt: new Date(FROZEN_NOW - seconds * 1000) }
       : null;
 
   const globalMember = (accountCreatedAt: Date) => ({
@@ -143,6 +147,7 @@ describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(FROZEN_NOW);
     resetParticipantLookupCache();
 
     global.fetch = jest.fn().mockResolvedValue({
