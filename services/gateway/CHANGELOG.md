@@ -1,5 +1,117 @@
 # @meeshy/gateway
 
+## 1.66.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un marquage lu perdu hors ligne se rejoue à la reconnexion (Refs #7367)
+  - le chrome du Flux prend la fenêtre, et le (+) du rail est peint à SA taille
+  - le broadcast des mentions se lit sans `any`, et la dette redescend — run test
+  - la fiche ne dit plus « 1 ouverture » ET « Pas encore ouvert » sur la même pièce (Refs #7363)
+  - le compteur d'un éphémère n'apparaît que dans sa dernière minute, et sa destruction se voit (#7468)
+  - la vue unique s'arme d'un tap, à côté du flou — run test
+  - la bannière d'un éphémère porte la FLAMME, pas un sablier — run test
+  - l'éphémère est la FLAMME, et les deux surfaces de choix lisent la table — run test
+  - le canal de consommation entre dans l'init de RiverConversationHost — run test
+  - le compteur n'apparaît qu'à la dernière minute, et la destruction se voit — run test
+  - ouvrir une image ou un document émet, et la fiche nomme qui a ouvert
+  - une mention affiche le nom de la personne, comme sur iOS
+  - le témoin #6169 attend la visionneuse MONTÉE — portage de #7465 — run test
+  - le fil se lit dans une colonne centrée, et on y publie un post ou un réel
+  - le décompte d'un éphémère part de la réception, dans tous les modes (#7454)
+  - le centre de notifications est redemandé dans la fermeture du balayage — run test
+  - les témoins de la bannière éphémère rejoignent des fichiers INSCRITS — run test
+  - la garde des cinq modes rejoint un fichier INSCRIT au projet — run test
+  - la bannière d'un éphémère dit son heure et part à l'heure — run test
+  - un seul décompte éphémère, servi aux cinq modes de lecture — run test
+  - le pourcentage écouté a son témoin de direct, et les témoins de la feuille ne sont plus affaiblis
+  - affiche le pourcentage écouté/regardé visible à côté de la barre
+  - un message:consumed en retard ne rouvre plus une vue unique brûlée
+  - le catalogue d'interface est chargé avant de monter le test du composeur (Closes #7354)
+  - la fiche des accusés parle les sept langues et s'ouvre sur l'onglet qui a quelqu'un à montrer — run test
+  - la bascule « vue unique » du composeur arme le message, message:consumed le met à jour en direct
+  - localisations, coche et zone tactile 44 pt de la fiche des accusés — run test
+  - l'accusé de remise se DÉRIVE des arrivées de message, une seule table — run test
+  - les accusations de remise incluent les mentions — run test (Closes #7364)
+  - le témoin du fil rechargé mesure la fabrique que l'écran sert — staleTime: 0 dans messagesQuery
+  - la fiche résout « Lu » comme la bulle, et VoiceOver lit la source unique localisée — run test
+  - un fil rechargé revalide sans attendre 30 s — staleTime: 0
+  - le statut RÉSOLU alimente la fiche, les bulles et VoiceOver, plus le brut — run test (Refs #7365)
+  - ouvrir un document compte une OUVERTURE, et la galerie tient sous le plafond de 1200 lignes — run test (Refs #7362)
+  - l'ouverture d'une image ou d'un document depuis le fil remonte sa consommation — run test (Closes #7362)
+  - l'écriture « consommé par tous » quitte le fichier hors budget où le lot l'avait ajoutée — run test (Refs #7360)
+  - l'auteur qui réécoute son vocal n'allume plus « écouté par tous », et la fiche ne se relance que pour SON message — run test (Refs #7360)
+  - en sélection, taper l'accusé bascule la sélection et n'ouvre plus la fiche (Refs #7352)
+  - la barre « écouté jusqu'à » et le compteur bougent EN DIRECT, sans rouvrir la conversation — run test (Refs #7360)
+  - le libellé du bouton « Voir les détails » passe par le catalogue des sept langues (Refs #7352)
+  - la coche du message ouvre la fiche, chaque accusé porte son heure, la fiche suit le direct (Refs #7352)
+  - ReadStatusSummary mirrors messageId/readByAllAt — run test (Refs #7347)
+  - « Lu » depuis la liste avance le curseur — le fil rouvert ne remet pas de séparateur sur ce qu'on vient de marquer lu
+  - applyReadStatusUpdated applique readByAllAt du résumé nommé (Refs #7347)
+  - fermer une conversation lui rend ce qui reste non lu — liste, cache et badge suivent le serveur — run test (Refs #7350)
+  - « Équipe déploiement » garde ses 2 non-lus — le fil d'un appareil neuf s'ouvre sur son séparateur, mesuré au navigateur
+  - un message arrivé après la lecture rouvre le fil sur son séparateur
+  - la fiche, la feuille de commentaires d'une story et les Réels tiennent la salle de leur publication (Refs #7395)
+  - ouvrir une conversation ne marque plus lu ce qui n'a pas été affiché — run test (Closes #7350)
+  - le fil s'ouvre sur le séparateur même sur un appareil qui n'a jamais ouvert la conversation
+  - les fixtures du fil ne datent plus aucun message dans le futur entre minuit et 1 h 36 à Paris
+  - un commentaire traduit en direct bascule dans la langue du lecteur, sur la fiche et dans le lecteur de stories
+  - la fiche « Vu par » se rafraîchit SANS spinner, et l'instant de distribution survit au passage à lu — run test (Refs #7349)
+  - ouvrir une publication depuis un hashtag, un profil, les enregistrées ou un fil de Réels la peint sans squelette
+  - un `messageId` VIDE ne traverse plus la garde, et la forme du contrat de G-5 s'arrête ici (Refs #7348)
+  - une traduction livrée en direct atteint chaque écran qui montre la carte
+  - délivré-puis-lu avance à lu, la fiche « Vu par » se met à jour, message:pending-delivered écouté — run test (Refs #7349)
+  - read-status:updated cible le message NOMMÉ, plus toujours le dernier du fil (Refs #7348)
+  - aimer ou enregistrer depuis un hashtag ou un profil change la carte à l'écran (Refs #7341)
+  - une notification corrigée remplace la bannière encore affichée, sans en lever de nouvelle (Refs #7342)
+  - Réglages › Outils ouvre les publications enregistrées, à la place qu'iOS leur donne
+  - l'écran `/me/bookmarks` relit les publications enregistrées
+  - enregistrer ou retirer une publication écrit aussi le corpus des enregistrées, dans les deux sens
+  - les publications enregistrées se lisent par `scope=bookmarks`, et leur corpus est une appartenance
+  - les libellés d'état du fil se lisent dans la langue du lecteur
+  - le worker de push applique le son coupé et l'empilement que la passerelle lui envoie (Refs #7308)
+  - les gardes du dépôt suivent le décompte éphémère (#7451)
+  - le décompte d'un éphémère part de la réception de chacun (#7451)
+  - la porte jumelle « qui a lu » ne sert plus l'appareil des autres
+  - un invité anonyme lit et écrit les statuts de pièce jointe comme tout membre
+  - currentUserJoinedAt servi dans le détail de conversation - Closes #7358
+  - readDevice masqué pour les autres membres - Refs #7358
+  - anonymes invités exclus des détails de statut de pièces jointes - Refs #7358
+  - les deux portes status-details refusent en 404 un contenu antérieur au plancher, et celle des pièces jointes ne lève plus à chaque appel
+  - /attachments/:id/status-details respecte le plancher d'historique (Closes #7357)
+  - la lecture exacte est armée par les compositions de staging et de production
+  - la durée cumulée d'un média dérive des écoutes réelles, jamais de la durée de piste (Closes #7359)
+  - la progression audio/vidéo servie est la plus avancée, le complet ne redescend jamais (Refs #7359)
+  - répondre diffuse l'arriéré marqué lu, un résumé par message — et aucun compteur à zéro inventé (Refs #7347)
+  - read-status:updated émet un résumé par message figé, plus un agrégat sur le dernier (Refs #7347)
+  - le badge poussé par mark-unread déclare son pont non calculé et se type sur le contrat
+  - la traduction du TEXTE d'une publication atteint aussi sa salle (Refs #7395)
+  - mark-unread reste effectif après une réponse, et pousse le badge (#7346)
+  - la page d'un hashtag montre si le lecteur a aimé, enregistré ou republié chaque publication
+  - l'état du lecteur d'une liste de publications vit dans UNE fonction
+  - les index du favori couvrent son keyset et sa cascade, et le plafond des participations est déterministe (Refs #7377)
+  - marquer lu fige enfin `readAt` quand le message a d'abord été LIVRÉ (Refs #7345)
+  - un lien de partage échu ferme le favori comme il ferme le fil (Refs #7377)
+  - un curseur keyset forgé est refusé au décodage, plus remis à Prisma (Refs #7377)
+  - un expéditeur disparu ne rend plus la liste des favoris illisible (Refs #7377)
+  - la liste des favoris sert le message vivant, et seulement ce que le lecteur a le droit de lire (Refs #7377)
+  - un lecteur pose et retire son étoile sur un message, et ses autres appareils le savent (Refs #7377)
+  - le push d'une notification réécrite se déclare correction, pour le web qui ne reçoit pas la révocation (Closes #7342)
+  - la composition du push web quitte PushNotificationService pour son propre module, et ses témoins avec elle (Refs #7308)
+  - le push web porte enfin le son coupé, l'empilement par conversation et le sujet de remplacement (Refs #7308)
+  - adopte verbatim les déclarations du fil posées par #7454
+  - l'aperçu de liste cesse de juger un éphémère sur `expiresAt` (#7451)
+  - `message:countdown-started` est déclaré au contrat du fil — run test
+  - la frontière du premier non-lu accepte un repli sur unreadCount
+  - le modèle MessageStar porte l'étoile personnelle d'un lecteur sur un message (Refs #7377)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.23.0
+
 ## 1.65.0
 
 ### Minor Changes
