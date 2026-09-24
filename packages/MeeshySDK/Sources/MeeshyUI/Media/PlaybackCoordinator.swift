@@ -66,7 +66,7 @@ public final class PlaybackCoordinator {
         }
 
         stopAllExternal(except: nil)
-        SharedAVPlayerManager.shared.stop()
+        SharedAVPlayerManager.shared.stopForHandoff()
     }
 
     public func willStartPlaying(video manager: SharedAVPlayerManager) {
@@ -87,7 +87,7 @@ public final class PlaybackCoordinator {
         }
 
         stopAllExternal(except: ObjectIdentifier(player))
-        SharedAVPlayerManager.shared.stop()
+        SharedAVPlayerManager.shared.stopForHandoff()
     }
 
     // MARK: - Active Playback Query

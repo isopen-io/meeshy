@@ -31,12 +31,13 @@ private final class FeedStoreWeakBox: @unchecked Sendable {
     init(_ value: FeedStore) { self.value = value }
 }
 
-/// Fetches the feed page synchronously on the calling actor. Declared at
-/// file scope so the closure passed to `reader.read` doesn't inherit any
-/// actor isolation context, which would trigger Swift 6 strict concurrency
-/// runtime checks at GRDB invocation (same workaround as `MessageStore`'s
-/// `fetchMessageWindow`).
-private func fetchFeedPosts(reader: any DatabaseWriter, limit: Int) throws -> [PostRecord] {
+/// Fetches the feed page. Declared at file scope AND `nonisolated` so the
+/// closure passed to `reader.read` inherits no actor isolation — under the
+/// app's default MainActor isolation a plain file-scope function is still
+/// MainActor, which both pinned the read to the main thread and is what
+/// tripped the Swift 6 runtime isolation check GRDB invocations used to hit.
+/// Same shape as `MessageStore`'s `fetchMessageWindow`, read detached.
+private nonisolated func fetchFeedPosts(reader: any DatabaseWriter, limit: Int) throws -> [PostRecord] {
     try reader.read { db in
         try PostRecord.order(Column("createdAt").desc).limit(limit).fetchAll(db)
     }
@@ -100,22 +101,24 @@ public final class FeedStore: ObservableObject {
     }
 
     private var loadedCount = 50
+    private var refreshGeneration = 0
 
     // MARK: - Off-main DB read
 
+    /// Runs after EVERY feed commit (likes, comments, translations) and on each
+    /// pagination step, re-reading and decoding the whole loaded window — off
+    /// the main thread, so a socket burst no longer hitches the feed scroll.
+    /// Generation guard: refreshes can now interleave across the await, and
+    /// only the most recent request may publish.
     private func refreshFromDB() async {
         let reader = persistence.reader
         let limit = loadedCount
-        // Read on the calling actor (MainActor). Direct reads via GRDB are
-        // fast (a single indexed SELECT) and avoid the Swift 6 strict
-        // concurrency closure-isolation crash that hit
-        // `Task.detached + reader.read` combinations.
-        let newPosts: [PostRecord]
-        do {
-            newPosts = try fetchFeedPosts(reader: reader, limit: limit)
-        } catch {
-            return
-        }
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let fetched: Result<[PostRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result { try fetchFeedPosts(reader: reader, limit: limit) }
+        }.value
+        guard generation == refreshGeneration, case .success(let newPosts) = fetched else { return }
         guard newPosts != posts else { return }
         posts = newPosts
         postsDidChange.send()
