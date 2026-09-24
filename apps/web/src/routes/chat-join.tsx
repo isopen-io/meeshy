@@ -32,7 +32,7 @@ import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { defaultGuestLanguage, GuestForm } from '@/routes/chat-join-guest';
+import { defaultGuestLanguage, GuestForm, GuestSubmit } from '@/routes/chat-join-guest';
 import {
   GroupCard,
   INK,
@@ -270,6 +270,11 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
     const validated = validateGuestDraft(draft, load.invitation.guest);
     if (!validated.ok) {
       setInput({ field: validated.field, message: translateInvite(language, MISSING_KEY[validated.field]) });
+      /* Le bouton vit dans la barre collée, loin des champs : un formulaire
+         incomplet MÈNE au champ fautif plutôt que de s'y refuser en silence. */
+      const target = document.getElementById(`chat-join-${validated.field}`);
+      target?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      target?.focus({ preventScroll: true });
       return;
     }
 
@@ -358,6 +363,14 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
   const choices = joinChoicesOf({ signedIn: isAccount, guestAllowed: invitation?.guest.allowed === true });
   const open = join.kind !== 'joined' && !joinRefusedForGood;
   const next = href('chatJoin', { link });
+  const primary: ReactNode =
+    choices.account && open ? (
+      <JoinAction language={language} joining={join.kind === 'joining'} online={online} onJoin={() => void handleJoin()} />
+    ) : choices.guest && open ? (
+      <GuestSubmit language={language} busy={join.kind === 'joining'} online={online} />
+    ) : choices.accountRequired ? (
+      <GuestExits language={language} next={next} withSeparator={false} accountRequired />
+    ) : null;
 
   return (
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -374,9 +387,9 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
         {invitation === null ? null : (
           <div
             data-invite-layout
-            className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"
+            className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"
           >
-            <div className="grid gap-5 md:row-span-2">
+            <div className="grid gap-5 md:row-span-4">
               <InviterBlock language={language} invitation={invitation} />
               <GroupCard language={language} invitation={invitation} url={url} copied={copied} onCopy={copy} onReshare={reshare} />
             </div>
@@ -391,10 +404,6 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
                 <p role="status" className="text-center text-body font-semibold" style={{ color: INK }}>
                   {translateInvite(language, 'invite.join.joined')}
                 </p>
-              ) : null}
-
-              {choices.account && open ? (
-                <JoinAction language={language} joining={join.kind === 'joining'} online={online} onJoin={() => void handleJoin()} />
               ) : null}
 
               {choices.guest && open ? (
@@ -412,11 +421,15 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
                   onSubmit={() => void handleGuestJoin()}
                 />
               ) : null}
-
-              {choices.signIn ? (
-                <GuestExits language={language} next={next} withSeparator={choices.guest && open} accountRequired={choices.accountRequired} />
-              ) : null}
             </JoinPanel>
+
+            {choices.signIn && !choices.accountRequired ? (
+              <div data-invite-exits className="md:order-2 md:col-start-2">
+                <GuestExits language={language} next={next} withSeparator={choices.guest && open} accountRequired={false} />
+              </div>
+            ) : null}
+
+            {primary === null ? null : <PrimaryBar>{primary}</PrimaryBar>}
           </div>
         )}
       </main>
@@ -428,29 +441,44 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
 }
 
 /**
- * LES CHOIX (#7796 § 5) — sous 768 px, un panneau COLLÉ au bas de l'écran
- * (l'action primaire reste dans le premier écran quel que soit ce qui la
- * précède) ; au-delà, une carte dans la colonne de droite, titrée « Rejoindre
- * <groupe> ». Collé au bas de la GRILLE entière, pas de sa colonne : un élément
- * `sticky` ne sort jamais de son parent.
+ * LES CHOIX (#7796 § 5) — les champs de l'invité, dans le FIL de la page :
+ * sous 768 px après la carte des droits, au-delà dans la colonne de droite,
+ * titrés « Rejoindre <groupe> ». L'action primaire n'y est PAS : elle vit
+ * dans `PrimaryBar`.
  */
 function JoinPanel({ language, title, children }: { readonly language: InterfaceLanguage; readonly title: string; readonly children: ReactNode }) {
   return (
     <section
       aria-labelledby="invite-join-title"
       data-invite-join
-      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-safe md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6 md:pb-6"
-      style={{
-        backgroundColor: 'var(--color-ios-card)',
-        borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
-        boxShadow: '0 -8px 24px color-mix(in srgb, var(--ios-indigo-900) 8%, transparent)',
-      }}
+      className="grid gap-3 rounded-[20px] p-4 md:col-start-2 md:rounded-[26px] md:p-6"
+      style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)' }}
     >
-      <h2 id="invite-join-title" className="sr-only text-thread font-extrabold md:not-sr-only" style={{ color: INK }}>
+      <h2 id="invite-join-title" className="text-thread font-extrabold" style={{ color: INK }}>
         {translateInvite(language, 'invite.join.title', { name: isolated(title) })}
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * L'ACTION PRIMAIRE, SEULE (#7796, revue) — sous 768 px, une barre COLLÉE au
+ * bas de l'écran qui ne porte QUE le bouton primaire (« Continuer en
+ * anonyme », « Rejoindre avec mon compte », ou « Se connecter » quand le lien
+ * exige un compte) : l'action reste dans le premier écran sans cacher le
+ * groupe. Enfant DIRECT de la grille de la page : un élément `sticky` ne sort
+ * jamais de son parent. Au-delà de 768 px, elle reprend sa place sous les
+ * champs (`order`), sans rien coller.
+ */
+function PrimaryBar({ children }: { readonly children: ReactNode }) {
+  return (
+    <div
+      data-invite-primary-bar
+      className="sticky bottom-0 z-10 -mx-4 border-t border-[color-mix(in_srgb,var(--color-ios-ink-3)_22%,transparent)] bg-[color:var(--color-ios-card)] px-4 pt-3 pb-safe shadow-[0_-8px_24px_color-mix(in_srgb,var(--ios-indigo-900)_8%,transparent)] md:static md:order-1 md:col-start-2 md:mx-0 md:border-t-0 md:bg-transparent md:p-0 md:shadow-none"
+    >
+      {children}
+    </div>
   );
 }
 

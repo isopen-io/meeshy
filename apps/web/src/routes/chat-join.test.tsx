@@ -621,7 +621,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
   test('la matrice des choix : visiteur sur un lien ouvert — le formulaire, puis se connecter ou créer un compte', async () => {
     const { deps } = depsWith();
     const el = await mount(deps);
-    const join = el.querySelector('[data-invite-join]');
+    const join: HTMLElement = el;
     expect(join?.querySelector('[data-guest-form]')).not.toBeNull();
     expect(join?.querySelector('[data-invite-sign-in]')).not.toBeNull();
     expect(join?.querySelector('[data-invite-sign-up]')).not.toBeNull();
@@ -629,11 +629,43 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(text(join)).toContain('ou avec ton compte');
   });
 
+  test('la barre collée ne porte QUE l’action primaire ; champs et sorties restent dans la page', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const bar = el.querySelector('[data-invite-primary-bar]');
+    expect(bar?.querySelector('[data-guest-submit]')).not.toBeNull();
+    expect(bar?.querySelector('[data-guest-nickname], [data-guest-language], [data-invite-sign-in], [data-invite-sign-up]')).toBeNull();
+    expect(el.querySelector('[data-invite-join] [data-guest-nickname]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-exits] [data-invite-sign-in]')).not.toBeNull();
+    expect(guestSubmit(el)?.getAttribute('form')).toBe(guestForm(el)?.id);
+  });
+
+  test('un formulaire incomplet MÈNE au prénom : le champ reçoit le focus, et rien ne part', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await submitGuest(el);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(document.activeElement).toBe(nicknameField(el));
+  });
+
+  test('connecté : la barre porte « Rejoindre avec mon compte » ; compte requis : « Se connecter »', async () => {
+    signIn();
+    const account = await mount(depsWith().deps);
+    expect(text(account.querySelector('[data-invite-primary-bar] [data-invite-join-account]'))).toBe('Rejoindre avec mon compte');
+    act(() => {
+      mounted?.root.unmount();
+      sessionStore.getState().clearSession();
+    });
+    const required = await mount(depsWith(withTerms({ allowed: false })).deps);
+    expect(required.querySelector('[data-invite-primary-bar] [data-invite-sign-in]')).not.toBeNull();
+    expect(required.querySelector('[data-invite-exits]')).toBeNull();
+  });
+
   test('la matrice des choix : compte connecté — « Rejoindre avec mon compte », et aucune porte anonyme', async () => {
     signIn();
     const { deps } = depsWith();
     const el = await mount(deps);
-    const join = el.querySelector('[data-invite-join]');
+    const join: HTMLElement = el;
     expect(text(join?.querySelector('[data-invite-join-account]') ?? null)).toBe('Rejoindre avec mon compte');
     expect(join?.querySelector('[data-guest-form]')).toBeNull();
     expect(join?.querySelector('[data-invite-sign-in]')).toBeNull();
@@ -642,7 +674,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
   test('la matrice des choix : visiteur, compte requis — se connecter devient l’action primaire', async () => {
     const { deps } = depsWith(withTerms({ allowed: false }));
     const el = await mount(deps);
-    const join = el.querySelector('[data-invite-join]');
+    const join: HTMLElement = el;
     expect(join?.querySelector('[data-guest-form]')).toBeNull();
     expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
     expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-white');

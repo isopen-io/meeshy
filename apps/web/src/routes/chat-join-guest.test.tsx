@@ -7,7 +7,7 @@ import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { defaultGuestLanguage, guestLanguageOptions, GuestForm } from './chat-join-guest';
+import { defaultGuestLanguage, GUEST_FORM_ID, guestLanguageOptions, GuestForm, GuestSubmit } from './chat-join-guest';
 
 /**
  * **LE FORMULAIRE D'INVITÉ, SEUL** (#5561).
@@ -141,10 +141,16 @@ describe('GuestForm — le geste atteint `onEdit`', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Une information manque');
   });
 
-  test('hors ligne : le bouton est inactif et l’écran le dit', () => {
-    const { host } = mount({ online: false });
-    expect(host.querySelector<HTMLButtonElement>('[data-guest-submit]')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Hors ligne');
+  test('hors ligne : le bouton (hors du formulaire, rattaché par `form`) est inactif et l’écran le dit', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted = { container, root };
+    act(() => root.render(<GuestSubmit language="fr" busy={false} online={false} />));
+    const button = container.querySelector<HTMLButtonElement>('[data-guest-submit]');
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttribute('form')).toBe(GUEST_FORM_ID);
+    expect(container.textContent).toContain('Hors ligne');
   });
 });
 

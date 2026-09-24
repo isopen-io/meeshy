@@ -63,6 +63,10 @@ const FIELD_TINT = 'var(--ios-indigo-500)';
 const INPUT_CLASS = 'min-w-0 flex-1 bg-transparent text-body outline-none';
 const INPUT_STYLE = { minHeight: 44, color: 'var(--color-ios-ink)' } as const;
 
+/** L'identifiant du formulaire : son bouton vit HORS de lui (la barre collée
+ * au bas de l'écran, `chat-join.tsx`) et le soumet par l'attribut `form`. */
+export const GUEST_FORM_ID = 'chat-join-guest-form';
+
 export type GuestFormProps = {
   readonly language: InterfaceLanguage;
   readonly terms: GuestTerms;
@@ -83,7 +87,6 @@ export function GuestForm({
   terms,
   draft,
   busy,
-  online,
   refusedField,
   refusalMessage,
   focused,
@@ -95,11 +98,12 @@ export function GuestForm({
     refusedField === field && refusalMessage !== null ? refusalMessage : undefined;
 
   const languages = guestLanguageOptions(terms);
-  const disabled = busy || !online;
 
   return (
     <form
+      id={GUEST_FORM_ID}
       noValidate
+      aria-busy={busy}
       data-guest-form
       onSubmit={(event) => {
         event.preventDefault();
@@ -247,8 +251,32 @@ export function GuestForm({
         </Field>
       ) : null}
 
+    </form>
+  );
+}
+
+/**
+ * « CONTINUER EN ANONYME » — le bouton du formulaire, rendu HORS de lui (#7796,
+ * revue) : sous 768 px il vit seul dans la barre collée au bas de l'écran,
+ * pendant que les champs restent dans le fil de la page. L'attribut `form` le
+ * rattache au formulaire : Entrée dans un champ et le bouton soumettent la
+ * MÊME chose, et un formulaire incomplet renvoie au champ fautif.
+ */
+export function GuestSubmit({
+  language,
+  busy,
+  online,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly busy: boolean;
+  readonly online: boolean;
+}) {
+  const disabled = busy || !online;
+  return (
+    <div className="grid w-full gap-2">
       <button
         type="submit"
+        form={GUEST_FORM_ID}
         data-guest-submit
         disabled={disabled}
         aria-busy={busy}
@@ -263,12 +291,11 @@ export function GuestForm({
       >
         {translateInvite(language, busy ? 'invite.join.joining' : 'invite.guest.continue')}
       </button>
-
       {online ? null : (
         <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           {translateInvite(language, 'invite.join.offline')}
         </p>
       )}
-    </form>
+    </div>
   );
 }
