@@ -11,6 +11,7 @@ import {
   studioFailureKey,
   studioSnapshotOf,
   withAddedText,
+  withAudience,
   withSelected,
   withSound,
   withSoundPlane,
@@ -441,5 +442,41 @@ describe('studioSnapshotOf / studioDraftFromSnapshot — ce qui survit à un rem
     const restored = studioDraftFromSnapshot(snapshot, (fileUrl) => `https://cdn/${fileUrl}`, 'fr');
     expect(restored.background?.aspectRatio).toBe(0.5625);
     expect(restored.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });
+  });
+});
+
+describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopié', () => {
+  test('rien n’est choisi à la naissance', () => {
+    expect(emptyStudioDraft('fr').visibility).toBeNull();
+  });
+
+  test('withAudience pose la valeur SANS toucher au reste du brouillon (fonction pure)', () => {
+    const draft = typed('Bonjour');
+    const next = withAudience(draft, 'COMMUNITY');
+    expect(next.visibility).toBe('COMMUNITY');
+    expect(next.texts).toBe(draft.texts);
+    expect(next.selected).toBe(draft.selected);
+  });
+
+  test('choisie ⇒ la clé `visibility` PART du snapshot ; sans choix ⇒ elle est ABSENTE', () => {
+    const chosen = studioSnapshotOf(withAudience(typed('Bonjour'), 'FRIENDS'), 'fr');
+    expect(chosen.visibility).toBe('FRIENDS');
+    const none = studioSnapshotOf(typed('Bonjour'), 'fr');
+    expect('visibility' in none).toBe(false);
+  });
+
+  test('relue depuis un snapshot, sinon null', () => {
+    expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: '' }], visibility: 'PRIVATE' }, (u) => u, 'fr').visibility).toBe('PRIVATE');
+    expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: '' }] }, (u) => u, 'fr').visibility).toBeNull();
+  });
+
+  test('un snapshot NOMINATIF (ONLY/EXCEPT, sans leur liste) se relit SANS audience — jamais un état que la passerelle refuserait', () => {
+    for (const visibility of ['ONLY', 'EXCEPT'] as const) {
+      expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: 'x' }], visibility }, (u) => u, 'fr').visibility).toBeNull();
+    }
+  });
+
+  test('une audience seule ne tient pas un brouillon en vie (la mémoire s’en charge)', () => {
+    expect(isStudioDraftEmpty(withAudience(emptyStudioDraft('fr'), 'FRIENDS'))).toBe(true);
   });
 });

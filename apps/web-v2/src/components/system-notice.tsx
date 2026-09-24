@@ -120,5 +120,5 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
       </>
     );
   }
-  return <span>{row.text}</span>;
+  return <span>{systemRowText(row)}</span>;
 }

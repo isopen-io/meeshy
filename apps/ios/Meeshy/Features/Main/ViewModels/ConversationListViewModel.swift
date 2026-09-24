@@ -1129,14 +1129,11 @@ class ConversationListViewModel: ObservableObject {
                     // que la passerelle sert et que le décodeur jetait.
                     // Message NEUF : « rien d'affirmé » vaut « aucun auteur » —
                     // celui de l'ancien message ne s'hérite pas (garde anti-périmé).
+                    // `senderId` est un id de PARTICIPANT : « Vous » se reconnaît
+                    // aussi à `updatedBy`, l'id UTILISATEUR de l'auteur (#7612).
                     let resolvedSenderName = ConversationListAuthor.resolve(
-                        eventSenderId: event.senderId,
-                        eventSenderName: event.lastMessageSenderName,
-                        currentUserId: self.currentUserId,
-                        conversationType: self.conversations[index].type,
-                        peerUserId: self.conversations[index].participantUserId,
-                        peerUsername: self.conversations[index].participantUsername,
-                        youLabel: Self.youAuthorLabel
+                        event, readerId: self.currentUserId,
+                        row: self.conversations[index], youLabel: Self.youAuthorLabel
                     ).displayedNameForNewMessage
                     self.bumpToTop(
                         conversationId: event.conversationId,
@@ -1211,13 +1208,8 @@ class ConversationListViewModel: ObservableObject {
                     // édition de légende — ce que le témoin
                     // `…editingTheSameMessage_keepsItsDescription` a attrapé.
                     if case .display(let auteur) = ConversationListAuthor.resolve(
-                        eventSenderId: event.senderId,
-                        eventSenderName: event.lastMessageSenderName,
-                        currentUserId: self.currentUserId,
-                        conversationType: self.conversations[index].type,
-                        peerUserId: self.conversations[index].participantUserId,
-                        peerUsername: self.conversations[index].participantUsername,
-                        youLabel: Self.youAuthorLabel
+                        event, readerId: self.currentUserId,
+                        row: self.conversations[index], youLabel: Self.youAuthorLabel
                     ) {
                         self.conversations[index].lastMessageSenderName = auteur
                     }

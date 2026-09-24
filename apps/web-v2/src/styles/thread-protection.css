@@ -123,17 +123,17 @@
   border-color: color-mix(in srgb, black 5%, transparent);
 }
 
-/* LE BADGE ÉPHÉMÈRE — `error.opacity(isDark ? 0.15 : 0.1)`
-   (`BubbleMetaBadges.swift:146-171`) : un SÉLECTEUR, jamais une lecture JS
-   du schéma (même discipline que `.focus-card`/`.focus-chip`,
-   `thread-scene.css`). */
+/* LE BADGE ÉPHÉMÈRE — ORANGE (#7599, `MeeshyColors.stateEphemeral` dérivé en
+   `--ios-state-ephemeral`, #7603). Il était peint au rouge d'erreur, et se
+   confondait avec l'échec d'envoi. Fond `opacity(isDark ? 0.15 : 0.1)` : un
+   SÉLECTEUR, jamais une lecture JS du schéma. */
 .protected-ephemeral-badge {
   padding-inline: 8px;
   padding-block: 4px;
-  color: var(--color-error);
-  border: 0.5px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  color: var(--ios-state-ephemeral);
+  border: 0.5px solid color-mix(in srgb, var(--ios-state-ephemeral) 30%, transparent);
   --ephemeral-fill: 15%;
-  background-color: color-mix(in srgb, var(--color-error) var(--ephemeral-fill), transparent);
+  background-color: color-mix(in srgb, var(--ios-state-ephemeral) var(--ephemeral-fill), transparent);
 }
 :root.light .protected-ephemeral-badge {
   --ephemeral-fill: 10%;

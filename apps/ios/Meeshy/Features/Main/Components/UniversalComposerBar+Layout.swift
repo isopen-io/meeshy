@@ -368,7 +368,7 @@ extension UniversalComposerBar {
                 binding.wrappedValue = newValue
             }
             // Ripple wave on each keystroke
-            if isFocused {
+            if isFocused && !typeWave {
                 typeWave = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     typeWave = false
@@ -410,9 +410,7 @@ extension UniversalComposerBar {
         // `reduceMotion` ne le ralentit pas : il l'ARRÊTE. Une rotation est un
         // mouvement qu'on subit, pas une information qu'on perd — le cadre de
         // tête reste celui que l'auteur emploie, donc rien ne manque.
-        .onReceive(
-            Timer.publish(every: UniversalComposerBar.stickerRotationPeriod, on: .main, in: .common).autoconnect()
-        ) { _ in
+        .onReceive(stickerRotationTimer) { _ in
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.28)) { stickerRotationStep += 1 }
         }

@@ -277,7 +277,6 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
             "apps/ios/MeeshyShareExtension",
             "apps/ios/MeeshyNotificationExtension",
             "apps/ios/MeeshyWidgets",
-            "apps/ios/MeeshyContextMenu",
             "packages/MeeshySDK/Sources",
         ].map { root.appendingPathComponent($0) }
 

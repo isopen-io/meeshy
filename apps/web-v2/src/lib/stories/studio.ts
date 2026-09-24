@@ -1,6 +1,7 @@
 import type { ApiFailure } from '@/lib/api/http';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
+import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import type { StudioMediaKind, StudioPlane } from './story-document';
 import type { StudioDraftSnapshot, StudioTextLayerSnapshot } from './studio-draft-store';
 import { IDENTITY_POSE, clampPose, type StudioPose } from './studio-pose';
@@ -96,6 +97,22 @@ export type StudioDraft = {
   readonly background: StudioVisualAsset | null;
   readonly overlay: StudioVisualAsset | null;
   readonly sound: StudioSoundAsset | null;
+  /**
+   * **L'AUDIENCE CHOISIE PAR L'AUTEUR** (#7683) — `null` tant que rien n'est
+   * choisi : le corps de `POST /posts` part alors SANS `visibility` (D-111,
+   * la passerelle pose son propre défaut, `core.ts:421`). Un défaut recopié
+   * ICI en littéral est exactement ce qui avait laissé les stories web à
+   * `FRIENDS` pendant que les posts naissaient publics — voir
+   * `publication-audience.ts` § `defaultAudienceOf`, qui ne sert QUE
+   * l'affichage de la pastille, jamais le corps envoyé.
+   *
+   * `ChoosableAudience`, jamais `PostVisibility` : un brouillon ne PEUT pas
+   * tenir `ONLY`/`EXCEPT` sans leur liste de personnes — la passerelle le
+   * refuserait (`types.ts:319-323`). L'état illégal n'est pas représentable ;
+   * le jour du sélecteur de personnes (#7463), ce champ deviendra un type
+   * SOMME qui porte la liste avec le mode.
+   */
+  readonly visibility: ChoosableAudience | null;
 };
 
 /** Les trois PORTES du couloir gauche — le fond, le calque, le son. Le
@@ -109,7 +126,7 @@ export function emptyStudioDraft(language: string): StudioDraft {
   // édite, et il ne devient un objet du document que s'il porte du texte
   // (`composeObjects` filtre les vides). Sans lui, le plateau n'aurait aucune
   // cible de frappe tant que l'auteur n'a pas tapé « ajouter un texte ».
-  return { texts: [seed], selected: seed.id, background: null, overlay: null, sound: null };
+  return { texts: [seed], selected: seed.id, background: null, overlay: null, sound: null, visibility: null };
 }
 
 export function isStudioDraftEmpty(draft: StudioDraft): boolean {
@@ -133,6 +150,16 @@ export function withAddedText(draft: StudioDraft, language: string): StudioDraft
 
 export function withSelected(draft: StudioDraft, id: string | null): StudioDraft {
   return { ...draft, selected: id };
+}
+
+/**
+ * **L'AUDIENCE COMMISE** (#7683) — un seul site : choisir écrit
+ * `draft.visibility`, que l'effet de persistance existant
+ * (`story-compose.tsx`, `deps.drafts.set`) porte au brouillon comme le reste
+ * — même dispositif que `commitPose` pour la pose d'un objet.
+ */
+export function withAudience(draft: StudioDraft, visibility: ChoosableAudience): StudioDraft {
+  return { ...draft, visibility };
 }
 
 /**
@@ -324,6 +351,7 @@ export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDr
     ...(sound !== null && draft.sound !== null
       ? { sound: { ...sound, plane: draft.sound.plane, ...(draft.sound.durationMs !== undefined ? { durationMs: draft.sound.durationMs } : {}) } }
       : {}),
+    ...(draft.visibility !== null ? { visibility: draft.visibility } : {}),
   };
 }
 
@@ -396,6 +424,7 @@ export function studioDraftFromSnapshot(
     ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
+    visibility: isRememberableAudience(snapshot.visibility) ? snapshot.visibility : null,
     sound:
       snapshot.sound === undefined
         ? null

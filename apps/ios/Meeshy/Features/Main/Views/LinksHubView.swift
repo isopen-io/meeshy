@@ -8,8 +8,6 @@ import MeeshyUI
 /// Vue hub synthétisant toutes les formes de liens de la plateforme.
 /// Deep link : https://meeshy.me/links
 struct LinksHubView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel

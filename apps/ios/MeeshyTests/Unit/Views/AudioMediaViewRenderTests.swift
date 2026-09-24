@@ -269,6 +269,64 @@ final class AudioMediaViewRenderTests: XCTestCase {
     }
 }
 
+// MARK: - #7660 — la rangée audio garde sa hauteur au premier rendu
+
+/// Un vocal déjà présent sur l'appareil se dessinait d'abord comme « à
+/// télécharger » — bouton ↓ et libellé de taille sous le bouton — le temps que
+/// la résolution asynchrone du `.task` le déclare prêt. Mesuré au simulateur
+/// (fil « Meeshy Global ») : la rangée d'un vocal re-mesurée 89 → 79 pt
+/// quelques images après chaque réalisation, redimensionnement joué dans une
+/// passe animée, sous le doigt.
+@MainActor
+final class AudioMediaViewFirstRenderHeightTests: XCTestCase {
+
+    func test_firstRender_audioAlreadyOnDevice_measuresAsSettled() async throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-7660-\(UUID().uuidString).m4a")
+        try Data(repeating: 0, count: 1024).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        )
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let host = UIHostingController(rootView: AudioMediaView.makeForTest(fileUrl: file.absoluteString))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let proposal = CGSize(width: 360, height: CGFloat.greatestFiniteMagnitude)
+
+        let firstRender = host.sizeThatFits(in: proposal).height
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(25))
+            host.view.layoutIfNeeded()
+        }
+        let settled = host.sizeThatFits(in: proposal).height
+
+        XCTAssertEqual(firstRender, settled, "un vocal déjà sur l'appareil se dessine prêt dès le premier rendu")
+    }
+
+    func test_availableOnDeviceAtFirstRender_remoteAudioOnDisk_isReady() {
+        let availability = AudioMediaView.availableOnDeviceAtFirstRender(
+            urlString: "https://example.com/vocal.m4a",
+            isOnDisk: { _ in true }
+        )
+        guard case .ready = availability else {
+            return XCTFail("un vocal distant déjà en cache disque est prêt au premier rendu, pas \(availability)")
+        }
+    }
+
+    func test_availableOnDeviceAtFirstRender_remoteAudioNotOnDisk_needsDownload() {
+        let availability = AudioMediaView.availableOnDeviceAtFirstRender(
+            urlString: "https://example.com/vocal.m4a",
+            isOnDisk: { _ in false }
+        )
+        guard case .needsDownload = availability else {
+            return XCTFail("un vocal absent du disque reste à télécharger, pas \(availability)")
+        }
+    }
+}
+
 extension AudioMediaView {
     static func makeForTest(
         replyReference: ReplyReference? = nil,
@@ -276,7 +334,8 @@ extension AudioMediaView {
         originalLanguage: String = "fr",
         translatedAudios: [MessageTranslatedAudio] = [],
         conversationName: String? = nil,
-        audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
+        audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil,
+        fileUrl: String = "https://example.com/test.m4a"
     ) -> AudioMediaView {
         let attachment = MeeshyMessageAttachment(
             id: "att-test-1",
@@ -286,7 +345,7 @@ extension AudioMediaView {
             mimeType: "audio/m4a",
             fileSize: 1024,
             filePath: "/test/test.m4a",
-            fileUrl: "https://example.com/test.m4a",
+            fileUrl: fileUrl,
             uploadedBy: "user-test-1"
         )
         // Dates fixées pour que deux appels successifs produisent des

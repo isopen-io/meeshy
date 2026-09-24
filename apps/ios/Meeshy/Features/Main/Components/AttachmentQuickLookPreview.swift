@@ -40,8 +40,11 @@ struct AttachmentQuickLookPreview: View {
         .task {
             switch kind {
             case .image:
-                guard fullImage == nil, let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
-                fullImage = UIImage(data: data)
+                guard fullImage == nil, let fileURL else { return }
+                fullImage = await Task.detached(priority: .userInitiated) { () -> UIImage? in
+                    guard let data = try? Data(contentsOf: fileURL) else { return nil }
+                    return UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 840, height: 840))
+                }.value
             case .video:
                 guard let fileURL else { return }
                 let queue = AVQueuePlayer()

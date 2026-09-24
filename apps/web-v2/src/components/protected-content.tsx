@@ -26,6 +26,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { attachmentSegments } from '@/lib/view/message-a11y-label';
 
 import { Glyph } from './glyph';
+import { ViewOnceOpenedContext } from './view-once-opened';
 
 /**
  * LE VOILE, LE TOMBSTONE ET LE MINUTEUR — miroir de `FocalProtectedContent.swift`
@@ -662,7 +663,9 @@ function ViewOnceStage({ onClose, children }: { readonly onClose: () => void; re
       >
         <Glyph name="x" size={22} />
       </button>
-      <div className="view-once-stage-content">{children}</div>
+      <div className="view-once-stage-content">
+        <ViewOnceOpenedContext.Provider value>{children}</ViewOnceOpenedContext.Provider>
+      </div>
     </div>,
     document.body,
   );

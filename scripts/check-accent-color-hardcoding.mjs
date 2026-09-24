@@ -127,7 +127,7 @@
 // c'est bien ici — dans le registre daté qu'il exige — que l'appel se
 // justifie. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 436;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -139,7 +139,6 @@ const SEARCH_ROOTS = [
   'packages/MeeshySDK/Sources',
   'apps/ios/Meeshy',
   'apps/ios/MeeshyNotificationExtension',
-  'apps/ios/MeeshyContextMenu',
   'apps/ios/MeeshyShareExtension',
   'apps/ios/MeeshyWidgets',
 ];

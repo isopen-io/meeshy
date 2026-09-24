@@ -37,8 +37,8 @@ extension MessageListViewController {
     /// (`MessageListViewController.swift`, `configureDataSource`) : le contenu
     /// est recalculé à CHAQUE configuration depuis l'état gelé du contrôleur,
     /// jamais porté par l'item du diffable.
-    func makeUnreadSeparatorRegistration() -> UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> {
-        UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+    func makeUnreadSeparatorRegistration() -> UICollectionView.CellRegistration<MessageListCell, MessageListItem> {
+        UICollectionView.CellRegistration<MessageListCell, MessageListItem> { [weak self] cell, _, item in
             guard let self, case .firstUnreadSeparator = item,
                   let boundary = self.frozenUnreadSeparator else {
                 cell.contentConfiguration = nil

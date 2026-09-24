@@ -1,8 +1,10 @@
+import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared/utils/conversation-notice';
+import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { metadataOf } from './message-metadata';
 
 /**
@@ -54,7 +56,15 @@ export function isSystemMessage(message: Pick<Message, 'messageType' | 'messageS
  */
 export type SystemRow =
   | { readonly kind: 'call'; readonly text: string; readonly callType: 'audio' | 'video' }
-  | { readonly kind: 'join'; readonly displayName: string; readonly handle: string | null; readonly isAnonymous: boolean }
+  | {
+      readonly kind: 'join';
+      readonly displayName: string;
+      readonly handle: string | null;
+      readonly isAnonymous: boolean;
+      /** Le membre qui l'a fait entrer (#7593) — absent quand il est venu de lui-même. */
+      readonly addedBy?: string;
+    }
+  | { readonly kind: 'group'; readonly notice: ConversationNotice }
   | { readonly kind: 'notice'; readonly text: string };
 
 /**
@@ -83,8 +93,19 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
     const primaryName = givenName ?? joinNotice.displayName;
     const username = joinNotice.username !== undefined && joinNotice.username.trim() !== '' ? joinNotice.username : undefined;
     const handle = username !== undefined && username !== primaryName ? `@${username}` : null;
-    return { kind: 'join', displayName: primaryName, handle, isAnonymous: joinNotice.isAnonymous };
+    return {
+      kind: 'join',
+      displayName: primaryName,
+      handle,
+      isAnonymous: joinNotice.isAnonymous,
+      ...(joinNotice.addedBy === undefined ? {} : { addedBy: joinNotice.addedBy.displayName }),
+    };
   }
+
+  /* LES AVIS DE VIE DU GROUPE (#7593, #7673) — le sens voyage dans
+     `metadata`, jamais dans `content`, qui n'est qu'un repli FRANÇAIS. */
+  const groupNotice = parseConversationNotice(metadata);
+  if (groupNotice !== null) return { kind: 'group', notice: groupNotice };
 
   if (message.content !== '') return { kind: 'notice', text: message.content };
   return null;
@@ -94,13 +115,38 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
  * doit prononcer (`composeMessageLabel`) et le seul que `SystemNotice`
  * affiche pour `call`/`notice`. L'avis d'arrivée compose le sien
  * (`bubble.joinNotice.joined`, `BubbleSystemViews.swift:313-319`). */
-export function systemRowText(row: SystemRow): string {
+export function systemRowText(row: SystemRow, language: string = currentInterfaceLanguage()): string {
   switch (row.kind) {
     case 'call':
     case 'notice':
       return row.text;
     case 'join':
-      return `${row.displayName} a rejoint la conversation`;
+      return row.addedBy === undefined
+        ? conversationPreviewString(language, 'system.member.joined', { actor: row.displayName })
+        : conversationPreviewString(language, 'system.member.added', { actor: row.addedBy, target: row.displayName });
+    case 'group':
+      return groupNoticeText(row.notice, language);
+  }
+}
+
+/**
+ * LES MÊMES PHRASES QUE LA LISTE (#7673) — `conversationPreviewString`, le
+ * catalogue du composeur partagé que la ligne de liste et le SDK iOS lisent
+ * déjà, dans les sept langues. Aucune jumelle dans le catalogue d'interface.
+ */
+function groupNoticeText(notice: ConversationNotice, language: string): string {
+  switch (notice.kind) {
+    case 'member-removed':
+      return conversationPreviewString(language, 'system.member.removed', {
+        actor: notice.actor.displayName,
+        target: notice.target.displayName,
+      });
+    case 'member-left':
+      return conversationPreviewString(language, 'system.member.left', { actor: notice.actor.displayName });
+    case 'conversation-renamed':
+      return conversationPreviewString(language, 'system.conversation.renamed');
+    case 'conversation-image':
+      return conversationPreviewString(language, 'system.conversation.image');
   }
 }
 

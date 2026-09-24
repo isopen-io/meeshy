@@ -857,3 +857,43 @@ emit({
   type: 'LensPreviewGlyphName',
   role: "LE JEU de la ligne d'apercu de la Lentille (#7547) : les icones du composeur partage que le socle ne porte pas.",
 });
+
+/**
+ * LES DEUX JEUX DE L'AUDIENCE DU STUDIO (#7683) — miroir des six
+ * `PostVisibility.icon` (`packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift:22-31`,
+ * SF Symbols `globe`, `person.3.fill`, `person.2.fill`, `person.fill.xmark`,
+ * `person.fill.checkmark`, `lock.fill`) :
+ *
+ * | iOS | phosphor | jeu |
+ * |---|---|---|
+ * | `globe` (public) | `globe` | `STORY_AUDIENCE` (la pastille) |
+ * | `person.3.fill` (communautes) | `users-three` | `STORY_AUDIENCE` (la pastille) |
+ * | `person.2.fill` (contacts) | `users` | SOCLE (`glyphs.ts`) |
+ * | `person.fill.xmark` (sauf...) | `user-minus` | `STORY_AUDIENCE_PEOPLE` (la feuille) |
+ * | `person.fill.checkmark` (seulement...) | `user-check` | `STORY_AUDIENCE_PEOPLE` (la feuille) |
+ * | `lock.fill` (prive) | `lock` | SOCLE (`glyphs.ts`) |
+ *
+ * `users` et `lock` ne sont PAS repris : le socle les paie deja avant le
+ * premier pixel. Et les deux modes NOMINATIFS ont leur propre jeu : la
+ * pastille ne les peint jamais (le studio ne sait pas les choisir), seule la
+ * feuille — chargee A LA DEMANDE — les montre, grises avec leur raison. Les
+ * lier au chunk du studio ferait payer a chaque ouverture deux icones que la
+ * plupart des auteurs ne verront pas (revue-correction #7683 : la premiere
+ * forme dupliquait le socle et liait les six, et le chunk du studio franchissait
+ * son plafond).
+ */
+emit({
+  ids: ['globe', 'users-three'],
+  output: join(HERE, '../src/components/glyphs-story-audience.ts'),
+  constant: 'STORY_AUDIENCE_GLYPHS',
+  type: 'StoryAudienceGlyphName',
+  role: "LE JEU DE LA PASTILLE D'AUDIENCE DU STUDIO (#7683) : les deux audiences choisissables que le socle ne porte pas, charge avec /stories/new et /posts/new.",
+});
+
+emit({
+  ids: ['user-minus', 'user-check'],
+  output: join(HERE, '../src/components/glyphs-story-audience-people.ts'),
+  constant: 'STORY_AUDIENCE_PEOPLE_GLYPHS',
+  type: 'StoryAudiencePeopleGlyphName',
+  role: "LE JEU DE LA FEUILLE D'AUDIENCE (#7683) : les deux modes NOMINATIFS, charges avec la feuille a la demande, jamais avec le studio.",
+});

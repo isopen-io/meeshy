@@ -6,8 +6,6 @@ import MeeshyUI
 struct AchievementBadgeView: View {
     let achievement: Achievement
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {

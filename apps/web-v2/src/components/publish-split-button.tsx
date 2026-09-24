@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { translate } from '@/lib/i18n-catalog';
@@ -41,6 +41,7 @@ export function PublishSplitButton({
   menuDisabled,
   busy,
   refusalOf,
+  audienceLabelOf,
   onPublish,
 }: {
   readonly language: InterfaceLanguage;
@@ -53,6 +54,10 @@ export function PublishSplitButton({
   readonly busy: boolean;
   /** La raison pour laquelle un format ne peut pas partir, ou `null`. */
   readonly refusalOf: (kind: PublicationKind) => string | null;
+  /** **CE QUE CE FORMAT PARTIRAIT COMME AUDIENCE** (#7683) — optionnel : les
+   * appelants qui n'ont pas d'audience (aucun aujourd'hui hors le studio) ne
+   * rendent aucune ligne, un menu qui n'a rien à dire ne le dit pas. */
+  readonly audienceLabelOf?: (kind: PublicationKind) => string;
   readonly onPublish: (kind: PublicationKind) => void;
 }) {
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -64,7 +69,7 @@ export function PublishSplitButton({
     onResize: () => setOpen(false),
   });
 
-  const measure = () => {
+  const place = (menuHeight: number) => {
     const anchor = buttonRef.current?.getBoundingClientRect();
     if (anchor === undefined) return;
     const placement = placePopover({ anchorRight: anchor.right, viewportWidth: window.innerWidth, preferredWidth: MENU_WIDTH, margin: MENU_MARGIN });
@@ -72,12 +77,25 @@ export function PublishSplitButton({
       anchorTop: anchor.top,
       anchorBottom: anchor.bottom,
       viewportHeight: window.innerHeight,
-      estimatedHeight: PUBLICATION_KINDS.length * MENU_ITEM_HEIGHT + MENU_PADDING,
+      estimatedHeight: menuHeight,
       gap: MENU_GAP,
       margin: MENU_MARGIN,
     });
     setBox({ top: vertical.top, right: window.innerWidth - anchor.right + placement.right, width: placement.width });
   };
+  const measure = () => place(PUBLICATION_KINDS.length * MENU_ITEM_HEIGHT + MENU_PADDING);
+
+  /** LA HAUTEUR RÉELLE, AVANT LA PEINTURE (revue-correction #7683) — l'estimé
+   * ne sait pas combien de lignes porte chaque format : la ligne d'audience
+   * (#7683) et une raison de refus qui passe sur deux lignes rendaient le
+   * menu plus haut que prévu, et il RECOUVRAIT la capsule qui l'ouvre. Mesuré
+   * une fois monté, replacé dans la même image. */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const height = menuRef.current?.getBoundingClientRect().height ?? 0;
+    if (height > 0) place(height);
+    // `place` lit des refs et la fenêtre : seule l'OUVERTURE redéclenche la mesure.
+  }, [open]);
 
   const menuLabel = translate(language, 'story.studio.publish.menu');
 
@@ -158,6 +176,11 @@ export function PublishSplitButton({
                       {translate(language, `story.studio.kind.${KIND_KEY[choice]}`)}
                       {choice === kind ? <Glyph name="check" size={14} /> : null}
                     </span>
+                    {audienceLabelOf === undefined ? null : (
+                      <span data-publish-kind-audience className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                        {audienceLabelOf(choice)}
+                      </span>
+                    )}
                     {refusal === null ? null : <span className="text-mini">{refusal}</span>}
                   </button>
                 );

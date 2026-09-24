@@ -308,13 +308,12 @@ final class ConversationSocketHandler {
     private func startTypingEmission() {
         guard UserPreferencesManager.shared.privacy.showTypingIndicator else { return }
 
-        typingTimer?.invalidate()
-
         if !isEmittingTyping {
             isEmittingTyping = true
             messageSocket.emitTypingStart(conversationId: conversationId)
         }
 
+        guard typingTimer == nil else { return }
         typingTimer = Timer.scheduledTimer(withTimeInterval: Self.typingReemitInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isEmittingTyping else { return }

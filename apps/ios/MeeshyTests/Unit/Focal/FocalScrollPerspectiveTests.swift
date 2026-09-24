@@ -106,10 +106,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     /// layer à plat (cellule recyclée d'un mode à l'autre).
     func test_host_appliesThePassOnScrollDisplayAndApply_andResetsOnConfigure() throws {
         // Unit/Focal → Unit → MeeshyTests → apps/ios : QUATRE remontées.
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let code = try controllerClusterSource()
         XCTAssertGreaterThanOrEqual(code.components(separatedBy: "applyFocalPerspectiveToVisibleCells()").count - 1, 3,
             "scrollViewDidScroll + fin d'apply + changement de mode, au minimum")
         XCTAssertTrue(code.contains("FocalScrollPerspective.reset(cell.contentView.layer)"))
@@ -197,10 +194,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     /// s'active que sur un geste utilisateur, s'aplatit après `restDelay`,
     /// et le changement de mode remet tout à plat sans animation.
     func test_host_activatesTheSceneOnUserGestureOnly_andFlattensAtRest() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let code = AppSourceGuard.stripComments(try controllerClusterSource())
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         XCTAssertTrue(code.contains("guard readingMode == .focal, scrollView.isDragging || scrollView.isDecelerating else { return }"),
                       "La scène ne s'active que sur un geste UTILISATEUR — jamais sur un défilement programmé.")
@@ -223,7 +217,8 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     /// rien. Cette garde LIE les deux : si la compaction revient, la
     /// sur-réserve doit revenir avec elle.
     func test_focalOverscan_isZero_whileTheCompactionIsNotApplied() throws {
-        let host = try normalizedSource("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let host = AppSourceGuard.stripComments(try controllerClusterSource())
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         if host.contains("FocalScrollPerspective.poses(") {
             XCTAssertTrue(
                 host.contains("layout.focalOverscan = readingMode == .focal"),
@@ -241,6 +236,20 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertTrue(perspective.contains("static let overscanFraction"), "la fraction reste nommée")
         let layout = try normalizedSource("Meeshy/Features/Main/Views/MessageListLayout.swift")
         XCTAssertTrue(layout.contains("let extended = rect.insetBy(dx: 0, dy: -focalOverscan)"), "le layout garde son extension de rect")
+    }
+
+    /// L'hôte et ses extensions : la scène Focal vit dans
+    /// `MessageListViewController+FocalScene.swift` depuis #7624 — une garde
+    /// indexée par FICHIER rougirait à chaque extraction.
+    private func controllerClusterSource() throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try [
+            "Meeshy/Features/Main/Views/MessageListViewController.swift",
+            "Meeshy/Features/Main/Views/MessageListViewController+FocalScene.swift",
+        ]
+        .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+        .joined(separator: "\n")
     }
 
     private func normalizedSource(_ relativePath: String) throws -> String {
@@ -304,7 +313,8 @@ final class FocalScrollPerspectiveTests: XCTestCase {
     }
 
     func test_host_posesTheLoupeOnTheElectedCell_afterTheElection() throws {
-        let host = try normalizedSource("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let host = AppSourceGuard.stripComments(try controllerClusterSource())
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         guard let election = host.range(of: "let electionChanged = focalFocusedLocalId != focused"),
               let loupe = host.range(of: "FocalScrollPerspective.magnify(cell.contentView.layer, isFocused:")
         else { return XCTFail("la passe doit élire PUIS poser la loupe sur la cellule élue") }

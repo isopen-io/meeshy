@@ -9,8 +9,6 @@ struct StatsTimelineChart: View {
     let color: String
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         Chart {

@@ -14,8 +14,6 @@ struct FriendRequestListView: View {
     // is the route destination), mirroring `FriendRequestListViewModel`'s
     // former ownership.
     @StateObject private var viewModel = RequestsViewModel()
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented

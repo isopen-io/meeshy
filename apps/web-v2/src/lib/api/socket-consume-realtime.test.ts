@@ -131,3 +131,19 @@ describe('`message:consumed` met la bulle à jour EN DIRECT (#7354)', () => {
     expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(0);
   });
 });
+
+describe('`message:view-once-purged` vide la bulle EN DIRECT, sans la retirer (#7644)', () => {
+  test('la purge serveur atteint le fil ouvert : contenu retiré, rangée gardée', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const target = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 0, content: 'secret' });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([target]));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, { messageId: 'm-1', conversationId: 'c-a' });
+
+    const rows = queryClient.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages ?? [];
+    expect(rows.map((m) => m.id)).toEqual(['m-1']);
+    expect(rows[0]?.content).toBe('');
+    expect(rows[0]?.isFullyConsumed).toBe(true);
+  });
+});

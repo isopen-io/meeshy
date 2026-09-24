@@ -373,24 +373,29 @@ const noRowCarriesContinuousPerspective = (page) =>
      correcte, dans une autre langue. Un gate n'épingle pas une chaîne
      TRADUISIBLE : `data-prism-toggle` est posé pour être trouvé, et il ne
      change avec aucune langue. */
-  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
-  expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme');
-  const langOf = async () =>
-    pastille.evaluate((btn) => btn.closest('[data-reading-mode]')?.querySelector('p[lang]')?.getAttribute('lang') ?? null);
+  /* LES DRAPEAUX PORTENT LE GESTE (#7599) — un message traduit montre ses
+     drapeaux, et la pastille 🌐 se tait devant eux (chaque état dit une fois,
+     miroir iOS #7603). Le contrôle mesuré est donc le drapeau NON pressé de
+     la rangée, puis le drapeau qui l'était, pour revenir. */
+  const row = page.locator('main li [data-reading-mode]:has(button[data-prism-flag][aria-pressed="false"])').first();
+  expect((await row.count()) > 0, 'un message traduit porte ses drapeaux');
+  const otherFlag = row.locator('button[data-prism-flag][aria-pressed="false"]').first();
+  const servedFlag = row.locator('button[data-prism-flag][aria-pressed="true"]').first();
+  const servedCode = (await servedFlag.count()) > 0 ? await servedFlag.getAttribute('data-prism-flag') : null;
+  const langOf = async () => row.evaluate((el) => el.querySelector('p[lang]')?.getAttribute('lang') ?? null);
   const beforeLang = await langOf();
-  await pastille.click();
+  await otherFlag.click();
   await page.waitForTimeout(200);
   const afterLang = await langOf();
   expect(
     afterLang !== null && afterLang !== beforeLang,
-    `cliquer la pastille du Prisme OUVRE la langue d’origine (le contrôle a un effet) — ${beforeLang} → ${afterLang}`,
+    `toucher un autre drapeau CHANGE la langue lue (le contrôle a un effet) — ${beforeLang} → ${afterLang}`,
   );
-  await pastille.click();
-  await page.waitForTimeout(200);
-  expect(
-    (await langOf()) === beforeLang,
-    'la recliquer referme — le contrôle est une bascule, pas un aller simple',
-  );
+  if (servedCode !== null) {
+    await row.locator(`button[data-prism-flag="${servedCode}"]`).first().click();
+    await page.waitForTimeout(200);
+    expect((await langOf()) === beforeLang, 'retoucher le drapeau servi ramène la langue d’avant');
+  }
 
   /**
    * --- défaut 10 : le SAUT de citation a un EFFET (le bouton ne faisait
@@ -1184,19 +1189,23 @@ const noRowCarriesContinuousPerspective = (page) =>
    * défilement et confondrait deux défauts distincts.
    *
    * Le fil s'ouvre PINNÉ EN BAS (§ mission) : l'UNIQUE message porteur d'une
-   * pastille (`m1`, langue d'origine anglaise servie en français) est alors
+   * drapeau (`m1`, langue d'origine anglaise servie en français) est alors
    * scrollé HORS de la zone visible de `<main>` (clippée par
    * `overflow-y-auto`) — un `elementFromPoint` à cet endroit répond
    * légitimement l'EN-TÊTE, qui occupe l'écran par-dessus. On remonte donc en
-   * haut du fil avant de mesurer, pour tester une pastille RÉELLEMENT visible.
+   * haut du fil avant de mesurer, pour tester un drapeau RÉELLEMENT visible.
    */
   await page.evaluate(() => {
     const main = document.querySelector('main');
     if (main) main.scrollTop = 0;
   });
   await page.waitForTimeout(200);
-  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
-  expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme (mouvement réduit)');
+  /* LE DRAPEAU, PLUS LA PASTILLE (#7599) — un message traduit ne montre plus
+     la pastille 🌐 à côté de ses drapeaux (chaque état se dit une fois) : le
+     premier contrôle `tap-target-22` de la ligne basse de m1 est désormais
+     son drapeau d'origine, et c'est lui dont la zone tactile se mesure. */
+  const pastille = page.locator('main li [data-row="m1"] button[data-prism-flag]').first();
+  expect((await pastille.count()) > 0, 'un message traduit porte son drapeau (mouvement réduit)');
   const tapTarget = await pastille.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const probe = (dx, dy) => {
@@ -1258,7 +1267,10 @@ const noRowCarriesContinuousPerspective = (page) =>
    * contrôles que les deux témoins de débord ci-dessous ciblent nommément
    * (« Afficher…langue d'origine » et « English »).
    */
-  expect(rowButtonCount >= 2, `la ligne basse porte au moins la pastille et le drapeau de la langue d’origine (${rowButtonCount} trouvés)`);
+  /* `>= 1` depuis #7599 : la pastille ne coexiste plus avec les drapeaux,
+     donc la frontière pastille/drapeau que ce témoin gardait n'existe plus ;
+     chaque bouton présent doit toujours posséder l'intérieur de sa boîte. */
+  expect(rowButtonCount >= 1, `la ligne basse porte au moins le drapeau de la langue d’origine (${rowButtonCount} trouvés)`);
   for (let i = 0; i < rowButtonCount; i += 1) {
     const btn = rowButtons.nth(i);
     const label = (await btn.getAttribute('aria-label')) ?? (await btn.getAttribute('title')) ?? `#${i}`;

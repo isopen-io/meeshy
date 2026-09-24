@@ -13,8 +13,6 @@ struct VoiceProfileWizardView: View {
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = VoiceProfileWizardViewModel()
 
     var body: some View {

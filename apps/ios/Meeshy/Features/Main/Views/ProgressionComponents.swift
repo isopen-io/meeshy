@@ -82,44 +82,6 @@ struct ProgressionTierDots: View {
     }
 }
 
-struct ProgressionLevelCard: View {
-    let level: EngagementLevelProgress
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.brandPrimary
-
-    var body: some View {
-        ProgressionCard(tint: tint) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "star.fill")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(tint)
-                        .accessibilityHidden(true)
-                    Text(ProgressionCopy.levelTitle(level.level))
-                        .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
-                }
-                Text(ProgressionCopy.score(level.scale.value))
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                ProgressionBar(
-                    progress: level.scale.progress,
-                    tint: tint,
-                    label: String(localized: "progression.a11y.bar.level", defaultValue: "Vers le niveau \(level.level + 1)", bundle: .main)
-                )
-                .padding(.top, MeeshySpacing.xs)
-                Text(ProgressionCopy.nextStep(for: level.scale, kind: .level, level: level.level))
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct ProgressionStreakCard: View {
     let streak: EngagementStreakProgress
 
@@ -344,47 +306,6 @@ struct ProgressionSkeleton: View {
         .skeletonShimmer()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Progression en cours de chargement", bundle: .main))
-    }
-}
-
-/// L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
-///
-/// Au neutre (×1) l'hôte ne monte pas cette vue : un badge « ×1 » n'apprend
-/// rien et occupe la place de ce qui compte. Et le texte dit ce qui PORTE le
-/// multiplicateur — un accélérateur dont on ignore la cause ne se pilote pas,
-/// il se subit.
-struct ProgressionElanBanner: View {
-    let elan: EngagementElanProgress
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.brandPrimary
-
-    var body: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-            Image(systemName: "wand.and.stars")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(tint)
-                .accessibilityHidden(true)
-            Text(
-                ProgressionCopy.elan(
-                    factor: elan.factor,
-                    families: elan.activeFamilyCount,
-                    windowDays: elan.windowDays,
-                    hasStanding: elan.hasStanding
-                )
-            )
-            .font(MeeshyFont.relative(11, weight: .semibold))
-            .foregroundColor(theme.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(tint.opacity(0.14))
-        )
-        .accessibilityElement(children: .combine)
     }
 }
 

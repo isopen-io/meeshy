@@ -137,6 +137,29 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     }
   });
 
+  /** #7683, D-115 — `visibility` PART uniquement quand l'auteur l'a choisie ;
+   * sans choix, la clé est ABSENTE du corps (D-111), jamais un défaut
+   * recopié côté client. */
+  test('`visibility` part dans le corps quand elle est fournie', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, visibility: 'FRIENDS', originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect(JSON.parse(String(calls[0]!.init.body)).visibility).toBe('FRIENDS');
+  });
+
+  test('aucune `visibility` fournie ⇒ AUCUNE clé `visibility` dans le corps', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    expect('visibility' in JSON.parse(String(calls[0]!.init.body))).toBe(false);
+  });
+
   test('un échec serveur (429) traverse tel quel — le composeur affiche sa raison', async () => {
     const effects = buildStoryCanvasEffects({ texts: texts('x') })!;
     const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'Too many requests', retryAfter: 12 } });

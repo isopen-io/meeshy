@@ -113,7 +113,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // `FeedCommentsSheet.swift` pour leur propre fichier : la liste SUIT l'hôte.
             "Features/Main/Views/CommentRowView.swift",
             "Features/Main/Views/PostDetailView.swift",
-            "Features/Main/Views/ReelsPlayerView.swift",
+            // #7625 — la barre de lecture d'un réel (sa valeur en pourcentage)
+            // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
+            "Features/Main/Views/ReelPageChrome.swift",
             "Features/Main/Components/ConversationDashboardView.swift",
             "Features/Main/Components/MessageOverlayMenu.swift",
         ]
