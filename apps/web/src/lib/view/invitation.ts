@@ -45,10 +45,23 @@ type NavigateurPartage = {
 const PONT_PARTAGE = 'MeeshyShare';
 
 /**
+ * La feuille Android fermée sans choix (#7822) : le pont rejette avec le code
+ * `CANCELED`. Traduit en `AbortError`, il prend le chemin d'une annulation
+ * web — ni copie, ni partage compté, ni annonce.
+ */
+const ANNULATION_PONT = 'CANCELED';
+
+function annulationDuPont(erreur: unknown): unknown {
+  const code = (erreur as { readonly code?: unknown } | null)?.code;
+  return code === ANNULATION_PONT ? new DOMException('Partage annulé', 'AbortError') : erreur;
+}
+
+/**
  * Le portail se COMPOSE de ce que l'hôte offre : `navigator.share` d'abord,
  * le pont de la coque quand la WebView n'a pas l'API, le presse-papier
  * toujours en repli. Un refus du pont (aucune application pour partager) n'est
- * pas un `AbortError` : `partagerLien` retombe donc sur la copie.
+ * pas un `AbortError` : `partagerLien` retombe donc sur la copie. Sa seule
+ * annulation, elle, en devient un.
  */
 export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coque: CoqueNative | undefined }): PortailPartage {
   const { nav, coque } = hote;
@@ -58,7 +71,13 @@ export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coqu
   const partage = typeof nav.share === 'function'
     ? { share: (d: DonneesPartage) => nav.share!(d) }
     : pont !== null
-      ? { share: async (d: DonneesPartage) => void (await pont('share', d)) }
+      ? {
+          share: async (d: DonneesPartage) => {
+            await pont('share', d).catch((erreur: unknown) => {
+              throw annulationDuPont(erreur);
+            });
+          },
+        }
       : {};
   const copie = nav.clipboard && typeof nav.clipboard.writeText === 'function'
     ? { copier: (t: string) => nav.clipboard!.writeText(t) }
