@@ -337,7 +337,7 @@ readonly SHARED_BASELINE=0
 #
 # Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
 # scripts/check-any-debt.sh` + son self-test.
-readonly GATEWAY_BASELINE=506
+readonly GATEWAY_BASELINE=505
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
