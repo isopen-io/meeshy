@@ -73,9 +73,15 @@ const newClientMutationId = (): string => newClientMessageId().replace(/^cid_/, 
 
 const isReaderOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
+/** Les formats que `RepostSchema.targetType` accepte
+ * (`services/gateway/src/routes/posts/types.ts:491-499`) — un autre
+ * (`MOOD`, réel sur `Post.type`) ferait refuser le geste ENTIER (400) ;
+ * omis, la passerelle applique son défaut (revue-correction #6484). */
+const REPOSTABLE_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL', 'STORY', 'STATUS']);
+
 function sendRepost(
   deps: RepostDeps,
-  params: { readonly targetId: string; readonly targetType: string; readonly visibility?: PostVisibility },
+  params: { readonly targetId: string; readonly targetType?: string; readonly visibility?: PostVisibility },
 ): Promise<ApiResult<unknown>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return Promise.resolve({ ok: true, status: 201, data: { id: `repost-${params.targetId}`, repostOfId: params.targetId } });
@@ -84,7 +90,7 @@ function sendRepost(
     method: 'POST',
     path: `/api/v1/posts/${encodeURIComponent(params.targetId)}/repost`,
     body: {
-      targetType: params.targetType,
+      ...(params.targetType === undefined ? {} : { targetType: params.targetType }),
       isQuote: false,
       ...(params.visibility === undefined ? {} : { visibility: params.visibility }),
     },
@@ -112,14 +118,14 @@ export async function performRepost(params: {
   if (inFlight.has(flightKey)) return { ok: true };
 
   const target = known === undefined ? postId : repostTargetId(known);
-  const targetType = known?.type ?? 'POST';
+  const targetType = known !== undefined && REPOSTABLE_TYPES.has(known.type) ? known.type : undefined;
 
   updateCardPost(deps.queryClient, postId, markReposted);
   inFlight.add(flightKey);
   try {
     const result = await sendRepost(deps, {
       targetId: target,
-      targetType,
+      ...(targetType === undefined ? {} : { targetType }),
       ...(requestedVisibility === undefined ? {} : { visibility: requestedVisibility }),
     }).catch(() => null);
 

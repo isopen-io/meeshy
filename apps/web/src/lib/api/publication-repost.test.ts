@@ -99,6 +99,21 @@ describe('performRepost — optimiste, puis la passerelle', () => {
     expect(requests[0]?.headers?.['X-Client-Mutation-Id']).toMatch(/^cmid_/);
   });
 
+  test('un format que `RepostSchema` n’accepte pas n’est PAS envoyé — la passerelle refuserait le geste entier (400)', async () => {
+    /* `MOOD` est une valeur réelle de `Post.type` que `RepostSchema.targetType`
+       (`services/gateway/src/routes/posts/types.ts:491-499`) n'énumère pas :
+       l'envoyer rend 400 VALIDATION_ERROR, et le repost légitime échoue.
+       Omis, la passerelle applique son défaut. Même sort pour une carte
+       qu'aucune caisse ne porte : rien n'est inventé. */
+    const queryClient = seededOn(FEED_QUERY_KEY, [post({ id: 'm1', type: 'MOOD', isRepostedByMe: false })]);
+    const { requests, transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));
+
+    await performRepost({ postId: 'm1', deps: gatewayDeps(queryClient, transport) });
+    await performRepost({ postId: 'inconnue', deps: gatewayDeps(queryClient, transport) });
+
+    expect(requests.map((r) => r.body)).toEqual([{ isQuote: false }, { isQuote: false }]);
+  });
+
   test('la cible GRIMPE à la racine — carte encastrée', async () => {
     const queryClient = seededOn(FEED_QUERY_KEY, [
       post({ id: 'r1', type: 'REEL', repostOfId: 'r0', originalRepostOfId: 'root', isRepostedByMe: false }),

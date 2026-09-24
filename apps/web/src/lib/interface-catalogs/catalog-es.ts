@@ -109,7 +109,7 @@ const es = {
   'feed.post.repost.error': 'No se pudo republicar',
   'feed.post.repost.already': 'Ya republicado',
   'feed.post.repost.offline': 'Sin conexión — la republicación no pudo salir.',
-  'feed.post.repost.unconfirmed': 'Republicación no confirmada — sin conexión',
+  'feed.post.repost.unconfirmed': 'Republicación no confirmada — inténtalo de nuevo',
   'feed.post.repost.audience': 'Esa audiencia ampliaría el alcance de la publicación original',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel de {author}',

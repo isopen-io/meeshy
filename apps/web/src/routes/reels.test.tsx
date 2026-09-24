@@ -3,11 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import ReelImages from '@/components/reel-images';
 import { ReelPage } from '@/components/reel-page';
 import { REEL_MARKET_IMAGES, REEL_RANK2_ES, REEL_SCENE_LOOP, REEL_STUDIO, REEL_SUNSET_EN, REEL_VOICE } from '@/lib/api/fixtures-reels';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { reelStageOf } from '@/lib/reels/scene';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { ROUTES } from '@/routes/route-table';
@@ -174,13 +176,27 @@ describe('ReelPage — la légende passe par le Prisme', () => {
 });
 
 describe('ReelPage — les autres compositions d’un réel', () => {
-  test('des IMAGES se parcourent, chacune nommée, sans lecteur ni commande de son', () => {
+  /* LES IMAGES SONT À LA DEMANDE (revue-correction #6484, motif D-54 —
+     `budgets.json › reels` ne monte pas) : la page d'un réel d'images peint
+     son AFFICHE — la première image — tant que le chunk `reel-images` n'est
+     pas là, exactement comme un réel composé (`ReelSceneStage`). La galerie
+     elle-même se prouve sur son composant, et sa résolution client plus bas. */
+  test('un réel d’IMAGES peint son affiche d’abord, sans lecteur ni commande de son', () => {
     const html = page(REEL_MARKET_IMAGES);
     expect(html).not.toContain('<video');
-    expect(html).toContain('alt="Image 1 sur 2"');
-    expect(html).toContain('alt="Image 2 sur 2"');
+    expect(html).toContain('data-reel-poster');
     expect(html).not.toContain('Activer le son');
     expect(html).not.toContain('Lire le réel');
+  });
+
+  test('des IMAGES se parcourent, chacune nommée', () => {
+    const stage = reelStageOf(modelOf(REEL_MARKET_IMAGES));
+    const images = stage.kind === 'images' ? stage.images : [];
+    const html = renderToStaticMarkup(<ReelImages images={images} language="fr" />);
+    expect(images.length).toBe(2);
+    expect(html).toContain('data-reel-images');
+    expect(html).toContain('alt="Image 1 sur 2"');
+    expect(html).toContain('alt="Image 2 sur 2"');
   });
 
   test('un réel AUDIO monte un lecteur sonore et sa commande de son', () => {
@@ -436,5 +452,96 @@ describe('ReelPage — un réel COMPOSÉ, la scène apparaît une fois son chunk
 
   test('CONTRASTE — piste refusée MAIS fond vidéo AUDIBLE ⇒ le rail son RESTE : ce son-là joue', async () => {
     expect(await railSonApresRefus(true)).not.toBeNull();
+  });
+});
+
+/**
+ * COMMENTER ET REPARTAGER ONT UN EFFET (#6484, loi 4 — revue-correction). Les
+ * témoins de rendu ci-dessus prouvent que les deux boutons EXISTENT ; aucun ne
+ * prouvait qu'ils FONT quelque chose : un `onPress` débranché passait au vert.
+ * Le réel est monté en fenêtre `far` (affiche seule) — le rail n'en dépend pas,
+ * et aucun lecteur média ne s'ouvre pour rien.
+ */
+describe('ReelPage — le rail agit : commenter et repartager appellent l’écran (#6484)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  test('un réel d’IMAGES en fenêtre active monte sa galerie une fois son chunk résolu', async () => {
+    await import('@/components/reel-images');
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ReelPage
+          model={modelOf(REEL_MARKET_IMAGES)}
+          index={0}
+          count={1}
+          mode="active"
+          soundOn={false}
+          language="fr"
+          preferredLanguages={['fr']}
+          onToggleSound={() => undefined}
+          onGesture={() => undefined}
+          onShare={() => undefined}
+          onSoundBlocked={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(container.querySelectorAll('[data-reel-images] img').length).toBe(2);
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  test('un tap sur « Commenter » puis sur « Repartager » remet CE réel à l’écran, une fois chacun', () => {
+    const calls: string[] = [];
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <ReelPage
+          model={modelOf(REEL_SUNSET_EN)}
+          index={0}
+          count={1}
+          mode="far"
+          soundOn={false}
+          language="fr"
+          preferredLanguages={['fr']}
+          onToggleSound={() => undefined}
+          onGesture={() => undefined}
+          onShare={() => undefined}
+          onSoundBlocked={() => undefined}
+          onComment={(postId) => calls.push(`comment:${postId}`)}
+          onRepost={(postId) => calls.push(`repost:${postId}`)}
+        />,
+      );
+    });
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-reel-gesture="comment"]')?.click();
+    });
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-reel-gesture="repost"]')?.click();
+    });
+    expect(calls).toEqual([`comment:${REEL_SUNSET_EN.id}`, `repost:${REEL_SUNSET_EN.id}`]);
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

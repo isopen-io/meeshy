@@ -109,7 +109,7 @@ const de = {
   'feed.post.repost.error': 'Repost fehlgeschlagen',
   'feed.post.repost.already': 'Bereits repostet',
   'feed.post.repost.offline': 'Offline — der Repost konnte nicht gesendet werden.',
-  'feed.post.repost.unconfirmed': 'Repost nicht bestätigt — offline',
+  'feed.post.repost.unconfirmed': 'Repost nicht bestätigt — bitte erneut versuchen',
   'feed.post.repost.audience': 'Diese Zielgruppe würde die Reichweite des Originalbeitrags erweitern',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel von {author}',

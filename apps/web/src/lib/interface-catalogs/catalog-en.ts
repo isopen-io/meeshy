@@ -109,7 +109,7 @@ const en = {
   'feed.post.repost.error': 'Couldn’t repost',
   'feed.post.repost.already': 'Already reposted',
   'feed.post.repost.offline': 'Offline — the repost couldn’t go out.',
-  'feed.post.repost.unconfirmed': 'Repost not confirmed — offline',
+  'feed.post.repost.unconfirmed': 'Repost not confirmed — try again',
   'feed.post.repost.audience': 'That audience would widen the original post’s reach',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel by {author}',

@@ -138,6 +138,11 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
            feuille est un ÉCRAN, pas une scène — elle reprend le schéma du
            document, comme `/post/$post` qui montre le même fil. */
         colorScheme: 'light dark',
+        /* L'ENCOCHE BASSE (revue-correction #6484, défaut de coque 5a) :
+           posée au bas d’un écran plein cadre sous `viewport-fit=cover`, la
+           feuille laissait son composeur SOUS l'indicateur d'accueil d'un
+           iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         borderTopLeftRadius: 18,
         borderTopRightRadius: 18,
         zIndex: 3,
