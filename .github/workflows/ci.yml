@@ -1003,6 +1003,12 @@ jobs:
           cd apps/web
           node scripts/check-shell-dist.mjs
 
+      - name: Gate manifeste de la coque Android (permissions consommées par le web)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-android-manifest.mjs
+
       # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
