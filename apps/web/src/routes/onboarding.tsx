@@ -18,6 +18,7 @@ import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
+import { appNotificationsOffer } from '@/lib/onboarding/notifications-offer';
 import {
   nextStepAfter,
   pointsOf,
@@ -88,9 +89,6 @@ export type OnboardingScreenDeps = {
   readonly navigate: (path: string, replace?: boolean) => void;
 };
 
-const browserNotifications = (): typeof Notification | null =>
-  typeof globalThis.Notification === 'function' ? globalThis.Notification : null;
-
 export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   api: apiDeps,
   queryClient: appQueryClient,
@@ -113,9 +111,12 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
     });
     return outcome.status === 'saved' ? 'saved' : outcome.status === 'offline' ? 'offline' : 'failed';
   },
-  notificationsAskable: () => browserNotifications()?.permission === 'default',
+  /* La carte 5 ne s'ouvre que là où un ABONNEMENT push peut suivre le
+     « Oui » (`notifications-offer.ts`) — aujourd'hui nulle part : l'abonné
+     web est #7306, la coque Android #7307. */
+  notificationsAskable: appNotificationsOffer.askable,
   askNotifications: async () => {
-    await browserNotifications()?.requestPermission();
+    await appNotificationsOffer.ask();
   },
   /* Les chiffres RELUS du serveur. En fixtures, aucun : le corpus de la
      progression (`engagement-fixture.ts`) décrit un compte ANCIEN, celui de
