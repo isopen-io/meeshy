@@ -91,6 +91,19 @@ describe('les huit saluts de chaque langue', () => {
   });
 });
 
+describe('l’arabe — un « +N » ou un « N / M » ne se retourne pas', () => {
+  /* Sans isolat, l'algorithme bidirectionnel peint « +7. » en « .7+ » et
+     « 0 / 10 » en « 10 / 0 » dans une phrase arabe : la récompense se lit à
+     l'envers. Chaque montant est isolé de gauche à droite (U+2066 … U+2069). */
+  test('chaque nombre signé ou fraction est dans un isolat LTR', async () => {
+    const arabic = await loadOnboardingCatalog('ar');
+    for (const [key, value] of Object.entries(arabic)) {
+      const bare = value.replace(/\u2066[^\u2069]*\u2069/g, '');
+      expect({ key, signed: /\+\d|\+\{/.test(bare), fraction: /(\d|\})\s*\/\s*(\d|\{)/.test(bare) }).toEqual({ key, signed: false, fraction: false });
+    }
+  });
+});
+
 describe('translateOnboarding', () => {
   test('interpole les paramètres', async () => {
     await loadOnboardingCatalog('en');

@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 
 import type { OnboardingPatchBody, OnboardingState, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
@@ -126,6 +127,10 @@ const signIn = () =>
     expiresIn: 3600,
   });
 
+/** Le « +N » arrive à la pastille après son vol (850 ms) : on attend qu'il
+ * se pose, en temps réel — c'est ce que le lecteur voit. */
+const landed = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 950)));
+
 const card = (host: ParentNode): string | null => host.querySelector('[data-onb-card]')?.getAttribute('data-onb-card') ?? null;
 const action = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-onb-action="${id}"]`);
 
@@ -203,8 +208,11 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     expect(greetings[0]?.conversationId).toBe('g-global');
     expect(greetings[0]?.content).toContain('Maya');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
-    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('14');
+    expect(host.querySelector('[data-onb-flight]')?.textContent).toBe('+14');
     expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu gagnes 14 points.');
+    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    await landed();
+    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('14');
   });
 
   test('le texte modifié est celui qui part', async () => {
@@ -255,6 +263,7 @@ describe('carte 3 — la première story, visibilité servie', () => {
     );
     expect(card(host)).toBe('story');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
+    await landed();
     expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('10');
     expect(cleared).toBe(1);
   });

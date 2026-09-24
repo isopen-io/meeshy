@@ -136,7 +136,7 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
 const isStepId = (value: string | null): value is OnboardingStepId =>
   value !== null && (ONBOARDING_STEPS as readonly string[]).includes(value);
 
-const FLIGHT_MS = 1100;
+const FLIGHT_MS = 1300;
 const BUMP_AT_MS = 850;
 
 type Flight = { readonly points: number; readonly key: number };
@@ -144,6 +144,9 @@ type Flight = { readonly points: number; readonly key: number };
 function useRewardFlight(lang: InterfaceLanguage) {
   const [flight, setFlight] = useState<Flight | null>(null);
   const [bump, setBump] = useState(false);
+  /* Les points EN VOL : la pastille ne les compte qu'à l'arrivée du « +N »,
+     sans quoi le chiffre changerait avant que le lecteur ait vu d'où il vient. */
+  const [travelling, setTravelling] = useState(0);
   const [announcement, setAnnouncement] = useState('');
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -154,8 +157,12 @@ function useRewardFlight(lang: InterfaceLanguage) {
       if (points <= 0) return;
       setAnnouncement(translateOnboarding(lang, 'onboarding.points.announce', { points: String(points) }));
       setFlight({ points, key: Date.now() });
+      setTravelling(points);
       timers.current.push(
-        setTimeout(() => setBump(true), BUMP_AT_MS),
+        setTimeout(() => {
+          setTravelling(0);
+          setBump(true);
+        }, BUMP_AT_MS),
         setTimeout(() => {
           setBump(false);
           setFlight(null);
@@ -165,7 +172,7 @@ function useRewardFlight(lang: InterfaceLanguage) {
     [lang],
   );
 
-  return { flight, bump, announcement, celebrate };
+  return { flight, bump, travelling, announcement, celebrate };
 }
 
 /** « Étape N sur M » — M compte les étapes de CE parcours : ni celles que le
@@ -217,7 +224,7 @@ export function OnboardingJourney({
   const [askable] = useState(() => deps.notificationsAskable());
   const [step, setStep] = useState<JourneyStep | null>(null);
   const [storyPublished, setStoryPublished] = useState(false);
-  const { flight, bump, announcement, celebrate } = useRewardFlight(lang);
+  const { flight, bump, travelling, announcement, celebrate } = useRewardFlight(lang);
   const actionDeps: OnboardingActionDeps = useMemo(() => ({ ...deps.api, queryClient: deps.queryClient }), [deps.api, deps.queryClient]);
 
   const context = useMemo<JourneyContext | null>(
@@ -301,9 +308,9 @@ export function OnboardingJourney({
             <span />
           ) : (
             <span className="onb-pill-anchor">
-              <PointsPill points={sessionPoints} bump={bump} label={translateOnboarding(lang, 'onboarding.points.announce', { points: String(sessionPoints) })} />
+              <PointsPill points={Math.max(0, sessionPoints - travelling)} bump={bump} label={translateOnboarding(lang, 'onboarding.points.announce', { points: String(sessionPoints) })} />
               {flight === null ? null : (
-                <span key={flight.key} data-onb-flight className="onb-flight" aria-hidden="true">
+                <span key={flight.key} data-onb-flight className="onb-flight" dir="ltr" aria-hidden="true">
                   {translateOnboarding(lang, 'onboarding.points.gained', { points: String(flight.points) })}
                 </span>
               )}

@@ -32,7 +32,7 @@ export function PointsPill({ points, bump, label }: { readonly points: number; r
   return (
     <span data-onb-pill className={bump ? 'onb-pill onb-pill-bump' : 'onb-pill'} aria-label={label} role="img">
       <GlyphSvg glyph={PROGRESSION_GLYPHS.star} size={16} />
-      <span className="onb-pill-value" aria-hidden="true">
+      <span aria-hidden="true">
         {points}
       </span>
     </span>
