@@ -77,12 +77,4 @@ class MessageListCell: UICollectionViewCell {
         fitted.frame.size.height = height
         return fitted
     }
-
-    /// **Corps vide, `nonisolated` (SE-0466, #7686).** La cible compile sous
-    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` : sans cette déclaration,
-    /// Swift synthétise une deinit ISOLÉE qui double-libère le scope
-    /// task-local hors tâche sur iOS 26.1 (abrt). Un corps vide n'a aucun
-    /// état à toucher — rien ne dépend du main actor, donc rien ne change de
-    /// comportement à le déclarer `nonisolated`.
-    nonisolated deinit {}
 }
