@@ -549,6 +549,15 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onStoryChanged = (): void => {
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
   };
+  /* `story:viewed` (#7116, revue) — le plateau comme ci-dessus, ET le compte
+     des vues de l'auteur + sa feuille ouverte (`publication-views-realtime.ts`,
+     `import()` : D-98, motif `story:reacted`). */
+  const onStoryViewed = (payload: unknown): void => {
+    onStoryChanged();
+    void import('./publication-views-realtime').then(({ applyStoryViewedEvent }) => {
+      applyStoryViewedEvent(deps.queryClient, payload);
+    });
+  };
 
   /**
    * `post:liked` / `post:unliked` / `post:bookmarked` (#6278, D-47) — LE FIL
@@ -842,7 +851,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
   socket.on<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
   socket.on<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
   socket.on<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
@@ -919,7 +928,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
       socket.off<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
       socket.off<unknown>(SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted);
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);

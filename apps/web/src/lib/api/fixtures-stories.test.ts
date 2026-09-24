@@ -40,3 +40,23 @@ describe('STORY_FEED — le corpus exerce ce que le lecteur sait rendre', () => 
     expect(videoStory !== undefined && idsDuRail.has(videoStory.id)).toBe(true);
   });
 });
+
+/**
+ * **MA STORY PORTE LE MÊME MÉDIA DANS SES DEUX PROJECTIONS** (#7116, revue).
+ *
+ * `STORY_TRAY.st-mienne` annonçait une image (`m4`) quand `STORY_FEED.st-mienne`
+ * — la projection que le LECTEUR lit — n'en portait aucune : sur le plan
+ * AUTEUR, « Enregistrer » n'avait donc rien à télécharger sur la seule story de
+ * fixtures dont le lecteur est l'auteur, et le critère de fin de #7116 était
+ * inatteignable sur fixtures. Deux projections d'une même publication qui
+ * divergent, c'est une passerelle que la fixture ne mime plus.
+ */
+describe('st-mienne — le rail et le lecteur voient la MÊME story', () => {
+  test('même id de média, même type, et une source lisible côté lecteur', () => {
+    const tray = STORY_TRAY.find((story) => story.id === 'st-mienne');
+    const feed = STORY_FEED.find((story) => story.id === 'st-mienne');
+
+    expect(feed?.media?.map((media) => [media.id, media.mimeType])).toEqual(tray?.media?.map((media) => [media.id, media.mimeType]));
+    expect(feed?.media?.[0]?.url ?? '').toMatch(/^data:image\//);
+  });
+});

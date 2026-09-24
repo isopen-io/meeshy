@@ -14,6 +14,7 @@ import {
   type StoryActionRailPlan,
 } from '@/lib/stories/action-rail';
 import { percent, ringAppearance } from '@/lib/stories/save-progress';
+import type { StorySaveJobView } from '@/lib/stories/save-store';
 
 /**
  * **LE RAIL D'ACTIONS DU LECTEUR DE STORIES** — miroir de
@@ -35,9 +36,11 @@ import { percent, ringAppearance } from '@/lib/stories/save-progress';
  * C'est la généralisation du `canReply: onReplyToStory != nil` d'iOS : le
  * gel décide de l'APPARTENANCE, la remise d'un gestionnaire décide de
  * l'ATTEIGNABILITÉ, et les deux sont structurels — aucune branche à oublier
- * au rendu, aucun décor qui ne fait rien. Les cinq actions que la v3.1 ne
- * sait pas encore FAIRE (`repost`, `views`, `share`, `save`, `translations`)
- * n'ont donc pas de gestionnaire, et ne sont pas là (D-88).
+ * au rendu, aucun décor qui ne fait rien. Les actions que la v3.1 ne sait
+ * pas encore FAIRE (`repost`, `translations`) n'ont donc pas de
+ * gestionnaire, et ne sont pas là (D-88) ; `views`, `share` et `save` ont
+ * rejoint le plan AUTEUR avec #7116 — `share`/`save` seulement quand la
+ * story porte un média exportable (`storyDownloadableMedia`).
  *
  * **LE SCHÉMA** — la scène est peinte par le contenu de la story, pas par le
  * thème : le rail vit sur du blanc franc + ombre portée en clair COMME en
@@ -174,19 +177,20 @@ export type StoryActionRailProps = {
   readonly hidden?: boolean;
   /**
    * **L'EXPORT EN COURS** (#7116) — `null`/absent ⇒ le bouton « Enregistrer »
-   * plein rend (comme avant ce lot). Une valeur ⇒ `save` bascule vers
-   * l'anneau (`StoryExportRailButtons.resolve`, `lib/stories/action-rail.ts`),
+   * plein rend. Un job ⇒ `save` bascule vers l'anneau
+   * (`StoryExportRailButtons.resolve`, `lib/stories/action-rail.ts`),
    * « Partager » restant un bouton au premier plan tout du long.
    *
-   * `progress` est la progression BRUTE du téléchargement (0..1, avant
-   * `downloadShare`) — le CHIFFRE et l'ARC du composant `SaveProgressRing`
-   * dérivent tous deux de `lib/stories/save-progress.ts`, jamais recalculés
-   * ici.
+   * C'est l'instantané du store (`lib/stories/save-store.ts`), SEULE source
+   * de l'anneau : `progress` est la progression BRUTE du téléchargement
+   * (0..1) — `null` quand le flux n'annonce pas sa longueur. Le CHIFFRE et
+   * l'ARC en dérivent tous deux par `lib/stories/save-progress.ts`, jamais
+   * recalculés ici.
    */
-  readonly saving?: { readonly progress: number; readonly cancellable: boolean; readonly reduceMotion: boolean } | null;
+  readonly saving?: StorySaveJobView | null;
   /** Le tap sur l'anneau ANNULABLE — absent, l'anneau ne se pose pas dans un
    * bouton (loi 4 : jamais de contrôle inerte). */
-  readonly onCancelSave?: () => void;
+  readonly onCancelSave?: (() => void) | undefined;
 };
 
 function RailButton({
@@ -242,71 +246,105 @@ function RailButton({
 
 /**
  * **L'ANNEAU D'EXPORT** (#7116) — miroir de `StorySaveProgressRing.swift` :
- * le CHIFFRE et l'ARC dérivent tous deux de `lib/stories/save-progress.ts`
- * (`percent`), jamais un second calcul qui pourrait diverger. `tone`/`sweeps`
- * viennent de `ringAppearance` — accent tant qu'annulable, inerte + balayage
- * indéterminé sinon (la seule chose qui bouge pendant une livraison qui ne
- * publie aucune progression).
+ * le CHIFFRE et l'ARC dérivent tous deux de `percent`
+ * (`lib/stories/save-progress.ts`), jamais un second calcul qui pourrait
+ * diverger ; le ton et le balayage viennent de `ringAppearance`.
+ *
+ * **LE BALAYAGE TOURNE SEUL** (revue #7116) — le premier jet faisait tourner
+ * l'anneau ENTIER, chiffre compris : pendant la livraison, « 90 » pivotait
+ * sur lui-même. iOS pose un arc indéterminé PAR-DESSUS l'arc de valeur ; ici
+ * de même, un segment dans son propre calque. `prefers-reduced-motion` le
+ * fige par la règle générale de `styles/app.css`.
+ *
+ * **PROGRESSION INCONNUE ⇒ `aria-busy`, AUCUN `aria-valuenow`** — un flux
+ * sans `Content-Length` (le cas NOMINAL de la route d'export) ne dit pas
+ * « 0 % » pendant toute sa durée : il dit « en cours », et le balayage le
+ * montre.
  *
  * **NON ANNULABLE ⇒ PAS DE `<button>`** (D-88, loi 4 : jamais de contrôle
- * inerte) — l'anneau se pose alors dans un `<div>` muet, de la même
- * empreinte que les autres boutons du rail (44×44) pour ne pas décaler ses
- * voisins.
+ * inerte) — l'anneau se pose alors dans une case muette de la même empreinte
+ * (44×44) pour ne pas décaler ses voisins.
  */
+const RING_SIZE = 32;
+const RING_STROKE = 3;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+/** La part de cercle que le balayage occupe — un segment, pas une valeur. */
+const SWEEP_SHARE = 0.25;
+
+function RingArc({ share, color }: { readonly share: number; readonly color: string }) {
+  const middle = RING_SIZE / 2;
+  return (
+    <circle
+      cx={middle}
+      cy={middle}
+      r={RING_RADIUS}
+      fill="none"
+      stroke={color}
+      strokeWidth={RING_STROKE}
+      strokeDasharray={RING_CIRCUMFERENCE}
+      strokeDashoffset={RING_CIRCUMFERENCE * (1 - share)}
+      strokeLinecap="round"
+      transform={`rotate(-90 ${middle} ${middle})`}
+    />
+  );
+}
+
 function SaveProgressRing({
-  percentValue,
-  tone,
-  sweeps,
-  cancellable,
+  job,
   onCancel,
-  cancelLabel,
+  language,
 }: {
-  readonly percentValue: number;
-  readonly tone: 'accent' | 'inert';
-  readonly sweeps: boolean;
-  readonly cancellable: boolean;
+  readonly job: StorySaveJobView;
   readonly onCancel: (() => void) | undefined;
-  readonly cancelLabel: string;
+  readonly language: InterfaceLanguage;
 }) {
-  const size = 32;
-  const stroke = 3;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(100, Math.max(0, percentValue)) / 100);
-  const color = tone === 'accent' ? 'var(--color-ios-brand)' : 'rgba(255,255,255,0.6)';
+  const figure = job.progress === null ? null : percent(job.progress);
+  const appearance = ringAppearance({ cancellable: job.cancellable, indeterminate: figure === null });
+  const color = appearance.tone === 'accent' ? 'var(--ios-indigo-400)' : 'rgba(255,255,255,0.6)';
+  const value =
+    figure === null
+      ? { 'aria-busy': true }
+      : { 'aria-valuenow': figure, 'aria-valuetext': translate(language, 'story.save.progress', { percent: String(figure) }) };
 
   const ring = (
     <span
       data-story-save-ring
+      data-story-save-tone={appearance.tone}
+      data-story-save-sweeps={appearance.sweeps ? 'true' : 'false'}
       role="progressbar"
+      aria-label={translate(language, 'story.action.save')}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={percentValue}
-      className={sweeps ? 'relative grid place-items-center animate-spin' : 'relative grid place-items-center'}
-      style={{ width: size, height: size }}
+      {...value}
+      className="relative grid place-items-center"
+      style={{ width: RING_SIZE, height: RING_SIZE }}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
+      <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
+        <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={RING_STROKE} />
+        {figure === null ? null : <RingArc share={figure / 100} color={color} />}
       </svg>
-      <span className="absolute text-mini font-semibold tabular-nums" style={{ color: '#fff', textShadow: TEXT_SHADOW }} aria-hidden="true">
-        {percentValue}
-      </span>
+      {appearance.sweeps ? (
+        <svg
+          data-story-save-sweep
+          className="absolute inset-0 animate-spin"
+          width={RING_SIZE}
+          height={RING_SIZE}
+          viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+          aria-hidden="true"
+        >
+          <RingArc share={SWEEP_SHARE} color={color} />
+        </svg>
+      ) : null}
+      {figure === null ? null : (
+        <span className="absolute text-mini font-semibold tabular-nums" style={{ color: '#fff', textShadow: TEXT_SHADOW }} aria-hidden="true">
+          {figure}
+        </span>
+      )}
     </span>
   );
 
-  if (!cancellable) {
+  if (!job.cancellable || onCancel === undefined) {
     return (
       <div className="grid place-items-center" style={{ width: 44, height: 44 }}>
         {ring}
@@ -321,7 +359,7 @@ function SaveProgressRing({
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       onClick={onCancel}
-      aria-label={cancelLabel}
+      aria-label={translate(language, 'story.save.cancel')}
       className="pointer-events-auto grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ minWidth: 44, minHeight: 44, outlineColor: '#fff' }}
     >
@@ -391,20 +429,9 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
            `save`) apparaissent/disparaissent ENSEMBLE (`resolveStoryExportRailButtons`)
            — `share` reste ici un bouton ORDINAIRE, `save` seul bascule. */
         if (action === 'save' && saving !== null && saving !== undefined) {
-          const exportButtons = resolveStoryExportRailButtons({ showsExport: plan.showsExport, saveProgress: saving.progress });
+          const exportButtons = resolveStoryExportRailButtons({ showsExport: plan.showsExport, saveProgress: saving.progress ?? 0 });
           if (exportButtons.showsSaveProgressRing) {
-            const appearance = ringAppearance({ cancellable: saving.cancellable, reduceMotion: saving.reduceMotion });
-            return (
-              <SaveProgressRing
-                key="save"
-                percentValue={percent(saving.progress)}
-                tone={appearance.tone}
-                sweeps={appearance.sweeps}
-                cancellable={saving.cancellable}
-                onCancel={onCancelSave}
-                cancelLabel={translate(language, 'story.save.cancel')}
-              />
-            );
+            return <SaveProgressRing key="save" job={saving} onCancel={onCancelSave} language={language} />;
           }
         }
         /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */

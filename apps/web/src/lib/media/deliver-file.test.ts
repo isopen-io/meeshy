@@ -92,4 +92,21 @@ describe('fileDeliveryPortal — aucune porte ⇒ aucun bouton (loi 4)', () => {
     expect(await portal!.deliver(blob(), 'x.jpg', 'image/jpeg')).toBe('delivered');
     expect(downloaded).toBe(true);
   });
+
+  test('le partage REFUSÉ (hors activation) sans ancre de repli ⇒ `unavailable`, jamais un succès annoncé (revue #7116)', async () => {
+    /* La coque iOS : la feuille du système ne s'ouvre que pendant
+       l'activation du geste, et un téléchargement la fait expirer
+       (`NotAllowedError`). Le premier jet rendait alors `cancelled` — « Export
+       annulé » annoncé pour une livraison que l'utilisateur n'avait pas
+       annulée. */
+    const portal = fileDeliveryPortal({
+      canShareFiles: () => true,
+      shareFiles: async () => {
+        const error = new Error('not allowed');
+        error.name = 'NotAllowedError';
+        throw error;
+      },
+    });
+    expect(await portal!.deliver(blob(), 'x.jpg', 'image/jpeg')).toBe('unavailable');
+  });
 });

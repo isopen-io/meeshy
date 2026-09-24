@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
@@ -33,7 +33,7 @@ afterEach(() => {
   appQueryClient.clear();
 });
 
-async function mountSheet(props: { readonly postId: string; readonly viewCount: number }): Promise<HTMLElement> {
+async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null }): Promise<HTMLElement> {
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <ul>
@@ -61,11 +61,50 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(host.querySelector('h2')?.textContent).toContain('8');
   });
 
-  test('une story d’AUTRUI ⇒ état d’ERREUR avec réessayer, jamais la liste', async () => {
+  test('une story d’AUTRUI (403) ⇒ l’état REFUS dit pourquoi — « réessayer » n’y changerait rien', async () => {
     const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5 });
-    expect(host.querySelector('[data-viewers-error]')).not.toBeNull();
-    expect(host.querySelector('[data-viewers-retry]')).not.toBeNull();
+    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Seul l’auteur peut voir qui a regardé cette story.');
+    expect(host.querySelector('[data-viewers-retry]')).toBeNull();
     expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+  });
+
+  test('une story INTROUVABLE (404) ⇒ l’erreur avec « Réessayer », et réessayer REFAIT la requête', async () => {
+    const host = await mountSheet({ postId: 'st-inconnue', viewCount: null });
+    expect(host.querySelector('[data-viewers-error]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+    const before = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.dataUpdateCount ?? 0;
+    const errorsBefore = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.errorUpdateCount ?? 0;
+    host.querySelector<HTMLButtonElement>('[data-viewers-retry]')?.click();
+    await mounter.settle();
+    const errorsAfter = appQueryClient.getQueryState(['stories', 'viewers', 'st-inconnue'])?.errorUpdateCount ?? 0;
+    expect(before).toBe(0);
+    expect(errorsAfter).toBeGreaterThan(errorsBefore);
+  });
+
+  test('chaque lecteur est un LIEN vers son profil (iOS : `onOpenProfile(viewer)`)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 8 });
+    const links = [...host.querySelectorAll<HTMLAnchorElement>('[data-story-viewer] a')];
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/u/noor.haddad', '/u/elan.roy', '/u/mika.sorel']);
+  });
+
+  test('compte AUTORITATIF absent ⇒ l’en-tête retombe sur la liste servie, jamais « 0 vue » au-dessus de trois lecteurs', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: null });
+    expect(host.querySelector('h2')?.textContent).toBe('3 vues');
+  });
+
+  test('HORS LIGNE sans cache ⇒ l’état hors-ligne, jamais « Aucune vue » (un mensonge)', async () => {
+    /* TanStack met la requête EN PAUSE hors ligne — ni données, ni erreur
+       (`lib/view/cold-state.ts`). Le premier jet lisait ce couple comme une
+       liste VIDE et annonçait « Aucune vue pour le moment » à un auteur que
+       huit personnes avaient vu. */
+    onlineManager.setOnline(false);
+    try {
+      const host = await mountSheet({ postId: 'st-mienne', viewCount: 8 });
+      expect(host.querySelector('[data-viewers-offline]')?.textContent).toBe('Hors ligne — la liste s’affichera au retour du réseau.');
+      expect(host.querySelector('[data-viewers-empty]')).toBeNull();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   test('aucune vue ⇒ l’état VIDE, titre et sous-titre', async () => {

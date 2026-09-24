@@ -51,6 +51,15 @@ describe('fileNameOf — le nom SERVI par la passerelle, ou un repli composé', 
     /* Le stand-in SVG des fixtures — jamais servi par la passerelle réelle. */
     expect(fileNameOf({ contentDisposition: null, fallbackMediaId: 'm3', mimeType: 'image/svg+xml' })).toBe('meeshy-m3.svg');
   });
+
+  test('un `Content-Type` À PARAMÈTRES se lit par son essence (revue #7116)', () => {
+    /* `Content-Type` est un type MIME, paramètres compris : la passerelle
+       sert l'essence nue (`media-export.ts:178`), mais un mandataire peut y
+       ajouter `; charset=…` — lu tel quel, le fichier livré perdait son
+       extension et le système ne savait plus l'ouvrir. */
+    expect(fileNameOf({ contentDisposition: null, fallbackMediaId: 'm4', mimeType: 'image/svg+xml;utf8' })).toBe('meeshy-m4.svg');
+    expect(fileNameOf({ contentDisposition: null, fallbackMediaId: 'm5', mimeType: 'Video/MP4 ; codecs=avc1' })).toBe('meeshy-m5.mp4');
+  });
 });
 
 describe('downloadFile — la progression, et une raison pour chaque absence', () => {

@@ -68,11 +68,23 @@ function newCalls(): Calls {
 }
 
 describe('useStoryKeyboardShortcuts — la navigation au clavier du lecteur', () => {
-  test('Échap ferme, sans condition', () => {
+  test('Échap ferme le lecteur quand AUCUNE couche n’est ouverte', () => {
     const calls = newCalls();
     mount({ calls, isPaused: false, showsSound: false, layerOpen: false });
     key('Escape');
     expect(calls.closed).toBe(1);
+  });
+
+  test('ÉCHAP APPARTIENT À LA COUCHE OUVERTE — la feuille « Vues » se ferme, le lecteur RESTE (revue #7116)', () => {
+    /* Mesuré au navigateur sur le premier jet : Échap dans la feuille
+       « Vues » (un `<dialog>` modal, qui se ferme lui-même sur Échap)
+       remontait jusqu'à `window`, et le lecteur ENTIER se fermait — l'auteur
+       perdait sa story pour avoir voulu fermer une liste. La feuille de
+       commentaires y échappait seule, par sa capture maison. */
+    const calls = newCalls();
+    mount({ calls, isPaused: false, showsSound: false, layerOpen: true });
+    key('Escape');
+    expect(calls.closed).toBe(0);
   });
 
   test('les flèches avancent / reculent', () => {

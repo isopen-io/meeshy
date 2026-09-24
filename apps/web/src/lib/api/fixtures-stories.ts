@@ -102,7 +102,7 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     viewCount: 8,
     isViewedByMe: true,
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
-    media: [{ id: 'm4', thumbnailUrl: '', mimeType: 'image/jpeg' }],
+    media: [{ id: 'm4', thumbnailUrl: '', mimeType: 'image/svg+xml' }],
   },
   /**
    * **LA STORY VIDÉO** (#6807) — la seule du corpus, et le seul chemin par
@@ -441,6 +441,10 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     content: 'Ma story à moi.',
     originalLanguage: 'fr',
+    /* LE MÊME MÉDIA QUE SA TUILE DU RAIL (#7116, revue) — sans lui, « Enregistrer »
+       du plan AUTEUR n'aurait rien à télécharger sur la seule story de fixtures
+       dont le lecteur est l'auteur (`storyDownloadableMedia`). */
+    media: [{ id: 'm4', url: STORY_PHOTO_STAND_IN, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'image/svg+xml' }],
     /* MA story porte le plan RÉDUIT : ni réagir, ni répondre, ni republier —
        mais bien ses commentaires, pour que la capture montre une RÉDUCTION et
        non un rail vide (`resolveStoryActionRailPlan`). */

@@ -289,6 +289,31 @@ describe('`story:reacted` / `story:unreacted` sont ÉCOUTÉS (#7227)', () => {
   });
 });
 
+describe('`story:viewed` est ÉCOUTÉ pour le compte des vues (#7116, revue)', () => {
+  test('`story:viewed` pose le compte SERVI sur MA story — « Vues » suit sans recharger', async () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story({ viewCount: 8 })]);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: 'u-noor', viewerUsername: 'noor', viewCount: 9 });
+    const storyOf = () => queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
+    await flush(() => storyOf()?.viewCount === 9);
+
+    expect(storyOf()?.viewCount).toBe(9);
+  });
+
+  test('`destroy` démonte l’écoute', async () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story({ viewCount: 8 })]);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps).destroy();
+
+    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: 'u-noor', viewerUsername: 'noor', viewCount: 9 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1')?.viewCount).toBe(8);
+  });
+});
+
 describe('`comment:updated` / `comment:deleted` / `comment:liked` / `comment:unliked` sont ÉCOUTÉS (#7227)', () => {
   test('`comment:updated` remplace la ligne, en direct', async () => {
     const { deps, socket, queryClient } = buildDeps();

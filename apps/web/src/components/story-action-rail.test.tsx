@@ -260,7 +260,7 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
       plan: plan(),
       language: 'fr',
       handlers: TOUS,
-      saving: { progress: 0.4, cancellable: true, reduceMotion: false },
+      saving: { progress: 0.4, cancellable: true },
       onCancelSave: () => cancels.push('cancel'),
     });
     expect(host.querySelector('[data-story-action="save"]')).toBeNull();
@@ -284,10 +284,56 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
       plan: plan(),
       language: 'fr',
       handlers: TOUS,
-      saving: { progress: 0.95, cancellable: false, reduceMotion: false },
+      saving: { progress: 1, cancellable: false },
     });
     const ring = host.querySelector('[data-story-save-ring]');
     expect(ring).not.toBeNull();
     expect(ring?.closest('button')).toBeNull();
+    /* La livraison ne publie rien : le ton passe à INERTE et le balayage dit
+       « en cours » — l'arc de valeur, lui, reste à 90 % (`downloadShare(1)`). */
+    expect(ring?.getAttribute('data-story-save-tone')).toBe('inert');
+    expect(ring?.getAttribute('aria-valuenow')).toBe('90');
+    expect(ring?.querySelector('[data-story-save-sweep]')).not.toBeNull();
+  });
+
+  test('flux SANS longueur (`progress: null`, le cas nominal de la route d’export) ⇒ `aria-busy`, aucun faux « 0 % », un balayage', async () => {
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: null, cancellable: true },
+      onCancelSave: () => undefined,
+    });
+    const ring = host.querySelector('[data-story-save-ring]');
+    expect(ring?.getAttribute('aria-busy')).toBe('true');
+    expect(ring?.hasAttribute('aria-valuenow')).toBe(false);
+    expect(ring?.textContent).toBe('');
+    expect(ring?.querySelector('[data-story-save-sweep]')).not.toBeNull();
+    expect(ring?.getAttribute('data-story-save-tone')).toBe('accent');
+  });
+
+  test('LE CHIFFRE NE TOURNE PAS : seul le calque du balayage porte la rotation (revue #7116)', async () => {
+    const host = await monter({ plan: plan(), language: 'fr', handlers: TOUS, saving: { progress: 1, cancellable: false } });
+    const ring = host.querySelector('[data-story-save-ring]');
+    const spinning = [...(ring?.querySelectorAll('.animate-spin') ?? [])];
+    expect(spinning.length).toBe(1);
+    expect(spinning[0]?.hasAttribute('data-story-save-sweep')).toBe(true);
+    expect(ring?.classList.contains('animate-spin')).toBe(false);
+  });
+
+  test('la valeur S’ANNONCE en mots (`aria-valuetext`), pas seulement en nombre', async () => {
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: 0.4, cancellable: true },
+      onCancelSave: () => undefined,
+    });
+    expect(host.querySelector('[data-story-save-ring]')?.getAttribute('aria-valuetext')).toBe('Enregistrement 36 %');
+  });
+
+  test('annulable mais SANS gestionnaire d’annulation ⇒ aucun `<button>` sans effet (loi 4)', async () => {
+    const host = await monter({ plan: plan(), language: 'fr', handlers: TOUS, saving: { progress: 0.4, cancellable: true } });
+    expect(host.querySelector('[data-story-save-ring]')?.closest('button')).toBeNull();
   });
 });
