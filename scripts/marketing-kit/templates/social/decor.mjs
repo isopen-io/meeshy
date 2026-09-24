@@ -10,6 +10,10 @@ import { langue } from '../../lib/langues.mjs'
 import { socialFormat } from './formats.mjs'
 import { LIBELLES } from './textes/annonces.mjs'
 
+// Typographie du kit : celle du socle, et un nombre ne se sépare jamais du mot qu'il compte
+// (« 0 traducteur », « 12 personnes »).
+export const ecrire = (texte, lang) => typo(texte, lang).replace(/(\d) (?=\p{L})/gu, '$1\u00A0')
+
 const px = (n) => `${Math.round(n * 100) / 100}px`
 
 export const tailleScene = (format) => {
@@ -50,17 +54,17 @@ export const loupe = (ecranHtml, { cible, x, y, largeur, hauteur, zoom = 'auto',
 
 // Titre en deux temps (la seconde phrase en dégradé), ajusté à sa boîte.
 export const titre = (texte, ctx, { x, y, largeur, hauteur, taille, classe = '', centre = false }) => {
-  const [l1, l2] = coupeLegende(typo(texte, ctx.lang))
+  const [l1, l2] = coupeLegende(ecrire(texte, ctx.lang))
   return html`<h1 class="gab-caption titre autofit ${centre ? 'centre' : ''} ${classe}" data-sur style="${place({ x, y, largeur, hauteur })};font-size:${taille}px"><span class="l1">${l1}</span>${l2 ? html`<span class="l2">${l2}</span>` : ''}</h1>`
 }
 
 // Texte simple ajusté à sa boîte (une chaîne est typographiée, un fragment passe tel quel).
 export const texte = (contenu, ctx, { x, y, largeur, hauteur, taille, classe = '', balise = 'p' }) =>
-  html`<${balise} class="bloc autofit ${classe}" data-sur style="${place({ x, y, largeur, hauteur })};font-size:${taille}px">${typeof contenu === 'string' ? typo(contenu, ctx.lang) : contenu}</${balise}>`
+  html`<${balise} class="bloc autofit ${classe}" data-sur style="${place({ x, y, largeur, hauteur })};font-size:${taille}px">${typeof contenu === 'string' ? ecrire(contenu, ctx.lang) : contenu}</${balise}>`
 
 // Sous-titres incrustés, façon vidéo verticale : blanc sur bandeau sombre, ligne par ligne.
-export const sousTitre = (contenu, ctx, { y, hauteur = 150, taille = 27, x = 40, largeur }) =>
-  html`<div class="st-zone autofit" data-sur style="${place({ x, y, largeur, hauteur })};font-size:${taille}px"><p class="st"><span>${typo(contenu, ctx.lang)}</span></p></div>`
+export const sousTitre = (contenu, ctx, { y, hauteur = 150, taille = 25, x = 40, largeur }) =>
+  html`<div class="st-zone autofit" data-sur style="${place({ x, y, largeur, hauteur })};font-size:${taille}px"><p class="st"><span>${ecrire(contenu, ctx.lang)}</span></p></div>`
 
 // Marque de plan de storyboard : « V1 · 2/4 ».
 export const marquePlan = (code, n, total = 4) => html`<span class="plan-chip"><b>${code}</b> ${n}/${total}</span>`
@@ -71,8 +75,8 @@ export const drapeauxFleche = (ctx, de, vers, { x, y, taille = 30, z = 6, rotati
 }
 
 // Signature de fin (le logo n'apparaît qu'à la fin d'une vidéo, § 1).
-export const signature = (ctx, { x, y, taille = 52, avecLangues = true, classe = '' }) =>
-  html`<div class="signature ${classe}" data-sur style="${place({ x, y })}">
+export const signature = (ctx, { x, y, largeur, taille = 52, avecLangues = true, classe = '' }) =>
+  html`<div class="signature ${classe}" data-sur style="${place({ x, y, largeur })}">
     <div class="sig-marque">${logo(taille, { radius: 0.28 })}<span style="font-size:${Math.round(taille * 0.62)}px">Meeshy</span></div>
     ${avecLangues ? html`<span class="sig-langues">${icon('globe', { size: 15 })}${LIBELLES.langues76[ctx.lang]}</span>` : ''}
   </div>`

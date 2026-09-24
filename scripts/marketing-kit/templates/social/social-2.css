@@ -51,13 +51,17 @@
 /* ─── Carrousels ─── */
 .compteur { position: absolute; top: 22px; inset-inline-end: 28px; z-index: 9; display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 800; background: color-mix(in srgb, white 20%, transparent); }
 .fond-aube .compteur { color: var(--ios-indigo-700); background: var(--ios-indigo-100); }
-.cta-pied { position: absolute; bottom: 58px; inset-inline: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cta-pied { position: absolute; top: 330px; inset-inline: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.cta.avec-flamme .cta-pied { top: 390px; }
+.cta-flamme { position: absolute; top: 300px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 8px; padding: 9px 20px; border-radius: 999px; white-space: nowrap; font-size: 18px; color: var(--ios-warning); background: #fff; box-shadow: 0 12px 30px color-mix(in srgb, var(--ios-warning) 45%, transparent); }
+.cta-flamme b { font-weight: 850; color: var(--ios-indigo-950); }
+[dir='rtl'] .cta-flamme { transform: translateX(50%); left: auto; right: 50%; }
 .cta-pied svg { border-radius: 16px; box-shadow: 0 14px 34px color-mix(in srgb, var(--ios-indigo-950) 45%, transparent); }
-.cta-pied b { font-size: 28px; font-weight: 850; letter-spacing: -0.02em; }
+.cta-pied b { font-size: 32px; font-weight: 850; letter-spacing: -0.02em; }
 .pill-store { padding: 10px 20px; border-radius: 999px; font-size: 16px; font-weight: 800; color: var(--ios-indigo-700); background: #fff; box-shadow: 0 10px 26px color-mix(in srgb, var(--ios-indigo-950) 30%, transparent); }
 .fond-aube .pill-store { color: #fff; background: var(--kit-grad-brand); }
 .pill-langues { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; opacity: 0.9; }
-.cta.mini .cta-pied { flex-direction: row; bottom: 30px; gap: 12px; }
+.cta.mini .cta-pied { flex-direction: row; top: auto; bottom: 30px; gap: 12px; }
 .cta.mini .cta-pied svg { width: 40px; height: 40px; border-radius: 11px; }
 .cta.mini .cta-pied b { font-size: 22px; }
 .cta.mini .pill-langues { display: none; }
@@ -70,8 +74,8 @@
 
 .numero { width: 60px; height: 60px; border-radius: 18px; display: grid; place-items: center; font-size: 34px; font-weight: 900; color: #fff; background: var(--kit-grad-hero); box-shadow: 0 12px 30px color-mix(in srgb, var(--ios-indigo-500) 45%, transparent); z-index: 9; }
 .cinq { font-size: 190px; font-weight: 900; line-height: 1; letter-spacing: -0.05em; background: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-purple-600)); -webkit-background-clip: text; background-clip: text; color: transparent; z-index: 7; }
-.icones-cinq { position: absolute; top: 470px; inset-inline-start: 28px; display: flex; gap: 12px; z-index: 6; }
-.icones-cinq span { width: 62px; height: 62px; border-radius: 18px; display: grid; place-items: center; color: var(--ios-indigo-600); background: #fff; box-shadow: 0 12px 28px color-mix(in srgb, var(--ios-indigo-900) 16%, transparent); }
+.icones-cinq { position: absolute; top: 500px; inset-inline-start: 28px; display: flex; gap: 12px; z-index: 6; }
+.icones-cinq span { width: 76px; height: 76px; border-radius: 18px; display: grid; place-items: center; color: var(--ios-indigo-600); background: #fff; box-shadow: 0 12px 28px color-mix(in srgb, var(--ios-indigo-900) 16%, transparent); }
 
 .audio-com { width: 300px; padding: 12px 14px; border-radius: 20px; color: #111827; background: #fff; box-shadow: 0 18px 44px color-mix(in srgb, var(--ios-indigo-950) 35%, transparent); }
 .ac-tete { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ios-indigo-600); }
@@ -156,3 +160,10 @@
 .badge-nom { font-size: 11px; font-weight: 800; color: var(--b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .badge-carte:not(.obtenu) .badge-nom { color: var(--kit-muted); }
 .badge-compte { font-family: var(--kit-font-rounded); font-size: 9.5px; font-weight: 600; color: var(--kit-muted); }
+
+.composer-field.rec { gap: 10px; color: var(--kit-ink); }
+.rec-point { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ios-error, #ef4444); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ios-error, #ef4444) 25%, transparent); }
+.composer-field.rec b { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px; }
+.rec-onde { flex: 1; height: 24px; display: flex; align-items: center; gap: 2px; }
+.rec-onde i { flex: 1; border-radius: 1px; background: var(--ios-indigo-400); }
+.mic-btn.actif { width: 52px; height: 52px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--ios-indigo-500) 25%, transparent), 0 8px 24px color-mix(in srgb, var(--ios-indigo-500) 55%, transparent); }

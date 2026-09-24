@@ -12,10 +12,11 @@ const arrondi = (n) => Math.round(n * 10) / 10
 export const zoneSure = ({ format, role, dir }) => {
   const { largeur: W, hauteur: H } = tailleScene(format)
   if (format !== '9x16') return { haut: 12, bas: H - 12, gauche: 12, droite: W - 12 }
-  const debut = arrondi(W * 0.06)
-  const fin = arrondi(W * 0.11)
+  const story = role === 'story Meeshy'
+  const debut = arrondi(W * (story ? 0.04 : 0.06))
+  const fin = arrondi(W * (story ? 0.04 : 0.11))
   return {
-    haut: arrondi(H * (role === 'story Meeshy' ? 0.14 : 0.05)),
+    haut: arrondi(H * (story ? 0.14 : 0.05)),
     bas: arrondi(H * 0.84),
     gauche: dir === 'rtl' ? fin : debut,
     droite: arrondi(W - (dir === 'rtl' ? debut : fin)),
@@ -43,9 +44,11 @@ const passes = () => {
     const w = cible.offsetWidth
     const h = cible.offsetHeight
     const W = loupe.clientWidth
-    const H = loupe.clientHeight
     const m = Number(loupe.dataset.marge)
-    const zoom = loupe.dataset.zoom === 'auto' ? Math.min(W / (w + 2 * m), H / (h + 2 * m), 2.6) : Number(loupe.dataset.zoom)
+    const zoom = loupe.dataset.zoom === 'auto' ? Math.min(W / (w + 2 * m), loupe.clientHeight / (h + 2 * m), 2.6) : Number(loupe.dataset.zoom)
+    // La hauteur déclarée est un plafond : la loupe se resserre sur sa cible, sans voisins rognés.
+    const H = Math.min(loupe.clientHeight, Math.ceil((h + 2 * m) * zoom))
+    loupe.style.height = `${H}px`
     const borne = (v, min) => Math.max(min, Math.min(0, v))
     const tx = borne(W / (2 * zoom) - (x + w / 2), W / zoom - ecran.offsetWidth)
     const ty = borne(H / (2 * zoom) - (y + h / 2), H / zoom - ecran.offsetHeight)

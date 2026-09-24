@@ -19,32 +19,56 @@ const langsQuatre = (lang) => [lang, ...['es', 'ar', 'de', 'fr', 'pt', 'it', 'en
 const ondeDecor = (n = 64) =>
   html`<div class="onde-decor">${waveformHeights(n).map((h, i) => html`<i style="height:${(h * 3.2).toFixed(1)}px;--k:${i}"></i>`)}</div>`
 
-// Villes des profils et des langues africaines citées (lon, lat) — projection équirectangulaire.
+// Globe pointillé (projection orthographique, centré sur l'Afrique et l'Europe) et les arcs
+// entre les villes des profils et des langues citées — aucune carte réelle, aucune donnée externe.
 const VILLES = [
-  ['Lyon', 4.8, 45.8], ['Seoul', 127, 37.6], ['Madrid', -3.7, 40.4], ['Osaka', 135.5, 34.7], ['São Paulo', -46.6, -23.5],
-  ['Dakar', -17.4, 14.7], ['Amman', 35.9, 31.9], ['Berlin', 13.4, 52.5], ['Bologna', 11.3, 44.5], ['Accra', -0.2, 5.6],
-  ['Bangalore', 77.6, 12.97], ['Toronto', -79.4, 43.7], ['Kinshasa', 15.3, -4.3], ['Bamako', -8, 12.6], ['Nairobi', 36.8, -1.3],
-  ['Mexico', -99.1, 19.4], ['Jakarta', 106.8, -6.2], ['Istanbul', 29, 41], ['Hanoi', 105.8, 21], ['Cairo', 31.2, 30],
+  ['Lyon', 4.8, 45.8], ['Dakar', -17.4, 14.7], ['Amman', 35.9, 31.9], ['Berlin', 13.4, 52.5], ['Bologna', 11.3, 44.5],
+  ['Accra', -0.2, 5.6], ['Bangalore', 77.6, 12.97], ['Kinshasa', 15.3, -4.3], ['Bamako', -8, 12.6], ['Nairobi', 36.8, -1.3],
+  ['São Paulo', -46.6, -23.5], ['Madrid', -3.7, 40.4], ['Istanbul', 29, 41], ['Cairo', 31.2, 30], ['Johannesburg', 28, -26.2],
 ]
-const projete = ([, lon, lat]) => [330 + ((lon + 125) / 270) * 440, 40 + ((62 - lat) / 95) * 380]
+const GLOBE = { cx: 590, cy: 232, r: 196, lon0: 12, lat0: 14 }
+const rad = (d) => (d * Math.PI) / 180
+
+const orthographique = (lon, lat) => {
+  const { cx, cy, r, lon0, lat0 } = GLOBE
+  const [l, p, p0] = [rad(lon - lon0), rad(lat), rad(lat0)]
+  const visible = Math.sin(p0) * Math.sin(p) + Math.cos(p0) * Math.cos(p) * Math.cos(l)
+  return {
+    x: cx + r * Math.cos(p) * Math.sin(l),
+    y: cy - r * (Math.cos(p0) * Math.sin(p) - Math.sin(p0) * Math.cos(p) * Math.cos(l)),
+    profondeur: visible,
+  }
+}
 
 const constellation = () => {
-  const pts = VILLES.map(projete)
-  const arcs = [[0, 1], [0, 5], [2, 4], [7, 3], [9, 12], [13, 5], [14, 10], [11, 8], [6, 17], [16, 18], [15, 2], [19, 12], [1, 3], [4, 9], [10, 16]]
-  const courbe = ([a, b]) => {
-    const [x1, y1] = pts[a]
-    const [x2, y2] = pts[b]
-    const mx = (x1 + x2) / 2
-    const my = Math.min(y1, y2) - Math.abs(x2 - x1) * 0.22
-    return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}"/>`
+  const points = []
+  for (let lat = -80; lat <= 80; lat += 8) {
+    for (let lon = -180; lon < 180; lon += 8) {
+      const p = orthographique(lon, lat)
+      if (p.profondeur > 0.05) points.push(`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(0.8 + p.profondeur * 1.2).toFixed(2)}" fill-opacity="${(0.08 + p.profondeur * 0.22).toFixed(2)}"/>`)
+    }
   }
-  const grille = Array.from({ length: 23 }, (_, i) => Array.from({ length: 24 }, (_, j) => `<circle cx="${330 + j * 20}" cy="${i * 20 + 5}" r="1"/>`).join('')).join('')
+  const villes = VILLES.map(([, lon, lat]) => orthographique(lon, lat))
+  const arcs = [[0, 1], [0, 2], [3, 6], [4, 7], [5, 9], [8, 0], [10, 11], [12, 14], [13, 1], [9, 6], [7, 10], [2, 5]]
+  const courbe = ([a, b]) => {
+    const [p, q] = [villes[a], villes[b]]
+    const mx = (p.x + q.x) / 2
+    const my = (p.y + q.y) / 2
+    const dx = mx - GLOBE.cx
+    const dy = my - GLOBE.cy
+    const n = Math.hypot(dx, dy) || 1
+    const levee = 0.28 * Math.hypot(q.x - p.x, q.y - p.y)
+    return `<path d="M${p.x.toFixed(1)} ${p.y.toFixed(1)} Q${(mx + (dx / n) * levee).toFixed(1)} ${(my + (dy / n) * levee).toFixed(1)} ${q.x.toFixed(1)} ${q.y.toFixed(1)}"/>`
+  }
   return raw(`<svg class="constellation" viewBox="0 0 800 450" aria-hidden="true">
-    <g fill="#fff" fill-opacity=".07">${grille}</g>
-    <g fill="none" stroke="url(#arc-g)" stroke-width="1.6" stroke-linecap="round">${arcs.map(courbe).join('')}</g>
-    <defs><linearGradient id="arc-g" x1="0" x2="1"><stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+    <defs><linearGradient id="arc-g" x1="0" x2="1"><stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#e879f9"/></linearGradient>
+    <radialGradient id="globe-g" cx=".42" cy=".38" r=".7"><stop offset="0" stop-color="#6366f1" stop-opacity=".35"/><stop offset="1" stop-color="#1e1b4b" stop-opacity="0"/></radialGradient>
     <radialGradient id="pt-g"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#c7d2fe"/><stop offset="1" stop-color="#818cf8" stop-opacity="0"/></radialGradient></defs>
-    ${pts.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="url(#pt-g)"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="#fff"/>`).join('')}
+    <circle cx="${GLOBE.cx}" cy="${GLOBE.cy}" r="${GLOBE.r + 30}" fill="url(#globe-g)"/>
+    <circle cx="${GLOBE.cx}" cy="${GLOBE.cy}" r="${GLOBE.r}" fill="none" stroke="#a5b4fc" stroke-opacity=".18"/>
+    <g fill="#c7d2fe">${points.join('')}</g>
+    <g fill="none" stroke="url(#arc-g)" stroke-width="1.8" stroke-linecap="round" stroke-opacity=".9">${arcs.map(courbe).join('')}</g>
+    ${villes.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="10" fill="url(#pt-g)"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.8" fill="#fff"/>`).join('')}
   </svg>`)
 }
 
@@ -92,8 +116,8 @@ export const ANNONCES_X = {
       contenu: html`${marqueDiscrete(ctx, { x: 32, y: 30 })}
         ${titre(ANNONCES.X5.titre[ctx.lang], ctx, { x: 32, y: 70, largeur: 476, hauteur: 70, taille: 46 })}
         ${telephone(ecran('progression', sc(ctx, 'light')), { largeur: 236, x: 34, y: 162, rotation: -3 })}
-        ${loupe(ecran('progression', sc(ctx, 'light')), { cible: '.p-card.flamme', x: 216, y: 206, largeur: 300, hauteur: 150, rotation: 2 })}
-        ${loupe(ecran('progression', sc(ctx, 'light')), { cible: '.p-link', x: 236, y: 380, largeur: 280, hauteur: 70, rotation: -1 })}`,
+        ${loupe(ecran('progression', sc(ctx, 'light')), { cible: '.p-card.flamme', x: 206, y: 200, largeur: 310, hauteur: 170, rotation: 2 })}
+        ${loupe(ecran('progression', sc(ctx, 'light')), { cible: '.p-link', x: 226, y: 400, largeur: 290, hauteur: 80, rotation: -1 })}`,
     }),
   X6: (ctx) =>
     scene({

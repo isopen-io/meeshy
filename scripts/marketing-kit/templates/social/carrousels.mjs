@@ -24,20 +24,20 @@ const slide = ({ ctx, c, i, visuel, titreOpts = {}, classe = '' }) => {
   return scene({
     format: F, ctx, fond: FONDS[c], classe: `carrousel ${classe}`,
     contenu: html`${marqueDiscrete(ctx, { x: 28, y: 24 })}${compteur(i, n, ctx)}
-      ${titre(CARROUSELS[c][i][ctx.lang], ctx, { x: 28, y: 66, largeur: 484, hauteur: 150, taille: 38, ...titreOpts })}
+      ${titre(CARROUSELS[c][i][ctx.lang], ctx, { x: 28, y: 64, largeur: 484, hauteur: 136, taille: 42, ...titreOpts })}
       ${visuel}`,
   })
 }
 
-const tel = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 272, x: 134, y: 232, ...options })
+const tel = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 280, x: 130, y: 214, ...options })
 const telGauche = (ecranHtml, options = {}) => tel(ecranHtml, { x: 40, ...options })
 
 const cta = ({ ctx, c, i, extra, classe = '', titreOpts = {} }) =>
   slide({
     ctx, c, i, classe: `cta ${classe}`,
-    titreOpts: { y: 120, hauteur: 200, taille: 44, centre: true, ...titreOpts },
+    titreOpts: { y: 96, hauteur: 190, taille: 48, centre: true, ...titreOpts },
     visuel: html`${extra}
-      <div class="cta-pied" data-sur>${logo(64, { radius: 0.28 })}<b>Meeshy</b><span class="pill-store">${LIBELLES.telecharger[ctx.lang]}</span><span class="pill-langues">${icon('globe', { size: 14 })}${LIBELLES.langues76[ctx.lang]}</span></div>`,
+      <div class="cta-pied" data-sur>${logo(84, { radius: 0.28 })}<b>Meeshy</b><span class="pill-store">${LIBELLES.telecharger[ctx.lang]}</span><span class="pill-langues">${icon('globe', { size: 14 })}${LIBELLES.langues76[ctx.lang]}</span></div>`,
   })
 
 const murDeLangues = () =>
@@ -69,7 +69,7 @@ export const CARROUSELS_4x5 = {
     (ctx) => slide({ ctx, c: 'C1', i: 0, visuel: html`${telGauche(ecran('dm', sc(ctx, 'dark')))}${loupe(ecran('dm', sc(ctx, 'dark')), { cible: '.msg-row.mine .bubble', x: 190, y: 420, largeur: 330, hauteur: 110, rotation: -2 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 1, visuel: html`${telGauche(E.ecranChezLAmi(AMI[ctx.lang], ctx.lang))}${loupe(E.ecranChezLAmi(AMI[ctx.lang], ctx.lang), { cible: '.bubble.theirs', x: 190, y: 420, largeur: 330, hauteur: 120, rotation: 2 })}${drapeauxFleche(ctx, ctx.lang, AMI[ctx.lang], { x: 300, y: 330, taille: 28 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 2, visuel: html`${telGauche(ecran('dm', sc(ctx, 'dark')))}${loupe(ecran('dm', sc(ctx, 'dark')), { cible: '.bubble.audio', x: 170, y: 380, largeur: 350, hauteur: 230, rotation: -2 })}` }),
-    (ctx) => slide({ ctx, c: 'C1', i: 3, titreOpts: { taille: 34 }, visuel: tel(E.ecranConsentementVoix(sc(ctx, 'light'))) }),
+    (ctx) => slide({ ctx, c: 'C1', i: 3, titreOpts: { taille: 36 }, visuel: html`${telGauche(E.ecranConsentementVoix(sc(ctx, 'light')))}${loupe(E.ecranConsentementVoix(sc(ctx, 'light')), { cible: '.voix-lignes', x: 170, y: 400, largeur: 350, hauteur: 160, rotation: 2 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 4, visuel: murDeLangues() }),
     (ctx) => cta({ ctx, c: 'C1', i: 5, extra: '' }),
   ],
@@ -79,12 +79,12 @@ export const CARROUSELS_4x5 = {
     (ctx) => slide({ ctx, c: 'C2', i: 2, visuel: html`${telGauche(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 3 }))}${loupe(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 3 }), { cible: '.messages .msg-row:last-child .bubble', x: 170, y: 440, largeur: 350, hauteur: 120, rotation: 2 })}` }),
     (ctx) => slide({ ctx, c: 'C2', i: 3, visuel: tel(E.ecranRevelation(sc(ctx, 'dark'), { type: 'succes', valeur: 'first_content' })) }),
     (ctx) => slide({ ctx, c: 'C2', i: 4, visuel: html`${telGauche(E.ecranProgressionAvec(sc(ctx, 'light'), { serie: 1, record: 1, serieJalon: 7 }))}${loupe(E.ecranProgressionAvec(sc(ctx, 'light'), { serie: 1, record: 1, serieJalon: 7 }), { cible: '.p-card.flamme', x: 170, y: 420, largeur: 350, hauteur: 150, rotation: -2 })}` }),
-    (ctx) => cta({ ctx, c: 'C2', i: 5, extra: puce(html`${icon('flame', { size: 22 })}<b>1</b>`, { x: 226, y: 330, classe: 'pill-flamme' }) }),
+    (ctx) => cta({ ctx, c: 'C2', i: 5, classe: 'avec-flamme', extra: html`<div class="cta-flamme" data-sur>${icon('flame', { size: 26 })}<b>${ctx.ui('progression.streak.days', 1)}</b></div>` }),
   ],
   C3: [
     (ctx) => slide({
-      ctx, c: 'C3', i: 0, titreOpts: { y: 250, hauteur: 190, taille: 44 },
-      visuel: html`${puce('5', { x: 28, y: 60, classe: 'cinq' })}<div class="icones-cinq" data-sur>${['globe', 'camera', 'mic', 'people', 'link'].map((n) => html`<span>${icon(n, { size: 26 })}</span>`)}</div>`,
+      ctx, c: 'C3', i: 0, titreOpts: { y: 262, hauteur: 190, taille: 46 },
+      visuel: html`${puce('5', { x: 28, y: 60, classe: 'cinq' })}<div class="icones-cinq" data-sur>${['globe', 'camera', 'mic', 'people', 'link'].map((n) => html`<span>${icon(n, { size: 30 })}</span>`)}</div>`,
     }),
     (ctx) => slide({ ctx, c: 'C3', i: 1, titreOpts: { x: 104, largeur: 408 }, visuel: html`${numero(1)}${tel(ecran('global', sc(ctx, 'dark')))}` }),
     (ctx) => slide({ ctx, c: 'C3', i: 2, titreOpts: { x: 104, largeur: 408 }, visuel: html`${numero(2)}${tel(E.ecranMaStory(sc(ctx, 'dark')))}` }),

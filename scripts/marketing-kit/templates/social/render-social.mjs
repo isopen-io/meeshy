@@ -88,7 +88,8 @@ const planche = async (browser, format, lang) => {
   if (!lot.length) return null
   const largeur = { '9x16': 230, '4x5': 250, '1x1': 360, '16x9': 480, yt: 480 }[format]
   const hauteur = Math.round((largeur * f.height) / f.width)
-  const lignes = [...new Set(lot.map((v) => v.concept))].map((c) => lot.filter((v) => v.concept === c))
+  const groupe = (v) => (v.concept.startsWith('S') ? 'S' : v.concept)
+  const lignes = [...new Set(lot.map(groupe))].map((c) => lot.filter((v) => groupe(v) === c))
   const colonnes = Math.max(...lignes.map((l) => l.length))
   const unique = lignes.every((l) => l.length === 1)
   const rangs = unique ? [lot] : lignes

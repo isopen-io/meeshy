@@ -9,7 +9,7 @@ import { avatar, homeIndicator, nomComplet, roundButton, statusBar, typo } from 
 import { contexte, ecran } from '../../lib/gabarits.mjs'
 import { formatNumber } from '../../lib/locales.mjs'
 import { ACCENTS } from '../../screens/conversations.mjs'
-import { globalHeader } from '../../screens/conversations.mjs'
+import { dmHeader, globalHeader } from '../../screens/conversations.mjs'
 import { bubble, conversationBackground, conversationHeader, daySeparator, systemNotice } from '../../screens/conversation.mjs'
 import { meeshEntry } from '../../screens/progression.mjs'
 import { postCard } from '../../screens/social.mjs'
@@ -56,6 +56,31 @@ export const ecranGlobalBonjour = (ctx, { reponses = 3, saisie = false } = {}) =
     ${globalHeader(ctx)}
     <main class="messages">${corps}</main>
     ${saisie ? composerSaisi(ctx, monBonjour(ctx)) : html`<div class="composer">${roundButton('plus', { iconSize: 20, tint: 'var(--kit-ink)' })}<div class="composer-field glass"><span>${ctx.ui('composer.message')}</span></div><div class="round-btn mic-btn">${icon('mic', { size: 20 })}</div></div>`}
+    ${homeIndicator()}
+  </div>`
+}
+
+// Le DM au moment où le lecteur ENREGISTRE son vocal (V1, plan 1) : les messages d'avant,
+// et le composeur en enregistrement — point rouge, durée, onde qui avance.
+export const ecranEnregistrement = (ctx) => {
+  const accent = ACCENTS.dm
+  const onde = Array.from({ length: 34 }, (_, i) => 4 + 16 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)))
+  return html`<div class="ecran iphone conversation ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
+    ${conversationBackground(accent, ctx.theme)}
+    ${statusBar()}
+    ${dmHeader(ctx)}
+    <main class="messages">
+      ${daySeparator(ctx)}
+      ${bubble({ ctx, contenu: DEMO.dm[0], accent, time: '9:18' })}
+      ${bubble({ ctx, contenu: DEMO.miens.dmCri[ctx.lang], mine: true, accent, time: '9:19' })}
+      ${bubble({ ctx, contenu: DEMO.dm[1], accent, time: '9:24' })}
+      ${bubble({ ctx, contenu: DEMO.miens.dmBillets[ctx.lang], mine: true, accent, time: '9:25' })}
+      ${bubble({ ctx, contenu: DEMO.dm[2], accent, time: '9:26' })}
+    </main>
+    <div class="composer enregistre">
+      <div class="composer-field glass rec"><i class="rec-point"></i><b>0:05</b><span class="rec-onde">${onde.map((h) => html`<i style="height:${h.toFixed(1)}px"></i>`)}</span></div>
+      <div class="round-btn mic-btn actif">${icon('mic', { size: 22 })}</div>
+    </div>
     ${homeIndicator()}
   </div>`
 }
