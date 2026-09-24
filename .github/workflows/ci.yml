@@ -1003,6 +1003,15 @@ jobs:
           cd apps/web
           node scripts/check-shell-dist.mjs
 
+      # #7844 — le maillon `check-android-manifest` du composite n'était
+      # exécuté par AUCUN job : `gate-ci-parity.test.ts` le signalait vert par
+      # omission. Pur node, il ne lit que le manifeste versionné de la coque.
+      - name: Gate manifeste de la coque Android (permissions requises)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-android-manifest.mjs
+
       # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
