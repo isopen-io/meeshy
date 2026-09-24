@@ -54,17 +54,25 @@ public struct LanguageShareBar: View {
     }
 
     private var legend: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: MeeshySpacing.md, alignment: .leading)],
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: MeeshySpacing.md, alignment: .leading)],
                   alignment: .leading, spacing: MeeshySpacing.sm) {
             ForEach(Array(visible.enumerated()), id: \.offset) { _, share in
+                // Le nom et le pourcentage sont DEUX textes : une autonyme écrite
+                // de droite à gauche (« العربية ») dans la même chaîne que « 7 % »
+                // réordonnait les deux et affichait « % 7 العربية ».
                 HStack(spacing: 6) {
                     Circle().fill(color(for: share)).frame(width: 8, height: 8)
-                    Text(verbatim: label(for: share))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                    Text(verbatim: name(for: share))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
+                    if share.isMeasured {
+                        Text(verbatim: share.percent.formatted(.percent))
+                            .monospacedDigit()
+                            .fixedSize()
+                    }
                 }
+                .font(MeeshyFont.relative(14, weight: .semibold))
+                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             }
         }
     }

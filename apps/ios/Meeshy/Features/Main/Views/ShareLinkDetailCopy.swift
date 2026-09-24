@@ -82,7 +82,7 @@ enum ShareLinkDetailCopy {
 
     static func fieldName(_ field: InviteRequestedField) -> String {
         switch field {
-        case .name: return String(localized: "shareLink.detail.fieldName", defaultValue: "Prénom et nom", bundle: .main)
+        case .name: return String(localized: "shareLink.detail.fieldName", defaultValue: "Nom complet", bundle: .main)
         case .nickname: return String(localized: "shareLink.detail.fieldNickname", defaultValue: "Pseudo", bundle: .main)
         case .email: return String(localized: "shareLink.detail.fieldEmail", defaultValue: "E-mail", bundle: .main)
         case .birthday: return String(localized: "shareLink.detail.fieldBirthday", defaultValue: "Date de naissance", bundle: .main)

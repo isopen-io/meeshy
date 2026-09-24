@@ -193574,43 +193574,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم الأول واسم العائلة"
+            "value": "الاسم الكامل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vor- und Nachname"
+            "value": "Vollständiger Name"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "First and last name"
+            "value": "Full name"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nombre y apellido"
+            "value": "Nombre completo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prénom et nom"
+            "value": "Nom complet"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome e cognome"
+            "value": "Nome completo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome e sobrenome"
+            "value": "Nome completo"
           }
         }
       }
