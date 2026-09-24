@@ -1,9 +1,14 @@
 import { Fragment, useMemo, type CSSProperties, type ReactNode } from 'react';
 
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+import { hasBlockSyntax, parseBlocks, type TextBlock } from '@meeshy/shared/utils/text-blocks';
 import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment } from '@meeshy/shared/utils/text-segments';
 
-import { Link } from '@/routes/route-table';
+import { apiConfig } from '@/lib/api/config';
+import { internalPathOf } from '@/lib/links/internal-link';
+import { webOriginOf } from '@/lib/links/web-origin';
+import { compile, match } from '@/lib/router';
+import { Link, navigate, ROUTES } from '@/routes/route-table';
 
 /**
  * **LE TEXTE ÉCRIT PAR QUELQU'UN, RENDU** (#7032) — le site UNIQUE de la v2
@@ -48,6 +53,19 @@ import { Link } from '@/routes/route-table';
  * ouvre, et celle qu'iOS construit (`MessageTextRenderer.swift`).
  */
 const trackedLinkLabel = (token: string): string => `meeshy.me/l/${token}`;
+
+/**
+ * LES CHEMINS QUE L'APP SERT (#7849) — compilés UNE fois : un lien Meeshy
+ * dont le chemin n'est pas ici reste un lien sortant.
+ */
+const APP_PATTERNS = Object.values(ROUTES).map((route) => compile(route.pattern));
+const isAppPath = (path: string): boolean => APP_PATTERNS.some((pattern) => match(pattern, path) !== null);
+
+const inAppPathOf = (href: string): string | null =>
+  internalPathOf(href, {
+    origins: [webOriginOf(apiConfig.base, window.location.origin), window.location.origin],
+    isAppPath,
+  });
 
 /** La teinte d'un lien, quand la surface ne la donne pas. */
 const DEFAULT_LINK_COLOR = 'var(--color-ios-brand)';
@@ -94,7 +112,40 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
             {segment.url === null ? trackedLinkLabel(segment.token) : segment.text}
           </Link>
         );
-      case 'url':
+      case 'code':
+        return (
+          <code
+            key={key}
+            aria-hidden={hosts.plainTextHidden ? true : undefined}
+            className="rounded-[4px] px-1 font-mono text-[0.9em]"
+            style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)' }}
+          >
+            {segment.text}
+          </code>
+        );
+      case 'url': {
+        /* INTERNE (#7849) — un lien Meeshy navigue DANS l'app, comme une
+           mention : même onglet, routeur, et dans la coque on ne sort pas vers
+           le navigateur externe. Les gestes « nouvel onglet » restent au
+           navigateur. */
+        const inApp = inAppPathOf(segment.href);
+        if (inApp !== null) {
+          return (
+            <a
+              key={key}
+              href={inApp}
+              style={{ color: hosts.linkColor }}
+              className="underline"
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                navigate(inApp);
+              }}
+            >
+              {segment.text}
+            </a>
+          );
+        }
         return (
           /* `noopener noreferrer` : la page ouverte ne reçoit ni la main sur
              l'onglet d'origine (`window.opener`) ni l'adresse d'où elle vient. */
@@ -109,6 +160,7 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
             {segment.text}
           </a>
         );
+      }
       default:
         return hosts.plainTextHidden ? (
           <span key={key} aria-hidden>
@@ -148,6 +200,63 @@ function segmentNodes(segments: readonly TextSegment[], hosts: InlineHosts): rea
   });
 }
 
+/**
+ * **LES BLOCS** (#7849) — titres, listes, citations, code. Rendus par les
+ * balises qui portent leur sens (`<ul>`, `<blockquote>`, `<pre>`), jamais par
+ * un `<div>` stylé. Un titre de message n'est PAS un titre de document : il
+ * reste un paragraphe en gras plus grand, sans quoi chaque `# Salut` d'une
+ * conversation s'insérerait dans le plan des titres de l'écran.
+ */
+const HEADING_SIZE = { 1: '1.25em', 2: '1.12em', 3: '1em' } as const satisfies Record<1 | 2 | 3, string>;
+
+function blockNode(
+  block: TextBlock,
+  index: number,
+  render: (text: string) => readonly ReactNode[],
+  textHidden: boolean,
+): ReactNode {
+  const key = `b${index}`;
+  switch (block.kind) {
+    case 'paragraph':
+      return <p key={key}>{render(block.text)}</p>;
+    case 'heading':
+      return (
+        <p key={key} data-md-heading={block.level} style={{ fontWeight: 700, fontSize: HEADING_SIZE[block.level] }}>
+          {render(block.text)}
+        </p>
+      );
+    case 'list': {
+      const items = block.items.map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>{render(item)}</li>);
+      return block.ordered ? (
+        <ol key={key} start={block.start} className="list-decimal pl-6">
+          {items}
+        </ol>
+      ) : (
+        <ul key={key} className="list-disc pl-6">
+          {items}
+        </ul>
+      );
+    }
+    case 'quote':
+      return (
+        <blockquote key={key} className="border-l-[3px] pl-2 opacity-80" style={{ borderColor: 'currentColor' }}>
+          {render(block.text)}
+        </blockquote>
+      );
+    case 'code':
+      return (
+        <pre
+          key={key}
+          aria-hidden={textHidden ? true : undefined}
+          className="overflow-x-auto whitespace-pre rounded-[8px] px-2 py-1 font-mono text-[0.85em]"
+          style={{ backgroundColor: 'color-mix(in srgb, currentColor 10%, transparent)' }}
+        >
+          <code>{block.text}</code>
+        </pre>
+      );
+  }
+}
+
 export function RichText({
   text,
   className,
@@ -179,18 +288,34 @@ export function RichText({
    * par `trackingLinksOf` ; absentes ⇒ chaque URL est un lien direct. */
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
-  const segments = useMemo(
-    () =>
-      segmentText(text, {
-        hashtags,
-        ...(mentions === undefined ? {} : { mentions }),
-        ...(trackingLinks === undefined ? {} : { trackingLinks }),
-      }),
-    [text, hashtags, mentions, trackingLinks],
-  );
+  const blocks = useMemo(() => (hasBlockSyntax(text) ? parseBlocks(text) : null), [text]);
+  const render = useMemo(() => {
+    const options = {
+      hashtags,
+      ...(mentions === undefined ? {} : { mentions }),
+      ...(trackingLinks === undefined ? {} : { trackingLinks }),
+    };
+    return (content: string) => segmentNodes(segmentText(content, options), { linkColor, plainTextHidden });
+  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden]);
+  if (blocks === null) {
+    return (
+      <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>
+        {render(text)}
+      </p>
+    );
+  }
+  /* UN TEXTE À BLOCS se rend dans un `<div>` : un `<ul>` ou un `<pre>` ne
+     peut pas vivre dans un `<p>`. Le chemin nominal, sans bloc, garde son
+     `<p>` inchangé. */
   return (
-    <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>
-      {segmentNodes(segments, { linkColor, plainTextHidden })}
-    </p>
+    <div
+      data-rich-text=""
+      className={`${className ?? ''} flex flex-col gap-1`}
+      lang={lang}
+      style={style}
+      {...(rest as React.HTMLAttributes<HTMLDivElement>)}
+    >
+      {blocks.map((block, index) => blockNode(block, index, render, plainTextHidden))}
+    </div>
   );
 }

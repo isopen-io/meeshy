@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { hasBlockSyntax, parseBlocks } from '../utils/text-blocks';
+import { plainTextOf } from '../utils/text-plain';
 import { segmentText } from '../utils/text-segments';
 
 describe('segmentText — le code inline', () => {
@@ -176,5 +177,16 @@ describe('parseBlocks — les blocs d’un message', () => {
       { kind: 'heading', level: 1, text: 'T' },
       { kind: 'paragraph', text: 'a\n\nb' },
     ]);
+  });
+});
+
+describe('plainTextOf — ce qu’on lit, sans la notation', () => {
+  it('retire les marqueurs et garde le texte lu', () => {
+    expect(plainTextOf('un **mot** et [la doc](https://x.fr), `code`')).toBe('un mot et la doc, code');
+    expect(plainTextOf('# Titre\n- a\n- b\n> cité')).toBe('Titre\na\nb\ncité');
+  });
+
+  it('un texte nu reste identique', () => {
+    expect(plainTextOf('salut @alice, 3 * 4 = 12\n\nfin')).toBe('salut @alice, 3 * 4 = 12\n\nfin');
   });
 });
