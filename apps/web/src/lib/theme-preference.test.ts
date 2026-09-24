@@ -55,7 +55,7 @@ const environmentOf = (options: { readonly systemLight: boolean; readonly storag
   const scope = globalThis as { window?: unknown; document?: unknown; localStorage?: unknown };
   const saved = { window: scope.window, document: scope.document, localStorage: scope.localStorage };
   scope.window = { matchMedia: () => media };
-  scope.document = { documentElement: { classList } };
+  scope.document = { documentElement: { classList }, querySelectorAll: () => [] };
   scope.localStorage = storage;
   return {
     classes,

@@ -64,10 +64,18 @@ function fakeStorage() {
   };
 }
 
+function fakeThemeColorMetas() {
+  return (['dark', 'light'] as const).map((scheme) => ({
+    media: `(prefers-color-scheme: ${scheme})`,
+    getAttribute: (name: string) => (name === 'data-scheme' ? scheme : null),
+  }));
+}
+
 function installEnvironment() {
   const media = fakeMatchMedia();
   const classList = fakeClassList();
   const storage = fakeStorage();
+  const metas = fakeThemeColorMetas();
 
   const originalWindow = (globalThis as { window?: unknown }).window;
   const originalDocument = (globalThis as { document?: unknown }).document;
@@ -82,6 +90,10 @@ function installEnvironment() {
   };
   (globalThis as { document: unknown }).document = {
     documentElement: { classList },
+    querySelectorAll: (selector: string) => {
+      expect(selector).toBe('meta[name="theme-color"][data-scheme]');
+      return metas;
+    },
   };
   (globalThis as { localStorage: unknown }).localStorage = storage;
 
@@ -89,6 +101,7 @@ function installEnvironment() {
     media,
     classList,
     storage,
+    metas,
     restore() {
       (globalThis as { window?: unknown }).window = originalWindow;
       (globalThis as { document?: unknown }).document = originalDocument;
@@ -219,5 +232,41 @@ describe('la barre d’état de la coque suit le schéma PEINT, pas le système 
     setThemePreference('light');
 
     expect(env.classList.contains('light')).toBe(true);
+  });
+});
+
+describe('la barre du navigateur suit le schéma PEINT, pas le système (#7776)', () => {
+  const barre = (env: ReturnType<typeof installEnvironment>) =>
+    Object.fromEntries(env.metas.map((meta) => [meta.getAttribute('data-scheme'), meta.media]));
+
+  test('au démarrage, un choix sombre stocké sur un système clair peint la barre en sombre', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    env.storage.setItem('meeshy.scheme', 'dark');
+    env.classList.toggle('dark', true);
+
+    followSystem();
+
+    expect(barre(env)).toEqual({ dark: 'all', light: 'not all' });
+  });
+
+  test('choisir « clair » dans Réglages peint la barre en clair', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+
+    setThemePreference('light');
+
+    expect(barre(env)).toEqual({ dark: 'not all', light: 'all' });
+  });
+
+  test('en suivi du système, la bascule du téléphone suit jusqu’à la barre', () => {
+    const env = installEnvironment();
+    cleanup = env.restore;
+    env.classList.toggle('dark', true);
+
+    followSystem();
+    env.media.fire(true);
+
+    expect(barre(env)).toEqual({ dark: 'not all', light: 'all' });
   });
 });
