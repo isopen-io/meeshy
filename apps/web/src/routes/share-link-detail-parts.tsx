@@ -4,7 +4,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
 import { endonymOf, LanguageShareBar } from '@/components/language-share-bar';
-import { SECTION_CARD_STYLE } from '@/components/grouped-section';
+import { SECTION_BRAND_INK, SECTION_CARD_STYLE } from '@/components/grouped-section';
 import type { RecentArrival, ShareLinkStats } from '@/lib/api/link-stats';
 import type { MyShareLink, ShareLinkInactiveReason, ShareLinkPolicy } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
@@ -33,13 +33,12 @@ import { Link } from '@/routes/route-table';
 
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
-const BRAND_INK = 'var(--ios-indigo-600)';
 const TITLE_CLASS = 'text-check font-extrabold uppercase tracking-[0.1em]';
 const SUB_TITLE_CLASS = 'text-chip font-extrabold uppercase tracking-[0.08em]';
 const CARD_CLASS = 'grid gap-3 rounded-[20px] p-4';
-const ACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-indigo-700) 45%, var(--ios-purple-600) 100%)';
+const ACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-indigo-700) 45%, color-mix(in srgb, var(--ios-purple-600) 75%, black) 100%)';
 const INACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-neutral-600), var(--ios-neutral-500))';
-const PILL_BUTTON = 'flex items-center justify-center gap-2 rounded-chip px-4 text-body font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2';
+const PILL_BUTTON = 'flex items-center justify-center gap-2 rounded-chip px-3 text-caption font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 sm:text-body';
 
 const REASON_KEY: Readonly<Record<ShareLinkInactiveReason, 'links.detail.reason.closed' | 'links.detail.reason.expired' | 'links.detail.reason.revoked'>> = {
   CONVERSATION_CLOSED: 'links.detail.reason.closed',
@@ -102,7 +101,14 @@ export function InviteLinkCard({
       data-share-link-hero
       aria-label={translateInvite(language, 'linkDetail.title')}
       className="grid gap-3.5 rounded-[28px] p-5 text-white"
-      style={{ background: link.isActive ? ACTIVE_GRADIENT : INACTIVE_GRADIENT, boxShadow: '0 18px 40px color-mix(in srgb, var(--ios-indigo-600) 30%, transparent)' }}
+      style={{
+        /* Le dégradé est une IMAGE : la couleur pleine sous lui est la teinte la
+           plus claire qu'il traverse, celle que mesurent les contrôles de
+           contraste (`scripts/lib/contrast.mjs` ne lit que la couleur). */
+        backgroundColor: link.isActive ? 'var(--ios-indigo-600)' : 'var(--ios-neutral-500)',
+        backgroundImage: link.isActive ? ACTIVE_GRADIENT : INACTIVE_GRADIENT,
+        boxShadow: '0 18px 40px color-mix(in srgb, var(--ios-indigo-600) 30%, transparent)',
+      }}
     >
       <div className="flex items-center gap-3.5">
         <span
@@ -113,7 +119,7 @@ export function InviteLinkCard({
           {initialsOf(group)}
         </span>
         <span className="grid min-w-0 flex-1 gap-0.5">
-          <span data-share-link-conversation className="truncate text-thread font-extrabold">
+          <span data-share-link-conversation dir="auto" className="line-clamp-2 break-words text-thread font-extrabold">
             {group}
           </span>
           <span className="text-caption" style={{ opacity: 0.92 }}>
@@ -123,7 +129,7 @@ export function InviteLinkCard({
         <span
           data-share-link-status
           className="shrink-0 rounded-chip px-2.5 py-1 text-chip font-extrabold uppercase"
-          style={{ backgroundColor: link.isActive ? 'var(--ios-success-deep)' : 'rgb(0 0 0 / 0.35)' }}
+          style={link.isActive ? { backgroundColor: 'var(--color-success)', color: 'var(--color-on-status)' } : { backgroundColor: 'rgb(0 0 0 / 0.35)' }}
         >
           {translate(language, link.isActive ? 'links.status.active' : 'links.status.inactive')}
         </span>
@@ -142,7 +148,7 @@ export function InviteLinkCard({
         </p>
       )}
       {link.description === null ? null : (
-        <p data-share-link-message className="text-body leading-relaxed" style={{ opacity: 0.95 }}>
+        <p data-share-link-message dir="auto" className="text-body leading-relaxed" style={{ opacity: 0.95 }}>
           « {link.description} »
         </p>
       )}
@@ -211,11 +217,11 @@ export function LinkStatTiles({ language, stats }: { readonly language: Interfac
                   : SECTION_CARD_STYLE
               }
             >
-              <strong className="text-section font-extrabold" style={{ color: highlighted ? BRAND_INK : INK }} {...(value === null ? { 'aria-hidden': true } : {})}>
+              <strong className={`text-section font-extrabold ${highlighted ? SECTION_BRAND_INK : ''}`} style={highlighted ? undefined : { color: INK }} {...(value === null ? { 'aria-hidden': true } : {})}>
                 {value === null ? '—' : format.format(value)}
               </strong>
               {value === null ? <span className="sr-only">{translateInvite(language, 'linkDetail.stats.unknown')}</span> : null}
-              <span className="text-caption font-semibold" style={{ color: highlighted ? BRAND_INK : INK_2 }}>
+              <span className={`text-caption font-semibold ${highlighted ? SECTION_BRAND_INK : ''}`} style={highlighted ? undefined : { color: INK_2 }}>
                 {translateInvite(language, STAT_LABEL[key])}
               </span>
             </li>
@@ -236,7 +242,7 @@ export function ArrivalLanguages({ language, stats }: { readonly language: Inter
   const shares = languageSharesOf(stats.arrivalsByLanguage);
   return (
     <section aria-labelledby="link-arrival-languages" data-share-link-languages className={CARD_CLASS} style={SECTION_CARD_STYLE}>
-      <h2 id="link-arrival-languages" className={TITLE_CLASS} style={{ color: BRAND_INK }}>
+      <h2 id="link-arrival-languages" className={`${TITLE_CLASS} ${SECTION_BRAND_INK}`}>
         {translateInvite(language, 'linkDetail.languages.title')}
       </h2>
       {shares.length === 0 ? (
@@ -298,7 +304,7 @@ function ArrivalRow({ language, arrival, now }: { readonly language: InterfaceLa
         </span>
       )}
       {arrival.isAnonymous ? (
-        <span data-share-link-arrival-anonymous className="shrink-0 rounded-chip px-2.5 py-1 text-chip font-bold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))', color: BRAND_INK }}>
+        <span data-share-link-arrival-anonymous className={`shrink-0 rounded-chip px-2.5 py-1 text-chip font-bold ${SECTION_BRAND_INK}`} style={{ backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))' }}>
           {translateInvite(language, 'linkDetail.recent.anonymous')}
         </span>
       ) : null}
@@ -313,7 +319,7 @@ function ArrivalRow({ language, arrival, now }: { readonly language: InterfaceLa
 export function RecentArrivals({ language, stats, now }: { readonly language: InterfaceLanguage; readonly stats: ShareLinkStats; readonly now: Date }) {
   return (
     <section aria-labelledby="link-recent-arrivals" data-share-link-recent className={CARD_CLASS} style={SECTION_CARD_STYLE}>
-      <h2 id="link-recent-arrivals" className={TITLE_CLASS} style={{ color: BRAND_INK }}>
+      <h2 id="link-recent-arrivals" className={`${TITLE_CLASS} ${SECTION_BRAND_INK}`}>
         {translateInvite(language, 'linkDetail.recent.title')}
       </h2>
       {stats.recentArrivals.length === 0 ? (
@@ -347,7 +353,7 @@ function ConfigRow({ row, label, children }: { readonly row: string; readonly la
 function RightMark({ language, label, granted }: { readonly language: InterfaceLanguage; readonly label: string; readonly granted: boolean }) {
   return (
     <li className="flex items-center gap-2 text-body font-semibold" style={{ color: granted ? INK : INK_2 }}>
-      <span aria-hidden="true" style={{ color: granted ? 'var(--ios-success-deep)' : 'var(--ios-error)' }}>
+      <span aria-hidden="true" style={{ color: granted ? 'var(--color-success)' : 'var(--color-error)' }}>
         {granted ? <Glyph name="check" size={16} /> : <Glyph name="x" size={16} />}
       </span>
       <span className={granted ? '' : 'line-through decoration-1'}>{label}</span>
@@ -374,14 +380,14 @@ export function ConfigurationCard({ language, link, policy }: { readonly languag
   return (
     <section aria-labelledby="link-configuration" data-share-link-configuration className={CARD_CLASS} style={SECTION_CARD_STYLE}>
       <div className="flex items-center justify-between gap-3">
-        <h2 id="link-configuration" className={TITLE_CLASS} style={{ color: BRAND_INK }}>
+        <h2 id="link-configuration" className={`${TITLE_CLASS} ${SECTION_BRAND_INK}`}>
           {translateInvite(language, 'linkDetail.config.title')}
         </h2>
         <a
           href="#link-edit"
           data-share-link-edit-anchor
-          className="grid place-items-center rounded-[10px] px-2 text-body font-bold focus-visible:outline-2"
-          style={{ minHeight: 44, color: BRAND_INK, outlineColor: 'var(--color-ios-brand)' }}
+          className={`grid place-items-center rounded-[10px] px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
         >
           {translateInvite(language, 'linkDetail.config.edit')}
         </a>

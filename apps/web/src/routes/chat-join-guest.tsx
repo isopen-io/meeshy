@@ -111,7 +111,7 @@ export function GuestForm({
           passerelle n'a rattaché à rien. Au-dessus du formulaire, jamais sous
           un champ deviné. */}
       {refusedField === null && refusalMessage !== null ? (
-        <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
+        <p role="alert" className="text-caption" style={{ color: 'var(--color-error)' }}>
           {refusalMessage}
         </p>
       ) : null}
@@ -255,7 +255,8 @@ export function GuestForm({
         className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           minHeight: 54,
-          background: 'linear-gradient(135deg, var(--ios-indigo-500), var(--ios-purple-500))',
+          backgroundColor: 'var(--ios-indigo-600)',
+          backgroundImage: 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, black))',
           outlineColor: 'var(--color-ios-brand)',
           opacity: disabled ? 0.6 : 1,
         }}

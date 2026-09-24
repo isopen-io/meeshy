@@ -59,7 +59,12 @@ export function LanguageShareBar({
           return (
             <li key={share.code} data-language-share={share.code} className="flex items-center gap-1.5">
               <span aria-hidden="true" className="block size-2 shrink-0 rounded-full" style={{ backgroundColor: segmentTint(index) }} />
-              {share.percent === null ? <span lang={share.code}>{name}</span> : <span>{compose(name, percent.format(share.percent / 100))}</span>}
+              {share.percent === null ? (
+                <span lang={share.code}>{name}</span>
+              ) : (
+                /* Le nom est ISOLÉ (U+2068 … U+2069) : « العربية » ne retourne pas son pourcentage dans une phrase française. */
+                <span>{compose(`\u2068${name}\u2069`, percent.format(share.percent / 100))}</span>
+              )}
             </li>
           );
         })}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
-import { RowIcon, SECTION_CARD_STYLE } from '@/components/grouped-section';
+import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { endonymOf } from '@/components/language-share-bar';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type MyShareLink, type ShareLinkPatch, type ShareLinkPolicy } from '@/lib/api/links';
 import type { ShareLinkUpdateOutcome } from '@/lib/api/link-actions';
@@ -85,8 +85,8 @@ function NumberRow({
           aria-invalid={invalid}
           {...(invalid ? { 'aria-describedby': `${id}-error` } : {})}
           onInput={(event) => onChange(event.currentTarget.valueAsNumber)}
-          className="w-24 bg-transparent text-end text-body font-bold outline-none"
-          style={{ minHeight: 44, color: 'var(--ios-indigo-600)' }}
+          className={`w-24 bg-transparent text-end text-body font-bold outline-none ${SECTION_BRAND_INK}`}
+          style={{ minHeight: 44 }}
         />
       </label>
       {invalid ? (
@@ -137,12 +137,11 @@ function LanguageChoices({
                 disabled={draft.allLanguages}
                 onClick={() => onToggle(code)}
                 lang={code}
-                className="rounded-chip px-3.5 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+                className={`rounded-chip px-3.5 text-caption font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${selected ? 'text-white' : SECTION_BRAND_INK}`}
                 style={{
                   minHeight: 44,
                   outlineColor: BRAND,
                   opacity: draft.allLanguages ? 0.5 : 1,
-                  color: selected ? 'white' : 'var(--ios-indigo-600)',
                   backgroundColor: selected ? 'var(--ios-indigo-600)' : 'color-mix(in srgb, var(--ios-indigo-500) 10%, var(--color-ios-card))',
                 }}
               >
@@ -201,7 +200,8 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
     if (outcome === 'failed') setDraft(before);
   }
 
-  const numberError = translateInvite(language, 'linkDetail.edit.number.invalid', { max: new Intl.NumberFormat(language).format(MAX_USES_CEILING) });
+  const format = new Intl.NumberFormat(language);
+  const numberError = translateInvite(language, 'linkDetail.edit.number.invalid', { max: format.format(MAX_USES_CEILING) });
 
   return (
     <section id="link-edit" aria-labelledby="link-edit-title" data-share-link-edit className="grid scroll-mt-4 gap-4 rounded-[24px] p-4 md:p-6" style={SECTION_CARD_STYLE}>
@@ -258,8 +258,8 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
               id="link-edit-expiration"
               value={draft.expiration}
               onChange={(event) => edit({ expiration: expirationOf(event.currentTarget.value) })}
-              className="max-w-[55%] rounded-chip bg-transparent text-body font-semibold outline-none"
-              style={{ minHeight: 44, color: 'var(--ios-indigo-600)' }}
+              className={`max-w-[55%] rounded-chip bg-transparent text-body font-semibold outline-none ${SECTION_BRAND_INK}`}
+              style={{ minHeight: 44 }}
             >
               {link.expiresAt === null ? null : (
                 <option value="keep">
@@ -278,7 +278,11 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           <RuleToggle
             id="limitUses"
             label={translateInvite(language, 'linkDetail.edit.maxUses')}
-            caption={translate(language, 'links.unlimited')}
+            caption={
+              draft.limitUses && Number.isFinite(draft.maxUses)
+                ? translate(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: format.format(draft.maxUses) })
+                : translate(language, 'links.unlimited')
+            }
             icon={<Glyph name="users" size={15} />}
             tint={SHARE_TINT}
             checked={draft.limitUses}
@@ -298,7 +302,11 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           <RuleToggle
             id="limitConcurrent"
             label={translateInvite(language, 'linkDetail.edit.maxConcurrent')}
-            caption={translate(language, 'links.unlimited')}
+            caption={
+              draft.limitConcurrent && Number.isFinite(draft.maxConcurrent)
+                ? translateInvite(language, 'linkDetail.config.concurrent.value', { count: format.format(draft.maxConcurrent) })
+                : translate(language, 'links.unlimited')
+            }
             icon={<Glyph name="users" size={15} />}
             tint="var(--ios-indigo-600)"
             checked={draft.limitConcurrent}

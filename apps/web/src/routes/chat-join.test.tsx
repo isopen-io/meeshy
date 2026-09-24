@@ -276,8 +276,8 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     expect(text(el.querySelector('[data-invite-figure="people"]'))).toContain('personnes');
     expect(text(el.querySelector('[data-invite-figure="people"] strong'))).toBe('248');
     expect(text(el.querySelector('[data-invite-figure="languages"]'))).toContain('langues parlées');
-    expect(text(el.querySelector('[data-language-share="fr"]'))).toBe('Français 75 %');
-    expect(text(el.querySelector('[data-language-share="es"]'))).toBe('Español 25 %');
+    expect(text(el.querySelector('[data-language-share="fr"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Français 75 %');
+    expect(text(el.querySelector('[data-language-share="es"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Español 25 %');
   });
 
   test('sans chiffres servis, la section ne s’affiche pas', async () => {
@@ -630,7 +630,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     const join = el.querySelector('[data-invite-join]');
     expect(join?.querySelector('[data-guest-form]')).toBeNull();
     expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
-    expect(join?.querySelector<HTMLElement>('[data-invite-sign-in]')?.style.background).toContain('linear-gradient');
+    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-white');
   });
 });
 

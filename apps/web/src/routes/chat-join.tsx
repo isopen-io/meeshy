@@ -38,6 +38,7 @@ import {
   INK,
   INK_2,
   INVITE_ACTION_BACKGROUND,
+  INVITE_ACTION_FLOOR,
   INVITE_OUTLINE_BUTTON,
   INVITE_OUTLINE_STYLE,
   InvitationFigures,
@@ -437,7 +438,7 @@ function JoinPanel({ language, title, children }: { readonly language: Interface
     <section
       aria-labelledby="invite-join-title"
       data-invite-join
-      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6"
+      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-[calc(var(--safe-bottom)+16px)] md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 94%, transparent)',
         borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
@@ -474,7 +475,7 @@ function JoinAction({
         disabled={disabled}
         aria-busy={joining}
         className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ minHeight: 54, background: INVITE_ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1, outlineColor: 'var(--color-ios-brand)' }}
+        style={{ minHeight: 54, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1, outlineColor: 'var(--color-ios-brand)' }}
       >
         {translateInvite(language, joining ? 'invite.join.joining' : 'invite.join.account')}
       </button>
@@ -535,7 +536,7 @@ function GuestExits({
               ? INVITE_OUTLINE_BUTTON
               : 'flex items-center justify-center rounded-[16px] px-3 text-body font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2'
           }
-          style={withSeparator ? INVITE_OUTLINE_STYLE : { minHeight: 48, background: INVITE_ACTION_BACKGROUND, outlineColor: 'var(--color-ios-brand)' }}
+          style={withSeparator ? INVITE_OUTLINE_STYLE : { minHeight: 48, backgroundColor: INVITE_ACTION_FLOOR, backgroundImage: INVITE_ACTION_BACKGROUND, outlineColor: 'var(--color-ios-brand)' }}
         >
           {translateInvite(language, 'invite.exits.signIn')}
         </Link>

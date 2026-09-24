@@ -75,7 +75,8 @@ const DEPLOIEMENT: LinkInvitation = {
       { code: 'ar', count: 17 },
     ],
   },
-  limits: { expiresAt: '2099-12-31T23:59:00.000Z', maxUses: 50, currentUses: 12 },
+  /* Six jours et quelques heures : « encore 7 jours » quel que soit le jour de la recette. */
+  limits: { expiresAt: new Date(Date.now() + 6.5 * 86_400_000).toISOString(), maxUses: 50, currentUses: 12 },
   readsHistory: false,
   guest: OPEN_TERMS,
 };

@@ -3,6 +3,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { Avatar } from '@/components/avatar';
 import { BrandMark } from '@/components/brand-mark';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { SECTION_BRAND_INK } from '@/components/grouped-section';
 import { LINKS_GLYPHS } from '@/components/glyphs-links';
 import { LanguageShareBar, endonymOf } from '@/components/language-share-bar';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -43,12 +44,14 @@ export const INVITE_CARD_STYLE = {
   backgroundColor: 'var(--color-ios-card)',
   border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
 } as const;
-export const INVITE_ACTION_BACKGROUND = 'linear-gradient(135deg, var(--ios-indigo-500), var(--ios-purple-500))';
-export const INVITE_OUTLINE_BUTTON =
-  'flex items-center justify-center gap-2 rounded-[14px] px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2';
+/** L'action primaire — assez sombre aux DEUX bouts pour tenir AA sous du blanc
+ * (`#fff` sur violet 600 pur : 4,2:1). `backgroundColor` porte la teinte la plus
+ * claire, celle que mesurent les gates (`contrast.mjs` ne lit que la couleur). */
+export const INVITE_ACTION_BACKGROUND = 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, black))';
+export const INVITE_ACTION_FLOOR = 'var(--ios-indigo-600)';
+export const INVITE_OUTLINE_BUTTON = `flex items-center justify-center gap-2 rounded-[14px] px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${SECTION_BRAND_INK}`;
 export const INVITE_OUTLINE_STYLE = {
   minHeight: 46,
-  color: 'var(--ios-indigo-600)',
   backgroundColor: 'var(--color-ios-card)',
   border: '1.5px solid color-mix(in srgb, var(--ios-indigo-400) 55%, transparent)',
   outlineColor: BRAND,
@@ -102,7 +105,7 @@ const plural = <K extends InviteCatalogKey>(count: number, one: K, other: K): K 
 export function InviteHeader({ language, next }: { readonly language: InterfaceLanguage; readonly next: string | null }) {
   return (
     <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-12 md:py-6" lang={language}>
-      <span className="flex items-center gap-2 text-brand font-extrabold" style={{ color: 'var(--ios-indigo-600)' }}>
+      <span className={`flex items-center gap-2 text-brand font-extrabold ${SECTION_BRAND_INK}`}>
         <span aria-hidden="true" className="grid size-8 place-items-center rounded-[10px] text-white" style={{ background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))' }}>
           <BrandMark size={20} lineWidth={2.6} />
         </span>
@@ -112,8 +115,8 @@ export function InviteHeader({ language, next }: { readonly language: InterfaceL
         <Link
           to="login"
           search={{ next }}
-          className="grid place-items-center rounded-[12px] px-2 text-body font-bold focus-visible:outline-2"
-          style={{ minHeight: 44, color: 'var(--ios-indigo-600)', outlineColor: BRAND }}
+          className={`grid place-items-center rounded-[12px] px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          style={{ minHeight: 44, outlineColor: BRAND }}
         >
           {translateInvite(language, 'invite.exits.signIn')}
         </Link>
@@ -152,6 +155,7 @@ export function InviterBlock({ language, invitation }: { readonly language: Inte
         {message === null ? null : (
           <blockquote
             data-invite-message
+            dir="auto"
             aria-label={inviter === null ? undefined : translateInvite(language, 'invite.inviter.message', { name: inviter.name })}
             className="rounded-[20px] rounded-ss-[6px] px-4 py-3.5 text-body leading-relaxed"
             style={{ backgroundColor: 'var(--color-ios-card)', color: INK, boxShadow: '0 6px 20px color-mix(in srgb, var(--ios-indigo-900) 10%, transparent)' }}
@@ -168,7 +172,7 @@ export function InviterBlock({ language, invitation }: { readonly language: Inte
 function GroupLogo({ language, title, avatar }: { readonly language: InterfaceLanguage; readonly title: string; readonly avatar: string | null }) {
   return (
     <span
-      className="grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-[22px] md:size-[88px] md:rounded-[26px]"
+      className="relative -mt-[34px] grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-[22px] md:-mt-10 md:size-[88px] md:rounded-[26px]"
       style={{
         border: '4px solid var(--color-ios-card)',
         background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))',
@@ -217,11 +221,13 @@ export function GroupCard({
       <div data-invite-banner={group.banner === null ? 'gradient' : 'image'} className="relative h-[132px] md:h-[150px]" style={{ background: BANNER_GRADIENT }}>
         {group.banner === null ? null : <img src={attachmentSrc(group.banner)} alt="" className="absolute inset-0 size-full object-cover" />}
       </div>
-      <div className="grid gap-3 px-5 pb-5 md:gap-3.5 md:px-7 md:pb-6">
-        <div className="-mt-[34px] flex items-end gap-3.5 md:-mt-10 md:gap-4">
+      {/* Le logo MORD sur la bannière ; le nom, lui, commence SOUS elle — un nom
+          long qui passe à la ligne ne remonte jamais sur l'image. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3 px-5 pb-5 md:gap-3.5 md:px-7 md:pb-6">
+        <div className="flex items-start gap-3.5 md:gap-4">
           <GroupLogo language={language} title={title} avatar={group.avatar} />
-          <div className="grid min-w-0 gap-0.5 pb-1">
-            <h1 id="chat-join-title" className="break-words text-section font-extrabold tracking-tight" style={{ color: INK }}>
+          <div className="grid min-w-0 gap-0.5 pt-2.5">
+            <h1 id="chat-join-title" dir="auto" className="break-words text-section font-extrabold tracking-tight" style={{ color: INK }}>
               {title}
             </h1>
             {meta === '' ? null : (
@@ -232,15 +238,15 @@ export function GroupCard({
           </div>
         </div>
         {group.description === null ? null : (
-          <p data-invite-description className="text-body leading-relaxed" style={{ color: INK }}>
+          <p data-invite-description dir="auto" className="text-body leading-relaxed" style={{ color: INK }}>
             {group.description}
           </p>
         )}
         <div className="grid gap-2.5 md:flex md:items-center">
           <p
             data-invite-url
-            className="flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 md:flex-1"
-            style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))', color: 'var(--ios-indigo-600)' }}
+            className={`flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 md:flex-1 ${SECTION_BRAND_INK}`}
+            style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))' }}
           >
             <span aria-hidden="true" className="shrink-0">
               <Glyph name="linkSimple" size={18} />
@@ -303,7 +309,7 @@ export function InvitationFigures({ language, invitation }: { readonly language:
       </ul>
       {shares.length === 0 ? null : (
         <div className="grid gap-3 rounded-[20px] p-4 md:p-5" style={INVITE_CARD_STYLE}>
-          <h2 className={SECTION_TITLE} style={{ color: 'var(--ios-indigo-600)' }}>
+          <h2 className={`${SECTION_TITLE} ${SECTION_BRAND_INK}`}>
             {translateInvite(language, 'invite.stats.spoken')}
           </h2>
           <LanguageShareBar language={language} shares={shares} compose={(name, percent) => translateInvite(language, 'invite.stats.share', { language: name, percent })} />
@@ -316,7 +322,7 @@ export function InvitationFigures({ language, invitation }: { readonly language:
 function RightRow({ language, right, granted }: { readonly language: InterfaceLanguage; readonly right: AnonymousRight; readonly granted: boolean }) {
   return (
     <li data-invite-right={right} data-granted={granted} className="flex items-center gap-2.5 text-body font-semibold" style={{ color: granted ? INK : INK_2 }}>
-      <span aria-hidden="true" className="shrink-0" style={{ color: granted ? 'var(--ios-success-deep)' : 'var(--ios-error)' }}>
+      <span aria-hidden="true" className="shrink-0" style={{ color: granted ? 'var(--color-success)' : 'var(--color-error)' }}>
         {granted ? <Glyph name="check" size={18} /> : <Glyph name="x" size={18} />}
       </span>
       <span className={granted ? '' : 'line-through decoration-1'}>{translateInvite(language, RIGHT_KEY[right])}</span>
@@ -359,7 +365,7 @@ export function RightsCard({ language, invitation, now }: { readonly language: I
     places === null ? translateInvite(language, 'invite.places.unlimited') : translateInvite(language, plural(places, 'invite.places.one', 'invite.places.other'), { count: format.format(places) });
   return (
     <section aria-labelledby="invite-rights" data-invite-rights className="grid gap-2.5 rounded-[20px] p-4 md:p-5" style={INVITE_CARD_STYLE}>
-      <h2 id="invite-rights" className={SECTION_TITLE} style={{ color: 'var(--ios-indigo-600)' }}>
+      <h2 id="invite-rights" className={`${SECTION_TITLE} ${SECTION_BRAND_INK}`}>
         {translateInvite(language, 'invite.rights.title')}
       </h2>
       <ul className="grid gap-2.5">
