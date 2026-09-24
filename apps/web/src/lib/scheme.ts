@@ -27,7 +27,22 @@ function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
+  syncBrowserBar(scheme);
   syncShellSystemBars(scheme);
+}
+
+/**
+ * LA BARRE DU NAVIGATEUR (#7776), jumelle web de la barre d'état de la coque.
+ * `index.html` pose une meta `theme-color` par schéma, gardée par
+ * `prefers-color-scheme` : laissée seule, la barre suit le SYSTÈME et se
+ * peint claire au-dessus d'une app réglée en sombre. Chaque meta porte son
+ * schéma (`data-scheme`) ; on active celle du schéma PEINT et on éteint
+ * l'autre, sans recopier ses couleurs ici.
+ */
+function syncBrowserBar(scheme: ColorScheme): void {
+  document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach((meta) => {
+    (meta as HTMLMetaElement).media = meta.getAttribute('data-scheme') === scheme ? 'all' : 'not all';
+  });
 }
 
 /**
@@ -106,6 +121,7 @@ export function setThemePreference(preference: ThemePreference): void {
  * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
+  syncBrowserBar(currentScheme());
   syncShellSystemBars(currentScheme());
   const query = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = (e: MediaQueryListEvent) => {
