@@ -317,8 +317,11 @@ function SaveProgressRing({
       aria-valuemin={0}
       aria-valuemax={100}
       {...value}
-      className="relative grid place-items-center"
-      style={{ width: RING_SIZE, height: RING_SIZE }}
+      className="relative grid place-items-center rounded-full"
+      /* LE MÊME DISQUE QUE SES VOISINS (`RAIL_DISC`, 44) — sans lui, l'anneau
+         se posait NU sur la photo : une piste blanche à 25 % sur un ciel clair
+         ne se lit pas, et la face « Enregistrer » changeait de silhouette. */
+      style={{ width: 44, height: 44, background: RAIL_DISC }}
     >
       <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
         <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={RING_STROKE} />
@@ -327,7 +330,7 @@ function SaveProgressRing({
       {appearance.sweeps ? (
         <svg
           data-story-save-sweep
-          className="absolute inset-0 animate-spin"
+          className="absolute animate-spin"
           width={RING_SIZE}
           height={RING_SIZE}
           viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}

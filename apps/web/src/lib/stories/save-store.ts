@@ -74,11 +74,16 @@ function update(storyId: string, controller: AbortController, next: (view: Story
  * Démarre un job — **IDEMPOTENT** (`guard jobs[storyId] == nil`, `:191`) :
  * un second appel pendant qu'un job tourne déjà rend `null`, jamais une
  * seconde poignée que personne n'annulerait.
+ *
+ * Le job naît INDÉTERMINÉ (`progress: null`) : tant que la réponse n'a pas
+ * dit sa longueur, rien ne permet d'afficher un pour-cent — un « 0 » figé
+ * pendant l'aller-retour se lisait « rien ne se passe » (mesuré à la
+ * capture, requête retenue).
  */
 export function start(storyId: string): StorySaveJobHandle | null {
   if (jobs.has(storyId)) return null;
   const controller = new AbortController();
-  jobs.set(storyId, { view: { progress: 0, cancellable: true }, controller });
+  jobs.set(storyId, { view: { progress: null, cancellable: true }, controller });
   notify();
   return {
     signal: controller.signal,

@@ -40,8 +40,6 @@ const VIEWERS_OF_ST_MIENNE: readonly PostViewerRow[] = [
   },
 ];
 
-export type FixtureInteractionsPostId = 'st-mienne' | (string & {});
-
 /**
  * `authorId` d'une story de fixtures — pour décider REFUSED vs NOT_FOUND
  * exactement comme la passerelle (`post.authorId !== userId ⇒ FORBIDDEN`,

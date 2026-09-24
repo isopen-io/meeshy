@@ -22,9 +22,9 @@ import { cancel, getState, start, subscribe } from './save-store';
  *     `generations` iOS) — une poignée périmée n'écrit plus rien.
  */
 describe('storySaveStore — une poignée par job, liée à SA génération', () => {
-  test('`start` crée un job à 0, annulable', () => {
+  test('`start` crée un job INDÉTERMINÉ (aucune longueur connue avant la réponse), annulable', () => {
     const job = start('st-1');
-    expect(getState('st-1')).toEqual({ progress: 0, cancellable: true });
+    expect(getState('st-1')).toEqual({ progress: null, cancellable: true });
     job?.finish();
   });
 
@@ -75,7 +75,7 @@ describe('storySaveStore — une poignée par job, liée à SA génération', ()
     const second = start('st-7');
     first?.report(0.9);
     first?.finish();
-    expect(getState('st-7')).toEqual({ progress: 0, cancellable: true });
+    expect(getState('st-7')).toEqual({ progress: null, cancellable: true });
     second?.finish();
     expect(getState('st-7')).toBeNull();
   });

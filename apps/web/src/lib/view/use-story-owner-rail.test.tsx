@@ -236,7 +236,7 @@ describe('useStoryOwnerRail — « Enregistrer » : un job, un anneau, une issue
     probe = mountProbe();
     probe.render(storyOf('st-a'));
     act(() => probe?.rail().handlers.save?.());
-    expect(probe.rail().saving).toEqual({ progress: 0, cancellable: true });
+    expect(probe.rail().saving).toEqual({ progress: null, cancellable: true });
     act(() => probe?.rail().cancelSave());
     await settle();
     expect(probe.announced).toEqual(['Export annulé']);
