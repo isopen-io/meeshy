@@ -18,10 +18,11 @@ import XCTest
 /// porte des miroirs `@State` alimentés par `.onReceive`, parce que le même
 /// abonnement « re-rendait CHAQUE carte du fil en continu ».
 ///
-/// **Le plein écran, lui, garde son observation** : il DESSINE la barre de
-/// progression, donc `currentTime` est exactement ce qu'il lui faut. Une
-/// garde qui interdirait l'observation partout confondrait un abonnement
-/// inutile avec un abonnement justifié.
+/// **Le plein écran suit la même loi.** Il ne DESSINE pas la barre de
+/// progression : `_FullscreenOverlayControls` le fait, et observe le moteur
+/// lui-même. Le renderer ne lit que `player` et `isMuted` — son abonnement
+/// réévaluait surface, poster, légende et gestes cinq fois par seconde pour
+/// rien. L'abonnement justifié est celui de la barre, pas celui de l'hôte.
 final class InlineVideoRendererScopedMirrorsSourceGuardTests: XCTestCase {
 
     private func renderersSource() throws -> String {
@@ -74,14 +75,34 @@ final class InlineVideoRendererScopedMirrorsSourceGuardTests: XCTestCase {
         }
     }
 
-    func test_theFullscreenRendererKeepsTheSubscriptionItNeeds() throws {
+    func test_theFullscreenRendererMirrorsWhatItDraws_andOnlyItsSeekBarObserves() throws {
         let code = try renderersSource()
-        guard let start = code.range(of: "internal struct _FullscreenRenderer") else {
+        guard let start = code.range(of: "internal struct _FullscreenRenderer"),
+              let end = code.range(of: "internal struct _VideoFrameModifier")
+        else {
             return XCTFail("Le renderer plein écran est introuvable : la garde ne mesure plus rien.")
         }
+        let fullscreen = code[start.lowerBound..<end.lowerBound]
+        XCTAssertFalse(
+            fullscreen.contains("@ObservedObject private var manager"),
+            "`_FullscreenRenderer` ne lit pas `currentTime` : l'observer réévaluait tout le plein écran à 5 Hz."
+        )
+        for field in ["player", "isMuted"] {
+            XCTAssertTrue(
+                fullscreen.contains(".onReceive(manager.$\(field))"),
+                "`_FullscreenRenderer` lit `\(field)` dans son body : sans miroir, la valeur se fige à sa naissance."
+            )
+        }
+        let controls = ComposerSourceGuard.stripComments(
+            try String(
+                contentsOf: ComposerSourceGuard.packageRoot
+                    .appendingPathComponent("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift"),
+                encoding: .utf8
+            )
+        )
         XCTAssertTrue(
-            code[start.lowerBound...].contains("@ObservedObject private var manager"),
-            "`_FullscreenRenderer` DOIT observer le moteur : il dessine la barre de progression, donc `currentTime` est précisément ce qu'il lui faut (#6226)."
+            controls.contains("@ObservedObject var manager: SharedAVPlayerManager"),
+            "La barre de lecture plein écran DESSINE `currentTime` : c'est elle qui observe le moteur."
         )
     }
 }
