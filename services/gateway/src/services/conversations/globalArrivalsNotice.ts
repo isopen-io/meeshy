@@ -49,11 +49,12 @@ const queues = new Map<string, Promise<unknown>>();
 function enqueue<T>(conversationId: string, task: () => Promise<T>): Promise<T> {
   const previous = queues.get(conversationId) ?? Promise.resolve();
   const next = previous.then(task, task);
-  const settled = next.catch(() => undefined);
-  queues.set(conversationId, settled);
-  void settled.then(() => {
-    if (queues.get(conversationId) === settled) queues.delete(conversationId);
-  });
+  const tail: Promise<unknown> = next
+    .then(() => undefined, () => undefined)
+    .finally(() => {
+      if (queues.get(conversationId) === tail) queues.delete(conversationId);
+    });
+  queues.set(conversationId, tail);
   return next;
 }
 
