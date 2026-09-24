@@ -31,7 +31,7 @@ const logo = (taille) => html`<span class="as-logo" style="width:${taille}px;hei
 
 // Géométrie en points CSS : la scène iPhone fait 440 × 956, l'iPad 1376 × 1032.
 const SCENES = {
-  iphone: { echelle: 0.82, deviceTop: 246 },
+  iphone: { echelle: 0.815, deviceTop: 252 },
   ipad: { echelle: 0.84, deviceTop: 214 },
 }
 
@@ -138,7 +138,7 @@ export const pagePoster = ({ lang }) => {
   const corps = html`<div class="as-poster" dir="${ctx.dir}" lang="${lang}" style="width:${largeur}px;height:${hauteur}px;--poster-k:${largeur / 440}">
     <div class="as-poster-ecran">${ecran('dm', ctx)}</div>
     <div class="as-spot" data-spot=".bubble.audio"></div>
-    <div class="as-poster-textes" data-fit>
+    <div class="as-poster-textes" data-fit data-au-dessus=".bubble.audio">
       <span class="avant">${typo(avant, lang)}</span>
       <span class="apres">${typo(apres, lang)}</span>
     </div>

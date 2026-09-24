@@ -64,10 +64,17 @@ function installer() {
     el.style.top = `${r.bottom + 26}px`
   }
 
+  const poserAuDessus = (el) => {
+    const c = scene().getBoundingClientRect()
+    const r = rel(scene().querySelector(el.dataset.auDessus).getBoundingClientRect(), c)
+    el.style.top = `${Math.max(12, r.top - el.offsetHeight - 26)}px`
+  }
+
   window.asMiseEnPage = () => {
     document.querySelectorAll('[data-anneau]').forEach(cerner)
     document.querySelectorAll('[data-loupe]').forEach(grossir)
     document.querySelectorAll('[data-fit]').forEach(ajuster)
+    document.querySelectorAll('[data-au-dessus]').forEach(poserAuDessus)
     document.querySelectorAll('[data-ancre]').forEach(ancrer)
     document.querySelectorAll('[data-spot]').forEach(projeter)
     return true

@@ -32,7 +32,7 @@
 
 /* Panorama : positionné en coordonnées de SÉQUENCE, décalé de la place de la capture. */
 .as-pano { position: absolute; top: 0; bottom: 0; left: var(--pano-x); z-index: -1; pointer-events: none; }
-[dir='rtl'] .as-pano { left: var(--pano-x); }
+[dir='rtl'] .as-pano { left: auto; right: var(--pano-x); }
 .as-halo { position: absolute; border-radius: 50%; display: block; }
 .as-halo.h { background: radial-gradient(circle, var(--halo), transparent 68%); }
 .as-halo.b { background: radial-gradient(circle, var(--halo-b), transparent 70%); }
@@ -44,15 +44,14 @@
 /* Tête : marque (capture 1), légende, rangée de surimpressions — posée juste au-dessus de l'appareil. */
 .as-head {
   position: absolute;
-  top: 40px;
-  bottom: calc(100% - var(--device-top) + 22px);
+  top: 26px;
+  bottom: calc(100% - var(--device-top) + 20px);
   inset-inline: 30px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
+  gap: 10px;
   padding-block: 8px;
-  overflow: hidden;
   z-index: 3;
 }
 .as-head > :first-child { margin-top: auto; }
@@ -64,7 +63,7 @@
 .as-caption {
   margin: 0;
   width: 100%;
-  font-size: 50px;
+  font-size: 49px;
   font-weight: 850;
   line-height: 1.02;
   letter-spacing: -1.5px;
@@ -77,10 +76,10 @@
 .as-canvas[lang='ar'] .as-caption { line-height: 1.28; font-weight: 800; }
 
 /* Rangées : drapeaux en pile, bonjours en bulles. */
-.as-rangee { flex: none; display: flex; align-items: center; flex-wrap: nowrap; max-width: 100%; overflow: hidden; padding: 4px 2px 8px; }
+.as-rangee { flex: none; display: flex; align-items: center; flex-wrap: nowrap; max-width: 100%; padding: 2px 2px 6px; }
 .as-flag {
-  width: 40px; height: 40px; border-radius: 50%; flex: none;
-  display: grid; place-items: center; font-size: 22px; line-height: 1;
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 19px; line-height: 1;
   background: #fff;
   box-shadow: 0 6px 16px color-mix(in srgb, var(--ios-indigo-950) 22%, transparent), 0 0 0 2.5px color-mix(in srgb, var(--ios-indigo-200) 60%, white);
 }
@@ -88,12 +87,12 @@
 .as-bonjours { gap: 8px; }
 .as-bonjour {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
-  padding: 7px 13px 7px 9px; border-radius: 18px 18px 18px 6px;
-  font-size: 15px; font-weight: 650; white-space: nowrap;
+  padding: 5px 11px 5px 8px; border-radius: 16px 16px 16px 5px;
+  font-size: 14px; font-weight: 650; white-space: nowrap;
   color: var(--ios-indigo-950); background: #fff;
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--ios-indigo-950) 22%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ios-indigo-950) 16%, transparent);
 }
-.as-bonjour[dir='rtl'] { padding: 7px 9px 7px 13px; }
+.as-bonjour[dir='rtl'] { padding: 5px 8px 5px 11px; }
 .as-bonjour[lang='ar'] { font-family: var(--kit-font-arabic); }
 .as-bonjour:nth-child(even) { background: color-mix(in srgb, var(--ios-indigo-100) 70%, white); }
 [dir='rtl'] .as-bonjour { border-radius: 18px 18px 6px 18px; }
@@ -140,7 +139,7 @@
 .as-poster-ecran > .ecran { transform: scale(var(--poster-k)); transform-origin: 0 0; }
 .as-spot {
   position: absolute; inset: 0; z-index: 2; pointer-events: none;
-  background: radial-gradient(ellipse var(--sw) var(--sh) at var(--sx) var(--sy), transparent 70%, color-mix(in srgb, #0f0c29 74%, transparent) 100%);
+  background: radial-gradient(ellipse var(--sw) var(--sh) at var(--sx) var(--sy), transparent 64%, color-mix(in srgb, #0f0c29 86%, transparent) 100%);
 }
 .as-poster-textes {
   position: absolute; z-index: 3; top: 150px; inset-inline: 22px;
