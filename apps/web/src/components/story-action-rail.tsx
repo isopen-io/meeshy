@@ -262,8 +262,7 @@ function RailButton({
  * montre.
  *
  * **NON ANNULABLE ⇒ PAS DE `<button>`** (D-88, loi 4 : jamais de contrôle
- * inerte) — l'anneau se pose alors dans une case muette de la même empreinte
- * (44×44) pour ne pas décaler ses voisins.
+ * inerte) — l'anneau reste seul dans sa case 44×44, sans rien à toucher.
  */
 const RING_SIZE = 32;
 const RING_STROKE = 3;
@@ -347,27 +346,28 @@ function SaveProgressRing({
     </span>
   );
 
-  if (!job.cancellable || onCancel === undefined) {
-    return (
-      <div className="grid place-items-center" style={{ width: 44, height: 44 }}>
-        {ring}
-      </div>
-    );
-  }
-
+  /* LE BOUTON D'ANNULATION EST LE VOISIN DE L'ANNEAU, PAS SON PARENT : les
+     enfants d'un `button` sont PRÉSENTATIONNELS (ARIA), et un `progressbar`
+     posé dedans perdait son rôle et sa valeur — iOS dit les deux
+     (`accessibilityLabel` + `accessibilityValue`, `:758-787`). Le bouton
+     couvre la case 44×44 ; l'anneau reste dans l'arbre avec sa valeur. */
+  const cancellable = job.cancellable && onCancel !== undefined;
   return (
-    <button
-      type="button"
-      data-story-save-cancel
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={onCancel}
-      aria-label={translate(language, 'story.save.cancel')}
-      className="pointer-events-auto grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ minWidth: 44, minHeight: 44, outlineColor: '#fff' }}
-    >
+    <div className="relative grid place-items-center" style={{ width: 44, height: 44 }}>
       {ring}
-    </button>
+      {cancellable ? (
+        <button
+          type="button"
+          data-story-save-cancel
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={onCancel}
+          aria-label={translate(language, 'story.save.cancel')}
+          className="pointer-events-auto absolute inset-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ outlineColor: '#fff' }}
+        />
+      ) : null}
+    </div>
   );
 }
 
