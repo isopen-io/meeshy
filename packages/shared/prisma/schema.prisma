@@ -247,6 +247,13 @@ model User {
   // Profile completion
   profileCompletionRate Int? @default(0)
 
+  /// Onboarding post-inscription (#7729, `@meeshy/shared/types/onboarding`).
+  /// Fin du parcours — faite, passée d'un bloc, ou close par le serveur après
+  /// 7 jours. `null` = pas fini ; jamais de booléen jumeau.
+  onboardingCompletedAt DateTime?
+  /// Les étapes VUES (faites ou passées), ids de `ONBOARDING_STEP_IDS`.
+  onboardingSteps       String[]  @default([])
+
   // Engagement — série de jours actifs (#5544,
   // docs/product/streaks-badges-modele.md § 5). Un état, pas un historique :
   // pas de collection à part.
