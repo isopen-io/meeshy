@@ -119,6 +119,22 @@ export function conversationEngagementAxis(conversation: {
 }
 
 /**
+ * La fenêtre de la garde anti-texte répété de Meeshy Global (#7740) : un texte
+ * identique à l'un des `take` derniers messages de moins de `windowMs` ne
+ * crédite pas `content.text_message`. Le message part quand même — la garde
+ * retient le POINT, jamais l'envoi.
+ */
+export const GLOBAL_REPEAT_WINDOW = { take: 50, windowMs: 10 * 60 * 1000 } as const;
+
+/**
+ * La forme comparée : casse, compatibilité Unicode, ponctuation et espaces
+ * écrasés. Les emoji restent : « 👋 » et « 👋👋 » ne sont pas le même texte.
+ */
+export function normalizeRepeatableText(text: string): string {
+  return text.normalize('NFKC').toLowerCase().replace(/[\p{P}\s]+/gu, ' ').trim();
+}
+
+/**
  * La poussée d'un message au translator, sous la forme que le service attend.
  *
  * Extraite parce qu'elle a DEUX appelants : les effets post-commit ci-dessous,
@@ -206,7 +222,7 @@ export function queueMessageTranslation(params: {
  *   région-taggé y retombe silencieusement sur l'anglais.
  */
 export function runMessagePostSaveEffects(params: {
-  prisma: Pick<PrismaClient, 'conversation'>;
+  prisma: Pick<PrismaClient, 'conversation' | 'message'>;
   translationService: PostSaveTranslationQueue | null | undefined;
   /**
    * `undefined`/`null` désactive l'effet — même discipline que
@@ -290,14 +306,22 @@ export function runMessagePostSaveEffects(params: {
   // utilisateur ANONYME n'a pas de ligne `EngagementCounter` possible
   // (`userId` y est un `User.id` requis) : la garde évite même la lecture
   // de la conversation quand elle ne peut mener nulle part.
+  // UNE lecture de la conversation, partagée par les deux axes qui en ont
+  // besoin — mémoïsée, et jamais faite pour un expéditeur anonyme.
+  let conversationRead: Promise<{ type: string; communityId: string | null } | null> | null = null;
+  const readConversation = () => {
+    conversationRead ??= prisma.conversation.findUnique({
+      where: { id: message.conversationId },
+      select: { type: true, communityId: true },
+    });
+    return conversationRead;
+  };
+
   if (engagementService && message.senderUserId) {
     const senderUserId = message.senderUserId;
     void Promise.resolve()
       .then(async () => {
-        const conversation = await prisma.conversation.findUnique({
-          where: { id: message.conversationId },
-          select: { type: true, communityId: true },
-        });
+        const conversation = await readConversation();
         if (!conversation) return;
         await engagementService.recordConversationActivity(
           senderUserId,
@@ -321,8 +345,15 @@ export function runMessagePostSaveEffects(params: {
       (mimeType) => resolveAttachmentType(mimeType) === 'audio'
     );
     const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
+    const normalized = normalizeRepeatableText(message.content);
     void Promise.resolve()
-      .then(() => engagementService.recordActivity(senderUserId, contentAxisKey))
+      .then(async () => {
+        if (contentAxisKey === 'content.text_message' && normalized.length > 0) {
+          const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
+          if (repeated) return;
+        }
+        await engagementService.recordActivity(senderUserId, contentAxisKey);
+      })
       .catch(report('contentEngagement'));
   }
 
@@ -338,4 +369,31 @@ export function runMessagePostSaveEffects(params: {
       .then(() => engagementService.recordActivity(senderUserId, 'tool.sticker'))
       .catch(report('stickerEngagement'));
   }
+}
+
+/**
+ * Le texte répète-t-il l'un des derniers messages de Meeshy Global (#7740) ?
+ * Hors Global, jamais : la lecture de l'historique n'a lieu que là.
+ */
+async function isRepeatedGlobalText(params: {
+  prisma: Pick<PrismaClient, 'message'>;
+  readConversation: () => Promise<{ type: string } | null>;
+  message: PostSaveMessage;
+  normalized: string;
+}): Promise<boolean> {
+  const { prisma, readConversation, message, normalized } = params;
+  const conversation = await readConversation();
+  if (conversation?.type !== 'global') return false;
+  const recent = await prisma.message.findMany({
+    where: {
+      conversationId: message.conversationId,
+      id: { not: message.id },
+      deletedAt: null,
+      createdAt: { gte: new Date(Date.now() - GLOBAL_REPEAT_WINDOW.windowMs) },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: GLOBAL_REPEAT_WINDOW.take,
+    select: { content: true },
+  });
+  return recent.some((row) => normalizeRepeatableText(row.content) === normalized);
 }
