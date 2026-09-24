@@ -208,6 +208,8 @@ export function accountIdentityBlockText(identite: IdentiteDuCompte, language?: 
  * `PasswordSettings`, jusque-là écrit et monté nulle part.
  *
  * **À la bascule vers `apps/web-v2`, ces deux ancres doivent exister là-bas.**
+ * La bascule est faite et le legacy a quitté le dépôt (#7668) : les ancres
+ * restent à servir par le web actuel — suivi #7720.
  * Mesuré le 2026-09-14 : le `/settings` de la v2 n'a ni onglets par fragment
  * ni section de mot de passe. Un lien d'e-mail qui atterrit sur une page qui
  * ne parle pas de ce qu'il promet est un contrôle qui ment — et il ment dans

@@ -79,7 +79,7 @@ export interface MagicLinkRequest {
 /**
  * `returnUrl` clampé à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
  * chemin protocole-relatif (#6742) — même doctrine que le web
- * (`apps/web-v2/src/lib/view/magic-link.ts:safeReturnPath`, la garde qui lit
+ * (`apps/web/src/lib/view/magic-link.ts:safeReturnPath`, la garde qui lit
  * `returnUrl` en sortie du lien de digest, `jobs/notification-digest.ts`).
  * Une valeur suspecte est ABSENTE du lien envoyé, jamais recopiée telle
  * quelle : la valeur vient du CLIENT et n'est jamais crue avant d'être

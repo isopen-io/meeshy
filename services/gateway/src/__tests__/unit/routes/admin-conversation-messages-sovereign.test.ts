@@ -307,7 +307,7 @@ describe('GET /admin/conversations/:id/messages — le rang', () => {
 describe('GET /admin/conversations/:id/messages — la forme SERVIE', () => {
   it('sert `senderId` au PREMIER NIVEAU, résolu en `User.id` — sans lui le regroupement du fil casse', async () => {
     const ligne = await premiereLigne([messageFixture()]);
-    // `continues()` (apps/web-v2/src/lib/grouping.ts) compare `senderId` : en
+    // `continues()` (apps/web/src/lib/grouping.ts) compare `senderId` : en
     // base c'est un `Participant.id`, que les clients comparent à un `User.id`.
     expect(ligne.senderId).toBe('user-1');
     expect(ligne.senderParticipantId).toBe('participant-1');

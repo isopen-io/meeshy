@@ -17,7 +17,7 @@ import Foundation
 /// `broadcastReadStatus.getLatestMessageSummary`) ne le pose pas, et le
 /// résumé décrit alors le DERNIER message non supprimé de la conversation —
 /// même repli que documenté côté web (`applyReadStatusUpdated`,
-/// `apps/web-v2/src/lib/api/realtime-apply.ts`).
+/// `apps/web/src/lib/api/realtime-apply.ts`).
 ///
 /// `readByAllAt` (#7347, G-5) — l'instant où le DERNIER destinataire actif a
 /// lu CE message, `nil` tant qu'il en manque un. Même moteur que le REST

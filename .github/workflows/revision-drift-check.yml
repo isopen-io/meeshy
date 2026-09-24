@@ -64,12 +64,15 @@ jobs:
           # aurait laissé passer exactement l'incident qui a ouvert cette
           # issue : `gateway-staging` recréé et à jour pendant que
           # `frontend-staging` restait périmé, sans qu'aucun gate ne rougisse.
-          # Pas de pendant « production » : `apps/web-v2` n'y est pas encore
-          # servi (legacy `apps/web` seul, hors périmètre de ce gate — #5609).
+          # Pas encore de pendant « production » : ce commentaire l'expliquait
+          # par le legacy, qui servait meeshy.me (#5609). Ce n'est plus vrai
+          # depuis le 2026-09-15 — `apps/web` (ex `apps/web-v2`) y est servi —
+          # et le legacy a quitté le dépôt (#7668) : l'entrée manquante est
+          # désormais un suivi (#7718), pas un choix.
           - name: frontend-staging
             url: https://staging.meeshy.me/build-info.json
             ref: origin/dev
-            paths: 'apps/web-v2 packages/design-tokens packages/shared'
+            paths: 'apps/web packages/design-tokens packages/shared'
     steps:
       - name: Checkout (historique complet — requis par git merge-base/rev-list)
         uses: actions/checkout@v7

@@ -731,7 +731,7 @@ public struct TranscriptionFailedEvent: Codable, Sendable {
 /// I3 (#7349) : iOS ne l'écoutait pas du tout (vérifié : aucune occurrence
 /// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que web-v2
 /// l'utilise déjà pour invalider ses listes de messages
-/// (`apps/web-v2/src/lib/api/socket.ts`).
+/// (`apps/web/src/lib/api/socket.ts`).
 public struct PendingMessagesDeliveredEvent: Decodable, Sendable {
     public let count: Int
     public let conversationIds: [String]

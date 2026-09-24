@@ -1222,7 +1222,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // current user was just replayed. iOS had no listener at all (verified:
     // no occurrence anywhere under apps/ios or packages/MeeshySDK before this
     // lot) — web-v2 already reacts to it by resyncing the named conversations
-    // (`apps/web-v2/src/lib/api/socket.ts`). The handler mirrors the existing
+    // (`apps/web/src/lib/api/socket.ts`). The handler mirrors the existing
     // reconnect/foreground resync path (`triggerSyncIfNeeded` →
     // `delegate.syncMissedMessages()`), scoped to the currently open
     // conversation.

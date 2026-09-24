@@ -90,15 +90,13 @@ const SITES: readonly string[] = [
   // la contre-épreuve « gouverné, pas muet » — exactement ce qu'elle existe
   // pour attraper : un site qui devient conforme PAR DISPARITION.
   'services/gateway/src/routes/users/profile-credentials.ts',
-  'apps/web/components/auth/register-form-wizard.tsx',
-  'apps/web/components/auth/wizard-steps/SecurityStep.tsx',
-  'apps/web/components/auth/PasswordRequirementsChecklist.tsx',
-  // `apps/web/components/settings/ProfileSettings.tsx` a été SUPPRIMÉ (#4189) :
-  // huit de ses appels visaient des routes inexistantes, et son seul
-  // importateur était son propre `.example.tsx`, lui-même importé nulle part.
-  // Le formulaire monté par `app/settings/page.tsx` est `user-settings.tsx`,
-  // dont l'homonymie a longtemps fait croire au contraire.
+  // Les trois sites du legacy `apps/web` (assistant d'inscription, étape de
+  // sécurité, liste d'exigences) sont partis avec lui (#7668). L'application
+  // qui a pris son chemin ne porte AUCUN littéral : elle LIT la borne dans le
+  // schéma partagé — gardé par le dernier bloc de ce fichier.
 ];
+
+const WEB_SIGNUP_FORM = 'apps/web/src/lib/signup-form.ts';
 
 describe('longueur minimale du mot de passe — une règle, pas onze', () => {
   it.each(SITES)('%s n’impose aucune autre longueur que la constante', (path) => {
@@ -119,6 +117,17 @@ describe('longueur minimale du mot de passe — une règle, pas onze', () => {
       source.includes('PASSWORD_MIN_LENGTH') || passwordLengthLiterals(source).length > 0;
 
     expect(governed).toBe(true);
+  });
+});
+
+describe('le web lit la borne dans le schéma partagé, sans la recopier', () => {
+  it(`${WEB_SIGNUP_FORM} dérive sa borne de registerRequestSchema`, () => {
+    const source = read(WEB_SIGNUP_FORM);
+
+    expect(source).toMatch(
+      /PASSWORD_MIN\s*=\s*registerRequestSchema\.properties\.password\.minLength/
+    );
+    expect(passwordLengthLiterals(source)).toEqual([]);
   });
 });
 

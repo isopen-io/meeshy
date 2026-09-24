@@ -792,7 +792,7 @@ export function registerMessagesListRoute(
         // `offset + resultCount < total`. `cursorPagination.hasMore`, lui,
         // DEVINAIT : « la page est pleine, donc il en reste ». Une seule charge
         // portait donc deux `hasMore` contradictoires, et le client lit celui-ci
-        // (`apps/web-v2/src/lib/api/messages.ts:50` → `hasOlder`, qui libelle
+        // (`apps/web/src/lib/api/messages.ts:50` → `hasOlder`, qui libelle
         // « Sur les N derniers messages » du Résumé Vivant).
         //
         // Les deux règles ne divergent qu'à un seul rang : une pile de

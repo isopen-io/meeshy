@@ -10,7 +10,7 @@
  * iOS et Android n'ont pas à le lire : un push de révocation retire d'abord la
  * bannière d'avant, puis le push nominal affiche celle d'après. Le web ne
  * reçoit pas la révocation (`NOTIFICATION_REVOCATION_PUSH_PLATFORMS`) ; son
- * service worker (`apps/web-v2/public/sw-push.js`, qui en porte le JUMEAU
+ * service worker (`apps/web/public/sw-push.js`, qui en porte le JUMEAU
  * faute de pouvoir importer ce module) lit ce champ pour REMPLACER la bannière
  * encore affichée de cette notification, et pour n'en lever aucune quand elle
  * ne l'est plus.
