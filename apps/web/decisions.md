@@ -1,7 +1,9 @@
-# apps/web-v2 — décisions
+# apps/web — décisions
 
 Les choix d'architecture et de produit de la v4 web, avec leur raison et leur
 date. Convention du dépôt : chaque répertoire actif tient son `decisions.md`.
+
+**Nom et chemins (2026-09-24, #7668).** Ce registre est celui de l'application née `apps/web-v4`, renommée `apps/web-v3` (2026-09-07) puis `apps/web-v2` (2026-09-10, D-35), et qui porte depuis le 2026-09-24 le chemin `apps/web` et le paquet `@meeshy/web` — la version CONTINUE (2.0.11), elle ne repart pas de zéro. Le legacy Next.js qui tenait ce chemin a quitté le dépôt le même jour ; il se relit, et se restaure, depuis le tag `legacy-web-final` (`git show legacy-web-final:<chemin>`). **Les entrées sont DATÉES et ne se réécrivent pas** : avant le 2026-09-24, `apps/web-v2` / `web-v2` y désigne CETTE application et `apps/web` le legacy — ses chemins sont cités ici sous la forme `legacy-web-final:apps/web/…`.
 
 **Ce fichier ne pilote rien** — l'état d'une tâche vit dans son issue. Il
 répond à « pourquoi c'est comme ça », pas à « où on en est ».
@@ -68,7 +70,7 @@ produits vivants sur un domaine** — moins grave qu'un lien perdu, plus
 difficile à diagnostiquer. Le point se rouvre au décommissionnement (#5496).
 
 Vérifié depuis : `/chat/:id` du legacy **est déjà** l'adresse d'un lien de
-partage (`apps/web/app/chat/[id]/page.tsx:21` lit un `linkId`). Les deux sont
+partage (`legacy-web-final:apps/web/app/chat/[id]/page.tsx:21` lit un `linkId`). Les deux sont
 la même route ; `/chat/*` passe en bloc à la v4.
 
 ## D-6 · `/c/` ne révèle rien d'une conversation dont on n'est pas membre — 2026-09-07 (#5560)
@@ -337,7 +339,7 @@ C'est le cas où une WebView Android d'entrée de gamme lâche (#5446), et la
 charte du dépôt classe une lenteur comme un **bug**, pas comme une dette.
 
 **Ce qui est réutilisé.** `@tanstack/react-virtual`, la bibliothèque que le
-legacy emploie déjà (`apps/web/components/conversations/hooks/useVirtualizedList.ts`).
+legacy emploie déjà (`legacy-web-final:apps/web/components/conversations/hooks/useVirtualizedList.ts`).
 Ce hook-là n'est PAS repris : c'est un réglage de 37 lignes, pas une loi — le
 copier aurait fait une jumelle sans rien partager d'utile.
 
@@ -665,7 +667,7 @@ configurations — rayon 18 uniforme, `BubbleBackground.swift:20-23` — ce que
 la capture drapeaux éteints montrait comme « queue » était un texte stylé,
 pas la peau de bulle — le run `wf_81ad007f-ceb` l'a fait, et son
 propre rapport l'écrivait (« preuve vivante que le drapeau iOS est désactivé »).
-Le dossier `apps/web-v2/targets/` (captures clair/sombre, arbres
+Le dossier `apps/web/targets/` (ex `apps/web-v2/targets/` ; captures clair/sombre, arbres
 d'accessibilité, analyses par vue avec tableau iOS → web-v2) est la source de
 vérité des phases Cadrer, Concevoir et Spécifier ; il PRIME sur toute
 spécification antérieure.
@@ -723,7 +725,7 @@ d'éligibilité n'est pas `activeParticipantCount` (que la passerelle sert
 (`ConversationView.swift:569`) et que web-v2 affiche déjà — une ligne dans
 `decision.ts`. Aucun endpoint : c'est le mode le plus compatible avec le
 précache, et le seul accordé aux invités. Une peau React complète existe
-dans le legacy (`apps/web/components/conversations/riviere/`), jamais montée :
+dans le legacy (`legacy-web-final:apps/web/components/conversations/riviere/`), jamais montée :
 elle se PORTE (Preact, jetons dérivés), elle ne s'importe pas. La condition
 unique est **D-15** : la peau legacy monte toutes les bulles et mesure
 chacune ; le tracé doit être virtualisé comme iOS le fait
@@ -2106,7 +2108,7 @@ n'affirme rien qu'il ne tienne pas.
 
 ## D-48 · Une publication se partage sous son adresse CANONIQUE, dans le geste ; le partage est compté après coup, et le détail attend le budget de première peinture — 2026-09-13 (#6278, #6279)
 
-**L'adresse partagée est `https://meeshy.me/feeds/post/<id>`** (`lib/feed/share-url.ts`) — la forme que les deux autres clients reconnaissent déjà : le repli de partage d'iOS (`FeedView.swift:22-29`), revendiquée en lien universel par l'app (`DeepLinkRouter.swift:106`), servie par le legacy en production (`apps/web/app/feeds/post/[postId]`). Origine FIXE, jamais `location.origin` : un lien partagé depuis staging doit s'ouvrir chez son destinataire, pas sur un environnement de recette.
+**L'adresse partagée est `https://meeshy.me/feeds/post/<id>`** (`lib/feed/share-url.ts`) — la forme que les deux autres clients reconnaissent déjà : le repli de partage d'iOS (`FeedView.swift:22-29`), revendiquée en lien universel par l'app (`DeepLinkRouter.swift:106`), servie par le legacy en production (`legacy-web-final:apps/web/app/feeds/post/[postId]`). Origine FIXE, jamais `location.origin` : un lien partagé depuis staging doit s'ouvrir chez son destinataire, pas sur un environnement de recette.
 
 **Pourquoi pas le lien SUIVI qu'iOS demande d'abord** (`POST /posts/:id/share {generateLink:true}` → `shortUrl` `/l/<token>`) : il faut l'ATTENDRE avant d'ouvrir la feuille, et `navigator.share` n'ouvre que pendant l'activation du geste. Une requête réseau entre le tap et la feuille la consomme — Safari rend `NotAllowedError`, et le presse-papier, soumis à la même règle, échoue avec. Le geste le plus fréquent du web (ouvrir la feuille) aurait donc raté précisément là où il compte, le mobile. **Écart assumé avec iOS : l'attribution par lien suivi reste à l'app.** Corollaire mesuré au passage : le `shortUrl` émis sur staging vise `FRONTEND_URL/l/<token>`, une adresse que le chantier ne sert pas — elle n'est de toute façon pas atteignable ici.
 
@@ -2872,9 +2874,9 @@ composite vert.
 
 **Signalement porteur.** « Actuellement les conversations direct ont pour titre X & Y au lieu d'avoir le display name de l'interlocuteur (cette erreur est sur iOS aussi). »
 
-**Aucune concaténation `&` n'existe dans le dépôt** — balayage de `packages/`, `services/gateway/src`, `apps/web-v2/src`, `apps/web/`, `apps/ios`, `packages/MeeshySDK`, `apps/android`. `generateDefaultConversationTitle` est juste. Le titre est **stocké**, et les clients l'affichent fidèlement.
+**Aucune concaténation `&` n'existe dans le dépôt** — balayage de `packages/`, `services/gateway/src`, `apps/web-v2/src`, `legacy-web-final:apps/web/`, `apps/ios`, `packages/MeeshySDK`, `apps/android`. `generateDefaultConversationTitle` est juste. Le titre est **stocké**, et les clients l'affichent fidèlement.
 
-**La cause est le LEGACY** : `apps/web/components/conversations/create-conversation-modal.tsx:102-130` composait un titre CÔTÉ CLIENT et l'envoyait — chaîne `autoGeneratedTitles.betweenTwoUsers`, soit « {user1} et {user2} » (fr), « {user1} and {user2} » (en), « {user1} y {user2} » (es), « {user1} e {user2} » (pt). La v2 n'en écrit aucun (`createDirectConversation` poste `{ type, participantIds }`). Le legacy étant décommissionné (#6702), le stock existant demeure mais ne grossit plus.
+**La cause est le LEGACY** : `legacy-web-final:apps/web/components/conversations/create-conversation-modal.tsx:102-130` composait un titre CÔTÉ CLIENT et l'envoyait — chaîne `autoGeneratedTitles.betweenTwoUsers`, soit « {user1} et {user2} » (fr), « {user1} and {user2} » (en), « {user1} y {user2} » (es), « {user1} e {user2} » (pt). La v2 n'en écrit aucun (`createDirectConversation` poste `{ type, participantIds }`). Le legacy étant décommissionné (#6702), le stock existant demeure mais ne grossit plus.
 
 **La précédence dépend désormais du TYPE.** Un GROUPE a un titre propre ; un DIRECT n'en a pas — il porte le nom de l'autre. `titleOf` lit donc, pour un direct : nom du pair, puis titre stocké en dernier recours ; pour un groupe : titre stocké, puis nom d'un membre servi. `customName` (renommage local du lecteur) prime toujours sur les deux, `identifier` ferme la marche. Le doc-comment d'origine affirmait déjà « elle porte le nom de l'autre » ; la règle ne le faisait pas.
 
@@ -3019,7 +3021,7 @@ Le correctif déplace la loi vers son SITE UNIQUE : `SceneCanvas` (`scene-player
 
 ## D-82 · Une version neuve ATTEND qu'on la demande : `registerType: 'prompt'`, l'application inscrit son worker, et la purge NOMME ce qu'elle efface — 2026-09-17 (#6936)
 
-**Le worker neuf n'active plus rien tout seul.** `VitePWA` passait `registerType: 'autoUpdate'`, ce qui posait `skipWaiting: true` + `clientsClaim: true` (`vite-plugin-pwa/dist/index.js:874-877`) : un déploiement activait le worker neuf EN SILENCE sous une page qui continuait de faire tourner l'ancien JavaScript, et cette activation retirait du précache les chunks de l'ancienne version — un écran chargé à la demande pouvait alors ne plus se charger, sans que le lecteur ait jamais appris qu'une version existait. En `prompt`, le worker neuf reste EN ATTENTE, la page l'annonce et c'est le clic qui lui envoie `SKIP_WAITING` — le message que le modèle de Workbox câble précisément quand `skipWaiting` est faux, et l'API que le legacy utilisait déjà (`apps/web/public/sw.js:233-238`). `clientsClaim` reste VRAI : sans lui, la première visite n'est contrôlée par personne, ce que `check-institutional.mjs` exige.
+**Le worker neuf n'active plus rien tout seul.** `VitePWA` passait `registerType: 'autoUpdate'`, ce qui posait `skipWaiting: true` + `clientsClaim: true` (`vite-plugin-pwa/dist/index.js:874-877`) : un déploiement activait le worker neuf EN SILENCE sous une page qui continuait de faire tourner l'ancien JavaScript, et cette activation retirait du précache les chunks de l'ancienne version — un écran chargé à la demande pouvait alors ne plus se charger, sans que le lecteur ait jamais appris qu'une version existait. En `prompt`, le worker neuf reste EN ATTENTE, la page l'annonce et c'est le clic qui lui envoie `SKIP_WAITING` — le message que le modèle de Workbox câble précisément quand `skipWaiting` est faux, et l'API que le legacy utilisait déjà (`legacy-web-final:apps/web/public/sw.js:233-238`). `clientsClaim` reste VRAI : sans lui, la première visite n'est contrôlée par personne, ce que `check-institutional.mjs` exige.
 
 **L'application inscrit son worker, `registerSW.js` disparaît.** `injectRegister: false` : le script injecté n'inscrivait que le worker, sans détection ni annonce. L'inscription vit dans `main.tsx` (sur le `load`, après la première peinture, hors coque et hors développement) et porte les trois déclencheurs de vérification du legacy — démarrage, retour au premier plan (`focus` ET `visibilitychange`), battement horaire qui ne part jamais d'un onglet caché. `nginx.conf` perd l'en-tête d'un fichier qui n'existe plus.
 
@@ -3139,9 +3141,11 @@ Les deux sont à relever, pas à corriger ici : un lot de rail qui « réparerai
 
 **Depuis #4850, un `textStyle` ne choisit QU'UNE POLICE** — ni couleur, ni fond, ni contour, ni lueur. Et seize des dix-huit familles de `StoryTextStyle.swift` nomment une police **embarquée dans l'app iOS** (Zapfino, Papyrus, Noteworthy, SnellRoundhand…). Les reproduire sur le web veut dire charger des WOFF2, et le poids de première peinture est déjà au-dessus de son plafond. **Ce lot ne télécharge aucun octet de police** : cinq familles sont servies parce qu'elles n'en exigent aucune — `bold` et `neon` (les DEUX qu'iOS rend déjà sur la police système, `fontName == nil`), `classic` et `italic` (Georgia), `typewriter` (Courier). Les treize autres attendent leur budget, une issue de suivi.
 
-**Ce que cet arbitrage n'a rien coûté.** L'axe qui porte tout le visuel — `textEffect`, vingt-cinq valeurs — est une **table d'ombres en `em`**, donc du CSS pur : `lib/canvas/text-effect.ts` en est la copie exacte du legacy `apps/web/lib/story-text-effect.ts`. S'y ajoutent à coût nul la couleur (la palette de quatorze d'iOS), la graisse, l'alignement, la pastille, le cadre et le contour des glyphes. **Le vocabulaire visuel d'iOS est donc servi presque entier ; c'est la TYPOGRAPHIE, et elle seule, qui attend.**
+**Ce que cet arbitrage n'a rien coûté.** L'axe qui porte tout le visuel — `textEffect`, vingt-cinq valeurs — est une **table d'ombres en `em`**, donc du CSS pur : `lib/canvas/text-effect.ts` en est la copie exacte du legacy `legacy-web-final:apps/web/lib/story-text-effect.ts`. S'y ajoutent à coût nul la couleur (la palette de quatorze d'iOS), la graisse, l'alignement, la pastille, le cadre et le contour des glyphes. **Le vocabulaire visuel d'iOS est donc servi presque entier ; c'est la TYPOGRAPHIE, et elle seule, qui attend.**
 
 > **La table est le QUATRIÈME miroir** (iOS `StoryTextEffect.swift`, Android `StoryTextEffect.kt`, `apps/web`, et celui-ci). Le mutualiser demanderait de toucher le legacy gelé ; il disparaîtra avec lui. Tant que les deux coexistent, toute évolution touche les quatre.
+>
+> **Le legacy a disparu le 2026-09-24 (#7668)** : la table n'a plus que TROIS miroirs — iOS, Android (gelé, sa divergence n'est plus un défaut) et `lib/canvas/text-effect.ts`. Toute évolution touche les deux vivants.
 
 ### Un style ÉCRIT doit être PEINT — sinon il est pire qu'absent
 
