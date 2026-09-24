@@ -70,11 +70,22 @@ function installer() {
     el.style.top = `${Math.max(12, r.top - el.offsetHeight - 26)}px`
   }
 
+  // Une surimpression posée sur l'écran efface les bulles qu'elle recouvrirait à moitié :
+  // une affiche ne se lit pas à travers un texte tronqué.
+  const degager = (el) => {
+    const t = el.getBoundingClientRect()
+    const croise = (b) => b.left < t.right && t.left < b.right && b.top < t.bottom && t.top < b.bottom
+    scene().querySelectorAll(el.dataset.degager).forEach((b) => {
+      if (croise(b.getBoundingClientRect())) b.style.visibility = 'hidden'
+    })
+  }
+
   window.asMiseEnPage = () => {
     document.querySelectorAll('[data-anneau]').forEach(cerner)
     document.querySelectorAll('[data-loupe]').forEach(grossir)
     document.querySelectorAll('[data-fit]').forEach(ajuster)
     document.querySelectorAll('[data-au-dessus]').forEach(poserAuDessus)
+    document.querySelectorAll('[data-degager]').forEach(degager)
     document.querySelectorAll('[data-ancre]').forEach(ancrer)
     document.querySelectorAll('[data-spot]').forEach(projeter)
     return true

@@ -125,3 +125,13 @@
 .inv-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 15px; }
 .no-acc { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; color: var(--ios-purple-600); background: color-mix(in srgb, var(--ios-purple-500) 14%, transparent); }
 .inv-row .flag { margin-inline-start: auto; font-size: 18px; }
+
+/* Grille des badges (AchievementBadgeView) — iPhone (kit social) et panneau Progression iPad. */
+.badge-grille { display: grid; gap: 12px; }
+.badge-carte { padding: 16px 6px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; opacity: 0.7; background: linear-gradient(160deg, color-mix(in srgb, var(--b) 12%, var(--kit-bg-2)), var(--kit-bg-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kit-ink) 8%, transparent); }
+.badge-carte.obtenu { opacity: 1; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b) 30%, transparent); }
+.badge-anneau { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--b) var(--arc), color-mix(in srgb, var(--kit-ink) 12%, transparent) 0); }
+.badge-anneau span { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: var(--b); background: var(--kit-bg-2); }
+.badge-nom { font-size: 11px; font-weight: 800; color: var(--b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.badge-carte:not(.obtenu) .badge-nom { color: var(--kit-muted); }
+.badge-compte { font-family: var(--kit-font-rounded); font-size: 9.5px; font-weight: 600; color: var(--kit-muted); }

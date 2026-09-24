@@ -11,7 +11,7 @@ import { formatNumber } from '../../lib/locales.mjs'
 import { ACCENTS } from '../../screens/conversations.mjs'
 import { dmHeader, globalHeader } from '../../screens/conversations.mjs'
 import { bubble, conversationBackground, conversationHeader, daySeparator, systemNotice } from '../../screens/conversation.mjs'
-import { meeshEntry } from '../../screens/progression.mjs'
+import { grilleBadges, meeshEntry } from '../../screens/progression.mjs'
 import { postCard } from '../../screens/social.mjs'
 import { DEMO, lecteurDe, profilDe } from '../../textes/demo.mjs'
 import { COMMENTAIRES_VILLE, MA_VILLE, MON_BONJOUR, REPONSES_GLOBAL } from './textes/demo-social.mjs'
@@ -177,37 +177,13 @@ export const ecranConsentementVoix = (ctx) =>
     ${homeIndicator()}
   </div>`
 
-// La grille des badges (AchievementBadgeView ×3 colonnes) : anneau de progression, nom, compte.
-const BADGES = [
-  ['content.audio_message', 'mic', 12, 10, '#6366F1'],
-  ['content.story', 'camera', 7, 10, '#EC4899'],
-  ['social.friendship', 'personCheck', 10, 10, '#10B981'],
-  ['conversation.public', 'globe', 23, 25, '#0EA5E9'],
-  ['comment.audio', 'comment', 4, 10, '#F59E0B'],
-  ['content.post', 'heart', 3, 10, '#8B5CF6'],
-  ['social.invite_joined', 'personPlus', 2, 5, '#14B8A6'],
-  ['tool.sticker', 'sparkles', 1, 10, '#F43F5E'],
-  ['content.reel', 'video', 0, 5, '#808080'],
-]
-
 export const ecranBadges = (ctx) =>
   html`<div class="ecran iphone badges ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
     <div class="p-bg"></div>
     ${statusBar()}
     <div class="p-nav">${roundButton('back', { iconSize: 19, tint: 'var(--ios-indigo-500)', className: 'flip-rtl' })}${meeshEntry(DEMO.progression.meesh)}</div>
     <h1 class="p-title">${ctx.ui('progression.section.badges')}</h1>
-    <div class="badge-grille">
-      ${BADGES.map(([axe, glyphe, courant, seuil, couleur]) => {
-        const obtenu = courant >= seuil
-        const teinte = obtenu ? couleur : '#808080'
-        const angle = Math.min(1, courant / seuil) * 360
-        return html`<div class="badge-carte${obtenu ? ' obtenu' : ''}" style="--b:${teinte};--arc:${angle}deg">
-          <div class="badge-anneau"><span>${icon(glyphe, { size: 22 })}</span></div>
-          <div class="badge-nom">${ctx.ui(`progression.axis.${axe}`)}</div>
-          <div class="badge-compte">${courant}/${seuil}</div>
-        </div>`
-      })}
-    </div>
+    ${grilleBadges(ctx)}
     ${homeIndicator()}
   </div>`
 

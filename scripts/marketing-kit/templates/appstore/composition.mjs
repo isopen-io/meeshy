@@ -11,6 +11,8 @@ import { langue } from '../../lib/langues.mjs'
 import { typo } from '../../lib/composants.mjs'
 import { icon } from '../../lib/icons.mjs'
 import { carteMeesh } from '../../screens/progression.mjs'
+import { suggestionsDecouverte } from '../../screens/social.mjs'
+import { profilDe } from '../../textes/demo.mjs'
 import { kitCss } from '../../lib/styles.mjs'
 import { contexte, coupeLegende, ecran } from '../../lib/gabarits.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
@@ -68,10 +70,12 @@ const panorama = (appareil) => {
   </div>`
 }
 
-const legende = ({ lang, cle }) => {
+// `corps` : le corps de la SÉRIE (le plus petit qu'exige une légende de la vitrine), pour
+// qu'une langue garde une seule taille de titre d'une capture à l'autre.
+const legende = ({ lang, cle, corps }) => {
   const texte = LEGENDES[cle][lang]
   const [l1, l2] = coupeLegende(typo(texte, lang))
-  return html`<h1 class="as-caption" data-fit><span class="l1">${l1}</span>${l2 ? html` <span class="l2">${l2}</span>` : ''}</h1>`
+  return html`<h1 class="as-caption" data-fit${corps ? raw(` style="--as-corps:${corps}px"`) : ''}><span class="l1">${l1}</span>${l2 ? html` <span class="l2">${l2}</span>` : ''}</h1>`
 }
 
 const pastilleDrapeau = (code) => html`<span class="as-flag">${langue(code).drapeau}</span>`
@@ -82,8 +86,9 @@ const DECORS = {
     html`<div class="as-fleche" data-ancre=".bubble.audio">${pastilleDrapeau(ctx.lang)}${icon(ctx.dir === 'rtl' ? 'arrowLeft' : 'arrowRight', { size: 18 })}${pastilleDrapeau('ko')}</div>`,
   'drapeaux-groupe': (ctx) =>
     html`<div class="as-rangee as-pile">${['ko', 'es', 'ja', ctx.lang === 'ja' ? 'fr' : ctx.lang].map(pastilleDrapeau)}</div>`,
-  'drapeaux-monde': () =>
-    html`<div class="as-rangee as-pile">${['en', 'it', 'pt', 'hi', 'de'].map(pastilleDrapeau)}</div>`,
+  // Les PAYS des amis suggérés à l'écran — un drapeau de langue se lirait comme un pays absent.
+  'drapeaux-monde': (ctx) =>
+    html`<div class="as-rangee as-pile">${suggestionsDecouverte(ctx.lang).map((p) => html`<span class="as-flag">${profilDe(p).drapeau}</span>`)}</div>`,
   bonjours: (ctx, appareil) =>
     html`<div class="as-rangee as-bonjours">${BONJOURS.filter((b) => b.lang !== ctx.lang).slice(0, appareil === 'iphone' ? 3 : 6).map(
       (b) => html`<span class="as-bonjour" lang="${b.lang}" dir="${directionOf(b.lang)}"><span>${langue(b.lang).drapeau}</span>${b.texte}</span>`,
@@ -105,7 +110,7 @@ export const captureDe = ({ appareil, rang }) => {
   return capture
 }
 
-export const pageCapture = ({ appareil, lang, rang }) => {
+export const pageCapture = ({ appareil, lang, rang, corps }) => {
   const capture = captureDe({ appareil, rang })
   const ctx = contexte({ lang, theme: capture.theme })
   const { width, height } = scene(appareil)
@@ -114,11 +119,11 @@ export const pageCapture = ({ appareil, lang, rang }) => {
   const device = tailleCadre(appareil)
   const decor = capture.decor ? DECORS[capture.decor](ctx, appareil) : ''
   const ton = capture.theme === 'dark' ? 'as-sombre' : 'as-clair'
-  const corps = html`<div class="as-canvas as-${appareil} ${ton}" dir="${ctx.dir}" lang="${lang}" style="width:${width}px;height:${height}px;--pano-x:${-(rang - 1) * width}px;--device-top:${deviceTop}px">
+  const contenu = html`<div class="as-canvas as-${appareil} ${ton}" dir="${ctx.dir}" lang="${lang}" style="width:${width}px;height:${height}px;--pano-x:${-(rang - 1) * width}px;--device-top:${deviceTop}px">
     ${panorama(appareil)}
     <header class="as-head">
       ${rang === 1 ? html`<div class="as-brand">${logo(appareil === 'iphone' ? 30 : 36)}<span>Meeshy</span></div>` : ''}
-      ${legende({ lang, cle: capture.legende })}
+      ${legende({ lang, cle: capture.legende, corps })}
       ${rangeeDecor(capture.decor) ? decor : ''}
     </header>
     <div class="as-device" style="width:${device.width}px;height:${device.height}px;transform:translateX(-50%) scale(${echelle})">
@@ -126,7 +131,7 @@ export const pageCapture = ({ appareil, lang, rang }) => {
     </div>
     ${rangeeDecor(capture.decor) ? '' : decor}
   </div>`
-  return documentHtml({ lang, corps, largeur: width, hauteur: height })
+  return documentHtml({ lang, corps: contenu, largeur: width, hauteur: height })
 }
 
 // Affiche de l'App Preview : l'écran plein cadre (la vidéo EST l'écran), un projecteur sur le
@@ -139,7 +144,7 @@ export const pagePoster = ({ lang }) => {
   const corps = html`<div class="as-poster" dir="${ctx.dir}" lang="${lang}" style="width:${largeur}px;height:${hauteur}px;--poster-k:${largeur / 440}">
     <div class="as-poster-ecran">${ecran('dm', ctx)}</div>
     <div class="as-spot" data-spot=".bubble.audio"></div>
-    <div class="as-poster-textes" data-fit data-au-dessus=".bubble.audio">
+    <div class="as-poster-textes" data-fit data-au-dessus=".bubble.audio" data-degager=".bubble:not(.audio)">
       <span class="avant">${typo(avant, lang)}</span>
       <span class="apres">${typo(apres, lang)}</span>
     </div>

@@ -95,11 +95,14 @@ export const ecranGroupe = (ctx) =>
   conversationScreen({ ctx, accent: ACCENTS.nova, header: groupeHeader(ctx), corps: groupeCorps(ctx) })
 
 // Capture 3 — Meeshy Global : « X a rejoint », puis les bonjours, lus dans la langue du lecteur.
-export const globalCorps = (ctx) => {
+// `depuis` : la première ligne montrée. L'iPhone ouvre le fil sur la première bulle ENTIÈRE,
+// jamais sur une bulle tranchée par l'en-tête ; l'iPad, plus haut, montre tout.
+export const globalCorps = (ctx, { depuis = 0 } = {}) => {
   const accent = ACCENTS.global
   const lecteur = DEMO.lecteurs[ctx.lang]
   const heures = ['8:58', '9:00', '9:02', '9:03', '9:05', '9:06', '9:08', '9:10', '9:11', '9:12', '9:14']
   const lignes = DEMO.global.map((ligne, i) => {
+    if (i < depuis) return ''
     if (ligne.type === 'arrivee') return systemNotice(ctx.ui('bubble.joinNotice.joined', profilDe(ligne.auteur).prenom))
     if (ligne.auteur === lecteur) return bubble({ ctx, contenu: ligne.text, mine: true, accent, time: heures[i] })
     return bubble({ ctx, contenu: ligne, auteur: ligne.auteur, accent, time: heures[i], identite: true })
@@ -117,4 +120,4 @@ export const globalHeader = (ctx) =>
   })
 
 export const ecranGlobal = (ctx) =>
-  conversationScreen({ ctx, accent: ACCENTS.global, header: globalHeader(ctx), corps: globalCorps(ctx), className: 'global' })
+  conversationScreen({ ctx, accent: ACCENTS.global, header: globalHeader(ctx), corps: globalCorps(ctx, { depuis: 2 }), className: 'global' })

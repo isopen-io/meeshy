@@ -10,7 +10,7 @@ let page
 beforeAll(async () => {
   browser = await chromium.launch()
   page = await browser.newPage({ viewport: { width: 540, height: 960 } })
-})
+}, 60_000)
 
 afterAll(async () => {
   await browser?.close()

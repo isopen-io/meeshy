@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Moteur de rendu du kit marketing (#7727, #7728).
 //
+// Ses rendus iPhone 6,9" / iPad 13" sont des BROUILLONS de mise en scène (out/brouillons/) :
+// le SEUL livrable App Store est templates/appstore/render-appstore.mjs → fastlane/screenshots.
+//
 //   node scripts/marketing-kit/render.mjs --format iphone-6.9 --lang fr --gabarit 01-vocal
 //   node scripts/marketing-kit/render.mjs --format iphone-6.9,ipad-13 --lang all --gabarit all
 //   node scripts/marketing-kit/render.mjs --planches
@@ -21,6 +24,7 @@ import { pngInfo, stripAlpha } from './lib/png.mjs'
 import { SEQUENCES } from './lib/sequences.mjs'
 
 export const OUT_DIR = resolve(REPO_ROOT, 'scripts/marketing-kit/out')
+export const OUT_BROUILLONS = resolve(OUT_DIR, 'brouillons')
 
 const liste = (valeur, tout) => (valeur === 'all' ? tout : valeur.split(','))
 
@@ -62,7 +66,7 @@ export const renderPng = async (browser, { format, lang, gabarit }) => {
   }
 }
 
-export const cheminSortie = ({ format, lang, gabarit }) => resolve(OUT_DIR, format, lang, `${gabarit}.png`)
+export const cheminSortie = ({ format, lang, gabarit }) => resolve(OUT_BROUILLONS, format, lang, `${gabarit}.png`)
 
 const rendre = async ({ formats, langs, gabarits }) => {
   const browser = await ouvrirNavigateur()
@@ -86,11 +90,11 @@ const rendre = async ({ formats, langs, gabarits }) => {
   return produits
 }
 
-export const nomPlanche = (format, { brut }) => `${format}${brut ? '-ecrans' : ''}`
+export const nomPlanche = (format, { brut }) => `brouillon-${format}${brut ? '-ecrans' : ''}`
 
 // Planche contact : une ligne par langue, une colonne par gabarit, vignettes réduites.
 const planche = async (browser, format, { brut }) => {
-  const dossier = resolve(OUT_DIR, format)
+  const dossier = resolve(OUT_BROUILLONS, format)
   if (!existsSync(dossier)) return null
   const ids = planchesDuFormat(format)
     .filter((p) => (p.gabarit === 'ecran') === brut)
@@ -120,15 +124,15 @@ const planche = async (browser, format, { brut }) => {
     .grille{display:grid;grid-template-columns:48px repeat(${colonnes.length},${largeur}px);gap:14px;padding:0 32px 32px;align-items:center}
     .col{font-size:12px;color:#a5b4fc;text-align:center}.lang{font-size:18px;color:#fff;text-transform:uppercase}
     img{display:block;border-radius:10px;box-shadow:0 8px 24px #0008}.vide{width:${largeur}px;height:${hauteur}px;border:1px dashed #4338ca;border-radius:10px}
-  </style><h1>Meeshy — ${format}${brut ? ' — écrans bruts' : ''}</h1><p>${f.usage} · ${f.width}×${f.height} · ${langs.length} langues × ${colonnes.length} gabarits</p><div class="grille">${entete}${cellules}</div>`
-  const tmp = resolve(OUT_DIR, 'planches', `.${format}${brut ? '-ecrans' : ''}.html`)
+  </style><h1>BROUILLON — Meeshy — ${format}${brut ? ' — écrans bruts' : ''}</h1><p>Non livrable : les captures App Store viennent de render-appstore.mjs (fastlane/screenshots). · ${f.usage} · ${f.width}×${f.height} · ${langs.length} langues × ${colonnes.length} gabarits</p><div class="grille">${entete}${cellules}</div>`
+  const tmp = resolve(OUT_DIR, 'planches', `.${nomPlanche(format, { brut })}.html`)
   mkdirSync(resolve(tmp, '..'), { recursive: true })
   writeFileSync(tmp, html)
   const context = await browser.newContext({ viewport: { width: 64 + 48 + colonnes.length * (largeur + 14), height: 400 }, deviceScaleFactor: 1 })
   await horsReseau(context)
   const page = await context.newPage()
   await page.goto(pathToFileURL(tmp).href, { waitUntil: 'load' })
-  const sortie = resolve(OUT_DIR, 'planches', `${format}${brut ? '-ecrans' : ''}.png`)
+  const sortie = resolve(OUT_DIR, 'planches', `${nomPlanche(format, { brut })}.png`)
   writeFileSync(sortie, stripAlpha(await page.screenshot({ type: 'png', fullPage: true })))
   await context.close()
   console.log(`▦ ${relative(REPO_ROOT, sortie)}`)
@@ -157,8 +161,8 @@ const main = async () => {
     },
   })
   if (values.planches) {
-    const avecRendus = existsSync(OUT_DIR)
-      ? readdirSync(OUT_DIR, { withFileTypes: true }).filter((d) => d.isDirectory() && FORMATS[d.name]).map((d) => d.name)
+    const avecRendus = existsSync(OUT_BROUILLONS)
+      ? readdirSync(OUT_BROUILLONS, { withFileTypes: true }).filter((d) => d.isDirectory() && FORMATS[d.name]).map((d) => d.name)
       : []
     return planches(values.format ? liste(values.format, avecRendus) : avecRendus)
   }

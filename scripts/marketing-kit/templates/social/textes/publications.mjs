@@ -109,11 +109,11 @@ export const PUBLICATIONS = [
   {
     n: 10, lieu: 'post', note: 'défi de CAMPAGNE (aucun défi n’existe dans l’app) — visuel : 9x16-S4',
     texte: avecHashtag(t(
-      'Défi de la semaine : {#}. Poste ton bonjour et fais-toi un ami dans un pays où tu n’es jamais allé.',
+      'Défi de la semaine : {#}. Poste ton bonjour et fais-toi un ami dans un pays que tu ne connais pas encore.',
       'Challenge of the week: {#}. Post your hello and make a friend in a country you’ve never been to.',
       'Reto de la semana: {#}. Publica tu hola y hazte amigo de alguien de un país que no conoces.',
-      'Challenge der Woche: {#}. Poste dein Hallo und finde einen Freund in einem Land, in dem du nie warst.',
-      'Sfida della settimana: {#}. Posta il tuo ciao e fatti un amico in un paese dove non sei mai stato.',
+      'Challenge der Woche: {#}. Poste dein Hallo und finde Freunde in einem Land, das du noch nicht kennst.',
+      'Sfida della settimana: {#}. Posta il tuo ciao e fatti un amico in un paese che non conosci ancora.',
       'Desafio da semana: {#}. Poste seu oi e faça um amigo num país onde você nunca foi.',
       'تحدي الأسبوع: {#}. انشر تحيتك وكوّن صديقًا في بلد لم تزره من قبل.',
     )),

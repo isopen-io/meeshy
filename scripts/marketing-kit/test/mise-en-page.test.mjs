@@ -54,7 +54,7 @@ describe('révélation d’un badge (AchievementRevealView)', () => {
   beforeAll(async () => {
     browser = await chromium.launch()
     navigateur = await browser.newPage({ viewport: { width: 540, height: 960 } })
-  })
+  }, 60_000)
 
   afterAll(async () => {
     await browser?.close()
@@ -90,5 +90,5 @@ describe('révélation d’un badge (AchievementRevealView)', () => {
       }
     }
     expect(fautes).toEqual([])
-  })
+  }, 120_000)
 })

@@ -32,7 +32,26 @@ const horsReseau = async (context, reseau) => {
   })
 }
 
-export const corpsDeSerie = async () => null
+// Corps de la série : chaque légende est d'abord ajustée seule, puis la vitrine prend le plus
+// petit corps obtenu — une langue garde UNE taille de titre sur toutes ses captures.
+export const corpsDeSerie = async (browser, { appareil, lang }) => {
+  const a = APPAREILS[appareil]
+  const page = await browser.newPage({ viewport: { width: a.width / a.scale, height: a.height / a.scale } })
+  try {
+    const tailles = []
+    for (const [i] of a.captures.entries()) {
+      await page.setContent(pageCapture({ appareil, lang, rang: i + 1 }), { waitUntil: 'load' })
+      await page.evaluate(() => document.fonts.ready)
+      tailles.push(await page.evaluate(() => {
+        window.asMiseEnPage()
+        return parseFloat(getComputedStyle(document.querySelector('.as-caption')).fontSize)
+      }))
+    }
+    return Math.floor(Math.min(...tailles) * 2) / 2
+  } finally {
+    await page.close()
+  }
+}
 
 const verifierPng = (png, { width, height }) => {
   const info = pngInfo(png)
@@ -83,12 +102,13 @@ const produire = async ({ langs, appareils, rangs }) => {
         }
         const a = APPAREILS[appareil]
         const numeros = rangs ?? a.captures.map((_, i) => i + 1)
+        const corps = await corpsDeSerie(browser, { appareil, lang })
         for (const rang of numeros.filter((r) => r <= a.captures.length)) {
-          const { png, mesure } = await rendre(browser, { html: pageCapture({ appareil, lang, rang }), ...a })
+          const { png, mesure } = await rendre(browser, { html: pageCapture({ appareil, lang, rang, corps }), ...a })
           const chemin = cheminFastlane({ appareil, lang, rang })
           ecrire(chemin, png)
           const legende = LEGENDES[a.captures[rang - 1].legende][lang]
-          entrees.push({ lang, appareil, rang, chemin, texte: legende, ...mesure })
+          entrees.push({ lang, appareil, rang, chemin, texte: legende, corps, ...mesure })
           console.log(`${mesure.erreurs.length ? '✗' : '✓'} ${relative(REPO_ROOT, chemin)}${mesure.avertissements.length ? `  (${mesure.avertissements.length} avert.)` : ''}`)
         }
       }

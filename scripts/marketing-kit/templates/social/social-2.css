@@ -46,6 +46,9 @@
 
 .etapes { position: absolute; top: 326px; inset-inline: 40px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; z-index: 6; }
 .etapes li { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 24px; font-size: 22px; font-weight: 750; line-height: 1.25; background: color-mix(in srgb, white 15%, transparent); border: 0.5px solid color-mix(in srgb, white 28%, transparent); backdrop-filter: blur(10px); }
+.s4-pied { position: absolute; top: 664px; inset-inline: 40px; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.s4-pied .sig-marque span { font-size: 32px; }
+.s4-lien { display: flex; align-items: center; gap: 10px; padding: 14px 28px; border-radius: 999px; font-size: 22px; font-weight: 800; color: #fff; border: 2px dashed color-mix(in srgb, white 60%, transparent); background: color-mix(in srgb, white 10%, transparent); }
 .etapes li b { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 900; color: var(--ios-indigo-600); background: #fff; }
 
 /* ─── Carrousels ─── */
@@ -58,8 +61,8 @@
 [dir='rtl'] .cta-flamme { transform: translateX(50%); left: auto; right: 50%; }
 .cta-pied svg { border-radius: 16px; box-shadow: 0 14px 34px color-mix(in srgb, var(--ios-indigo-950) 45%, transparent); }
 .cta-pied b { font-size: 32px; font-weight: 850; letter-spacing: -0.02em; }
-.pill-store { padding: 10px 20px; border-radius: 999px; font-size: 16px; font-weight: 800; color: var(--ios-indigo-700); background: #fff; box-shadow: 0 10px 26px color-mix(in srgb, var(--ios-indigo-950) 30%, transparent); }
-.fond-aube .pill-store { color: #fff; background: var(--kit-grad-brand); }
+.pill-telecharger { padding: 10px 20px; border-radius: 999px; font-size: 16px; font-weight: 800; color: var(--ios-indigo-700); background: #fff; box-shadow: 0 10px 26px color-mix(in srgb, var(--ios-indigo-950) 30%, transparent); }
+.fond-aube .pill-telecharger { color: #fff; background: var(--kit-grad-brand); }
 .pill-langues { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; opacity: 0.9; }
 .cta.mini .cta-pied { flex-direction: row; top: auto; bottom: 30px; gap: 12px; }
 .cta.mini .cta-pied svg { width: 40px; height: 40px; border-radius: 11px; }
@@ -116,7 +119,12 @@
 .x4-langues span { padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 750; background: color-mix(in srgb, white 13%, transparent); border: 0.5px solid color-mix(in srgb, white 24%, transparent); }
 
 /* ─── YouTube ─── */
-.yt-visage { position: absolute; top: 54px; inset-inline-start: 10px; z-index: 4; font-size: 214px; line-height: 1; filter: drop-shadow(0 22px 40px color-mix(in srgb, #0f0c29 55%, transparent)); }
+.yt-visage { position: absolute; top: 56px; inset-inline-start: 30px; z-index: 4; filter: drop-shadow(0 22px 40px color-mix(in srgb, #0f0c29 55%, transparent)); }
+.yt-visage > .avatar { box-shadow: 0 0 0 6px color-mix(in srgb, white 30%, transparent); }
+.yt-visage-ami { position: absolute; bottom: -8px; inset-inline-end: -18px; }
+.yt-visage-ami .avatar { box-shadow: 0 0 0 5px var(--ios-indigo-500); }
+.miniature .marque-discrete { font-size: 20px; color: #fff; }
+.tel.sans-sous-titres .call-captions { visibility: hidden; }
 .yt-bulles { position: absolute; top: 118px; inset-inline-start: 244px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .yt-b { padding: 10px 22px; border-radius: 28px; font-size: 40px; font-weight: 900; line-height: 1.1; white-space: nowrap; box-shadow: 0 14px 34px color-mix(in srgb, #0f0c29 45%, transparent); }
 .yt-b.ko { color: #111827; background: #fff; border-end-start-radius: 8px; }
@@ -155,14 +163,7 @@
 .voix-lignes .ico { width: 24px; color: var(--ios-indigo-500); }
 .voix-bouton { align-self: stretch; padding: 16px 0; border-radius: 14px; font-size: 16px; font-weight: 650; color: #fff; background: var(--ios-indigo-500); }
 
-.badge-grille { position: absolute; top: 160px; inset-inline: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.badge-carte { padding: 16px 6px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; opacity: 0.7; background: linear-gradient(160deg, color-mix(in srgb, var(--b) 12%, var(--kit-bg-2)), var(--kit-bg-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kit-ink) 8%, transparent); }
-.badge-carte.obtenu { opacity: 1; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b) 30%, transparent); }
-.badge-anneau { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--b) var(--arc), color-mix(in srgb, var(--kit-ink) 12%, transparent) 0); }
-.badge-anneau span { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: var(--b); background: var(--kit-bg-2); }
-.badge-nom { font-size: 11px; font-weight: 800; color: var(--b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.badge-carte:not(.obtenu) .badge-nom { color: var(--kit-muted); }
-.badge-compte { font-family: var(--kit-font-rounded); font-size: 9.5px; font-weight: 600; color: var(--kit-muted); }
+.ecran.badges .badge-grille { position: absolute; top: 160px; inset-inline: 16px; grid-template-columns: repeat(3, 1fr); }
 
 .composer-field.rec { gap: 10px; color: var(--kit-ink); }
 .rec-point { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ios-error, #ef4444); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ios-error, #ef4444) 25%, transparent); }

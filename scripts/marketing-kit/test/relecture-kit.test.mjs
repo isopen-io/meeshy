@@ -148,6 +148,21 @@ describe('mesures en navigateur', () => {
     }
   }, LENT)
 
+  test('capture 08 : la carte Meesh flottante ne recouvre pas l’explication du badge', async () => {
+    for (const lang of KIT_LANGS) {
+      const page = await ouvrir(pageCapture({ appareil: 'iphone', lang, rang: 8 }), { width: 440, height: 956 })
+      const chevauche = await page.evaluate(() => {
+        window.asMiseEnPage()
+        const carte = document.querySelector('.as-carte-flottante').getBoundingClientRect()
+        const range = document.createRange()
+        range.selectNodeContents(document.querySelector('.reveal-sub'))
+        return [...range.getClientRects()].some((r) => r.bottom > carte.top && r.top < carte.bottom)
+      })
+      await page.close()
+      expect({ lang, chevauche }).toEqual({ lang, chevauche: false })
+    }
+  }, LENT)
+
   test('iPad 05 : le panneau Progression est rempli jusqu’au bas de l’image (grille des badges)', async () => {
     for (const lang of KIT_LANGS) {
       const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: 5 }), { width: 1376, height: 1032 })

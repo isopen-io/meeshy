@@ -16,7 +16,7 @@ import {
 } from './conversations.mjs'
 import { composer, conversationBackground, heure } from './conversation.mjs'
 import { filCorps } from './social.mjs'
-import { meeshEntry, progressionCartes } from './progression.mjs'
+import { grilleBadges, meeshEntry, progressionCartes } from './progression.mjs'
 import { appelControles, appelSousTitres } from './appel.mjs'
 
 const P = DEMO.progression
@@ -97,7 +97,10 @@ export const ipadProgression = (ctx) =>
     colonneGauche(ctx, null),
     html`<section class="ipad-panel progression-panel">
       <div class="ipad-panel-head"><h2>${ctx.ui('progression.title')}</h2>${meeshEntry(P.meesh)}</div>
-      <div class="ipad-progression">${progressionCartes(ctx)}</div>
+      <div class="ipad-progression-corps">
+        <div class="ipad-progression">${progressionCartes(ctx)}</div>
+        <div class="ipad-badges"><h3>${ctx.ui('progression.section.badges')}</h3>${grilleBadges(ctx, { limite: 8 })}</div>
+      </div>
     </section>`,
   )
 

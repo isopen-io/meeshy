@@ -54,5 +54,7 @@ export const nomComplet = (profil) => `${profil.prenom} ${profil.nom}`
 // le deux-points, et un emoji final ne part jamais seul à la ligne.
 export const typo = (texte, lang) => {
   const fine = lang === 'fr' ? texte.replace(/ :/g, '\u00A0:').replace(/ ([?!;»])/g, '\u202F$1').replace(/« /g, '«\u202F') : texte
-  return fine.replace(/ (\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\uFE0F]*)$/u, '\u00A0$1')
+  return fine
+    .replace(/(\d) (?=(?:h|min|s|km|m|kg|g|°C|%|€)(?![\p{L}\p{N}]))/gu, '$1\u00A0')
+    .replace(/ (\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\uFE0F]*)$/u, '\u00A0$1')
 }

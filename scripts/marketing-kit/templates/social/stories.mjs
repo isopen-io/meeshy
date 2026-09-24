@@ -8,6 +8,7 @@ import { puce, scene, texte, titre } from './decor.mjs'
 import { BONJOURS } from './textes/demo-social.mjs'
 import { HASHTAG } from './textes/langues.mjs'
 import { STORIES } from './textes/videos.mjs'
+import { LIBELLES } from './textes/annonces.mjs'
 
 const F = '9x16'
 
@@ -80,6 +81,10 @@ export const STORIES_9x16 = {
       format: F, ctx, fond: 'vif', classe: 'story-meeshy',
       contenu: html`${texte(STORIES.S4.surtitre[ctx.lang], ctx, { x: 40, y: 150, largeur: 460, hauteur: 44, taille: 20, classe: 'surtitre centre' })}
         ${texte(HASHTAG[ctx.lang], ctx, { x: 30, y: 206, largeur: 480, hauteur: 80, taille: 46, classe: 'hashtag centre' })}
-        <ol class="etapes" data-sur>${STORIES.S4.etapes.map((e, i) => html`<li><b>${i + 1}</b><span>${typo(e[ctx.lang], ctx.lang)}</span></li>`)}</ol>`,
+        <ol class="etapes" data-sur>${STORIES.S4.etapes.map((e, i) => html`<li><b>${i + 1}</b><span>${typo(e[ctx.lang], ctx.lang)}</span></li>`)}</ol>
+        <div class="s4-pied" data-sur>
+          <div class="sig-marque">${logo(52, { radius: 0.28 })}<span>Meeshy</span></div>
+          <div class="s4-lien">${icon('link', { size: 20 })}<span>${LIBELLES.lienBio[ctx.lang]}</span></div>
+        </div>`,
     }),
 }

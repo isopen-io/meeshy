@@ -38,7 +38,7 @@ const cta = ({ ctx, c, i, extra, classe = '', titreOpts = {} }) =>
     ctx, c, i, classe: `cta ${classe}`,
     titreOpts: { y: 96, hauteur: 190, taille: 48, centre: true, ...titreOpts },
     visuel: html`${extra}
-      <div class="cta-pied" data-sur>${logo(84, { radius: 0.28 })}<b>Meeshy</b><span class="pill-store">${LIBELLES.telecharger[ctx.lang]}</span><span class="pill-langues">${icon('globe', { size: 14 })}${LIBELLES.langues76[ctx.lang]}</span></div>`,
+      <div class="cta-pied" data-sur>${logo(84, { radius: 0.28 })}<b>Meeshy</b><span class="pill-telecharger">${LIBELLES.telecharger[ctx.lang]}</span><span class="pill-langues">${icon('globe', { size: 14 })}${LIBELLES.langues76[ctx.lang]}</span></div>`,
   })
 
 const murDeLangues = () =>

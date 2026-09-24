@@ -17,6 +17,33 @@ const bar = (fraction, teinte) =>
 const tuile = (nom, teinte) =>
   html`<div class="p-tile" style="--t:${teinte}">${icon(nom, { size: 26 })}</div>`
 
+// La grille des badges (AchievementBadgeView ×3 colonnes) : anneau de progression, nom, compte.
+const BADGES = [
+  ['content.audio_message', 'mic', 12, 10, '#6366F1'],
+  ['content.story', 'camera', 7, 10, '#EC4899'],
+  ['social.friendship', 'personCheck', 10, 10, '#10B981'],
+  ['conversation.public', 'globe', 23, 25, '#0EA5E9'],
+  ['comment.audio', 'comment', 4, 10, '#F59E0B'],
+  ['content.post', 'heart', 3, 10, '#8B5CF6'],
+  ['social.invite_joined', 'personPlus', 2, 5, '#14B8A6'],
+  ['tool.sticker', 'sparkles', 1, 10, '#F43F5E'],
+  ['content.reel', 'video', 0, 5, '#808080'],
+]
+
+export const grilleBadges = (ctx, { limite = BADGES.length } = {}) =>
+  html`<div class="badge-grille">
+    ${BADGES.slice(0, limite).map(([axe, glyphe, courant, seuil, couleur]) => {
+      const obtenu = courant >= seuil
+      const teinte = obtenu ? couleur : '#808080'
+      const angle = Math.min(1, courant / seuil) * 360
+      return html`<div class="badge-carte${obtenu ? ' obtenu' : ''}" style="--b:${teinte};--arc:${angle}deg">
+        <div class="badge-anneau"><span>${icon(glyphe, { size: 22 })}</span></div>
+        <div class="badge-nom">${ctx.ui(`progression.axis.${axe}`)}</div>
+        <div class="badge-compte">${courant}/${seuil}</div>
+      </div>`
+    })}
+  </div>`
+
 // ProgressionMeeshEntry — le solde dans l'en-tête, pièce d'argent (meeshSilver) sur verre ambré.
 export const meeshEntry = (solde) =>
   html`<div class="meesh-entry glass"><span>${solde}</span>${meeshCoin(20)}</div>`
@@ -110,7 +137,8 @@ export const ecranProgression = (ctx) =>
 export const ecranSucces = (ctx) => {
   const { ui, lang } = ctx
   const axe = ui(`progression.axis.${P.revelation.axe}`)
-  const titre = `${P.revelation.seuil} ${lang === 'de' ? axe : axe.toLocaleLowerCase(lang)}`
+  const nom = lang === 'de' ? axe.replace(/^\p{Lu}/u, (c) => c.toLocaleLowerCase(lang)) : axe.toLocaleLowerCase(lang)
+  const titre = `${P.revelation.seuil} ${nom}`
   return html`<div class="ecran iphone reveal ${ctx.theme}" dir="${ctx.dir}" lang="${lang}">
     <div class="reveal-glow"></div>
     ${revealRays()}

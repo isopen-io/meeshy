@@ -172,7 +172,8 @@ export const YOUTUBE = {
 // Libellés du kit social qui ne sont PAS des écrans de l'app.
 export const LIBELLES = {
   langues76: t('76 langues traduisibles', '76 translatable languages', '76 idiomas traducibles', '76 übersetzbare Sprachen', '76 lingue traducibili', '76 línguas traduzíveis', '76 لغة قابلة للترجمة'),
-  telecharger: t('Disponible sur l’App Store', 'Available on the App Store', 'Disponible en la App Store', 'Jetzt im App Store', 'Disponibile su App Store', 'Disponível na App Store', 'متوفر على App Store'),
+  telecharger: t('Télécharge Meeshy', 'Download Meeshy', 'Descarga Meeshy', 'Hol dir Meeshy', 'Scarica Meeshy', 'Baixe o Meeshy', 'حمّل Meeshy'),
+  lienBio: t('Lien en bio', 'Link in bio', 'Enlace en la bio', 'Link in der Bio', 'Link in bio', 'Link na bio', 'الرابط في النبذة'),
   glisse: t('Glisse', 'Swipe', 'Desliza', 'Wischen', 'Scorri', 'Arrasta', 'اسحب'),
   promesse: t('Le monde entier devient ton groupe.', 'The whole world becomes your group.', 'El mundo entero se vuelve tu grupo.', 'Die ganze Welt wird deine Gruppe.', 'Il mondo intero diventa il tuo gruppo.', 'O mundo inteiro vira o seu grupo.', 'العالم كله يصبح مجموعتك.'),
   jour: t('Jour', 'Day', 'Día', 'Tag', 'Giorno', 'Dia', 'اليوم'),

@@ -63,7 +63,7 @@
 .as-caption {
   margin: 0;
   width: 100%;
-  font-size: 49px;
+  font-size: var(--as-corps, 49px);
   font-weight: 850;
   line-height: 1.02;
   letter-spacing: -1.5px;
@@ -131,11 +131,11 @@
   box-shadow: 0 0 0 6px color-mix(in srgb, white 30%, transparent), 0 28px 60px color-mix(in srgb, black 50%, transparent), 0 0 70px color-mix(in srgb, var(--ios-warning) 35%, transparent);
 }
 [dir='rtl'] .as-carte-flottante { transform: rotate(2.5deg); }
-.as-carte-flottante .p-card.meesh { zoom: 1.12; margin: 0; background: #fff; }
+.as-carte-flottante .p-card.meesh { zoom: 1.04; margin: 0; background: #fff; }
 
 /* ─── iPad 13" paysage : scène 1376 × 1032 ─── */
 .as-ipad .as-head { top: 30px; inset-inline: 88px; align-items: center; text-align: center; gap: 12px; }
-.as-ipad .as-caption { font-size: 64px; letter-spacing: -2px; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.28em; text-wrap: nowrap; }
+.as-ipad .as-caption { font-size: var(--as-corps, 64px); letter-spacing: -2px; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.28em; text-wrap: nowrap; }
 .as-ipad .as-caption .l1,
 .as-ipad .as-caption .l2 { display: inline-block; }
 .as-ipad .as-brand { font-size: 18px; }

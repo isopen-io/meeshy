@@ -7,7 +7,7 @@ import { contexte, ecran } from '../../lib/gabarits.mjs'
 import { langue } from '../../lib/langues.mjs'
 import { waveformHeights } from '../../screens/audio.mjs'
 import { serve } from '../../lib/prism.mjs'
-import { profilDe } from '../../textes/demo.mjs'
+import { DEMO, profilDe } from '../../textes/demo.mjs'
 import { loupe, marqueDiscrete, puce, scene, signature, telephone, texte, titre } from './decor.mjs'
 import { LANGUES_TRADUISIBLES } from './langues-traduisibles.mjs'
 import { MESSAGE_VOYAGE } from './textes/demo-social.mjs'
@@ -124,7 +124,7 @@ export const ANNONCES_X = {
       format: '16x9', ctx, fond: 'nuit', classe: 'annonce',
       contenu: html`${titre(ANNONCES.X6.titre[ctx.lang], ctx, { x: 44, y: 60, largeur: 330, hauteur: 170, taille: 44 })}
         <div class="marque-bas">${marqueDiscrete(ctx, { x: 0, y: 0 })}</div>
-        ${telephone(ecran('appel', sc(ctx, 'dark')), { largeur: 196, x: 560, y: 24, rotation: 3 })}
+        ${telephone(ecran('appel', sc(ctx, 'dark')), { largeur: 196, x: 560, y: 24, rotation: 3, classe: 'sans-sous-titres' })}
         ${loupe(ecran('appel', sc(ctx, 'dark')), { cible: '.call-captions', x: 270, y: 250, largeur: 440, hauteur: 160, rotation: -2 })}`,
     }),
 }
@@ -135,14 +135,15 @@ export const MINIATURES_YT = {
   Y1: (ctx) =>
     scene({
       format: 'yt', ctx, fond: 'vif', classe: 'miniature',
-      contenu: html`<div class="yt-visage">😮</div>
+      contenu: html`<div class="yt-visage">${avatar(profilDe(DEMO.lecteurs[ctx.lang]), 176)}<div class="yt-visage-ami">${avatar(profilDe('minjun.p'), 84)}</div></div>
         <div class="yt-bulles" data-sur>
           <div class="yt-b ko" lang="ko" dir="ltr">안녕!</div>
           <div class="yt-fleche">${icon('arrowRight', { size: 26, className: 'vers-bas' })}</div>
           <div class="yt-b moi" lang="${ctx.lang}" dir="${ctx.dir}">${typo(YOUTUBE.Y1.salut[ctx.lang], ctx.lang)}</div>
         </div>
         ${texte(YOUTUBE.Y1.jours[ctx.lang], ctx, { x: 392, y: 34, largeur: 230, hauteur: 150, taille: 78, classe: 'yt-gros' })}
-        <div class="yt-drapeaux" data-sur><span>${langue(ctx.lang).drapeau}</span><span>${langue('ko').drapeau}</span></div>`,
+        <div class="yt-drapeaux" data-sur><span>${langue(ctx.lang).drapeau}</span><span>${langue('ko').drapeau}</span></div>
+        ${marqueDiscrete(ctx, { x: 26, y: 310, taille: 30 })}`,
     }),
   Y2: (ctx) => {
     const servi = serve(MESSAGE_VOYAGE, ctx.lang)
