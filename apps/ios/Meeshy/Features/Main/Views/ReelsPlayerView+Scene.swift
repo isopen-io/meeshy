@@ -55,6 +55,16 @@ final class ReelSceneClock: ObservableObject {
     @Published var progress: Double = 0
 }
 
+/// Possède le moteur audio d'une page de réel SANS le republier : la page le
+/// garde en vie et l'appelle, seuls ses lecteurs (`ReelAudioView`,
+/// `ReelAudioControl`, `ReelBorrowedSoundToggle`) l'observent.
+@MainActor
+final class ReelAudioEngineBox: ObservableObject {
+    nonisolated deinit {}
+
+    let player = AudioPlaybackManager()
+}
+
 /// La scène d'un réel composé, jouée plein écran.
 ///
 /// La lecture suit la MÊME porte que la vidéo d'un réel simple

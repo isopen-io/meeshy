@@ -490,8 +490,11 @@ struct ReelPageView: View {
     /// (`ReelAudioControl` → `AudioPlayerView(externalPlayer:)`) and the hero
     /// transcript (`ReelAudioView` → `MediaTranscriptionView`) so the karaoke
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
-    /// page; only the active audio reel ever plays.
-    @StateObject var audioPlayer = AudioPlaybackManager()
+    /// page; only the active audio reel ever plays. Held through a box that
+    /// never publishes: `@StateObject` on the engine itself re-rendered the
+    /// whole page at its 10 Hz `currentTime` tick — its readers observe it.
+    @StateObject private var audioBox = ReelAudioEngineBox()
+    var audioPlayer: AudioPlaybackManager { audioBox.player }
     /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
