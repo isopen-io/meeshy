@@ -28,6 +28,18 @@ export function publicationKindFromSearch(search: URLSearchParams, fallback: Pub
   return PUBLICATION_KINDS.find((kind) => SEARCH_VALUES[kind] === value) ?? fallback;
 }
 
+/**
+ * **D'OÙ L'ON OUVRE LE STUDIO** (#7729) — `?from=onboarding` : l'accueil
+ * post-inscription ouvre le studio pour la première story, et la fermeture
+ * comme la publication y RAMÈNENT, au lieu de laisser le nouveau venu dans la
+ * liste des stories, hors de son parcours. Une valeur fermée, jamais une
+ * adresse de retour libre : rien d'autre qu'une route connue ne s'ouvre ainsi.
+ */
+export type StudioOrigin = 'onboarding';
+
+export const studioOriginFromSearch = (search: URLSearchParams): StudioOrigin | null =>
+  search.get('from') === 'onboarding' ? 'onboarding' : null;
+
 export type PublicationRefusal = 'reel-without-qualifying-media' | 'story-with-several-pages';
 
 const visualMedia = (asset: StudioVisualAsset | null): ReelMediaLike[] =>

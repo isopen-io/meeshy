@@ -2,7 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility';
-import { postJoinSystemMessage, type JoinSystemMessageDeps } from './joinSystemMessage';
+import { emitArrivalsLineUpdate, postGlobalArrival, type GlobalArrivalsDeps } from './globalArrivalsNotice';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import type { AfterResponse } from '../../utils/after-response';
@@ -158,8 +158,12 @@ export async function ensureGlobalConversationMembership(
 
   const socketManager = deps.resolveSocketManager?.();
 
-  const broadcast: JoinSystemMessageDeps['broadcast'] = socketManager
+  const broadcast: GlobalArrivalsDeps['broadcast'] = socketManager
     ? (message, conversationId) => socketManager.broadcastMessage(message, conversationId)
+    : undefined;
+  const io = socketManager?.getIO?.();
+  const broadcastUpdate: GlobalArrivalsDeps['broadcastUpdate'] = io
+    ? async (message, conversationId) => emitArrivalsLineUpdate(io, message, conversationId)
     : undefined;
 
   /**
@@ -170,15 +174,12 @@ export async function ensureGlobalConversationMembership(
    * que la moitié.
    */
   const annoncerLArrivee = async (): Promise<void> => {
-    await postJoinSystemMessage(
-      { prisma: deps.prisma, broadcast },
-      {
-        conversationId: globalConversation.id,
-        participantId: created.id,
-        displayName: input.displayName,
-        isAnonymous: false,
-        viaShareLink: false,
-      },
+    // Une ligne par fenêtre de dix minutes, mise à jour à chaque arrivée
+    // (#7740) — jamais « X a rejoint » par inscription : une vague
+    // d'inscriptions noyait le salon.
+    await postGlobalArrival(
+      { prisma: deps.prisma, broadcast, broadcastUpdate },
+      { conversationId: globalConversation.id, participantId: created.id, displayName: input.displayName },
     );
 
     await emitMemberCountBestEffort(deps, socketManager, {

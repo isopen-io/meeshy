@@ -4,10 +4,10 @@ Meeshy es la app donde haces amigos en todo el mundo, sin sentir nunca la barrer
 
 EL MUNDO ENTERO EN TU GRUPO
 • Chatea en privado o en grupo: cada uno lee los mensajes en su propio idioma
-• Más de 80 idiomas traducidos automáticamente: del coreano al japonés, del español al árabe, del suajili al wólof y al lingala
+• 76 idiomas traducibles, traducidos automáticamente: del coreano al japonés, del español al árabe, del suajili al wólof y al lingala
 • Reacciones, respuestas, menciones, hilos: una mensajería de verdad, totalmente traducida
 
-TU VOZ HABLA MÁS DE 80 IDIOMAS
+TUS AUDIOS, EN 76 IDIOMAS TRADUCIBLES
 • Envía un audio: tus amigos pueden escucharlo en su idioma, con una voz que se parece a la tuya (clonación de voz, solo si tú la activas)
 • Cada audio llega con su transcripción, traducida
 • Ya envías audios. Ahora cruzan fronteras.

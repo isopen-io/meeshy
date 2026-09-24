@@ -271,7 +271,11 @@ export const REEL_PORTRAIT: FeedPost = {
     },
   ],
   likeCount: 63,
-  commentCount: 11,
+  /* DEUX commentaires SEMÉS (#6484, `fixtures-comments.ts` — le fil du gate
+     navigateur) — jamais onze : un compteur qui en annonce plus que le fil
+     n'en porte est le défaut du cycle 122 (CLAUDE.md racine) rendu visible
+     par la feuille de commentaires du lecteur des Réels. */
+  commentCount: 2,
 };
 
 /** `POST_NO_DIMENSIONS` — un média SANS `width`/`height` servies. */

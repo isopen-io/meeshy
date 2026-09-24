@@ -4,6 +4,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 
@@ -37,6 +38,18 @@ import { usePublicationRoom } from '@/lib/view/use-publication-room';
  * frappe partirait avec. La capture se fait en phase de CAPTURE, sur
  * `document`, pour passer AVANT l'écouteur du lecteur quel que soit l'ordre
  * de montage.
+ *
+ * **LE RETOUR MATÉRIEL PASSE PAR `useBackDismiss`, PAS PAR UN ÉCOUTEUR
+ * MAISON** (revue-correction #6484, défaut majeur 1). La feuille l'annonçait
+ * sans le tenir : seul `Escape` était câblé, et sur la coque Android le
+ * bouton retour matériel appelle `history.back()` — sans entrée d'historique
+ * posée à l'ouverture, ce retour remonte la route `/reels` ou `/story/…`
+ * SOUS la feuille (le lecteur se ferme, le brouillon en cours part avec),
+ * exactement le motif déjà mesuré pour `MessageMenu`
+ * (`AND-9-back-depuis-menu.png`, `lib/view/use-back-dismiss.ts`). `Sheet` et
+ * `MessageMenu` partagent déjà cette loi ; cette feuille, qui EST une couche
+ * modale posée sur un écran inchangé, la rejoint plutôt que d'en écrire une
+ * jumelle.
  */
 export type PublicationCommentsSheetProps = {
   readonly postId: string;
@@ -51,6 +64,7 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
      (`canUserConsumePost`), mais il n'est dans aucun salon de fil : sans la
      salle, aucun commentaire ne lui arrive en direct. */
   usePublicationRoom(postId);
+  useBackDismiss(onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -138,6 +152,11 @@ export function PublicationCommentsSheet({ postId, onClose }: PublicationComment
            feuille est un ÉCRAN, pas une scène — elle reprend le schéma du
            document, comme `/post/$post` qui montre le même fil. */
         colorScheme: 'light dark',
+        /* L'ENCOCHE BASSE (revue-correction #6484, défaut de coque 5a) :
+           posée au bas d’un écran plein cadre sous `viewport-fit=cover`, la
+           feuille laissait son composeur SOUS l'indicateur d'accueil d'un
+           iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         borderTopLeftRadius: 18,
         borderTopRightRadius: 18,
         zIndex: 3,

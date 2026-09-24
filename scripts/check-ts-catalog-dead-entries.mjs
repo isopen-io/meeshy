@@ -322,7 +322,12 @@ export const parseCatalogBlock = (blockLines) => {
 // chemin écrit ses adresses en littéraux (`path: '/api/v1/…'`) sans importer
 // le catalogue. 455 entrées sur 459 n'ont donc plus d'appelant. Trancher entre
 // « le web adopte le catalogue » et « le catalogue part » : #7716.
-const BASELINE_DEAD_ENTRIES = 455;
+// 455 → 456 (#7729, 2026-09-24) : `me.onboarding`, générée depuis le manifeste
+// quand #7756 a monté `GET|PATCH /me/onboarding`. Son client web
+// (`feat/web-v2-onboarding-7729`, `lib/api/onboarding.ts`) écrit l'adresse en
+// littéral, comme tout `apps/web` depuis #7668 : elle reste morte ici tant que
+// #7716 n'a pas tranché, au même titre que les 455 précédentes.
+const BASELINE_DEAD_ENTRIES = 456;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

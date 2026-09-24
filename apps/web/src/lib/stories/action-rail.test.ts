@@ -5,6 +5,7 @@ import {
   freezeStoryActionRail,
   reconcileStoryActionRailComments,
   resolveStoryActionRailPlan,
+  resolveStoryExportRailButtons,
   storyActionRailButtons,
   type StoryActionRailInputs,
 } from './action-rail';
@@ -133,6 +134,32 @@ describe('reconcileStoryActionRailComments — la SECONDE remontée à sens uniq
   test('une réconciliation sur un bouton DÉJÀ présent rend le même objet', () => {
     const entree = freezeStoryActionRail(null, autrui({ commentCount: 3 }));
     expect(reconcileStoryActionRailComments(entree, { storyId: 'st-1', commentCount: 9 })).toBe(entree);
+  });
+});
+
+describe('resolveStoryExportRailButtons — les DEUX faces de `showsExport` (StoryExportRailButtons.resolve)', () => {
+  test('`showsExport: false` ⇒ les trois tombent, même avec une progression en cours', () => {
+    expect(resolveStoryExportRailButtons({ showsExport: false, saveProgress: 0.5 })).toEqual({
+      showsShareButton: false,
+      showsSaveButton: false,
+      showsSaveProgressRing: false,
+    });
+  });
+
+  test('`showsExport: true` + `saveProgress: null` ⇒ Partager ET Enregistrer, jamais l’anneau', () => {
+    expect(resolveStoryExportRailButtons({ showsExport: true, saveProgress: null })).toEqual({
+      showsShareButton: true,
+      showsSaveButton: true,
+      showsSaveProgressRing: false,
+    });
+  });
+
+  test('`showsExport: true` + une progression ⇒ Partager reste, Enregistrer bascule vers l’anneau', () => {
+    expect(resolveStoryExportRailButtons({ showsExport: true, saveProgress: 0.4 })).toEqual({
+      showsShareButton: true,
+      showsSaveButton: false,
+      showsSaveProgressRing: true,
+    });
   });
 });
 

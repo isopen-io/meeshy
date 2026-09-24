@@ -1,0 +1,191 @@
+/* Kit marketing Meeshy — socle. Couleurs : UNIQUEMENT les jetons --ios-* (ios.css, généré
+   depuis MeeshyColors.swift). Les dérivés du kit sont des mélanges de ces jetons. */
+
+:root {
+  --kit-font: -apple-system, 'SF Pro Display', 'SF Pro Text', system-ui, 'Helvetica Neue', sans-serif;
+  --kit-font-rounded: 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
+  --kit-font-arabic: 'Geeza Pro', 'SF Arabic', 'Noto Sans Arabic', system-ui, sans-serif;
+  --kit-mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  --kit-grad-brand: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-indigo-700));
+  --kit-grad-hero: linear-gradient(145deg, var(--ios-indigo-400) 0%, var(--ios-indigo-600) 42%, var(--ios-purple-600) 78%, var(--ios-purple-500) 100%);
+  --kit-grad-night: linear-gradient(160deg, var(--ios-indigo-950) 0%, #0f0c29 55%, var(--ios-violet-950, #2e1065) 100%);
+}
+
+.dark {
+  --kit-bg: var(--ios-surface);
+  --kit-bg-2: var(--ios-surface-card);
+  --kit-ink: var(--ios-ink);
+  --kit-ink-2: var(--ios-ink-2);
+  --kit-muted: color-mix(in srgb, var(--ios-indigo-300) 70%, transparent);
+  --kit-glass: color-mix(in srgb, #1c1a2e 62%, transparent);
+  --kit-glass-edge: color-mix(in srgb, white 12%, transparent);
+  --kit-fill: color-mix(in srgb, white 7%, transparent);
+  --kit-fill-2: color-mix(in srgb, white 12%, transparent);
+  --kit-hair: color-mix(in srgb, white 8%, transparent);
+  --kit-track: color-mix(in srgb, white 20%, transparent);
+  --kit-meta: color-mix(in srgb, white 55%, transparent);
+  color-scheme: dark;
+}
+
+.light {
+  --kit-bg: var(--ios-surface);
+  --kit-bg-2: var(--ios-surface-card);
+  --kit-ink: var(--ios-ink);
+  --kit-ink-2: color-mix(in srgb, var(--ios-indigo-700) 80%, transparent);
+  --kit-muted: color-mix(in srgb, var(--ios-indigo-700) 80%, transparent);
+  --kit-glass: color-mix(in srgb, white 72%, transparent);
+  --kit-glass-edge: color-mix(in srgb, var(--ios-indigo-900) 8%, transparent);
+  --kit-fill: color-mix(in srgb, black 4%, transparent);
+  --kit-fill-2: color-mix(in srgb, black 7%, transparent);
+  --kit-hair: color-mix(in srgb, black 6%, transparent);
+  --kit-track: color-mix(in srgb, black 12%, transparent);
+  --kit-meta: color-mix(in srgb, black 50%, transparent);
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--kit-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  overflow: hidden;
+}
+
+[lang='ar'],
+[lang='ar'] * { font-family: var(--kit-font-arabic), var(--kit-font); letter-spacing: 0 !important; }
+
+bdi { unicode-bidi: isolate; }
+
+.ico { display: block; flex: none; }
+
+/* ─── L'écran : la surface de l'app, à l'échelle du point iOS ─── */
+.ecran {
+  position: relative;
+  overflow: hidden;
+  background: var(--kit-bg);
+  color: var(--kit-ink);
+  font-size: var(--ios-font-body);
+  line-height: 1.32;
+}
+
+.ecran.iphone { width: 440px; height: 956px; }
+.ecran.ipad { width: 1376px; height: 1032px; }
+
+/* ─── Barre d'état 9:41, batterie pleine (xcrun simctl status_bar override) ─── */
+.status-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 62px;
+  padding: 21px 34px 0 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.2px;
+  z-index: 50;
+  color: var(--kit-ink);
+  direction: ltr;
+}
+.status-bar.on-media { color: #fff; }
+.ipad .status-bar { height: 32px; padding: 9px 26px 0 26px; font-size: 14px; }
+.status-bar .right { display: flex; gap: 7px; align-items: center; padding-top: 2px; }
+.status-bar svg { display: block; }
+
+.home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 148px;
+  height: 5px;
+  margin-left: -74px;
+  border-radius: 3px;
+  background: var(--kit-ink);
+  opacity: 0.9;
+  z-index: 60;
+}
+.ipad .home-indicator { width: 300px; margin-left: -150px; height: 5px; bottom: 7px; opacity: 0.7; }
+.on-media .home-indicator,
+.home-indicator.on-media { background: #fff; }
+
+/* ─── Verre (adaptiveGlass) ─── */
+.glass {
+  background: var(--kit-glass);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 0.5px solid var(--kit-glass-edge);
+  box-shadow: 0 8px 28px color-mix(in srgb, black 18%, transparent);
+}
+
+.round-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.round-btn.sm { width: 36px; height: 36px; }
+
+/* ─── Avatar (MeeshyAvatar) : initiales sur dégradé de la teinte du profil ─── */
+.avatar {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  background: var(--av-grad);
+}
+.avatar .initiales { position: relative; z-index: 1; text-shadow: 0 1px 2px color-mix(in srgb, black 25%, transparent); }
+.avatar svg.motif { position: absolute; inset: 0; border-radius: 50%; }
+.avatar.ring { box-shadow: 0 0 0 2px var(--kit-bg), 0 0 0 4px var(--ios-indigo-500); }
+.avatar.story-ring { box-shadow: 0 0 0 2.5px var(--kit-bg), 0 0 0 5px var(--ios-indigo-400); }
+.avatar .presence {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 28%;
+  height: 28%;
+  min-width: 9px;
+  min-height: 9px;
+  border-radius: 50%;
+  background: var(--ios-success);
+  box-shadow: 0 0 0 2px var(--kit-bg);
+  z-index: 2;
+}
+.avatar .mood {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  font-size: 40%;
+  z-index: 2;
+}
+
+/* ─── Pastille de langue (LanguageFlagChip) ─── */
+.flag-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 14px;
+  line-height: 1;
+}
+.flag-chip.active { font-size: 16px; }
+.flag-chip .underline { width: 10px; height: 1.5px; border-radius: 1px; background: var(--lang-color); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}

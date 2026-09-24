@@ -247,6 +247,13 @@ export interface TranslationStatus {
 export interface MessageResponse extends ApiResponse<SocketIOMessage> {
   // Message complet avec toutes les relations
   readonly data: SocketIOMessage;  // Includes sender, translations, replyTo, etc.
+  /**
+   * Secondes à attendre avant de réessayer — posé par les SEULS refus
+   * temporaires (`code: 'NEWCOMER_SLOW_MODE'`, #7740). Absent sur un succès et
+   * sur un refus définitif : un client qui le lit peut REPRÉSENTER le message
+   * au lieu de le ranger en échec.
+   */
+  readonly retryAfter?: number;
 }
 
 // ===== ÉVÉNEMENTS WEBSOCKET UNIFIÉS =====

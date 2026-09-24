@@ -1,11 +1,14 @@
 import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { describe, expect, test } from 'bun:test';
 
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
+import { storyReturn } from '@/lib/onboarding/story-return';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { buttonNamed } from '@/test-support/act-mount';
+import StoryComposeScreen from './story-compose';
 import {
   VIEWER_ID,
   fakeRect,
@@ -685,5 +688,49 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     } finally {
       document.documentElement.lang = 'fr';
     }
+  });
+});
+
+describe('StoryComposeScreen — ouvert par l’accueil post-inscription (#7729)', () => {
+  const mountFromOnboarding = (deps: Parameters<typeof mount>[0]) => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(<StoryComposeScreen deps={deps} requestedAudience="FRIENDS" origin="onboarding" />);
+    });
+    return {
+      container,
+      dispose: () => {
+        act(() => root.unmount());
+        container.remove();
+      },
+    };
+  };
+
+  test('l’audience demandée part, la croix ramène au parcours, et la publication y revient avec sa récompense', async () => {
+    /* Le banc tourne sur `about:blank`, où l'historique ne peut rien
+       pousser : l'adresse du studio est posée d'abord, comme dans la vraie
+       navigation depuis la carte « Montre-toi ». */
+    const happyDom: unknown = Reflect.get(window, 'happyDOM');
+    const setUrl: unknown = typeof happyDom === 'object' && happyDom !== null ? Reflect.get(happyDom, 'setURL') : undefined;
+    const before = window.location.href;
+    const goTo = (url: string) => {
+      if (typeof setUrl === 'function') Reflect.apply(setUrl, happyDom, [url]);
+    };
+    goTo('http://localhost/stories/new?audience=friends&from=onboarding');
+    const bench = harness({});
+    const { container, dispose } = mountFromOnboarding(bench.deps);
+    expect(container.querySelector('a[href="/onboarding"]')).not.toBeNull();
+
+    typeText(container, 'Nouveau sur Meeshy 👋');
+    act(() => publishButton(container)!.click());
+    await flush(() => window.location.pathname === '/onboarding');
+
+    expect(bench.posts[0]?.visibility).toBe('FRIENDS');
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/onboarding?story=post-1');
+    expect(storyReturn.take('post-1')).toBe(true);
+    dispose();
+    goTo(before);
   });
 });

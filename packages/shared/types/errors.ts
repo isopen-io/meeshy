@@ -36,6 +36,8 @@ export enum ErrorCode {
   ALREADY_MEMBER = 'ALREADY_MEMBER',
   INVALID_OPERATION = 'INVALID_OPERATION',
   MESSAGE_TOO_OLD = 'MESSAGE_TOO_OLD',
+  /** Meeshy Global (#7740) : un compte de moins de 24 h écrit un message toutes les 30 s. Temporaire — la réponse porte `retryAfter` (secondes). */
+  NEWCOMER_SLOW_MODE = 'NEWCOMER_SLOW_MODE',
   
   // System (9xxx)
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -137,6 +139,10 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     fr: 'Le message est trop ancien pour être modifié',
     en: 'Message is too old to be modified',
   },
+  [ErrorCode.NEWCOMER_SLOW_MODE]: {
+    fr: 'Bienvenue ! Les nouveaux comptes écrivent un message toutes les 30 s ici',
+    en: 'Welcome! New accounts can post one message every 30 s here',
+  },
   
   // System
   [ErrorCode.INTERNAL_ERROR]: {
@@ -201,6 +207,7 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.ALREADY_MEMBER]: 409,
   [ErrorCode.INVALID_OPERATION]: 422,
   [ErrorCode.MESSAGE_TOO_OLD]: 422,
+  [ErrorCode.NEWCOMER_SLOW_MODE]: 429,
   
   // System (500)
   [ErrorCode.INTERNAL_ERROR]: 500,

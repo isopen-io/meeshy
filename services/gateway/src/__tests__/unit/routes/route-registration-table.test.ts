@@ -170,7 +170,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 572
     // à 574 routes au lot de l'écriture, soit exactement ces deux-là, puis de
     // 574 à 575 au lot de la liste, soit exactement le `GET`.
-    expect(ROUTE_TABLE.length).toBe(67);
+    //
+    // 67 → 68 le 2026-09-24 (#7729) : entrée `me-onboarding`, les adresses
+    // NEUVES `GET`/`PATCH /api/v1/me/onboarding` (l'état du parcours
+    // d'accueil). Aucun alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(68);
   });
 });
 

@@ -1,5 +1,6 @@
 import { resolveLastMessageSummaryKind } from '@meeshy/shared/utils/last-message-protection';
 import { parseJoinNotice, type JoinNoticeMetadata } from '@meeshy/shared/utils/join-notice';
+import { arrivalsNoticeLine, parseArrivalsNotice } from '@meeshy/shared/utils/arrivals-notice';
 import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared/utils/conversation-notice';
 import type {
   LastMessageAttachmentSummary,
@@ -201,6 +202,8 @@ export function systemEventFromMessage(message: SystemEventSource): LastMessageS
   if (callSummaryFromMetadata(message.metadata)) return null;
   const joinNotice = parseJoinNotice(message.metadata);
   if (joinNotice) return joinNoticeEvent(joinNotice);
+  const arrivals = parseArrivalsNotice(message.metadata);
+  if (arrivals) return { key: 'system.members-arrived', params: { ...arrivalsNoticeLine(arrivals).params, count: arrivals.count } };
   const notice = parseConversationNotice(message.metadata);
   if (notice) return conversationNoticeEvent(notice);
   const raw = asRecord(message.metadata);

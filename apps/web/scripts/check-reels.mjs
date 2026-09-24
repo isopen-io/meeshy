@@ -37,6 +37,12 @@
  *     fois (sur le rail, jamais une pastille de moteur en plus), le tap et la
  *     barre sur la PAGE et non dans la boîte 9:16, et aucun lecteur ni piste
  *     de son de fond ne survit au retour.
+ * 15. commenter et repartager depuis le rail (#6484) : les six gestes dans
+ *     l'ordre d'iOS ; « Commenter » ouvre la feuille PARTAGÉE avec le lecteur
+ *     de stories (D-89), pager inerte, focus dedans, une flèche n'y fait pas
+ *     défiler le pager, un envoi fait monter le compteur du rail, Échap la
+ *     referme et rend le focus ; « Repartager » est optimiste, annoncé,
+ *     append-only ; hors ligne, les deux disent leur refus SUR PLACE.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -377,7 +383,10 @@ try {
       };
       check(Object.values(inks).every((ratio) => ratio !== null && ratio >= WCAG_AA), `${label} : auteur, légende et compteur tiennent AA au pixel sur la mire (${JSON.stringify(inks)})`);
       const controls = await reach(page, '[data-reel-index="0"] [data-reel-gesture], [data-reels-back]');
-      check(controls.length === 5 && controls.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR), `${label} : retour, j'aime, enregistrer, partager, son — atteignables, 44 au moins (${JSON.stringify(controls)})`);
+      check(
+        controls.length === 7 && controls.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR),
+        `${label} : retour, j'aime, commenter, enregistrer, repartager, partager, son — atteignables, 44 au moins (#6484, ${JSON.stringify(controls)})`,
+      );
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label} : aucun défilement horizontal`);
 
       // ------------------------------------------------ 4. balayage tactile
@@ -436,6 +445,200 @@ try {
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', likeSel, { timeout: 500 })
         .then(() => true, () => false);
       check(liked && Number(await page.textContent(`${likeSel} .tabular-nums`)) === before + 1, `${label} : « J'aime » bascule au geste, compte +1`);
+
+      // ------------------------------------------------ 15. commenter et repartager (#6484)
+      const commentSel = '[data-reel-index="0"] [data-reel-gesture="comment"]';
+      const repostSel = '[data-reel-index="0"] [data-reel-gesture="repost"]';
+
+      // Les SIX gestes du rail, dans l'ordre iOS (aimer · commenter ·
+      // enregistrer · repartager · partager · son), chacun ≥ 44 et atteignable.
+      const railOrder = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-reel-index="0"] [data-reel-gesture]')].map((el) => el.getAttribute('data-reel-gesture')),
+      );
+      const railTargets = await reach(page, '[data-reel-index="0"] [data-reel-gesture]');
+      check(
+        railOrder.join(',') === 'like,comment,bookmark,repost,share,sound' &&
+          railTargets.length === 6 &&
+          railTargets.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR),
+        `${label} : les six gestes, dans l'ordre iOS, tous atteignables et ≥ 44 (${JSON.stringify(railOrder)})`,
+      );
+
+      // HORS LIGNE — repartager refuse SUR PLACE (aucun optimiste), le dit.
+      await context.setOffline(true);
+      await page.click(repostSel);
+      // Le TEXTE du refus, jamais « une annonce quelconque » : la région
+      // garde la dernière annonce, et un témoin qui n'attend qu'une chaîne
+      // non vide passe sur celle d'un geste précédent (revue-correction #6484).
+      const announcedOffline = await page
+        .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Hors ligne — le repartage n’a pas pu partir.', undefined, { timeout: 1500 })
+        .then(() => true, () => false);
+      const offlineRepostState = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-pressed'), repostSel);
+      const offlineAnnouncement = await page.textContent('[role="status"].sr-only').catch(() => '');
+      check(
+        offlineRepostState === 'false' && announcedOffline,
+        `${label} : hors ligne, « Repartager » refuse SUR PLACE — aucun optimiste (état ${offlineRepostState}, annonce « ${offlineAnnouncement} »)`,
+      );
+      await context.setOffline(false);
+
+      // COMMENTER ouvre la MÊME feuille que le lecteur de stories (D-89),
+      // sur CE réel — jamais une navigation.
+      await page.click(commentSel);
+      const sheetOpened = await page.waitForSelector(`[data-story-comments-sheet="${SEED}"]`, { timeout: 3000 }).then(() => true, () => false);
+      check(sheetOpened, `${label} : « Commenter » ouvre la feuille de commentaires PARTAGÉE, sur ce réel (#6484, D-89)`);
+      check((await page.$('[data-comment-thread]')) !== null, `${label} : la feuille monte le MÊME fil que /post/$post (CommentThread)`);
+      await page
+        .waitForSelector('[data-comment-list] [data-comment-row]', { timeout: 3000 })
+        .catch(() => undefined);
+      const seededComments = await page.$$eval('[data-comment-list] [data-comment-row]', (els) => els.length).catch(() => 0);
+      check(seededComments > 0, `${label} : le fil du réel montre les commentaires déjà semés (${seededComments})`);
+      await capture(page, `reels-commentaires-${slug}`);
+
+      // RIEN DU RÉEL NE SE PEINT PAR-DESSUS LA FEUILLE (revue-correction
+      // #6484). La barre de progression du réel est en `z-10` (au-dessus du
+      // voile bas, #6903) ; sans contexte d'empilement propre au pager, elle
+      // traversait la feuille (`zIndex: 3`) sur sa dernière rangée — un trait
+      // clair sous le composeur, vu à la capture sombre. Les trois dernières
+      // lignes de pixels de la feuille doivent être SON fond, partout.
+      const sheetBackground = await page.evaluate(() => {
+        const sheet = document.querySelector('[data-story-comments-sheet]');
+        return sheet === null ? null : getComputedStyle(sheet).backgroundColor;
+      });
+      const edgeShot = await page.screenshot({ clip: { x: 0, y: height - 3, width, height: 3 }, animations: 'disabled' });
+      const edgeDrift = await page.evaluate(
+        async ([data, background]) => {
+          const rgb = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(background ?? '');
+          if (rgb === null) return null;
+          const img = new Image();
+          await new Promise((ok, ko) => {
+            img.onload = ok;
+            img.onerror = ko;
+            img.src = `data:image/png;base64,${data}`;
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const context = canvas.getContext('2d');
+          context.drawImage(img, 0, 0);
+          const px = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          let worst = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            worst = Math.max(worst, Math.abs(px[i] - Number(rgb[1])), Math.abs(px[i + 1] - Number(rgb[2])), Math.abs(px[i + 2] - Number(rgb[3])));
+          }
+          return worst;
+        },
+        [edgeShot.toString('base64'), sheetBackground],
+      );
+      check(edgeDrift !== null && edgeDrift <= 24, `${label} : le bas de la feuille est peint de SON fond — aucun trait du réel par-dessus (écart ${edgeDrift} sur 255, fond ${sheetBackground})`);
+
+      // CE QUE LA FEUILLE RECOUVRE DEVIENT INERTE (D-90), et le focus entre
+      // DANS la feuille — sans quoi la touche suivante irait au pager.
+      const sheetFocus = await page.evaluate(() => ({
+        inert: document.querySelector('[data-reels-pager]')?.inert === true,
+        inside: document.querySelector('[data-story-comments-sheet]')?.contains(document.activeElement) === true,
+      }));
+      check(sheetFocus.inert && sheetFocus.inside, `${label} : feuille ouverte — le pager est inerte, le focus est dans la feuille (${JSON.stringify(sheetFocus)})`);
+
+      // UNE FLÈCHE DANS LA FEUILLE N'AVANCE PAS LE PAGER RECOUVERT
+      // (revue-correction #6484). L'écouteur de `window` du lecteur ignorait
+      // l'inertie : `scrollTo` sur un sous-arbre inerte défile quand même —
+      // mesuré, la flèche basse faisait passer au réel suivant, ce qui FERMAIT
+      // la feuille et emportait le commentaire en cours.
+      // Un FAIT attendu, jamais un délai (`lib/fixed-delay-ratchet.test.ts`) :
+      // le défaut se voit dès que le pager bouge ou que la feuille part ; son
+      // absence se conclut à l'échéance. Une machine lente peut rater un rouge,
+      // jamais en inventer un.
+      await page.keyboard.press('ArrowDown');
+      const arrowMoved = await page
+        .waitForFunction(
+          () => document.querySelector('[data-story-comments-sheet]') === null || (document.querySelector('[data-reels-pager]')?.scrollTop ?? 0) > 0,
+          undefined,
+          { timeout: 800 },
+        )
+        .then(() => true, () => false);
+      const afterArrow = await page.evaluate(() => ({
+        sheet: document.querySelector('[data-story-comments-sheet]')?.getAttribute('data-story-comments-sheet') ?? null,
+        active: document.querySelector('[data-reel-mode="active"]')?.getAttribute('data-reel') ?? null,
+      }));
+      check(
+        !arrowMoved && afterArrow.sheet === SEED && afterArrow.active === SEED,
+        `${label} : une flèche dans la feuille ne fait pas défiler le pager recouvert (${JSON.stringify(afterArrow)})`,
+      );
+
+      // LE COMPTEUR DU RAIL SUIT L'ENVOI EN OPTIMISTE (#6484, C2) — lu sur le
+      // rail lui-même, la caisse que le lecteur peint, pas sur un cache voisin.
+      const commentBefore = Number(await page.textContent(`${commentSel} .tabular-nums`));
+      await page.fill('[data-story-comments-sheet] textarea', 'Bien vu');
+      await page.click('[data-story-comments-sheet] [data-comment-send]');
+      const countFollowed = await page
+        .waitForFunction(
+          ([sel, expected]) => Number(document.querySelector(`${sel} .tabular-nums`)?.textContent) === expected,
+          [commentSel, commentBefore + 1],
+          { timeout: 1500 },
+        )
+        .then(() => true, () => false);
+      check(countFollowed, `${label} : envoyer un commentaire depuis la feuille fait monter le compteur du rail (${commentBefore} → ${commentBefore + 1})`);
+
+      // ÉCHAP FERME LA FEUILLE, PAS LE LECTEUR — l'inertie se lève et le focus
+      // revient au bouton qui l'a ouverte.
+      const urlBefore = new URL(page.url());
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-story-comments-sheet]', { state: 'detached', timeout: 3000 }).catch(() => undefined);
+      /* Le focus revient dans un EFFET (après la peinture, sous Preact) : lu
+         à l'instant du démontage, il est encore sur `<body>`. On attend donc
+         l'état, jamais un délai fixe — et un retour qui n'arrive pas rougit. */
+      await page
+        .waitForFunction(() => document.activeElement?.getAttribute('data-reel-gesture') === 'comment', undefined, { timeout: 1500 })
+        .catch(() => undefined);
+      const afterEscape = await page.evaluate(() => ({
+        sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+        inert: document.querySelector('[data-reels-pager]')?.inert === true,
+        focus: document.activeElement?.getAttribute('data-reel-gesture') ?? null,
+      }));
+      const urlAfter = new URL(page.url());
+      check(
+        !afterEscape.sheet && !afterEscape.inert && afterEscape.focus === 'comment' && urlAfter.pathname + urlAfter.search === urlBefore.pathname + urlBefore.search,
+        `${label} : Échap referme la feuille, lève l'inertie et rend le focus à « Commenter », sans quitter les Réels (${JSON.stringify(afterEscape)} ${urlAfter.pathname}${urlAfter.search})`,
+      );
+
+      // REPARTAGER — optimiste, compte +1, teinte posée, jamais défait par un
+      // second tap (append-only, miroir `ReelsViewModel.repost`).
+      const repostBefore = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      await page.click(repostSel);
+      const reposted = await page
+        .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', repostSel, { timeout: 1500 })
+        .then(() => true, () => false);
+      const repostColor = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('style') ?? '', repostSel);
+      const announcedSuccess = await page
+        .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Repartage', undefined, { timeout: 1500 })
+        .then(() => true, () => false);
+      check(
+        reposted && announcedSuccess && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1 && repostColor.includes('--color-ok'),
+        `${label} : « Repartager » bascule au geste, compte +1, teinte posée, succès annoncé (${repostColor})`,
+      );
+      await capture(page, `reels-repartage-${slug}`);
+      await page.click(repostSel);
+      // « Déjà repartagé » (feed.post.repost.already) est l'annonce PROPRE au
+      // second tap — attendre CE texte précis, jamais un délai fixe, prouve
+      // que le second appel a bien été traité (pas seulement que le premier
+      // l'a été).
+      const announcedAlready = await page
+        .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Déjà repartagé', undefined, { timeout: 1500 })
+        .then(() => true, () => false);
+      check(
+        announcedAlready && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1,
+        `${label} : un second tap ne compte pas deux fois — append-only (#6484)`,
+      );
+
+      // HORS LIGNE, DE NOUVEAU — le fil de commentaires déjà lu le DIT (cache
+      // conservé, `comments.offline`), jamais un silence.
+      await context.setOffline(true);
+      await page.click(commentSel);
+      await page.waitForSelector('[data-story-comments-sheet]', { timeout: 3000 }).catch(() => undefined);
+      const offlineComments = await page.waitForSelector('[data-comment-state="offline"]', { timeout: 3000 }).then(() => true, () => false);
+      check(offlineComments, `${label} : hors ligne, la feuille garde le cache et le DIT (data-comment-state="offline")`);
+      await page.click('[data-story-comments-close]');
+      await page.waitForSelector('[data-story-comments-sheet]', { state: 'detached', timeout: 3000 }).catch(() => undefined);
+      await context.setOffline(false);
 
       // ------------------------------------------------ 8. hors ligne, avec des réels
       /* La coupure se dit par la pastille de synchronisation de la coquille, le

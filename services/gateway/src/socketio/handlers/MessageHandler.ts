@@ -71,7 +71,7 @@ import {
   resolveForwardSourceBroadcastPayload,
   withoutForwardSourceOrItsPath,
 } from '../../services/preferences/forward-source-visibility.js';
-import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
+import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
@@ -430,7 +430,7 @@ export class MessageHandler {
       );
 
       // Répondre au client
-      this._sendResponse(callback, response);
+      this._sendResponse(callback, response, socket);
 
       // Broadcaster le message si succès — SAUF sur un dedup idempotent
       // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
@@ -661,7 +661,7 @@ export class MessageHandler {
       // (Prisma read failure, connection drop) would silently skip the
       // callback and leave iOS / web waiting indefinitely → spurious
       // retry. Mirror the order used by `handleMessageSend` above.
-      this._sendResponse(callback, response);
+      this._sendResponse(callback, response, socket);
 
       if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -2273,8 +2273,10 @@ export class MessageHandler {
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
-    response: MessageResponse
+    response: MessageResponse, socket?: MeeshySocket
   ): void {
+    const refusal = response.success ? null : messageRefusalEvent(response);
+    if (refusal) socket?.emit(SERVER_EVENTS.ERROR, refusal);
     if (!callback) return;
 
     try {
@@ -2291,12 +2293,7 @@ export class MessageHandler {
           success: true,
           data: buildMessageAckData(data)
         });
-      } else {
-        callback({
-          success: false,
-          error: response.error || 'Failed to send message'
-        });
-      }
+      } else callback(buildMessageFailureAck(response));
     } catch (error) {
       handlerLogger.error('ACK callback threw — socket connection preserved', { error });
     }

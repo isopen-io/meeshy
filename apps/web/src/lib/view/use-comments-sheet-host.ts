@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * LA LOI D'HÔTE DE LA FEUILLE DE COMMENTAIRES (#6484, D-89) — ce qu'un écran
@@ -17,11 +17,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *  - **UN CHANGEMENT DE CLÉ FERME LA FEUILLE** — la story ou le réel suivant
  *    n'hérite pas du fil de son voisin.
  *
- * `routes/story.tsx` garde sa propre implémentation inline : c'est un fichier
- * DÉJÀ hors budget (1000-1200 lignes, CLAUDE.md racine) où « on ajoute » est
- * interdit — l'y faire consommer ce hook aurait exigé une extraction plus
- * large, hors du périmètre de ce lot. Les DEUX portent la MÊME loi ; seul le
- * lecteur des Réels, écrit APRÈS cette extraction, la lit d'ici.
+ * LES DEUX LECTEURS la lisent d'ici — `routes/story.tsx` (qui y a perdu ses
+ * trois effets inline : une EXTRACTION, 1020 → 992 lignes) et
+ * `routes/reels.tsx`. Ce qui reste propre à un hôte y reste : la PAUSE de la
+ * story (son horloge avance seule ; un réel, comme sur iOS, continue de jouer
+ * sous la feuille) et l'inertie de ce que la feuille recouvre (D-90).
  */
 export type CommentsSheetHost = {
   /** `null` ⇒ fermée. Sinon, la publication dont le fil est ouvert. */
@@ -30,16 +30,17 @@ export type CommentsSheetHost = {
   readonly close: () => void;
 };
 
+/* `open`, `close` et l'hôte lui-même GARDENT LEUR IDENTITÉ tant que l'état ne
+ * change pas (revue-correction #6484). Ils sont lus en aval par des
+ * mémoïsations et des effets : `openComments` (`useCallback`) puis
+ * `railHandlers` (`useMemo`) du lecteur de stories, et l'écouteur d'Échap de
+ * la feuille (`useEffect([onClose])`). Rendus neufs à chaque rendu, ils
+ * défaisaient les deux premières et réabonnaient le troisième à chaque
+ * rendu de l'hôte. Ce module vit dans un chunk PARTAGÉ par les deux lecteurs :
+ * la mémoïsation ne pèse ni sur `reels`, ni sur `story_reader`. */
 export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHost {
   const [postId, setPostId] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-
-  const open = useCallback((id: string) => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPostId(id);
-  }, []);
-
-  const close = useCallback(() => setPostId(null), []);
 
   useEffect(() => {
     if (postId !== null) return;
@@ -55,5 +56,11 @@ export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeWhenChanges]);
 
-  return { postId, open, close };
+  const open = useCallback((id: string) => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPostId(id);
+  }, []);
+  const close = useCallback(() => setPostId(null), []);
+
+  return useMemo(() => ({ postId, open, close }), [postId, open, close]);
 }

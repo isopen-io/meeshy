@@ -370,6 +370,7 @@ struct RootView: View {
         .modifier(RootChromeLayer(
             reelsPresenter: reelsPresenter,
             conversationViewModel: conversationViewModel,
+            storyViewModel: storyViewModel,
             storyViewerCoordinator: storyViewerCoordinator,
             router: router,
             activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },

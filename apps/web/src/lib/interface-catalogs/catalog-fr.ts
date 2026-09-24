@@ -9,6 +9,8 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frThreadStates from './catalog-fr-thread-states';
+
 const fr = {
   'announce.messageSent': 'Message envoyé',
   'announce.messageCopied': 'Message copié',
@@ -144,7 +146,7 @@ const fr = {
   'feed.post.repost.error': 'Erreur lors du repost',
   'feed.post.repost.already': 'Déjà repartagé',
   'feed.post.repost.offline': 'Hors ligne — le repartage n’a pas pu partir.',
-  'feed.post.repost.unconfirmed': 'Repartage non confirmé — hors ligne',
+  'feed.post.repost.unconfirmed': 'Repartage non confirmé — réessayez',
   'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',
@@ -1000,6 +1002,15 @@ const fr = {
   'story.action.save': 'Enregistrer',
   'story.action.comments': 'Commentaires',
   'story.action.translations': 'Traductions',
+  'story.views.empty.title': 'Aucune vue pour le moment',
+  'story.views.empty.subtitle': 'Les personnes qui regardent votre story apparaîtront ici.',
+  'story.views.count.one': '{count} vue',
+  'story.views.count.other': '{count} vues',
+  'story.save.progress': 'Enregistrement {percent} %',
+  'story.save.cancel': 'Annuler l’enregistrement',
+  'story.save.success': 'Story enregistrée',
+  'story.save.failed': 'Échec de l’enregistrement',
+  'story.save.cancelled': 'Export annulé',
   /* LA PASTILLE DU PRISME (#7141) — trois SUJETS, parce que « Afficher le
      message… » sur un commentaire serait traduit et faux. Neuf clés plates
      plutôt que trois à paramètre : l'accord (« traduit » / « traduite ») ne
@@ -1135,57 +1146,7 @@ const fr = {
   'message.location.open': 'Ouvrir dans Plans',
   'message.location.a11y': 'Position : {place}',
 
-  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — le transfert, l'échec d'envoi, les
-     tombstones et les substituts de pièce protégée. Ils étaient EN DUR, en
-     français, sur des surfaces servies en SEPT langues : un lecteur anglophone,
-     arabophone ou lusophone lisait du français sur les états les plus
-     anxiogènes de l'application. D-13 ne les couvre pas — elle EXCLUT
-     explicitement « les textes affichés à l'utilisateur, qui relèvent de
-     l'internationalisation, pas du nommage ».
-
-     Valeurs reprises du catalogue iOS là où il en a une : `bubble.meta.forwarded`,
-     `bubble.meta.forwarded.fromGroup`, `bubble.meta.forwarded.from`,
-     `bubble.system.deleted`, `bubble.system.burned`, `bubble.system.burned.a11y`,
-     `bubble.media.masked`, `bubble.media.viewOnce`, `common.retry`,
-     `sync.pill.failed.message` (l'annonce au lecteur d'écran). */
-  'message.forwarded': 'Transféré',
-  'message.forwarded.fromGroup': 'Transféré depuis {name}',
-  'message.forwarded.fromPerson': 'Transféré de {name}',
-  'message.send.failed': 'Non envoyé',
-  'message.send.failed.reason': 'Non envoyé — {reason}',
-  'message.send.retry': 'Réessayer',
-  'announce.messageNotSent': 'Message non envoyé',
-  'announce.messageNotSent.reason': 'Message non envoyé — {reason}',
-  'message.deleted': 'Message supprimé',
-  'message.expired.a11y': 'Message éphémère expiré',
-  'message.withheld': 'Contenu retenu',
-  'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
-  'message.veiled': 'Contenu masqué',
-  'message.veiled.hint': 'Toucher pour révéler le contenu',
-  'message.veiled.error': 'Révélation impossible pour l’instant',
-  'message.ephemeral.a11y': 'Message éphémère, disparaît dans {remaining}',
-  'message.ephemeral.awaiting': 'En attente de réception',
-  'message.ephemeral.awaiting.a11y': 'Message éphémère de {duration}, en attente de réception',
-  'message.viewOnce.tap': 'Touchez pour afficher',
-  'message.viewOnce.opened': 'Déjà ouvert',
-  'message.viewOnce.sealed.a11y': 'Message à vue unique, touchez pour afficher',
-  'message.viewOnce.opened.a11y': 'Message à vue unique, déjà ouvert',
-  'message.viewOnce.close': 'Fermer',
-  'attachment.protected.image': 'Photo protégée',
-  'attachment.protected.video': 'Vidéo protégée',
-  'attachment.protected.audio': 'Vocal protégé',
-  'attachment.protected.file': 'Pièce protégée',
-  /* LE GENRE D'UN MEDIA CITE (#7556) — miroir `AttachmentKind.shortLabel`
-     (`packages/MeeshySDK/.../Models/AttachmentKind.swift:140-153`) : le libelle
-     COURT qui remplace un apercu VIDE dans une citation (« Photo », « Video »…).
-     DISTINCT d'`attachment.protected.*` juste au-dessus, qui qualifie le
-     SUBSTITUT d'une piece masquee — deux etats, donc deux jeux de mots : « un
-     second vocabulaire ferait dire deux choses differentes a l'oeil et a
-     l'oreille pour un meme etat ». */
-  'attachment.kind.image': 'Photo',
-  'attachment.kind.video': 'Vidéo',
-  'attachment.kind.audio': 'Audio',
-  'attachment.kind.file': 'Fichier',
+  ...frThreadStates,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en

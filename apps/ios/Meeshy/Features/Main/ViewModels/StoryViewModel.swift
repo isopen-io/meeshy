@@ -69,6 +69,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// protection qui compte — « personne HORS du module ne l'écrit » — est
     /// intacte.
     @Published var activeUploads: [StoryUploadState] = []
+    /// L'id d'un upload qui a ABOUTI côté serveur, annoncé juste AVANT son
+    /// retrait de `activeUploads`. Un retrait seul ne dit rien : annulation,
+    /// abandon par la file et succès vident la ligne pareil. Qui doit créditer
+    /// une publication (l'onboarding, #7729) écoute ce signal, jamais la file.
+    let storyUploadSucceeded = PassthroughSubject<String, Never>()
     /// Vue de compatibilité : l'upload que les surfaces d'avatar mettent en
     /// avant (un échec l'emporte, sinon la tête de file). `activeUploads` étant
     /// `@Published`, toutes les vues qui lisent cette propriété calculée
@@ -134,7 +139,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         StoryPublishQueue.shared.publishSucceeded.publisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
-                self?.removeActiveUpload(queueId: payload.queueId)
+                self?.removeActiveUpload(queueId: payload.queueId, succeeded: true)
             }
             .store(in: &cancellables)
 
@@ -146,8 +151,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .store(in: &cancellables)
     }
 
-    private func removeActiveUpload(queueId: String) {
+    private func removeActiveUpload(queueId: String, succeeded: Bool = false) {
         guard let idx = activeUploads.firstIndex(where: { $0.queueId == queueId }) else { return }
+        if succeeded { storyUploadSucceeded.send(activeUploads[idx].id) }
         let removed = activeUploads.remove(at: idx)
         if currentUploadId == removed.id {
             uploadTask?.cancel()

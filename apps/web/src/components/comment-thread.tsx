@@ -1,20 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useStore } from 'zustand/react';
 
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
 import { CommentList } from '@/components/comment-list';
 import type { CommentGestureHandlers } from '@/components/comment-row';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
-import { apiDeps } from '@/lib/api/deps';
 import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
-import { sessionStore } from '@/lib/api/session';
-import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useMinute } from '@/lib/view/use-minute';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useViewer } from '@/lib/view/use-viewer';
 
 /**
  * **LE FIL DE COMMENTAIRES, MONTÉ** — la liste (`comment-list.tsx`), son
@@ -43,8 +40,7 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
   const online = useOnline();
   const reader = useReaderLanguages();
   const minute = useMinute();
-  const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const viewer = useViewer();
   const query = useComments(postId, { enabled });
 
   const comments = useMemo(

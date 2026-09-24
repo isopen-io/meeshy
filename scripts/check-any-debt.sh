@@ -337,7 +337,12 @@ readonly SHARED_BASELINE=0
 #
 # Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
 # scripts/check-any-debt.sh` + son self-test.
-readonly GATEWAY_BASELINE=506
+#
+# 506 → 505 (#7740, lot anti-spam de Meeshy Global) : `POST /translate-blocking`
+# ne persiste plus de message (il contournait `MessagingService.handleMessage`,
+# donc le mode lent des nouveaux comptes, la clôture et l'appartenance) — le
+# `const messageData: any` de la branche « nouveau message » part avec elle.
+readonly GATEWAY_BASELINE=505
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

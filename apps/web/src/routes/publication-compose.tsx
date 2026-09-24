@@ -1,5 +1,6 @@
 import { useSearch } from '@/lib/router';
-import { publicationKindFromSearch, type PublicationKind } from '@/lib/stories/publication-kind';
+import { requestedAudienceFromSearch } from '@/lib/stories/publication-audience';
+import { publicationKindFromSearch, studioOriginFromSearch, type PublicationKind } from '@/lib/stories/publication-kind';
 import StoryComposeScreen from '@/routes/story-compose';
 
 /**
@@ -7,12 +8,20 @@ import StoryComposeScreen from '@/routes/story-compose';
  * `/posts/new` montent le MÊME studio ; seule change le format que la
  * capsule `[Publier … | ▾]` publie si l'auteur ne touche pas au chevron.
  * `?type=story|post|reel` le précise (la porte « Réel » du fil ouvre
- * `/posts/new?type=reel`).
+ * `/posts/new?type=reel`). L'accueil post-inscription (#7729) ajoute
+ * `?audience=` (la visibilité par défaut servie) et `?from=onboarding`.
  */
 function ComposeAt({ fallback }: { readonly fallback: PublicationKind }) {
   const [search] = useSearch();
   const initialKind = publicationKindFromSearch(search, fallback);
-  return <StoryComposeScreen key={initialKind} initialKind={initialKind} />;
+  return (
+    <StoryComposeScreen
+      key={initialKind}
+      initialKind={initialKind}
+      requestedAudience={requestedAudienceFromSearch(search)}
+      origin={studioOriginFromSearch(search)}
+    />
+  );
 }
 
 export function StoryComposeRoute() {

@@ -90,6 +90,9 @@ export interface LastMessageCallSummary {
  *
  * - `system.member-joined` — params `{ name }` (le nom affiché de l'arrivant),
  *   pour une arrivée de SOI-MÊME (lien d'invitation, conversation globale)
+ * - `system.members-arrived` — params `{ first, second, third, others, count }`
+ *   (#7740) : la ligne d'arrivées regroupées de Meeshy Global — noms des
+ *   derniers arrivés, nombre des autres, total de la fenêtre
  * - `system.member-added` — params `{ actor, target }` (noms affichés) : un
  *   membre en a ajouté un autre (#7593)
  * - `system.member-removed` — params `{ actor, target }` : un membre en a
@@ -103,6 +106,7 @@ export interface LastMessageCallSummary {
  */
 export type SystemEventKey =
   | 'system.member-joined'
+  | 'system.members-arrived'
   | 'system.member-added'
   | 'system.member-removed'
   | 'system.member-left'

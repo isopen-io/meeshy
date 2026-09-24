@@ -1,6 +1,7 @@
 import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared/utils/conversation-notice';
 import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
+import { arrivalsNoticeText, parseArrivalsNotice, type ArrivalsNoticeMetadata } from '@meeshy/shared/utils/arrivals-notice';
 
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -65,6 +66,8 @@ export type SystemRow =
       readonly addedBy?: string;
     }
   | { readonly kind: 'group'; readonly notice: ConversationNotice }
+  /** Les arrivées REGROUPÉES de Meeshy Global (#7740) — une ligne par fenêtre de dix minutes. */
+  | { readonly kind: 'arrivals'; readonly notice: ArrivalsNoticeMetadata }
   | { readonly kind: 'notice'; readonly text: string };
 
 /**
@@ -107,6 +110,9 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
   const groupNotice = parseConversationNotice(metadata);
   if (groupNotice !== null) return { kind: 'group', notice: groupNotice };
 
+  const arrivals = parseArrivalsNotice(metadata);
+  if (arrivals !== null) return { kind: 'arrivals', notice: arrivals };
+
   if (message.content !== '') return { kind: 'notice', text: message.content };
   return null;
 }
@@ -126,6 +132,8 @@ export function systemRowText(row: SystemRow, language: string = currentInterfac
         : conversationPreviewString(language, 'system.member.added', { actor: row.addedBy, target: row.displayName });
     case 'group':
       return groupNoticeText(row.notice, language);
+    case 'arrivals':
+      return arrivalsNoticeText(row.notice, language);
   }
 }
 

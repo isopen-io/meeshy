@@ -1,9 +1,9 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useStore } from 'zustand/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
+import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { ReelPage } from '@/components/reel-page';
 import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
@@ -11,8 +11,6 @@ import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
-import { sessionStore } from '@/lib/api/session';
-import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -21,22 +19,15 @@ import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
-import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
+import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSettled } from '@/lib/view/use-settled';
+import { useViewer } from '@/lib/view/use-viewer';
 import { href, navigate } from '@/routes/route-table';
-
-/** La feuille de commentaires — chargée À LA DEMANDE (motif D-54, comme
- * `routes/story.tsx`) : un lecteur qui regarde des réels sans les commenter
- * ne paie ni la liste, ni le composeur, ni leur requête. Composant PARTAGÉ
- * avec le lecteur de stories (D-89, #6484) — `components/publication-comments-sheet.tsx`. */
-const PublicationCommentsSheet = lazy(() =>
-  import('@/components/publication-comments-sheet').then((m) => ({ default: m.PublicationCommentsSheet })),
-);
 
 /**
  * LES RÉELS (#6457) — miroir de `ReelsPlayerView` et `ReelsViewModel` (iOS) :
@@ -193,11 +184,10 @@ export default function ReelsScreen() {
   const [soundOn, setSoundOn] = useState(hasUserActivation);
 
   /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
-     exigent un `registeredUser` (`interactions.ts:826-828`,
-     `comments.ts:184-186`), même garde que `CommentThread.canWrite`. Offrir
-     les boutons puis refuser en 401 serait un contrôle qui ment (loi 4). */
-  const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+     exigent un `registeredUser`, même garde que `CommentThread.canWrite`.
+     `useViewer` est PARTAGÉ avec `comment-thread.tsx` (#6484,
+     `lib/view/use-viewer.ts`) : aucun des deux ne le paie deux fois. */
+  const viewer = useViewer();
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
@@ -243,6 +233,7 @@ export default function ReelsScreen() {
      #6484) — la loi d'hôte (focus, fermeture au changement de réel) vit dans
      `use-comments-sheet-host.ts`, extraite de `routes/story.tsx`. */
   const comments = useCommentsSheetHost(activeId);
+  const sheetOpen = comments.postId !== null;
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -280,6 +271,13 @@ export default function ReelsScreen() {
          flèches ne sont jamais rendues à un bouton, le réel gardant sa
          navigation quel que soit le contrôle qui a le focus. */
       if (shortcutYieldsToTarget({ target: event.target, key: event.key })) return;
+      /* LA FEUILLE OUVERTE GARDE LE CLAVIER (revue-correction #6484, D-90).
+         Le pager est `inert` sous elle, mais `inert` ne retient que ce que
+         l'UTILISATEUR touche : `scrollTo` le défile quand même. Mesuré au
+         navigateur, une flèche dans la feuille passait au réel suivant — ce
+         qui la FERMAIT (`useCommentsSheetHost`) avec le commentaire en cours.
+         La loi est celle que le lecteur de stories applique déjà au doigt. */
+      if (screenGestureYields({ target: event.target, layerOpen: sheetOpen })) return;
       const direction = KEY_DIRECTION[event.key];
       const el = scroller.current;
       if (direction === undefined || el === null) return;
@@ -291,7 +289,7 @@ export default function ReelsScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [close, count]);
+  }, [close, count, sheetOpen]);
 
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = reels;
   useEffect(() => {
@@ -323,8 +321,13 @@ export default function ReelsScreen() {
            `routes/story.tsx`) — un sous-arbre inerte n'intercepte plus le
            doigt ni le clavier : sans elle, un balayage sous la feuille
            ferait avancer le pager derrière le fil qu'on lit. */
-        inert={comments.postId !== null}
-        className="scrollbar-none h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
+        inert={sheetOpen}
+        /* `isolate` (revue-correction #6484) : un contexte d'empilement PROPRE
+           au pager. La barre de progression d'un réel est en `z-10` pour
+           passer au-dessus de son voile (#6903) ; sans lui, elle passait
+           AUSSI au-dessus de la feuille de commentaires (`zIndex: 3`), en
+           trait clair sur sa dernière rangée. */
+        className="scrollbar-none isolate h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
       >
         {models.map((model, index) => (
           <ReelPage
@@ -344,11 +347,7 @@ export default function ReelsScreen() {
           />
         ))}
       </div>
-      {comments.postId !== null ? (
-        <Suspense fallback={null}>
-          <PublicationCommentsSheet postId={comments.postId} onClose={comments.close} />
-        </Suspense>
-      ) : null}
+      <CommentsSheetPortal host={comments} />
     </>
   );
 
