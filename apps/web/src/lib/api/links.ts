@@ -374,7 +374,4 @@ export function createShareLink(deps: LinksDeps, conversationId: string): Promis
   return createShareLinkFromDraft(deps, defaultShareLinkDraft(conversationId), new Date());
 }
 
-/** L'URL À PARTAGER (§ 3.3) — `${origin}/chat/${slug}`, miroir `MyShareLink.joinUrl`. */
-export function shareLinkUrl(origin: string, linkId: string): string {
-  return `${origin}/chat/${linkId}`;
-}
+export { shareLinkUrl } from '../links/web-origin';

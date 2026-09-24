@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { AuthColumn } from '@/components/auth-column';
-import { Avatar } from '@/components/avatar';
-import { Glyph } from '@/components/glyph';
+import { LiveAnnouncement } from '@/components/live-announcement';
+import { apiConfig } from '@/lib/api/config';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
@@ -18,7 +16,6 @@ import {
   type GuestDraft,
   type GuestField,
   type GuestJoinBody,
-  type InvitationKind,
   type LinkGuestJoined,
   type LinkInvitation,
   type LinkJoined,
@@ -26,11 +23,30 @@ import {
 } from '@/lib/api/link-join';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { joinChoicesOf } from '@/lib/links/invitation-view';
+import { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from '@/lib/links/link-copy';
+import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
-import { initialsOf } from '@/lib/view/conversation';
+import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm } from '@/routes/chat-join-guest';
+import {
+  GroupCard,
+  INK,
+  INK_2,
+  INVITE_ACTION_BACKGROUND,
+  INVITE_OUTLINE_BUTTON,
+  INVITE_OUTLINE_STYLE,
+  InvitationFigures,
+  InvitationPending,
+  InviteHeader,
+  InviterBlock,
+  RefusalBanner,
+  RightsCard,
+} from '@/routes/chat-join-parts';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -40,12 +56,14 @@ import { Link, href, navigate } from '@/routes/route-table';
  * compte, et donc la seule où une invitation se lit. Son pendant privé,
  * `/c/:conversation`, fait l'inverse — sans compte, rien n'y est révélé.
  *
- * CE QUE L'ÉCRAN MONTRE AVANT LE CHOIX : qui invite, le titre, le type, ce que
- * le nouveau membre pourra lire et faire. RIEN d'autre — ni message, ni membre,
- * ni compteur (`link-join.ts § projection`). La lecture passe par
- * `GET /anonymous/link/:identifier`, jamais par `GET /links/:identifier` qui
- * SERT jusqu'à cinquante messages à un visiteur sans session dès que le lien
- * autorise l'historique.
+ * CE QUE L'ÉCRAN MONTRE AVANT LE CHOIX (#7796, maquette validée) : qui invite
+ * et son message, le groupe (bannière, logo, nom, type, date, description, son
+ * lien avec Copier et Repartager), le nombre de personnes et les langues
+ * parlées, ce qu'on pourra faire en anonyme. RIEN qui identifie un membre — ni
+ * visage, ni nom, ni message (`link-join.ts § projection`). La lecture passe
+ * par `GET /anonymous/link/:identifier`, jamais par `GET /links/:identifier`
+ * qui SERT jusqu'à cinquante messages à un visiteur sans session dès que le
+ * lien autorise l'historique.
  *
  * TROIS PUBLICS, UNE ADRESSE :
  *  - un compte CONNECTÉ rejoint en un geste, puis arrive dans le fil ;
@@ -60,10 +78,12 @@ import { Link, href, navigate } from '@/routes/route-table';
  * conservées. Les confondre fait réessayer quelqu'un dont le lien est mort, ou
  * abandonner quelqu'un dont le pseudo était juste pris.
  *
- * **L'ACTION PRIMAIRE TIENT DANS LE PREMIER ÉCRAN, DANS TOUS SES ÉTATS.** C'est
- * pourquoi le détail des droits vit dans un `<details>` REPLIÉ, pourquoi pseudo
- * et langue partagent une rangée, et pourquoi e-mail et date de naissance ne
- * paraissent que si le lien les exige.
+ * **L'ACTION PRIMAIRE TIENT DANS LE PREMIER ÉCRAN, DANS TOUS SES ÉTATS**
+ * (#5561, `check-join-first-screen.mjs`). Sous 768 px la page est une colonne
+ * que la maquette termine par les choix ; ils sont donc COLLÉS au bas de
+ * l'écran (`sticky`) tant que la page défile au-dessus d'eux. Au-delà, deux
+ * colonnes : le groupe à gauche, les chiffres, les droits et les choix à
+ * droite, tous dans le premier écran d'un bureau.
  *
  * LES EFFETS DE BORD SONT INJECTÉS (`ChatJoinDeps`) — même dispositif que
  * `MagicLinkValidation` (`validate`, `go`) : le témoin monte l'écran sans
@@ -86,6 +106,15 @@ export type ChatJoinDeps = {
    * `onUnauthorized` (`api/client.ts`), qu'un 401 aurait déclenché si la porte
    * de jonction en rendait un. */
   readonly expireSession: () => void;
+  /** Copier l'adresse du lien (#7796) — le presse-papiers du navigateur ou de la coque. */
+  readonly copyText: (url: string) => Promise<CopyOutcome>;
+  /** Repartager (#7796) — la feuille native (`navigator.share`, pont `MeeshyShare`
+   * de la coque), sinon une copie, dite. */
+  readonly shareUrl: (data: { readonly title: string; readonly text: string; readonly url: string }) => Promise<ResultatInvitation>;
+  /** L'origine PUBLIQUE des adresses partagées (`web-origin.ts`) — jamais
+   * l'origine virtuelle d'une coque. */
+  readonly origin: () => string;
+  readonly now: () => Date;
 };
 
 const DEFAULT_DEPS: ChatJoinDeps = {
@@ -98,6 +127,10 @@ const DEFAULT_DEPS: ChatJoinDeps = {
     void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   },
   expireSession: () => sessionStore.getState().clearSession(),
+  copyText: (url) => copyLinkText(url, portailDuNavigateur()),
+  shareUrl: (data) => partagerLien(data),
+  origin: () => webOriginOf(apiConfig.base, window.location.origin),
+  now: () => new Date(),
 };
 
 type LoadState =
@@ -126,64 +159,38 @@ const EMPTY_DRAFT: GuestDraft = { nickname: '', email: '', birthday: '', languag
  */
 const PASSING_REFUSALS: ReadonlySet<LinkRefusal> = new Set<LinkRefusal>(['rate-limited', 'offline', 'unavailable']);
 
-/** Chaque cause, dite. Un `Record` exhaustif : un refus ajouté au port sans
- * phrase ici ne compile pas. */
-const REFUSAL_CAUSE: Readonly<Record<LinkRefusal, string>> = {
-  'not-found': 'Cette invitation est introuvable. Le lien est peut-être incomplet.',
-  revoked: 'Ce lien a été désactivé par la personne qui l’a partagé.',
-  expired: 'Ce lien a expiré ou n’est plus actif.',
-  closed: 'Cette conversation est terminée : elle ne peut plus être rejointe.',
-  full: 'Ce lien a atteint sa limite de participants.',
-  language: 'Cette invitation n’accepte pas votre langue.',
-  banned: 'Vous ne pouvez plus rejoindre cette conversation.',
-  region: 'Cette invitation n’est pas accessible depuis votre réseau.',
-  'account-required': 'Un compte Meeshy est nécessaire pour rejoindre cette conversation.',
-  'session-expired': 'Votre session a expiré. Reconnectez-vous pour rejoindre.',
-  'rate-limited': 'Trop de tentatives. Réessayez dans un instant.',
-  offline: 'Vous êtes hors ligne. L’invitation s’affichera au retour du réseau.',
-  unavailable: 'L’invitation est indisponible pour le moment.',
-};
-
-/** Ce qui MANQUE — dit avant que rien ne parte (`validateGuestDraft`). */
-const MISSING_FIELD: Readonly<Record<GuestField, string>> = {
-  nickname: 'Choisissez un pseudo pour cette conversation.',
-  email: 'Ce lien demande une adresse e-mail valide.',
-  birthday: 'Ce lien demande votre date de naissance.',
-  language: 'Choisissez une langue parmi celles que ce lien accepte.',
-};
-
-/** Ce que la PASSERELLE a refusé — distinct de ce qui manquait. */
-const REFUSED_FIELD: Readonly<Record<GuestField, string>> = {
-  nickname: 'Ce pseudo est déjà pris dans cette conversation.',
-  email: 'Cette adresse e-mail a été refusée.',
-  birthday: 'Cette date de naissance a été refusée.',
-  language: 'Cette invitation n’accepte pas cette langue.',
-};
-
-const REFUSED_WITHOUT_FIELD = 'Une information demandée manque ou a été refusée.';
-
-const KIND_LABEL: Readonly<Record<InvitationKind, string>> = {
-  direct: 'Conversation privée',
-  group: 'Conversation de groupe',
-  public: 'Conversation publique',
-  global: 'Conversation ouverte à tous',
-  broadcast: 'Canal de diffusion',
-};
-
-/** Le dégradé d'action des pages d'accès — celui du lien par e-mail
- * (`MagicLinkView.swift:156-162`), pas celui de la connexion : rejoindre n'est
- * pas s'authentifier. */
-const ACTION_BACKGROUND = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
-const SUBTLE_BORDER = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)';
-
 export default function ChatJoinScreen() {
   const { link } = useParams<'/chat/$link'>();
   return <ChatJoin link={link} />;
 }
 
+const MISSING_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.missing.${GuestField}`>>> = {
+  nickname: 'invite.missing.nickname',
+  email: 'invite.missing.email',
+  birthday: 'invite.missing.birthday',
+  language: 'invite.missing.language',
+};
+
+const REFUSED_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.refused.${GuestField}`>>> = {
+  nickname: 'invite.refused.nickname',
+  email: 'invite.refused.email',
+  birthday: 'invite.refused.birthday',
+  language: 'invite.refused.language',
+};
+
+const COPIED_MS = 2000;
+
+/** Le fond de la page — la lueur indigo de la maquette, sur la surface du schéma. */
+const PAGE_BACKGROUND =
+  'radial-gradient(60% 30% at 12% 0%, color-mix(in srgb, var(--ios-indigo-500) 14%, transparent), transparent), radial-gradient(50% 30% at 90% 90%, color-mix(in srgb, var(--ios-purple-500) 10%, transparent), transparent), var(--color-ios-surface)';
+
 export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string; readonly deps?: ChatJoinDeps }) {
+  const language = currentInterfaceLanguage();
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
+  const announcer = useLiveAnnouncer(LINK_ANNOUNCE_MS);
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [load, setLoad] = useState<LoadState>(LOADING);
   const [join, setJoin] = useState<JoinState>(IDLE);
   const [attempt, setAttempt] = useState(0);
@@ -228,18 +235,18 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
     const invitation = load.invitation;
     setDraft((current) =>
       current.language === ''
-        ? { ...current, language: defaultGuestLanguage(invitation.guest, currentInterfaceLanguage()) }
+        ? { ...current, language: defaultGuestLanguage(invitation.guest, language) }
         : current,
     );
-  }, [load]);
+  }, [load, language]);
 
   const isAccount = session.status === 'authenticated';
-  const language = session.status === 'authenticated' ? (session.user.systemLanguage ?? null) : null;
+  const accountLanguage = session.status === 'authenticated' ? (session.user.systemLanguage ?? null) : null;
 
   async function handleJoin() {
     if (join.kind === 'joining' || join.kind === 'joined' || !online) return;
     setJoin({ kind: 'joining' });
-    const result = await deps.join(link, language);
+    const result = await deps.join(link, accountLanguage);
     if (!result.ok) {
       const refusal = linkRefusalOf(result);
       if (refusal === 'session-expired') deps.expireSession();
@@ -260,7 +267,7 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
 
     const validated = validateGuestDraft(draft, load.invitation.guest);
     if (!validated.ok) {
-      setInput({ field: validated.field, message: MISSING_FIELD[validated.field] });
+      setInput({ field: validated.field, message: translateInvite(language, MISSING_KEY[validated.field]) });
       return;
     }
 
@@ -282,10 +289,10 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
         field: refusal.field,
         message:
           refusal.field === null
-            ? REFUSED_WITHOUT_FIELD
+            ? translateInvite(language, 'invite.refused.none')
             : refusal.suggestion !== null
-              ? `Ce pseudo est déjà pris — « ${refusal.suggestion} » est libre.`
-              : REFUSED_FIELD[refusal.field],
+              ? translateInvite(language, 'invite.refused.taken', { suggestion: refusal.suggestion })
+              : translateInvite(language, REFUSED_KEY[refusal.field]),
       });
       setJoin(IDLE);
       return;
@@ -313,149 +320,174 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
     if (input?.field === field) setInput(null);
   }
 
-  const joinRefusedForGood = join.kind === 'refused' && !PASSING_REFUSALS.has(join.refusal);
-  const canOfferJoin = isAccount && join.kind !== 'joined' && !joinRefusedForGood;
-  const offersGuest =
-    load.kind === 'ready' && !isAccount && load.invitation.guest.allowed && join.kind !== 'joined' && !joinRefusedForGood;
-
-  return (
-    <AuthColumn className="items-center justify-center gap-5 px-6 py-8">
-      {load.kind === 'loading' ? <InvitationPending /> : null}
-
-      {load.kind === 'refused' ? (
-        <RefusalBanner refusal={load.refusal} {...(PASSING_REFUSALS.has(load.refusal) && online ? { onRetry: retryLoad } : {})} />
-      ) : null}
-
-      {load.kind === 'ready' ? (
-        <>
-          <InvitationCard invitation={load.invitation} />
-          <RightsDetails invitation={load.invitation} />
-
-          {join.kind === 'refused' ? <RefusalBanner refusal={join.refusal} /> : null}
-
-          {join.kind === 'joined' ? (
-            <p role="status" className="text-center text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              Vous avez rejoint la conversation. Ouverture du fil…
-            </p>
-          ) : null}
-
-          {canOfferJoin ? <JoinAction joining={join.kind === 'joining'} online={online} onJoin={() => void handleJoin()} /> : null}
-
-          {offersGuest ? (
-            <GuestForm
-              terms={load.invitation.guest}
-              draft={draft}
-              busy={join.kind === 'joining'}
-              online={online}
-              refusedField={input?.field ?? null}
-              refusalMessage={input?.message ?? null}
-              focused={focused}
-              onEdit={editDraft}
-              onFocus={setFocused}
-              onSubmit={() => void handleGuestJoin()}
-            />
-          ) : null}
-
-          {isAccount ? null : (
-            <GuestExits next={href('chatJoin', { link })} withSeparator={offersGuest} accountRequired={!load.invitation.guest.allowed} />
-          )}
-        </>
-      ) : null}
-    </AuthColumn>
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+    },
+    [],
   );
-}
 
-function InvitationPending() {
+  const { announce } = announcer;
+  const invitation = load.kind === 'ready' ? load.invitation : null;
+  const url = shareLinkUrl(deps.origin(), encodeURIComponent(invitation?.linkId ?? link));
+  const title = invitation?.title ?? translateInvite(language, 'invite.group.fallbackTitle');
+
+  const copy = useCallback(() => {
+    void deps.copyText(url).then((outcome) => {
+      if (outcome !== 'copied') {
+        announce(translateInvite(language, 'invite.announce.copyFailed'), 'error');
+        return;
+      }
+      announce(translateInvite(language, 'invite.announce.copied'));
+      setCopied(true);
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
+    });
+  }, [announce, deps, language, url]);
+
+  const reshare = useCallback(() => {
+    void deps.shareUrl({ title, text: translateInvite(language, 'invite.share.text', { name: title }), url }).then((outcome) => {
+      if (outcome === 'copie') announce(translateInvite(language, 'invite.announce.copied'));
+      if (outcome === 'indisponible') announce(translateInvite(language, 'invite.announce.shareUnavailable'), 'error');
+    });
+  }, [announce, deps, language, title, url]);
+
+  const joinRefusedForGood = join.kind === 'refused' && !PASSING_REFUSALS.has(join.refusal);
+  const choices = joinChoicesOf({ signedIn: isAccount, guestAllowed: invitation?.guest.allowed === true });
+  const open = join.kind !== 'joined' && !joinRefusedForGood;
+  const next = href('chatJoin', { link });
+
   return (
-    <div aria-busy="true" className="grid w-full justify-items-center gap-3 text-center">
-      <span aria-hidden="true" className="rounded-full" style={{ width: 72, height: 72, backgroundColor: 'var(--color-ios-card)' }} />
-      <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Ouverture de l’invitation…
-      </p>
+    <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language}>
+      <InviteHeader language={language} next={isAccount ? null : next} />
+      <main id="contenu" className="mx-auto grid w-full max-w-[1280px] flex-1 content-start px-4 md:px-12 md:pb-12">
+        {load.kind === 'loading' ? <InvitationPending language={language} /> : null}
+
+        {load.kind === 'refused' ? (
+          <div className="mx-auto grid w-full max-w-md content-center py-8">
+            <RefusalBanner language={language} refusal={load.refusal} {...(PASSING_REFUSALS.has(load.refusal) && online ? { onRetry: retryLoad } : {})} />
+          </div>
+        ) : null}
+
+        {invitation === null ? null : (
+          <div
+            data-invite-layout
+            className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"
+          >
+            <div className="grid gap-5 md:row-span-2">
+              <InviterBlock language={language} invitation={invitation} />
+              <GroupCard language={language} invitation={invitation} url={url} copied={copied} onCopy={copy} onReshare={reshare} />
+            </div>
+            <div className="grid gap-4 md:col-start-2">
+              <InvitationFigures language={language} invitation={invitation} />
+              <RightsCard language={language} invitation={invitation} now={deps.now()} />
+            </div>
+            <JoinPanel language={language} title={title}>
+              {join.kind === 'refused' ? <RefusalBanner language={language} refusal={join.refusal} /> : null}
+
+              {join.kind === 'joined' ? (
+                <p role="status" className="text-center text-body font-semibold" style={{ color: INK }}>
+                  {translateInvite(language, 'invite.join.joined')}
+                </p>
+              ) : null}
+
+              {choices.account && open ? (
+                <JoinAction language={language} joining={join.kind === 'joining'} online={online} onJoin={() => void handleJoin()} />
+              ) : null}
+
+              {choices.guest && open ? (
+                <GuestForm
+                  language={language}
+                  terms={invitation.guest}
+                  draft={draft}
+                  busy={join.kind === 'joining'}
+                  online={online}
+                  refusedField={input?.field ?? null}
+                  refusalMessage={input?.message ?? null}
+                  focused={focused}
+                  onEdit={editDraft}
+                  onFocus={setFocused}
+                  onSubmit={() => void handleGuestJoin()}
+                />
+              ) : null}
+
+              {choices.signIn ? (
+                <GuestExits language={language} next={next} withSeparator={choices.guest && open} accountRequired={choices.accountRequired} />
+              ) : null}
+            </JoinPanel>
+          </div>
+        )}
+      </main>
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20" style={{ height: 0 }}>
+        <LiveAnnouncement text={announcer.text} tone={announcer.tone} marker="invite" />
+      </div>
     </div>
   );
 }
 
-function InvitationCard({ invitation }: { readonly invitation: LinkInvitation }) {
-  const { inviter } = invitation;
+/**
+ * LES CHOIX (#7796 § 5) — sous 768 px, un panneau COLLÉ au bas de l'écran
+ * (l'action primaire reste dans le premier écran quel que soit ce qui la
+ * précède) ; au-delà, une carte dans la colonne de droite, titrée « Rejoindre
+ * <groupe> ». Collé au bas de la GRILLE entière, pas de sa colonne : un élément
+ * `sticky` ne sort jamais de son parent.
+ */
+function JoinPanel({ language, title, children }: { readonly language: InterfaceLanguage; readonly title: string; readonly children: ReactNode }) {
   return (
-    <section aria-labelledby="chat-join-title" className="grid w-full justify-items-center gap-2 text-center">
-      {inviter === null ? (
-        <span
-          aria-hidden="true"
-          className="grid place-items-center rounded-full"
-          style={{ width: 64, height: 64, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}
-        >
-          <Glyph name="users" size={32} />
-        </span>
-      ) : (
-        <Avatar
-          initials={initialsOf(inviter.name)}
-          color={colorForName(inviter.name)}
-          size={64}
-          name={inviter.name}
-          {...(inviter.avatar === null ? {} : { src: inviter.avatar })}
-        />
-      )}
-      <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {inviter === null ? 'Vous êtes invité à rejoindre' : `${inviter.name} vous invite à rejoindre`}
-      </p>
-      <h1 id="chat-join-title" className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        {invitation.title ?? 'Une conversation Meeshy'}
-      </h1>
-      {invitation.kind === null ? null : (
-        <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {KIND_LABEL[invitation.kind]}
-        </p>
-      )}
+    <section
+      aria-labelledby="invite-join-title"
+      data-invite-join
+      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 94%, transparent)',
+        borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
+        boxShadow: '0 -8px 24px color-mix(in srgb, var(--ios-indigo-900) 8%, transparent)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <h2 id="invite-join-title" className="sr-only text-thread font-extrabold md:not-sr-only" style={{ color: INK }}>
+        {translateInvite(language, 'invite.join.title', { name: title })}
+      </h2>
+      {children}
     </section>
   );
 }
 
-/**
- * LE DÉTAIL DES DROITS, REPLIÉ (#5561). Il répond à « qu'est-ce que
- * j'accepte ? » sans coûter la hauteur qui pousserait l'action primaire hors
- * du premier écran. `<details>` natif : ouvrable au clavier, annoncé par les
- * lecteurs d'écran, aucun script.
- */
-function RightsDetails({ invitation }: { readonly invitation: LinkInvitation }) {
-  const { guest, readsHistory } = invitation;
-  return (
-    <details data-join-rights className="w-full rounded-[14px] px-4 py-2" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-      <summary className="cursor-pointer text-caption font-semibold" style={{ color: 'var(--color-ios-ink)', minHeight: 44, lineHeight: '44px' }}>
-        Ce que vous pourrez faire
-      </summary>
-      <ul className="grid gap-1.5 pb-3 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        <li>{readsHistory ? 'Lire les messages déjà échangés.' : 'Lire les messages publiés après votre arrivée.'}</li>
-        <li>{guest.mayWrite ? 'Écrire dans la conversation.' : 'Lire seulement : l’écriture n’est pas ouverte aux invités.'}</li>
-        <li>Repartir quand vous voulez — une participation n’est pas un compte.</li>
-      </ul>
-    </details>
-  );
-}
-
-function JoinAction({ joining, online, onJoin }: { readonly joining: boolean; readonly online: boolean; readonly onJoin: () => void }) {
+function JoinAction({
+  language,
+  joining,
+  online,
+  onJoin,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly joining: boolean;
+  readonly online: boolean;
+  readonly onJoin: () => void;
+}) {
   const disabled = joining || !online;
   return (
     <div className="grid w-full gap-2">
       <button
         type="button"
+        data-invite-join-account
         onClick={onJoin}
         disabled={disabled}
         aria-busy={joining}
-        className="grid w-full place-items-center rounded-[14px] font-bold text-white transition-opacity"
-        style={{ minHeight: 52, background: ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1 }}
+        className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ minHeight: 54, background: INVITE_ACTION_BACKGROUND, opacity: disabled ? 0.6 : 1, outlineColor: 'var(--color-ios-brand)' }}
       >
-        {joining ? 'Entrée dans la conversation…' : 'Rejoindre'}
+        {translateInvite(language, joining ? 'invite.join.joining' : 'invite.join.account')}
       </button>
       {online ? null : (
-        <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Hors ligne — rejoindre attendra le retour du réseau.
+        <p className="text-center text-caption" style={{ color: INK_2 }}>
+          {translateInvite(language, 'invite.join.offline')}
         </p>
       )}
     </div>
   );
 }
+
+const DIVIDER = { backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' } as const;
 
 /**
  * LES DEUX SORTIES D'UN VISITEUR SANS SESSION — des ANCRES, jamais des boutons
@@ -464,14 +496,17 @@ function JoinAction({ joining, online, onJoin }: { readonly joining: boolean; re
  * (`session-guard.ts § safeNextPath`) avant de s'en servir.
  *
  * Quand le formulaire d'invité est offert, elles deviennent SECONDAIRES et un
- * séparateur le dit ; quand le lien EXIGE un compte, elles sont la seule voie
- * et la phrase l'explique — jamais une porte anonyme offerte puis refusée.
+ * séparateur le dit ; quand le lien EXIGE un compte, « Se connecter » est
+ * l'action primaire et la phrase l'explique — jamais une porte anonyme offerte
+ * puis refusée.
  */
 function GuestExits({
+  language,
   next,
   withSeparator,
   accountRequired,
 }: {
+  readonly language: InterfaceLanguage;
   readonly next: string;
   readonly withSeparator: boolean;
   readonly accountRequired: boolean;
@@ -479,62 +514,33 @@ function GuestExits({
   return (
     <div className="grid w-full gap-3">
       {accountRequired ? (
-        <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Cette conversation demande un compte Meeshy.
+        <p data-invite-account-required className="text-center text-caption" style={{ color: INK_2 }}>
+          {translateInvite(language, 'invite.exits.accountRequired')}
         </p>
       ) : null}
       {withSeparator ? (
-        <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-          ou gardez votre identité
+        <p className="flex items-center gap-3 text-caption font-semibold" style={{ color: INK_2 }}>
+          <span aria-hidden="true" className="h-px flex-1" style={DIVIDER} />
+          {translateInvite(language, 'invite.exits.separator')}
+          <span aria-hidden="true" className="h-px flex-1" style={DIVIDER} />
         </p>
       ) : null}
-      <Link
-        to="login"
-        search={{ next }}
-        className={`grid w-full place-items-center rounded-[14px] px-6 ${withSeparator ? 'font-semibold' : 'font-bold text-white'}`}
-        style={
-          withSeparator
-            ? { minHeight: 44, border: SUBTLE_BORDER, color: 'var(--color-ios-ink)' }
-            : { minHeight: 52, background: ACTION_BACKGROUND }
-        }
-      >
-        Se connecter pour rejoindre
-      </Link>
-      <Link
-        to="signup"
-        search={{ next }}
-        className="grid w-full place-items-center rounded-[14px] px-6 font-semibold"
-        style={{ minHeight: 44, border: SUBTLE_BORDER, color: 'var(--color-ios-ink)' }}
-      >
-        Créer un compte
-      </Link>
-    </div>
-  );
-}
-
-function RefusalBanner({ refusal, onRetry }: { readonly refusal: LinkRefusal; readonly onRetry?: () => void }) {
-  return (
-    <div role="alert" className="grid w-full gap-3 rounded-[14px] p-4 text-center" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {REFUSAL_CAUSE[refusal]}
-      </p>
-      <div className="grid gap-2">
-        {onRetry === undefined ? null : (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="grid w-full place-items-center rounded-[14px] px-6 font-semibold"
-            style={{ minHeight: 44, border: SUBTLE_BORDER, color: 'var(--color-ios-ink)' }}
-          >
-            Réessayer
-          </button>
-        )}
+      <div className="grid grid-cols-2 gap-2.5">
         <Link
-          to="list"
-          className="grid w-full place-items-center rounded-[14px] px-6 font-semibold"
-          style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+          to="login"
+          search={{ next }}
+          data-invite-sign-in
+          className={
+            withSeparator
+              ? INVITE_OUTLINE_BUTTON
+              : 'flex items-center justify-center rounded-[16px] px-3 text-body font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2'
+          }
+          style={withSeparator ? INVITE_OUTLINE_STYLE : { minHeight: 48, background: INVITE_ACTION_BACKGROUND, outlineColor: 'var(--color-ios-brand)' }}
         >
-          Revenir à l’accueil
+          {translateInvite(language, 'invite.exits.signIn')}
+        </Link>
+        <Link to="signup" search={{ next }} data-invite-sign-up className={INVITE_OUTLINE_BUTTON} style={INVITE_OUTLINE_STYLE}>
+          {translateInvite(language, 'invite.exits.signUp')}
         </Link>
       </div>
     </div>

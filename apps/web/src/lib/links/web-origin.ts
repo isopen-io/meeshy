@@ -17,3 +17,9 @@ export function webOriginOf(apiBase: string, fallbackOrigin: string): string {
   const host = GATEWAY_ORIGIN.exec(apiBase.trim())?.[1];
   return host === undefined ? fallbackOrigin : `https://${host}`;
 }
+
+/** L'URL À PARTAGER (§ 3.3) — `${origin}/chat/${slug}`, miroir `MyShareLink.joinUrl`.
+ * JAMAIS `/l/<token>`, qui est un lien de SUIVI (#7796). */
+export function shareLinkUrl(origin: string, linkId: string): string {
+  return `${origin}/chat/${linkId}`;
+}
