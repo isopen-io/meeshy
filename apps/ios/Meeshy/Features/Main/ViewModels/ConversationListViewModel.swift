@@ -1552,8 +1552,8 @@ class ConversationListViewModel: ObservableObject {
     private func clearTyping(for conversationId: String) {
         typingTimers[conversationId]?.invalidate()
         typingTimers[conversationId] = nil
-        typingUsernames.removeValue(forKey: conversationId)
-        typingUsers.removeValue(forKey: conversationId)
+        if typingUsernames[conversationId] != nil { typingUsernames.removeValue(forKey: conversationId) }
+        if typingUsers[conversationId] != nil { typingUsers.removeValue(forKey: conversationId) }
         typers.removeValue(forKey: conversationId)
     }
 
@@ -1562,8 +1562,8 @@ class ConversationListViewModel: ObservableObject {
     /// la même personne.
     private func refreshTypingDerivations(for conversationId: String) {
         let selection = Self.typingSelection(for: typers[conversationId])
-        typingUsernames[conversationId] = selection?.displayName
-        typingUsers[conversationId] = selection?.username
+        if typingUsernames[conversationId] != selection?.displayName { typingUsernames[conversationId] = selection?.displayName }
+        if typingUsers[conversationId] != selection?.username { typingUsers[conversationId] = selection?.username }
     }
 
     /// Un frappeur : son handle (`@pseudo`) et son nom d'affichage. Le gateway

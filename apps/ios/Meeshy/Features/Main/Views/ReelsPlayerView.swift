@@ -478,7 +478,10 @@ struct ReelPageView: View {
     /// Réel composé (#6745) — voir `ReelsPlayerView+Scene.swift`.
     @State var scenePaused = false
     @State var sceneSoundMuted = false
-    @StateObject var sceneClock = ReelSceneClock()
+    // `@State`, pas `@StateObject` : la page POSSÈDE l'horloge sans s'y
+    // abonner. `@StateObject` l'abonnait, et chaque image du player (60–120 Hz)
+    // ré-évaluait la page entière ; seule `ReelSceneProgressBar` l'observe.
+    @State var sceneClock = ReelSceneClock()
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.

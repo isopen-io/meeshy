@@ -359,13 +359,7 @@ public enum StoryRenderer {
     /// backgroundStyle, volume, zIndex…). Un échec d'encodage (impossible en
     /// pratique pour ces structs Codable) retourne un hash unique par appel
     /// pour forcer le rebuild plutôt que servir une layer périmée.
-    @MainActor
-    private static let editContentEncoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return encoder
-    }()
-
+    private static let editContentEncoder = { let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]; return e }()
     @MainActor
     private static func editContentHash(for item: any RenderableItem) -> Int {
         let encoder = editContentEncoder
