@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import arIdentity from './catalog-ar-identity';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -168,8 +169,7 @@ const ar = {
   'feed.allLoaded': 'تم تحميل جميع المنشورات',
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
-  'a11y.avatar.profile': 'عرض الملف الشخصي لـ {name}',
-  'a11y.avatar.story': 'عرض قصة {name}',
+  ...arIdentity,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',
   'report.body': 'اختر سبب البلاغ. سيصل إلى فريق الإشراف لدينا.',

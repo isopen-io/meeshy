@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frThreadStates from './catalog-fr-thread-states';
+import frIdentity from './catalog-fr-identity';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -209,8 +210,7 @@ const fr = {
   'feed.allLoaded': 'Toutes les publications sont chargées',
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
-  'a11y.avatar.profile': 'Voir le profil de {name}',
-  'a11y.avatar.story': 'Voir la story de {name}',
+  ...frIdentity,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
