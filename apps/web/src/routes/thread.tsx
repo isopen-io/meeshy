@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
 
@@ -16,15 +16,9 @@ import '@/styles/thread-menu.css';
 import '@/styles/thread-system.css';
 
 import { Composer } from '@/components/composer';
-import { ForwardSheet } from '@/components/forward-sheet';
-import { MessageDetailSheet } from '@/components/message-detail-sheet';
-import { MessageMenu } from '@/components/message-menu';
-import { reactionEntries } from '@/components/message-blocks';
-import { ReactionSheet } from '@/components/reaction-sheet';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
-import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
-import { TypingDots } from '@/components/typing-dots';
+import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from '@/components/thread-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -39,30 +33,17 @@ import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conv
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { useReplyToPreview } from '@/lib/view/use-reply-preview';
 import { useSend } from '@/lib/view/use-send';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { translationChoices } from '@/lib/view/message-actions';
-import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
-import { menuRows } from '@/lib/reading-mode/catalog';
-import {
-  resolveThreadMode,
-  threadCapabilities,
-  toStickyPreference,
-  usesFlatRow,
-} from '@/lib/reading-mode/decision';
+import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
-import { usePersistedReadingMode } from '@/lib/reading-mode/use-persisted-mode';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { draftStore } from '@/lib/send/draft-store';
-import type { PendingAttachment } from '@/lib/send/attachments';
-import type { ComposeProtection } from '@/lib/send/compose-protection';
-import type { SharedPlace } from '@/lib/send/shared-place';
-import { useThreadDraft } from '@/lib/view/use-draft';
+import { useThreadCompose } from '@/lib/view/use-thread-compose';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
@@ -72,6 +53,9 @@ import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-mess
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
+import { useThreadJump } from '@/lib/view/use-thread-jump';
+import { summaryExits } from '@/lib/view/summary-exits';
+import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -90,6 +74,15 @@ import { ThreadModes } from './thread-modes';
  * modes est extrait dans `ThreadModes` (`src/routes/thread-modes.tsx`,
  * #5878) : ce fichier reste sous le budget de taille pour la prochaine
  * surface (Rivière, D-21), qui s'ajoute LÀ, pas ici.
+ *
+ * DÉCOUPAGE #7429 (sans changer un pixel) — l'orchestration du mode de
+ * lecture (`useThreadReadingMode`), la composition du composeur
+ * (`useThreadCompose`), le saut de citation (`useThreadJump`), les trois
+ * sorties du Résumé (`summaryExits`) et les feuilles du message
+ * (`ThreadMessageSheets`) vivent désormais chacun dans leur propre fichier —
+ * même doctrine qu'iOS (`ConversationView.swift`, découpé en quatorze
+ * extensions PAR SURFACE) : cet écran ne fait plus que CÂBLER ce que chacun
+ * lui rend.
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
@@ -285,109 +278,21 @@ export default function ThreadScreen() {
   const group = conversation !== undefined && isGroup(conversation);
 
   /**
-   * LE MODE DE LECTURE (#5566) — la LOI vit dans `@meeshy/shared`
-   * (`decision.ts` ne fait que la consommer avec le catalogue de cet écran,
-   * D-14) ; le CHOIX COLLANT vit dans `readingModeStore`, scopé
-   * `(lecteur, conversation)` — `scope` REMPLACE la constante `'local'`
-   * figée (#5650, F7).
-   *
-   * Figés à l'OUVERTURE (comme l'`init` du contrôleur iOS) : la branche
-   * d'absence de la loi lit l'INSTANT de l'ouverture, pas un instant qui
-   * recule à chaque rendu tant que l'écran reste monté.
-   *
-   * INITIALISEUR PARESSEUX, et ce n'est pas un détail de style : le
-   * virtualiseur re-rend CET écran à chaque image de défilement. Écrit
-   * `useRef(new Date())`, l'argument est évalué à CHAQUE rendu — une `Date`
-   * allouée par image, pour une valeur que `useRef` jette aussitôt.
+   * LE MODE DE LECTURE (#5566, #7429) — l'ORCHESTRATION ENTIÈRE (instant
+   * d'ouverture, préférence collante, décision, capacités, lignes de menu,
+   * ligne courante) vit désormais dans `useThreadReadingMode`
+   * (`lib/reading-mode/use-thread-reading-mode.ts`) — même doctrine qu'iOS
+   * (`Focal/Core/ReadingModeOrchestrator.swift` : « la loi vit ailleurs,
+   * l'écran ne fait que la consommer »). `conversation` ENTIÈRE, jamais
+   * `conversationId` (qui replie sur le paramètre de route) : voir le
+   * doc-comment du hook.
    */
-  const [openedAt] = useState(() => new Date());
-  /**
-   * `usePersistedReadingMode` (revue-correction #5793, défaut majeur) — reçoit
-   * `conversation?.id`, JAMAIS `conversationId` (qui replie sur le paramètre
-   * de route tant que la conversation n'est pas résolue, `lib/api/query.ts`) :
-   * sur un lien `/c/<identifiant>`, lire ou écrire sous ce repli créait DEUX
-   * clés `localStorage` pour une seule conversation (lecture précoce sous
-   * l'identifiant, écriture tardive — l'utilisateur ne choisit un mode
-   * qu'une fois l'écran interactif, donc résolu — sous l'ObjectId). Le hook
-   * ne lit/n'écrit RIEN tant que `conversation` est `undefined` : l'écran est
-   * de toute façon en `pending` à cet instant (retour anticipé plus bas).
-   */
-  const { stickyMode, lastOpenedAt, selectMode, resetToAuto } = usePersistedReadingMode({
+  const reading = useThreadReadingMode({
     store: readingModeStore,
     scope,
-    conversationId: conversation?.id,
-    openedAt,
+    conversation,
+    isAnonymous: viewer.isAnonymous,
   });
-
-  /**
-   * LE BROUILLON DU COMPOSEUR, CITATION COMPRISE (#6175) — même clé
-   * (lecteur, conversation) que le mode de lecture ci-dessus, et la MÊME
-   * discipline de lecture. Ce hook POSSÈDE `replyTarget` : la persistance de
-   * la citation ne peut pas dépendre d'une frappe, et son annulation doit
-   * atteindre le magasin (§ doc-comment de `useThreadDraft`, qui porte le
-   * détail et la mesure).
-   */
-  const { initial: initialDraft, replyTarget, setReplyTarget, reportComposerDraft } = useThreadDraft({
-    store: draftStore,
-    scope,
-    conversationId: conversation?.id,
-  });
-
-  /**
-   * MÉMORISÉS, parce que le virtualiseur re-rend cet écran à chaque image de
-   * défilement : sans `useMemo`, la loi, les capacités et les CINQ lignes du
-   * menu (objets neufs, libellés interpolés) étaient reconstruites soixante
-   * fois par seconde pour un menu fermé. C'est aussi le motif que copieront
-   * les surfaces à venir — il doit être juste maintenant.
-   */
-  const readingDecision = useMemo(
-    () =>
-      resolveThreadMode({
-        unreadCount: conversation === undefined ? 0 : unreadOf(conversation),
-        lastOpenedAt,
-        now: openedAt,
-        sticky: toStickyPreference(stickyMode),
-        // #5695 : `summary` est désormais dans le catalogue de rendu web —
-        // `viewer.isAnonymous` a un effet OBSERVABLE ici (un invité perd
-        // `summary`, la loi le retire de `threadCapabilities`).
-        isAnonymous: viewer.isAnonymous,
-        conversationType: conversation?.type ?? 'direct',
-        // #5696 : l'éligibilité de la Rivière lit `memberCount` comme iOS
-        // (`ConversationView.swift:569`) — MÊME champ que celui affiché
-        // juste en-dessous (« N participants »), voir `thread.tsx` ligne
-        // sur `conversation.memberCount`.
-        memberCount: conversation?.memberCount ?? null,
-      }),
-    [conversation, lastOpenedAt, openedAt, stickyMode, viewer.isAnonymous],
-  );
-  const readingCapabilities = useMemo(
-    () =>
-      threadCapabilities({
-        isAnonymous: viewer.isAnonymous,
-        conversationType: conversation?.type ?? 'direct',
-        memberCount: conversation?.memberCount ?? null,
-      }),
-    [conversation?.type, conversation?.memberCount, viewer.isAnonymous],
-  );
-  const readingMenuRows = useMemo(
-    () =>
-      menuRows({
-        availableModes: readingCapabilities.availableModes,
-        riverEligibilityReason: readingCapabilities.riverEligibilityReason,
-        currentMode: readingDecision.mode,
-      }),
-    [readingCapabilities, readingDecision.mode],
-  );
-  const currentRow = readingMenuRows.find((row) => row.mode === readingDecision.mode);
-  /**
-   * Alias vers `usePersistedReadingMode` — `selectMode`/`resetToAuto`
-   * ignorent l'appel tant que `conversation?.id` n'est pas résolu (§
-   * `use-persisted-mode.ts`), sans conséquence : ces callbacks ne sont
-   * atteignables que depuis l'UI réelle du fil, montée seulement après le
-   * retour anticipé `pending` plus bas.
-   */
-  const selectReadingMode = selectMode;
-  const resetReadingModeToAuto = resetToAuto;
 
   /**
    * LA VIRTUALISATION DU FIL — la seule chose qui tienne un fil de cinq cents
@@ -433,7 +338,7 @@ export default function ThreadScreen() {
    * apparaît — exactement comme l'ancrage bas (`count`, plus bas) le fait
    * déjà pour la même raison.
    */
-  const scene = useThreadScene(scroller, { mode: readingDecision.mode, ready: placed.length > 0 });
+  const scene = useThreadScene(scroller, { mode: reading.readingDecision.mode, ready: placed.length > 0 });
 
   /**
    * LE CHROME DU FIL (#5774, travail 3/3) — `host` est l'HÔTE COMMUN de
@@ -449,7 +354,7 @@ export default function ThreadScreen() {
   const { bottomEdgeRef, vars: insetVars } = useThreadInsets();
   const chrome = useThreadChromeSignals({
     scroller,
-    mode: readingDecision.mode,
+    mode: reading.readingDecision.mode,
     placed,
     virtualizer,
     messages,
@@ -477,62 +382,37 @@ export default function ThreadScreen() {
   });
 
   /**
-   * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
-   * une navigation par son nom accessible et ne faisait rien. `scrollToIndex`
-   * amène le message cité dans la fenêtre virtualisée ; la mise en évidence
-   * s'efface d'elle-même, jamais un état qui s'accumule sans fin.
+   * LE SAUT DE CITATION ET SA MISE EN ÉVIDENCE (#5566, défaut 10 ; #5695,
+   * #7429) — extrait dans `useThreadJump` (`lib/view/use-thread-jump.ts`) :
+   * le bouton de citation promettait une navigation par son nom accessible
+   * et ne faisait rien ; le SAUT DIFFÉRÉ y vit aussi (les trois sorties du
+   * Résumé Vivant appellent `jump.requestJump` avant que `<ol>` soit monté).
    */
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * `useCallback` et non une fonction nue : cette référence est une PROP de
-   * chaque `FocalRow`, dont le `memo` (#5648) ne vaut que si elle est
-   * stable. `noteProgrammaticScroll` l'est déjà (`reading-mode/scene.ts`),
-   * `virtualizer` aussi (instance TanStack), `placed` depuis le `useMemo`
-   * ci-dessus — la chaîne tient de bout en bout.
-   */
-  const noteProgrammaticScroll = scene.noteProgrammaticScroll;
-  const jumpToMessage = useCallback(
-    (messageId: string) => {
-      const index = placed.findIndex((p) => p.message.id === messageId);
-      if (index === -1) return;
-      // ANNONCE le défilement PROGRAMMÉ avant de le déclencher — ni le révélé
-      // ni l'armement de la scène ne doivent réagir à un saut de citation
-      // (§1.5 de la spécification #5648, même famille de désarmement que
-      // l'ancrage bas ci-dessous, D-15).
-      noteProgrammaticScroll();
-      virtualizer.scrollToIndex(index, { align: 'center' });
-      setHighlightedId(messageId);
-      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
-    },
-    [placed, virtualizer, noteProgrammaticScroll],
-  );
-  useEffect(() => () => {
-    if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
-  }, []);
+  const jump = useThreadJump({
+    placed,
+    virtualizer,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
+    mode: reading.readingDecision.mode,
+  });
 
   /**
-   * LE SAUT DIFFÉRÉ (#5695) — les TROIS sorties du Résumé Vivant reposent
-   * sur `jumpToMessage`, qui n'a de cible que quand `<ol>` est MONTÉ
-   * (`usesFlatRow`). Sans ce différé, basculer `summary → script` puis
-   * sauter dans le MÊME geste viserait un virtualiseur qui compte encore
-   * zéro rangée plate — miroir des trois portes iOS
-   * (`ConversationView.swift:1527-1547`, qui posent `scrollToMessageId` +
-   * `trigger`, consommés APRÈS le rebasculement de mode).
+   * LA COMPOSITION DU FIL — BROUILLON, CITATION, ENVOI (#5695, #6175, #7429)
+   * — extraite dans `useThreadCompose` (`lib/view/use-thread-compose.ts`) :
+   * un seul hook, appelé ICI, sans condition — les Rules of Hooks qui
+   * forçaient `replyToMessage`/`handleComposerSend`/`handleCancelReply` à
+   * rester déclarés APRÈS le brouillon mais AVANT les trois retours
+   * anticipés n'ont plus lieu d'être : il n'y a plus deux sites à garder
+   * synchronisés. `setReplyTarget` reste exposé — `useMessageMenu`
+   * (« Répondre ») et `summaryExits` (plus bas) l'appellent directement.
    */
-  const [pendingJump, setPendingJump] = useState<string | null>(null);
-  useEffect(() => {
-    if (pendingJump === null || !usesFlatRow(readingDecision.mode)) return;
-    jumpToMessage(pendingJump);
-    setPendingJump(null);
-  }, [pendingJump, readingDecision.mode, jumpToMessage]);
-
-  /* LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un visage
-     de la Rampe, le composeur s'ouvre déjà adressé : la citation ET
-     `replyToId` à l'envoi. Si le message cité a quitté le cache entre-temps,
-     `replyToMessage` (plus bas) rend `undefined` et le bandeau ne se monte
-     pas — fail-closed, jamais une citation FANTÔME. */
+  const compose = useThreadCompose({
+    store: draftStore,
+    scope,
+    conversationId: conversation?.id,
+    messages,
+    readerLanguages,
+    send,
+  });
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -549,31 +429,27 @@ export default function ThreadScreen() {
     readerLocale,
     viewerId: viewer.id ?? '',
     canStar: !viewer.isAnonymous,
-    onReply: (messageId) => setReplyTarget(messageId),
+    onReply: (messageId) => compose.setReplyTarget(messageId),
     announce: announcer.announce,
   });
 
   /**
-   * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695) — miroir
+   * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695, #7429) — miroir
    * `ConversationView.swift:1527-1547` : visage → script + saut sur la
    * PREMIÈRE preuve + pré-adressage ; épisode → script + saut sur son
    * PREMIER message ; « Reprendre le fil » → script + saut sur le PREMIER
-   * message d'un AUTRE (jamais du lecteur). Aucun retour automatique.
+   * message d'un AUTRE (jamais du lecteur). Aucun retour automatique. La
+   * fabrique elle-même (`summaryExits`, `lib/view/summary-exits.ts`) est une
+   * fonction PURE, sans hook — ce qui varie d'un rendu à l'autre lui arrive
+   * en PARAMÈTRE (`resumeTarget`, un thunk qui lit `unreadBoundary`/
+   * `messages` AU MOMENT du geste, jamais à la construction).
    */
-  const onReplyToPerson = (entry: { readonly evidenceMessageIds: readonly string[] }) => {
-    const target = entry.evidenceMessageIds[0] ?? null;
-    selectReadingMode('script');
-    setPendingJump(target);
-    setReplyTarget(target);
-  };
-  const onOpenEpisode = (episode: { readonly messageIds: readonly string[] }) => {
-    selectReadingMode('script');
-    setPendingJump(episode.messageIds[0] ?? null);
-  };
-  const onResumeThread = () => {
-    selectReadingMode('script');
-    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
-  };
+  const exits = summaryExits({
+    selectMode: reading.selectReadingMode,
+    requestJump: jump.requestJump,
+    setReplyTarget: compose.setReplyTarget,
+    resumeTarget: () => resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }),
+  });
 
   /**
    * **L'HISTORIQUE, À L'APPROCHE DU HAUT** (#6972) — la sentinelle haute, son
@@ -589,7 +465,7 @@ export default function ThreadScreen() {
     rowCount: placed.length,
     firstMessageId: placed[0]?.message.id,
     fetchOlder: threadData.fetchOlder,
-    noteProgrammaticScroll,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
 
   /**
@@ -658,72 +534,6 @@ export default function ThreadScreen() {
     virtualizer,
     onProgrammaticScroll: scene.noteProgrammaticScroll,
   });
-
-  /**
-   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
-   * #6175, défauts bloquant 1 et majeur 2) — DÉCLARÉE ICI, AVANT les retours
-   * anticipés plus bas : un `useMemo` après un retour anticipé viole les
-   * Rules of Hooks dès que le premier rendu est `pending` (aucun hook après)
-   * et le second rendu réel (N hooks de plus) — React lève « Rendered more
-   * hooks than during the previous render. » exactement à cette transition.
-   * `replyToMessage` ne dépend que de `messages` (mémoïsé plus haut) et de
-   * `replyTarget` (issu de `useThreadDraft`, également plus haut) : aucune
-   * des deux valeurs n'exige `conversation` narrowée non-optionnelle.
-   *
-   * Le memo lui-même vit dans `useReplyToPreview`
-   * (`lib/view/use-reply-preview.ts`), EXTRAIT pour être testable seul : le
-   * témoin qui en prouve la stabilité d'identité
-   * (`use-reply-preview.test.tsx`) n'a pas à monter tout `ThreadScreen`
-   * (routeur, TanStack Query, virtualiseur…) pour rougir sur ce défaut.
-   */
-  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
-  const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
-
-  /**
-   * `handleComposerSend`/`handleCancelReply` (revue-correction #6175, défaut
-   * bloquant 1) — également remontés ICI : ils ne dépendent que de `send`
-   * (plus haut), `replyToMessage` (ci-dessus) et `setReplyTarget`
-   * (`useThreadDraft`, plus haut), donc aucune contrainte ne les retenait
-   * après les retours anticipés — les y laisser aurait recréé la même
-   * violation des Rules of Hooks que celle corrigée ci-dessus.
-   */
-  const handleComposerSend = useCallback(
-    ({
-      text,
-      attachments,
-      language,
-      protection,
-      place,
-    }: {
-      text: string;
-      attachments: readonly PendingAttachment[];
-      language: string;
-      protection: ComposeProtection;
-      place: SharedPlace | null;
-    }) => {
-      /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
-         (revue-correction #5813, défaut majeur 6) — `replyToMessage`
-         est déjà résolu plus haut pour la bande du composeur ; le
-         réutiliser ici évite une seconde recherche ET porte la
-         citation jusqu'à la bulle optimiste.
-         `language` (#5828) — décidée PAR MESSAGE par le composeur
-         (détection locale → choix → rang 1 du Prisme du LECTEUR),
-         jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
-         doit partir en `originalLanguage`, jamais celle du lecteur.
-         `protection` (#6175) — éphémère / flou / effets choisis par
-         la rangée haute, composée en champs `Message` par
-         `localMessageOf` (`protectionFieldsOf`). */
-      /* `place` (#7280) — le lieu que la tuile « Position » a obtenu ; il
-         part dans un champ `location` DÉDIÉ du corps, que la passerelle
-         valide seule (`parseSharedPlace`) avant de l'écrire dans
-         `Message.metadata.location`. */
-      send(text, attachments, replyToMessage ?? null, language, protection, place);
-      setReplyTarget(null);
-    },
-    [send, replyToMessage, setReplyTarget],
-  );
-
-  const handleCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
   /**
    * LES TROIS ÉTATS AVANT LE RENDU RÉEL (#5650, F5/F8/§5 étape 10) — TOUS les
@@ -795,11 +605,11 @@ export default function ThreadScreen() {
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
-        currentRowTitle={currentRow?.title ?? ''}
-        isAuto={readingDecision.reason !== 'sticky'}
-        readingMenuRows={readingMenuRows}
-        onSelectReadingMode={selectReadingMode}
-        onResetReadingModeToAuto={resetReadingModeToAuto}
+        currentRowTitle={reading.currentRow?.title ?? ''}
+        isAuto={reading.readingDecision.reason !== 'sticky'}
+        readingMenuRows={reading.readingMenuRows}
+        onSelectReadingMode={reading.selectReadingMode}
+        onResetReadingModeToAuto={reading.resetReadingModeToAuto}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
@@ -881,12 +691,14 @@ export default function ThreadScreen() {
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
         <ThreadModes
-          mode={readingDecision.mode}
+          mode={reading.readingDecision.mode}
           viewer={viewer}
           readerLocale={readerLocale}
           summary={{
             conversation, messages, windowCoversUnread,
-            onReplyToPerson, onOpenEpisode, onResumeThread,
+            onReplyToPerson: exits.onReplyToPerson,
+            onOpenEpisode: exits.onOpenEpisode,
+            onResumeThread: exits.onResumeThread,
             ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
           }}
           placed={placed}
@@ -895,10 +707,10 @@ export default function ThreadScreen() {
           readerLanguages={readerLanguages}
           group={group}
           storyRingOf={storyRingOf}
-          highlightedId={highlightedId}
+          highlightedId={jump.highlightedId}
           expiredIds={expiredIds}
           destroyingIds={destroyingIds}
-          jumpToMessage={jumpToMessage}
+          jumpToMessage={jump.jumpToMessage}
           consume={consume}
           onEphemeralExpired={onEphemeralExpired}
           deliveryOf={deliveryOf}
@@ -923,51 +735,7 @@ export default function ThreadScreen() {
           unreadCount={unreadBoundary?.unreadCount ?? 0}
         />
       </main>
-      {/*
-        LE RETOUR VISIBLE DE LA PAGINATION VERS LE PASSÉ (#6972) — FLOTTANT,
-        frère absolu de `<main>`, exactement comme la pilule de jour au-dessus :
-        posé DANS le défileur il grandirait le contenu par le HAUT, poussant
-        tout le fil de quarante pixels à l'instant où la page part et le
-        ramenant quand elle arrive — deux sauts pour une page qui s'est
-        chargée correctement (voir le doc-comment d'`OlderHead`,
-        `thread-modes.tsx`). La PRISE reste dans le flux, à un pixel ;
-        seul le DESSIN flotte.
-
-        Sous la bande, au même repère que la pilule de jour — la pilule de jour
-        ne colle rien au sommet du fil (`stickyDayOf`,
-        `use-thread-chrome-signals.ts`), et c'est au sommet, et là seulement,
-        que l'historique se charge : les deux ne se disputent jamais la place.
-      */}
-      {older.state === 'loading-more' || older.state === 'error' ? (
-        <div className="absolute inset-x-0 z-20 flex justify-center px-4" style={{ top: 'calc(var(--safe-top, 0px) + 60px)' }}>
-          {older.state === 'loading-more' ? (
-            /* `role="status"` avec un TEXTE visuellement masqué : une région
-               live annonce son CONTENU qui change, jamais son nom calculé
-               (revue-correction #6195, motif `LensPaginationFooter`). */
-            <span
-              role="status"
-              className="glass-prominent glass-card rounded-chip inline-flex items-center px-3 py-1.5"
-              style={{ color: 'var(--color-ios-ink-2)', border: '0.5px solid var(--color-edge)' }}
-            >
-              <TypingDots color="currentColor" />
-              <span className="sr-only">Chargement des messages plus anciens</span>
-            </span>
-          ) : (
-            /* UN REFUS OFFRE SON REJEU — un échec silencieux laisserait le
-               haut du fil muet et l'historique inatteignable sans que rien ne
-               le dise (loi 4 : un contrôle existe s'il a un effet). Cible de
-               44 px, comme le « Réessayer » de la Lentille. */
-            <button
-              type="button"
-              onClick={older.retry}
-              className="glass-prominent glass-card rounded-chip inline-flex items-center gap-2 px-3 text-mini font-semibold"
-              style={{ color: 'var(--color-ios-ink)', border: '0.5px solid var(--color-edge)', minHeight: 44 }}
-            >
-              Historique indisponible <span aria-hidden>·</span> Réessayer
-            </button>
-          )}
-        </div>
-      ) : null}
+      <OlderLoadIndicator state={older.state} onRetry={older.retry} />
 
       <ScrollToBottomButton
         visible={chrome.scrollButtonVisible}
@@ -977,36 +745,7 @@ export default function ThreadScreen() {
         onClick={chrome.onScrollToBottom}
       />
 
-      {/*
-        LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
-        réaction (plafond de 5), « Message copié », « Message protégé »
-        n'avaient AUCUN retour à l'œil : leur seul canal était la région
-        `role="status"` ci-dessus, `className="offscreen"` — visuellement
-        masquée. `aria-hidden` ICI : le MÊME texte est déjà lu par cette
-        région-là, l'annoncer deux fois doublerait la lecture au lecteur
-        d'écran. Motif `dayLabel` (rondeur, flou) au-dessus du composeur.
-      */}
-      {announcer.text !== '' ? (
-        /* FLOTTANTE, et ancrée au bord bas MESURÉ (#6213) — jamais dans le
-           flux : en frère de flux elle poussait tout l'écran d'une trentaine
-           de pixels à chaque annonce, et le fil sautait sous les yeux du
-           lecteur pour dire « Message copié ». */
-        <div
-          className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-4"
-          style={{ bottom: 'var(--thread-notice-bottom)' }}
-          aria-hidden
-        >
-          <span
-            className="glass-prominent glass-card rounded-chip px-3 py-1.5 text-mini font-semibold"
-            style={{
-              color: 'var(--color-ios-ink)',
-              border: '0.5px solid var(--color-edge)',
-            }}
-          >
-            {announcer.text}
-          </span>
-        </div>
-      ) : null}
+      <NoticePill text={announcer.text} />
 
       {/*
         LE COMPOSEUR NE SE MONTE JAMAIS EN RÉSUMÉ (revue-correction #5813,
@@ -1035,7 +774,7 @@ export default function ThreadScreen() {
         s'arrêter net sur la pilule de langue — le défaut de la capture.
       */}
       <div ref={bottomEdgeRef} className="absolute inset-x-0 bottom-0 z-20">
-      {readingDecision.mode === 'summary' ? null : messageMenu.selection !== null ? (
+      {reading.readingDecision.mode === 'summary' ? null : messageMenu.selection !== null ? (
         /* LE MODE SÉLECTION REMPLACE LE COMPOSEUR (#5814, question 5) —
            miroir `ConversationView.swift:1986` : jamais les deux à la fois. */
         <SelectionToolbar
@@ -1078,95 +817,28 @@ export default function ThreadScreen() {
         >
           <Composer
             preferred={readerLanguages}
-            onSend={handleComposerSend}
+            onSend={compose.onSend}
             onTextChange={typing.onTextChange}
-            draft={initialDraft}
-            /* `replyToId` COMPOSÉ PAR `useThreadDraft` (#6175) — `Composer`
-               ne connaît que la citation PRÉ-ADRESSÉE
+            draft={compose.initialDraft}
+            /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) —
+               `Composer` ne connaît que la citation PRÉ-ADRESSÉE
                (`replyTo.author`/`excerpt`), jamais l'identifiant. */
-            onDraftChange={reportComposerDraft}
+            onDraftChange={compose.reportComposerDraft}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
-            {...(replyTo ? { replyTo, onCancelReply: handleCancelReply } : {})}
+            {...(compose.replyTo ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply } : {})}
           />
         </div>
       )}
       </div>
 
-      {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
-          quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un
-          message ET que ce message existe encore dans le fil. */}
-      {((target, data) =>
-        target === null || data === undefined ? null : (
-          /* L'ID EST CAPTURÉ, PAS RÉ-ASSERTÉ (revue #5814) — `menuTarget!`
-             dans chaque fermeture était une assertion de type par fermeture,
-             que la garde d'au-dessus ne justifie pas (TypeScript ne narrow
-             pas à travers un callback). Un paramètre le fige une fois. */
-          <MessageMenu
-            target={target}
-            items={data.items}
-            choices={data.choices}
-            subjectLabel={data.subjectLabel}
-            onClose={messageMenu.onCloseMenu}
-            onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji)}
-            onExpandReactions={() => messageMenu.setReactionSheetFor(target.messageId)}
-            onAction={(actionId) => messageMenu.onMenuAction(target.messageId, actionId)}
-            onPickLanguage={(code) => messageMenu.onPickLanguage(target.messageId, code)}
-          />
-        ))(messageMenu.menuTarget, messageMenu.menuData)}
-
-      {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
-          feuilles indépendantes, jamais montées en même temps que le menu
-          (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
-      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
-          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
-          fait que la requête de liste (`useConversations`, cache-first) n'est
-          jamais lancée par la simple ouverture d'un fil. */}
-      {messageMenu.forwardIds === null ? null : (
-        <ForwardSheet
-          viewerId={viewer.id ?? ''}
-          onPick={messageMenu.onForwardTo}
-          onClose={messageMenu.onCloseForward}
-        />
-      )}
-      {((messageId) =>
-        messageId === null ? null : (
-          <ReactionSheet
-            onPick={(emoji) => {
-              messageMenu.onMenuReact(messageId, emoji);
-              messageMenu.setReactionSheetFor(null);
-            }}
-            onClose={() => messageMenu.setReactionSheetFor(null)}
-          />
-        ))(messageMenu.reactionSheetFor)}
-      {((detailFor) => {
-        if (detailFor === null) return null;
-        const detailMessage = messages.find((m) => m.id === detailFor);
-        if (detailMessage === undefined) return null;
-        const servedDetail = messageMenu.servedOf(detailFor);
-        return (
-          <MessageDetailSheet
-            /* Une vue unique (#7580) : ni langues ni pièces — rien de son contenu. */
-            choices={
-              detailMessage.isViewOnce
-                ? []
-                : translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
-            }
-            reactions={reactionEntries(detailMessage.reactionSummary)}
-            sentAt={new Date(detailMessage.createdAt)}
-            delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
-            locale={readerLocale}
-            conversationId={conversationId}
-            messageId={detailMessage.id}
-            attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
-            star={messageMenu.starOf(detailFor)}
-            onPickLanguage={(code) => {
-              messageMenu.onPickLanguage(detailFor, code);
-              messageMenu.setDetailFor(null);
-            }}
-            onClose={() => messageMenu.setDetailFor(null)}
-          />
-        );
-      })(messageMenu.detailFor)}
+      <ThreadMessageSheets
+        messageMenu={messageMenu}
+        messages={messages}
+        readerLanguages={readerLanguages}
+        readerLocale={readerLocale}
+        conversationId={conversationId}
+        viewerId={viewer.id ?? ''}
+      />
     </div>
   );
 }

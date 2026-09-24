@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { DayPill, ScrollToBottomButton } from './thread-chrome';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from './thread-chrome';
 
 describe('DayPill (#5774, travail 3/3, T9)', () => {
   test('label present, en-tete replie -> un role=heading aria-level=2 au texte, aria-hidden absent, pointer-events none', () => {
@@ -62,5 +66,81 @@ describe('ScrollToBottomButton (#5774, travail 3/3)', () => {
     );
     expect(html).not.toContain('messages non lus<');
     expect(html).toContain('>Bruno : Salut<');
+  });
+});
+
+describe('OlderLoadIndicator (#6972, extrait de routes/thread.tsx au lot #7429)', () => {
+  test('state hors loading-more/error -> rien ne se monte', () => {
+    const html = renderToStaticMarkup(<OlderLoadIndicator state="idle" onRetry={() => {}} />);
+    expect(html).toBe('');
+    const exhausted = renderToStaticMarkup(<OlderLoadIndicator state="exhausted" onRetry={() => {}} />);
+    expect(exhausted).toBe('');
+  });
+
+  test('loading-more -> role=status et texte sr-only "Chargement des messages plus anciens"', () => {
+    const html = renderToStaticMarkup(<OlderLoadIndicator state="loading-more" onRetry={() => {}} />);
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Chargement des messages plus anciens');
+  });
+
+  test('error -> bouton "Historique indisponible · Réessayer", cible 44px', () => {
+    const html = renderToStaticMarkup(<OlderLoadIndicator state="error" onRetry={() => {}} />);
+    expect(html).toContain('Historique indisponible');
+    expect(html).toContain('Réessayer');
+    expect(html).toContain('min-height:44px');
+  });
+
+  describe('error -> le clic déclenche onRetry UNE fois (loi 4 : un contrôle existe s’il a un effet)', () => {
+    const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    let container: HTMLDivElement;
+    let root: Root;
+
+    beforeAll(() => {
+      ensureHappyDomRegistered();
+      globals.IS_REACT_ACT_ENVIRONMENT = true;
+    });
+
+    afterAll(async () => {
+      await act(async () => {});
+      delete globals.IS_REACT_ACT_ENVIRONMENT;
+      await releaseHappyDomIfRegistered();
+    });
+
+    afterEach(() => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    test('un clic appelle onRetry exactement une fois', () => {
+      let calls = 0;
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<OlderLoadIndicator state="error" onRetry={() => (calls += 1)} />);
+      });
+      const button = container.querySelector('button');
+      expect(button).not.toBeNull();
+      act(() => {
+        button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(calls).toBe(1);
+    });
+  });
+});
+
+describe('NoticePill (revue #5814, défaut majeur 10 ; extrait de routes/thread.tsx au lot #7429)', () => {
+  test('texte vide -> rien ne se monte', () => {
+    expect(renderToStaticMarkup(<NoticePill text="" />)).toBe('');
+  });
+
+  test('texte non vide -> aria-hidden, pointer-events-none, contient le texte, ancré au bord bas mesuré', () => {
+    const html = renderToStaticMarkup(<NoticePill text="Message copié" />);
+    expect(html).toContain('aria-hidden');
+    expect(html).toContain('pointer-events-none');
+    expect(html).toContain('>Message copié<');
+    expect(html).toContain('bottom:var(--thread-notice-bottom)');
   });
 });
