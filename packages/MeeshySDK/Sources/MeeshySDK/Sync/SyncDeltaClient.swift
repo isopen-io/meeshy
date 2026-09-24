@@ -170,6 +170,14 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
         guard let url = urlDeSync(demande) else { return .muet }
         var requete = URLRequest(url: url)
         requete.httpMethod = "GET"
+        // L'IDENTITÉ DE L'APP, de la MÊME source qu'`APIClient` (#7810) : sans
+        // `X-Canvas-Caps` la passerelle sert la sentinelle v1 à la place du
+        // canvas, sans `X-App-Version` elle ne juge pas le binaire, sans
+        // `X-Device-Locale` le Prisme perd son 4e rang. Le client est `async` :
+        // il attend l'acteur, comme `APIClient`, plutôt que la moitié statique.
+        for (nom, valeur) in await ClientInfoProvider.shared.buildHeaders() {
+            requete.setValue(valeur, forHTTPHeaderField: nom)
+        }
         requete.setValue("application/json", forHTTPHeaderField: "accept")
         switch creance {
         case let .membre(jeton):

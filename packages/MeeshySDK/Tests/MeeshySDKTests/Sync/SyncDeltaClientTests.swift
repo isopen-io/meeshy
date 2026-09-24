@@ -82,6 +82,33 @@ final class SyncDeltaClientTests: XCTestCase {
         urlEnvoyee(transport).queryItems?.first(where: { $0.name == nom })?.value
     }
 
+    // MARK: - L'identité cliente (#7810)
+
+    func test_requete_porteLIdentiteCliente_valeurPourValeur() async {
+        let transport = MockSyncDeltaTransport()
+        transport.resultat = .success((corpsDeDelta(), reponse(200)))
+
+        _ = await demande(transport)
+
+        let requete = transport.requetes[0]
+        XCTAssertEqual(requete.value(forHTTPHeaderField: "X-Canvas-Caps"), "3")
+        let identite = ClientInfoProvider.identityHeaders()
+        XCTAssertFalse(identite.isEmpty)
+        for (nom, valeur) in identite {
+            XCTAssertEqual(requete.value(forHTTPHeaderField: nom), valeur, "en-tête \(nom)")
+        }
+    }
+
+    func test_requete_laCreanceNEstPasEcraseeParLIdentite() async {
+        let transport = MockSyncDeltaTransport()
+        transport.resultat = .success((corpsDeDelta(), reponse(200)))
+
+        _ = await demande(transport, creance: .invite(session: "sess.sonde"))
+
+        XCTAssertEqual(transport.requetes[0].value(forHTTPHeaderField: "x-session-token"), "sess.sonde")
+        XCTAssertEqual(transport.requetes[0].value(forHTTPHeaderField: "accept"), "application/json")
+    }
+
     // MARK: - L'URL
 
     func test_url_porteSinceEtCollections_surLAdresseTypee() async {
