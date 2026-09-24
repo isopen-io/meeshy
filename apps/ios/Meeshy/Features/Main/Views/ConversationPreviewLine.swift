@@ -187,7 +187,9 @@ struct ConversationPreviewLine: View {
             let separator = entry.offset == 0 ? Text("") : Text(" · ")
             guard case .countdown(_, let deadline) = entry.element,
                   ConversationPreviewCountdown.showsSeconds(at: now, deadline: deadline)
-            else { return text + separator + Text(entry.element.text) }
+            // Sans la notation (#7849) : `**gras**` se lit « gras » dans la
+            // liste, comme sur le web (`plainTextOf`).
+            else { return text + separator + Text(MessageTextRenderer.plainText(entry.element.text)) }
             return text + separator + Text(timerInterval: now...deadline, countsDown: true)
         }
     }

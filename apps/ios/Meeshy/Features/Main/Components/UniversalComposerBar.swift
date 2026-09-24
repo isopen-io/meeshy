@@ -303,6 +303,9 @@ struct UniversalComposerBar: View {
     // MARK: - State (internal for cross-file extension access)
 
     @State var text = ""
+    /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
+    /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
+    @State var formatSelectionStorage: Any? = nil
     /// La feuille des dix cadres à mots, ouverte par un appui long sur la
     /// pastille (#5326).
     @State var showTextStickerSheet = false

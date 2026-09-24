@@ -221,6 +221,14 @@ extension UniversalComposerBar {
                                 )
                         )
                 } else {
+                    // Gras, italique, souligné, barré — dès qu'un mot est
+                    // sélectionné (#7849, iOS 18+).
+                    if showsFormatBar {
+                        ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                     HStack(alignment: .bottom, spacing: 12) {
                         // Left: (+) attach / keyboard toggle button
                         if resolvedShowAttachment {
