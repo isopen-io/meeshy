@@ -13,7 +13,11 @@ struct ShareLinkIdentityChoice: Identifiable {
     let resumesGuestSession: Bool
     /// Le lien déjà résolu par `ShareLinkEntryResolver` — la page s'affiche
     /// avec, sans second appel ni indicateur de chargement.
-    let info: ShareLinkInfo
+    ///
+    /// `@Indirect` : le choix vit en `@State` dans `RootView` et
+    /// `iPadRootView`, dont la taille est un budget ; en ligne, ce lien a
+    /// poussé `iPadRootView` au-delà des 8 192 octets permis.
+    @Indirect var info: ShareLinkInfo
 
     var id: String { identifier }
 }

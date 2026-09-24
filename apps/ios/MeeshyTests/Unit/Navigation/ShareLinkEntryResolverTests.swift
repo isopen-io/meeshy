@@ -223,6 +223,14 @@ final class ShareLinkEntryResolverTests: XCTestCase {
         XCTAssertEqual(landing.info.landingChoices(isSignedIn: true), [.joinWithAccount])
     }
 
+    /// Le choix vit en `@State` dans `RootView` et `iPadRootView`, deux vues
+    /// dont la TAILLE est un budget (`ConversationViewValueSizeGuardTests`).
+    /// Le lien résolu qu'il transporte pèse plusieurs centaines d'octets : en
+    /// ligne, il a poussé `iPadRootView` à 8 449 o, au-delà des 8 192 permis.
+    func test_landing_choice_keepsTheResolvedLinkOffTheHostViewValue() {
+        XCTAssertLessThanOrEqual(MemoryLayout<ShareLinkIdentityChoice?>.size, 96)
+    }
+
     func test_landing_alreadyMember_showsNothing() async {
         let provider = MockShareLinkInfoProvider()
         provider.result = .success(makeLinkInfo(conversationId: "conv-7"))
