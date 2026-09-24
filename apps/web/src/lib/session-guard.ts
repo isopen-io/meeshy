@@ -60,6 +60,18 @@ export type RouteKey =
   | 'story'
   | 'feed'
   /**
+   * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
+   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
+   * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
+   * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
+   * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
+   * plus bas) : un visiteur sans compte choisissait une humeur, écrivait son
+   * mot, et découvrait à « Publier » que la passerelle refuse. Trouvée en
+   * déclarant `postCompose` (#7449) — la même classe de défaut, une porte
+   * plus loin.
+   */
+  | 'statusCompose'
+  /**
    * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
    * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
    * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
@@ -236,6 +248,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'storyCompose',
   'story',
   'feed',
+  /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
+  'statusCompose',
   /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant

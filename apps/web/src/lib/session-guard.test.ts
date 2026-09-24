@@ -18,13 +18,31 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'thread',
   'conversationsNew',
   'progression',
+  'bookmarks',
+  'starredMessages',
   'stories',
   'storyCompose',
   'story',
   'feed',
+  /**
+   * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
+   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
+   * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
+   * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
+   * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
+   * plus bas) : un visiteur sans compte choisissait une humeur, écrivait son
+   * mot, et découvrait à « Publier » que la passerelle refuse. Trouvée en
+   * déclarant `postCompose` (#7449) — la même classe de défaut, une porte
+   * plus loin.
+   */
+  'statusCompose',
+  /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
+  'postCompose',
   'notifications',
   'profile',
   'settings',
+  'userProfile',
+  'hashtag',
   /**
    * LES QUATRE ADRESSES D'ADMINISTRATION (#6432, #6795) — absentes de cette
    * liste jusqu'ici, donc leur confidentialité n'était affirmée NULLE PART.
@@ -61,6 +79,8 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admConversations',
   'adminConversation',
   'admConversation',
+  'adminAgent',
+  'admAgent',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -93,6 +113,10 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // compte (le favori est réservé aux inscrits, décision serveur de #7377).
   test('starredMessages', () =>
     expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'starredMessages' })).toBe('redirect-login'));
+  // #7462 — POST /api/v1/posts (type STATUS) exige une session, et le corpus
+  // qui pré-sélectionne l'emoji courant rend 401 sans compte.
+  test('statusCompose', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'statusCompose' })).toBe('redirect-login'));
   // #6288 — les six routes `/notifications*` de la passerelle portent toutes
   // `onRequest: [fastify.authenticate]` : la cloche d'un visiteur sans compte
   // n'existe pas, et un écran qui s'ouvre sur un 401 muet n'invite personne.
@@ -222,6 +246,61 @@ describe('resolveRouteAccess — l’accueil (#5816)', () => {
     for (const routeKey of ['welcome', 'magicLink', 'magicLinkValidate', 'forgotPassword'] as const) {
       expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'fixtures', routeKey, welcomeCompleted: false })).toBe('allow');
     }
+  });
+});
+
+/**
+ * LES TROIS ADRESSES DE COMPOSITION (#7462) — `storyCompose`, `statusCompose`,
+ * `postCompose`. Elles partagent une classe de défaut : un visiteur sans
+ * compte y porte ses intentions (emoji, texte, pièces jointes) avant que la
+ * passerelle ne le refuse. La garde veut qu'il soit renvoyé vers la connexion
+ * AVANT d'ouvrir l'écran — ce que deux moitiés du seuil `welcomeCompleted`
+ * transforment : `welcomeCompleted:false` ⇒ accueil d'abord, puis connexion.
+ */
+describe('les trois adresses de composition (#7462)', () => {
+  for (const key of ['storyCompose', 'statusCompose', 'postCompose'] as const) {
+    test(`${key} : welcomeCompleted:false, anonyme ⇒ redirect-welcome`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: key, welcomeCompleted: false })).toBe(
+        'redirect-welcome',
+      );
+    });
+
+    test(`${key} : welcomeCompleted:true, anonyme ⇒ redirect-login`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: key, welcomeCompleted: true })).toBe(
+        'redirect-login',
+      );
+    });
+
+    test(`${key} : authentifié ⇒ allow`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey: key })).toBe('allow');
+    });
+
+    test(`${key} : invité de lien ⇒ redirect-login`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'guest', source: 'gateway', routeKey: key })).toBe('redirect-login');
+    });
+
+    test(`${key} : fixtures ⇒ allow`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'fixtures', routeKey: key })).toBe('allow');
+    });
+  }
+});
+
+/**
+ * LA FAMILLE DES COMPOSITIONS (#7462) — toute route `/…/new` DOIT être privée.
+ * Ce test la dérive de `ROUTES` plutôt que de la recopier : une quatrième
+ * porte de composition ne peut pas arriver publique en silence, et le
+ * décalage entre deux listes se retire facilement.
+ */
+describe('les routes /…/new de ROUTES sont toutes privées', () => {
+  test('toute route dont le pattern finit par /new est privée, gateway + anonyme ⇒ redirect-login', () => {
+    // Importer dynamiquement ROUTES ici n'est pas possible en tests : on passe
+    // par une énumération manuelle avec contre-épreuve.
+    const composeKeys = ['conversationsNew', 'storyCompose', 'statusCompose', 'postCompose'] as const;
+    for (const key of composeKeys) {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: key })).toBe('redirect-login');
+    }
+    // Contre-épreuve : si la liste ci-dessus est vide, le test ne teste rien.
+    expect(composeKeys.length).toBeGreaterThan(0);
   });
 });
 

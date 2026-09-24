@@ -832,13 +832,10 @@ async function main() {
     await context.close();
   }
 
-  // --- 6. `/conversations/new` : route PRIVÉE, et un échec de recherche ------
-  //        se VOIT (jamais un écran blanc) — #5652 ---------------------------
-  {
-    /* SANS session : la garde sort le visiteur (`PRIVATE_ROUTES`,
-       `lib/session-guard.ts`). La route est arrivée avec son écran sans être
-       déclarée privée — un visiteur anonyme y trouvait une recherche que la
-       passerelle refuse, au lieu de l'écran de connexion. */
+  // --- 6. LES QUATRE ADRESSES DE COMPOSITION : routes PRIVÉES ----------------
+  //        (`/conversations/new`, `/stories/new`, `/status/new`, `/posts/new`)
+  //        — un visiteur SANS SESSION n'y entre pas — #5652, #7462 --------
+  for (const address of ['/conversations/new', '/stories/new', '/status/new', '/posts/new']) {
     const anonContext = await browser.newContext();
     const anonPage = await anonContext.newPage();
     await anonPage.route(isConversationsList, async (route) => {
@@ -852,11 +849,15 @@ async function main() {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
     await anonPage.route('**/socket.io/**', (route) => route.abort());
-    await anonPage.goto(`${base}/conversations/new`, { waitUntil: 'networkidle' });
+    await anonPage.goto(`${base}${address}`, { waitUntil: 'networkidle' });
     const anonPath = await anonPage.evaluate(() => window.location.pathname);
-    check(anonPath !== '/conversations/new', `sans session, /conversations/new ne s'ouvre pas (obtenu : ${anonPath})`);
+    check(anonPath !== address, `sans session, ${address} ne s'ouvre pas (obtenu : ${anonPath})`);
     await anonContext.close();
+  }
 
+  // --- 6b. `/conversations/new` : avec session, recherche en ÉCHEC -----------
+  //         l'alerte et le « Réessayer » se VOIENT (jamais un écran blanc) ----
+  {
     /* AVEC session, recherche en ÉCHEC : une ALERTE et un « Réessayer », jamais
        une liste vide — « erreur avalée en VIDE = vide légitime ». */
     const context = await browser.newContext();
