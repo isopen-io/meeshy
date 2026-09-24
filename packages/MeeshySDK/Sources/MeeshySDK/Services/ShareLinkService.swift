@@ -46,7 +46,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
     /// Visites, arrivées, langues et pays des arrivants d'UN lien.
     public func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats {
         let response: APIResponse<ShareLinkArrivalStats> = try await api.request(
-            ShareLinkStatsAddress(linkId: linkId)
+            LinksEndpoint.byLinkIdStats(linkId: linkId)
         )
         return response.data
     }
