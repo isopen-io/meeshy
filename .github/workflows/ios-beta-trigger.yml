@@ -1,5 +1,12 @@
 name: iOS (beta) → Xcode Cloud
 
+# DEPUIS LE 2026-09-24 (#7791) : chaque merge dans `main` démarre le build
+# Xcode Cloud de lui-même — `branchStartCondition` du workflow « TestFlight
+# beta test iOS » est armée sur `main` dans App Store Connect. Ce fichier ne
+# réagit donc plus à `push: main` (un commit `(beta)` y aurait lancé un SECOND
+# build) ; il reste le bouton MANUEL (`workflow_dispatch`). Ce qui suit décrit
+# le régime du mot-clé, en vigueur du 2026-07-31 au 2026-09-24.
+#
 # Déclenche le workflow Xcode Cloud « TestFlight beta test iOS » quand, et
 # seulement quand, le message de commit contient un marqueur beta — sous
 # n'importe laquelle de ces formes : (beta) [beta] {beta} "beta" 'beta'.
@@ -31,8 +38,6 @@ name: iOS (beta) → Xcode Cloud
 # (`--self-test` le vérifie).
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       reason:
