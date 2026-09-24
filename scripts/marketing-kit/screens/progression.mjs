@@ -8,7 +8,7 @@ const P = DEMO.progression
 
 // ProgressionElansHero écrit « Élan ×\(f) » EN DUR (non localisé) : une capture anglaise
 // montrerait un mot français. Le kit prend le début localisé de « progression.elan.base »
-// (« Momentum ×3 », « Racha ×3 »…) — défaut iOS consigné dans l'issue de suivi.
+// (« Momentum ×3 », « Racha ×3 »…) — défaut iOS consigné dans #7757.
 const titreElan = (ui) => ui('progression.elan.base', P.elan, '', P.elanFenetre).split(' — ')[0].trim()
 
 const bar = (fraction, teinte) =>

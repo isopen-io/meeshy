@@ -30,3 +30,12 @@ describe('langues du kit', () => {
     expect(KIT_LANGS.map(appStoreLocale)).toEqual(['fr-FR', 'en-US', 'es-ES', 'de-DE', 'it', 'pt-BR', 'ar-SA'])
   })
 })
+
+describe('dates', () => {
+  test('l’arabe date en calendrier grégorien, chiffres occidentaux (comme la métadonnée ar-SA)', async () => {
+    const { formatDate } = await import('../lib/locales.mjs')
+    const date = formatDate('ar', '2026-09-23')
+    expect(date).toContain('2026')
+    expect(date).not.toContain('هـ')
+  })
+})

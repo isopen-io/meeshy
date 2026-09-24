@@ -46,13 +46,13 @@
 /* iPad 13" paysage : scène 1376 × 1032 */
 .canvas.appstore.ipad .gab-brand { top: 46px; inset-inline-start: 64px; font-size: 16px; }
 .canvas.appstore.ipad .gab-caption { top: 86px; inset-inline: 64px; font-size: 64px; flex-direction: row; gap: 18px; }
-.canvas.appstore.ipad .gab-device { top: 212px; }
+.canvas.appstore.ipad .gab-device { top: 196px; }
 
 /* Surimpression 2.3.3 : 🇫🇷 → 🇰🇷 */
 .gab-overlay.fleche-langues {
   position: absolute;
   top: var(--overlay-top, 470px);
-  inset-inline-start: -58px;
+  inset-inline-start: -18px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -67,7 +67,7 @@
 }
 [dir='rtl'] .gab-overlay.fleche-langues { transform: rotate(5deg); }
 .canvas.appstore.iphone .gab-overlay.fleche-langues { --overlay-top: 600px; }
-.canvas.appstore.ipad .gab-overlay.fleche-langues { --overlay-top: 560px; }
+.canvas.appstore.ipad .gab-overlay.fleche-langues { --overlay-top: 640px; inset-inline-start: auto; inset-inline-end: -64px; }
 
 /* ─── Cadre d'appareil ─── */
 .device {

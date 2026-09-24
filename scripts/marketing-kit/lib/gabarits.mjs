@@ -47,7 +47,7 @@ const appStore = ({ format, lang, planche }) => {
   const device = f.device
   const { width, height } = tailleCadre(device)
   const scene = { width: f.width / f.scale, height: f.height / f.scale }
-  const echelle = device === 'iphone' ? 0.82 : 0.74
+  const echelle = device === 'iphone' ? 0.82 : 0.84
   const texte = LEGENDES[planche.legende][lang]
   const surimpression = planche.surimpression ? surimpressions[planche.surimpression](ctx) : ''
   return html`<div class="canvas appstore ${device} fond-${planche.theme === 'dark' ? 'vif' : 'nuit'}" dir="${ctx.dir}" lang="${lang}" style="width:${scene.width}px;height:${scene.height}px">

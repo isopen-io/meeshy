@@ -30,8 +30,10 @@
 .ipad-panel-head { position: absolute; top: 40px; inset-inline: 32px; display: flex; align-items: center; justify-content: space-between; height: 52px; }
 .ipad-fil { position: absolute; top: 106px; inset-inline: 28px; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 16px; align-items: start; }
 .ipad-fil .stories-tray { grid-column: 1 / -1; gap: 22px; }
-.ipad-progression { position: absolute; top: 108px; inset-inline: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-.ipad-progression .p-card.level { grid-column: 1; grid-row: 2 / span 1; }
+.ipad-progression { position: absolute; top: 108px; inset-inline: 32px; columns: 2; column-gap: 18px; }
+.ipad-progression > * { break-inside: avoid; margin-bottom: 18px; }
+.ipad-progression .p-card { padding: 20px; }
+.ipad-progression .p-level { font-size: 44px; }
 
 .ipad-call-grid { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #000; }
 .ipad-call-grid .tile { position: relative; overflow: hidden; display: grid; place-items: center; }

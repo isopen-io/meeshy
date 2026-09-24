@@ -16,7 +16,7 @@ const PATHS = {
   play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
   pause: '<rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/>',
   checks: '<path d="M2.5 12.5l4 4 8-9M10 16.5l1 .5 8.5-9.5" stroke-width="2"/>',
-  flame: '<path d="M12 2.5c.8 3.4 5.5 5.6 5.5 11a5.5 5.5 0 0 1-11 0c0-2.6 1.3-4.3 2.6-5.7.2 1.7.9 2.8 2 3.4C10.8 8 11 5.5 12 2.5z" fill="currentColor" stroke="none"/>',
+  flame: '<path d="M12 1c1.1 4 7.5 6.6 7.5 13.2a7.5 7.5 0 0 1-15 0c0-3.3 1.7-5.4 3.5-7.2.3 2.2 1.2 3.6 2.6 4.4C10.2 7.4 10.6 4.4 12 1z" fill="currentColor" stroke="none"/>',
   trophy: '<path d="M7 3.5h10v5a5 5 0 0 1-10 0z" fill="currentColor" stroke="none"/><path d="M7 5H4v1.5A3.5 3.5 0 0 0 7.5 10M17 5h3v1.5A3.5 3.5 0 0 1 16.5 10" stroke-width="1.8"/><path d="M10.5 13.5h3V17h-3z M8 17.5h8v3H8z" fill="currentColor" stroke="none"/>',
   rosette: '<circle cx="12" cy="9.5" r="6" fill="currentColor" stroke="none"/><path d="M8.5 14l-2 7 5.5-2.8 5.5 2.8-2-7" fill="currentColor" stroke="none"/><circle cx="12" cy="9.5" r="2.6" fill="#fff" fill-opacity=".45" stroke="none"/>',
   sparkles: '<path d="M4 20L14.5 9.5M13 5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1zM19 2.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7zM19.5 12l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" stroke-width="1.8"/>',

@@ -12,7 +12,7 @@ const APP_STORE_LOCALES = {
 
 const CATALOG_LOCALES = { pt: 'pt-BR' }
 
-const DATE_LOCALES = { ar: 'ar-SA-u-nu-latn', pt: 'pt-BR', en: 'en-US' }
+const DATE_LOCALES = { ar: 'ar-SA-u-ca-gregory-nu-latn', pt: 'pt-BR', en: 'en-US' }
 
 export const directionOf = (lang) => (lang === 'ar' ? 'rtl' : 'ltr')
 
