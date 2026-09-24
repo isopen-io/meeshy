@@ -134,7 +134,7 @@ export function InviteLinkCard({
           {translate(language, link.isActive ? 'links.status.active' : 'links.status.inactive')}
         </span>
       </div>
-      <p className="flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 py-3" style={{ backgroundColor: 'rgb(255 255 255 / 0.18)' }}>
+      <p className="flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 py-3" style={{ backgroundColor: 'rgb(30 27 75 / 0.32)' }}>
         <span aria-hidden="true" className="shrink-0">
           <Glyph name="linkSimple" size={18} />
         </span>
@@ -170,7 +170,7 @@ export function InviteLinkCard({
           data-share-link-action="copy"
           onClick={onCopy}
           className={PILL_BUTTON}
-          style={{ minHeight: 48, backgroundColor: 'rgb(255 255 255 / 0.22)', color: 'white', outlineColor: 'white' }}
+          style={{ minHeight: 48, backgroundColor: 'rgb(30 27 75 / 0.38)', color: 'white', outlineColor: 'white' }}
         >
           <span aria-hidden="true">{copied ? <Glyph name="check" size={18} /> : <LinksGlyph name="copy" size={18} />}</span>
           {translateInvite(language, copied ? 'linkDetail.card.copied' : 'linkDetail.card.copy')}

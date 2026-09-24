@@ -105,7 +105,7 @@ const plural = <K extends InviteCatalogKey>(count: number, one: K, other: K): K 
 export function InviteHeader({ language, next }: { readonly language: InterfaceLanguage; readonly next: string | null }) {
   return (
     <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-12 md:py-6" lang={language}>
-      <span className={`flex items-center gap-2 text-brand font-extrabold ${SECTION_BRAND_INK}`}>
+      <span className={`flex items-center gap-2 text-thread font-extrabold ${SECTION_BRAND_INK}`}>
         <span aria-hidden="true" className="grid size-8 place-items-center rounded-[10px] text-white" style={{ background: 'linear-gradient(135deg, var(--ios-indigo-800), var(--ios-indigo-500))' }}>
           <BrandMark size={20} lineWidth={2.6} />
         </span>

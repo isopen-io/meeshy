@@ -222,6 +222,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             {translateInvite(language, 'linkDetail.edit.name')}
             <input
               id="link-edit-name"
+              dir="auto"
               value={draft.name}
               maxLength={100}
               autoComplete="off"
@@ -235,6 +236,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             {translateInvite(language, 'linkDetail.edit.message')}
             <textarea
               id="link-edit-message"
+              dir="auto"
               value={draft.description}
               rows={3}
               maxLength={500}

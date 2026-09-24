@@ -139,7 +139,7 @@ export default function ShareLinkScreen() {
   const served = stats.data === undefined && stats.isError ? null : stats.data;
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe" lang={language}>
+    <div className="flex h-dvh flex-col overflow-hidden pt-safe" lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="md:hidden">
         <LinksHeader language={language} back="shareLinks" backLabel={translate(language, 'links.detail.back')} title={title} />
       </div>

@@ -359,7 +359,7 @@ export function ChatJoin({ link, deps = DEFAULT_DEPS }: { readonly link: string;
   const next = href('chatJoin', { link });
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language}>
+    <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <InviteHeader language={language} next={isAccount ? null : next} />
       <main id="contenu" className="mx-auto grid w-full max-w-[1280px] flex-1 content-start px-4 md:px-12 md:pb-12">
         {load.kind === 'loading' ? <InvitationPending language={language} /> : null}
@@ -438,12 +438,11 @@ function JoinPanel({ language, title, children }: { readonly language: Interface
     <section
       aria-labelledby="invite-join-title"
       data-invite-join
-      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-[calc(var(--safe-bottom)+16px)] md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6"
+      className="sticky bottom-0 z-10 -mx-4 grid gap-3 px-4 pt-4 pb-safe md:static md:col-start-2 md:mx-0 md:rounded-[26px] md:p-6 md:pb-6"
       style={{
-        backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 94%, transparent)',
+        backgroundColor: 'var(--color-ios-card)',
         borderTop: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
         boxShadow: '0 -8px 24px color-mix(in srgb, var(--ios-indigo-900) 8%, transparent)',
-        backdropFilter: 'blur(12px)',
       }}
     >
       <h2 id="invite-join-title" className="sr-only text-thread font-extrabold md:not-sr-only" style={{ color: INK }}>
