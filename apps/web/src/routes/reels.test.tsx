@@ -183,8 +183,9 @@ describe('ReelPage — les autres compositions d’un réel', () => {
      elle-même se prouve sur son composant, et sa résolution client plus bas. */
   test('un réel d’IMAGES peint son affiche d’abord, sans lecteur ni commande de son', () => {
     const html = page(REEL_MARKET_IMAGES);
+    expect(page(REEL_MARKET_IMAGES, { mode: 'far' })).toContain('data-reel-poster');
     expect(html).not.toContain('<video');
-    expect(html).toContain('data-reel-poster');
+    expect(html).toMatch(/data-reel-(poster|images)/);
     expect(html).not.toContain('Activer le son');
     expect(html).not.toContain('Lire le réel');
   });
