@@ -123,6 +123,15 @@ export function isStudioDraftEmpty(draft: StudioDraft): boolean {
   return draft.pages.every(isStudioPageEmpty);
 }
 
+/** Les pages qui PARTIRONT — une page sans matière ne produit aucune scène
+ * (`composeStoryCanvasPages`). Le SITE UNIQUE de « combien de scènes ? » pour
+ * le sous-menu de disposition (`layoutIsServed`) et le refus d'une story de
+ * plusieurs pages (`studioPublishRefusal`) : compter `pages.length` offrait
+ * une disposition qu'une page vide rendait sans effet. */
+export function studioPublishablePageCount(draft: StudioDraft): number {
+  return draft.pages.filter((page) => !isStudioPageEmpty(page)).length;
+}
+
 /** LE SITE UNIQUE de mutation d'UNE page — un `id` inconnu rend le brouillon
  * INCHANGÉ (même identité), pour que la tuile mémoïsée d'une autre page ne
  * re-rende jamais pour rien (Zero Unnecessary Re-render). */
@@ -176,10 +185,14 @@ export type StudioPlaceRefusal = 'door' | 'media-max';
 
 /** Le refus AVANT de poser un fichier — la porte (mauvais MIME) ou le
  * plafond du DOCUMENT entier (les 10 médias de `MAX_POST_MEDIA`, comptés sur
- * TOUTES les pages, jamais seulement la courante). */
+ * TOUTES les pages, jamais seulement la courante). Une porte déjà OCCUPÉE sur
+ * la page courante REMPLACE son média (question 9.1 de #6900) : le compte ne
+ * monte pas, le remplacement passe même au plafond. */
 export function studioPlaceRefusal(draft: StudioDraft, door: StudioDoor, mimeType: string): StudioPlaceRefusal | null {
   if (!studioDoorAccepts(door, mimeType)) return 'door';
-  return studioMediaCount(draft) >= STUDIO_PAGE_MAX ? 'media-max' : null;
+  const page = currentStudioPage(draft);
+  const occupied = (door === 'visual' ? page.background : door === 'overlay' ? page.overlay : page.sound) !== null;
+  return !occupied && studioMediaCount(draft) >= STUDIO_PAGE_MAX ? 'media-max' : null;
 }
 
 /* ── LES OBJETS TEXTE, DÉLÉGUÉS À LA PAGE COURANTE ───────────────────────── */

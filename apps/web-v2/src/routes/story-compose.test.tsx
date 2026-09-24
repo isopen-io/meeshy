@@ -1,18 +1,26 @@
 import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-import { createHttpTransport } from '@/lib/api/http';
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { createStudioDraftStore, type StudioDraftSnapshot, type StudioPageSnapshot, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
-import { buttonNamed } from '@/test-support/act-mount';
-import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-
 import type { PublicationKind } from '@/lib/stories/publication-kind';
-
-import StoryComposeScreen, { type StoryStudioDeps } from './story-compose';
+import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { buttonNamed } from '@/test-support/act-mount';
+import {
+  VIEWER_ID,
+  fakeRect,
+  flush,
+  harness,
+  image,
+  mount,
+  onePageSnapshot,
+  publishButton,
+  registerStudioBench,
+  removeButton,
+  selectFile,
+  typeText,
+  unmountAll,
+} from '@/test-support/story-studio-bench';
 
 /**
  * `StoryComposeScreen` (#6900) — le critère de fin (Publier inerte sans
@@ -27,203 +35,7 @@ import StoryComposeScreen, { type StoryStudioDeps } from './story-compose';
  * dépendance à l'ordre d'import des singletons.
  */
 
-const VIEWER_ID = 'c'.repeat(24);
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-
-beforeAll(async () => {
-  ensureHappyDomRegistered();
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
-  // L'allemand sert le témoin de RANG D-113 (§ 4.4, « en ALLEMAND ») : en
-  // français, un libellé en dur et un libellé du catalogue rendent le même
-  // texte — leçon 261.
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('de')]);
-  // Un budget de tours ne peut pas attendre un `import()` : les chunks à la
-  // demande de l'écran (moteur, montée, feuille d'audience, éditeur d'objet)
-  // sont réchauffés avant tout montage.
-  await Promise.all([
-    import('@/components/scene-player'),
-    import('@/lib/api/post-media-upload'),
-    import('./story-compose-audience-sheet'),
-    import('./story-compose-editor'),
-    import('./story-compose-pages'),
-    import('@/components/publish-layout-menu'),
-  ]);
-});
-
-afterAll(async () => {
-  delete globals.IS_REACT_ACT_ENVIRONMENT;
-  document.documentElement.lang = 'fr';
-  await releaseHappyDomIfRegistered();
-});
-
-const mounted: Array<{ root: Root; container: HTMLDivElement }> = [];
-
-beforeEach(() => {
-  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
-  act(() => {
-    sessionStore.getState().establish({
-      user: { id: VIEWER_ID, username: 'auteur', displayName: 'Auteur', avatar: '' },
-      token: 'jeton-du-temoin',
-      sessionToken: 'session-du-temoin',
-      expiresIn: 3600,
-    });
-  });
-});
-
-afterEach(() => {
-  act(() => {
-    mounted.splice(0).forEach(({ root, container }) => {
-      root.unmount();
-      container.remove();
-    });
-    sessionStore.getState().clearSession();
-  });
-  Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
-});
-
-async function flush(condition?: () => boolean): Promise<void> {
-  const limit = Date.now() + 2000;
-  for (;;) {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      for (let i = 0; i < 5; i += 1) await Promise.resolve();
-    });
-    if (condition === undefined || condition() || Date.now() >= limit) return;
-  }
-}
-
-function mount(deps: StoryStudioDeps, initialKind?: PublicationKind): HTMLDivElement {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const root = createRoot(container);
-  mounted.push({ root, container });
-  act(() => {
-    root.render(initialKind === undefined ? <StoryComposeScreen deps={deps} /> : <StoryComposeScreen deps={deps} initialKind={initialKind} />);
-  });
-  return container;
-}
-
-function unmountAll(): void {
-  act(() => {
-    mounted.splice(0).forEach(({ root, container }) => {
-      root.unmount();
-      container.remove();
-    });
-  });
-}
-
-function selectFile(host: ParentNode, door: 'visual' | 'sound', file: File): void {
-  const input = host.querySelector<HTMLInputElement>(`input[data-door="${door}"]`)!;
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  act(() => {
-    Object.defineProperty(input, 'files', { value: transfer.files, configurable: true });
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
-function writeNativeValue(element: HTMLElement, prototype: object | null, value: string): boolean {
-  if (prototype === null) return false;
-  const setter: unknown = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-  if (typeof setter !== 'function') return writeNativeValue(element, Object.getPrototypeOf(prototype), value);
-  Reflect.apply(setter, element, [value]);
-  return true;
-}
-
-function typeText(host: ParentNode, value: string): void {
-  const textarea = host.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
-  act(() => {
-    if (!writeNativeValue(textarea, Object.getPrototypeOf(textarea), value)) throw new Error('aucun setter natif de value');
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
-/** Un `DOMRect` complet — `happy-dom` ne peint rien (toutes ses boîtes sont
- * `0,0,0,0`) : c'est en le SUBSTITUANT sur les deux nœuds réels (la carte,
- * le texte peint) qu'on peut prouver, hors navigateur, que la saisie ADOPTE
- * la boîte MESURÉE plutôt qu'une formule recopiée (défaut 1, revue-correction). */
-function fakeRect(box: { readonly top: number; readonly left: number; readonly width: number; readonly height: number }): DOMRect {
-  const { top, left, width, height } = box;
-  return { top, left, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) } as DOMRect;
-}
-
-const publishButton = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-publish]');
-const removeButton = (host: ParentNode, label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-
-type Harness = {
-  readonly deps: StoryStudioDeps;
-  readonly posts: Array<Record<string, unknown>>;
-  readonly uploadCreations: () => number;
-};
-
-/** Un seul banc : `POST /posts` répond `postsStatus`, la montée TUS rend
- * `pm-<n>` (ou lève tant que `uploadsFail()` est vrai). */
-function harness(options: {
-  readonly postsStatus?: () => number;
-  readonly uploadsFail?: () => boolean;
-  readonly drafts?: StudioDraftStore;
-}): Harness {
-  const posts: Array<Record<string, unknown>> = [];
-  let creations = 0;
-  const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (!url.endsWith('/api/v1/posts') || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
-    posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-    const status = options.postsStatus?.() ?? 201;
-    const body = status === 201 ? { success: true, data: { id: 'post-1' } } : { success: false, error: 'boom' };
-    return new Response(JSON.stringify(body), { status });
-  }) as typeof fetch;
-  const uploadsFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    if (options.uploadsFail?.() === true) throw new TypeError('Failed to fetch');
-    if (init?.method === 'POST') {
-      creations += 1;
-      return new Response(null, { status: 201, headers: { Location: `/api/v1/uploads/up-${creations}` } });
-    }
-    return new Response(
-      JSON.stringify({ success: true, data: { attachment: { id: `pm-${creations}`, fileUrl: `2026/09/u/f-${creations}.jpg`, mimeType: 'image/jpeg' } } }),
-      { status: 200, headers: { 'Upload-Offset': '3' } },
-    );
-  }) as typeof fetch;
-  return {
-    posts,
-    uploadCreations: () => creations,
-    deps: {
-      api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
-      upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },
-      drafts: options.drafts ?? createStudioDraftStore(null),
-    },
-  };
-}
-
-const image = () => new File([new Uint8Array([1, 2, 3])], 'fond.jpg', { type: 'image/jpeg' });
-
-/** UN brouillon SEMÉ à UNE page (schéma 2, #7684) — la forme que les témoins
- * de ce fichier écrivent DIRECTEMENT dans le magasin, sans passer par
- * l'écran. `visibility` reste au niveau du BROUILLON (pas de la page) ; tout
- * le reste (`texts`, `background`, `overlay`, `sound`) va sur `page-1`. */
-function onePageSnapshot(fields: {
-  readonly texts: StudioPageSnapshot['texts'];
-  readonly visibility?: StudioDraftSnapshot['visibility'];
-  readonly background?: StudioPageSnapshot['background'];
-  readonly overlay?: StudioPageSnapshot['overlay'];
-  readonly sound?: StudioPageSnapshot['sound'];
-}): StudioDraftSnapshot {
-  const { texts, visibility, background, overlay, sound } = fields;
-  return {
-    schema: 2,
-    pages: [
-      {
-        id: 'page-1',
-        texts,
-        ...(background !== undefined ? { background } : {}),
-        ...(overlay !== undefined ? { overlay } : {}),
-        ...(sound !== undefined ? { sound } : {}),
-      },
-    ],
-    currentPage: 'page-1',
-    ...(visibility !== undefined ? { visibility } : {}),
-  };
-}
+registerStudioBench();
 
 describe('StoryComposeScreen — le bouton Publier est INERTE sans contenu (loi 4)', () => {
   test('brouillon vide : désactivé, et un clic n’envoie rien', async () => {
@@ -873,161 +685,5 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     } finally {
       document.documentElement.lang = 'fr';
     }
-  });
-});
-
-describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT (#7684)', () => {
-  const pageTiles = (host: ParentNode) => host.querySelectorAll<HTMLButtonElement>('[data-story-studio-page-tile]');
-  const pageRail = (host: ParentNode) => host.querySelector('[data-story-studio-page-rail]');
-  const addPage = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-option="add-page"]');
-  const pageDelete = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-studio-page-delete]');
-  const layoutToggle = () => document.querySelector<HTMLButtonElement>('[data-publish-layout-toggle]');
-  const layoutChoice = (mode: string) => document.querySelector<HTMLButtonElement>(`[data-publish-layout-choice="${mode}"]`);
-  const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
-  const another = (name: string) => new File([new Uint8Array([9, 9, 9])], name, { type: 'image/jpeg' });
-
-  test('une SEULE page : aucun rail, aucun sous-menu de disposition (loi 4)', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    typeText(el, 'Une seule page');
-    expect(pageRail(el)).toBeNull();
-    act(() => kindToggle(el)!.click());
-    expect(layoutToggle()).toBeNull();
-  });
-
-  test('poser une image PUIS créer une page ⇒ le rail affiche DEUX tuiles, la NOUVELLE page est COURANTE', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    selectFile(el, 'visual', image());
-    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-
-    const tiles = pageTiles(el);
-    expect(tiles).toHaveLength(2);
-    expect(tiles[1]?.getAttribute('aria-current')).toBe('true');
-    expect(tiles[0]?.getAttribute('aria-current')).toBeNull();
-  });
-
-  test('taper sur une tuile change la SCÈNE COURANTE — le fond affiché est celui de la page choisie', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    selectFile(el, 'visual', image());
-    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-    const firstSrc = el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src');
-    expect(firstSrc?.startsWith('blob:')).toBe(true);
-
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    selectFile(el, 'visual', another('deuxieme.jpg'));
-    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-    const secondSrc = el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src');
-    expect(secondSrc).not.toBe(firstSrc);
-
-    act(() => pageTiles(el)[0]!.click());
-    await flush();
-    expect(el.querySelector<HTMLImageElement>('[data-scene-player] img')?.getAttribute('src')).toBe(firstSrc);
-  });
-
-  test('la corbeille retire la page COURANTE ; sous DEUX pages, elle disparaît avec le rail', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    typeText(el, 'Page une');
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    expect(pageDelete(el)).not.toBeNull();
-
-    act(() => pageDelete(el)!.click());
-    await flush(() => pageRail(el) === null);
-    expect(pageTiles(el)).toHaveLength(0);
-  });
-
-  test('au PLAFOND (dix pages), le geste « créer une page » disparaît — jamais grisé (loi 4)', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    typeText(el, 'Page une');
-    for (let i = 1; i < 10; i += 1) {
-      act(() => addPage(el)!.click());
-      await flush(() => pageTiles(el).length === i + 1);
-    }
-    expect(pageTiles(el)).toHaveLength(10);
-    expect(addPage(el)).toBeNull();
-  });
-
-  test('le menu ▾ Publier déplie un sous-menu de disposition — POUR POST SEUL, à partir de DEUX pages', async () => {
-    const el = mount(harness({}).deps, 'POST');
-    typeText(el, 'Page une');
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    typeText(el, 'Page deux');
-
-    act(() => kindToggle(el)!.click());
-    const toggle = layoutToggle();
-    expect(toggle).not.toBeNull();
-    act(() => toggle!.click());
-    await flush(() => layoutChoice('carousel') !== null);
-    for (const mode of ['carousel', 'reel', 'hero', 'wave', 'sine']) {
-      expect(layoutChoice(mode)).not.toBeNull();
-    }
-  });
-
-  test('choisir une disposition PUBLIE en POST avec `canvas.layout` — le corps porte le mode choisi', async () => {
-    const bench = harness({});
-    const el = mount(bench.deps, 'POST');
-    typeText(el, 'Page une');
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    typeText(el, 'Page deux');
-
-    act(() => kindToggle(el)!.click());
-    act(() => layoutToggle()!.click());
-    await flush(() => layoutChoice('hero') !== null);
-    act(() => layoutChoice('hero')!.click());
-    await flush(() => bench.posts.length > 0);
-
-    expect(bench.posts[0]?.type).toBe('POST');
-    const effects = bench.posts[0]?.storyEffects as { readonly scenes: readonly unknown[]; readonly layout?: string } | undefined;
-    expect(effects?.scenes).toHaveLength(2);
-    expect(effects?.layout).toBe('hero');
-  });
-
-  test('sans toucher au chevron de disposition, un post de plusieurs pages part SANS `layout` (le repli du modèle)', async () => {
-    const bench = harness({});
-    const el = mount(bench.deps, 'POST');
-    typeText(el, 'Page une');
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    typeText(el, 'Page deux');
-
-    act(() => publishButton(el)!.click());
-    await flush(() => bench.posts.length > 0);
-    const effects = bench.posts[0]?.storyEffects as { readonly layout?: string } | undefined;
-    expect(effects && 'layout' in effects).toBe(false);
-  });
-
-  test('DEUX IMAGES, une par page, qualifient le RÉEL (#7684 — la règle serveur importée, jamais réécrite)', async () => {
-    const el = mount(harness({}).deps, 'REEL');
-    selectFile(el, 'visual', image());
-    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-    expect(el.querySelector('[data-publish-refusal]')).not.toBeNull();
-
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    selectFile(el, 'visual', another('deuxieme.jpg'));
-    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
-
-    expect(el.querySelector('[data-publish-refusal]')).toBeNull();
-    expect(publishButton(el)?.disabled).toBe(false);
-  });
-
-  test('le brouillon PERSISTÉ survit avec ses PAGES — rechargé, il retrouve son fond, ses deux pages et la page courante', async () => {
-    const drafts = createStudioDraftStore(null);
-    const el = mount(harness({ drafts }).deps, 'POST');
-    typeText(el, 'Page une');
-    act(() => addPage(el)!.click());
-    await flush(() => pageTiles(el).length === 2);
-    typeText(el, 'Page deux');
-    await flush();
-
-    unmountAll();
-    const reopened = mount(harness({ drafts }).deps, 'POST');
-    await flush(() => pageTiles(reopened).length === 2);
-    expect(pageTiles(reopened)).toHaveLength(2);
   });
 });

@@ -34,14 +34,16 @@
  *     capsule ; le choix survit au rechargement ; et, PUBLIÉ puis le studio
  *     ROUVERT, le brouillon est purgé mais la mémoire du lecteur relue.
  *  9. PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT (#7684) : `/posts/new`
- *     n'affiche AUCUN rail à une seule page (loi 4) ; poser un fond puis
- *     « créer une page » (`[data-story-option="add-page"]`) fait apparaître
- *     DEUX tuiles (`[data-story-studio-page-tile]`) ≥ 44 px de haut et une
- *     corbeille (`[data-story-studio-page-delete]`) ≥ 44×44 px ; le chevron
- *     ▾ Publier déplie, pour Post, un sous-menu de disposition
- *     (`[data-publish-layout-toggle]`) dont chaque ligne
- *     (`[data-publish-layout-choice]`) est une cible franche, et choisir
- *     « Une grande, les autres à côté » publie avec `canvas.layout: "hero"`.
+ *     n'affiche AUCUN rail à une seule page et sa ligne Post ne déplie rien
+ *     (loi 4) ; trois images posées sur trois pages font trois tuiles
+ *     (`[data-story-studio-page]`) de 44×44, la dernière courante, une
+ *     corbeille de 44×44 qui ne RECOUVRE aucune tuile, et la scène ne change
+ *     pas de hauteur quand le rail paraît (il vit dans la barre haute) ; le
+ *     tap sur la tuile 1 en fait la scène courante, qui PEINT ; le menu ▾
+ *     déplie sous Post les cinq agencements dans l'ordre iOS, lignes ≥ 44 px,
+ *     menu dans l'écran et hors de sa capsule, le réel choisissable ; rechargé,
+ *     le brouillon rend ses trois pages et sa page courante ; Post › « Une
+ *     grande, les autres à côté » publie.
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -441,45 +443,149 @@ async function runScheme(colorScheme) {
     await pagesPage.goto(`${BASE}/posts/new`, { waitUntil: 'load' });
     await pagesPage.waitForSelector('[data-story-studio]', { timeout: 8000 });
 
+    /* (a) UNE page : aucun rail, et la ligne Post ne déplie rien (loi 4). */
+    await pagesPage.setInputFiles('input[data-door="visual"]', { name: 'page1.png', mimeType: 'image/png', buffer: icon });
+    await pagesPage.waitForSelector('[data-asset-phase="ready"]', { timeout: 8000 });
+    // Mesurée AVEC le média posé : la ligne du pied qui le décrit existe aussi
+    // sur chaque page suivante — seule l'apparition du rail peut alors bouger
+    // la scène.
+    const stageBefore = await readBox(pagesPage, PLATEAU_SELECTOR);
     check(
       await pagesPage.evaluate(() => document.querySelector('[data-story-studio-page-rail]') === null),
       `${tag} : le rail des pages ne doit PAS exister avec une seule page (loi 4)`,
     );
-
-    await pagesPage.setInputFiles('input[data-door="visual"]', { name: 'page1.png', mimeType: 'image/png', buffer: icon });
-    await pagesPage.waitForSelector('[data-asset-phase="ready"]', { timeout: 8000 });
-
-    await pagesPage.click('[data-story-option="add-page"]');
-    await pagesPage.waitForSelector('[data-story-studio-page-rail]', { timeout: 8000 });
-    const tileCount = await pagesPage.evaluate(() => document.querySelectorAll('[data-story-studio-page-tile]').length);
-    check(tileCount === 2, `${tag} : trois tuiles de page attendues après « créer une page », vu ${tileCount}`);
-
-    const tileTargets = await pagesPage.evaluate(() =>
-      Array.from(document.querySelectorAll('[data-story-studio-page-tile]')).map((el) => {
-        const r = el.getBoundingClientRect();
-        return { width: r.width, height: r.height };
-      }),
+    await pagesPage.click('[data-publish-kind-toggle]');
+    await pagesPage.waitForSelector('[data-publish-kind-menu]', { timeout: 4000 });
+    check(
+      await pagesPage.evaluate(() => document.querySelector('[data-publish-kind-choice="POST"]')?.hasAttribute('aria-haspopup') === false),
+      `${tag} : un post d'UNE page n'offre aucun sous-menu de disposition (loi 4)`,
     );
-    for (const cible of tileTargets) {
-      check(cible.height >= MIN_TARGET - 0.5, `${tag} : une tuile de page doit atteindre 44 px de haut — ${JSON.stringify(cible)}`);
+    await pagesPage.keyboard.press('Escape');
+
+    /* (b) TROIS images, une par page ⇒ trois tuiles, la dernière courante. */
+    for (const name of ['page2.png', 'page3.png']) {
+      await pagesPage.click('[data-story-option="add-page"]');
+      await pagesPage.waitForFunction((n) => document.querySelectorAll('[data-story-studio-page]').length === n, name === 'page2.png' ? 2 : 3, { timeout: 8000 });
+      await pagesPage.setInputFiles('input[data-door="visual"]', { name, mimeType: 'image/png', buffer: icon });
+      await pagesPage.waitForSelector('[data-asset-phase="ready"]', { timeout: 8000 });
+    }
+    const rail = await pagesPage.evaluate(() => {
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      };
+      const tiles = Array.from(document.querySelectorAll('[data-story-studio-page]'));
+      const del = document.querySelector('[data-story-studio-page-delete]');
+      return {
+        tiles: tiles.map((el) => ({ ...box(el), current: el.getAttribute('aria-current') === 'true', id: el.getAttribute('data-story-studio-page') })),
+        del: del === null ? null : box(del),
+        stageCurrent: document.querySelector('[data-scene-stage]')?.getAttribute('data-story-studio-current-page') ?? null,
+      };
+    });
+    check(rail.tiles.length === 3, `${tag} : trois images posées sur trois pages ⇒ trois tuiles, vu ${rail.tiles.length}`);
+    check(rail.tiles[2]?.current === true, `${tag} : la page créée en dernier doit être la page courante`);
+    for (const tile of rail.tiles) {
+      check(tile.width >= MIN_TARGET - 0.5 && tile.height >= MIN_TARGET - 0.5, `${tag} : une tuile de page doit être une cible de 44×44 — ${JSON.stringify(tile)}`);
+    }
+    check(
+      rail.del !== null && rail.del.width >= MIN_TARGET - 0.5 && rail.del.height >= MIN_TARGET - 0.5,
+      `${tag} : la corbeille de page doit atteindre 44×44 px — ${JSON.stringify(rail.del)}`,
+    );
+    const overlaps = (a, b) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+    check(
+      rail.del !== null && rail.tiles.every((tile) => !overlaps(rail.del, tile)),
+      `${tag} : la corbeille ne recouvre aucune tuile — un tap sur la scène courante ne doit jamais la supprimer — ${JSON.stringify(rail)}`,
+    );
+    const stageAfter = await readBox(pagesPage, PLATEAU_SELECTOR);
+    check(
+      stageBefore !== null && stageAfter !== null && Math.abs(stageBefore.height - stageAfter.height) <= 0.5,
+      `${tag} : le rail apparaît dans la barre haute — la scène ne change pas de hauteur (${JSON.stringify({ stageBefore, stageAfter })})`,
+    );
+    if (CAPTURES !== undefined) await pagesPage.screenshot({ path: join(CAPTURES, `pages-${colorScheme}-${viewport.width}x${viewport.height}-rail.png`) });
+
+    /* (c) le tap sur la tuile 1 change la scène courante — et elle PEINT. */
+    await pagesPage.click(`[data-story-studio-page="${rail.tiles[0]?.id}"]`);
+    await pagesPage.waitForFunction(
+      (id) => document.querySelector('[data-scene-stage]')?.getAttribute('data-story-studio-current-page') === id,
+      rail.tiles[0]?.id,
+      { timeout: 4000 },
+    );
+    check(
+      await pagesPage.evaluate((id) => document.querySelector(`[data-story-studio-page="${id}"]`)?.getAttribute('aria-current') === 'true', rail.tiles[0]?.id),
+      `${tag} : la tuile tapée devient la scène courante`,
+    );
+    await pagesPage.waitForSelector('[data-scene-player]', { timeout: 8000 });
+    await twoFrames(pagesPage);
+    const pageStage = await readBox(pagesPage, PLATEAU_SELECTOR);
+    if (pageStage !== null) {
+      const inner = { x: pageStage.x + 4, y: pageStage.y + 4, width: Math.max(1, pageStage.width - 8), height: Math.max(1, pageStage.height - 8) };
+      check((await pixelSpread(pagesPage, inner)) > 4, `${tag} : la scène de la page 1 ne peint rien`);
     }
 
-    const deleteTarget = await readBox(pagesPage, '[data-story-studio-page-delete]');
+    /* (d) le menu ▾ : Post DÉPLIE ses cinq agencements (ordre iOS), chacun
+       une cible ≥ 44 px, le menu reste dans l'écran et ne recouvre pas sa
+       capsule ; le RÉEL est choisissable (trois images). */
+    await pagesPage.click('[data-publish-kind-toggle]');
+    await pagesPage.waitForSelector('[data-publish-kind-menu]', { timeout: 4000 });
     check(
-      deleteTarget !== null && deleteTarget.width >= MIN_TARGET - 0.5 && deleteTarget.height >= MIN_TARGET - 0.5,
-      `${tag} : la corbeille de page doit atteindre 44×44 px — ${JSON.stringify(deleteTarget)}`,
+      await pagesPage.evaluate(() => document.querySelector('[data-publish-kind-choice="POST"]')?.getAttribute('aria-haspopup') === 'menu'),
+      `${tag} : à plusieurs pages, la ligne Post porte un sous-menu (aria-haspopup="menu")`,
+    );
+    check(
+      await pagesPage.evaluate(() => document.querySelector('[data-publish-kind-choice="REEL"]')?.getAttribute('aria-disabled') === 'false'),
+      `${tag} : trois images ⇒ le réel devient choisissable (qualifiesAsReel)`,
+    );
+    await pagesPage.click('[data-publish-kind-choice="POST"]');
+    await pagesPage.waitForSelector('[data-publish-layout-choice="sine"]', { timeout: 4000 });
+    await twoFrames(pagesPage);
+    const layoutMenu = await pagesPage.evaluate(() => {
+      const menu = document.querySelector('[data-publish-kind-menu]');
+      const capsule = document.querySelector('[data-publish-split]')?.getBoundingClientRect();
+      const rows = Array.from(document.querySelectorAll('[data-publish-layout-choice]')).map((el) => ({
+        mode: el.getAttribute('data-publish-layout-choice'),
+        height: el.getBoundingClientRect().height,
+      }));
+      const r = menu?.getBoundingClientRect();
+      return r === undefined || capsule === undefined
+        ? null
+        : { menuTop: r.top, menuBottom: r.bottom, capsuleTop: capsule.top, capsuleBottom: capsule.bottom, innerHeight, rows };
+    });
+    check(
+      layoutMenu !== null && layoutMenu.rows.map((row) => row.mode).join(',') === 'carousel,reel,hero,wave,sine',
+      `${tag} : les cinq agencements, dans l'ordre iOS (ComposerMosaicChoice.ordered) — ${JSON.stringify(layoutMenu?.rows)}`,
+    );
+    check(
+      layoutMenu !== null && layoutMenu.rows.every((row) => row.height >= MIN_TARGET - 0.5),
+      `${tag} : chaque ligne d'agencement est une cible ≥ 44 px — ${JSON.stringify(layoutMenu?.rows)}`,
+    );
+    check(
+      layoutMenu !== null &&
+        layoutMenu.menuTop >= 0 &&
+        layoutMenu.menuBottom <= layoutMenu.innerHeight + 0.5 &&
+        (layoutMenu.menuBottom <= layoutMenu.capsuleTop + 0.5 || layoutMenu.menuTop >= layoutMenu.capsuleBottom - 0.5),
+      `${tag} : le menu déplié reste dans l'écran et ne recouvre pas la capsule — ${JSON.stringify(layoutMenu)}`,
+    );
+    if (layoutMenu !== null) measures[`${viewport.width}.layoutMenu`] = [round(layoutMenu.menuTop), round(layoutMenu.menuBottom), layoutMenu.rows.length];
+    measures[`${viewport.width}.rail`] = rail.tiles.map((tile) => [round(tile.x), round(tile.y), round(tile.width), round(tile.height)]);
+    if (CAPTURES !== undefined) await pagesPage.screenshot({ path: join(CAPTURES, `pages-${colorScheme}-${viewport.width}x${viewport.height}-menu.png`) });
+    await pagesPage.keyboard.press('Escape');
+
+    /* (e) rechargé, le brouillon garde ses trois pages et la page courante. */
+    await pagesPage.waitForFunction(
+      (key) => (localStorage.getItem(key) ?? '').includes('"schema":2'),
+      `meeshy.draft.story.${pagesViewerId}`,
+      { timeout: 4000 },
+    );
+    await pagesPage.reload({ waitUntil: 'load' });
+    await pagesPage.waitForFunction(() => document.querySelectorAll('[data-story-studio-page]').length === 3, undefined, { timeout: 8000 });
+    check(
+      await pagesPage.evaluate((id) => document.querySelector(`[data-story-studio-page="${id}"]`)?.getAttribute('aria-current') === 'true', rail.tiles[0]?.id),
+      `${tag} : rechargé, le brouillon rend ses trois pages ET la page courante`,
     );
 
-    await pagesPage.fill('#story-studio-text', 'Page deux');
+    /* (f) Post › « Une grande, les autres à côté » publie. */
     await pagesPage.click('[data-publish-kind-toggle]');
-    await pagesPage.waitForSelector('[data-publish-layout-toggle]', { timeout: 4000 });
-    await pagesPage.click('[data-publish-layout-toggle]');
-    await pagesPage.waitForSelector('[data-publish-layout-choice="hero"]', { timeout: 4000 });
-    const layoutTarget = await readBox(pagesPage, '[data-publish-layout-choice="hero"]');
-    check(
-      layoutTarget !== null && layoutTarget.height >= 40,
-      `${tag} : une ligne de disposition doit être une cible franche — ${JSON.stringify(layoutTarget)}`,
-    );
+    await pagesPage.click('[data-publish-kind-choice="POST"]');
     await pagesPage.click('[data-publish-layout-choice="hero"]');
     await pagesPage.waitForURL((url) => url.pathname.startsWith('/feed'), { timeout: 8000 });
 
@@ -510,7 +616,8 @@ console.log(
     'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
     'tapé survit à un rechargement, l’audience se choisit et voyage (pastille ≥ 44 px sans débordement, défaut FRIENDS ' +
     'désigné dans la feuille, six audiences dans l’ordre iOS, ONLY/EXCEPT grisés avec leur raison, menu sans recouvrement, ' +
-    'choix relu après rechargement ET après publication), et PLUSIEURS PAGES DE MÉDIAS (#7684) : aucun rail à une page, ' +
-    'deux tuiles ≥ 44 px de haut après « créer une page », une corbeille ≥ 44×44 px, et le sous-menu de disposition ' +
-    '(chevron ▾ Publier › Post) publie avec `canvas.layout` — clair et sombre identiques.',
+    'choix relu après rechargement ET après publication), et PLUSIEURS PAGES DE MÉDIAS (#7684) : aucun rail ni sous-menu à ' +
+    'une page, trois images ⇒ trois tuiles 44×44 dans la barre haute, corbeille 44×44 hors des tuiles, le tap change la ' +
+    'scène courante, Post déplie ses cinq agencements (ordre iOS, lignes ≥ 44 px, menu dans l’écran hors de sa capsule), ' +
+    'le réel choisissable, le brouillon relu avec ses pages, publication — clair et sombre identiques.',
 );

@@ -8,7 +8,17 @@ import {
   studioReelMedia,
   type PublicationKind,
 } from './publication-kind';
-import { emptyStudioDraft, withAddedPage, withSound, withText, withVisual, type StudioDraft } from './studio';
+import {
+  currentStudioPage,
+  emptyStudioDraft,
+  studioPublishablePageCount,
+  withAddedPage,
+  withSound,
+  withText,
+  withVisual,
+  withoutPage,
+  type StudioDraft,
+} from './studio';
 import { IDENTITY_POSE } from './studio-pose';
 
 const ready = { phase: 'ready', postMediaId: 'pm-1', fileUrl: 'f.jpg' } as const;
@@ -87,5 +97,34 @@ describe('studioReelMedia / studioPublishRefusal — le réel se REFUSE, il ne s
     const secondImage = withBackground(twoPages, 'image');
     expect(studioReelMedia(secondImage)).toHaveLength(2);
     expect(studioPublishRefusal(secondImage, 'REEL')).toBeNull();
+  });
+});
+
+describe('studioPublishRefusal — une STORY de plusieurs pages se REFUSE en le disant (#7684, question 9.4)', () => {
+  const twoPublishablePages = (): StudioDraft => {
+    const second = withAddedPage(textOnly(), 'fr');
+    return withText(second, currentStudioPage(second).texts[0]!.id, 'Deuxième');
+  };
+
+  test('deux pages AVEC matière ⇒ la story est refusée ; le post et le réel qualifiant ne le sont pas', () => {
+    expect(studioPublishRefusal(twoPublishablePages(), 'STORY')).toBe('story-with-several-pages');
+    expect(studioPublishRefusal(twoPublishablePages(), 'POST')).toBeNull();
+  });
+
+  test('une seconde page VIDE ne compte pas — ce qui est compté est ce qui PARTIRA', () => {
+    expect(studioPublishRefusal(withAddedPage(textOnly(), 'fr'), 'STORY')).toBeNull();
+  });
+
+  test('retirer la seconde page lève le refus', () => {
+    const draft = twoPublishablePages();
+    expect(studioPublishRefusal(withoutPage(draft, draft.currentPage), 'STORY')).toBeNull();
+  });
+});
+
+describe('studioPublishablePageCount — les pages qui produiront une SCÈNE', () => {
+  test('une page vide ne compte pas ; une page de texte, oui', () => {
+    const draft = withAddedPage(textOnly(), 'fr');
+    expect(studioPublishablePageCount(draft)).toBe(1);
+    expect(studioPublishablePageCount(withText(draft, currentStudioPage(draft).texts[0]!.id, 'Deux'))).toBe(2);
   });
 });

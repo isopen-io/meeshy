@@ -257,6 +257,16 @@ describe('studioMediaCount / studioPlaceRefusal — le plafond du DOCUMENT ENTIE
     expect(studioMediaCount(draft)).toBe(10);
     expect(studioPlaceRefusal(draft, 'visual', 'image/jpeg')).toBe('media-max');
   });
+
+  test('au plafond, REMPLACER un média de la page courante passe — le compte ne monte pas ; en AJOUTER un, non', () => {
+    const filled = (draft: StudioDraft): StudioDraft => withVisual(withVisual(draft, 'visual', visualAsset()), 'overlay', visualAsset());
+    const tenOnFivePages = [1, 2, 3, 4].reduce((draft) => filled(withAddedPage(draft, 'fr')), filled(typed('Une')));
+    expect(studioMediaCount(tenOnFivePages)).toBe(10);
+    const onLastFilledPage = withCurrentPage(tenOnFivePages, tenOnFivePages.pages[2]!.id);
+    expect(studioPlaceRefusal(onLastFilledPage, 'visual', 'image/jpeg')).toBeNull();
+    expect(studioPlaceRefusal(onLastFilledPage, 'overlay', 'image/png')).toBeNull();
+    expect(studioPlaceRefusal(onLastFilledPage, 'sound', 'audio/mp4')).toBe('media-max');
+  });
 });
 
 describe('studioSnapshotOf / studioDraftFromSnapshot — les PAGES font l’aller-retour (#7684)', () => {

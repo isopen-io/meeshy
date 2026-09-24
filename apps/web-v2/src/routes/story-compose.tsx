@@ -3,9 +3,9 @@ import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
-import type { ApiFailure, ApiResult } from '@/lib/api/http';
+import type { ApiFailure } from '@/lib/api/http';
 import { attachmentSrc } from '@/lib/api/media-url';
-import type { PostMediaUploadDeps, PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -21,23 +21,20 @@ import { resolveSceneText } from '@/lib/canvas/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
-import { storyMediaCaptionPayload } from '@/lib/stories/media-caption';
 import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind } from '@/lib/stories/publication-kind';
+import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import {
   buildPreviewCanvasDocument,
-  buildStoryCanvasEffectsPages,
   composeStoryCanvas,
   STORY_PLAIN_BACKGROUND,
-  studioMediaIds,
   studioMediaKindOf,
-  type StudioPlane,
-  type StudioReadyAsset,
 } from '@/lib/stories/story-document';
 import {
   pageWithMediaDuration,
+  pageWithSound,
   pageWithSoundUpload,
+  pageWithVisual,
   pageWithVisualAspectRatio,
   pageWithVisualUpload,
   type StudioDoor,
@@ -52,18 +49,17 @@ import {
   studioDraftFromSnapshot,
   studioFailureKey,
   studioPlaceRefusal,
+  studioPublishablePageCount,
   studioSnapshotOf,
   withAddedPage,
   withAddedText,
   withCurrentPage,
   withPage,
   withSelected,
-  withSound,
   withSoundPlane,
   withAudience,
   withText,
   withTextLayer,
-  withVisual,
   withVisualCaption,
   withVisualPose,
   withoutPage,
@@ -73,6 +69,7 @@ import {
   type StudioDraft,
 } from '@/lib/stories/studio';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
+import { settle, studioPublishPayload, uploadStateOf, type PendingUpload, type SettledPage } from '@/lib/stories/studio-publish';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
@@ -82,16 +79,15 @@ import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { Link, href, navigate } from '@/routes/route-table';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
+import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import {
   LayerMark,
   PageMark,
   SlidersMark,
-  StudioAssetRow,
   StudioChip,
   StudioDoorButton,
   StudioRefusal,
-  StudioSoundPlaneToggle,
 } from '@/routes/story-compose-parts';
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
 import { measureSceneText, sameSceneTextBox, type SceneTextBox } from '@/routes/story-compose-text-box';
@@ -159,45 +155,15 @@ const defaultStoryStudioDeps: StoryStudioDeps = {
  * moteur à chaque frappe. */
 const PREVIEW_CARRIER: SceneCarrier = { postId: 'story-studio-preview', media: [] };
 
-type PendingUpload = Promise<ApiResult<PostMediaUploadResult>>;
+/** Les montées EN VOL sont adressées par PAGE — un fichier posé sur la page 2
+ * ne se confond pas avec celui de la page 1 quand l'auteur bascule pendant le
+ * transport (#7684). */
+const uploadKey = (pageId: string, door: StudioDoor): string => `${pageId}:${door}`;
 
-type SettledAsset = { readonly kind: 'none' } | { readonly kind: 'ready'; readonly ready: StudioReadyAsset } | { readonly kind: 'failed' };
-
-const VISUAL_DOORS = ['visual', 'overlay'] as const;
+const ALL_DOORS: readonly StudioDoor[] = ['visual', 'overlay', 'sound'];
 
 function revokeIfLocal(url: string | undefined): void {
   if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
-}
-
-function uploadStateOf(result: ApiResult<PostMediaUploadResult>): StudioUploadState | null {
-  if (result.ok) {
-    return {
-      phase: 'ready',
-      postMediaId: result.data.postMediaId,
-      fileUrl: result.data.fileUrl,
-      ...(result.data.thumbHash !== undefined ? { thumbHash: result.data.thumbHash } : {}),
-    };
-  }
-  const reasonKey = studioFailureKey(result, 'upload');
-  return reasonKey === null ? null : { phase: 'failed', reasonKey };
-}
-
-function readyAssetFromUpload(upload: Extract<StudioUploadState, { phase: 'ready' }>): StudioReadyAsset {
-  return { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl, ...(upload.thumbHash !== undefined ? { thumbHash: upload.thumbHash } : {}) };
-}
-
-function readyAssetFromResult(data: PostMediaUploadResult): StudioReadyAsset {
-  return { postMediaId: data.postMediaId, fileUrl: data.fileUrl, ...(data.thumbHash !== undefined ? { thumbHash: data.thumbHash } : {}) };
-}
-
-/** Un média tel que la publication le LIT : prêt dans le brouillon, sinon
- * l'accusé de SA montée en vol — jamais un second envoi. */
-async function settle(upload: StudioUploadState | undefined, pending: PendingUpload | null): Promise<SettledAsset> {
-  if (upload === undefined) return { kind: 'none' };
-  if (upload.phase === 'ready') return { kind: 'ready', ready: readyAssetFromUpload(upload) };
-  if (upload.phase === 'failed' || pending === null) return { kind: 'failed' };
-  const result = await pending;
-  return result.ok ? { kind: 'ready', ready: readyAssetFromResult(result.data) } : { kind: 'failed' };
 }
 
 const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
@@ -220,7 +186,11 @@ export default function StoryComposeScreen({
   return <StoryStudio key={viewerId ?? 'anonymous'} deps={deps} viewerId={viewerId} initialKind={initialKind} />;
 }
 
-function StudioShell({ kind, children }: { readonly kind: PublicationKind; readonly children: ReactNode }) {
+/** La barre haute d'iOS (`ComposerTopBar.swift:49-71`) : ✕ · rail · ⋯. Le
+ * rail des scènes (#7684) prend la place du titre dès la deuxième page — le
+ * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
+ * quand le rail apparaît. */
+function StudioShell({ kind, rail, children }: { readonly kind: PublicationKind; readonly rail?: ReactNode; readonly children: ReactNode }) {
   const lang = currentInterfaceLanguage();
   return (
     <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
@@ -233,7 +203,8 @@ function StudioShell({ kind, children }: { readonly kind: PublicationKind; reado
         >
           <Glyph name="x" size={18} />
         </Link>
-        <h1 className="flex-1 text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+        {rail}
+        <h1 className={rail === undefined ? 'flex-1 text-body font-semibold' : 'offscreen'} style={{ color: 'var(--color-ios-ink)' }}>
           {translate(lang, TITLE_KEY[kind])}
         </h1>
       </header>
@@ -272,19 +243,16 @@ function StoryStudio({
     preferred: reader.languages,
     ...(draft.language !== undefined ? { initialLanguage: draft.language } : {}),
   });
-  /** Le format que la partie principale publie — celui de l'entrée, puis le
-   * dernier que le chevron a choisi (une intention armée hors ligne, ou un
-   * échec, repart au format que l'auteur a DIT). */
-  const [kind, setKind] = useState<PublicationKind>(initialKind);
+  /** Le GESTE que la partie principale publie — le format de l'entrée, puis
+   * le dernier que le chevron a choisi AVEC sa disposition (`PublishChoice`,
+   * #7684) : une intention armée hors ligne, ou un échec, repart comme
+   * l'auteur l'a DIT. Aucune disposition tant qu'il n'en a choisi aucune. */
+  const [choice, setChoice] = useState<PublishChoice>({ kind: initialKind, layout: null });
+  const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
   const [publishFailure, setPublishFailure] = useState<StudioFailureKey | null>(null);
-  const [placeRefusal, setPlaceRefusal] = useState<{ readonly door: StudioDoor; readonly reason: 'door' | 'media-max' } | null>(null);
-  /** **LA DISPOSITION CHOISIE PAR L'AUTEUR** (#7684) — `null` tant que rien
-   * n'est choisi : `composeStoryCanvasPages` applique alors le repli du
-   * modèle (`carousel`), jamais une valeur recopiée ici. Portée par le
-   * BROUILLON, pas persistée : un repli de session, comme `kind`. */
-  const [layout, setLayout] = useState<MosaicLayoutMode | null>(null);
+  const [placeRefusal, setPlaceRefusal] = useState<StudioPlaceRefusalNotice | null>(null);
   /** Les contrôleurs de l'outil ouvert (zone BASSE d'iOS) — FERMÉS par défaut :
    * la scène garde toute sa hauteur tant que l'auteur ne règle rien. */
   const [editorOpen, setEditorOpen] = useState(false);
@@ -295,10 +263,6 @@ function StoryStudio({
    * les autres pages restent immobiles (Zero Unnecessary Re-render). */
   const page = currentStudioPage(draft);
 
-  /** Les montées EN VOL sont adressées par PAGE — un fichier posé sur la page
-   * 2 ne doit pas se confondre avec celui de la page 1 quand l'auteur bascule
-   * pendant le transport. */
-  const uploadKey = (pageId: string, door: StudioDoor): string => `${pageId}:${door}`;
   const pendingRef = useRef<Record<string, PendingUpload | null>>({});
   const abortRef = useRef<Record<string, AbortController | null>>({});
   const latestDraft = useRef(draft);
@@ -362,7 +326,7 @@ function StoryStudio({
     const uploading: StudioUploadState = { phase: 'uploading', progress: 0 };
     if (door === 'sound') {
       revokeIfLocal(page.sound?.previewUrl);
-      setDraft((current) => withSound(current, { file, previewUrl, upload: uploading, plane: page.sound?.plane ?? 'background' }));
+      setDraft((current) => withPage(current, pageId, (p) => pageWithSound(p, { file, previewUrl, upload: uploading, plane: p.sound?.plane ?? 'background' })));
       void measureDurationMs(previewUrl, 'audio').then((durationMs) => {
         if (durationMs !== null) setDraft((current) => withPage(current, pageId, (p) => pageWithMediaDuration(p, 'sound', previewUrl, durationMs)));
       });
@@ -370,7 +334,9 @@ function StoryStudio({
       revokeIfLocal((door === 'visual' ? page.background : page.overlay)?.previewUrl);
       const mediaType = studioMediaKindOf(file.type);
       setDraft((current) =>
-        withVisual(current, door, { file, previewUrl, mediaType, upload: uploading, caption: '', pose: page.overlay?.pose ?? clampPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 }) }),
+        withPage(current, pageId, (p) =>
+          pageWithVisual(p, door, { file, previewUrl, mediaType, upload: uploading, caption: '', pose: p.overlay?.pose ?? clampPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 }) }),
+        ),
       );
       // La mesure décode le fichier LOCAL, hors du chemin de montée — un
       // format que ce navigateur ne sait pas décoder (§ 0, défaut 7) ne
@@ -387,10 +353,35 @@ function StoryStudio({
     startUpload(pageId, door, file);
   }
 
-  function remove(door: StudioDoor) {
-    const key = uploadKey(page.id, door);
+  /** Une montée qu'on ABANDONNE — la page ou le média qu'elle servait est
+   * retiré : elle ne coûte plus de bande passante, et son accusé ne revient
+   * sur rien. */
+  const forgetUpload = useCallback((pageId: string, door: StudioDoor) => {
+    const key = uploadKey(pageId, door);
     abortRef.current[key]?.abort();
+    abortRef.current[key] = null;
     pendingRef.current[key] = null;
+  }, []);
+
+  /** RETIRER UNE PAGE (`removeSlide`, #7684) — ses montées en vol sont
+   * ABANDONNÉES et ses aperçus locaux RÉVOQUÉS, comme le retrait d'un média :
+   * une page retirée ne laisse ni transfert ni `blob:` derrière elle. */
+  const deletePage = useCallback(
+    (id: string) => {
+      const removed = latestDraft.current.pages.find((p) => p.id === id);
+      if (removed === undefined || latestDraft.current.pages.length <= 1) return;
+      ALL_DOORS.forEach((door) => forgetUpload(id, door));
+      revokeIfLocal(removed.background?.previewUrl);
+      revokeIfLocal(removed.overlay?.previewUrl);
+      revokeIfLocal(removed.sound?.previewUrl);
+      setDraft((current) => withoutPage(current, id));
+    },
+    [forgetUpload],
+  );
+  const selectPage = useCallback((id: string) => setDraft((current) => withCurrentPage(current, id)), []);
+
+  function remove(door: StudioDoor) {
+    forgetUpload(page.id, door);
     if (door === 'sound') {
       revokeIfLocal(page.sound?.previewUrl);
       setDraft(withoutSound);
@@ -453,16 +444,14 @@ function StoryStudio({
   /**
    * **PLUSIEURS PAGES, PLUSIEURS SCÈNES, UN SEUL ENVOI** (#7684) — chaque
    * page règle ses TROIS montées en vol (`settle`, adressées par
-   * `${pageId}:${door}`), jamais seulement celles de la page à l'écran :
-   * publier depuis la page 2 ne doit pas laisser un fond de la page 1
-   * remonter en URL locale. `chosenLayout` n'est retenu QUE pour un POST
-   * (`layoutIsServed`, question 9.4 : la story publie un post PAR page).
+   * `${pageId}:${door}`), jamais seulement celles de la page à l'écran.
+   * `chosen` est le GESTE entier (format ET disposition, `PublishChoice`) :
+   * une intention armée hors ligne, ou un échec, repart avec les deux.
    */
-  async function publish(chosen: PublicationKind = kind, chosenLayout: MosaicLayoutMode | null = layout) {
+  async function publish(chosen: PublishChoice = choice) {
     if (!canPublishStudioDraft(draft) || publishing) return;
-    if (studioPublishRefusal(draft, chosen) !== null) return;
-    setKind(chosen);
-    if (chosenLayout !== null) setLayout(chosenLayout);
+    if (studioPublishRefusal(draft, chosen.kind) !== null) return;
+    setChoice(chosen);
     if (!online) {
       setAwaitingNetwork(true);
       return;
@@ -474,110 +463,43 @@ function StoryStudio({
     const settledByPage = new Map(
       await Promise.all(
         draft.pages.map(
-          async (p) =>
-            [
-              p.id,
-              await Promise.all([
-                settle(p.background?.upload, pendingRef.current[uploadKey(p.id, 'visual')] ?? null),
-                settle(p.overlay?.upload, pendingRef.current[uploadKey(p.id, 'overlay')] ?? null),
-                settle(p.sound?.upload, pendingRef.current[uploadKey(p.id, 'sound')] ?? null),
-              ]),
-            ] as const,
+          async (p): Promise<readonly [string, SettledPage]> => [
+            p.id,
+            await Promise.all([
+              settle(p.background?.upload, pendingRef.current[uploadKey(p.id, 'visual')] ?? null),
+              settle(p.overlay?.upload, pendingRef.current[uploadKey(p.id, 'overlay')] ?? null),
+              settle(p.sound?.upload, pendingRef.current[uploadKey(p.id, 'sound')] ?? null),
+            ]),
+          ],
         ),
       ),
     );
 
     const current = latestDraft.current;
-    const resolved = current.pages.map((p) => {
-      const [background, overlay, sound] = settledByPage.get(p.id) ?? [
-        { kind: 'none' as const },
-        { kind: 'none' as const },
-        { kind: 'none' as const },
-      ];
-      return {
-        page: p,
-        backgroundReady: background.kind === 'ready' && p.background !== null ? background.ready : undefined,
-        overlayReady: overlay.kind === 'ready' && p.overlay !== null ? overlay.ready : undefined,
-        soundReady: sound.kind === 'ready' && p.sound !== null ? sound.ready : undefined,
-      };
-    });
-    const anyUnresolved = resolved.some(
-      ({ page: p, backgroundReady, overlayReady, soundReady }) =>
-        (p.background !== null && backgroundReady === undefined) ||
-        (p.overlay !== null && overlayReady === undefined) ||
-        (p.sound !== null && soundReady === undefined),
-    );
-    if (anyUnresolved) {
-      setPublishing(false);
-      setPublishFailure(null);
-      return;
-    }
-
     // Le sous-menu n'offre une disposition QUE pour Post (`layoutIsServed`) :
     // un autre format part sans `layout`, même choisi plus tôt sur un Post.
-    const effectiveLayout = chosen === 'POST' ? chosenLayout : null;
-    const storyEffects = buildStoryCanvasEffectsPages(
-      resolved.map(({ page: p, backgroundReady, overlayReady, soundReady }) => ({
-        id: p.id,
-        texts: p.texts,
-        ...(backgroundReady !== undefined && p.background !== null
-          ? {
-              background: {
-                source: backgroundReady,
-                mediaType: p.background.mediaType,
-                ...(p.background.aspectRatio !== undefined ? { aspectRatio: p.background.aspectRatio } : {}),
-              },
-            }
-          : {}),
-        ...(overlayReady !== undefined && p.overlay !== null
-          ? {
-              overlay: {
-                source: overlayReady,
-                mediaType: p.overlay.mediaType,
-                ...(p.overlay.aspectRatio !== undefined ? { aspectRatio: p.overlay.aspectRatio } : {}),
-                pose: p.overlay.pose,
-              },
-            }
-          : {}),
-        ...(soundReady !== undefined && p.sound !== null ? { sound: { source: soundReady, plane: p.sound.plane } } : {}),
-      })),
-      effectiveLayout,
-    );
-    if (storyEffects === null) {
+    const payload = studioPublishPayload({ pages: current.pages, settled: settledByPage, layout: chosen.kind === 'POST' ? chosen.layout : null });
+    if (payload.kind !== 'ready') {
       setPublishing(false);
+      setPublishFailure(null);
       return;
     }
 
     // **AUCUN `content`** (défaut 4, revue-correction #6900) : le texte d'une
     // story vit dans `storyEffects` — l'envoyer en `content` le ferait rendre
     // DEUX FOIS chez le lecteur, miroir du `content: nil` iOS
-    // (`StoryViewModel+PublicationUpload.swift:378-391`). Le serveur traduit
-    // les `textObjects` du canevas directement
-    // (`PostService.triggerStoryTextObjectTranslation`), et `locale` sur chaque
-    // objet porte la langue source de CETTE traduction.
-    //
-    // **`mediaCaption`, LUI, part** (#6944) : `PostMedia.caption` est un
-    // TROISIÈME contenu, celui du média, que `PostService.applyMediaCaption`
-    // écrit et fait traduire. Le confondre avec `content` est exactement ce
-    // que la directive porteur du 2026-09-17 a levé. `PAGE PAR PAGE` (#7684) —
-    // deux fonds de deux pages différentes peuvent porter deux légendes.
-    const mediaCaption = storyMediaCaptionPayload(
-      resolved.flatMap(({ page: p, backgroundReady, overlayReady }) => [
-        { postMediaId: backgroundReady?.postMediaId, caption: p.background?.caption },
-        { postMediaId: overlayReady?.postMediaId, caption: p.overlay?.caption },
-      ]),
-    );
-
+    // (`StoryViewModel+PublicationUpload.swift:378-391`). `mediaCaption`, LUI,
+    // part (#6944) : `PostMedia.caption` est le contenu du MÉDIA.
     const result = await publishStory({
       ...deps.api,
-      type: chosen,
+      type: chosen.kind,
       // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le défaut
       // reste une règle SERVEUR (`core.ts:421`) — jamais un défaut recopié ici.
       ...(current.visibility !== null ? { visibility: current.visibility } : {}),
       ...(current.pages.some((p) => p.texts.some((layer) => layer.text.trim() !== '')) ? { originalLanguage: language } : {}),
-      ...(mediaCaption !== undefined ? { mediaCaption } : {}),
-      storyEffects,
-      mediaIds: studioMediaIds(resolved.map(({ backgroundReady, overlayReady, soundReady }) => ({ background: backgroundReady, overlay: overlayReady, sound: soundReady }))),
+      ...(payload.mediaCaption !== undefined ? { mediaCaption: payload.mediaCaption } : {}),
+      storyEffects: payload.storyEffects,
+      mediaIds: payload.mediaIds,
     });
 
     if (!result.ok) {
@@ -596,7 +518,7 @@ function StoryStudio({
       revokeIfLocal(p.overlay?.previewUrl);
       revokeIfLocal(p.sound?.previewUrl);
     });
-    if (chosen === 'STORY') {
+    if (chosen.kind === 'STORY') {
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
       navigate(href('stories'));
       return;
@@ -735,6 +657,7 @@ function StoryStudio({
 
   const canPublish = canPublishStudioDraft(draft);
   const kindRefusal = studioPublishRefusal(draft, kind);
+  const publishablePageCount = studioPublishablePageCount(draft);
   /** **CE QUI PARTIRA** (#7683) — l'audience CHOISIE, sinon le défaut de la
    * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
    * dit toujours ce qui part, même quand rien n'a été choisi. */
@@ -759,26 +682,20 @@ function StoryStudio({
     selectedId === 'overlay' ? (page.overlay?.pose ?? null) : (selectedLayer?.pose ?? null);
 
   return (
-    <StudioShell kind={kind}>
+    <StudioShell
+      kind={kind}
+      rail={
+        draft.pages.length > 1 ? (
+          <Suspense fallback={<span className="min-w-0 flex-1" />}>
+            <StudioPageRail lang={lang} pages={draft.pages} currentPageId={draft.currentPage} onSelect={selectPage} onDelete={deletePage} />
+          </Suspense>
+        ) : undefined
+      }
+    >
       {!online ? (
         <p role="status" className="shrink-0 px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           {translate(lang, 'story.studio.offline')}
         </p>
-      ) : null}
-
-      {/* LE RAIL DES PAGES — la rangée HAUTE (#7684, §1.2) : chargé à la
-          demande, jamais monté sous une seule page (`slides.count > 1`,
-          `ComposerSlideRail.swift:39`). */}
-      {draft.pages.length > 1 ? (
-        <Suspense fallback={null}>
-          <StudioPageRail
-            lang={lang}
-            pages={draft.pages}
-            currentPageId={draft.currentPage}
-            onSelect={(id) => setDraft((current) => withCurrentPage(current, id))}
-            onDelete={(id) => setDraft((current) => withoutPage(current, id))}
-          />
-        </Suspense>
       ) : null}
 
       <div className="flex min-h-0 flex-1 gap-2 px-2">
@@ -842,6 +759,7 @@ function StoryStudio({
         <div className="grid min-w-0 flex-1 place-items-center" style={{ containerType: 'size' }}>
           <div
             data-scene-stage
+            data-story-studio-current-page={page.id}
             ref={stageRef}
             role="group"
             aria-label={translate(lang, 'story.studio.stage')}
@@ -925,7 +843,7 @@ function StoryStudio({
                 règlent rien : elles SONT l'objet qu'on saisit. */}
             {selectedId !== null && selectedPose !== null ? (
               <StudioObjectHandles
-                key={selectedId}
+                key={`${page.id}:${selectedId}`}
                 lang={lang}
                 name={objectName(selectedId)}
                 pose={selectedPose}
@@ -1005,71 +923,15 @@ function StoryStudio({
       ) : null}
 
       <footer className="flex shrink-0 flex-col gap-1 px-4 pt-2 pb-safe">
-        {page.background !== null || page.overlay !== null || page.sound !== null ? (
-          <ul className="flex flex-col gap-1">
-            {VISUAL_DOORS.map((door) => {
-              const asset = door === 'visual' ? page.background : page.overlay;
-              if (asset === null) return null;
-              return (
-                <StudioAssetRow
-                  key={door}
-                  lang={lang}
-                  glyph={door === 'visual' ? 'image' : 'layer'}
-                  label={translate(lang, door === 'visual' ? 'story.studio.background.label' : 'story.studio.overlay.label')}
-                  removeLabel={translate(lang, door === 'visual' ? 'story.studio.background.remove' : 'story.studio.overlay.remove')}
-                  upload={asset.upload}
-                  onRetry={asset.file !== undefined ? () => retry(door) : undefined}
-                  onRemove={() => remove(door)}
-                  caption={{
-                    value: asset.caption,
-                    inputId: `story-studio-caption-${door}`,
-                    onChange: (value) => setDraft((current) => withVisualCaption(current, door, value)),
-                  }}
-                />
-              );
-            })}
-            {page.sound !== null ? (
-              <StudioAssetRow
-                lang={lang}
-                glyph="microphone"
-                label={translate(lang, 'story.studio.sound.label')}
-                removeLabel={translate(lang, 'story.studio.sound.remove')}
-                upload={page.sound.upload}
-                onRetry={page.sound.file !== undefined ? () => retry('sound') : undefined}
-                onRemove={() => remove('sound')}
-              >
-                <StudioSoundPlaneToggle
-                  lang={lang}
-                  plane={page.sound.plane}
-                  onChange={(plane: StudioPlane) => setDraft((current) => withSoundPlane(current, plane))}
-                />
-              </StudioAssetRow>
-            ) : null}
-          </ul>
-        ) : null}
-        {/* LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine
-            largeur : partagée avec la pastille et la capsule Publier, elle ne
-            gardait que quelques pixels à 320 px — l'échec d'une publication et
-            la raison d'un réel refusé se réduisaient à une lettre. */}
-        <div className="text-caption">
-          {placeRefusal !== null ? (
-            <p role="alert" data-place-refusal={placeRefusal.reason} style={{ color: 'var(--color-error)' }}>
-              {placeRefusal.reason === 'media-max'
-                ? translate(lang, 'story.studio.refusal.media-max')
-                : translate(lang, placeRefusal.door === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
-            </p>
-          ) : kindRefusal !== null ? (
-            <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(lang, 'story.studio.refusal.reel')}
-            </p>
-          ) : publishFailure !== null ? (
-            <p role="alert" style={{ color: 'var(--color-error)' }}>
-              {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
-            </p>
-          ) : (
-            <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
-          )}
-        </div>
+        <StudioPageAssets
+          lang={lang}
+          page={page}
+          onRetry={retry}
+          onRemove={remove}
+          onCaption={(door, value) => setDraft((current) => withVisualCaption(current, door, value))}
+          onSoundPlane={(plane) => setDraft((current) => withSoundPlane(current, plane))}
+        />
+        <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
         {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
             l'audience en TÊTE, un espace, la capsule Publier. */}
         <div className="flex items-center gap-3 pb-3">
@@ -1088,14 +950,14 @@ function StoryStudio({
             disabled={!canPublish || publishing || kindRefusal !== null}
             menuDisabled={!canPublish || publishing}
             busy={publishing || awaitingNetwork}
-            refusalOf={(candidate) => (studioPublishRefusal(draft, candidate) === null ? null : translate(lang, 'story.studio.refusal.reel'))}
-            audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
-            pageCount={draft.pages.length}
-            layoutValue={layout ?? 'carousel'}
-            onPublish={(chosen, mode) => {
-              if (mode !== undefined) setLayout(mode);
-              void publish(chosen, mode);
+            refusalOf={(candidate) => {
+              const refusal = studioPublishRefusal(draft, candidate);
+              return refusal === null ? null : publicationRefusalText(lang, refusal);
             }}
+            audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
+            layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
+            onPrimary={() => void publish()}
+            onChoose={(chosen) => void publish(chosen)}
           />
         </div>
       </footer>
