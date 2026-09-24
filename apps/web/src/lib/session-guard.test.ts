@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { ROUTES } from '@/routes/route-table';
 import { landingAfterSession, resolveRouteAccess, safeNextPath, type RouteKey } from './session-guard';
 
 /**
@@ -24,20 +25,14 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'storyCompose',
   'story',
   'feed',
-  /**
-   * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
-   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
-   * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
-   * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
-   * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
-   * plus bas) : un visiteur sans compte choisissait une humeur, écrivait son
-   * mot, et découvrait à « Publier » que la passerelle refuse. Trouvée en
-   * déclarant `postCompose` (#7449) — la même classe de défaut, une porte
-   * plus loin.
-   */
+  /* LES PORTES DE COMPOSITION (#7449, #7462) — leurs raisons sont écrites
+     UNE fois, sur `RouteKey` dans `session-guard.ts` ; la famille `/…/new`
+     est en outre dérivée de `ROUTES` plus bas, pour qu'elle ne dépende pas
+     de cette liste. */
   'statusCompose',
-  /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
+  'shareLinkNew',
+  'communityNew',
   'notifications',
   'profile',
   'settings',
@@ -286,22 +281,34 @@ describe('les trois adresses de composition (#7462)', () => {
 });
 
 /**
- * LA FAMILLE DES COMPOSITIONS (#7462) — toute route `/…/new` DOIT être privée.
- * Ce test la dérive de `ROUTES` plutôt que de la recopier : une quatrième
- * porte de composition ne peut pas arriver publique en silence, et le
- * décalage entre deux listes se retire facilement.
+ * LA FAMILLE DES COMPOSITIONS (#7462) — toute adresse `/…/new` est un geste
+ * de MEMBRE (créer une conversation, une story, une humeur, un post, un lien,
+ * une communauté) : elle est PRIVÉE.
+ *
+ * La famille est DÉRIVÉE de `ROUTES`, jamais recopiée (leçon 640 : une
+ * énumération tenue à la main diverge de ce qu'elle énumère). Une porte de
+ * composition ajoutée demain sans sa déclaration dans la loi rougit ICI, au
+ * lieu de s'ouvrir à un visiteur qui ne découvrira le refus qu'à l'envoi.
+ *
+ * La contre-épreuve nomme quatre membres UNE fois : elle prouve que le filtre
+ * voit bien la famille (un filtre qui ne rendrait rien satisferait la boucle
+ * sans rien garder), elle ne remplace pas la dérivation.
  */
-describe('les routes /…/new de ROUTES sont toutes privées', () => {
-  test('toute route dont le pattern finit par /new est privée, gateway + anonyme ⇒ redirect-login', () => {
-    // Importer dynamiquement ROUTES ici n'est pas possible en tests : on passe
-    // par une énumération manuelle avec contre-épreuve.
-    const composeKeys = ['conversationsNew', 'storyCompose', 'statusCompose', 'postCompose'] as const;
-    for (const key of composeKeys) {
-      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: key })).toBe('redirect-login');
-    }
-    // Contre-épreuve : si la liste ci-dessus est vide, le test ne teste rien.
-    expect(composeKeys.length).toBeGreaterThan(0);
+describe('la famille des compositions — dérivée de ROUTES (#7462)', () => {
+  const composeKeys = Object.entries(ROUTES)
+    .filter(([, route]) => route.pattern.endsWith('/new'))
+    .map(([key]) => key);
+
+  test('le filtre voit la famille : conversation, story, humeur, post', () => {
+    const missing = ['conversationsNew', 'storyCompose', 'statusCompose', 'postCompose'].filter((key) => !composeKeys.includes(key));
+    expect(missing).toEqual([]);
   });
+
+  for (const routeKey of composeKeys) {
+    test(`${routeKey} : visiteur anonyme ⇒ redirect-login`, () => {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey })).toBe('redirect-login');
+    });
+  }
 });
 
 /**

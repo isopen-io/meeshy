@@ -81,6 +81,18 @@ export type RouteKey =
    */
   | 'postCompose'
   /**
+   * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
+   * dernières portes `/…/new` : `POST /api/v1/links` exige un compte
+   * (`routes/links/creation.ts:24-33`, `requireAuth: true`,
+   * `allowAnonymous: false`) et `POST /api/v1/communities` aussi
+   * (`routes/communities/core.ts:387-388`, `fastify.authenticate`). Non
+   * déclarées, elles étaient PUBLIQUES par défaut : un visiteur sans compte
+   * remplissait nom, description et options avant le refus. Le témoin de la
+   * famille `/…/new`, DÉRIVÉ de la table des routes, les a trouvées.
+   */
+  | 'shareLinkNew'
+  | 'communityNew'
+  /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
    * porte `fastify.authenticate` (`routes/directory/people.ts`), et
@@ -252,6 +264,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'statusCompose',
   /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
+  /* CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — voir la raison
+     écrite sur `RouteKey` plus haut. */
+  'shareLinkNew',
+  'communityNew',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',

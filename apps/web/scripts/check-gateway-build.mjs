@@ -41,6 +41,7 @@ import { pathToFileURL } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { allFiles } from './lib/files.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
+import { screenRoutes } from './lib/v31-routes.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-gateway';
@@ -832,10 +833,23 @@ async function main() {
     await context.close();
   }
 
-  // --- 6. LES QUATRE ADRESSES DE COMPOSITION : routes PRIVÉES ----------------
-  //        (`/conversations/new`, `/stories/new`, `/status/new`, `/posts/new`)
+  // --- 6. LES ADRESSES DE COMPOSITION `/…/new` : routes PRIVÉES --------------
   //        — un visiteur SANS SESSION n'y entre pas — #5652, #7462 --------
-  for (const address of ['/conversations/new', '/stories/new', '/status/new', '/posts/new']) {
+  /* La famille est DÉRIVÉE de la table des routes (`screenRoutes`, dont
+     `route-inventory.test.ts` prouve l'accord avec `ROUTES`), jamais
+     recopiée : la liste à la main de la première version en comptait quatre
+     quand la table en déclarait six — `/links/share/new` et
+     `/communities/new` s'ouvraient sans session, et rien ne rougissait. */
+  const composeAddresses = screenRoutes().filter((pattern) => pattern.endsWith('/new'));
+  check(
+    ['/conversations/new', '/stories/new', '/status/new', '/posts/new'].every((address) => composeAddresses.includes(address)),
+    `la famille /…/new se lit dans la table des routes (obtenu : ${composeAddresses.join(', ')})`,
+  );
+  /* L'ENTRÉE, pas « ailleurs » : la loi renvoie un visiteur sans compte vers
+     la connexion, ou vers l'accueil d'abord (`redirect-welcome`) — toute
+     autre destination (la liste, une page d'erreur) n'est pas la garde. */
+  const entrances = ['/login', '/welcome'];
+  for (const address of composeAddresses) {
     const anonContext = await browser.newContext();
     const anonPage = await anonContext.newPage();
     await anonPage.route(isConversationsList, async (route) => {
@@ -851,7 +865,7 @@ async function main() {
     await anonPage.route('**/socket.io/**', (route) => route.abort());
     await anonPage.goto(`${base}${address}`, { waitUntil: 'networkidle' });
     const anonPath = await anonPage.evaluate(() => window.location.pathname);
-    check(anonPath !== address, `sans session, ${address} ne s'ouvre pas (obtenu : ${anonPath})`);
+    check(entrances.includes(anonPath), `sans session, ${address} renvoie vers l'entrée (obtenu : ${anonPath})`);
     await anonContext.close();
   }
 
