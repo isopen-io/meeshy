@@ -9,7 +9,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import { ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
 import { performProfileEdit } from '@/lib/api/profile-actions';
-import { sendAction } from '@/lib/api/query';
+import { retrySendAction, sendAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadEngagementProgress } from '@/lib/api/engagement';
 import { sessionStore } from '@/lib/api/session';
@@ -18,12 +18,14 @@ import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
+import { createGreetingSender } from '@/lib/onboarding/greeting-send';
 import { appNotificationsOffer } from '@/lib/onboarding/notifications-offer';
 import {
   nextStepAfter,
   pointsOf,
   producedSomething,
   recapOf,
+  replayServedState,
   resumeStep,
   stepPoints,
   withDone,
@@ -34,7 +36,7 @@ import {
 } from '@/lib/onboarding/journey';
 import { journeyProgressStore, type JourneyProgressStore } from '@/lib/onboarding/progress-store';
 import { useSearch } from '@/lib/router';
-import { confirmedCountOf, outboxStore } from '@/lib/send/outbox-store';
+import { outboxStore } from '@/lib/send/outbox-store';
 
 import {
   FriendsCard,
@@ -59,7 +61,10 @@ import { href, navigate } from './route-table';
  *
  * - **Le serveur arbitre** : l'état (`GET /me/onboarding`) se lit en cache
  *   d'abord (le cache de requêtes est persisté), la reprise rouvre la première
- *   étape absente des étapes vues ET pré-cochées (`journey.ts § resumeStep`).
+ *   étape absente des étapes vues ET pré-cochées (`journey.ts § resumeStep`),
+ *   et chaque relecture qui aboutit se rejoue contre la carte affichée
+ *   (`journey.ts § replayServedState`) : un parcours clos ailleurs rend
+ *   l'accueil, une étape réglée ailleurs cède à la suivante.
  * - **« Passer tout » est visible dès la première carte** ; aucun écran ne
  *   bloque, aucune phrase ne parle de perte, aucun compte à rebours.
  * - **Chaque carte finit sur un geste réel** (`onboarding-cards.tsx`) et la
@@ -93,12 +98,15 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   api: apiDeps,
   queryClient: appQueryClient,
   progress: journeyProgressStore,
-  sendGreeting: async ({ conversationId, content, language, viewerId, online }) => {
-    if (!online) return 'offline';
-    const before = confirmedCountOf(outboxStore.getState(), conversationId);
-    await sendAction({ conversationId, draft: { content, originalLanguage: language }, viewerId, online });
-    return confirmedCountOf(outboxStore.getState(), conversationId) > before ? 'sent' : 'failed';
-  },
+  /* UN SALUT, JAMAIS DEUX — un nouveau tap après un échec rejoue la
+     tentative (même `clientMessageId`) ou retire l'ancien texte de l'outbox
+     de Global avant d'envoyer le nouveau (`greeting-send.ts`). */
+  sendGreeting: createGreetingSender({
+    outbox: outboxStore,
+    send: ({ conversationId, content, language, viewerId, online }) =>
+      sendAction({ conversationId, draft: { content, originalLanguage: language }, viewerId, online }),
+    retry: retrySendAction,
+  }),
   addFriend: (suggestion, viewerId) =>
     performSendRequest({
       person: { id: suggestion.id, username: suggestion.username, displayName: suggestion.displayName, avatar: suggestion.avatarUrl },
@@ -232,6 +240,9 @@ export function OnboardingJourney({
      l'étape tout de suite ; « Continuer » ne la réécrit pas. Une écriture
      refusée s'efface du registre : le geste suivant la retente. */
   const recorded = useRef(new Set<OnboardingStepId>());
+  /* « Passer tout » ou la sortie du récapitulatif : la fin écrite dans le
+     cache n'est pas une clôture VENUE D'AILLEURS, l'écran part déjà. */
+  const leaving = useRef(false);
   const record = useCallback(
     (from: OnboardingStepId, outcome: OnboardingStepOutcome) => {
       if (recorded.current.has(from)) return;
@@ -277,8 +288,29 @@ export function OnboardingJourney({
     setStep(resumeStep(context));
   }, [context, step, search, clearSearch, setProgress, record, celebrate, deps]);
 
+  /* LE SERVEUR ARBITRE À CHAQUE RELECTURE, pas une seule fois sur le cache
+     (persisté, parfois vieux d'une heure). Seule une lecture de
+     `GET /me/onboarding` qui ABOUTIT se rejoue contre la carte affichée
+     (`journey.ts § replayServedState`) — jamais nos propres écritures, qui ne
+     disent que ce que ce parcours vient de faire. */
+  const wasFetching = useRef(query.isFetching);
+  useEffect(() => {
+    const fetched = wasFetching.current && !query.isFetching && query.status === 'success';
+    wasFetching.current = query.isFetching;
+    if (!fetched || context === null || step === null || step === 'recap' || leaving.current) return;
+    const replay = replayServedState({ context, step, ownSteps: recorded.current });
+    if (replay === 'stay') return;
+    if (replay === 'closed') {
+      leaving.current = true;
+      deps.navigate(href('list'), true);
+      return;
+    }
+    setStep(replay);
+  }, [query.isFetching, query.status, context, step, deps]);
+
   const leave = useCallback(
     (path: string) => {
+      leaving.current = true;
       void finishJourney(actionDeps);
       deps.navigate(path, true);
     },
@@ -363,7 +395,7 @@ export function OnboardingJourney({
           <GlobalCard
             host={host}
             available={state.globalConversationId !== null}
-            alreadySent={progress.done.includes('global')}
+            alreadySent={progress.done.includes('global') || state.prefilledSteps.includes('global')}
             name={displayName}
             languagesLabel={languagesLabel}
             pick={(n) => Math.floor(deps.random() * n)}

@@ -10,6 +10,7 @@ import { LanguageSheet } from '@/components/language-sheet';
 import type { FriendActionOutcome } from '@/lib/api/friend-actions';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { GreetingOutcome } from '@/lib/onboarding/greeting-send';
 import { greetingTemplates } from '@/lib/onboarding/greetings';
 import { greetingDraft, LEVEL_ONE_POINTS, type GreetingDraft } from '@/lib/onboarding/journey';
 import { initialsOf } from '@/lib/view/conversation';
@@ -198,7 +199,7 @@ export function LanguagesCard({
 
 // --- 2. Meeshy Global ---------------------------------------------------------
 
-export type GreetingSend = 'sent' | 'failed' | 'offline';
+export type GreetingSend = GreetingOutcome;
 
 type GlobalPhase = 'draft' | 'sending' | 'sent' | 'failed';
 
@@ -216,7 +217,7 @@ export function GlobalCard({
 }: {
   readonly host: CardHost;
   readonly available: boolean;
-  /** Le salut s'est déjà confirmé sur cet appareil : la carte se rouvre ENVOYÉE, jamais sur un composeur neuf. */
+  /** Le salut s'est déjà confirmé — sur cet appareil, ou ailleurs (pré-coché par le serveur) : la carte se montre ENVOYÉE, jamais sur un composeur neuf. */
   readonly alreadySent: boolean;
   readonly name: string;
   readonly languagesLabel: string;
@@ -254,7 +255,7 @@ export function GlobalCard({
 
   const submit = async () => {
     const content = text.trim();
-    if (content === '' || phase === 'sending') return;
+    if (content === '' || phase === 'sending' || alreadySent) return;
     setPhase('sending');
     setOffline(false);
     const outcome = await send(content);
@@ -268,7 +269,10 @@ export function GlobalCard({
     setPhase('failed');
   };
 
-  const sent = phase === 'sent';
+  /* `alreadySent` peut ARRIVER pendant que la carte est montée (la relecture
+     du serveur pré-coche un salut parti d'iOS) : il gagne sur la phase locale,
+     jamais un « Envoyer » sous un salut déjà publié. */
+  const sent = phase === 'sent' || alreadySent;
   const unavailable = !available;
 
   return (

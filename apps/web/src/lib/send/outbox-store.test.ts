@@ -108,6 +108,29 @@ describe('outboxStore', () => {
     expect(confirmedCountOf(store.getState(), 'c-b')).toBe(0);
   });
 
+  /**
+   * #7729 — ABANDONNER une entrée en échec n'est PAS la confirmer : le salut
+   * de l'accueil réécrit après un échec retire l'ancien texte de l'outbox, et
+   * `confirmed` ne doit pas annoncer un envoi qui n'a jamais eu lieu.
+   */
+  test('discard retire l’entrée SANS compter de confirmation, et nettoie la clé vide', () => {
+    const store = createOutboxStore();
+    store.getState().enqueue('c-a', entry('cid_1', { delivery: 'failed' }));
+    store.getState().enqueue('c-a', entry('cid_2'));
+
+    store.getState().discard('c-a', 'cid_1');
+    expect(entriesOf(store.getState(), 'c-a').map((e) => e.message.clientMessageId)).toEqual(['cid_2']);
+    expect(confirmedCountOf(store.getState(), 'c-a')).toBe(0);
+
+    store.getState().discard('c-a', 'cid_2');
+    expect('c-a' in store.getState().entries).toBe(false);
+    expect(confirmedCountOf(store.getState(), 'c-a')).toBe(0);
+
+    const before = store.getState();
+    store.getState().discard('c-a', 'absent');
+    expect(store.getState()).toBe(before);
+  });
+
   test('remove retire la clé de conversation quand elle devient vide — jamais un [] orphelin', () => {
     const store = createOutboxStore();
     store.getState().enqueue('c-a', entry('cid_1'));
