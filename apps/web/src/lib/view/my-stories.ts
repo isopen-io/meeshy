@@ -38,7 +38,6 @@ export function myActiveStories(options: {
   if (viewerId === undefined || viewerId === '') return [];
   return stories
     .filter((story) => story.author?.id === viewerId && !isStoryExpired(story, now))
-    .slice()
     .sort((a, b) => timeOf(b.createdAt) - timeOf(a.createdAt));
 }
 

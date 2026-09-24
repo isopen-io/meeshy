@@ -205,8 +205,8 @@
       "dynamic_only": true,
       "kb": {
         "value": 4,
-        "status": "CIBLE -- MESUREE EN REVUE-CORRECTION DE #6149, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-24 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,99 Ko gzip -9 -- le listing « Mes stories » (`routes/stories-mine.tsx`) que la pastille « moi » du rail ouvre desormais (#6149) : la carte, l'etat vide, la confirmation de suppression. CHARGE A LA DEMANDE (`route-table.tsx`, comme chaque route) : un lecteur qui n'ouvre jamais ses stories ne le telecharge jamais. Nomme HORS du prefixe `story-` (`stories-` != `story-`) pour ne pas entrer dans le motif de `story_reader`. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "status": "CIBLE -- MESUREE PAR #6149 PUIS REMESUREE EN REVUE-CORRECTION, NON ARBITREE",
+        "source": "REMESURE en revue-correction de #6149 le 2026-09-24 (`bun run build` puis `node scripts/measure-weight.mjs`) : 3,27 Ko gzip -9, en HAUSSE de 2,99 -- la confirmation PARTAGEE (`components/confirm-dialog.tsx`, qui remplace la copie locale : elle ne vit que dans ce chunk tant que les trois autres confirmations du depot n'y ont pas migre, #7858), le (+) d'en-tete, le bandeau hors ligne et la carte devenue surface. Le plafond de 4 TIENT sans etre touche (0,73 Ko de marge). HISTORIQUE -- Mesure de measure-weight.mjs le 2026-09-24 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,99 Ko gzip -9 -- le listing « Mes stories » (`routes/stories-mine.tsx`) que la pastille « moi » du rail ouvre desormais (#6149) : la carte, l'etat vide, la confirmation de suppression. CHARGE A LA DEMANDE (`route-table.tsx`, comme chaque route) : un lecteur qui n'ouvre jamais ses stories ne le telecharge jamais. Nomme HORS du prefixe `story-` (`stories-` != `story-`) pour ne pas entrer dans le motif de `story_reader`. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
     "publication_viewers": {

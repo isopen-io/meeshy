@@ -52,16 +52,27 @@ const send = (deps: PostActionDeps, method: 'POST' | 'DELETE', path: string): Pr
  * relit `STORIES_QUERY_PREFIX` en plus du Flux : la story revient au listing
  * exactement comme une carte revient au Flux.
  */
+const removeEverywhere = (queryClient: QueryClient, postId: string): void => {
+  removeCardPost(queryClient, postId);
+  removeStoryFromCaches(queryClient, postId);
+};
+
 export async function deletePost(params: { readonly postId: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
   const { postId, deps } = params;
-  removeCardPost(deps.queryClient, postId);
-  removeStoryFromCaches(deps.queryClient, postId);
+  removeEverywhere(deps.queryClient, postId);
 
   const result = outcome(await send(deps, 'DELETE', `/api/v1/posts/${encodeURIComponent(postId)}`));
-  if (result !== 'done') {
-    void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
-    void deps.queryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
+  if (result === 'done') {
+    /* UNE RELECTURE PENDANT LE VOL (revue-correction #6149) — une autre
+       suppression refusée, un `story:viewed`, un retour au premier plan :
+       elle a pu rapporter la publication que le serveur n'avait pas encore
+       retirée. La confirmation RÉAPPLIQUE le retrait — idempotent, et sans
+       effet (garde « rien à écrire ») quand aucune caisse ne l'a rapportée. */
+    removeEverywhere(deps.queryClient, postId);
+    return result;
   }
+  void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
+  void deps.queryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
   return result;
 }
 

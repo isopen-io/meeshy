@@ -159,6 +159,26 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     expect(el.querySelector('li[data-story-self]')).toBeNull();
     expect(el.querySelector('[data-story-author="u-moi"]')).not.toBeNull();
   });
+
+  /**
+   * **LA BANDE ÉPINGLÉE ROUTE « MOI » PAR LA MÊME RÈGLE** (revue-correction
+   * #6149) — `PinnedStoryTrailBand.selfAvatarCell`
+   * (`StoryTrayView.swift:887-915`) appelle le MÊME résolveur que la grande
+   * trail (`StoryTrayActionResolver.avatarTap`) : mon anneau épinglé ouvre
+   * le listing, jamais ma story. Sans ce témoin, la bande repliée gardait
+   * l'ancien comportement que #6149 retirait du grand plateau.
+   */
+  test('dans la bande épinglée, MON anneau ouvre le listing « Mes stories », et le dit', () => {
+    const el = mount({
+      variant: 'pinned',
+      groups: [group('u-moi', 'moi', true), group('u-ines', 'Inès')],
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
+    });
+    const mien = el.querySelector('[data-story-author="u-moi"]');
+    expect(mien?.getAttribute('href')).toBe('/stories/mine');
+    expect(mien?.getAttribute('aria-label')).toBe('Gérer mes stories');
+    expect(el.querySelector('[data-story-author="u-ines"]')?.getAttribute('href')).toBe('/story/st-u-ines');
+  });
 });
 
 describe('💭 sans humeur, l\'emoji avec', () => {
@@ -318,6 +338,21 @@ describe('où mènent les deux portes', () => {
       self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
+  });
+
+  /**
+   * **L'ANNONCE DIT LA DESTINATION** (revue-correction #6149) — miroir
+   * `StoryTrayActionResolver.avatarAccessibilityLabel` (« le libellé
+   * VoiceOver DÉCRIT la destination réelle ») : « Votre story » annonçait un
+   * contenu, le lien ouvre une GESTION.
+   */
+  test('le lien de ma pastille centrale s\'annonce « Gérer mes stories »', () => {
+    const el = mount({
+      variant: 'grande',
+      groups: [],
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
+    });
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('aria-label')).toBe('Gérer mes stories');
   });
 
   /**

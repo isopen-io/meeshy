@@ -282,6 +282,8 @@ async function runScheme({ colorScheme, locale, dir }) {
   check(true, `${tag} : un VRAI clic sur ma pastille ouvre bien le listing`);
 
   await page.waitForSelector('[data-my-stories-list] li[data-my-story]', { timeout: 8000 });
+  const creer = await page.evaluate(() => document.querySelector('[data-my-stories-create]')?.getAttribute('href') ?? null);
+  check(creer === '/stories/new', `${tag} : l'en-tête du listing doit porter le (+) vers le studio (MyStoriesView.swift:174-186) — obtenu « ${creer} »`);
   const rangees = await page.evaluate(() => document.querySelectorAll('[data-my-stories-list] li[data-my-story]').length);
   check(rangees > 0, `${tag} : le listing doit rendre au moins une rangée pour mes stories actives des fixtures — obtenu ${rangees}`);
 
@@ -289,8 +291,12 @@ async function runScheme({ colorScheme, locale, dir }) {
      confirmation (miroir `MyStoriesDeleteConfirmation.swift`), le second la
      retire réellement (registre optimiste, `story-caches.ts`). */
   await page.click('[data-my-story-delete]');
-  await page.waitForSelector('[data-my-story-delete-dialog]', { timeout: 8000 });
-  await page.click('[data-my-story-delete-confirm]');
+  await page.waitForSelector('[data-confirm-dialog="my-story-delete"]', { timeout: 8000 });
+  await page.click('[data-confirm-dialog="my-story-delete"] [data-confirm="confirm"]');
+  /* LA MODALE SE RETIRE AU GESTE, pas à la réponse (revue-correction #6149) :
+     la rangée et la confirmation partent dans le MÊME rendu. */
+  const modaleRestante = await page.evaluate(() => document.querySelectorAll('[data-confirm-dialog="my-story-delete"]').length);
+  check(modaleRestante === 0, `${tag} : la confirmation doit se fermer AU GESTE — ${modaleRestante} modale(s) encore montée(s)`);
   await page.waitForFunction(
     () => document.querySelectorAll('[data-my-stories-list] li[data-my-story]').length === 0,
     { timeout: 8000 },

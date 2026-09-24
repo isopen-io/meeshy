@@ -23,11 +23,11 @@ import { Link } from '@/routes/route-table';
  *
  * ## TROIS CONTRÔLES, TROIS ARBRES — jamais l'un DANS l'autre
  *
- * L'avatar (quand j'ai une story) ouvre ma story ; le (+) ouvre le studio ; la
- * pastille ouvre ma composition d'humeur. Les trois sont FRÈRES dans un
+ * L'avatar (quand j'ai une story) ouvre le listing « Mes stories » (#6149) ;
+ * le (+) ouvre le studio ; la pastille ouvre ma composition d'humeur. Les trois sont FRÈRES dans un
  * conteneur positionné, jamais imbriqués : un bouton dans un `<a>` produit un
- * arbre d'accessibilité invalide, et taper la pastille ouvrirait AUSSI la
- * story. C'est exactement pourquoi iOS les monte en `ZStack` plutôt qu'en
+ * arbre d'accessibilité invalide, et taper la pastille ouvrirait AUSSI le
+ * listing. C'est exactement pourquoi iOS les monte en `ZStack` plutôt qu'en
  * `label:` du bouton principal.
  *
  * ## LE DÉBORD DES CIBLES EST DÉLIBÉRÉ
@@ -180,7 +180,10 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
           <Link
             to="storiesMine"
             data-story-self-open
-            aria-label={translate(language, 'stories.mine')}
+            /* L'ANNONCE DIT LA DESTINATION (miroir
+               `StoryTrayActionResolver.avatarAccessibilityLabel`) : le lien
+               ouvre une GESTION, « Votre story » annonçait un contenu. */
+            aria-label={translate(language, 'storiesMine.manage')}
             className="rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ outlineColor: 'var(--color-ios-brand)' }}
           >

@@ -8,6 +8,7 @@
  */
 const frStoriesMine = {
   'storiesMine.title': 'Mes stories',
+  'storiesMine.manage': 'Gérer mes stories',
   'storiesMine.empty.title': 'Aucune story envoyée',
   'storiesMine.empty.subtitle': 'Vos stories publiées apparaîtront ici tant qu’elles sont actives.',
   'storiesMine.action.open': 'Ouvrir',

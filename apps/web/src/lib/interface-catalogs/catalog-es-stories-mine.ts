@@ -2,6 +2,7 @@
  * doc-comment de `catalog-fr-stories-mine.ts`. */
 const esStoriesMine = {
   'storiesMine.title': 'Mis historias',
+  'storiesMine.manage': 'Gestionar mis historias',
   'storiesMine.empty.title': 'No hay historias enviadas',
   'storiesMine.empty.subtitle': 'Tus historias publicadas aparecerán aquí mientras estén activas.',
   'storiesMine.action.open': 'Abrir',

@@ -42,6 +42,9 @@ const MARKERS = {
   discover: { 'data-discover-announce': '' },
   profile: { 'data-profile-announce': '' },
   invite: { 'data-invite-announce': '' },
+  /* « Mes stories » (#6149) — l'issue d'une suppression : réussie, ou refusée
+     et la rangée revenue. */
+  myStories: { 'data-my-stories-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;

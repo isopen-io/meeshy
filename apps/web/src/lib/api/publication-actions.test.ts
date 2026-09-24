@@ -76,6 +76,28 @@ describe('deletePost — une story quitte le plateau AVANT la réponse, et y rev
     expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
+  /**
+   * **UNE RELECTURE PENDANT LE VOL NE RESSUSCITE PAS LA STORY** (revue-
+   * correction #6149) — deux suppressions en vol, ou un `story:viewed` qui
+   * invalide le plateau pendant le DELETE : la relecture rapporte la story
+   * que le serveur n'a pas encore retirée. La confirmation RÉAPPLIQUE le
+   * retrait ; sans elle, une story supprimée restait affichée jusqu'à la
+   * relecture suivante, et le listing devait sérialiser ses suppressions.
+   */
+  test('une relecture qui ramène la story pendant le vol est défaite par la confirmation', async () => {
+    const queryClient = trayWith(['s1', 's2']);
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/s1': { ok: true, data: null } });
+
+    const pending = deletePost({ postId: 's1', deps: { source: 'gateway', transport, queryClient } });
+    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, [
+      { id: 's1', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' },
+      { id: 's2', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' },
+    ] satisfies readonly StoryTrayPost[]);
+
+    expect(await pending).toBe('done');
+    expect(trayIdsOf(queryClient)).toEqual(['s2']);
+  });
+
   test('supprimer une carte du Flux ne touche à AUCUN corpus de stories', async () => {
     const stories: readonly StoryTrayPost[] = [{ id: 's1', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' }];
     const queryClient = feedWith(['p1']);

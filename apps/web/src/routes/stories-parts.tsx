@@ -1,3 +1,5 @@
+import type { ReactNode, Ref } from 'react';
+
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -12,7 +14,25 @@ import { Link } from '@/routes/route-table';
  * module — le rail complet — au listing « Mes stories », qui n'en a besoin
  * d'aucune ligne.
  */
-export function StoriesHeader({ language, title }: { readonly language: InterfaceLanguage; readonly title: string }) {
+/**
+ * `action` — le geste d'en-tête propre à l'écran (le (+) « Créer une story »
+ * de « Mes stories », `MyStoriesView.swift:174-186`), posé en FIN de ligne :
+ * le début porte déjà le retour. `titleRef` — le point de chute du focus
+ * quand l'élément qui l'avait quitte l'écran (une rangée supprimée) : le titre
+ * devient alors focalisable par programme (`tabIndex={-1}`), jamais au
+ * clavier.
+ */
+export function StoriesHeader({
+  language,
+  title,
+  action,
+  titleRef,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly title: string;
+  readonly action?: ReactNode;
+  readonly titleRef?: Ref<HTMLHeadingElement>;
+}) {
   return (
     <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
       <Link
@@ -23,9 +43,15 @@ export function StoriesHeader({ language, title }: { readonly language: Interfac
       >
         <span aria-hidden="true" className="text-lg leading-none">‹</span>
       </Link>
-      <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+      <h1
+        ref={titleRef}
+        {...(titleRef === undefined ? {} : { tabIndex: -1 })}
+        className="min-w-0 flex-1 truncate text-body font-semibold focus:outline-none"
+        style={{ color: 'var(--color-ios-ink)' }}
+      >
         {title}
       </h1>
+      {action}
     </header>
   );
 }
