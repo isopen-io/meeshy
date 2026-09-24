@@ -77,9 +77,15 @@ function harness(
     readonly greeting?: GreetingSend;
     readonly askable?: boolean;
     readonly confirmed?: readonly OnboardingStepId[];
+    /** Un cache PERSISTÉ vieux d'une heure : l'écran s'ouvre dessus, puis la relecture de `state` arrive quand le témoin la relâche. */
+    readonly staleCache?: OnboardingState;
   } = {},
 ) {
   const state = options.state ?? served();
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const patches: OnboardingPatchBody[] = [];
   const greetings: { conversationId: string; content: string; language: string }[] = [];
   const friends: string[] = [];
@@ -93,11 +99,13 @@ function harness(
       patches.push(request.body as OnboardingPatchBody);
       return { ok: true, data: state };
     }
+    if (options.staleCache !== undefined) await held;
     return { ok: true, data: state };
   }) as typeof transport.request;
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData(ONBOARDING_QUERY_KEY, state);
+  if (options.staleCache === undefined) queryClient.setQueryData(ONBOARDING_QUERY_KEY, state);
+  else queryClient.setQueryData(ONBOARDING_QUERY_KEY, options.staleCache, { updatedAt: Date.now() - 60 * 60_000 });
 
   const progress = createJourneyProgressStore({ storage: memoryStorage() });
   progress.write('u-maya', { done: options.confirmed ?? [], friendRequests: [] });
@@ -126,7 +134,11 @@ function harness(
     random: () => 0,
     navigate: (path, replace = false) => visits.push({ path, replace }),
   };
-  return { deps, patches, greetings, friends, visits, saves, asked: () => asked };
+  const arrive = () => act(async () => {
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  return { deps, patches, greetings, friends, visits, saves, asked: () => asked, arrive };
 }
 
 const signIn = () =>
@@ -174,6 +186,51 @@ describe('la reprise — la première étape manquante, « Passer tout » dès l
     const { deps } = harness();
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     expect(host.textContent ?? '').not.toMatch(/perdre|perdu|expire|dernière chance|plus que/i);
+  });
+});
+
+describe('le serveur arbitre à CHAQUE relecture, pas seulement sur le cache', () => {
+  test('cache périmé éligible, serveur non éligible (plus de sept jours, ou fini sur iOS) : l’écran rend l’accueil', async () => {
+    signIn();
+    const closed = served({ eligible: false, completedAt: '2026-09-24T09:00:00.000Z' });
+    const { deps, visits, arrive } = harness({ staleCache: served(), state: closed });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('languages');
+    expect(visits).toEqual([]);
+    await arrive();
+    expect(visits).toEqual([{ path: '/', replace: true }]);
+  });
+
+  test('cache sans « global », serveur qui le pré-coche (salut envoyé depuis iOS) : aucun second « Envoyer »', async () => {
+    signIn();
+    const { deps, greetings, arrive } = harness({
+      staleCache: served({ seenSteps: ['languages'] }),
+      state: served({ seenSteps: ['languages'], prefilledSteps: ['global'] }),
+    });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('global');
+    await arrive();
+    expect(action(host, 'global.send')).toBeNull();
+    expect(card(host)).toBe('story');
+    expect(greetings).toEqual([]);
+  });
+
+  test('la carte du salut rouverte par son adresse alors que le serveur l’a pré-cochée se montre ENVOYÉE', async () => {
+    signIn();
+    const { deps } = harness({ state: served({ seenSteps: ['languages'], prefilledSteps: ['global'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('step=global')} clearSearch={() => undefined} />);
+    expect(action(host, 'global.send')).toBeNull();
+    expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
+  });
+
+  test('« Passer tout » ne rend l’accueil qu’UNE fois, même quand la fin arrive dans le cache', async () => {
+    signIn();
+    const finished = served({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z' });
+    const { deps, visits, arrive } = harness({ staleCache: served(), state: finished });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    await click(action(host, 'skipAll'));
+    await arrive();
+    expect(visits).toEqual([{ path: '/', replace: true }]);
   });
 });
 

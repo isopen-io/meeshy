@@ -78,6 +78,35 @@ export const nextStepAfter = (current: OnboardingStepId, context: JourneyContext
   firstOpenFrom(ONBOARDING_STEPS.indexOf(current) + 1, context);
 
 /**
+ * **UNE RELECTURE DU SERVEUR SE REJOUE CONTRE LA CARTE AFFICHÉE.** L'écran
+ * s'ouvre sur le cache (persisté, parfois vieux d'une heure), puis chaque
+ * lecture de `GET /me/onboarding` qui aboutit peut dire ce qui s'est passé
+ * AILLEURS :
+ * - le parcours s'est clos (fini sur iOS, sept jours passés) ⇒ `'closed'` —
+ *   sauf si c'est CE parcours qui vient de voir la cinquième étape : le
+ *   serveur le clôt alors, et le récapitulatif reste dû ;
+ * - l'étape affichée s'est réglée ailleurs (un salut parti d'iOS pré-coche
+ *   `global`) ⇒ l'étape suivante, jamais un second « Envoyer ».
+ * Ce que CE parcours a lui-même écrit (`ownSteps`) ou vu se confirmer
+ * (`progress.done`) ne déplace jamais la carte : elle montre ce qui vient
+ * d'arriver.
+ */
+export function replayServedState(input: {
+  readonly context: JourneyContext;
+  readonly step: OnboardingStepId;
+  readonly ownSteps: ReadonlySet<OnboardingStepId>;
+}): JourneyStep | 'closed' | 'stay' {
+  const { context, step, ownSteps } = input;
+  const { state } = context;
+  const closed = !state.eligible || state.completedAt !== null;
+  const closedHere = ownSteps.size > 0 && ONBOARDING_STEPS.every((id) => state.seenSteps.includes(id));
+  if (closed) return closedHere ? 'stay' : 'closed';
+  const settledElsewhere =
+    (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ownSteps.has(step) && !context.progress.done.includes(step);
+  return settledElsewhere ? nextStepAfter(step, context) : 'stay';
+}
+
+/**
  * **CE QUE LES RÈGLES DU SERVEUR CRÉDITENT** (§ 1 du parcours) — un premier
  * message dans une conversation : `content.text_message` (9) +
  * `recordConversationActivity` (5) ; une story : `content.story` (9) +

@@ -9,6 +9,7 @@ import {
   nextStepAfter,
   pointsOf,
   recapOf,
+  replayServedState,
   resumeStep,
   withDone,
   withFriendRequest,
@@ -149,5 +150,33 @@ describe('greetingDraft — un salut pré-rempli, jamais le même, avec un trou 
     expect(greetingDraft({ templates, index: 5, name: 'Tom', languages: 'x' }).text).toBe(
       greetingDraft({ templates, index: 1, name: 'Tom', languages: 'x' }).text,
     );
+  });
+});
+
+describe('replayServedState — une relecture du serveur rejouée contre la carte affichée', () => {
+  const none = new Set<never>();
+
+  test('un parcours clos ailleurs (fini sur iOS, plus de sept jours) : on sort', () => {
+    expect(replayServedState({ context: context({ state: state({ eligible: false }) }), step: 'languages', ownSteps: none })).toBe('closed');
+  });
+
+  test('un parcours que CE parcours vient de clore (ses cinq étapes vues, dont une par nous) : on reste', () => {
+    const all = state({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z', seenSteps: ['languages', 'global', 'story', 'friends', 'notifications'] });
+    expect(replayServedState({ context: context({ state: all }), step: 'global', ownSteps: new Set(['global'] as const) })).toBe('stay');
+  });
+
+  test('l’étape affichée réglée AILLEURS (salut pré-coché) : on passe à la suivante', () => {
+    const replay = replayServedState({ context: context({ state: state({ seenSteps: ['languages'], prefilledSteps: ['global'] }) }), step: 'global', ownSteps: none });
+    expect(replay).toBe('story');
+  });
+
+  test('l’étape réglée par CE parcours (son accusé) : on reste, la carte montre ce qui vient d’arriver', () => {
+    const served = context({ state: state({ seenSteps: ['languages', 'global'] }) });
+    expect(replayServedState({ context: served, step: 'global', ownSteps: new Set(['global'] as const) })).toBe('stay');
+    expect(replayServedState({ context: { ...served, progress: withDone(EMPTY_PROGRESS, 'global') }, step: 'global', ownSteps: none })).toBe('stay');
+  });
+
+  test('rien de neuf : on reste', () => {
+    expect(replayServedState({ context: context(), step: 'languages', ownSteps: none })).toBe('stay');
   });
 });

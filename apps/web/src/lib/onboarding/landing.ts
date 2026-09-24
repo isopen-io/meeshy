@@ -14,7 +14,7 @@ import type { SessionState } from '@/lib/api/session';
  * propose : un lien profond (une invitation `/chat/…`, un fil nommé, une
  * story) mène où il promet, jamais dans un détour. Le serveur tranche
  * l'éligibilité (compte neuf, non fini, moins de sept jours) ; ce module ne
- * fait que lire sa réponse, en cache d'abord.
+ * fait que lire sa réponse, en cache d'abord TANT QU'IL EST FRAIS.
  *
  * **Une fois par lancement et par compte** : « Plus tard » ou le bouton retour
  * doivent pouvoir sortir du parcours sans qu'il revienne à la navigation
@@ -58,9 +58,11 @@ export type OnboardingLanding = {
 export function createOnboardingLanding(deps: OnboardingLandingDeps): OnboardingLanding {
   const decided = new Set<string>();
 
+  /* `fetchQuery` et sa fraîcheur, jamais `getQueryData` : le cache de
+     requêtes est PERSISTÉ, un état vieux d'une heure (un parcours fini depuis
+     sur iOS, un compte passé les sept jours) proposerait sinon un parcours
+     clos. Frais, il décide sans réseau ; périmé, le serveur relu tranche. */
   const stateOf = async (): Promise<OnboardingState | undefined> => {
-    const cached = deps.queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY);
-    if (cached !== undefined) return cached;
     try {
       return await deps.queryClient.fetchQuery({ queryKey: ONBOARDING_QUERY_KEY, queryFn: deps.load, staleTime: ONBOARDING_STALE_TIME });
     } catch {

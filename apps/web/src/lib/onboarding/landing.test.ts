@@ -71,6 +71,24 @@ describe('createOnboardingLanding — cache d’abord, une fois par lancement', 
     expect(loads()).toBe(0);
   });
 
+  test('un cache PÉRIMÉ (persisté depuis une heure) ne décide pas : le serveur relu tranche', async () => {
+    const queryClient = new QueryClient();
+    const visits: string[] = [];
+    let loads = 0;
+    const landing = createOnboardingLanding({
+      queryClient,
+      load: async () => {
+        loads += 1;
+        return state({ eligible: false, completedAt: '2026-09-24T09:00:00.000Z' });
+      },
+      navigate: (path) => visits.push(path),
+    });
+    queryClient.setQueryData(ONBOARDING_QUERY_KEY, state(), { updatedAt: Date.now() - 60 * 60_000 });
+    await landing.offer({ source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'me' });
+    expect(loads).toBe(1);
+    expect(visits).toEqual([]);
+  });
+
   test('sans cache, l’état se lit puis décide', async () => {
     const { visits, loads, landing } = fixture();
     await landing.offer({ source: 'gateway', sessionStatus: 'authenticated', routeKey: 'list', viewerId: 'me' });
