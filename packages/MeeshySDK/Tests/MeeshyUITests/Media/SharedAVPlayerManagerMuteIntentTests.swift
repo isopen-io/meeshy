@@ -95,4 +95,15 @@ final class SharedAVPlayerManagerMuteIntentTests: XCTestCase {
     func test_shouldDuckOthersOnPlay_trueWhenNotMuted() {
         XCTAssertTrue(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: false))
     }
+
+    /// A voice note or a story taking over from an IDLE video engine must not
+    /// bounce the audio session (blocking setActive(false) on main + other apps'
+    /// music resumed then cut again).
+    func test_shouldReleaseSessionOnHandoff_falseWhenVideoHeldNothing() {
+        XCTAssertFalse(SharedAVPlayerManager.shouldReleaseSessionOnHandoff(heldPlayback: false))
+    }
+
+    func test_shouldReleaseSessionOnHandoff_trueWhenVideoHeldAPlayer() {
+        XCTAssertTrue(SharedAVPlayerManager.shouldReleaseSessionOnHandoff(heldPlayback: true))
+    }
 }

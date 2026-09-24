@@ -421,7 +421,10 @@ struct TimelineExportPreviewSheet: View {
 
     let url: URL
     @Environment(\.dismiss) private var dismiss
-    @State private var player: AVPlayer
+    /// Construit à l'apparition, pas dans `init` : `State(initialValue:)`
+    /// n'est pas paresseux, et chaque ré-évaluation du parent allouait un
+    /// `AVPlayer` + `AVPlayerItem` jetés aussitôt.
+    @State private var player: AVPlayer?
     @State private var loopObserver: NSObjectProtocol?
     @State private var saveState: SaveState = .idle
 
@@ -429,7 +432,6 @@ struct TimelineExportPreviewSheet: View {
 
     init(url: URL) {
         self.url = url
-        _player = State(initialValue: AVPlayer(url: url))
     }
 
     /// Icône du bouton Enregistrer par état ; `nil` = ProgressView (saving).
@@ -457,6 +459,8 @@ struct TimelineExportPreviewSheet: View {
             controlsOverlay
         }
         .onAppear {
+            let player = self.player ?? AVPlayer(url: url)
+            self.player = player
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -472,7 +476,7 @@ struct TimelineExportPreviewSheet: View {
                 NotificationCenter.default.removeObserver(loopObserver)
             }
             loopObserver = nil
-            player.pause()
+            player?.pause()
         }
     }
 

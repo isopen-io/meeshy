@@ -378,6 +378,8 @@ struct TrackingLinkDetailView: View {
             .compactMap { Unicode.Scalar(base + $0.value) }.map { String($0) }.joined()
     }
 
+    private static let qrContext = CIContext()
+
     private func generateQRAndShare() {
         guard let url = URL(string: link.shortUrl),
               let filter = CIFilter(name: "CIQRCodeGenerator") else { return }
@@ -385,8 +387,7 @@ struct TrackingLinkDetailView: View {
         filter.setValue("H", forKey: "inputCorrectionLevel")
         guard let ciImage = filter.outputImage else { return }
         let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
-        let context = CIContext()
-        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return }
+        guard let cgImage = Self.qrContext.createCGImage(scaled, from: scaled.extent) else { return }
         qrShareImage = QRShareImage(image: UIImage(cgImage: cgImage))
     }
 

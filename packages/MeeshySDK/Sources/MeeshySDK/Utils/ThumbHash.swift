@@ -468,9 +468,28 @@ extension UIImage {
         return Data(hash).base64EncodedString()
     }
 
+    /// Decoded placeholders, keyed by their base64 hash. The decode is a pure function of the
+    /// hash, and its callers sit on hot render paths (story cube swipe, loading overlay, image
+    /// cells re-initialised by every parent render) that re-ask for the same hash at frame rate.
+    /// `NSCache` is thread-safe and evicts under memory pressure; each entry is a ~32 px bitmap.
+    private nonisolated(unsafe) static let thumbHashImageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 256
+        return cache
+    }()
+
     /// Decode a base64-encoded ThumbHash string to a UIImage placeholder.
-    /// Decode time: ~1-3 ms (full inverse DCT to ~32 px). Returns nil on invalid input.
+    /// Decode time: ~1-3 ms (full inverse DCT to ~32 px), paid once per hash — later calls are
+    /// served from `thumbHashImageCache`. Returns nil on invalid input.
     public static func fromThumbHash(_ base64String: String) -> UIImage? {
+        let key = base64String as NSString
+        if let cached = thumbHashImageCache.object(forKey: key) { return cached }
+        guard let image = decodeThumbHash(base64String) else { return nil }
+        thumbHashImageCache.setObject(image, forKey: key)
+        return image
+    }
+
+    private static func decodeThumbHash(_ base64String: String) -> UIImage? {
         guard !base64String.isEmpty,
               let data = Data(base64Encoded: base64String) else { return nil }
         let hash = [UInt8](data)
