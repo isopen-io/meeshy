@@ -3985,3 +3985,15 @@ C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui t
 **LES LIBELLÉS VIVENT DANS UN CATALOGUE À LA DEMANDE** (`i18n-invite-catalog.ts`, `invite.*` et `linkDetail.*`, sept langues), chargé avec les deux écrans comme ceux de l'administration et de l'accueil — `catalog-fr.ts` a passé le budget de taille. La page d'accueil était en français codé en dur : elle ne l'est plus.
 
 **Divergences assumées avec la maquette.** Ni barre latérale de navigation sur le bureau (l'application n'en a nulle part ; les menus flottants sont sa navigation) — le fil d'Ariane seul ; ni « Voir les N arrivées » (aucune page ne les liste encore : un lien vers rien serait un contrôle qui ment).
+
+## D-118 — Les détails d'une conversation sont une FEUILLE du fil, et l'identité d'une personne a son menu d'appui long (2026-09-24, #7828, #7829, #7830)
+
+**UNE FEUILLE, PAS UNE ADRESSE.** `ConversationInfoSheet.swift` se pose au-dessus du fil ; le web fait de même (`components/conversation-details-sheet.tsx`, chargée à la demande par `conversation-details-sheet-lazy.tsx`, montée par `routes/thread.tsx`). Trois raisons : le fil garde son défilement et son état dessous ; tout ce que la feuille peint d'abord (la conversation, ses participants en cache) est déjà dans la mémoire de l'écran qui l'ouvre — cache d'abord sans second chargement ; et le retour matériel la referme (`Sheet` → `useBackDismiss`) sans qu'une adresse de plus ait à se tenir en parité. Si un lien profond vers les détails devient un besoin, il ouvrira la feuille depuis une requête du fil, jamais un second écran.
+
+**LES MEMBRES VIENNENT D'UN PORT BORNÉ** (`lib/api/conversation-members.ts`, `GET /conversations/:id/participants`, curseur, clé `['conversation-members', id]` hors du préfixe `['conversations']`, que plusieurs sites parcourent en supposant des conversations). Un participant anonyme n'a pas de pseudo : celui que sert la passerelle est son nom local, il ne fabrique aucun lien.
+
+**UN APPUI LONG N'OUVRE QU'UN MENU, LE PLUS PROCHE.** L'avatar d'un auteur vit dans la rangée qui porte le menu du message. `useLongPress` RÉCLAME le geste d'ouverture (appui, clic droit, touche menu) au premier hôte qui le voit ; les hôtes englobants l'ignorent. Une réclamation plutôt qu'un `stopPropagation` : l'appui doit atteindre le `document`, où `useRovingMenu` referme un menu ouvert.
+
+**LE MENU D'AVATAR EST UNE LOI ET UN COMPOSANT** (`lib/view/avatar-menu.ts`, `components/avatar-menu.tsx`) : Voir le profil · Voir la story (anneau vu ou non) · Détails de la conversation, dans l'ordre de `MeeshyAvatar.swift:331-354`, chaque entrée n'existant que si elle a un effet. Le TOUCHER reste `identityTarget`. Le même menu sert la bulle, la rangée plate, l'en-tête, la pile des participants les plus actifs et les membres de la feuille.
+
+**HORS TRANCHE, CONSIGNÉ** : médias (#7834), statistiques (#7835), options (#7836) et « Quitter » (#7837).

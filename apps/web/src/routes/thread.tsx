@@ -18,6 +18,10 @@ import '@/styles/thread-system.css';
 import { Composer } from '@/components/composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
+import { ConversationDetailsContext } from '@/components/avatar-menu';
+import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
+import { apiConfig } from '@/lib/api/config';
+import { webOriginOf } from '@/lib/links/web-origin';
 import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from '@/components/thread-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
@@ -128,6 +132,13 @@ export default function ThreadScreen() {
   const conversationId = threadData.conversationId;
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
+  /**
+   * LES DÉTAILS DE LA CONVERSATION (#7829) — une feuille de CE fil : le titre
+   * de l'en-tête et le menu de chaque avatar d'auteur (#7828) l'ouvrent par la
+   * même porte. Stable, pour que le contexte ne re-rende aucune rangée.
+   */
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const openDetails = useCallback(() => setDetailsOpen(true), []);
   const online = useOnline();
 
   /**
@@ -607,6 +618,7 @@ export default function ThreadScreen() {
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
+        onOpenDetails={openDetails}
         currentRowTitle={reading.currentRow?.title ?? ''}
         isAuto={reading.readingDecision.reason !== 'sticky'}
         readingMenuRows={reading.readingMenuRows}
@@ -692,50 +704,52 @@ export default function ThreadScreen() {
           payé sur ses rangées ; il est venu deux fois parce qu'il ne se voit
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
-        <ThreadModes
-          mode={reading.readingDecision.mode}
-          viewer={viewer}
-          readerLocale={readerLocale}
-          summary={{
-            conversation, messages, windowCoversUnread,
-            onReplyToPerson: exits.onReplyToPerson,
-            onOpenEpisode: exits.onOpenEpisode,
-            onResumeThread: exits.onResumeThread,
-            ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
-          }}
-          placed={placed}
-          virtualizer={virtualizer}
-          scene={scene}
-          readerLanguages={readerLanguages}
-          group={group}
-          storyRingOf={storyRingOf}
-          highlightedId={jump.highlightedId}
-          expiredIds={expiredIds}
-          destroyingIds={destroyingIds}
-          jumpToMessage={jump.jumpToMessage}
-          consume={consume}
-          onEphemeralExpired={onEphemeralExpired}
-          deliveryOf={deliveryOf}
-          startedAtOf={startedAtOf}
-          reasonOf={reasonOf}
-          permanentOf={permanentOf}
-          retry={retry}
-          displayLanguageOf={messageMenu.displayLanguageOf}
-          myReactionsOf={messageMenu.myReactionsOf}
-          selection={messageMenu.selection}
-          onRowTap={messageMenu.onRowTap}
-          longPress={messageMenu.longPress}
-          onPickLanguage={messageMenu.onPickLanguage}
-          onReact={messageMenu.onMenuReact}
-          onOpenDetail={messageMenu.setDetailFor}
-          typists={typing.typists}
-          typistAvatarOf={typistAvatarOf}
-          accent={accent}
-          older={{ state: older.state, sentinelRef: older.sentinelRef }}
-          readTrackingSentinelRef={readTracking.sentinelRef}
-          unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
-          unreadCount={unreadBoundary?.unreadCount ?? 0}
-        />
+        <ConversationDetailsContext.Provider value={openDetails}>
+          <ThreadModes
+            mode={reading.readingDecision.mode}
+            viewer={viewer}
+            readerLocale={readerLocale}
+            summary={{
+              conversation, messages, windowCoversUnread,
+              onReplyToPerson: exits.onReplyToPerson,
+              onOpenEpisode: exits.onOpenEpisode,
+              onResumeThread: exits.onResumeThread,
+              ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
+            }}
+            placed={placed}
+            virtualizer={virtualizer}
+            scene={scene}
+            readerLanguages={readerLanguages}
+            group={group}
+            storyRingOf={storyRingOf}
+            highlightedId={jump.highlightedId}
+            expiredIds={expiredIds}
+            destroyingIds={destroyingIds}
+            jumpToMessage={jump.jumpToMessage}
+            consume={consume}
+            onEphemeralExpired={onEphemeralExpired}
+            deliveryOf={deliveryOf}
+            startedAtOf={startedAtOf}
+            reasonOf={reasonOf}
+            permanentOf={permanentOf}
+            retry={retry}
+            displayLanguageOf={messageMenu.displayLanguageOf}
+            myReactionsOf={messageMenu.myReactionsOf}
+            selection={messageMenu.selection}
+            onRowTap={messageMenu.onRowTap}
+            longPress={messageMenu.longPress}
+            onPickLanguage={messageMenu.onPickLanguage}
+            onReact={messageMenu.onMenuReact}
+            onOpenDetail={messageMenu.setDetailFor}
+            typists={typing.typists}
+            typistAvatarOf={typistAvatarOf}
+            accent={accent}
+            older={{ state: older.state, sentinelRef: older.sentinelRef }}
+            readTrackingSentinelRef={readTracking.sentinelRef}
+            unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
+            unreadCount={unreadBoundary?.unreadCount ?? 0}
+          />
+        </ConversationDetailsContext.Provider>
       </main>
       <OlderLoadIndicator state={older.state} onRetry={older.retry} />
 
@@ -832,6 +846,18 @@ export default function ThreadScreen() {
         </div>
       )}
       </div>
+
+      <ConversationDetailsPortal
+        open={detailsOpen}
+        conversation={conversation}
+        title={title}
+        accent={accent}
+        viewerId={viewer.id ?? ''}
+        storyRingOf={storyRingOf}
+        deps={apiDeps}
+        origin={webOriginOf(apiConfig.base, window.location.origin)}
+        onClose={() => setDetailsOpen(false)}
+      />
 
       <ThreadMessageSheets
         messageMenu={messageMenu}

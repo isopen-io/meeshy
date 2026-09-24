@@ -1,6 +1,7 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { Avatar } from './avatar';
+import { AvatarMenuTrigger } from './avatar-menu';
 import { PersonName } from './person-name';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
@@ -10,6 +11,7 @@ import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
+import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 
@@ -34,6 +36,7 @@ export function ThreadHeader({
   otherUnread,
   expanded,
   onToggleExpanded,
+  onOpenDetails,
   currentRowTitle,
   isAuto,
   readingMenuRows,
@@ -50,6 +53,13 @@ export function ThreadHeader({
   readonly otherUnread: number;
   readonly expanded: boolean;
   readonly onToggleExpanded: () => void;
+  /**
+   * OUVRE LES DÉTAILS DE LA CONVERSATION (#7829). En groupe, le TITRE les
+   * ouvre au toucher ; en direct le titre reste la porte vers le pair (#7528)
+   * et les détails passent par son appui long, comme l'avatar de l'en-tête
+   * dans les deux cas — le menu d'avatar (#7828). Absent, rien ne les promet.
+   */
+  readonly onOpenDetails?: (() => void) | undefined;
   readonly currentRowTitle: string;
   readonly isAuto: boolean;
   readonly readingMenuRows: readonly MenuRow[];
@@ -68,6 +78,14 @@ export function ThreadHeader({
      texte — il nomme la conversation, pas une personne. */
   const peer = peerOf(conversation, viewerId);
   const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
+  /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
+     d'auteur (#7828) : le pair (profil, story) en direct, et les détails de la
+     conversation partout où l'hôte sait les ouvrir. */
+  const identityMenu = avatarMenuEntries({
+    username: peer?.user?.username,
+    storyRing: peerRing,
+    details: onOpenDetails !== undefined,
+  });
 
   return (
     /*
@@ -137,8 +155,31 @@ export function ThreadHeader({
 
         {expanded ? (
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-              <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />
+            <h1
+              className={`${group && onOpenDetails !== undefined ? '' : 'truncate '}text-title font-bold`}
+              style={{ color: 'var(--color-ios-ink)' }}
+            >
+              {group && onOpenDetails !== undefined ? (
+                /* LE TITRE D'UN GROUPE OUVRE SES DÉTAILS (#7829). La marge
+                   négative rend au flux ce que le rembourrage ajoute : la cible
+                   fait 44 px de haut sans que l'en-tête grandisse. C'est le
+                   bouton qui tronque, pas le titre : un `overflow: hidden` sur
+                   le titre rognerait la cible à sa hauteur de texte. */
+                <button
+                  type="button"
+                  onClick={onOpenDetails}
+                  aria-haspopup="dialog"
+                  data-thread-title-details
+                  className="block max-w-full truncate text-start"
+                  style={{ paddingBlock: 11, marginBlock: -11 }}
+                >
+                  {title}
+                </button>
+              ) : (
+                <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
+                  <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />
+                </AvatarMenuTrigger>
+              )}
             </h1>
             {/* `--color-ios-ink` et non `-ink-2` (#6308) : l'encre secondaire, semi-
                 transparente (`color-mix(in srgb, #4338ca 80%, transparent)` en clair),
@@ -206,25 +247,27 @@ export function ThreadHeader({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={onToggleExpanded}
-          aria-expanded={expanded}
-          aria-label={expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
-          className="shrink-0"
-        >
-          {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,
-              viewerId)` était déjà appelé À LA LIGNE SUIVANTE pour la
-              présence : la donnée arrivait jusqu'ici et l'en-tête de CHAQUE
-              conversation rendait des initiales. */}
-          <Avatar
-            initials={initialsOf(title)}
-            color={accent}
-            size={44}
-            {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
-          />
-        </button>
+        <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
+            className="shrink-0"
+          >
+            {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,
+                viewerId)` était déjà appelé À LA LIGNE SUIVANTE pour la
+                présence : la donnée arrivait jusqu'ici et l'en-tête de CHAQUE
+                conversation rendait des initiales. */}
+            <Avatar
+              initials={initialsOf(title)}
+              color={accent}
+              size={44}
+              {...(photo === undefined ? {} : { src: photo })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
+            />
+          </button>
+        </AvatarMenuTrigger>
       </div>
       {/*
         LE BANDEAU DE COUPURE A QUITTÉ CET EN-TÊTE (#6080) — remplacé par la
