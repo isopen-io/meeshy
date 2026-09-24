@@ -168,10 +168,18 @@ public actor MediaSessionCoordinator {
         let session = AVAudioSession.sharedInstance()
         // Independent do/catch per call — a setCategory failure must not skip the
         // setActive attempt (each used to run regardless of the other's outcome).
-        do {
-            try session.setCategory(.playback, mode: mode, options: options)
-        } catch {
-            logger.error("activatePlaybackSync: setCategory failed — \(error.localizedDescription, privacy: .public)")
+        // `setCategory` is a synchronous round-trip to the audio server, paid on
+        // the main thread by every video play and story open: skipped when the
+        // session already carries exactly this configuration.
+        if Self.playbackConfigurationDiffers(
+            currentCategory: session.category, currentMode: session.mode,
+            currentOptions: session.categoryOptions, mode: mode, options: options
+        ) {
+            do {
+                try session.setCategory(.playback, mode: mode, options: options)
+            } catch {
+                logger.error("activatePlaybackSync: setCategory failed — \(error.localizedDescription, privacy: .public)")
+            }
         }
         do {
             try session.setActive(true)
@@ -218,6 +226,18 @@ public actor MediaSessionCoordinator {
     /// touching the real `AVAudioSession`.
     nonisolated static func shouldManageSession(callActive: Bool) -> Bool {
         !callActive
+    }
+
+    /// Pure, testable decision behind `activatePlaybackSync`: reconfigure only
+    /// when the session is not already `.playback` with this mode and options.
+    nonisolated static func playbackConfigurationDiffers(
+        currentCategory: AVAudioSession.Category,
+        currentMode: AVAudioSession.Mode,
+        currentOptions: AVAudioSession.CategoryOptions,
+        mode: AVAudioSession.Mode,
+        options: AVAudioSession.CategoryOptions
+    ) -> Bool {
+        currentCategory != .playback || currentMode != mode || currentOptions != options
     }
 
     /// Active AVAudioSession pour le rôle demandé.
