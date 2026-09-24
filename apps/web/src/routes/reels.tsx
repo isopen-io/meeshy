@@ -19,7 +19,7 @@ import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
-import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
+import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -233,6 +233,7 @@ export default function ReelsScreen() {
      #6484) — la loi d'hôte (focus, fermeture au changement de réel) vit dans
      `use-comments-sheet-host.ts`, extraite de `routes/story.tsx`. */
   const comments = useCommentsSheetHost(activeId);
+  const sheetOpen = comments.postId !== null;
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -270,6 +271,13 @@ export default function ReelsScreen() {
          flèches ne sont jamais rendues à un bouton, le réel gardant sa
          navigation quel que soit le contrôle qui a le focus. */
       if (shortcutYieldsToTarget({ target: event.target, key: event.key })) return;
+      /* LA FEUILLE OUVERTE GARDE LE CLAVIER (revue-correction #6484, D-90).
+         Le pager est `inert` sous elle, mais `inert` ne retient que ce que
+         l'UTILISATEUR touche : `scrollTo` le défile quand même. Mesuré au
+         navigateur, une flèche dans la feuille passait au réel suivant — ce
+         qui la FERMAIT (`useCommentsSheetHost`) avec le commentaire en cours.
+         La loi est celle que le lecteur de stories applique déjà au doigt. */
+      if (screenGestureYields({ target: event.target, layerOpen: sheetOpen })) return;
       const direction = KEY_DIRECTION[event.key];
       const el = scroller.current;
       if (direction === undefined || el === null) return;
@@ -281,7 +289,7 @@ export default function ReelsScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [close, count]);
+  }, [close, count, sheetOpen]);
 
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = reels;
   useEffect(() => {
@@ -313,8 +321,13 @@ export default function ReelsScreen() {
            `routes/story.tsx`) — un sous-arbre inerte n'intercepte plus le
            doigt ni le clavier : sans elle, un balayage sous la feuille
            ferait avancer le pager derrière le fil qu'on lit. */
-        inert={comments.postId !== null}
-        className="scrollbar-none h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
+        inert={sheetOpen}
+        /* `isolate` (revue-correction #6484) : un contexte d'empilement PROPRE
+           au pager. La barre de progression d'un réel est en `z-10` pour
+           passer au-dessus de son voile (#6903) ; sans lui, elle passait
+           AUSSI au-dessus de la feuille de commentaires (`zIndex: 3`), en
+           trait clair sur sa dernière rangée. */
+        className="scrollbar-none isolate h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
       >
         {models.map((model, index) => (
           <ReelPage

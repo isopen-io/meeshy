@@ -390,6 +390,23 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "qu'un message effacé de l'historique personnel d'un lecteur ne serait " +
       'jamais marqué livré pour lui — donc compté non lu à vie.',
   },
+  'messaging/messagePostSaveEffects.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Anti-répétition de Meeshy Global (#7740) : compare le texte qu'on VIENT " +
+      "d'envoyer aux derniers de Global (`select: { content: true }`) pour " +
+      'décider du crédit d\'engagement, et ne rend rien. Masquer ici laisserait ' +
+      'un lecteur regagner des points en répétant ce qu\'il a effacé chez lui.',
+  },
+  'onboarding/OnboardingService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Suggestions d'onboarding (#7729) : ne lit que des `senderId` récents de " +
+      'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
+      "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
+  },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,

@@ -520,6 +520,47 @@ async function runScheme(colorScheme) {
       await page.click('[data-story-action="comments"]');
       await page.waitForSelector('[data-story-comments-close]', { timeout: 8000 });
     }
+    /* ── 7 ter. LA FEUILLE ELLE-MÊME, HORS DE TOUT CHAMP (revue #6484) ────
+       La cession des touches ne couvrait que les CONTRÔLES (7) : sur la
+       feuille nue — qui PREND le focus à son montage —, une flèche avançait
+       la story recouverte et Espace relançait sa lecture. Même loi que le
+       doigt (7 bis) : feuille ouverte, les raccourcis du lecteur se taisent. */
+    await page.focus('[data-story-comments-sheet]');
+    const avantPanneau = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press(' ');
+    /* Un FAIT attendu, jamais un délai (`lib/fixed-delay-ratchet.test.ts`) :
+       le défaut se voit dès que la story change, reprend ou perd sa feuille ;
+       son absence se conclut à l'échéance. */
+    await page
+      .waitForFunction(
+        (avant) => {
+          const scene = document.querySelector('[data-story-scene]');
+          return (
+            scene?.getAttribute('data-story-scene') !== avant ||
+            scene?.getAttribute('data-story-paused') !== 'true' ||
+            document.querySelector('[data-story-comments-sheet]') === null
+          );
+        },
+        avantPanneau,
+        { timeout: 800 },
+      )
+      .catch(() => undefined);
+    const apresPanneau = await page.evaluate(() => ({
+      story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+    }));
+    check(
+      apresPanneau.story === avantPanneau && apresPanneau.pause === 'true' && apresPanneau.sheet === true,
+      `${tag} st-amie-2 : une flèche ou Espace sur la feuille nue ne doit ni avancer la story ni la relancer — ${avantPanneau} → ${JSON.stringify(apresPanneau)}`,
+    );
+    if (!apresPanneau.sheet) {
+      await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-story-action="comments"]', { timeout: 8000 });
+      await page.click('[data-story-action="comments"]');
+      await page.waitForSelector('[data-story-comments-close]', { timeout: 8000 });
+    }
     /* LA CONTRE-ÉPREUVE DE LA CESSION — elle est FINE, et sans ce témoin rien
        n'empêcherait de la rendre GROSSIÈRE. Cliquer un bouton le FOCALISE
        (comportement natif) : si l'écran cédait TOUTE touche à un contrôle
