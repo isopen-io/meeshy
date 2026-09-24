@@ -130,6 +130,12 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// visite, jamais au cache. L'hôte la pose depuis son état de visite.
     public var isViewOnceRevealed: Bool = false
 
+    /// **Quand CE lecteur a ouvert cette vue unique** (#7579), `nil` sinon.
+    /// Restitué de la colonne GRDB du même nom, ou posé par le serveur
+    /// (`APIMessage.consumedByMe`). Non nul, il est permanent : la bulle dit
+    /// `(1) · Déjà ouvert`, et le contenu est purgé.
+    public var viewOnceOpenedAt: Date?
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)

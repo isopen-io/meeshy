@@ -350,5 +350,15 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "ephemeralDuration", .integer)
             }
         }
+
+        // **La vue unique OUVERTE, par lecteur** (#7579). Le fil affiché vient
+        // de GRDB : l'état « déjà ouvert » doit y vivre, sinon un redémarrage
+        // ou une revalidation REST le perdrait et rendrait le contenu. Même
+        // convention nullable : les lignes existantes valent NULL (non ouverte).
+        migrator.registerMigration("messages_view_once_opened_at") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "viewOnceOpenedAt", .datetime)
+            }
+        }
     }
 }

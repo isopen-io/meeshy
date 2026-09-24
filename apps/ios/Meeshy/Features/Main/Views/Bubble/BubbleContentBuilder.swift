@@ -39,23 +39,24 @@ extension BubbleContent {
         // Le sceau retire texte, pièces, sticker et lieu, et les traductions
         // qui les disent : aucune sous-vue, aucun libellé accessible, aucun
         // chargeur de média ne peut plus rendre ce que ce modèle ne porte pas.
+        // #7579 — une vue unique DÉJÀ OUVERTE non plus : son contenu est purgé.
         let isSealed = message.isViewOnceSealed
+        let withholdsContent = isSealed || message.isViewOnceOpened
         let message = message.sealedForDisplay
-        let translations = isSealed ? [] : translations
-        let preferredTranslation = isSealed ? nil : preferredTranslation
-        let translatedAudios = isSealed ? [] : translatedAudios
-        let preferredAudioLangCode = isSealed ? nil : preferredAudioLangCode
+        let translations = withholdsContent ? [] : translations
+        let preferredTranslation = withholdsContent ? nil : preferredTranslation
+        let translatedAudios = withholdsContent ? [] : translatedAudios
+        let preferredAudioLangCode = withholdsContent ? nil : preferredAudioLangCode
 
         self.messageId = message.id
         self.isMe = message.isMe
         self.senderName = message.senderName
 
         // --- Kind ---
-        // Note: `.burned` does NOT exclude `isMe`. The sender also sees the
-        // "Vu et efface" state once their view-once message has been consumed,
-        // matching the legacy `ThemedMessageBubble.isViewOnceBurned` semantics
-        // (the wrapper additionally gates on `blurController.isRevealed`,
-        // which is a runtime concern handled in the wrapper, not in BubbleContent).
+        // Une vue unique se consomme PAR PERSONNE (#7579) : l'état « déjà
+        // ouvert » vient de la colonne locale de CE lecteur
+        // (`viewOnceOpenedAt`), auteur compris — jamais du compteur global
+        // `viewOnceCount`, que l'ouverture d'un autre fait monter.
         // System messages (call summaries: "Appel vidéo · 04:32", "Appel
         // refusé", …) render as a centered notice, never as a chat bubble.
         // Checked first so a system message is never mistaken for a deleted /
@@ -64,8 +65,8 @@ extension BubbleContent {
             self.kind = .system
         } else if message.isDeleted {
             self.kind = .deleted
-        } else if message.isViewOnce && message.viewOnceCount > 0 {
-            self.kind = .burned
+        } else if message.isViewOnceOpened {
+            self.kind = .viewOnceOpened
         } else if isSealed {
             self.kind = .viewOnceSealed
         } else {
@@ -276,6 +277,7 @@ extension BubbleContent {
         let protection = message.protection()
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
         self.isBurning = message.isBurning
+        self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred

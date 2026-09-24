@@ -449,6 +449,11 @@ public struct APIMessage: Sendable {
     /// Même patron `var`/`= nil` que `location` et `sticker` : l'init
     /// memberwise reste source-compatible avec les fixtures existantes.
     public var ephemeralDuration: Int? = nil
+    /// Vue unique déjà ouverte par CE lecteur (#7578, contrat serveur) : le
+    /// serveur ne sert plus son contenu, et le client grave l'état « déjà
+    /// ouvert » (`MessageRecord.viewOnceOpenedAt`). `nil` sur une charge
+    /// antérieure au contrat.
+    public var consumedByMe: Bool? = nil
     /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
     /// mécanique que `postReplyTo`. Le SDK ne décode pas `metadata` brut.
     /// `var`/`= nil` (au lieu de `let`) : même patron que `trackingLinks`
@@ -514,7 +519,7 @@ extension APIMessage: Decodable {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, ephemeralDuration, location, sticker
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, ephemeralDuration, location, sticker, consumedByMe
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
@@ -574,6 +579,7 @@ extension APIMessage: Decodable {
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
+        consumedByMe = try c.decodeIfPresent(Bool.self, forKey: .consumedByMe)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
         // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme

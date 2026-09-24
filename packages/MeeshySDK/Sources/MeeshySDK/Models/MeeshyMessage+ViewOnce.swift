@@ -18,14 +18,21 @@ public extension MeeshyMessage {
     /// message : sa légende, elle, est le contenu du message, et se protège
     /// avec la photo.
     var holdsViewOnce: Bool {
-        isViewOnce || attachments.contains { $0.isViewOnce }
+        isViewOnce || viewOnceOpenedAt != nil || attachments.contains { $0.isViewOnce }
+    }
+
+    /// CE lecteur l'a-t-il déjà ouverte (#7579) ? Permanent, et par personne :
+    /// ce que les autres ouvrent n'y change rien.
+    var isViewOnceOpened: Bool {
+        viewOnceOpenedAt != nil && !isDeleted && messageSource != .system
     }
 
     /// Le contenu doit-il rester HORS du rendu ? Vrai tant que le lecteur n'a
     /// pas touché le message pour l'ouvrir. Un message supprimé ou un avis
     /// système n'a pas de contenu à sceller.
     var isViewOnceSealed: Bool {
-        holdsViewOnce && !isViewOnceRevealed && !isDeleted && messageSource != .system
+        holdsViewOnce && viewOnceOpenedAt == nil && !isViewOnceRevealed
+            && !isDeleted && messageSource != .system
     }
 
     /// Le média qu'un toucher ouvre en plein écran — une image (sticker
@@ -44,7 +51,7 @@ public extension MeeshyMessage {
     /// un composant qui ne reçoit ni texte, ni pièce, ni sticker, ni lieu ne
     /// peut ni les peindre, ni les dire au lecteur d'écran, ni les télécharger.
     var sealedForDisplay: MeeshyMessage {
-        guard isViewOnceSealed else { return self }
+        guard isViewOnceSealed || isViewOnceOpened else { return self }
         var sealed = self
         sealed.isViewOnce = true
         sealed.content = ""

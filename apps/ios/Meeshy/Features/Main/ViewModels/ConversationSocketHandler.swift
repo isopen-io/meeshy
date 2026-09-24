@@ -53,7 +53,6 @@ protocol ConversationSocketDelegate: AnyObject {
     /// ViewModel : ne vider que ce que le handler voit (`messageTranslations`)
     /// laisserait l'hydratation réinjecter le texte d'avant l'édition.
     func invalidateTranslations(for messageId: String)
-    func markMessageAsConsumed(messageId: String)
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
     /// Re-fetch messages this reader had hidden for themselves and has just
@@ -709,7 +708,7 @@ final class ConversationSocketHandler {
                     let msgId = event.messageId
                     Task {
                         do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
+                            try await persistence.markDeleted(localId: msgId, deletedAt: now, sparingOpenedViewOnce: true)
                         } catch {
                             Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         }

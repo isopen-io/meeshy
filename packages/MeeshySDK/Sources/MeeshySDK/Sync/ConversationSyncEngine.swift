@@ -22,6 +22,9 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
     case reactionRemoved(messageId: String, emoji: String, participantId: String?)
     case consumed(messageId: String, viewOnceCount: Int)
+    /// La vue unique est « déjà ouverte » pour CE lecteur, ou son contenu a été
+    /// purgé par le serveur : vider le contenu local, garder la bulle (#7579).
+    case viewOnceOpened(messageId: String)
 }
 
 // MARK: - Protocol

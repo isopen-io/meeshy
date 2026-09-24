@@ -4,10 +4,8 @@ import MeeshyUI
 
 /// Vues "systeme" affichees a la place du contenu d'une bulle :
 /// - `BubbleDeletedView` quand le message a ete supprime
-/// - `BubbleBurnedView` quand un message ephemere a ete vu et efface
 ///
-/// Was: ThemedMessageBubble.deletedMessageView (lignes 363-393) +
-/// ThemedMessageBubble.burnedMessageView (lignes 395-425).
+/// Was: ThemedMessageBubble.deletedMessageView (lignes 363-393).
 ///
 /// Stateless : reposent uniquement sur `isMe` et `isDark`. Equatable trivial.
 struct BubbleDeletedView: View, Equatable {
@@ -47,47 +45,10 @@ struct BubbleDeletedView: View, Equatable {
     }
 }
 
-struct BubbleBurnedView: View, Equatable {
-    let isMe: Bool
-    let isDark: Bool
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill")
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.stateOpened)
-                Text(String(localized: "bubble.system.burned", defaultValue: "Vu et supprimé", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
-                    .italic()
-                    .foregroundColor(ThemeManager.shared.textMuted)
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.sm)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.stateOpened.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(MeeshyColors.stateOpened.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message vu et supprimé", bundle: .main))
-
-            if !isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
-    }
-}
-
 /// Centered system notice rendered in place of a chat bubble — the FALLBACK
 /// for any system message whose `metadata` did not decode into a richer
 /// notice (legacy call summaries, legacy join notices, future event kinds).
-/// Unlike `BubbleDeletedView`/`BubbleBurnedView` (which still align with the
+/// Unlike `BubbleDeletedView` (which still aligns with the
 /// sender side), a system notice is a milestone of the thread: centered, no
 /// avatar, thread time engraved FIRST — same semantics as the date stickers
 /// and `BubbleJoinNoticeView`. No leading glyph: the producer is unknown by
