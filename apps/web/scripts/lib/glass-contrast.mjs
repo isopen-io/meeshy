@@ -244,7 +244,7 @@ export const GLASS_CONTRAST_INVENTORY = [
     kind: 'text',
   },
   {
-    site: 'src/routes/thread.tsx — l’annonce du presse-papiers (« Message copié »)',
+    site: 'src/components/thread-chrome.tsx — l’annonce du presse-papiers (« Message copié », NoticePill, #7429)',
     tone: '--ios-surface-card',
     ink: '--ios-ink',
     density: 'glass-prominent',
