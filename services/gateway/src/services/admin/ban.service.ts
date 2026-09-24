@@ -1,4 +1,4 @@
-import { PrismaClient, Ban } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Ban, Prisma } from '@meeshy/shared/prisma/client';
 import type { UserManagementService } from './user-management.service';
 
 export interface CreateBanParams {
@@ -33,6 +33,17 @@ export interface LiftBanParams {
  * chose que cette branche disait mieux.)
  */
 export const SYSTEM_ACTOR_ID = '000000000000000000000000';
+
+/**
+ * Prédicat Prisma d'un ban NON LEVÉ, source unique.
+ *
+ * `createBan` n'écrit pas `liftedAt` : sur MongoDB le champ est ABSENT du
+ * document, et `liftedAt: null` seul ne matcherait que les documents où il
+ * vaut explicitement `null` — un ban tout juste posé serait lu comme levé.
+ * Même loi que `NOT_DELETED` (`posts/softDelete.ts`), les deux formes du
+ * « jamais écrit » réunies.
+ */
+export const NOT_LIFTED: Prisma.BanWhereInput = { OR: [{ liftedAt: null }, { liftedAt: { isSet: false } }] };
 
 /**
  * Un ban est EN VIGUEUR quand il n'a pas été levé et (permanent, ou son
@@ -105,7 +116,7 @@ export class BanService {
 
   async listActiveBans(userId: string, options: { excludeBanId?: string } = {}): Promise<Ban[]> {
     const tous = await this.prisma.ban.findMany({
-      where: { userId, liftedAt: null, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
+      where: { userId, ...NOT_LIFTED, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
     });
     return tous.filter((b) => estEnVigueur(b));
   }
@@ -122,7 +133,7 @@ export class BanService {
    */
   async sweepExpiredBans(now: Date = new Date()): Promise<Ban[]> {
     const expires = await this.prisma.ban.findMany({
-      where: { liftedAt: null, expiresAt: { not: null, lte: now } },
+      where: { ...NOT_LIFTED, expiresAt: { not: null, lte: now } },
     });
 
     const lifted: Ban[] = [];

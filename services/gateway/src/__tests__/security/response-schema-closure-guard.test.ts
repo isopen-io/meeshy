@@ -352,6 +352,12 @@ const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
   'admin/content.ts|200': 1,
   'admin/content-share-links.ts|200': 1,
   'admin/posts.ts|200': 2,
+  // #7845 — `values` d'une catégorie de préférences (lecture ET écriture de la
+  // fiche d'administration) : un sac de réglages hétérogène dont les clés
+  // varient par catégorie, la même forme juste que
+  // `me/preferences/preference-router-factory.ts`. Tout ce qui voyage à côté
+  // (clés stockées, description des champs, lecture seule) est fermé.
+  'admin/user-admin-response-schemas.ts|n/a (fichier extrait)': 2,
   // #4284 a découpé conversations/messages.ts en fichiers frères ; ces deux
   // sites vivent désormais dans messages-send.ts (compte inchangé : 2).
   'conversations/messages-send.ts|200': 2,

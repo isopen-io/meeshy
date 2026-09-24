@@ -357,3 +357,112 @@ describe('UserSanitizationService.sanitizeAuditLog', () => {
     expect(result.userAgent).toBe(log.userAgent);
   });
 });
+
+// ─── #7845 A0 — la fiche d'administration sert TOUTES les métadonnées ────────
+
+/**
+ * Chaque colonne SECRÈTE de `User`, remplie. Le témoin ne peut tomber que si la
+ * ligne qui entre porte vraiment le secret : une fixture qui l'omettrait
+ * attesterait une protection que la production n'a pas à tenir.
+ */
+const SECRETS_DE_LA_LIGNE: Readonly<Record<string, unknown>> = {
+  password: '$2b$12$hash-du-mot-de-passe',
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+  twoFactorPendingSecret: 'PENDINGSECRET',
+  twoFactorChallengeHash: 'challenge-hash',
+  twoFactorChallengeExpiresAt: new Date('2026-09-30'),
+  emailVerificationToken: 'email-token',
+  emailVerificationCode: '123456',
+  emailVerificationExpiry: new Date('2026-09-30'),
+  pendingEmailVerificationToken: 'pending-email-token',
+  pendingEmailVerificationExpiry: new Date('2026-09-30'),
+  phoneVerificationCode: '654321',
+  phoneVerificationExpiry: new Date('2026-09-30'),
+  pendingPhoneVerificationCode: '111111',
+  pendingPhoneVerificationExpiry: new Date('2026-09-30'),
+  signalIdentityKeyPrivate: 'private-key',
+  signalIdentityKeyPublic: 'public-key',
+  signalPreKeyBundle: 'bundle',
+  signalPreKeyBundleVersion: 3,
+  signalRegistrationId: 42,
+  searchTokens: ['john', 'doe'],
+  referralCode: 'REF-SECRET',
+  usernameHistory: [{ username: 'ancien', changedAt: new Date('2025-01-01') }],
+  blockedUserIds: ['507f1f77bcf86cd799439aaa', '507f1f77bcf86cd799439bbb'],
+};
+
+const METADONNEES_DE_LA_LIGNE: Partial<FullUser> = {
+  banner: 'u/banner.jpg',
+  deviceLocale: 'en-US',
+  deviceCountry: 'US',
+  birthDate: new Date('1990-05-01'),
+  ageVerifiedAt: new Date('2026-02-01'),
+  voiceProfileConsentAt: new Date('2026-03-01'),
+  voiceDataConsentAt: new Date('2026-03-02'),
+  dataProcessingConsentAt: new Date('2026-03-03'),
+  analyticsConsentAt: null,
+  voiceCloningEnabledAt: new Date('2026-03-04'),
+  termsAcceptedAt: new Date('2026-01-01'),
+  termsVersion: '3',
+  onboardingCompletedAt: new Date('2026-01-02'),
+  currentStreakDays: 4,
+  longestStreakDays: 12,
+  lastStreakDate: new Date('2026-09-20'),
+  engagementScore: 77,
+  meeshBalance: 30,
+  meeshMintedLifetime: 90,
+  pendingEmail: 'new@example.com',
+  pendingPhoneNumber: '+33700000000',
+  phoneTransferredAt: null,
+};
+
+function ligneComplete(): FullUser {
+  return Object.assign(makeFullUser(METADONNEES_DE_LA_LIGNE), SECRETS_DE_LA_LIGNE);
+}
+
+describe('UserSanitizationService.sanitizeUser — métadonnées de la fiche (#7845 A0)', () => {
+  it('sert la bannière à tout rôle, comme l\'avatar : une image publique', () => {
+    mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
+    const result = makeService().sanitizeUser(ligneComplete(), UserRoleEnum.MODERATOR) as unknown as Record<string, unknown>;
+    expect(result.banner).toBe('u/banner.jpg');
+  });
+
+  it('sert à un ADMIN les langues d\'appareil, l\'âge, les consentements, les CGU, l\'engagement et les changements en attente', () => {
+    mockCanViewSensitiveData.mockReturnValue(true);
+    mockCanViewPresence.mockReturnValue(true);
+    const result = makeService().sanitizeUser(ligneComplete(), UserRoleEnum.ADMIN) as unknown as Record<string, unknown>;
+    expect(result).toMatchObject({ ...METADONNEES_DE_LA_LIGNE, blockedCount: 2 });
+  });
+
+  it('sert blockedCount = 0 quand la colonne est absente, jamais la liste', () => {
+    mockCanViewSensitiveData.mockReturnValue(true);
+    mockCanViewPresence.mockReturnValue(true);
+    const result = makeService().sanitizeUser(makeFullUser(), UserRoleEnum.ADMIN) as unknown as Record<string, unknown>;
+    expect(result.blockedCount).toBe(0);
+    expect(result).not.toHaveProperty('blockedUserIds');
+  });
+
+  it('ne sert à un MODERATOR ni les consentements, ni la date de naissance, ni l\'engagement', () => {
+    mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
+    const result = makeService().sanitizeUser(ligneComplete(), UserRoleEnum.MODERATOR) as unknown as Record<string, unknown>;
+    const retenus = Object.keys(METADONNEES_DE_LA_LIGNE).filter((cle) => cle !== 'banner');
+    for (const cle of [...retenus, 'blockedCount']) {
+      expect(result).not.toHaveProperty(cle);
+    }
+  });
+
+  it.each([UserRoleEnum.BIGBOSS, UserRoleEnum.ADMIN, UserRoleEnum.MODERATOR, UserRoleEnum.AUDIT])(
+    'ne sert AUCUNE colonne secrète à %s',
+    (role) => {
+      const sensible = role === UserRoleEnum.BIGBOSS || role === UserRoleEnum.ADMIN;
+      mockCanViewSensitiveData.mockReturnValue(sensible);
+      mockCanViewPresence.mockReturnValue(sensible);
+      const result = makeService().sanitizeUser(ligneComplete(), role) as unknown as Record<string, unknown>;
+      for (const cle of Object.keys(SECRETS_DE_LA_LIGNE)) {
+        expect(result).not.toHaveProperty(cle);
+      }
+    }
+  );
+});

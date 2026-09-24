@@ -10,6 +10,54 @@ import {
 import { permissionsService } from './permissions.service';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
+/**
+ * Les métadonnées d'un compte qu'un administrateur lit sur sa fiche (#7845 A0).
+ *
+ * Énumérées champ par champ, JAMAIS par un spread de la ligne : `FullUser` est
+ * la ligne Prisma coulée telle quelle, et elle porte à côté de ces champs le
+ * hash du mot de passe, les secrets 2FA, les jetons et codes de vérification,
+ * les clés Signal et `searchTokens`. Un `...user` servirait tout cela d'un coup
+ * — la liste explicite est la seule forme où une colonne ajoutée demain au
+ * modèle ne sort pas sans qu'on l'ait décidé.
+ *
+ * `blockedUserIds` n'y entre que par son CARDINAL : savoir qu'un compte en a
+ * bloqué douze instruit une plainte ; savoir LESQUELS appartient aux douze.
+ */
+function adminMetadataOf(user: FullUser): Pick<
+  AdminUser,
+  | 'deviceLocale' | 'deviceCountry' | 'birthDate' | 'ageVerifiedAt'
+  | 'voiceProfileConsentAt' | 'voiceDataConsentAt' | 'dataProcessingConsentAt'
+  | 'analyticsConsentAt' | 'voiceCloningEnabledAt' | 'termsAcceptedAt' | 'termsVersion'
+  | 'onboardingCompletedAt' | 'currentStreakDays' | 'longestStreakDays' | 'lastStreakDate'
+  | 'engagementScore' | 'meeshBalance' | 'meeshMintedLifetime' | 'pendingEmail'
+  | 'pendingPhoneNumber' | 'phoneTransferredAt' | 'blockedCount'
+> {
+  return {
+    deviceLocale: user.deviceLocale ?? null,
+    deviceCountry: user.deviceCountry ?? null,
+    birthDate: user.birthDate ?? null,
+    ageVerifiedAt: user.ageVerifiedAt ?? null,
+    voiceProfileConsentAt: user.voiceProfileConsentAt ?? null,
+    voiceDataConsentAt: user.voiceDataConsentAt ?? null,
+    dataProcessingConsentAt: user.dataProcessingConsentAt ?? null,
+    analyticsConsentAt: user.analyticsConsentAt ?? null,
+    voiceCloningEnabledAt: user.voiceCloningEnabledAt ?? null,
+    termsAcceptedAt: user.termsAcceptedAt ?? null,
+    termsVersion: user.termsVersion ?? null,
+    onboardingCompletedAt: user.onboardingCompletedAt ?? null,
+    currentStreakDays: user.currentStreakDays ?? null,
+    longestStreakDays: user.longestStreakDays ?? null,
+    lastStreakDate: user.lastStreakDate ?? null,
+    engagementScore: user.engagementScore ?? null,
+    meeshBalance: user.meeshBalance ?? null,
+    meeshMintedLifetime: user.meeshMintedLifetime ?? null,
+    pendingEmail: user.pendingEmail ?? null,
+    pendingPhoneNumber: user.pendingPhoneNumber ?? null,
+    phoneTransferredAt: user.phoneTransferredAt ?? null,
+    blockedCount: user.blockedUserIds?.length ?? 0,
+  };
+}
+
 export class UserSanitizationService {
   /**
    * Masque un email : john.doe@example.com → j***@example.com
@@ -60,6 +108,7 @@ export class UserSanitizationService {
       displayName: user.displayName,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner ?? null,
       role: user.role,
       isActive: user.isActive,
       isOnline: user.isOnline,
@@ -115,6 +164,7 @@ export class UserSanitizationService {
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
         userFeature: user.userFeature,
+        ...adminMetadataOf(user),
         _count: user._count
       };
       return adminData;

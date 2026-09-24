@@ -37,13 +37,16 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserConversationsRoute } from './user-conversations';
+import { registerUserPreferenceRoutes } from './user-preferences';
+import { registerAdminUserStatsRoute } from './user-stats-admin';
+import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
-import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
 
 // Utilisation des schemas de validation renforces
@@ -143,6 +146,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
+
+  // #7845 — administrer un membre depuis SA fiche : ses préférences (lecture
+  // `canViewSensitiveData`, écriture sous les `gardes` de `users-write.ts`) et
+  // ses compteurs (agrégats, `canViewUserDetails`).
+  registerUserPreferenceRoutes(fastify, { userAuditService });
+  registerAdminUserStatsRoute(fastify);
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -657,103 +666,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
-   * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
-   * onto each conversation. Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { userId: string };
-    Querystring: { offset?: string; limit?: string; type?: string };
-  }>('/admin/users/:userId/conversations', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const { userId } = request.params;
-      const { offset = '0', limit, type } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
-
-      const userExists = await fastify.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
-      });
-      if (!userExists) {
-        return sendNotFound(reply, 'Utilisateur non trouvé');
-      }
-
-      const where: any = {
-        participants: {
-          some: { userId, isActive: true }
-        }
-      };
-      if (type) {
-        where.type = type;
-      }
-
-      const [conversations, total] = await Promise.all([
-        fastify.prisma.conversation.findMany({
-          where,
-          select: {
-            id: true,
-            identifier: true,
-            title: true,
-            type: true,
-            avatar: true,
-            isActive: true,
-            // Même règle que `GET /conversations` : la colonne `memberCount`
-            // n'est écrite par personne, donc l'écran admin affichait
-            // « 0 membres » sur toute conversation créée depuis la migration
-            // héritée. Le compte vient de la base.
-            _count: { select: conversationActiveMemberCountSelect },
-            communityId: true,
-            createdAt: true,
-            lastMessageAt: true,
-            participants: {
-              where: { isActive: true },
-              take: 6,
-              orderBy: { joinedAt: 'asc' },
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                role: true,
-                joinedAt: true,
-                isActive: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            }
-          },
-          orderBy: { lastMessageAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.conversation.count({ where })
-      ]);
-
-      // Keep a small participant preview (direct → the other member, group → a
-      // first slice; the full group list is paged via the dedicated endpoint),
-      // and surface the target user's membership separately for convenience.
-      const data = conversations.map((conv) => {
-        const { _count, ...convData } = conv as typeof conv & { _count: { participants: number } };
-        const participants = (convData as { participants?: Array<{ userId?: string | null }> }).participants ?? [];
-        const membership = participants.find((p) => p.userId === userId) ?? null;
-        return { ...convData, memberCount: _count.participants, participants, membership };
-      });
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + conversations.length < total
-      });
-    } catch (error) {
-      logError(fastify.log, 'Error fetching user conversations', error);
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user conversations' });
-    }
-  });
+  // GET /admin/users/:userId/conversations — extraite par #7845 (tri,
+  // filtres, réglages, ligne d'appartenance toujours servie) : elle grandissait
+  // dans un fichier déjà près du plafond de taille.
+  registerUserConversationsRoute(fastify);
 
   /**
    * GET /admin/users/:userId/media - List media produced by a user (admin view).
@@ -962,4 +878,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
   // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
   registerConversationsSovereignRoute(fastify);
+
+  // PATCH /admin/conversations/:id et ses deux gestes sur un membre (#7845 E) :
+  // configurer une conversation SANS en être membre — les routes de membre
+  // exigent d'y être (« une fois dans »). Rang d'administration, motif écrit,
+  // trace `AdminAuditLog`.
+  registerConversationSettingsSovereignRoutes(fastify);
 }

@@ -195,6 +195,11 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
   // (4). Le compte total est inchangé.
   'admin/agent-configs.ts': 4,
+  // #7845 — le retrait souverain d'un membre relit les participants RESTANTS
+  // pour nommer leurs rooms et annoncer l'effectif ABSOLU : même fanout, même
+  // raison que `conversations/participant-removal.ts` (gelé plus bas). Borner
+  // la lecture tronquerait l'audience ET fausserait le compte annoncé.
+  'admin/conversation-settings-sovereign.ts': 1,
   // 4 -> 2 : #4465 a retiré les deux `findMany` nus de `GET /stats`
   // (`agentUserRole.findMany({distinct:['userId']})`, remplacé par un
   // `$group`+`$count`) et de `GET /scan-logs/stats` (`agentScanLog.findMany`

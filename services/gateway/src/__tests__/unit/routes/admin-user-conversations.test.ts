@@ -193,6 +193,173 @@ describe('GET /admin/users/:userId/conversations', () => {
   });
 });
 
+/**
+ * #7845 D — tri, filtres et métadonnées de la liste des conversations d'un
+ * membre. Le double honore ce qu'on lui passe au sens où chaque témoin lit
+ * l'ARGUMENT reçu par Prisma : un tri qui n'atteint pas `orderBy` est un
+ * contrôle sans effet (loi 4), et c'est ce que ces témoins regardent.
+ */
+describe('GET /admin/users/:userId/conversations — tri, filtres, métadonnées (#7845 D)', () => {
+  const url = (qs = '') => `/api/v1/admin/users/${TARGET_ID}/conversations${qs}`;
+  type FindManyArgs = { where: AnyRecord; orderBy: AnyRecord; select?: AnyRecord; skip?: number; take?: number };
+  const argsOf = (fn: unknown): FindManyArgs =>
+    (fn as jest.Mock).mock.calls[0]?.[0] as FindManyArgs;
+
+  const conversationRow = (overrides: AnyRecord = {}): AnyRecord => ({
+    id: 'c1',
+    identifier: 'mshy_one',
+    title: 'Team',
+    description: 'Le groupe',
+    type: 'group',
+    avatar: null,
+    banner: 'b.jpg',
+    isActive: true,
+    closedAt: null,
+    communityId: null,
+    createdAt: new Date('2026-01-01').toISOString(),
+    updatedAt: new Date('2026-02-01').toISOString(),
+    lastMessageAt: new Date('2026-06-01').toISOString(),
+    defaultWriteRole: 'everyone',
+    isAnnouncementChannel: false,
+    slowModeSeconds: 30,
+    autoTranslateEnabled: true,
+    encryptionMode: null,
+    _count: { participants: 9 },
+    conversationMessageStats: { totalMessages: 120 },
+    participants: [],
+    ...overrides,
+  });
+
+  it('porte sort=title&order=asc jusqu\'à orderBy', async () => {
+    const prisma = createMockPrisma({ conversations: [] });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url('?sort=title&order=asc') });
+    expect(res.statusCode).toBe(200);
+    expect(argsOf(prisma.conversation.findMany).orderBy).toEqual({ title: 'asc' });
+    await app.close();
+  });
+
+  it('trie par défaut sur lastMessageAt desc', async () => {
+    const prisma = createMockPrisma({ conversations: [] });
+    const app = await buildApp(prisma, 'ADMIN');
+    await app.inject({ method: 'GET', url: url() });
+    expect(argsOf(prisma.conversation.findMany).orderBy).toEqual({ lastMessageAt: 'desc' });
+    await app.close();
+  });
+
+  it('refuse sort=memberCount (400) — la colonne est morte, trier dessus trierait des zéros', async () => {
+    const prisma = createMockPrisma({});
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url('?sort=memberCount') });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse order=up (400)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url('?order=up') });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('refuse un rôle de membre inconnu (400)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url('?role=owner') });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('trie par arrivée du membre en passant par participant.findMany', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt-t', userId: TARGET_ID, role: 'member', joinedAt: new Date('2026-03-01').toISOString(), nickname: 'Tito', isActive: true, displayName: 'T', conversation: conversationRow() },
+      ],
+      participantsCount: 1,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url('?sort=joinedAt&order=asc') });
+    expect(res.statusCode).toBe(200);
+    const args = argsOf(prisma.participant.findMany);
+    expect(args.orderBy).toEqual({ joinedAt: 'asc' });
+    expect(args.where).toMatchObject({ userId: TARGET_ID, isActive: true });
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    const body = res.json();
+    expect(body.data[0]).toMatchObject({ id: 'c1', membership: { role: 'member', nickname: 'Tito' } });
+    expect(body.pagination).toMatchObject({ total: 1 });
+    await app.close();
+  });
+
+  it('filtre par titre OU identifiant, insensible à la casse — jamais par contenu', async () => {
+    const prisma = createMockPrisma({ conversations: [] });
+    const app = await buildApp(prisma, 'ADMIN');
+    await app.inject({ method: 'GET', url: url('?search=team') });
+    expect(argsOf(prisma.conversation.findMany).where.OR).toEqual([
+      { title: { contains: 'team', mode: 'insensitive' } },
+      { identifier: { contains: 'team', mode: 'insensitive' } },
+    ]);
+    await app.close();
+  });
+
+  it('filtre par rôle du membre et par activité', async () => {
+    const prisma = createMockPrisma({ conversations: [] });
+    const app = await buildApp(prisma, 'ADMIN');
+    await app.inject({ method: 'GET', url: url('?role=admin&isActive=false') });
+    const { where } = argsOf(prisma.conversation.findMany);
+    expect(where.isActive).toBe(false);
+    expect(where.participants).toEqual({ some: { userId: TARGET_ID, isActive: true, role: { in: ['admin', 'ADMIN'] } } });
+    await app.close();
+  });
+
+  it('sert la ligne du membre même au-delà des six premiers participants', async () => {
+    const preview = Array.from({ length: 6 }, (_, i) => ({ id: `pt-${i}`, userId: `other-${i}`, role: 'member', isActive: true, user: null }));
+    const prisma = createMockPrisma({
+      conversations: [conversationRow({ participants: preview })],
+      participants: [{ id: 'pt-t', userId: TARGET_ID, conversationId: 'c1', role: 'moderator', joinedAt: new Date('2026-04-01').toISOString(), nickname: null, isActive: true, displayName: 'T' }],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url() });
+    expect(res.json().data[0].membership).toMatchObject({ userId: TARGET_ID, role: 'moderator' });
+    expect(argsOf(prisma.participant.findMany).where).toMatchObject({ userId: TARGET_ID, conversationId: { in: ['c1'] } });
+    await app.close();
+  });
+
+  it('sert messageCount à null sans ligne de statistiques, et le compte quand elle existe', async () => {
+    const prisma = createMockPrisma({
+      conversations: [conversationRow({ id: 'c1' }), conversationRow({ id: 'c2', conversationMessageStats: null })],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url() });
+    const [avec, sans] = res.json().data;
+    expect(avec.messageCount).toBe(120);
+    expect(sans.messageCount).toBeNull();
+    expect(avec.memberCount).toBe(9);
+    expect(avec).not.toHaveProperty('conversationMessageStats');
+    expect(avec).not.toHaveProperty('_count');
+    await app.close();
+  });
+
+  it('sert les réglages et les métadonnées de la conversation', async () => {
+    const prisma = createMockPrisma({ conversations: [conversationRow()] });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: url() });
+    expect(res.json().data[0]).toMatchObject({
+      description: 'Le groupe',
+      banner: 'b.jpg',
+      closedAt: null,
+      updatedAt: new Date('2026-02-01').toISOString(),
+      settings: {
+        defaultWriteRole: 'everyone',
+        isAnnouncementChannel: false,
+        slowModeSeconds: 30,
+        autoTranslateEnabled: true,
+        encryptionMode: null,
+      },
+    });
+    await app.close();
+  });
+});
+
 describe('GET /admin/conversations/:conversationId/participants', () => {
   it('returns 404 when the conversation does not exist', async () => {
     const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');

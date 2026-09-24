@@ -152,6 +152,36 @@ export interface FullUser {
   registrationDevice: string | null;
   registrationCountry: string | null;
   userFeature?: UserFeatureData | null;
+  /**
+   * #7845 A0 — les métadonnées que la fiche d'administration sert. OPTIONNELLES
+   * ici parce que `FullUser` est la ligne Prisma coulée telle quelle
+   * (`getUserById`) : elles y sont toujours, mais les fabriques de témoins qui
+   * bâtissent un `FullUser` à la main n'ont pas à les connaître toutes.
+   */
+  banner?: string | null;
+  deviceLocale?: string | null;
+  deviceCountry?: string | null;
+  birthDate?: Date | null;
+  ageVerifiedAt?: Date | null;
+  voiceProfileConsentAt?: Date | null;
+  voiceDataConsentAt?: Date | null;
+  dataProcessingConsentAt?: Date | null;
+  analyticsConsentAt?: Date | null;
+  voiceCloningEnabledAt?: Date | null;
+  termsAcceptedAt?: Date | null;
+  termsVersion?: string | null;
+  onboardingCompletedAt?: Date | null;
+  currentStreakDays?: number | null;
+  longestStreakDays?: number | null;
+  lastStreakDate?: Date | null;
+  engagementScore?: number | null;
+  meeshBalance?: number | null;
+  meeshMintedLifetime?: number | null;
+  pendingEmail?: string | null;
+  pendingPhoneNumber?: string | null;
+  phoneTransferredAt?: Date | null;
+  /** Lu pour son CARDINAL seulement (`AdminUser.blockedCount`) — la liste ne sort jamais. */
+  blockedUserIds?: string[];
   _count?: {
     sentMessages?: number;
     conversations?: number;
@@ -170,6 +200,8 @@ export interface PublicUser {
   displayName: string | null;
   bio: string;
   avatar: string | null;
+  /** Image publique, au même titre que l'avatar (#7845 A0). */
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
@@ -219,9 +251,39 @@ export interface AdminUser extends PublicUser {
   deletedAt: Date | null;
   deletedBy: string | null;
   userFeature?: UserFeatureData | null;
+  /**
+   * #7845 A0 — ce qu'un administrateur doit lire pour comprendre un compte :
+   * sa langue d'appareil (rang 4 du Prisme), son âge, ses consentements, ses
+   * CGU, son engagement et ce qui attend confirmation. Jamais un secret : les
+   * jetons, codes, échéances et clés restent hors de ce type, et
+   * `blockedUserIds` n'y entre que par son cardinal.
+   */
+  deviceLocale: string | null;
+  deviceCountry: string | null;
+  birthDate: Date | null;
+  ageVerifiedAt: Date | null;
+  voiceProfileConsentAt: Date | null;
+  voiceDataConsentAt: Date | null;
+  dataProcessingConsentAt: Date | null;
+  analyticsConsentAt: Date | null;
+  voiceCloningEnabledAt: Date | null;
+  termsAcceptedAt: Date | null;
+  termsVersion: string | null;
+  onboardingCompletedAt: Date | null;
+  currentStreakDays: number | null;
+  longestStreakDays: number | null;
+  lastStreakDate: Date | null;
+  engagementScore: number | null;
+  meeshBalance: number | null;
+  meeshMintedLifetime: number | null;
+  pendingEmail: string | null;
+  pendingPhoneNumber: string | null;
+  phoneTransferredAt: Date | null;
+  blockedCount: number;
   _count?: {
     sentMessages?: number;
     conversations?: number;
+    participations?: number;
     createdShareLinks?: number;
     createdTrackingLinks?: number;
     createdAffiliateTokens?: number;
@@ -422,7 +484,16 @@ export enum UserAuditAction {
    * (#6821) — distincte de `RESET_PASSWORD`, qui invalide TOUTES les
    * sessions comme effet de bord d'un autre geste.
    */
-  REVOKE_SESSION = 'REVOKE_SESSION'
+  REVOKE_SESSION = 'REVOKE_SESSION',
+
+  /**
+   * Écriture, par un administrateur, d'une catégorie de préférences d'un tiers
+   * (#7845). Distincte d'`UPDATE_PROFILE` : la ligne d'audit doit dire QUEL
+   * réglage a changé et dans quelle catégorie, pas seulement qu'un profil a
+   * bougé. Les consentements n'y passent jamais — ils ont leur geste
+   * (`UPDATE_CONSENT`) et son motif obligatoire.
+   */
+  UPDATE_PREFERENCES = 'UPDATE_PREFERENCES'
 }
 
 /**
