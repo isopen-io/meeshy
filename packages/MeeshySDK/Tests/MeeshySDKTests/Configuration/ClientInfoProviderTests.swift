@@ -129,4 +129,35 @@ final class ClientInfoProviderTests: XCTestCase {
             XCTAssertFalse(value?.isEmpty ?? true, "\(key) should not be empty")
         }
     }
+
+    // MARK: - Identité sans géolocalisation (extensions)
+
+    /// Une extension (NSE) interroge les MÊMES routes que l'app mais ne peut
+    /// pas attendre l'acteur ni toucher CoreLocation. Tant qu'elle recopiait
+    /// ses en-têtes à la main, elle omettait `X-Canvas-Caps` : la passerelle
+    /// lui servait la sentinelle « Mets à jour Meeshy », que l'app peignait au
+    /// tap d'une notification de story (#7804).
+    func test_identityHeaders_portentToutCeQueLaPasserelleNegocie() {
+        let headers = ClientInfoProvider.identityHeaders()
+        XCTAssertEqual(headers["X-Canvas-Caps"], "3")
+        XCTAssertNotNil(headers["X-App-Version"])
+        XCTAssertNotNil(headers["X-App-Platform"])
+        XCTAssertNotNil(headers["X-Device-Locale"])
+    }
+
+    func test_identityHeaders_neLisentJamaisLaGeolocalisation() {
+        let headers = ClientInfoProvider.identityHeaders()
+        XCTAssertNil(headers["X-Meeshy-City"])
+        XCTAssertNil(headers["X-Meeshy-Region"])
+    }
+
+    /// Une SEULE source : ce que l'app envoie contient, valeur pour valeur,
+    /// l'identité que l'extension envoie.
+    func test_buildHeaders_contientLIdentiteValeurPourValeur() async {
+        let identity = ClientInfoProvider.identityHeaders()
+        let full = await ClientInfoProvider.shared.buildHeaders()
+        for (key, value) in identity {
+            XCTAssertEqual(full[key], value, "Divergence sur \(key)")
+        }
+    }
 }
