@@ -47,7 +47,6 @@ export function Avatar({
   storyRing,
   mood,
   redundant,
-  storyOpens,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -120,11 +119,10 @@ export function Avatar({
    * `MeeshyAvatar.swift:165-175` — trait doublé pour une story non vue,
    * plancher d'un pixel.
    *
-   * **UN ANNEAU IMPLIQUE UNE DESTINATION.** Quand il est là, l'avatar ouvre la
-   * STORY ; sinon il ouvre le profil (`profileUsername`). Un avatar ne peut pas
-   * mener à deux endroits, et c'est l'ordre d'iOS comme des applications que
-   * nos lecteurs connaissent : l'anneau prime, parce qu'il est VISIBLE et qu'il
-   * annonce ce qu'il ouvre.
+   * **L'ANNEAU PLEIN IMPLIQUE UNE DESTINATION.** Une story NON VUE s'ouvre au
+   * toucher ; une story déjà vue (anneau atténué) laisse le toucher au profil
+   * (`profileUsername`) et reste atteignable par l'appui long. C'est la règle
+   * d'iOS (`MeeshyAvatar.swift:361-365`), portée par `identityTarget`.
    */
   storyRing?: AuthorStoryRing;
   /**
@@ -134,11 +132,6 @@ export function Avatar({
    * focus), où un lien focalisable recevrait le focus sans s'annoncer.
    */
   redundant?: boolean;
-  /**
-   * QUELLE STORY LE TOUCHER OUVRE — voir `identityTarget` (#7830). Défaut :
-   * toute story annoncée par l'anneau.
-   */
-  storyOpens?: 'always' | 'unseen';
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
@@ -301,8 +294,8 @@ export function Avatar({
   );
 
   /* LA DESTINATION VIENT DE LA LOI PARTAGÉE (#7241) — `identityTarget`, la
-     MÊME que celle du NOM (`components/person-name.tsx`). L'anneau y prime sur
-     le profil parce qu'il est VISIBLE : il annonce ce qu'il ouvre. Deux
+     MÊME que celle du NOM (`components/person-name.tsx`) : la story NON VUE,
+     sinon le profil. Deux
      décisions parallèles se mettraient à dériver, et rien ne rougirait quand
      un avatar ouvre une story pendant que le nom juste à côté ouvre un profil.
 
@@ -313,7 +306,6 @@ export function Avatar({
   const cible = identityTarget({
     ...(profileUsername === undefined ? {} : { username: profileUsername }),
     ...(storyRing === undefined ? {} : { storyRing }),
-    ...(storyOpens === undefined ? {} : { storyOpens }),
   });
   if (cible === null) return corps;
 

@@ -15,7 +15,7 @@ import { AvatarMenuTrigger } from './avatar-menu';
  *
  * LES GESTES, RÈGLE COMMUNE AU WEB ET À iOS (#7831, l'issue jumelle) : le
  * TOUCHER ouvre la story quand elle n'a pas encore été vue, sinon le profil
- * (`identityTarget`, `storyOpens: 'unseen'`) ; l'APPUI LONG ouvre le menu
+ * (`identityTarget`) ; l'APPUI LONG ouvre le menu
  * d'avatar (#7828) : Voir le profil · Voir la story (vue ou non) · Détails
  * de la conversation.
  *
@@ -61,7 +61,6 @@ export function ActiveMembersStack({
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
-                storyOpens="unseen"
               />
             </AvatarMenuTrigger>
           </li>

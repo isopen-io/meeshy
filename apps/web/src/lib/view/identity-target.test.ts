@@ -16,8 +16,8 @@ import { identityTarget } from './identity-target';
 
 const RING = { entryStoryId: 'st-1', unseen: true } as const;
 
-describe('l’anneau de story PRIME, parce qu’il est visible', () => {
-  test('avec une story, l’identité ouvre la story', () => {
+describe('une story NON VUE prime, parce que l’anneau plein l’annonce', () => {
+  test('avec une story non vue, l’identité ouvre la story', () => {
     expect(identityTarget({ username: 'nour', storyRing: RING })).toEqual({ kind: 'story', post: 'st-1' });
   });
 
@@ -25,12 +25,12 @@ describe('l’anneau de story PRIME, parce qu’il est visible', () => {
    * LE CŒUR DE LA PRIORITÉ : un avatar cerclé qui mènerait au profil
    * contredirait ce que le lecteur VOIT. L'anneau annonce ce qu'il ouvre.
    */
-  test('la story gagne même quand le pseudo est là', () => {
+  test('la story non vue gagne même quand le pseudo est là', () => {
     expect(identityTarget({ username: 'nour', storyRing: RING })).not.toEqual({ kind: 'profile', username: 'nour' });
   });
 
-  /** Et une story SANS pseudo reste ouvrable : les deux sont indépendants. */
-  test('une story sans pseudo s’ouvre quand même', () => {
+  /** Et une story non vue SANS pseudo reste ouvrable : les deux sont indépendants. */
+  test('une story non vue sans pseudo s’ouvre quand même', () => {
     expect(identityTarget({ storyRing: RING })).toEqual({ kind: 'story', post: 'st-1' });
   });
 });
@@ -56,18 +56,16 @@ describe('et sans rien, elle ne mène NULLE PART', () => {
   });
 });
 
-describe('`storyOpens: unseen` — une story vue laisse le toucher au profil (#7830, jumelle iOS #7831)', () => {
+describe('une story DÉJÀ VUE laisse le toucher au profil (#7828, #7830, jumelle iOS #7831)', () => {
   const SEEN = { entryStoryId: 'st-1', unseen: false } as const;
 
-  test('une story NON VUE s’ouvre au toucher', () => {
-    expect(identityTarget({ username: 'nour', storyRing: RING, storyOpens: 'unseen' })).toEqual({ kind: 'story', post: 'st-1' });
+  /** Miroir `MeeshyAvatar.swift:361-365` : `.unread` ⇒ story, sinon profil. */
+  test('story vue + pseudo ⇒ profil', () => {
+    expect(identityTarget({ username: 'nour', storyRing: SEEN })).toEqual({ kind: 'profile', username: 'nour' });
   });
 
-  test('une story DÉJÀ VUE laisse le toucher au profil', () => {
-    expect(identityTarget({ username: 'nour', storyRing: SEEN, storyOpens: 'unseen' })).toEqual({ kind: 'profile', username: 'nour' });
-  });
-
-  test('par défaut, tout anneau ouvre sa story (#7241 inchangé)', () => {
-    expect(identityTarget({ username: 'nour', storyRing: SEEN })).toEqual({ kind: 'story', post: 'st-1' });
+  /** Sans pseudo, une story vue ne rend rien tapable : elle reste au menu d'appui long. */
+  test('story vue sans pseudo ⇒ nulle part', () => {
+    expect(identityTarget({ storyRing: SEEN })).toBe(null);
   });
 });

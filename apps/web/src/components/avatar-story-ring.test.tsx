@@ -62,8 +62,8 @@ describe('l’anneau ne se peint que s’il a une story à ouvrir', () => {
     expect(html).toContain('data-story-ring="unseen"');
   });
 
-  /** L'ÉTAT VU N'EST PAS UNE ABSENCE : la story s'ouvre toujours, l'anneau
-      change seulement d'intensité. */
+  /** L'ÉTAT VU N'EST PAS UNE ABSENCE : l'anneau reste, atténué. Le toucher
+      passe au profil (`identityTarget`), la story reste au menu d'appui long. */
   test('une story déjà vue garde son anneau, atténué', () => {
     const html = avatar({ storyRing: { entryStoryId: 'st-1', unseen: false } });
 

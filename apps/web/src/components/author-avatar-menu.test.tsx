@@ -194,8 +194,9 @@ describe('AuthorAvatar — le menu de la PERSONNE, jamais celui du message (#782
     expect(entries()).toEqual([]);
   });
 
-  test('un auteur avec une story VUE : « Voir la story » l’ouvre, le toucher suit l’anneau', () => {
+  test('un auteur avec une story VUE : le toucher ouvre le profil, « Voir la story » ouvre la story', () => {
     monte({ skin: 'bubble', ring: { entryStoryId: 's-nour', unseen: false } });
+    expect(avatarLink().getAttribute('href')).toBe('/u/nour');
     contextMenuOn(avatarLink());
     expect(entries()).toEqual(['profile', 'story']);
     act(() => {
