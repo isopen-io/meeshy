@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeAdminUserDetail, loadAdminUserDetail } from './admin-user-detail';
+import {
+  adminUserPrivateQueryKey,
+  decodeAdminUserDetail,
+  decodeAdminUserPrivate,
+  loadAdminUserDetail,
+  withKnownCounts,
+} from './admin-user-detail';
+import { persistableQuery } from './query-client';
 import type { HttpTransport } from './http';
 
 /**
@@ -14,8 +21,9 @@ import type { HttpTransport } from './http';
  * `registrationDevice`, `registrationCountry`.
  *
  * **Le cache des requêtes est PERSISTÉ dans `localStorage`** (`query-client.ts`,
- * `shouldDehydrateQuery` déshydrate tout succès) et **aucun mécanisme
- * d'exemption n'existe**. Tout champ que ce décodeur accepte finit donc écrit
+ * `persistableQuery` déshydrate tout succès) et la clé de ce détail —
+ * `['admin', 'user', id]` — **n'est pas exemptée** : seules les clés
+ * `admin-souverain` le sont (`souverain.ts`). Tout champ que ce décodeur accepte finit donc écrit
  * sur le disque du navigateur — ici celui d'un administrateur, qui consulte
  * des comptes qui ne sont pas le sien. Des codes de secours de second facteur
  * et des empreintes de connexion y seraient une fuite durable, survivant à la
@@ -274,5 +282,161 @@ describe('loadAdminUserDetail — l’adresse demandée, et ce qu’un refus dev
 
     expect(resultat.ok).toBe(false);
     expect(!resultat.ok && resultat.status).toBe(0);
+  });
+});
+
+/**
+ * LES MÉTADONNÉES QUE LA FICHE AFFICHE DÉSORMAIS (#7845, A0) — servies par
+ * `sanitizeUser` sous `canViewSensitiveData`, et que ce décodeur jetait ou
+ * n'avait jamais eu l'occasion de voir. Chacune est une donnée de COMPTE
+ * (consentement, engagement, vérification en attente), jamais une empreinte de
+ * connexion : celles-ci restent refusées, la clé de ce détail étant persistée.
+ */
+describe('decodeAdminUserDetail — les métadonnées du compte (#7845)', () => {
+  const CHARGE_ETENDUE = {
+    ...CHARGE_COMPLETE,
+    banner: 'https://example.test/b.png',
+    phoneCountryCode: 'SN',
+    profileCompletionRate: 85,
+    _count: {
+      participations: 12,
+      sentFriendRequests: 3,
+      receivedFriendRequests: 4,
+      createdShareLinks: 2,
+      createdTrackingLinks: 1,
+      createdAffiliateTokens: 5,
+    },
+    deviceLocale: 'fr-SN',
+    deviceCountry: 'SN',
+    birthDate: '1995-04-02T00:00:00.000Z',
+    ageVerifiedAt: '2026-02-01T00:00:00.000Z',
+    voiceProfileConsentAt: '2026-03-01T00:00:00.000Z',
+    voiceDataConsentAt: null,
+    dataProcessingConsentAt: '2026-03-02T00:00:00.000Z',
+    analyticsConsentAt: null,
+    voiceCloningEnabledAt: '2026-03-03T00:00:00.000Z',
+    termsAcceptedAt: '2025-12-01T09:00:00.000Z',
+    termsVersion: '3.2',
+    onboardingCompletedAt: '2025-12-01T09:05:00.000Z',
+    currentStreakDays: 7,
+    longestStreakDays: 21,
+    lastStreakDate: '2026-09-15T00:00:00.000Z',
+    engagementScore: 340,
+    meeshBalance: 120,
+    meeshMintedLifetime: 900,
+    pendingEmail: 'nouvelle@example.test',
+    pendingPhoneNumber: null,
+    phoneTransferredAt: null,
+    blockedCount: 2,
+  };
+
+  test('décode chaque champ ajouté', () => {
+    const membre = decodeAdminUserDetail(CHARGE_ETENDUE);
+
+    expect(membre?.banner).toBe('https://example.test/b.png');
+    expect(membre?.phoneCountryCode).toBe('SN');
+    expect(membre?.profileCompletionRate).toBe(85);
+    expect(membre?.counts).toEqual({
+      participations: 12,
+      sentFriendRequests: 3,
+      receivedFriendRequests: 4,
+      createdShareLinks: 2,
+      createdTrackingLinks: 1,
+      createdAffiliateTokens: 5,
+    });
+    expect(membre?.deviceLocale).toBe('fr-SN');
+    expect(membre?.deviceCountry).toBe('SN');
+    expect(membre?.ageVerifiedAt).toBe('2026-02-01T00:00:00.000Z');
+    expect(membre?.consents).toEqual({
+      voiceProfile: '2026-03-01T00:00:00.000Z',
+      voiceData: null,
+      dataProcessing: '2026-03-02T00:00:00.000Z',
+      analytics: null,
+      voiceCloning: '2026-03-03T00:00:00.000Z',
+    });
+    expect(membre?.termsAcceptedAt).toBe('2025-12-01T09:00:00.000Z');
+    expect(membre?.termsVersion).toBe('3.2');
+    expect(membre?.onboardingCompletedAt).toBe('2025-12-01T09:05:00.000Z');
+    expect(membre?.engagement).toEqual({
+      currentStreakDays: 7,
+      longestStreakDays: 21,
+      lastStreakDate: '2026-09-15T00:00:00.000Z',
+      engagementScore: 340,
+      meeshBalance: 120,
+      meeshMintedLifetime: 900,
+    });
+    expect(membre?.blockedCount).toBe(2);
+  });
+
+  test('la date de naissance et les coordonnées en attente n’entrent PAS dans le détail persisté', () => {
+    const clefs = Object.keys(decodeAdminUserDetail(CHARGE_ETENDUE) ?? {});
+    for (const prive of ['birthDate', 'pendingEmail', 'pendingPhoneNumber']) expect(clefs).not.toContain(prive);
+  });
+
+  test('elles se lisent par le décodeur PRIVÉ, sous une clé que la persistance n’écrit pas', () => {
+    expect(decodeAdminUserPrivate(CHARGE_ETENDUE)).toEqual({
+      birthDate: '1995-04-02T00:00:00.000Z',
+      pendingEmail: 'nouvelle@example.test',
+      pendingPhoneNumber: null,
+    });
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: adminUserPrivateQueryKey('u-1') })).toBe(false);
+  });
+
+  test('une charge HOSTILE ne fait entrer aucun champ traçant ni inconnu', () => {
+    const membre = decodeAdminUserDetail({
+      ...CHARGE_ETENDUE,
+      blockedUserIds: ['u-9', 'u-8'],
+      password: 'hash',
+      twoFactorSecret: 'secret',
+      searchTokens: ['a'],
+      _count: { ...CHARGE_ETENDUE._count, secretCounter: 99 },
+    });
+
+    const clefs = Object.keys(membre ?? {});
+    for (const interdit of [...INTERDITS, 'blockedUserIds', 'password', 'twoFactorSecret', 'searchTokens', '_count']) {
+      expect(clefs).not.toContain(interdit);
+    }
+    expect(Object.keys(membre?.counts ?? {})).not.toContain('secretCounter');
+  });
+
+  test('un `_count` absent rend des ZÉROS, et le taux de complétion non servi reste null', () => {
+    const membre = decodeAdminUserDetail({ id: 'u-4', username: 'k' });
+
+    expect(membre?.counts).toEqual({
+      participations: 0,
+      sentFriendRequests: 0,
+      receivedFriendRequests: 0,
+      createdShareLinks: 0,
+      createdTrackingLinks: 0,
+      createdAffiliateTokens: 0,
+    });
+    expect(membre?.profileCompletionRate).toBeNull();
+    expect(membre?.banner).toBeNull();
+    expect(membre?.consents.analytics).toBeNull();
+    expect(membre?.engagement.meeshBalance).toBe(0);
+    expect(membre?.blockedCount).toBe(0);
+  });
+
+  test('un taux de complétion hors bornes n’est pas affichable — null', () => {
+    expect(decodeAdminUserDetail({ id: 'u-5', username: 'k', profileCompletionRate: 140 })?.profileCompletionRate).toBeNull();
+    expect(decodeAdminUserDetail({ id: 'u-5', username: 'k', profileCompletionRate: 'x' })?.profileCompletionRate).toBeNull();
+  });
+});
+
+describe('withKnownCounts — une écriture ne remet pas les compteurs à zéro', () => {
+  test('la réponse d’écriture (sans `_count`) garde les compteurs de la lecture', () => {
+    const lu = decodeAdminUserDetail({ id: 'u-7', username: 'k', _count: { participations: 12, createdShareLinks: 3 } });
+    const ecrit = decodeAdminUserDetail({ id: 'u-7', username: 'k', displayName: 'Nouveau' });
+    if (lu === null || ecrit === null) throw new Error('charge illisible');
+    const fusion = withKnownCounts(lu, ecrit);
+    expect(fusion.displayName).toBe('Nouveau');
+    expect(fusion.counts.participations).toBe(12);
+    expect(fusion.counts.createdShareLinks).toBe(3);
+  });
+
+  test('sans lecture préalable, la réponse d’écriture est prise telle quelle', () => {
+    const ecrit = decodeAdminUserDetail({ id: 'u-7', username: 'k' });
+    if (ecrit === null) throw new Error('charge illisible');
+    expect(withKnownCounts(undefined, ecrit)).toBe(ecrit);
   });
 });

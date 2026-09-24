@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { editableFieldsOf, updateAdminUser } from './admin-user-actions';
+import { editableFieldsOf, updateAdminUser, updateAdminUserSecurity, updateAdminUserVerifications } from './admin-user-actions';
 import type { HttpTransport } from './http';
 
 /**
@@ -137,5 +137,62 @@ describe('updateAdminUser — l’adresse, le corps, et ce qui revient', () => {
       expect(resultat.ok).toBe(false);
       expect(!resultat.ok && resultat.status).toBe(refus.status);
     }
+  });
+});
+
+/**
+ * SÉCURITÉ ET VÉRIFICATIONS (#7845) — `PATCH …/security` (déverrouiller,
+ * double authentification) et `PATCH …/verifications` (e-mail, téléphone, âge).
+ * Deux familles à part de l'édition, avec leurs propres routes et leur propre
+ * audit : les mêler ferait perdre à l'appelant le coût de son geste.
+ */
+describe('updateAdminUserSecurity', () => {
+  test('vise PATCH …/security avec un corps PLAT, et décode le membre rendu', async () => {
+    const { transport, appels } = transportEspion(MEMBRE_SERVI);
+
+    const resultat = await updateAdminUserSecurity({
+      ...deps(transport),
+      userId: 'u 1',
+      change: { unlock: true, twoFactorEnabled: false },
+      reason: '  demande vérifiée  ',
+    });
+
+    expect(appels[0]?.method).toBe('PATCH');
+    expect(appels[0]?.path).toBe(`/api/v1/admin/users/${encodeURIComponent('u 1')}/security`);
+    expect(appels[0]?.body).toEqual({ unlock: true, twoFactorEnabled: false, reason: 'demande vérifiée' });
+    expect(resultat.ok && resultat.data.username).toBe('amina');
+  });
+
+  test('refuse un changement VIDE avant le réseau', async () => {
+    const { transport, appels } = transportEspion(MEMBRE_SERVI);
+
+    const resultat = await updateAdminUserSecurity({ ...deps(transport), userId: 'u-1', change: { twoFactorEnabled: undefined } });
+
+    expect(appels).toHaveLength(0);
+    expect(!resultat.ok && resultat.status).toBe(0);
+  });
+});
+
+describe('updateAdminUserVerifications', () => {
+  test('vise PATCH …/verifications, sans motif blanc', async () => {
+    const { transport, appels } = transportEspion(MEMBRE_SERVI);
+
+    await updateAdminUserVerifications({
+      ...deps(transport),
+      userId: 'u-1',
+      change: { emailVerified: true, ageVerified: false, phoneVerified: undefined },
+      reason: '   ',
+    });
+
+    expect(appels[0]?.method).toBe('PATCH');
+    expect(appels[0]?.path).toBe('/api/v1/admin/users/u-1/verifications');
+    expect(appels[0]?.body).toEqual({ emailVerified: true, ageVerified: false });
+  });
+
+  test('propage un refus tel quel', async () => {
+    const refus = { ok: false as const, status: 403, error: 'Forbidden' };
+    const { transport } = transportEspion(refus, false);
+
+    expect(await updateAdminUserVerifications({ ...deps(transport), userId: 'u-1', change: { phoneVerified: true } })).toEqual(refus);
   });
 });

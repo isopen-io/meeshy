@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { Field } from '@/components/field';
 import { Sheet } from '@/components/sheet';
 import { sensitiveChangesOf } from '@/lib/admin/user-edit-guard';
+import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser, type AdminUserEdit } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
@@ -47,32 +48,69 @@ const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
-type Brouillon = {
-  readonly displayName: string;
-  readonly email: string;
-  readonly bio: string;
+/**
+ * Les champs TEXTE que la feuille édite, dans l'ordre où elle les montre — une
+ * table, et non quinze blocs recopiés : la comparaison au membre servi, le
+ * libellé et le type de saisie se lisent au même endroit (#7845). `banner` est
+ * `null` quand le membre n'en a pas ; le brouillon le tient en chaîne vide.
+ */
+const TEXTES = [
+  { cle: 'displayName', label: 'admin.edit.displayName', type: 'text' },
+  { cle: 'firstName', label: 'admin.edit.firstName', type: 'text' },
+  { cle: 'lastName', label: 'admin.edit.lastName', type: 'text' },
+  { cle: 'username', label: 'admin.edit.username', type: 'text' },
+  { cle: 'email', label: 'admin.edit.email', type: 'email' },
+  { cle: 'phoneCountryCode', label: 'admin.edit.phoneCountryCode', type: 'text' },
+  { cle: 'phoneNumber', label: 'admin.edit.phone', type: 'tel' },
+  { cle: 'bio', label: 'admin.edit.bio', type: 'text' },
+  { cle: 'banner', label: 'admin.edit.banner', type: 'url' },
+  { cle: 'timezone', label: 'admin.edit.timezone', type: 'text' },
+  { cle: 'systemLanguage', label: 'admin.user.systemLanguage', type: 'text' },
+  { cle: 'regionalLanguage', label: 'admin.user.regionalLanguage', type: 'text' },
+  { cle: 'customDestinationLanguage', label: 'admin.user.customLanguage', type: 'text' },
+] as const satisfies readonly { readonly cle: string; readonly label: AdminPlainCatalogKey; readonly type: TypeDeSaisie }[];
+
+type TypeDeSaisie = 'text' | 'email' | 'tel' | 'url';
+type CleTexte = (typeof TEXTES)[number]['cle'];
+
+type Brouillon = Readonly<Record<CleTexte, string>> & {
   readonly role: string;
   readonly isActive: boolean;
 };
 
+function brouillonDe(membre: AdminUserDetail): Brouillon {
+  return {
+    displayName: membre.displayName,
+    firstName: membre.firstName,
+    lastName: membre.lastName,
+    username: membre.username,
+    email: membre.email,
+    phoneCountryCode: membre.phoneCountryCode,
+    phoneNumber: membre.phoneNumber,
+    bio: membre.bio,
+    banner: membre.banner ?? '',
+    timezone: membre.timezone,
+    systemLanguage: membre.systemLanguage,
+    regionalLanguage: membre.regionalLanguage,
+    customDestinationLanguage: membre.customDestinationLanguage,
+    role: membre.role,
+    isActive: membre.isActive,
+  };
+}
+
 /** Ce que l'appelant a VRAIMENT changé — un champ égal à sa valeur servie
  * n'est pas présenté, donc n'appelle pas sa loi. */
 export function editFrom(membre: AdminUserDetail, brouillon: Brouillon): AdminUserEdit {
-  const edit: {
-    displayName?: string;
-    email?: string;
-    bio?: string;
-    role?: string;
-    isActive?: boolean;
-  } = {};
+  const servi = brouillonDe(membre);
+  const textes = Object.fromEntries(
+    TEXTES.filter(({ cle }) => brouillon[cle] !== servi[cle]).map(({ cle }) => [cle, brouillon[cle]]),
+  ) as Partial<Record<CleTexte, string>>;
 
-  if (brouillon.displayName !== membre.displayName) edit.displayName = brouillon.displayName;
-  if (brouillon.email !== membre.email) edit.email = brouillon.email;
-  if (brouillon.bio !== membre.bio) edit.bio = brouillon.bio;
-  if (brouillon.role !== membre.role) edit.role = brouillon.role;
-  if (brouillon.isActive !== membre.isActive) edit.isActive = brouillon.isActive;
-
-  return edit;
+  return {
+    ...textes,
+    ...(brouillon.role === servi.role ? {} : { role: brouillon.role }),
+    ...(brouillon.isActive === servi.isActive ? {} : { isActive: brouillon.isActive }),
+  };
 }
 
 export function AdminUserEditSheet({
@@ -81,20 +119,16 @@ export function AdminUserEditSheet({
   onClose,
   onSaved,
   onAnnounce,
+  deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
   readonly onSaved: (membre: AdminUserDetail) => void;
   readonly onAnnounce: (texte: string) => void;
+  readonly deps?: AdminDeps;
 }) {
-  const [brouillon, setBrouillon] = useState<Brouillon>({
-    displayName: membre.displayName,
-    email: membre.email,
-    bio: membre.bio,
-    role: membre.role,
-    isActive: membre.isActive,
-  });
+  const [brouillon, setBrouillon] = useState<Brouillon>(() => brouillonDe(membre));
   const [motif, setMotif] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
   const [confirme, setConfirme] = useState(false);
@@ -121,7 +155,7 @@ export function AdminUserEditSheet({
 
     setEnvoi(true);
     const resultat = await updateAdminUser({
-      ...apiDeps,
+      ...deps,
       userId: membre.id,
       edit,
       ...(motif.trim() === '' ? {} : { reason: motif }),
@@ -138,36 +172,21 @@ export function AdminUserEditSheet({
   }
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.edit.title')} onClose={onClose}>
-      <div className="grid gap-4 px-4 pb-6">
-        <Texte
-          id="admin-edit-displayName"
-          label={translateAdmin(language, 'admin.edit.displayName')}
-          valeur={brouillon.displayName}
-          focus={focus === 'displayName'}
-          onFocus={() => setFocus('displayName')}
-          onBlur={() => setFocus(null)}
-          onValeur={(displayName) => poser({ displayName })}
-        />
-        <Texte
-          id="admin-edit-email"
-          label={translateAdmin(language, 'admin.edit.email')}
-          valeur={brouillon.email}
-          type="email"
-          focus={focus === 'email'}
-          onFocus={() => setFocus('email')}
-          onBlur={() => setFocus(null)}
-          onValeur={(email) => poser({ email })}
-        />
-        <Texte
-          id="admin-edit-bio"
-          label={translateAdmin(language, 'admin.edit.bio')}
-          valeur={brouillon.bio}
-          focus={focus === 'bio'}
-          onFocus={() => setFocus('bio')}
-          onBlur={() => setFocus(null)}
-          onValeur={(bio) => poser({ bio })}
-        />
+    <Sheet title={translateAdmin(language, 'admin.edit.title')} bodyAs="div" onClose={onClose}>
+      <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-4 pb-6">
+        {TEXTES.map(({ cle, label, type }) => (
+          <Texte
+            key={cle}
+            id={`admin-edit-${cle}`}
+            label={translateAdmin(language, label)}
+            valeur={brouillon[cle]}
+            type={type}
+            focus={focus === cle}
+            onFocus={() => setFocus(cle)}
+            onBlur={() => setFocus(null)}
+            onValeur={(valeur) => poser({ [cle]: valeur })}
+          />
+        ))}
 
         <label className="grid gap-1">
           <span className="text-caption" style={{ color: INK2 }}>
@@ -253,7 +272,7 @@ function Texte({
   readonly id: string;
   readonly label: string;
   readonly valeur: string;
-  readonly type?: 'text' | 'email';
+  readonly type?: TypeDeSaisie;
   readonly focus: boolean;
   readonly onFocus: () => void;
   readonly onBlur: () => void;

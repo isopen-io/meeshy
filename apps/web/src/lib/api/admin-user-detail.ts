@@ -1,5 +1,6 @@
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
  * **LE DÉTAIL D'UN MEMBRE** (#6819) — `GET /api/v1/admin/users/:userId`,
@@ -18,9 +19,12 @@ import type { ApiResult } from './http';
  * `registrationDevice`, `registrationCountry`.
  *
  * **Le cache des requêtes est PERSISTÉ dans `localStorage`**
- * (`query-client.ts` déshydrate tout succès) et **aucun mécanisme d'exemption
- * n'existe**. Ce qu'on décode ici finit donc écrit sur le disque du
- * navigateur — celui d'un administrateur, qui consulte des comptes qui ne sont
+ * (`query-client.ts` déshydrate tout succès par `persistableQuery`). Un
+ * mécanisme d'exemption EXISTE — une clé qui commence par `admin-souverain`
+ * (`souverain.ts`) ne touche jamais le disque — mais la clé de CE détail,
+ * `['admin', 'user', id]`, **n'en relève pas : elle est persistée**, et c'est
+ * voulu (la fiche se rouvre sans attendre le réseau). Ce qu'on décode ici
+ * finit donc écrit sur le disque du navigateur — celui d'un administrateur, qui consulte des comptes qui ne sont
  * pas les siens, et dont le stockage survit à la déconnexion. Des codes de
  * secours de second facteur et des empreintes de connexion y seraient une
  * fuite durable, sans rapport avec le service rendu par l'écran.
@@ -30,6 +34,10 @@ import type { ApiResult } from './http';
  * champ par champ. Le second point n'est pas décoratif — un `...spread` de la
  * charge satisferait le type tout en recopiant chaque champ que la passerelle
  * ajoutera demain, en silence.
+ *
+ * L'empreinte de connexion (appareil, IP, lieu) ne se montre que par les
+ * SESSIONS (`admin-user-security.ts`), sous une clé `admin-souverain` — donc
+ * jamais écrite sur le disque.
  *
  * Ce qui reste est ce qu'un administrateur doit voir pour agir : l'identité,
  * le rôle, l'état du compte, ses vérifications, ses langues. Le numéro de
@@ -94,6 +102,57 @@ export type AdminUserDetail = {
   readonly lastActiveAt: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+
+  /** Image publique, comme `avatar` — `null` quand aucune n'est posée. */
+  readonly banner: string | null;
+  readonly phoneCountryCode: string;
+  /** Pourcentage 0–100 calculé par la passerelle ; `null` s'il n'est pas servi
+   * ou pas lisible — jamais un 0 qui affirmerait un profil vide. */
+  readonly profileCompletionRate: number | null;
+  readonly counts: AdminUserCounts;
+
+  readonly deviceLocale: string;
+  readonly deviceCountry: string;
+  readonly ageVerifiedAt: string | null;
+  readonly consents: AdminUserConsents;
+  readonly termsAcceptedAt: string | null;
+  readonly termsVersion: string | null;
+  readonly onboardingCompletedAt: string | null;
+  readonly engagement: AdminUserEngagement;
+  /** Le NOMBRE de comptes bloqués — la passerelle ne sert jamais la liste. */
+  readonly blockedCount: number;
+};
+
+/** Les compteurs `_count` que `getUserById` sert avec le membre (#7845). */
+export type AdminUserCounts = {
+  readonly participations: number;
+  readonly sentFriendRequests: number;
+  readonly receivedFriendRequests: number;
+  readonly createdShareLinks: number;
+  readonly createdTrackingLinks: number;
+  readonly createdAffiliateTokens: number;
+};
+
+/**
+ * Les cinq consentements, en DATE : `null` dit « jamais donné » (ou retiré),
+ * une date dit QUAND. Un booléen perdrait la seule information qu'un
+ * administrateur instruisant une plainte a besoin de citer.
+ */
+export type AdminUserConsents = {
+  readonly voiceProfile: string | null;
+  readonly voiceData: string | null;
+  readonly dataProcessing: string | null;
+  readonly analytics: string | null;
+  readonly voiceCloning: string | null;
+};
+
+export type AdminUserEngagement = {
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
+  readonly lastStreakDate: string | null;
+  readonly engagementScore: number;
+  readonly meeshBalance: number;
+  readonly meeshMintedLifetime: number;
 };
 
 /** Une chaîne SERVIE ou rien — jamais la chaîne vide, qui ressortirait comme
@@ -111,6 +170,26 @@ const asTextOrNull = (value: unknown): string | null => (typeof value === 'strin
  * eu raison de le croire.
  */
 const asDate = asTextOrNull;
+
+/** Un pourcentage LISIBLE ou rien : hors de 0–100, la valeur ne se montre pas. */
+const asPercent = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+
+/**
+ * Six compteurs NOMMÉS, lus un à un : `_count` est un sac que la passerelle
+ * peut enrichir demain, et ce qui n'est pas nommé ici n'entre pas dans le cache.
+ */
+function decodeCounts(raw: unknown): AdminUserCounts {
+  const compte = asRecord(raw) ?? {};
+  return {
+    participations: asCount(compte.participations),
+    sentFriendRequests: asCount(compte.sentFriendRequests),
+    receivedFriendRequests: asCount(compte.receivedFriendRequests),
+    createdShareLinks: asCount(compte.createdShareLinks),
+    createdTrackingLinks: asCount(compte.createdTrackingLinks),
+    createdAffiliateTokens: asCount(compte.createdAffiliateTokens),
+  };
+}
 
 export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
   const charge = asRecord(raw);
@@ -163,10 +242,100 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     lastActiveAt: asDate(charge.lastActiveAt),
     createdAt: asDate(charge.createdAt),
     updatedAt: asDate(charge.updatedAt),
+
+    banner: asTextOrNull(charge.banner),
+    phoneCountryCode: asText(charge.phoneCountryCode),
+    profileCompletionRate: asPercent(charge.profileCompletionRate),
+    counts: decodeCounts(charge._count),
+
+    deviceLocale: asText(charge.deviceLocale),
+    deviceCountry: asText(charge.deviceCountry),
+    ageVerifiedAt: asDate(charge.ageVerifiedAt),
+    consents: {
+      voiceProfile: asDate(charge.voiceProfileConsentAt),
+      voiceData: asDate(charge.voiceDataConsentAt),
+      dataProcessing: asDate(charge.dataProcessingConsentAt),
+      analytics: asDate(charge.analyticsConsentAt),
+      voiceCloning: asDate(charge.voiceCloningEnabledAt),
+    },
+    termsAcceptedAt: asDate(charge.termsAcceptedAt),
+    /** Une VERSION de texte, pas une date. */
+    termsVersion: asTextOrNull(charge.termsVersion),
+    onboardingCompletedAt: asDate(charge.onboardingCompletedAt),
+    engagement: {
+      currentStreakDays: asCount(charge.currentStreakDays),
+      longestStreakDays: asCount(charge.longestStreakDays),
+      lastStreakDate: asDate(charge.lastStreakDate),
+      engagementScore: asCount(charge.engagementScore),
+      meeshBalance: asCount(charge.meeshBalance),
+      meeshMintedLifetime: asCount(charge.meeshMintedLifetime),
+    },
+    blockedCount: asCount(charge.blockedCount),
   };
 }
 
 export const adminUserDetailQueryKey = (userId: string) => ['admin', 'user', userId] as const;
+
+/**
+ * Les compteurs `_count` ne voyagent qu'avec la LECTURE (`getUserById`) : les
+ * routes d'écriture (`PATCH /admin/users/:id`, `/security`, `/verifications`)
+ * rendent la ligne mise à jour, sans eux. Écrire leur réponse telle quelle
+ * dans le cache remettrait chaque compteur à zéro — un fait FAUX sur le
+ * membre, persisté, jusqu'à la prochaine lecture. Un geste d'écriture ne
+ * change aucun de ces compteurs : on garde ceux qu'on connaît.
+ */
+export function withKnownCounts(avant: AdminUserDetail | undefined, aJour: AdminUserDetail): AdminUserDetail {
+  return avant === undefined ? aJour : { ...aJour, counts: avant.counts };
+}
+
+/**
+ * **CE QUI NE SE PERSISTE PAS** (#7845) — la date de naissance et les
+ * coordonnées EN ATTENTE de confirmation. `sanitizeUser` les sert sous
+ * `canViewSensitiveData`, et la fiche les montre ; mais la clé du détail est
+ * écrite sur le disque du navigateur (voir l'en-tête de ce module), et ces
+ * trois champs n'ont rien à faire dans le stockage d'un administrateur qui
+ * consulte le compte d'un autre. Ils se lisent donc par une requête À PART,
+ * sous le préfixe `admin-souverain` que `persistableQuery` n'écrit jamais —
+ * au prix d'une seconde lecture, faite seulement quand l'onglet Profil s'ouvre.
+ */
+export type AdminUserPrivate = {
+  readonly birthDate: string | null;
+  /** Un changement d'adresse EN ATTENTE de confirmation — pas l'adresse en vigueur. */
+  readonly pendingEmail: string | null;
+  readonly pendingPhoneNumber: string | null;
+};
+
+export function decodeAdminUserPrivate(raw: unknown): AdminUserPrivate | null {
+  const charge = asRecord(raw);
+  if (charge === null || typeof charge.id !== 'string' || charge.id === '') return null;
+  return {
+    birthDate: asDate(charge.birthDate),
+    /** Des COORDONNÉES en attente, pas des dates. */
+    pendingEmail: asTextOrNull(charge.pendingEmail),
+    pendingPhoneNumber: asTextOrNull(charge.pendingPhoneNumber),
+  };
+}
+
+export const adminUserPrivateQueryKey = (userId: string) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'private'] as const;
+
+export function adminUserPrivateQueryOptions(deps: AdminDeps, userId: string) {
+  return {
+    queryKey: adminUserPrivateQueryKey(userId),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminUserPrivate> => {
+      const result = await deps.transport.request<unknown>({
+        method: 'GET',
+        path: `/api/v1/admin/users/${encodeURIComponent(userId)}`,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if (!result.ok) throw new Error(result.error);
+      const prive = decodeAdminUserPrivate(result.data);
+      if (prive === null) throw new Error('Membre illisible');
+      return prive;
+    },
+    staleTime: 5 * 1000,
+    retry: false,
+  };
+}
 
 /**
  * L'identifiant est ENCODÉ parce qu'il vient de l'URL que le visiteur a

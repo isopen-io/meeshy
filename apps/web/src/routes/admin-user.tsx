@@ -1,270 +1,239 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
-import { adminIdentityQueryOptions } from '@/lib/api/admin';
-import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
+import { adminIdentityQueryOptions, type AdminDeps } from '@/lib/api/admin';
+import {
+  adminUserDetailQueryKey,
+  adminUserDetailQueryOptions,
+  adminUserPrivateQueryKey,
+  adminUserPrivateQueryOptions,
+  withKnownCounts,
+  type AdminUserDetail,
+} from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
-import { adminMoment } from '@/lib/admin/format';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { useParams, useRoute } from '@/lib/router';
-import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { useParams, useRoute, useSearch } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { ActionButton } from '@/routes/link-page-parts';
 
-import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
-import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminAbsence, AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
+import { AdminUserAccountSheet } from './admin-user-account-sheet';
+import { AdminUserActivityPanel } from './admin-user-activity';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
+import { AdminUserImageCarousel } from './admin-user-carousel';
+import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminUserHero } from './admin-user-hero';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
+import { AdminUserProfile } from './admin-user-meta';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
+import { AdminUserPreferencesPanel } from './admin-user-preferences';
+import { AdminUserSecurityPanel } from './admin-user-security';
+import { AdminUserStatsPanel } from './admin-user-stats';
+import { AdminUserTabs, adminUserPanelId, adminUserTabId, isAdminUserTab, type AdminUserTab } from './admin-user-tabs';
 
 /**
- * **LE DÉTAIL D'UN MEMBRE** (#6819) — `/admin/users/$user` et `/adm/users/$user`,
- * premier écran de l'administration RÉÉCRITE sur le design system v2 (D-77).
+ * **LA FICHE D'UN MEMBRE** (#6819, refondue par #7845) — `/admin/users/$user`
+ * et `/adm/users/$user`. Tout ce qui concerne un membre s'administre d'ici :
+ * son identité, ses images, ses chiffres, ses préférences, ses conversations,
+ * ses médias, ses appareils, son activité.
  *
- * **En LECTURE seule pour l'instant.** Les six gestes que la passerelle sert
- * réellement — éditer, réinitialiser le mot de passe, désactiver, bannir,
- * lever un bannissement — arrivent par incréments séparés, chacun AVEC sa
- * confirmation : le port le dit depuis #6432, « une écriture d'administration
- * sans sa confirmation serait pire que son absence ».
+ * ## Deux colonnes sur un grand écran, une seule sur un téléphone
  *
- * **Le retour reste dans l'ESPACE d'où l'on vient.** `useRoute().key` distingue
- * `admUser` de `adminUser` : renvoyer les deux vers la même liste ferait sauter
- * l'administrateur d'une administration à l'autre au premier retour, alors que
- * D-76 les tient séparées à dessein.
+ * À partir de `lg` (1024 px), la colonne de GAUCHE porte ce qui dit QUI est ce
+ * membre — carte d'identité, carrousel, statistiques, gestes — et reste en vue
+ * pendant que la colonne de DROITE fait défiler l'onglet ouvert : on garde le
+ * visage de la personne sous les yeux en lisant ses conversations. Collante,
+ * elle est bornée à la hauteur de l'écran et défile d'elle-même : une colonne
+ * collante plus haute que l'écran cacherait son propre bas jusqu'à la fin de
+ * la page. Sous `lg`, une colonne, gouttières de 16 px et aucun défilement
+ * horizontal — mais PAS dans le même ordre : l'identité, puis les gestes,
+ * puis les onglets, et seulement ensuite le carrousel et les chiffres. Dans
+ * l'ordre du grand écran, les onglets tombaient à un millier de pixels sur un
+ * téléphone, et les conversations d'un membre — la moitié de la raison d'ouvrir
+ * sa fiche — étaient à plusieurs écrans de défilement. La colonne de gauche
+ * s'y DISSOUT (`display: contents`) : ses enfants deviennent ceux de la
+ * grille, rangés par `order`, sans rien monter deux fois.
  *
- * **La garde est celle de la liste**, lue au SERVEUR (`GET /me/permissions`) et
- * jamais déduite d'un rôle côté client. Tant que #6825 n'est pas tranchée, la
- * v2 exige `canManageUsers` (ADMIN+) là où la passerelle sert la lecture à
- * `canViewUsers` (jusqu'à AUDIT) : cet écran hérite donc du seuil de sa
- * section, sciemment, plutôt que d'en inventer un troisième.
+ * ## L'onglet se lit dans l'ADRESSE
+ *
+ * `?tab=conversations` : un lien envoyé à un collègue ouvre la fiche sur le
+ * bon onglet, et le retour arrière ne sort pas de la fiche à chaque onglet
+ * visité (`replace`). Un onglet inconnu retombe sur le profil.
+ *
+ * ## Le retour reste dans l'ESPACE d'où l'on vient
+ *
+ * `useRoute().key` distingue `admUser` de `adminUser` : renvoyer les deux vers
+ * la même liste ferait sauter l'administrateur d'une administration à l'autre
+ * au premier retour, alors que D-76 les tient séparées à dessein.
+ *
+ * ## La garde est celle de la liste
+ *
+ * Lue au SERVEUR (`GET /me/permissions`), jamais déduite d'un rôle côté
+ * client : `canManageUsers` (ADMIN+), le seuil de la section.
  */
-
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-
 export default function AdminUserScreen() {
   const language = currentInterfaceLanguage();
   const { user: userId } = useParams<'/admin/users/$user'>();
   const { key } = useRoute();
+  const [search, setSearch] = useSearch();
   const retour = key === 'admUser' ? 'admUsers' : 'adminUsers';
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
   const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((section) => section.id === 'users');
-
   const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
 
-  const [edition, setEdition] = useState(false);
-  const [motDePasse, setMotDePasse] = useState(false);
-  const [bannissement, setBannissement] = useState(false);
-  const annonceur = useLiveAnnouncer();
-  const client = useQueryClient();
+  const demande = search.get('tab');
+  const onglet: AdminUserTab = isAdminUserTab(demande) ? demande : 'profile';
+  const choisir = (tab: AdminUserTab) => {
+    const suivante = new URLSearchParams(search);
+    if (tab === 'profile') suivante.delete('tab');
+    else suivante.set('tab', tab);
+    setSearch(suivante, true);
+  };
 
   const titre = translateAdmin(language, 'admin.user.title');
-
-  if (identite.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminSkeleton rows={5} />
-      </AdminScreenFrame>
-    );
-  }
-
-  if (!autorise) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminDenied language={language} />
-      </AdminScreenFrame>
-    );
-  }
-
-  if (fiche.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <AdminSkeleton rows={6} />
-      </AdminScreenFrame>
-    );
-  }
-
-  const membre = fiche.data;
-  if (membre === undefined) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back={retour}>
-        <p className="text-body" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.user.unavailable')}
-        </p>
-      </AdminScreenFrame>
-    );
-  }
-
-  return (
-    <AdminScreenFrame language={language} title={titre} back={retour}>
-      <div className="grid gap-5" data-admin-user={membre.id}>
-        <Entete membre={membre} language={language} />
-        <Section titre={translateAdmin(language, 'admin.user.identity')}>
-          <Ligne label="@" valeur={membre.username} />
-          <Ligne label="✉" valeur={membre.email} />
-          {membre.phoneNumber === '' ? null : <Ligne label="☎" valeur={membre.phoneNumber} />}
-        </Section>
-        <Section titre={translateAdmin(language, 'admin.user.account')}>
-          <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
-          {/* UNE DATE SE LIT, ELLE NE SE RECOPIE PAS (#6819, recette au
-              navigateur) : ces deux lignes peignaient
-              « 2026-01-12T08:30:00.000Z ». Le champ, son décodage et le
-              libellé étaient justes — seul le RENDU ne l'était pas, et aucun
-              témoin ne pouvait tomber puisque la valeur affichée était
-              exactement la valeur servie. `adminMoment` est le site que cet
-              écran partage avec le pilotage de l'agent. */}
-          <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={adminMoment(membre.createdAt, language)} />
-          <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} />
-          <Ligne
-            label={translateAdmin(language, 'admin.user.twoFactor')}
-            valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
-          />
-        </Section>
-
-        <div className="grid gap-2">
-          <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
-          {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
-              qui se retrouve déconnectée partout. La couleur le dit avant que
-              la feuille ne l'écrive. */}
-          <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
-            {translateAdmin(language, 'admin.password.title')}
-          </ActionButton>
-          <ActionButton tone="danger" onClick={() => setBannissement(true)}>
-            {translateAdmin(language, 'admin.ban.open')}
-          </ActionButton>
-        </div>
-
-        {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les deux
-            routes sont servies jusqu'à AUDIT, plus largement que les gestes
-            d'écriture ci-dessus qui exigent ADMIN+. */}
-        <AdminUserMediaSection userId={membre.id} language={language} />
-        {/* La fiche ENTIÈRE, et pas seulement son identifiant (#6862) : la
-            modale de lecture rend le fil dans le Prisme DU MEMBRE, qui se
-            compose de ses trois rangs de langue, et le montre de SON point de
-            vue, qui demande son identité. */}
-        <AdminUserConversationsSection membre={membre} language={language} />
-      </div>
-
-      {edition ? (
-        <AdminUserEditSheet
-          membre={membre}
-          language={language}
-          onClose={() => setEdition(false)}
-          onAnnounce={annonceur.announce}
-          /**
-           * La route de PATCH rend le membre À JOUR, sanitisé : on l'écrit
-           * dans le cache plutôt que d'invalider. Invalider coûterait un
-           * aller-retour pour obtenir ce qu'on tient déjà, et laisserait
-           * l'écran afficher l'état d'AVANT pendant qu'il revient.
-           */
-          onSaved={(aJour) => client.setQueryData(adminUserDetailQueryKey(userId), aJour)}
-        />
-      ) : null}
-
-      {motDePasse ? (
-        <AdminUserPasswordSheet
-          userId={membre.id}
-          language={language}
-          onClose={() => setMotDePasse(false)}
-          onAnnounce={annonceur.announce}
-        />
-      ) : null}
-
-      {bannissement ? (
-        <AdminUserBanSheet
-          userId={membre.id}
-          language={language}
-          onClose={() => setBannissement(false)}
-          onAnnounce={annonceur.announce}
-        />
-      ) : null}
-
-      <AdminAnnouncement text={annonceur.text} />
+  const cadre = (contenu: ReactNode) => (
+    <AdminScreenFrame language={language} title={titre} back={retour} width="wide">
+      {contenu}
     </AdminScreenFrame>
   );
+
+  if (identite.isPending) return cadre(<AdminSkeleton rows={5} />);
+  if (!autorise) return cadre(<AdminDenied language={language} />);
+  if (fiche.data === undefined) {
+    return cadre(fiche.isPending ? <AdminSkeleton rows={6} /> : <AdminAbsence language={language} unavailable="admin.user.unavailable" />);
+  }
+
+  return cadre(<AdminUserWorkspace membre={fiche.data} language={language} tab={onglet} onTab={choisir} />);
 }
 
 /**
- * L'ÉTAT se lit en TROIS champs, jamais en un statut calculé (#6822) :
- * `DELETE /admin/users/:userId` n'écrit que `isActive:false` — ni `deletedAt`,
- * ni `deletedBy`. Un compte supprimé arrive donc avec `deletedAt: null`, et
- * afficher « supprimé » sur la seule foi de `isActive` mentirait. On dit donc
- * « supprimé » QUAND la passerelle l'affirme, « désactivé » sinon.
+ * L'ESPACE DE TRAVAIL d'une fiche chargée — séparé de l'écran pour être monté
+ * par un témoin sans routeur, avec son port injecté.
  */
-function Entete({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
-  const etat = membre.deletedAt !== null ? 'admin.user.deleted' : membre.isActive ? null : 'admin.users.inactive';
+export function AdminUserWorkspace({
+  membre,
+  language,
+  tab,
+  onTab,
+  deps = apiDeps,
+}: {
+  readonly membre: AdminUserDetail;
+  readonly language: InterfaceLanguage;
+  readonly tab: AdminUserTab;
+  readonly onTab: (tab: AdminUserTab) => void;
+  readonly deps?: AdminDeps;
+}) {
+  const [feuille, setFeuille] = useState<'edit' | 'account' | 'password' | 'ban' | null>(null);
+  const annonceur = useLiveAnnouncer();
+  const client = useQueryClient();
+  const fermer = () => setFeuille(null);
   /**
-   * LA PHOTO DU MEMBRE (#6975) — `AdminUserDetail.avatar` est SERVI
-   * (`api/admin-user-detail.ts:56`) et cette fiche ne montait aucun avatar du
-   * tout : un nom, une bio, une pastille d'activité. C'est le seul écran de
-   * l'application où identifier une personne A une conséquence (désactiver,
-   * bannir, réinitialiser un mot de passe), et c'était le seul à ne pas
-   * montrer son visage.
+   * Les routes d'écriture rendent le membre À JOUR, sanitisé : on l'écrit dans
+   * le cache plutôt que d'invalider. Invalider coûterait un aller-retour pour
+   * obtenir ce qu'on tient déjà, et laisserait l'écran afficher l'état d'AVANT
+   * pendant qu'il revient. Les compteurs `_count`, que ces routes ne servent
+   * pas, se GARDENT (`withKnownCounts`) — sans quoi chaque geste les
+   * remettrait à zéro. Les champs privés (coordonnées en attente) vivent sous
+   * une autre clé : un changement d'adresse peut les avoir créés.
    */
-  const photo = participantAvatarOf(membre);
+  const ecrit = (aJour: AdminUserDetail) => {
+    client.setQueryData<AdminUserDetail>(adminUserDetailQueryKey(membre.id), (avant) => withKnownCounts(avant, aJour));
+    void client.invalidateQueries({ queryKey: adminUserPrivateQueryKey(membre.id) });
+  };
 
   return (
-    <div className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        className="grid size-2 shrink-0 place-items-center rounded-full"
-        style={{ backgroundColor: membre.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
-      />
-      <Avatar
-        initials={initialsOf(membre.displayName)}
-        color="var(--color-ios-brand)"
-        size={44}
-        name={membre.displayName}
-        {...(photo === undefined ? {} : { src: photo })}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-title font-semibold" style={{ color: INK }}>
-          {membre.displayName}
-        </p>
-        {membre.bio === '' ? null : (
-          <p className="truncate text-caption" style={{ color: INK2 }}>
-            {membre.bio}
-          </p>
-        )}
-      </div>
-      {etat === null ? null : (
-        <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translateAdmin(language, etat)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function Section({ titre, children }: { readonly titre: string; readonly children: React.ReactNode }) {
-  return (
-    <section className="grid gap-2">
-      <h2 className="text-caption font-medium" style={{ color: INK2 }}>
-        {titre}
-      </h2>
-      <dl
-        className="grid gap-1 rounded-card px-4 py-3"
-        style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+    <>
+      <div
+        data-admin-user={membre.id}
+        data-admin-user-layout="split"
+        className="grid gap-5 pt-1 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start lg:gap-6"
       >
-        {children}
-      </dl>
-    </section>
+        <aside
+          data-admin-user-aside
+          className="contents lg:sticky lg:top-4 lg:grid lg:max-h-[calc(100dvh-6rem)] lg:min-w-0 lg:gap-5 lg:overflow-y-auto lg:pe-1 lg:[scrollbar-width:thin]"
+        >
+          <div className="order-1 min-w-0 lg:order-none" data-admin-user-order="hero">
+            <AdminUserHero membre={membre} language={language} />
+          </div>
+          <div className="order-4 min-w-0 lg:order-none" data-admin-user-order="carousel">
+            <AdminUserImageCarousel membre={membre} language={language} deps={deps} />
+          </div>
+          <div className="order-5 min-w-0 lg:order-none" data-admin-user-order="stats">
+            <AdminUserStatsPanel userId={membre.id} language={language} deps={deps} />
+          </div>
+          <div className="order-2 grid min-w-0 grid-cols-2 gap-2 lg:order-none lg:grid-cols-1" data-admin-user-actions data-admin-user-order="actions">
+            <ActionButton onClick={() => setFeuille('edit')}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
+            <ActionButton tone="secondary" onClick={() => setFeuille('account')}>
+              {translateAdmin(language, 'admin.account.open')}
+            </ActionButton>
+            {/* Ton `danger` : le geste révoque les sessions ouvertes de la
+                cible, qui se retrouve déconnectée partout. La couleur le dit
+                avant que la feuille ne l'écrive. */}
+            <ActionButton tone="danger" onClick={() => setFeuille('password')}>
+              {translateAdmin(language, 'admin.password.title')}
+            </ActionButton>
+            <ActionButton tone="danger" onClick={() => setFeuille('ban')}>
+              {translateAdmin(language, 'admin.ban.open')}
+            </ActionButton>
+          </div>
+        </aside>
+
+        <div className="order-3 grid min-w-0 content-start gap-4 lg:order-none" data-admin-user-order="tabs">
+          <AdminUserTabs active={tab} language={language} onSelect={onTab} />
+          <div role="tabpanel" id={adminUserPanelId(tab)} aria-labelledby={adminUserTabId(tab)} data-admin-user-panel={tab} className="min-w-0">
+            <Panneau membre={membre} language={language} tab={tab} deps={deps} onAnnounce={annonceur.announce} />
+          </div>
+        </div>
+      </div>
+
+      {feuille === 'edit' ? (
+        <AdminUserEditSheet membre={membre} language={language} onClose={fermer} onAnnounce={annonceur.announce} onSaved={ecrit} />
+      ) : null}
+      {feuille === 'account' ? (
+        <AdminUserAccountSheet membre={membre} language={language} deps={deps} onClose={fermer} onAnnounce={annonceur.announce} onSaved={ecrit} />
+      ) : null}
+      {feuille === 'password' ? (
+        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={fermer} onAnnounce={annonceur.announce} />
+      ) : null}
+      {feuille === 'ban' ? (
+        <AdminUserBanSheet userId={membre.id} language={language} onClose={fermer} onAnnounce={annonceur.announce} />
+      ) : null}
+
+      <AdminAnnouncement text={annonceur.text} />
+    </>
   );
 }
 
-function Ligne({ label, valeur }: { readonly label: string; readonly valeur: string }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
-        {label}
-      </dt>
-      <dd className="min-w-0 flex-1 truncate text-right text-body" style={{ color: INK }}>
-        {valeur}
-      </dd>
-    </div>
-  );
+/** UN panneau monté à la fois — voir `admin-user-tabs.tsx`. */
+function Panneau({
+  membre,
+  language,
+  tab,
+  deps,
+  onAnnounce,
+}: {
+  readonly membre: AdminUserDetail;
+  readonly language: InterfaceLanguage;
+  readonly tab: AdminUserTab;
+  readonly deps: AdminDeps;
+  readonly onAnnounce: (texte: string) => void;
+}) {
+  if (tab === 'preferences') return <AdminUserPreferencesPanel userId={membre.id} language={language} deps={deps} onAnnounce={onAnnounce} />;
+  /* La fiche ENTIÈRE, et pas seulement son identifiant (#6862) : la modale de
+     lecture rend le fil dans le Prisme DU MEMBRE, qui se compose de ses trois
+     rangs de langue, et le montre de SON point de vue. */
+  if (tab === 'conversations') return <AdminUserConversationsSection membre={membre} language={language} deps={deps} onAnnounce={onAnnounce} />;
+  if (tab === 'media') return <AdminUserMediaSection userId={membre.id} language={language} deps={deps} />;
+  if (tab === 'security') return <AdminUserSecurityPanel userId={membre.id} language={language} deps={deps} onAnnounce={onAnnounce} />;
+  if (tab === 'activity') return <AdminUserActivityPanel userId={membre.id} language={language} deps={deps} />;
+  return <PanneauProfil membre={membre} language={language} deps={deps} />;
+}
+
+/** Le profil lit À PART ce qui ne se persiste pas (`adminUserPrivateQueryOptions`). */
+function PanneauProfil({ membre, language, deps }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage; readonly deps: AdminDeps }) {
+  const prive = useQuery(adminUserPrivateQueryOptions(deps, membre.id));
+  return <AdminUserProfile membre={membre} prive={prive.isError ? null : prive.data} language={language} />;
 }

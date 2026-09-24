@@ -130,6 +130,21 @@ export function pageServie(resultat: { readonly data: unknown; readonly paginati
 }
 
 /**
+ * LE BORNAGE D'UNE PAGE DÉCODÉE (#7845) — `total` et `hasMore` tels que servis,
+ * avec le même repli que les quatre premières listes : un `hasMore` absent se
+ * déduit du total, un total absent retombe sur la longueur de la page.
+ */
+export function bornesDePage(
+  lignes: readonly unknown[],
+  meta: PageServie['meta'],
+  offset: number,
+): { readonly total: number; readonly offset: number; readonly hasMore: boolean } {
+  const total = asCount(meta.total);
+  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + lignes.length < total;
+  return { total: total || lignes.length, offset, hasMore };
+}
+
+/**
  * `false` par DÉFAUT sur chaque clé — une permission absente de la charge est
  * une permission qu'on n'a pas. Le `?? false` n'est pas de la prudence
  * décorative : la matrice servie peut gagner des clés (elle en a déjà gagné),

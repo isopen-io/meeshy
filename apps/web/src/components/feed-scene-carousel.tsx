@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, type KeyboardEvent } from 'react';
 
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument } from '@/lib/canvas/document';
@@ -7,6 +7,7 @@ import { carouselAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useElementSize } from '@/lib/view/use-element-size';
+import { useSnapCarousel } from '@/lib/view/use-snap-carousel';
 
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedSceneSurface } from './feed-scene-surface';
@@ -30,30 +31,6 @@ import { FeedSceneSurface } from './feed-scene-surface';
  * la cible iOS, et le compteur flottait au-dessus d'une bande vide
  * (revue-correction #6898).
  */
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/** `scrollLeft` est NÉGATIF sous `dir="rtl"` (Chromium, WebKit, Gecko
- * aujourd'hui) : la page se lit sur sa valeur absolue et la cible se pose
- * avec le signe de la direction — sinon, en arabe, `scrollTo({ left: +n })`
- * se borne à 0 et les flèches deviennent INERTES. */
-function directionSign(element: Element): 1 | -1 {
-  return typeof window !== 'undefined' && window.getComputedStyle(element).direction === 'rtl' ? -1 : 1;
-}
-
-const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
-
-/** Le délai sans `scroll` après lequel un navigateur SANS `scrollend`
- * (Safari, dont la WebView iOS de la coque) considère le geste terminé. */
-const SCROLL_SETTLE_MS = 120;
-
-/** Tant que ce délai court après un défilement PROGRAMMATIQUE (flèche,
- * clavier), les `scroll`/`scrollend` intermédiaires d'une animation `smooth`
- * ne recalculent RIEN : un `Math.round` sur un `scrollLeft` encore PARTIEL
- * retomberait sur la page de départ, écrasant le `setPage(target)` déjà posé. */
-const PROGRAMMATIC_GRACE_MS = 500;
-
 export type FeedSceneCarouselProps = {
   readonly document: CanvasDocument;
   readonly carrier: SceneCarrier;
@@ -71,11 +48,9 @@ export type FeedSceneCarouselProps = {
 };
 
 export function FeedSceneCarousel({ document, carrier, preferredLanguages, accent, active, authorName, onOpenScene, registerRef }: FeedSceneCarouselProps) {
-  const [page, setPage] = useState(0);
-  const trackRef = useRef<HTMLDivElement | null>(null);
   const language = currentInterfaceLanguage();
   const count = document.scenes.length;
-  const current = Math.min(page, Math.max(0, count - 1));
+  const { current, trackRef, scrollTo, step, trackHandlers } = useSnapCarousel<HTMLDivElement>(count);
   const naturalAspect = carouselAspect(document.scenes);
   const boxAspect = clampedCardAspect(naturalAspect);
 
@@ -89,56 +64,14 @@ export function FeedSceneCarousel({ document, carrier, preferredLanguages, accen
   );
   const frame = fitScene({ viewport: box, ratio: naturalAspect });
 
-  const programmaticUntil = useRef(0);
-
-  const scrollTo = useCallback(
-    (index: number) => {
-      const track = trackRef.current;
-      const target = Math.min(Math.max(index, 0), count - 1);
-      if (track !== null && track.clientWidth > 0) {
-        const reduced = prefersReducedMotion();
-        programmaticUntil.current = performance.now() + (reduced ? 0 : PROGRAMMATIC_GRACE_MS);
-        track.scrollTo({ left: directionSign(track) * target * track.clientWidth, behavior: reduced ? 'auto' : 'smooth' });
-      }
-      setPage(target);
-    },
-    [count],
-  );
-
-  const settle = useCallback(() => {
-    if (performance.now() < programmaticUntil.current) return;
-    const track = trackRef.current;
-    if (track === null || track.clientWidth === 0) return;
-    setPage(Math.min(Math.max(Math.round(Math.abs(track.scrollLeft) / track.clientWidth), 0), count - 1));
-  }, [count]);
-
-  // Repli SEULEMENT là où `scrollend` n'existe pas : un délai relancé à
-  // chaque `scroll`, qui ne tire qu'une fois le geste arrêté — jamais un
-  // calcul par trame pendant le glissement.
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onScrollWithoutScrollEnd = useCallback(() => {
-    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
-    settleTimer.current = setTimeout(() => {
-      settleTimer.current = null;
-      settle();
-    }, SCROLL_SETTLE_MS);
-  }, [settle]);
-  useEffect(
-    () => () => {
-      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
-    },
-    [],
-  );
-
   // `backward`/`forward` gardent leur nom ; sous `dir="rtl"`, ← avance.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
       event.preventDefault();
-      const toward = event.key === 'ArrowRight' ? 1 : -1;
-      scrollTo(current + toward * directionSign(event.currentTarget));
+      step(event.key === 'ArrowRight' ? 1 : -1, event.currentTarget);
     },
-    [current, scrollTo],
+    [step],
   );
 
   const labels = { previous: translate(language, 'feed.scene.carousel.previous'), next: translate(language, 'feed.scene.carousel.next') };
@@ -158,7 +91,7 @@ export function FeedSceneCarousel({ document, carrier, preferredLanguages, accen
             role="group"
             aria-label={translate(language, 'feed.scene.count', { count: String(count) })}
             onKeyDown={onKeyDown}
-            {...(supportsScrollEnd ? { onScrollEnd: settle } : { onScroll: onScrollWithoutScrollEnd })}
+            {...trackHandlers}
             className="scrollbar-none flex size-full overflow-x-auto overscroll-x-contain focus-visible:outline-2 focus-visible:-outline-offset-2"
             style={{ scrollSnapType: 'x mandatory', outlineColor: 'var(--color-ios-brand)' }}
           >

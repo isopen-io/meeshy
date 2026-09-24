@@ -2,8 +2,8 @@
 /**
  * LA RECETTE AU NAVIGATEUR DE L'ADMINISTRATION SOUVERAINE (#6862, #6733,
  * #6819) — ce qu'aucun témoin `bun test` de ce chantier ne peut voir : le
- * `<dialog>` natif (happy-dom ne l'ouvre pas), la GÉOMÉTRIE d'une section
- * repliable, le PARCOURS clavier réel, le contenu de `localStorage` APRÈS une
+ * `<dialog>` natif (happy-dom ne l'ouvre pas), les sections montées en
+ * panneaux de leur onglet, le PARCOURS clavier réel, le contenu de `localStorage` APRÈS une
  * lecture souveraine, et la LANGUE effectivement peinte dans les rangées.
  *
  * Sur un `dist` construit avec `VITE_DATA_SOURCE=gateway` : l'administration
@@ -214,6 +214,14 @@ const attendre = async (predicat, timeout = 6_000) => {
 /** Le fil ne se peint qu'une fois le virtualiseur alimenté. */
 const attendreLeFil = (page) => attendre(() => present(page, '[data-row]'));
 
+/** Ouvre un onglet de la fiche d'un membre (#7845) et attend qu'il soit sélectionné. */
+async function ouvrirOnglet(page, onglet) {
+  const selecteur = `[data-admin-user-tab="${onglet}"]`;
+  await attendre(() => present(page, selecteur));
+  await page.click(selecteur);
+  await attendre(() => page.evaluate((s) => document.querySelector(s)?.getAttribute('aria-selected') === 'true', selecteur));
+}
+
 /** Ouvre la modale d'une conversation et écrit le motif. */
 async function lireLaConversation(page, motif) {
   await page.click(`[data-admin-conversation-open="${CONVERSATION_ID}"]`);
@@ -325,14 +333,17 @@ async function main() {
       await ctx.close();
     }
 
-    // ------------------------------------- 3. les deux sections repliables
-    console.log('\n3. LA FICHE MEMBRE PLIE ET DÉPLIE SES DEUX SECTIONS');
+    // ------------------------------- 3. les deux sections sont des panneaux
+    console.log('\n3. LA FICHE MEMBRE MONTE CHAQUE SECTION COMME PANNEAU DE SON ONGLET');
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
       await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-user="${MEMBRE_ID}"]`));
-      await attendre(() => present(page, '[data-collapsible-toggle="admin-conv"]'));
+      /* LA FICHE EST EN ONGLETS depuis #7845 : chaque section ne se monte
+         qu'avec le sien. On ouvre donc celui des conversations pour la voir. */
+      await ouvrirOnglet(page, 'conversations');
+      await attendre(() => present(page, '[data-admin-section="conversations"]'));
       await page.waitForTimeout(500);
       await cliche(page, 'fiche-membre-depliee', { fullPage: true });
 
@@ -345,7 +356,7 @@ async function main() {
       check(!ISO_NU.test(fiche), `la fiche ne peint aucun horodatage ISO brut${ISO_NU.test(fiche) ? ` — « ${(fiche.match(ISO_NU) ?? [''])[0]} »` : ''}`);
       check(
         await present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`),
-        'la section Conversations et la section Médias sont TOUTES DEUX sur la fiche',
+        'l’onglet Conversations porte ses lignes',
       );
       /* Le cadre d'administration défile dans un conteneur À LUI : `fullPage`
          ne descend pas dedans. On amène donc la seconde section à l'écran pour
@@ -355,40 +366,25 @@ async function main() {
       await page.waitForTimeout(300);
       await cliche(page, 'fiche-membre-section-conversations');
 
-      for (const id of ['admin-media', 'admin-conv']) {
-        const etat = () =>
-          page.evaluate(
-            (s) => ({
-              expanded: document.querySelector(`[data-collapsible-toggle="${s}"]`)?.getAttribute('aria-expanded') ?? null,
-              cache: document.getElementById(`${s}-panel`)?.hasAttribute('hidden') ?? null,
-              controle: document.querySelector(`[data-collapsible-toggle="${s}"]`)?.getAttribute('aria-controls') ?? null,
-            }),
-            id,
-          );
-
-        const depart = await etat();
-        check(depart.expanded === 'true', `« ${id} » : dépliée au départ (aria-expanded=${depart.expanded})`);
-        check(depart.controle === `${id}-panel`, `« ${id} » : aria-controls désigne son panneau`);
-
-        await page.click(`[data-collapsible-toggle="${id}"]`);
-        await page.waitForTimeout(220);
-        const souris = await etat();
-        check(souris.expanded === 'false' && souris.cache === true, `« ${id} » : la SOURIS la replie, aria-expanded suit`);
-
-        await page.focus(`[data-collapsible-toggle="${id}"]`);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(220);
-        const clavier = await etat();
-        check(clavier.expanded === 'true' && clavier.cache === false, `« ${id} » : ENTRÉE la déplie, aria-expanded suit`);
-
-        await page.keyboard.press('Space');
-        await page.waitForTimeout(220);
-        const espace = await etat();
-        check(espace.expanded === 'false', `« ${id} » : ESPACE la replie`);
-        if (id === 'admin-conv') await cliche(page, 'fiche-membre-repliee');
-
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(220);
+      /* Un repliable du même titre que l'onglet le RÉPÉTAIT, et un clic
+         vidait le panneau entier (revue #7845) : la section est désormais le
+         panneau lui-même, nommé par son onglet. */
+      for (const [section, onglet, ancien] of [['media', 'media', 'admin-media'], ['conversations', 'conversations', 'admin-conv']]) {
+        await ouvrirOnglet(page, onglet);
+        check(await attendre(() => present(page, `[data-admin-section="${section}"]`)), `l’onglet « ${onglet} » monte sa section`);
+        const etat = await page.evaluate(
+          ({ onglet: o, ancien: a }) => {
+            const tab = document.querySelector(`[data-admin-user-tab="${o}"]`);
+            const panneau = document.querySelector(`[data-admin-user-panel="${o}"]`);
+            return {
+              repliable: document.querySelector(`[data-collapsible-toggle="${a}"]`) !== null,
+              nomme: tab !== null && panneau?.getAttribute('aria-labelledby') === tab.id,
+            };
+          },
+          { onglet, ancien },
+        );
+        check(!etat.repliable, `« ${onglet} » : aucun repliable ne répète l’onglet`);
+        check(etat.nomme, `« ${onglet} » : le panneau est nommé par son onglet (aria-labelledby)`);
       }
       await ctx.close();
     }
@@ -398,7 +394,7 @@ async function main() {
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page, appels } = ctx;
-      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}?tab=conversations`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`));
       await page.waitForTimeout(400);
 
@@ -455,7 +451,7 @@ async function main() {
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
-      await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
+      await page.goto(`${base}/adm/users/${MEMBRE_ID}?tab=conversations`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`));
       await page.waitForTimeout(400);
       await lireLaConversation(page, 'Signalement #9142 — vérification du fil');
@@ -611,7 +607,7 @@ async function main() {
   }
   console.log(
     `check-admin-souverain : vert — ${constats.length} constats ; tuile Agent sous son droit, deux adresses d’un même écran, ` +
-      'sections repliables souris et clavier, modale sous motif, vraie vue au Prisme du MEMBRE, et rien sur le disque.',
+      'sections montées en panneaux de leur onglet, modale sous motif, vraie vue au Prisme du MEMBRE, et rien sur le disque.',
   );
 }
 

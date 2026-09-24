@@ -2,9 +2,10 @@ import type { ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useOnline } from '@/lib/net/online';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -108,6 +109,55 @@ export function AdminCounter({ label, value }: { readonly label: string; readonl
   );
 }
 
+/**
+ * UNE TUILE DE STATISTIQUE (#7845) — la grammaire d'`AdminCounter` (carte,
+ * chiffre en gras tabulaire, libellé en légende), dans l'ordre de LECTURE d'une
+ * liste de définitions : le libellé est le TERME, le chiffre sa DÉFINITION.
+ * L'hôte est donc un `<dl>`, et un lecteur d'écran annonce « Messages envoyés,
+ * 12 345 » — jamais un nombre orphelin dont il faudrait deviner l'objet.
+ * `value` est déjà FORMATÉ par l'appelant (`adminCount`, langue de la page).
+ */
+export function AdminStatTile({ id, label, value }: { readonly id: string; readonly label: string; readonly value: string }) {
+  return (
+    <div
+      data-admin-stat={id}
+      className="grid min-w-0 content-start gap-0.5 rounded-card px-3.5 py-3"
+      style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+    >
+      <dt className="truncate text-caption" style={{ color: INK2 }}>
+        {label}
+      </dt>
+      <dd className="text-screen font-bold tabular-nums" style={{ color: INK }}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * **UNE ABSENCE S'EXPLIQUE** (#6862, étendue à la fiche entière par #7845) —
+ * un échec de requête ne se rend jamais comme un vide légitime : « aucune
+ * session » affirmerait un FAIT sur le membre. Hors ligne, c'est la coupure
+ * qu'on nomme ; en ligne, c'est la passerelle qui n'a pas répondu, dans les
+ * mots de la section (`unavailable`). Partagée par les onglets de la fiche :
+ * sept rédactions du même refus divergeraient au premier lot qui n'en relit
+ * qu'une.
+ */
+export function AdminAbsence({
+  language,
+  unavailable,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly unavailable: AdminPlainCatalogKey;
+}) {
+  const online = useOnline();
+  return (
+    <p className="text-caption" style={{ color: INK2 }} data-admin-absence>
+      {translateAdmin(language, online ? unavailable : 'admin.offline')}
+    </p>
+  );
+}
+
 /** Le squelette d'attente — jamais un `ProgressView` (cache-first, dimension 2). */
 export function AdminSkeleton({ rows }: { readonly rows: number }) {
   return (
@@ -128,6 +178,7 @@ export function AdminScreenFrame({
   title,
   back,
   fills = false,
+  width = 'default',
   children,
 }: {
   readonly language: InterfaceLanguage;
@@ -156,18 +207,29 @@ export function AdminScreenFrame({
    * sans qu'aucune erreur ne le signale.
    */
   readonly fills?: boolean;
+  /**
+   * LA LARGEUR DU CONTENU (#7845). `default` borne à `max-w-3xl` — une liste,
+   * un tableau de bord se lisent mieux sur une colonne étroite. `wide` ouvre à
+   * `max-w-6xl` pour la fiche d'un membre, seule à poser DEUX colonnes sur un
+   * grand écran : sous `max-w-3xl`, la colonne d'identité et celle des onglets
+   * se partageraient 768 px, et chacune serait trop étroite pour ce qu'elle
+   * porte. Un paramètre, et non une classe passée par l'appelant : les autres
+   * écrans gardent leur borne sans avoir à la redire.
+   */
+  readonly width?: 'default' | 'wide';
   readonly children: ReactNode;
 }) {
+  const borne = width === 'wide' ? 'max-w-6xl' : 'max-w-3xl';
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <AdminHeader language={language} title={title} back={back} />
       {fills ? (
         <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe">
-          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">{children}</div>
+          <div className={`mx-auto flex min-h-0 w-full ${borne} flex-1 flex-col`}>{children}</div>
         </main>
       ) : (
         <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
-          <div className="mx-auto w-full max-w-3xl pb-24">{children}</div>
+          <div className={`mx-auto w-full ${borne} pb-24`} data-admin-frame-width={width}>{children}</div>
         </main>
       )}
     </div>
@@ -210,5 +272,53 @@ export function AdminAnnouncement({ text }: { readonly text: string }) {
     >
       {text}
     </p>
+  );
+}
+
+/**
+ * PRÉCÉDENTE / SUIVANTE — la pagination des listes d'une fiche (#7845). Une
+ * seule rédaction pour les onglets Conversations, Médias, Sécurité et
+ * Activité : trois copies avaient déjà divergé, l'une n'avait plus de retour
+ * arrière, et la première page y devenait inaccessible sans quitter l'onglet.
+ * Rien ne s'affiche quand il n'y a qu'une page.
+ */
+export function AdminPagination({
+  language,
+  offset,
+  hasMore,
+  size,
+  onOffset,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly offset: number;
+  readonly hasMore: boolean;
+  readonly size: number;
+  readonly onOffset: (offset: number) => void;
+}) {
+  if (offset === 0 && !hasMore) return null;
+  const bouton =
+    'rounded-chip px-4 text-body font-semibold disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2';
+  const fond = {
+    minHeight: 44,
+    backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)',
+    color: INK,
+    outlineColor: BRAND,
+  };
+  return (
+    <div className="flex justify-between gap-2 pt-2" data-admin-pagination>
+      <button
+        type="button"
+        data-admin-page="previous"
+        disabled={offset === 0}
+        onClick={() => onOffset(Math.max(0, offset - size))}
+        className={bouton}
+        style={fond}
+      >
+        {translateAdmin(language, 'admin.users.previous')}
+      </button>
+      <button type="button" data-admin-page="next" disabled={!hasMore} onClick={() => onOffset(offset + size)} className={bouton} style={fond}>
+        {translateAdmin(language, 'admin.users.next')}
+      </button>
+    </div>
   );
 }

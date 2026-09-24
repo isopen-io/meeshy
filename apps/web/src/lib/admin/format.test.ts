@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { adminMoment } from './format';
+import { adminCount, adminDay, adminMoment } from './format';
 
 /**
  * **UN HORODATAGE SERVI N'EST PAS UN HORODATAGE AFFICHABLE** (#6819,
@@ -40,5 +40,37 @@ describe('adminMoment', () => {
    */
   test('une chaîne illisible se dit comme une absence, pas « Invalid Date »', () => {
     expect(adminMoment('pas-une-date', 'fr')).toBe('—');
+  });
+});
+
+/**
+ * UN COMPTEUR ET UN JOUR, DANS LA LANGUE DE LA PAGE (#7845) — les tuiles de
+ * statistiques et les dates sans heure (naissance, consentement, fin de série).
+ * Même site que `adminMoment`, pour la même raison : deux écrans qui formatent
+ * un nombre de deux façons finissent par le formater de deux façons.
+ */
+describe('adminCount', () => {
+  test('groupe les milliers selon la LANGUE', () => {
+    expect(adminCount(12345, 'en')).toBe('12,345');
+    expect(adminCount(12345, 'fr')).not.toBe(adminCount(12345, 'en'));
+  });
+
+  test('un compteur illisible se dit par un tiret', () => {
+    expect(adminCount(Number.NaN, 'fr')).toBe('—');
+    expect(adminCount(-1, 'fr')).toBe('—');
+  });
+});
+
+describe('adminDay', () => {
+  test('rend un JOUR localisé, sans heure', () => {
+    const rendu = adminDay('2026-01-12T08:30:00.000Z', 'fr');
+    expect(rendu).toContain('2026');
+    expect(rendu).not.toContain('08:30');
+    expect(rendu).not.toBe(adminDay('2026-01-12T08:30:00.000Z', 'en'));
+  });
+
+  test('une absence ou une charge illisible se dit par un tiret', () => {
+    expect(adminDay(null, 'fr')).toBe('—');
+    expect(adminDay('pas-une-date', 'fr')).toBe('—');
   });
 });

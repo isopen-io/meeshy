@@ -36,7 +36,10 @@ import type { ApiResult } from './http';
  * propres routes (`/security`, `/verifications`, `/consents`) et leurs propres
  * lois — les consentements de voix exigent le rang souverain ET un motif
  * écrit, parce qu'ils fabriquent une pièce légale au nom d'autrui. Les mêler
- * ici donnerait un port dont l'appelant ne pourrait plus deviner le coût.
+ * dans UNE fonction donnerait un port dont l'appelant ne pourrait plus deviner
+ * le coût : sécurité et vérifications ont donc chacune la leur
+ * (`updateAdminUserSecurity`, `updateAdminUserVerifications`, #7845), et les
+ * consentements n'en ont aucune ici.
  */
 /**
  * Chaque champ admet `| undefined` EXPLICITEMENT, et ce n'est pas une
@@ -81,6 +84,81 @@ export function editableFieldsOf(edit: AdminUserEdit): readonly string[] {
   return Object.keys(edit).filter((champ) => edit[champ as keyof AdminUserEdit] !== undefined);
 }
 
+/**
+ * Déverrouiller (`unlock: true`, jamais `false` — la passerelle n'accepte que
+ * le littéral) et armer ou désarmer la double authentification. Désarmer celle
+ * d'un compte que l'on ne surclasse pas serait le premier maillon d'une
+ * escalade : la passerelle tient la hiérarchie, ce port ne la contourne pas.
+ */
+export type AdminUserSecurityChange = {
+  readonly unlock?: true | undefined;
+  readonly twoFactorEnabled?: boolean | undefined;
+};
+
+/** Les trois preuves qu'un administrateur peut poser — ou retirer. */
+export type AdminUserVerificationsChange = {
+  readonly emailVerified?: boolean | undefined;
+  readonly phoneVerified?: boolean | undefined;
+  readonly ageVerified?: boolean | undefined;
+};
+
+/**
+ * UN corps plat, le motif en `reason` — la même grammaire que l'édition, pour
+ * deux routes de plus. Écrite une fois : trois compositions divergeraient au
+ * premier méta-champ ajouté.
+ */
+async function ecrireFamille(
+  params: AdminDeps & {
+    readonly userId: string;
+    readonly famille: '' | '/security' | '/verifications';
+    readonly change: Readonly<Record<string, unknown>>;
+    readonly reason?: string | undefined;
+    readonly signal?: AbortSignal | undefined;
+  },
+): Promise<ApiResult<AdminUserDetail>> {
+  const champs = Object.keys(params.change).filter((champ) => params.change[champ] !== undefined);
+  if (champs.length === 0) return { ok: false, status: 0, error: 'Aucun champ à écrire' };
+
+  const motif = params.reason?.trim() ?? '';
+  const corps: Record<string, unknown> = Object.fromEntries(champs.map((champ) => [champ, params.change[champ]]));
+  // Un méta-champ VIDE n'est pas un motif : l'envoyer blanc remplirait le
+  // journal d'audit de raisons qui n'en sont pas.
+  if (motif !== '') corps.reason = motif;
+
+  const result = await params.transport.request<unknown>({
+    method: 'PATCH',
+    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}${params.famille}`,
+    body: corps,
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok) return result;
+
+  const membre = decodeAdminUserDetail(result.data);
+  return membre === null ? { ok: false, status: 0, error: 'Membre illisible' } : { ok: true, data: membre };
+}
+
+export function updateAdminUserSecurity(
+  params: AdminDeps & {
+    readonly userId: string;
+    readonly change: AdminUserSecurityChange;
+    readonly reason?: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminUserDetail>> {
+  return ecrireFamille({ ...params, famille: '/security' });
+}
+
+export function updateAdminUserVerifications(
+  params: AdminDeps & {
+    readonly userId: string;
+    readonly change: AdminUserVerificationsChange;
+    readonly reason?: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminUserDetail>> {
+  return ecrireFamille({ ...params, famille: '/verifications' });
+}
+
 export async function updateAdminUser(
   params: AdminDeps & {
     readonly userId: string;
@@ -89,24 +167,13 @@ export async function updateAdminUser(
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminUserDetail>> {
-  const champs = editableFieldsOf(params.edit);
-  if (champs.length === 0) return { ok: false, status: 0, error: 'Aucun champ à écrire' };
-
-  const motif = params.reason?.trim() ?? '';
-  const corps: Record<string, unknown> = {};
-  for (const champ of champs) corps[champ] = params.edit[champ as keyof AdminUserEdit];
-  // Un méta-champ VIDE n'est pas un motif : l'envoyer blanc remplirait le
-  // journal d'audit de raisons qui n'en sont pas.
-  if (motif !== '') corps.reason = motif;
-
-  const result = await params.transport.request<unknown>({
-    method: 'PATCH',
-    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}`,
-    body: corps,
-    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  return ecrireFamille({
+    source: params.source,
+    transport: params.transport,
+    userId: params.userId,
+    famille: '',
+    change: params.edit,
+    reason: params.reason,
+    signal: params.signal,
   });
-  if (!result.ok) return result;
-
-  const membre = decodeAdminUserDetail(result.data);
-  return membre === null ? { ok: false, status: 0, error: 'Membre illisible' } : { ok: true, data: membre };
 }

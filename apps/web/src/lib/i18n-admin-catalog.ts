@@ -32,6 +32,16 @@ type TranslateAdminArgs<K extends AdminInterfaceCatalogKey> = [Placeholders<Fren
   ? []
   : [params: Readonly<Record<Placeholders<FrenchAdminCatalog[K]>, string>>];
 
+/**
+ * Les clés SANS paramètre — celles qu'un composant peut recevoir en prop et
+ * traduire sans savoir ce qu'elles disent (#7845). Une union de clés dont UNE
+ * porte `{count}` exigerait des paramètres pour toutes : le type les écarte
+ * donc à la source, plutôt que de laisser chaque appelant le découvrir.
+ */
+export type AdminPlainCatalogKey = {
+  [K in AdminInterfaceCatalogKey]: TranslateAdminArgs<K> extends [] ? K : never;
+}[AdminInterfaceCatalogKey];
+
 type CatalogModule = { readonly default: AdminInterfaceCatalog };
 
 const LOADERS: Readonly<Record<InterfaceLanguage, () => Promise<CatalogModule>>> = {

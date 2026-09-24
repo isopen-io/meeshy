@@ -41,6 +41,7 @@ export function Sheet({
   search,
   onSearchChange,
   bodyAs = 'ul',
+  closeLabel = 'Fermer',
   onClose,
   children,
 }: {
@@ -64,6 +65,9 @@ export function Sheet({
    * de désigner son propre conteneur de défilement.
    */
   bodyAs?: 'ul' | 'div';
+  /** Le nom du bouton de fermeture — dans la langue de l'écran qui monte la
+   * feuille quand il en a une ; le défaut est l'historique « Fermer ». */
+  closeLabel?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -123,7 +127,7 @@ export function Sheet({
             onClick={() => ref.current?.close()}
             className="grid place-items-center rounded-chip"
             style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-            aria-label="Fermer"
+            aria-label={closeLabel}
           >
             <Glyph name="x" size={20} />
           </button>

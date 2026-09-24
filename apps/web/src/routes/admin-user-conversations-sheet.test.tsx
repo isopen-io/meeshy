@@ -5,7 +5,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
-import { createActMounter } from '@/test-support/act-mount';
+import { createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
@@ -85,6 +85,33 @@ const MEMBRE = {
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  banner: null,
+  phoneCountryCode: '',
+  profileCompletionRate: null,
+  counts: {
+    participations: 0,
+    sentFriendRequests: 0,
+    receivedFriendRequests: 0,
+    createdShareLinks: 0,
+    createdTrackingLinks: 0,
+    createdAffiliateTokens: 0,
+  },
+  deviceLocale: '',
+  deviceCountry: '',
+  ageVerifiedAt: null,
+  consents: { voiceProfile: null, voiceData: null, dataProcessing: null, analytics: null, voiceCloning: null },
+  termsAcceptedAt: null,
+  termsVersion: null,
+  onboardingCompletedAt: null,
+  engagement: {
+    currentStreakDays: 0,
+    longestStreakDays: 0,
+    lastStreakDate: null,
+    engagementScore: 0,
+    meeshBalance: 0,
+    meeshMintedLifetime: 0,
+  },
+  blockedCount: 0,
 } satisfies AdminUserDetail;
 
 const LISTE = {
@@ -192,15 +219,12 @@ describe('LE PRISME REMIS À LA MODALE EST CELUI DU MEMBRE', () => {
   });
 });
 
-describe('la section des conversations est REPLIABLE', () => {
-  test('elle se plie, et sa liste est alors démontée', async () => {
+describe('la section des conversations est un PANNEAU d’onglet, pas un repliable', () => {
+  test('aucun repliable ne répète l’onglet — un clic ne peut plus vider le panneau', async () => {
     const host = await monter();
     expect(host.querySelector('[data-admin-conversation="c-atelier"]')).not.toBe(null);
-
-    await mounter.click(host.querySelector('[data-collapsible-toggle="admin-conv"]') as HTMLElement | null);
-
-    expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')?.getAttribute('aria-expanded')).toBe('false');
-    expect(host.querySelector('[data-admin-conversation="c-atelier"]')).toBe(null);
+    expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')).toBe(null);
+    expect(host.querySelector('[data-admin-section="conversations"]')).not.toBe(null);
   });
 });
 
@@ -305,5 +329,71 @@ describe('les MÉDIAS aussi : un échec n’est pas « rien publié »', () => {
     const host = await monterMedias(transportVideMedia());
     expect(host.querySelector('[data-admin-absence]')).toBe(null);
     expect(host.textContent ?? '').toContain(translateAdmin('fr', 'admin.media.empty'));
+  });
+});
+
+/**
+ * **TRIER, FILTRER, CONFIGURER** (#7845 D/E) — un tri qui ne change pas la
+ * requête est un tri décoratif : le témoin lit la chaîne de requête PARTIE.
+ */
+describe('le tri et la configuration', () => {
+  function transportComptant() {
+    const appels: HttpRequest[] = [];
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      appels.push(req);
+      if (req.path.includes('/conversations')) return { ok: true, data: LISTE };
+      return { ok: false, status: 404, error: 'non prévu' };
+    }) as HttpTransport['request'];
+    return { transport, appels };
+  }
+
+  const requetes = (appels: readonly HttpRequest[]) =>
+    appels.filter((a) => a.path.includes('/conversations')).map((a) => new URLSearchParams(a.path.split('?')[1] ?? ''));
+
+  async function monterTri() {
+    const t = transportComptant();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport: t.transport }} />
+      </QueryClientProvider>,
+    );
+    return { host, appels: t.appels };
+  }
+
+  test('changer le TRI relance la requête avec `sort`', async () => {
+    const { host, appels } = await monterTri();
+    typeInto(host.querySelector('[data-admin-conv-sort]') as HTMLSelectElement, 'title');
+    await mounter.settle();
+    expect(requetes(appels).at(-1)?.get('sort')).toBe('title');
+    expect(requetes(appels).at(-1)?.get('order')).toBe('desc');
+  });
+
+  test('inverser l’ORDRE relance la requête avec `order=asc`', async () => {
+    const { host, appels } = await monterTri();
+    await mounter.click(host.querySelector('[data-admin-conv-order]') as HTMLElement | null);
+    expect(requetes(appels).at(-1)?.get('order')).toBe('asc');
+  });
+
+  test('filtrer par RÔLE du membre part en `role`', async () => {
+    const { host, appels } = await monterTri();
+    typeInto(host.querySelector('[data-admin-conv-role]') as HTMLSelectElement, 'moderator');
+    await mounter.settle();
+    expect(requetes(appels).at(-1)?.get('role')).toBe('moderator');
+  });
+
+  test('la RECHERCHE part à la validation, sans attendre le délai', async () => {
+    const { host, appels } = await monterTri();
+    mounter.type(host, '[data-admin-conv-search]', 'atel');
+    await mounter.submit(host);
+    expect(requetes(appels).at(-1)?.get('search')).toBe('atel');
+  });
+
+  test('« Configurer » ouvre la feuille de configuration, distincte de la lecture', async () => {
+    const { host } = await monterTri();
+    expect(document.querySelector('[data-admin-conv-settings]')).toBe(null);
+    await mounter.click(host.querySelector('[data-admin-conversation-configure="c-atelier"]') as HTMLElement | null);
+    expect(document.querySelector('[data-admin-conv-settings="c-atelier"]')).not.toBe(null);
+    expect(document.querySelector('[data-admin-conversation-sheet]')).toBe(null);
   });
 });

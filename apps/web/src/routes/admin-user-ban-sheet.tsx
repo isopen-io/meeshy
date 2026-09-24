@@ -10,6 +10,8 @@ import {
   loadAdminUserBans,
   type AdminBan,
 } from '@/lib/api/admin-user-bans';
+import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
+import { adminUserStatsQueryKey } from '@/lib/api/admin-user-stats';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -47,7 +49,7 @@ const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 const BRAND = 'var(--color-ios-brand)';
 
-function etatDe(ban: AdminBan): 'active' | 'lifted' | 'expired' {
+export function banStateOf(ban: AdminBan): 'active' | 'lifted' | 'expired' {
   if (ban.active) return 'active';
   // Levé AVANT expiré : un ban retiré à la main reste un geste, même si son
   // échéance est passée depuis.
@@ -98,7 +100,13 @@ export function AdminUserBanSheet({
     setEnvoi(false);
 
     onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
-    if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    if (!resultat.ok) return;
+    void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    /* Bannir DÉSACTIVE le compte (et lever peut le rouvrir) : la fiche et ses
+       compteurs (`bansActive`, `sessionsActive`) sont périmés aussi. La clé
+       du détail est un PRÉFIXE — elle invalide avec lui les statistiques. */
+    void client.invalidateQueries({ queryKey: adminUserDetailQueryKey(userId) });
+    void client.invalidateQueries({ queryKey: adminUserStatsQueryKey(userId) });
   }
 
   const bannir = () =>
@@ -193,7 +201,7 @@ function BanRow({
   readonly envoi: boolean;
   readonly onLift: () => void;
 }) {
-  const etat = etatDe(ban);
+  const etat = banStateOf(ban);
 
   return (
     <div

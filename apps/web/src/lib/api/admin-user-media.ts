@@ -109,3 +109,22 @@ export async function loadAdminUserMedia(
 
   return { ok: true, data: decodeAdminMediaPage(pageServie(result), params.offset) };
 }
+
+/**
+ * LA REQUÊTE D'UNE PAGE DE MÉDIAS, écrite UNE fois (#7845) — le carrousel de la
+ * fiche et l'onglet Médias lisent la MÊME clé, donc doivent la remplir avec la
+ * MÊME fonction : deux `queryFn` sous une clé commune, c'est le cache qui
+ * décide laquelle a gagné, selon l'ordre de montage. Une seule, et le carrousel
+ * ne coûte aucune requête de plus que l'onglet.
+ */
+export function adminUserMediaQueryOptions(deps: AdminDeps, userId: string, offset: number) {
+  return {
+    queryKey: adminUserMediaQueryKey(userId, offset),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminMediaPage> => {
+      const resultat = await loadAdminUserMedia({ ...deps, userId, offset, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    retry: false,
+  };
+}

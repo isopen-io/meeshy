@@ -21,3 +21,29 @@ export function adminMoment(iso: string | null, langue: string): string {
 
   return new Intl.DateTimeFormat(langue, { dateStyle: 'short', timeStyle: 'short' }).format(date);
 }
+
+/**
+ * UN COMPTEUR, groupé selon la langue de la page (#7845) — « 12 345 » en
+ * français, « 12,345 » en anglais. Un nombre illisible (négatif, `NaN`) se dit
+ * par le même tiret qu'une date absente : les compteurs servis sont des `count`,
+ * jamais négatifs, et en afficher un serait afficher une erreur comme un fait.
+ */
+export function adminCount(n: number, langue: string): string {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  return new Intl.NumberFormat(langue).format(n);
+}
+
+/**
+ * UN JOUR, sans heure — une date de naissance, de consentement, de fin de
+ * série. L'heure y serait du bruit, et pour une date de naissance servie à
+ * minuit UTC, une heure LOCALE fausse (la veille, à l'ouest de Greenwich) :
+ * le jour est donc formaté en UTC.
+ */
+export function adminDay(iso: string | null, langue: string): string {
+  if (iso === null || iso === '') return '—';
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat(langue, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+}
