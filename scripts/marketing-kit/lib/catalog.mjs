@@ -17,7 +17,7 @@ const resolveUnit = (localization, lang, args) => {
   if (localization?.stringUnit?.value !== undefined) return localization.stringUnit.value
   const plural = localization?.variations?.plural
   if (!plural) return undefined
-  const count = args.find((a) => typeof a === 'number') ?? 0
+  const count = (plural.compte !== undefined ? args[plural.compte] : args.find((a) => typeof a === 'number')) ?? 0
   const forme = plural[pluralCategory(lang, count)] ?? plural.other
   return forme?.stringUnit?.value
 }
@@ -44,14 +44,17 @@ export const createCatalog = (catalogs) => {
   }
 }
 
-const variantes = (formes) => ({ variations: { plural: Object.fromEntries(Object.entries(formes).map(([k, v]) => [k, { stringUnit: { state: 'translated', value: v } }])) } })
+const variantes = ({ compte, ...formes }) => ({
+  variations: { plural: { ...Object.fromEntries(Object.entries(formes).map(([k, v]) => [k, { stringUnit: { state: 'translated', value: v } }])), ...(compte === undefined ? {} : { compte }) } },
+})
 
 // Pose les formes arabes du kit sur les clés dont l'arabe du catalogue ne les a pas encore.
 export const avecAccordsArabes = (strings) =>
   Object.fromEntries(
     Object.entries(strings).map(([cle, entree]) => {
       const formes = ACCORDS_ARABES[cle]
-      if (!formes || entree.localizations?.ar?.variations?.plural?.many) return [cle, entree]
+      const ar = entree.localizations?.ar
+      if (!formes || ar?.variations?.plural?.many || ar?.substitutions) return [cle, entree]
       return [cle, { ...entree, localizations: { ...entree.localizations, ar: variantes(formes) } }]
     }),
   )

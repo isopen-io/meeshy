@@ -10,6 +10,10 @@ describe('typographie', () => {
     expect(typo('See you? Yes!', 'en')).toBe('See you? Yes!')
   })
 
+  test('le deux-points français prend une espace insécable pleine, visible sur un titre', () => {
+    expect(typo('Ton tour : dis bonjour', 'fr')).toBe('Ton tour\u00A0: dis bonjour')
+  })
+
   test('un emoji final ne part jamais seul à la ligne', () => {
     expect(typo('Je fais les stickers ✨', 'fr')).toBe('Je fais les stickers ✨')
   })

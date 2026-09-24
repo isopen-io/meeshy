@@ -93,6 +93,13 @@ describe('accords arabes du kit — en attente du catalogue iOS', () => {
     expect(t('progression.next.streak', 'ar', 3, 10)).toBe('3 أيام متبقية قبل معلم 10')
   })
 
+  test('l’élan accorde la FENÊTRE (troisième argument), pas le facteur', () => {
+    const strings = avecAccordsArabes({ 'progression.elan.base': { localizations: { ar: { stringUnit: { value: 'الزخم ×%lld — %@ خلال %lld يومًا' } } } } })
+    const t = createCatalog([{ strings }])
+    expect(t('progression.elan.base', 'ar', 3, '3 فئات نشطة', 7)).toBe('الزخم ×3 — 3 فئات نشطة خلال 7 أيام')
+    expect(t('progression.elan.base', 'ar', 3, '3 فئات نشطة', 14)).toBe('الزخم ×3 — 3 فئات نشطة خلال 14 يومًا')
+  })
+
   test('le catalogue iOS reprend la main dès qu’il porte ses propres formes arabes', () => {
     const strings = avecAccordsArabes({ 'progression.streak.days': { localizations: { ar: pluriel({ one: 'أ', many: 'CATALOGUE %lld', other: 'autre %lld' }) } } })
     expect(createCatalog([{ strings }])('progression.streak.days', 'ar', 12)).toBe('CATALOGUE 12')

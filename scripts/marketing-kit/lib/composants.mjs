@@ -46,9 +46,9 @@ export const roundButton = (name, { size = 44, iconSize = 18, tint, className = 
 
 export const nomComplet = (profil) => `${profil.prenom} ${profil.nom}`
 
-// Typographie : espace fine insécable avant ? ! : ; en français, et un emoji final ne part
-// jamais seul à la ligne.
+// Typographie : espace fine insécable avant ? ! ; en français, espace insécable pleine avant
+// le deux-points, et un emoji final ne part jamais seul à la ligne.
 export const typo = (texte, lang) => {
-  const fine = lang === 'fr' ? texte.replace(/ ([?!:;»])/g, '\u202F$1').replace(/« /g, '«\u202F') : texte
+  const fine = lang === 'fr' ? texte.replace(/ :/g, '\u00A0:').replace(/ ([?!;»])/g, '\u202F$1').replace(/« /g, '«\u202F') : texte
   return fine.replace(/ (\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\uFE0F]*)$/u, '\u00A0$1')
 }

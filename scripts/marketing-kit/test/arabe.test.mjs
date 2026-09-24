@@ -8,10 +8,12 @@ const texteVisible = (page) => page.replace(/<style>[\s\S]*?<\/style>|<script>[\
 
 // L'arabe accorde le nom compté : 3 à 10 ⇒ « أيام » (pluriel), 11 à 99 ⇒ « يومًا » (singulier
 // accusatif), 2 ⇒ duel « يومان ». « 12 أيام », « 21 أيام », « 2 أيام » sont des fautes.
-const faussesJournees = (texte) =>
-  [...texte.matchAll(/(\d+)\s*أيام/g)].map((m) => Number(m[1])).filter((n) => n < 3 || n > 10)
+const faussesJournees = (texte) => [
+  ...[...texte.matchAll(/(\d+)\s*أيام/g)].map((m) => Number(m[1])).filter((n) => n < 3 || n > 10),
+  ...[...texte.matchAll(/(\d+)\s*يومًا/g)].map((m) => Number(m[1])).filter((n) => n % 100 < 11 || n % 100 > 99),
+]
 
-describe('accord du nombre en arabe — « أيام » seulement de 3 à 10', () => {
+describe('accord du nombre en arabe — « أيام » de 3 à 10, « يومًا » de 11 à 99', () => {
   test('l’écran Progression de démo', () => {
     expect(faussesJournees(toString(ecran('progression', contexte({ lang: 'ar', theme: 'light' }))))).toEqual([])
   })
