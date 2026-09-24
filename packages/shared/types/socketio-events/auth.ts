@@ -46,6 +46,8 @@ export interface AuthenticatedEventData {
 export interface ErrorEventData {
   readonly message: string;
   readonly code?: string;
+  /** Seconds to wait before retrying — only on a temporary refusal (`NEWCOMER_SLOW_MODE`, #7740). */
+  readonly retryAfter?: number;
 }
 
 export interface AuthTokenExpiredEventData {

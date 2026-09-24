@@ -107,7 +107,10 @@ export function useSend(params: {
 
   const reasonOf = useCallback(
     (messageId: string): string | undefined =>
-      sendFailureReason(entries.find((entry) => entry.message.id === messageId)?.lastError),
+      sendFailureReason(
+        entries.find((entry) => entry.message.id === messageId)?.lastError,
+        currentInterfaceLanguage(),
+      ),
     [entries],
   );
 
@@ -173,13 +176,14 @@ export function useSend(params: {
          lecteur d'écran AU MOMENT de l'échec — un `title` ne se survole pas
          au doigt. La dernière entrée en échec est celle qu'on vient de
          poser. */
-      const reason = sendFailureReason(
-        [...entries].reverse().find((entry) => entry.delivery === 'failed')?.lastError,
-      );
       /* LA MÊME LANGUE QUE LA BANDE QU'ELLE ANNONCE (#7337) — sa jumelle
          « Message envoyé », deux lignes plus bas, lisait déjà le catalogue ;
-         celle-ci était restée EN DUR, en français. */
+         celle-ci était restée EN DUR, en français. La cause aussi (#7740). */
       const language = currentInterfaceLanguage();
+      const reason = sendFailureReason(
+        [...entries].reverse().find((entry) => entry.delivery === 'failed')?.lastError,
+        language,
+      );
       announce(
         reason === undefined
           ? translate(language, 'announce.messageNotSent')

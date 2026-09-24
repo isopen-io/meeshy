@@ -11,7 +11,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
-import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
+import { isMessageTranslationTarget, translationTargetId } from '../zmq-translation/utils/zmq-helpers';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
@@ -3181,7 +3181,7 @@ export class MessageTranslationService extends EventEmitter {
       
       // Créer une requête de traduction
       const request: TranslationRequest = {
-        messageId: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        messageId: translationTargetId('direct-text', `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`),
         text: text,
         sourceLanguage: this._normalizeSourceLanguage(sourceLanguage),
         targetLanguages: [targetLanguage],

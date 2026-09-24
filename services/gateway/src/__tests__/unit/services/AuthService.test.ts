@@ -686,7 +686,8 @@ describe('AuthService', () => {
         mockPrisma.message.create.mockResolvedValue({ id: 'sys-msg', conversationId: 'global-conv-id' });
       };
 
-      it('poste « X a rejoint la conversation », signé du Participant.id de l’arrivant', async () => {
+      // #7740 — la ligne d'arrivées REGROUPÉES de Meeshy Global, plus un avis par inscription.
+      it('ouvre la ligne « X vient d’arriver », signée du Participant.id de l’arrivant', async () => {
         arrange();
 
         await inscrire();
@@ -698,12 +699,11 @@ describe('AuthService', () => {
           senderId: 'member-row-id',
           messageType: 'system',
           messageSource: 'system',
+          content: 'New User vient d’arriver — dis-lui salut',
           metadata: {
-            kind: 'member-joined',
-            participantId: 'member-row-id',
-            displayName: 'New User',
-            isAnonymous: false,
-            viaShareLink: false
+            kind: 'members-arrived',
+            arrivals: [{ participantId: 'member-row-id', displayName: 'New User' }],
+            count: 1
           }
         });
       });

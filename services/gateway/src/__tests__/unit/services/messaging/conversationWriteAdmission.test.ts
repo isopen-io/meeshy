@@ -23,8 +23,20 @@ import {
   admitConversationWriteFor,
   describeConversationWriteRefusal,
   isConversationClosed,
-  isConversationWriteRefused
+  isConversationWriteRefused,
+  writeRefusalHttpResponse
 } from '../../../../services/messaging/conversationWriteAdmission';
+import { cacheSendReservations } from '../../../../services/messaging/newcomerSendReservations';
+
+/** Une réservation neuve par admission : ces témoins portent sur la LECTURE de la base (cf. `globalNewcomerReservation.test.ts`). */
+const freshReservations = () => {
+  const entries = new Map<string, string>();
+  return cacheSendReservations(() => ({
+    setnx: async (key: string, value: string) => (entries.has(key) ? false : (entries.set(key, value), true)),
+    get: async (key: string) => entries.get(key) ?? null,
+    del: async (key: string) => { entries.delete(key); }
+  }));
+};
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const SENDER = 'participant-1';
@@ -129,6 +141,7 @@ const admitFor = (
       conversation: policy === null ? null : buildPolicy(policy),
       conversationId: CONVERSATION_ID,
       senderParticipantId: SENDER,
+      reservations: freshReservations(),
       now: NOW
     })
   };
@@ -303,7 +316,9 @@ describe('admitConversationWriteFor — conversation globale', () => {
     );
 
     expect(isConversationWriteRefused(await result)).toBe(false);
-    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+    // Le participant y est lu depuis #7740 — pour l'ANCIENNETÉ du compte
+    // (`globalNewcomerSlowMode.test.ts`), jamais pour un rang.
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 });
 
@@ -644,6 +659,37 @@ describe('describeConversationWriteRefusal — le message, en un seul exemplaire
   });
 });
 
+// ── Ce qu'on RÉPOND en HTTP ─────────────────────────────────────────────────
+
+describe('writeRefusalHttpResponse — le statut dit « jamais », « plus jamais » ou « pas encore »', () => {
+  it('rend 410 pour une conversation close', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'conversation-closed' }))
+      .toEqual({ status: 410 });
+  });
+
+  it('rend 403 pour un rang insuffisant', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'write-role-insufficient' }))
+      .toEqual({ status: 403 });
+  });
+
+  it('rend 429 + Retry-After pour le mode lent configuré', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'slow-mode-active', retryAfterSeconds: 12 }))
+      .toEqual({ status: 429, code: 'SLOW_MODE_ACTIVE', retryAfterSeconds: 12 });
+  });
+
+  // Le refus TEMPORAIRE des nouveaux comptes ne doit jamais tomber dans le 403
+  // définitif : une file cliente le rangerait en échec au lieu de le reprogrammer.
+  it('rend 429 + Retry-After + NEWCOMER_SLOW_MODE pour le mode lent des nouveaux comptes', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'newcomer-slow-mode', retryAfterSeconds: 21 }))
+      .toEqual({ status: 429, code: 'NEWCOMER_SLOW_MODE', retryAfterSeconds: 21 });
+  });
+
+  it('ne rend jamais Retry-After: 0 quand le décompte manque', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'newcomer-slow-mode' }))
+      .toEqual({ status: 429, code: 'NEWCOMER_SLOW_MODE', retryAfterSeconds: 1 });
+  });
+});
+
 // ── La lecture, pour le point de convergence ───────────────────────────────
 
 const readerReturning = (row: unknown, participant: unknown = { role: 'member', user: null }) =>
@@ -659,7 +705,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(isConversationWriteRefused(admission)).toBe(true);
@@ -671,7 +718,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(isConversationWriteRefused(admission)).toBe(false);
@@ -685,7 +733,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(admission).toEqual({ admitted: false, reason: 'write-role-insufficient' });
@@ -701,7 +750,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
@@ -727,6 +777,7 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
       senderParticipantId: SENDER,
+      reservations: freshReservations(),
       now: NOW
     });
 

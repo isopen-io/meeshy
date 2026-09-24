@@ -9,6 +9,7 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types';
+import { ErrorCode } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -29,6 +30,7 @@ import {
   isConversationWriteRefused,
   describeConversationWriteRefusal
 } from './conversationWriteAdmission';
+import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
 import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
@@ -49,7 +51,8 @@ export class MessagingService {
     private readonly prisma: PrismaClient,
     private readonly translationService: MessageTranslationService,
     notificationService?: NotificationService,
-    private readonly readBroadcastDeps?: ReadBroadcastDepsProvider
+    private readonly readBroadcastDeps?: ReadBroadcastDepsProvider,
+    private readonly sendReservations: SendReservationStore = sharedSendReservations
   ) {
     this.validator = new MessageValidator(prisma);
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
@@ -80,6 +83,13 @@ export class MessagingService {
     logger.info('perf:messaging.handleMessage', {
       ...corr, step: 'messaging.handleMessage', phase: 'start'
     });
+
+    // La fenêtre du mode lent que l'admission a RÉSERVÉE (règle 4). Tant que
+    // la ligne n'est pas écrite, toute sortie — refus plus bas, panne de
+    // `saveMessage` — la rend : un envoi que personne n'a reçu ne coûte pas
+    // 30 s d'attente. Écrite (ou dédupliquée sur l'original), elle expire.
+    let releaseReservation: (() => Promise<void>) | undefined;
+    let persisted = false;
 
     try {
       // 0. Assainissement des références de transfert — AVANT la validation,
@@ -232,7 +242,9 @@ export class MessagingService {
         'messaging.conversationWriteAdmission',
         () => admitConversationWrite(this.prisma, {
           conversationId,
-          senderParticipantId: participant.id
+          senderParticipantId: participant.id,
+          reservations: this.sendReservations,
+          sendId: request.clientMessageId
         }),
         { ...corr, conversationId }
       );
@@ -241,10 +253,15 @@ export class MessagingService {
           ...corr, conversationId, reason: conversationAdmission.reason,
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
-        return this.createErrorResponse(
-          describeConversationWriteRefusal(conversationAdmission)
-        );
+        return conversationAdmission.reason === 'newcomer-slow-mode'
+          ? this.createErrorResponse(
+              describeConversationWriteRefusal(conversationAdmission),
+              ErrorCode.NEWCOMER_SLOW_MODE,
+              conversationAdmission.retryAfterSeconds
+            )
+          : this.createErrorResponse(describeConversationWriteRefusal(conversationAdmission));
       }
+      releaseReservation = conversationAdmission.releaseReservation;
 
       // 3.7. Droit D'ÉCRITURE DU PARTICIPANT (#4855) — distinct de l'état du
       //      conteneur ci-dessus : `canSendMessages` est un droit PERSONNEL
@@ -424,6 +441,7 @@ export class MessagingService {
         }),
         { ...corr, conversationId }
       );
+      persisted = true;
 
       const isDuplicate =
         Boolean((message as { isDuplicate?: boolean }).isDuplicate);
@@ -485,6 +503,14 @@ export class MessagingService {
       return this.createErrorResponse(
         'Erreur interne lors de l\'envoi du message'
       );
+    } finally {
+      if (releaseReservation && !persisted) {
+        await releaseReservation().catch((error: unknown) =>
+          logger.warn('newcomer slow-mode reservation release failed', {
+            ...corr, errorMessage: error instanceof Error ? error.message : String(error)
+          })
+        );
+      }
     }
   }
 
@@ -680,11 +706,12 @@ export class MessagingService {
   /**
    * Génère une réponse d'erreur
    */
-  private createErrorResponse(error: string, code?: string): MessageResponse {
+  private createErrorResponse(error: string, code?: string, retryAfter?: number): MessageResponse {
     return {
       success: false,
       error,
       ...(code ? { code } : {}),
+      ...(retryAfter !== undefined ? { retryAfter } : {}),
       data: null as any
     };
   }

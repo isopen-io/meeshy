@@ -20,7 +20,7 @@ import type {
   ConversationParams,
   SendMessageBody
 } from './types';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
@@ -206,6 +206,14 @@ export function registerSendMessageRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        429: {
+          description: 'Meeshy Global — un compte de moins de 24 h écrit un message toutes les 30 s (#7740)',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
+          }
+        },
         500: errorResponseSchema
       }
     },
@@ -419,6 +427,14 @@ export function registerSendMessageRoute(
         // `canSendAudios` pour le type de pièce jointe posté) est un 403,
         // jamais une erreur de VALIDATION de la requête — même statut que le
         // jumeau anonyme, `routes/links/messages.ts`.
+        if (result.code === ErrorCode.NEWCOMER_SLOW_MODE) {
+          const retryAfter = result.retryAfter ?? 1;
+          reply.header('retry-after', String(retryAfter));
+          return sendError(reply, 429, result.error || ErrorMessages[ErrorCode.NEWCOMER_SLOW_MODE].fr, {
+            code: ErrorCode.NEWCOMER_SLOW_MODE,
+            details: { retryAfter }
+          });
+        }
         if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
           return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages');
         }

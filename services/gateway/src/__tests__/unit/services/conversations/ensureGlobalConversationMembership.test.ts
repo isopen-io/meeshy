@@ -29,7 +29,7 @@ type Harness = {
       findMany: jest.Mock;
       count: jest.Mock;
     };
-    message: { create: jest.Mock };
+    message: { create: jest.Mock; findMany: jest.Mock; update: jest.Mock };
   };
 };
 
@@ -45,7 +45,11 @@ function harness(overrides: { globalConv?: any; existingMember?: any; memberCoun
         findMany: jest.fn<any>().mockResolvedValue([]),
         count: jest.fn<any>().mockResolvedValue(memberCount),
       },
-      message: { create: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }) },
+      message: {
+        create: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        update: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
+      },
     },
   };
 }
@@ -160,7 +164,9 @@ describe('ensureGlobalConversationMembership', () => {
     expect(result).toEqual({ outcome: 'joined', participantId: 'part-new' });
   });
 
-  it('poste l\'avis d\'arrivée, signé du Participant.id créé', async () => {
+  // #7740 — le salon global ne poste plus « X a rejoint » par inscription :
+  // la ligne d'arrivées REGROUPÉES de la fenêtre (`globalArrivalsNotice.test.ts`).
+  it('ouvre la ligne d\'arrivées regroupées, signée du Participant.id créé', async () => {
     await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
 
     expect(h.prisma.message.create).toHaveBeenCalledTimes(1);
@@ -170,12 +176,47 @@ describe('ensureGlobalConversationMembership', () => {
       senderId: 'part-new',
       messageType: 'system',
       messageSource: 'system',
+      content: 'New User vient d’arriver — dis-lui salut',
       metadata: expect.objectContaining({
-        displayName: 'New User',
-        isAnonymous: false,
-        viaShareLink: false,
+        kind: 'members-arrived',
+        count: 1,
+        arrivals: [{ participantId: 'part-new', displayName: 'New User' }],
       }),
     });
+  });
+
+  it('met à jour la ligne ouverte et la rediffuse en message:edited plutôt que d\'en poster une autre', async () => {
+    const openLine = {
+      id: 'msg-open',
+      metadata: {
+        kind: 'members-arrived',
+        arrivals: [{ participantId: 'part-old', displayName: 'Aïcha' }],
+        count: 1,
+        windowStartedAt: new Date().toISOString(),
+      },
+    };
+    h.prisma.message.findMany.mockResolvedValue([openLine]);
+    h.prisma.message.update.mockImplementation(async ({ data }: any) => ({
+      id: 'msg-open', conversationId: GLOBAL_CONV.id, senderId: 'part-old', createdAt: new Date(), ...data,
+    }));
+    const { io, broadcast } = makeIo();
+    const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({ broadcastMessage, getIO: () => io });
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(h.prisma.message.create).not.toHaveBeenCalled();
+    expect(broadcastMessage).not.toHaveBeenCalled();
+    expect(io.to).toHaveBeenCalledWith(`conversation:${GLOBAL_CONV.id}`);
+    expect(broadcast.emit).toHaveBeenCalledWith(
+      'message:edited',
+      expect.objectContaining({
+        id: 'msg-open',
+        content: 'New User et Aïcha viennent d’arriver — dis-leur salut',
+        isEdited: false,
+        metadata: expect.objectContaining({ count: 2 }),
+      }),
+    );
   });
 
   it('diffuse l\'avis via le manager résolu, quand il en existe un', async () => {

@@ -1,6 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { sendFailureReason } from '@/lib/send/failure-reason';
+
+beforeAll(async () => {
+  await loadInterfaceCatalog('fr');
+});
 
 import { isPermanentFailure, outcomeOf, RETRYABLE_CLIENT_STATUSES } from './outcome';
 
@@ -86,7 +91,7 @@ describe('cohérence — un statut que sendFailureReason dit "réessayer" n’es
   }
 
   test('le 429 que sendFailureReason invite explicitement à réessayer n’est jamais permanent', () => {
-    const reason = sendFailureReason({ ok: false, status: 429, error: 'Rate limit exceeded' });
+    const reason = sendFailureReason({ ok: false, status: 429, error: 'Rate limit exceeded' }, 'fr');
     expect(reason).toContain('réessayez');
     expect(isPermanentFailure({ status: 429 })).toBe(false);
   });
