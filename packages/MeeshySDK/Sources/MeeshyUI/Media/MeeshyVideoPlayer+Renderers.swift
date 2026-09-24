@@ -519,7 +519,13 @@ internal struct _FullscreenRenderer: View {
     /// vidéo n'avait jamais joué. `attemptLoad()` le pose de façon SYNCHRONE
     /// (`load()` ne fait rien d'asynchrone dans ce cas — repli supprimé).
     @State private var loadFailed = false
-    @ObservedObject private var manager = SharedAVPlayerManager.shared
+    /// Référence NUE, champs lus MIROITÉS — même discipline que
+    /// `_InlineRenderer` : `@ObservedObject` réévaluait tout le plein écran
+    /// (surface, poster, légende, gestes) à chaque battement de `currentTime`
+    /// (5 Hz). La barre de lecture observe le moteur elle-même.
+    private let manager = SharedAVPlayerManager.shared
+    @State private var enginePlayer: AVPlayer? = SharedAVPlayerManager.shared.player
+    @State private var engineIsMuted: Bool = SharedAVPlayerManager.shared.isMuted
     /// Poster NET (opaque, résolu par l'app) : lu au montage, résolu sinon.
     @State private var poster: UIImage?
     /// Fond décoratif pendant la résolution — le thumbHash, flou assumé. La
@@ -599,7 +605,9 @@ internal struct _FullscreenRenderer: View {
             guard poster == nil, player.availability == .ready else { return }
             await resolvePosterIfNeeded()
         }
-        .task(id: manager.player != nil) { await armSurfaceReadyFailsafe() }
+        .task(id: enginePlayer != nil) { await armSurfaceReadyFailsafe() }
+        .onReceive(manager.$player) { enginePlayer = $0 }
+        .onReceive(manager.$isMuted) { engineIsMuted = $0 }
         .onAppear {
             watchStartTime = Date()
             // Defensive : reset l'auto-hide state à l'entrée du fullscreen.
@@ -617,11 +625,11 @@ internal struct _FullscreenRenderer: View {
 
     private var playerContent: some View {
         ZStack {
-            if let p = manager.player {
+            if let p = enginePlayer {
                 MeeshyVideoSurface(
                     player: p,
                     gravity: videoGravity,
-                    isMuted: manager.isMuted,
+                    isMuted: engineIsMuted,
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
@@ -648,12 +656,12 @@ internal struct _FullscreenRenderer: View {
             // COMPOSÉ sa première frame (`isReadyForDisplay`) : sans lui, la
             // couche vidéo est noire pendant le spin-up décodeur (1–2 s sur
             // cache froid). Jamais gaté sur `currentItem` (leçon 24).
-            if Self.showsPoster(playerPresent: manager.player != nil, surfaceReady: surfaceReady) {
+            if Self.showsPoster(playerPresent: enginePlayer != nil, surfaceReady: surfaceReady) {
                 posterLayer
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
-            if Self.showsLoadingSpinner(playerPresent: manager.player != nil, surfaceReady: surfaceReady, didInitialLoad: didInitialLoad) {
+            if Self.showsLoadingSpinner(playerPresent: enginePlayer != nil, surfaceReady: surfaceReady, didInitialLoad: didInitialLoad) {
                 ProgressView()
                     .tint(.white.opacity(0.85))
                     .allowsHitTesting(false)

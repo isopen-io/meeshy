@@ -501,29 +501,38 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   //
   // PÉRIMÈTRE, dit à voix haute : seuls les appels dont le chemin est une
   // chaîne LITTÉRALE sont vus. Ceux composés par gabarit
-  // (`buildApiUrl(`/users/${id}`)`) ne le sont pas — les couvrir demanderait
+  // (`path: `/users/${id}``) ne le sont pas — les couvrir demanderait
   // d'évaluer du TypeScript, et une garde qui prétendrait les couvrir sans le
   // faire serait pire que celle-ci.
+  //
+  // LA FORME D'APPEL A CHANGÉ AVEC L'APPLICATION (#7668, 2026-09-24). Le
+  // legacy Next.js appelait `buildApiUrl('/x')` / `apiService.get('/x', …)` ;
+  // il a quitté le dépôt, et l'application qui a pris le chemin `apps/web`
+  // décrit chaque requête par un objet `{ path: '/api/v1/x', … }`
+  // (`src/lib/api/*.ts`). Repointer le seul chemin aurait laissé l'ancien
+  // extracteur balayer 1 300 fichiers pour n'y trouver AUCUN appel — vert, et
+  // muet. L'extracteur lit donc la forme `path:` ; l'échantillon fixe plus bas
+  // prouve qu'il la reconnaît.
   it('ne laisse aucun appel LITTÉRAL du web viser une route absente', () => {
-    const racineWeb = path.resolve(__dirname, '../../../../../apps/web');
+    const racineWeb = path.resolve(__dirname, '../../../../../apps/web/src');
     if (!fs.existsSync(racineWeb)) {
-      throw new Error(`apps/web introuvable (${racineWeb}) — cette garde ne peut pas se prononcer, et se taire serait pire que rougir.`);
+      throw new Error(`apps/web/src introuvable (${racineWeb}) — cette garde ne peut pas se prononcer, et se taire serait pire que rougir.`);
     }
 
-    const IGNORÉS = ['node_modules', '.next', '.turbo', '__tests__', 'coverage'];
+    const IGNORÉS = ['node_modules', 'dist', '.turbo', '__tests__', 'coverage', 'test-support'];
     const fichiers: string[] = [];
     const parcourir = (dossier: string) => {
       for (const entrée of fs.readdirSync(dossier, { withFileTypes: true })) {
         if (IGNORÉS.includes(entrée.name)) continue;
         const complet = path.join(dossier, entrée.name);
         if (entrée.isDirectory()) parcourir(complet);
-        else if (/\.(ts|tsx)$/.test(entrée.name)) fichiers.push(complet);
+        else if (/\.(ts|tsx)$/.test(entrée.name) && !/\.test\.tsx?$/.test(entrée.name)) fichiers.push(complet);
       }
     };
     parcourir(racineWeb);
 
-    // `buildApiUrl('/x')` sert `<backend>/api/v1/x` ; un `/api/...` déjà présent
-    // n'est pas doublé (`lib/config.ts`).
+    // Un chemin sans préfixe `/api/v1` est rapporté à `<backend>/api/v1/x`, comme
+    // le faisait l'ancienne forme `buildApiUrl('/x')`.
     const versUrlServeur = (litteral: string) => {
       const sansApi = litteral.startsWith('/api/v')
         ? litteral
@@ -544,12 +553,11 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
         return attendus.every((seg, i) => seg.startsWith(':') || seg === '*' || seg === reçus[i]);
       });
 
-    // Le littéral n'est un chemin COMPLET que si rien ne lui est concaténé.
-    // `${buildApiUrl('/messages')}/${id}/translate` vise bien une route réelle,
-    // dont ce littéral n'est que le préfixe : le compter entier ferait rougir
-    // la garde sur trois appels parfaitement corrects. On l'écarte en regardant
-    // ce qui suit immédiatement la parenthèse fermante.
-    const motif = /(?:buildApiUrl|apiService\.(?:get|post|put|patch|delete))\(\s*['"]([^'"$]+)['"]\s*[,)]/g;
+    // Le littéral n'est un chemin COMPLET que s'il se FERME sur sa propre
+    // quote : un gabarit `path: `/api/v1/x/${id}`` s'arrête au `$` et n'est pas
+    // vu (cf. PÉRIMÈTRE). La requête se termine après, par une virgule, une
+    // accolade ou une fin de ligne.
+    const motif = /\bpath:\s*(['"`])(\/api\/[^'"`$\s]+)\1\s*[,}\n]/g;
     // Clé (url, site) et non url seule : deux fichiers visant la MÊME adresse
     // absente s'écrasaient, et le rapport n'en nommait qu'un — c'est ainsi que
     // `hooks/use-group-modal.ts` est resté caché derrière `lib/server-cache.ts`
@@ -559,21 +567,14 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     for (const fichier of fichiers) {
       const source = fs.readFileSync(fichier, 'utf8');
       for (const m of source.matchAll(motif)) {
-        // Un appel `apiService.get('/x', …)` se termine par une virgule ; un
-        // `buildApiUrl('/x')` par la parenthèse, éventuellement suivie d'une
-        // concaténation qui en fait un simple PRÉFIXE — écartée ici.
-        // Un appel COMMENTÉ n'est pas un appel. `privacy-settings.tsx` garde
-        // ainsi, en commentaire, un `apiService.delete('/api/v1/me/account')`
-        // qui documente une intention — le compter ferait rougir la garde sur
-        // du texte.
+        // Un appel COMMENTÉ n'est pas un appel : un doc-comment qui cite une
+        // requête documente une intention — le compter ferait rougir la garde
+        // sur du texte.
         const débutLigne = source.lastIndexOf('\n', m.index!) + 1;
         const avant = source.slice(débutLigne, m.index!).trimStart();
         if (avant.startsWith('//') || avant.startsWith('*')) continue;
 
-        const suite = source.slice(m.index! + m[0].length, m.index! + m[0].length + 3);
-        if (m[0].endsWith(')') && /^\}\s*[/`]/.test(suite)) continue;
-
-        const url = versUrlServeur(m[1]);
+        const url = versUrlServeur(m[2]);
         if (!estServie(url)) {
           const site = path.relative(racineWeb, fichier);
           fantômes.set(`${url}\u0000${site}`, { url, site });
@@ -601,18 +602,23 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     //    liste vide, et tout le reste passerait au vert sans rien lire.
     expect(fichiers.length).toBeGreaterThan(500);
 
-    // 2. L'EXTRACTEUR reconnaît-il encore les deux formes d'appel ? Question qui
+    // 2. L'EXTRACTEUR reconnaît-il encore la forme d'appel ? Question qui
     //    se répond sur un échantillon FIXE, insensible à ce que le web contient.
     //    Si `motif` cesse de matcher, ceci rougit — même le jour où il ne reste
     //    plus un seul littéral en production.
     const ÉCHANTILLON = [
-      "apiService.get('/api/v1/echantillon/verbe');",
-      "buildApiUrl('/api/v1/echantillon/constructeur');",
+      "request({ path: '/api/v1/echantillon/simple', method: 'GET' });",
+      'request({ method: "POST", path: "/api/v1/echantillon/double" });',
+      'request({ path: `/api/v1/echantillon/gabarit/${id}` });',
+      'const route = {',
+      '  path: `/api/v1/echantillon/accent-grave`',
+      '};',
     ].join('\n');
-    const extraits = [...ÉCHANTILLON.matchAll(motif)].map((m) => m[1]);
+    const extraits = [...ÉCHANTILLON.matchAll(motif)].map((m) => m[2]);
     expect(extraits).toEqual([
-      '/api/v1/echantillon/verbe',
-      '/api/v1/echantillon/constructeur',
+      '/api/v1/echantillon/simple',
+      '/api/v1/echantillon/double',
+      '/api/v1/echantillon/accent-grave',
     ]);
 
     // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration

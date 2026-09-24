@@ -19,6 +19,13 @@ import XCTest
 /// Témoins de STRUCTURE (source lue à l'exécution, leçon « ce qui ne
 /// s'exécute pas ne se signale pas ») + gardes des fichiers `Lentille/Mode/`
 /// reprises de l'ancienne suite `PeekViewModelTests` (timings et cotes gelés).
+///
+/// behaviour-matrix:L12 — les deux chemins d'appui long (natif iOS 26+,
+/// overlay < 26), le sous-menu « Mode de lecture », le ressort de pression gelé
+/// et la zone d'exclusion de l'avatar sont gardés ici. L'aperçu, lui, n'est
+/// plus `LentillePeekView` (décision du 2026-08-21 ci-dessus). Le témoin web
+/// de cet id est parti avec le legacy `apps/web` (#7668) ; le web actuel doit
+/// rejouer la matrice (#7717).
 final class LongPressPreviewGuardTests: XCTestCase {
 
     // MARK: - Sources

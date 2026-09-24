@@ -30,7 +30,7 @@ struct StoryTrayView: View {
     // manquant. (Le cover du composer, lui, est monté aux racines depuis S5 —
     // cf. `StoryComposerCover`.)
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
     /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
@@ -682,7 +682,7 @@ struct PinnedStoryTrailBand: View {
     // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
     // SharePickerView « Transférer » crasherait sur un env object manquant).
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     /// S5 — le tap sur son propre anneau ouvre désormais le VIEWER (parité avec
     /// la grande trail). La gestion reste atteignable par appui long

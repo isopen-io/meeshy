@@ -6,13 +6,24 @@
 > ## 🧊 LE DÉVELOPPEMENT ANDROID KOTLIN EST GELÉ (directive porteur 2026-09-16)
 > **`apps/android` — l'application NATIVE Kotlin (1 582 fichiers `.kt`, 254 559 lignes, mesurés le 2026-09-16) — ne reçoit plus de développement.** Aucune feature, aucun portage d'écran, aucune mise à parité, y compris si une issue ouverte avant cette date le demande : ces plans sont SUSPENDUS, ils ne se rejouent pas. Le gel porte sur le développement, pas sur le code : rien n'est supprimé, `android.yml` continue de tourner, et la reprise se décidera par une directive, jamais par une session.
 >
-> **CE QUE LE GEL NE TOUCHE PAS — la coque Android de `apps/web-v2`.** Ce sont DEUX Android, et la confusion coûterait le chantier en cours : `apps/web-v2/android` est une coque Capacitor qui ne porte AUCUN Kotlin écrit à la main (mesuré : 0 fichier `.kt`, 3 fichiers Java générés). La directive 2026-09-07 fait de `apps/web-v2` « une application similaire à `apps/ios` pour le web ET Android EN UNE FOIS » — c'est elle qui sert Android désormais, et elle continue à plein régime. Geler le Kotlin natif ne retire pas Android du produit : **cela fait de la coque le chemin Android.**
+> **CE QUE LE GEL NE TOUCHE PAS — la coque Android de `apps/web`** (ex `apps/web-v2`, renommée le 2026-09-24, #7668). Ce sont DEUX Android, et la confusion coûterait le chantier en cours : `apps/web/android` est une coque Capacitor qui ne porte AUCUN Kotlin écrit à la main (mesuré : 0 fichier `.kt`, 3 fichiers Java générés). La directive 2026-09-07 fait de `apps/web-v2` « une application similaire à `apps/ios` pour le web ET Android EN UNE FOIS » — c'est elle qui sert Android désormais, et elle continue à plein régime. Geler le Kotlin natif ne retire pas Android du produit : **cela fait de la coque le chemin Android.**
 >
-> **L'UNIQUE exception, même régime que le legacy `apps/web` :** un incident de production, une faille de sécurité ou une régression bloquante sur l'application déjà publiée se corrige — au minimum, et sans rien ajouter d'autre.
+> **L'UNIQUE exception, même régime que celui du legacy web jusqu'à son retrait (#7668) :** un incident de production, une faille de sécurité ou une régression bloquante sur l'application déjà publiée se corrige — au minimum, et sans rien ajouter d'autre.
 >
 > **Conséquence sur les règles « toute évolution touche les TROIS ».** Le dépôt énonce plusieurs lois à trois miroirs (Prisme Linguistique § 3 et ses quatre familles, présence § « Source de vérité TS »). Tant que ce gel tient, elles se lisent **« touche les DEUX »** — web et iOS — et **une divergence du miroir Kotlin n'est PAS un défaut à corriger** : c'est la conséquence assumée du gel. Ne pas ouvrir d'issue pour « remettre Android à parité » ; ne pas compter Android comme dimension manquante (§ 13, Complétude) d'une feature web ou iOS. Un lot qui TOUCHE une de ces lois note, dans son commentaire de clôture, ce que le miroir Kotlin n'a pas reçu — la dette se CONSIGNE, elle ne se solde pas.
 
-> ## 🛑 LA V3 EN DÉVELOPPEMENT EST ANNULÉE — le chantier web est `apps/web-v2` (2.0.0) (directives porteur 2026-09-07 et 2026-09-10)
+> ## ✅ UNE SEULE APPLICATION WEB : `apps/web` (2026-09-24, #7668)
+> **Le legacy Next.js a quitté le dépôt, et `apps/web-v2` a pris son chemin et son nom de paquet (`@meeshy/web`, version 2.0.x — la numérotation du chantier continue, elle ne repart pas de la 1.x du legacy).** meeshy.me la servait depuis le 2026-09-15 (conteneur `meeshy-frontend`, image `isopen/meeshy-web-v31`, construite depuis `apps/web/Dockerfile` par `docker.yml` — le nom d'image est l'affaire de #7709).
+>
+> - Il n'y a plus de « legacy à ne pas toucher » ni de « chantier » : `apps/web` EST l'application web, et elle suit l'interface iOS (bandeau ci-dessous, § « La v2.0 suit l'interface iOS », toujours en vigueur).
+> - La dernière forme du legacy est gelée sous le tag **`legacy-web-final`** : `git checkout legacy-web-final -- apps/web` la restaure, `node apps/web/scripts/route-inventory.mjs` y lit encore ses adresses.
+> - Le volume Docker `frontend_uploads` (monté en production sur `/srv/legacy-uploads/u:ro`) porte les téléversements du temps du legacy : il n'est pas dans le dépôt et ne part pas avec le code.
+> - Une loi à miroirs dont la colonne web citait un fichier du legacy se relit ainsi : si l'application **consomme** `@meeshy/shared`, la colonne web n'a plus de miroir à garder ; si elle **réimplémente**, la colonne pointe `apps/web/src/…` ; si elle ne porte pas encore la dimension, c'est une issue, jamais un chemin mort.
+> - Les journaux (`tasks/`), les CHANGELOG et les récits datés gardent `apps/web` au sens du legacy et `apps/web-v2` au sens du chantier : ils racontent ce qui était vrai à leur date, et ne se réécrivent pas.
+
+> ## 🛑 (CLOS le 2026-09-24 — #7668) LA V3 EN DÉVELOPPEMENT EST ANNULÉE — le chantier web est `apps/web-v2` (2.0.0) (directives porteur 2026-09-07 et 2026-09-10)
+> **Bandeau CLOS, conservé pour l'histoire : il décrit l'état du dépôt du 2026-09-07 au 2026-09-24.** Depuis, `apps/web-v2` s'appelle `apps/web` et le legacy n'est plus dans le dépôt (bandeau ci-dessus). Son tableau, son exception « le legacy SERT les utilisateurs » et ses chiffres ne s'appliquent plus ; seule la règle « la v2.0 suit l'interface iOS » reste en vigueur.
+>
 > **Deux applications web coexistent, et leurs noms ont changé le 2026-09-07 puis le 2026-09-10. Lire ce tableau avant de toucher à quoi que ce soit :**
 >
 > | répertoire | ce que c'est | état |
@@ -28,7 +39,7 @@
 >
 > **La v2.0 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` est la table héritée de l'ancienne refonte, encore importée par la v2.0 (`src/styles/app.css`, `src/styles/institutional.css`), et plus gardée par aucun gate depuis son retrait (#6000).
 >
-> **Ce que la bascule coûte, remesuré le 2026-09-11 sur `dev`** : le legacy sert **74 routes** (1 252 fichiers, 243 681 lignes hors tests) ; le chantier en sert **16** (200 fichiers, 32 044 lignes hors tests, plus 133 fichiers de témoins). Il n'est plus « sur fixtures sans API ni temps réel » — 4 fichiers appellent le réseau et 11 touchent au socket, les 16 fixtures cohabitant avec ces branchements. **Tout chiffre de ce paragraphe se remesure avant d'être cité : il a déjà été faux dans les deux sens.** La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit du chantier vivent dans `apps/web-v2/decisions.md`.
+> **Ce que la bascule coûte, remesuré le 2026-09-11 sur `dev`** : le legacy sert **74 routes** (1 252 fichiers, 243 681 lignes hors tests) ; le chantier en sert **16** (200 fichiers, 32 044 lignes hors tests, plus 133 fichiers de témoins). Il n'est plus « sur fixtures sans API ni temps réel » — 4 fichiers appellent le réseau et 11 touchent au socket, les 16 fixtures cohabitant avec ces branchements. **Tout chiffre de ce paragraphe se remesure avant d'être cité : il a déjà été faux dans les deux sens.** La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit du chantier vivent dans `apps/web/decisions.md`.
 
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
@@ -134,9 +145,9 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
    | famille | web | iOS | Android |
    |---|---|---|---|
    | aperçu de liste | `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`) | `MeeshyConversation.resolvedLastMessagePreview` | `LastMessagePreviewResolver.kt` |
-   | audio (transcription + piste jouée) | `resolveAutoLanguage` (`apps/web/hooks/use-audio-translation.ts`) | `AudioTrackLanguageResolver.resolve` | `resolveTranslatedAudio` (`BubbleContentBuilder.kt`) |
+   | audio (transcription + piste jouée) | `resolveAudioTrack` + `servedTranscript` (`apps/web/src/lib/api/prism.ts`) | `AudioTrackLanguageResolver.resolve` | `resolveTranslatedAudio` (`BubbleContentBuilder.kt`) |
    | audio **sur l'écran verrouillé** (piste ATTACHÉE au push) | résolu **SERVEUR** : `NotificationService.servedAttachmentMedia`, élu par la langue du texte servi | idem (NSE) | idem |
-   | posts / commentaires | `TranslationToggle` (`autoResolved`, via `usePreferredLanguages`) + `usePostTranslation` (`apps/web/hooks/use-post-translation.ts`) | `APIPost.resolveTranslation` (`packages/MeeshySDK/.../Models/PostModels.swift`) | `LanguageResolver.preferredTranslation` (`apps/android/core/model/.../lang/`) |
+   | posts / commentaires | `resolveFeedText` (`apps/web/src/lib/feed/text.ts`) + `resolveStoryCaption` (`apps/web/src/lib/stories/caption.ts`), tous deux sur `served()` (`apps/web/src/lib/api/prism.ts`) qui appelle `resolvePrismTranslation` | `APIPost.resolveTranslation` (`packages/MeeshySDK/.../Models/PostModels.swift`) | `LanguageResolver.preferredTranslation` (`apps/android/core/model/.../lang/`) |
    | **bannière de notification** (message, réponse, mention) | résolu **SERVEUR**, une fois pour les trois clients : `NotificationService.previewPrismSource` + `prismTranslation` (`services/gateway/.../notifications/`), partagé par les trois éventails → le CORPS servi et, en projection, `translatedContent` / `translatedLanguage` sur le fil APNs/FCM | idem (NSE) | idem |
 
    **La quatrième famille est résolue côté SERVEUR** — c'est ce qui l'a tenue hors des trois énumérations précédentes, qui balayaient les clients. Un résolveur de Prisme n'est pas nécessairement dans un client : dès qu'un contenu part vers un destinataire NOMMÉ (un push, un e-mail, un digest), c'est la passerelle qui descend son prisme. Trouvée au cycle 121 en posant la question de la 261 sur un type de contenu de plus : « et le texte poussé dans une notification, qui le résout ? ».
@@ -203,7 +214,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 ## Architecture
 
 ```
-apps/web (Next.js 15)        apps/ios (SwiftUI)
+apps/web (Vite + Preact + Capacitor : web, PWA, Android)   apps/ios (SwiftUI)
          ↓ WebSocket/HTTP              ↓ REST/WebSocket
 services/gateway (Fastify 5 + Socket.IO + ZMQ)
          ↓ ZeroMQ (PUSH/SUB)
@@ -214,7 +225,7 @@ MongoDB 8 (Prisma) + Redis 8
 
 ### Monorepo Structure
 ```
-apps/web/          → Next.js 15 frontend (port 3100)
+apps/web/          → Vite + Preact + Capacitor (web, PWA et coque Android ; image 3400)
 apps/ios/          → SwiftUI iOS app
 services/gateway/  → Fastify 5 API + WebSocket (port 3000)
 services/translator/ → FastAPI ML service (port 8000)
@@ -290,7 +301,7 @@ Each increment leaves the codebase in a working state.
 
 ### Preferred Tools
 - **Language**: TypeScript strict mode (JS services), Swift (iOS), Python (translator)
-- **Testing**: Jest/Vitest + React Testing Library (web), pytest (Python), XCTest (iOS)
+- **Testing**: `bun test` + happy-dom (web), Jest/Vitest (gateway, shared), pytest (Python), XCTest (iOS)
 - **Validation**: Zod (TypeScript), Pydantic (Python)
 - **State**: Zustand (web), SwiftUI @Published (iOS)
 
@@ -454,7 +465,7 @@ NEXT_PUBLIC_API_URL="https://gate.meeshy.me"
 ### Local Services (tmux "meeshy")
 - Window 0: translator (FastAPI, port 8000)
 - Window 1: gateway (Fastify, port 3000)
-- Window 2: web (Next.js, port 3100)
+- Window 2: web (`bun run dev` dans `apps/web`, serveur Vite)
 
 ### Docker Environments
 | Environment | Compose File | SSL | Domains |
@@ -545,11 +556,11 @@ accent = hueShift(primary, −30°)
 ### User Presence (source de vérité + palette)
 États dérivés de `isOnline` (backend, autoritatif — garde anti-stale jusqu'à 5 min) + `lastActiveAt` (décroissance 60s/3min/5min) — règle produit 1/3/5 (2026-07-20) :
 `online` (isOnline OU actif ≤ 60s) → **vert** `#34D399` (pulse) · `away` (≤ 3min) → **orange** `#FBBF24` · `idle` (≤ 5min) → **gris AFFICHÉ** `#9CA3AF` · `offline` (> 5min OU aucune donnée) → **aucun point**.
-- **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_DOT_CLASS.offline`, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
+- **Offline = pas de pastille sur les avatars** (comme WhatsApp). Le gris `#9CA3AF` reste défini dans les maps centrales (`PRESENCE_HEX.offline` partagé, `PresenceState.offline.dotColor`) pour les affichages LABELLISÉS explicites (en-têtes de section « Hors ligne », badge story-intro, texte « vu il y a X »), mais les dots d'avatar ne le rendent jamais.
 - Source de vérité TS : `packages/shared/utils/user-presence.ts` (`getUserPresenceStatus`) ; miroirs : iOS `UserPresence.state(now:)` (PresenceModels.swift), Android `Presence.kt` — toute évolution touche les 3 sites
-- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web `PRESENCE_DOT_CLASS`/`PRESENCE_BADGE_CLASS` (`apps/web/lib/user-status.ts`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)
-- **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `TypingService` → user-store) — une personne qui écrit est TOUJOURS verte
-- **Visibilité de la présence = amis acceptés, soi, ADMIN/BIGBOSS — rien d'autre (directive 2026-08-25).** Hors amitié acceptée, `isOnline` et `lastActiveAt` d'un autre utilisateur ne sont JAMAIS servis : ni par le partage d'une conversation, ni par la co-appartenance à une communauté, ni par un lien de story, ni à MODERATOR/AUDIT/ANALYST (= utilisateur ordinaire), ni à un viewer anonyme. Seule l'ACTIVITÉ (frappe, message envoyé) révèle qu'on est en ligne, et elle voyage par ses propres événements (`typing:start/stop`, `message:new`) — inchangés. Loi UNIQUE : `resolvePresenceVisibility()` (`packages/shared/utils/presence-visibility.ts`), résolue côté gateway par `PresenceVisibilityService.resolveForTarget(viewer, target)` / `resolveForTargets(viewer, ids)`, le viewer venant de `viewerFromRequest()` / `viewerFromAuthContext()` (`routes/users/presence-gate.ts`). Aucun site de service ne réécrit la boucle amitié/rôle ; `resolvePrefsOnly` (aveugle au viewer) a été SUPPRIMÉE et la garde `presence-visibility-viewer-aware-guard.test.ts` interdit son retour. Le broadcast `user:status` a pour audience les rooms `user:<id>` des amis acceptés + ADMIN/BIGBOSS connectés + soi (`socketio/presence-audience.ts`) — plus jamais les rooms de conversation ; `presence:snapshot` est résolu par destinataire. Un AGRÉGAT sans identité (« N en ligne ») n'est pas visé — mais **une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le champ** (`?onlineOnly=`, `orderBy isOnline`, suggestions classées par `lastActiveAt`, `?lastActiveAfter=`) : la sélection se restreint d'abord aux ids autorisés puis se re-filtre sur la valeur SERVIE (`OnlineOnlyScope` / `servedOnline` / `mayOrderByRawPresence` / `servedOnlineFirst`, `routes/users/presence-gate.ts`), et **ce qui part À CÔTÉ du champ gardé** (`lastActiveAt` voisin, colonnes de la LIGNE via `include` + `additionalProperties: true`) est gardé aussi. Une entrée absente de la carte ⇒ masquée sauf ADMIN+ (`presenceFor`) ; `serializeConversationParticipant` est fail-closed. Clients : présence absente ⇒ aucun point — ils ne fabriquent rien, et ne GARDENT pas ce que le serveur retire (web `mergeParticipants` applique toujours une charge masquée). Détail : `services/gateway/decisions.md` § « Visibilité de la présence », `tasks/lessons.md` § 288.
+- Mapping couleur CENTRAL (ne jamais redéclarer localement) : web — aucun miroir, `apps/web` CONSOMME `PRESENCE_HEX` / `presenceTone` de `@meeshy/shared/utils/user-presence` (`apps/web/src/components/avatar.tsx`), iOS `PresenceState.dotColor` (`MeeshyUI/Theme/PresenceStyle.swift`), Android `meeshyPresenceDotColor` (`MeeshyAvatar.kt`, renvoie `null` pour offline = pas de dot)
+- **typing:start reçu = preuve d'activité** : les clients forcent localement online (iOS `PresenceManager.noteActivity`, web `lens-row.tsx` : un pair qui écrit est rendu `online` depuis le `typing-store`) — une personne qui écrit est TOUJOURS verte
+- **Visibilité de la présence = amis acceptés, soi, ADMIN/BIGBOSS — rien d'autre (directive 2026-08-25).** Hors amitié acceptée, `isOnline` et `lastActiveAt` d'un autre utilisateur ne sont JAMAIS servis : ni par le partage d'une conversation, ni par la co-appartenance à une communauté, ni par un lien de story, ni à MODERATOR/AUDIT/ANALYST (= utilisateur ordinaire), ni à un viewer anonyme. Seule l'ACTIVITÉ (frappe, message envoyé) révèle qu'on est en ligne, et elle voyage par ses propres événements (`typing:start/stop`, `message:new`) — inchangés. Loi UNIQUE : `resolvePresenceVisibility()` (`packages/shared/utils/presence-visibility.ts`), résolue côté gateway par `PresenceVisibilityService.resolveForTarget(viewer, target)` / `resolveForTargets(viewer, ids)`, le viewer venant de `viewerFromRequest()` / `viewerFromAuthContext()` (`routes/users/presence-gate.ts`). Aucun site de service ne réécrit la boucle amitié/rôle ; `resolvePrefsOnly` (aveugle au viewer) a été SUPPRIMÉE et la garde `presence-visibility-viewer-aware-guard.test.ts` interdit son retour. Le broadcast `user:status` a pour audience les rooms `user:<id>` des amis acceptés + ADMIN/BIGBOSS connectés + soi (`socketio/presence-audience.ts`) — plus jamais les rooms de conversation ; `presence:snapshot` est résolu par destinataire. Un AGRÉGAT sans identité (« N en ligne ») n'est pas visé — mais **une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le champ** (`?onlineOnly=`, `orderBy isOnline`, suggestions classées par `lastActiveAt`, `?lastActiveAfter=`) : la sélection se restreint d'abord aux ids autorisés puis se re-filtre sur la valeur SERVIE (`OnlineOnlyScope` / `servedOnline` / `mayOrderByRawPresence` / `servedOnlineFirst`, `routes/users/presence-gate.ts`), et **ce qui part À CÔTÉ du champ gardé** (`lastActiveAt` voisin, colonnes de la LIGNE via `include` + `additionalProperties: true`) est gardé aussi. Une entrée absente de la carte ⇒ masquée sauf ADMIN+ (`presenceFor`) ; `serializeConversationParticipant` est fail-closed. Clients : présence absente ⇒ aucun point — ils ne fabriquent rien, et ne GARDENT pas ce que le serveur retire (le web dérive la présence de la charge servie par `getUserPresenceStatus`, `apps/web/src/lib/view/conversation.ts` — aucun état local ne la prolonge). Détail : `services/gateway/decisions.md` § « Visibilité de la présence », `tasks/lessons.md` § 288.
 
 ### API Response Format (all services)
 Le producteur unique est `sendSuccess()`/`sendError()` (`services/gateway/src/utils/response.ts`) ; la forme qu'il émet est déclarée par `packages/shared/types/api-schemas/error.ts` (`errorResponseSchema`) — ne pas la reproduire ici, elle a divergé une fois déjà (#4884). **`error` est une CHAÎNE PLATE, pas un objet** :
@@ -582,7 +593,6 @@ Le producteur unique est `sendSuccess()`/`sendError()` (`services/gateway/src/ut
 
 ## Subdirectory CLAUDE.md Files
 Each major directory has its own CLAUDE.md with domain-specific conventions:
-- `apps/web/CLAUDE.md` - Next.js frontend patterns
 - `apps/ios/CLAUDE.md` - SwiftUI iOS patterns
 - `services/gateway/CLAUDE.md` - Fastify API patterns
 - `services/translator/CLAUDE.md` - FastAPI ML patterns
@@ -592,7 +602,7 @@ Each major directory has its own CLAUDE.md with domain-specific conventions:
 
 ## Architectural Decision Records
 Each active development directory has a `decisions.md` file documenting key architectural choices:
-- `apps/web/decisions.md` - State, routing, auth, styling, i18n, build decisions
+- `apps/web/decisions.md` - le registre D-n du web (Vite + Preact + Capacitor) : état, routage, auth, i18n, build, coque Android
 - `apps/ios/decisions.md` - MVVM, navigation, singletons, cache, security decisions
 - `services/gateway/decisions.md` - Framework, WebSocket, ZMQ, encryption, rate limiting decisions
 - `services/translator/decisions.md` - ML models, TTS backends, worker pool, package manager decisions

@@ -343,7 +343,7 @@ describe('`fields` ne peut que RESTREINDRE', () => {
  * compteurs — avec « Bloquer » offert au lieu de la carte de blocage. Du
  * contenu masqué redevenait visible par le seul effet du rang.
  *
- * C'est le raisonnement que `apps/web-v2/src/lib/profile/relation.ts:13-18`
+ * C'est le raisonnement que `apps/web/src/lib/profile/relation.ts:13-18`
  * écrit DÉJÀ contre l'usage du panier `accepted` pour l'amitié, et que
  * personne n'avait appliqué au panier des bloqués faute d'alternative servie.
  *

@@ -98,7 +98,7 @@ export interface MessageCountdownStartedEventData {
  * message — celui que `GET …/receipts` sert déjà). `Date | null`, comme
  * `lastReadAt` ci-dessous : `null` tant que le dernier destinataire actif n'a
  * pas rattrapé CE message, une date figée dès qu'il l'a fait. Son
- * consommateur web (`apps/web-v2/src/lib/api/realtime-apply.ts`) change dans
+ * consommateur web (`apps/web/src/lib/api/realtime-apply.ts`) change dans
  * le MÊME lot, comme promis ci-dessus — jamais l'un sans l'autre.
  */
 export interface ReadStatusSummary {

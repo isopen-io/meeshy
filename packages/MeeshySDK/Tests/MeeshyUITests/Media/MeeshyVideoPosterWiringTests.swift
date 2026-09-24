@@ -123,8 +123,8 @@ final class MeeshyVideoPosterWiringTests: XCTestCase {
         XCTAssertTrue(content.contains("posterLayer"), "playerContent doit monter `posterLayer`")
         XCTAssertTrue(content.contains("guard !didInitialLoad else { return }"),
                       "le bloc de chargement initial reste intact (garde AttachmentIdWiring)")
-        XCTAssertTrue(content.contains("showsPoster(playerPresent: manager.player != nil, surfaceReady: surfaceReady)"),
-                      "la visibilité du poster passe par la décision pure — pas par `manager.player == nil` seul")
+        XCTAssertTrue(content.contains("showsPoster(playerPresent: enginePlayer != nil, surfaceReady: surfaceReady)"),
+                      "la visibilité du poster passe par la décision pure — pas par `enginePlayer == nil` seul")
         XCTAssertTrue(content.contains("onReadyForDisplay:"),
                       "la surface doit signaler sa première frame composée (KVO isReadyForDisplay)")
     }

@@ -198,7 +198,7 @@ export interface Attachment {
    * `serializeAttachmentForSocket.ts:106`) depuis avant ce lot ; il manquait
    * seulement ICI. Encodage ThumbHash (Evan Wallace, licence MIT) en base64
    * standard — le placeholder peint AVANT toute requête réseau
-   * (`apps/web-v2/src/lib/media/thumbhash.ts`).
+   * (`apps/web/src/lib/media/thumbhash.ts`).
    */
   readonly thumbHash?: string;
 

@@ -1702,6 +1702,8 @@ Gate : `tsc --noEmit` 0 erreur, 208/208 sur les quatre suites touchées.
 
 ## L'amnistie de type-check est SCINDÉE, pas levée (2026-08-23, cycle 105 bis)
 
+> **Clos le 2026-09-24 (#7668).** Le legacy `apps/web` a quitté le dépôt, et avec lui `scripts/check-type-debt.sh` et `scripts/check-lint-debt.sh` : il ne reste que l'étape `Type-check (contract packages — blocking)`, qui type aussi `@meeshy/web` (l'ex `apps/web-v2`, née à zéro erreur). Le récit ci-dessous date du cycle 105 bis ; il ne se réécrit pas.
+
 **Contexte**: `.github/workflows/ci.yml` portait UNE étape `Type-check` sur tout le monorepo, avec `continue-on-error: true`. Ce drapeau n'était pas un avis sur le typage : c'était la seule façon pour l'étape d'être verte, `apps/web` portant 1241 erreurs de types quand `@meeshy/shared`, `@meeshy/gateway` et `@meeshy/agent` sont à ZÉRO. Une amnistie, quatre packages — les 1241 du quatrième achetaient le silence sur le zéro des trois premiers.
 
 Le prix n'était pas théorique. Les cycles 99–104 ont bâti pour la passerelle un contrat d'émission Socket.IO (une charge par événement, la porte `socketio/serverEmit.ts`, un cliquet sur la forme de la porte). Une violation de ce contrat produit `TS2345` ou `TS2322` — **les deux codes que le `ts-jest` de la passerelle a dans son `diagnostics.ignoreCodes`**. Ni le job de test ni le job qualité ne pouvaient donc rougir sur une charge fausse. Mesuré et non supposé : retirer un champ requis d'une émission de `preferences-broadcast.ts` rend `error TS2345: Argument of type '{ userId: string; }' is not assignable to parameter of type 'UserPreferencesUpdatedEventData'` — que `ts-jest` avale et que `continue-on-error` pardonne. C'est la forme exacte du défaut du cycle 101 (`message:edited` servi sans `senderId`/`messageType`/`createdAt`, rejeté en silence par tout décodeur iOS pendant des mois).
@@ -2145,8 +2147,9 @@ global :
   — `routes/admin/agent-shared.ts:26-46`.
 - Les 8+1 modules sont montés (`routes/index.ts`, préfixe
   `/api/v1/admin/agent`) et servis en production.
-- Il existe une UI admin complète (`apps/web/app/admin/agent/page.tsx`, ~19
-  composants sous `apps/web/components/admin/agent/`) — pas seulement une API
+- Il existe une UI admin complète (`legacy-web-final:apps/web/app/admin/agent/page.tsx`, ~19
+  composants sous `legacy-web-final:apps/web/components/admin/agent/` ; depuis le
+  retrait du legacy le 2026-09-24 (#7668), `apps/web/src/routes/admin-agent.tsx`) — pas seulement une API
   interne sans consommateur.
 
 **Décision** : Le service `services/agent/` et sa surface d'administration

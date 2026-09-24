@@ -270,9 +270,7 @@ struct StoryViewerView: View {
     // === Transition states ===
 
     // Appear — start visible to avoid blank screen if animation doesn't fire
-    @State private var appearScale: CGFloat = 0.92
-    @State private var appearCornerRadius: CGFloat = 24
-    @State private var appearOpacity: Double = 1
+    @State private var appear = StoryViewerAppearance()
 
     // Dismiss
     @State var isDismissing = false // internal for cross-file extension access
@@ -285,7 +283,9 @@ struct StoryViewerView: View {
     @State var contentOpacity: Double = 1 // internal for cross-file extension access
 
     // Outgoing layer for true cross-dissolve (old stays visible while new fades in)
-    @State var outgoingStory: StoryItem? = nil // internal for cross-file extension access
+    // `@Indirect` : un `StoryItem` en ligne faisait passer la vue au-dessus du
+    // budget de `ConversationViewValueSizeGuardTests` (8 208 > 8 192 octets).
+    @State @Indirect var outgoingStory: StoryItem? = nil // internal for cross-file extension access
     @State var outgoingOpacity: Double = 0 // internal for cross-file extension access
 
     // Transition lock — prevents overlapping animations
@@ -566,8 +566,7 @@ struct StoryViewerView: View {
             // premier switch de groupe présente un interstitiel déjà complet.
             prefetchNeighborGroupIntros()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
-                appearScale = 1.0
-                appearCornerRadius = 0
+                appear = StoryViewerAppearance(scale: 1.0, cornerRadius: 0)
             }
             triggerInitialActionIfNeeded()
             if let story = currentStory {
@@ -1334,17 +1333,17 @@ struct StoryViewerView: View {
 
     private var cardScale: CGFloat {
         if isDismissing { return 0.12 }
-        return appearScale * (1.0 - dragProgress * 0.35)
+        return appear.scale * (1.0 - dragProgress * 0.35)
     }
 
     private var cardCornerRadius: CGFloat {
         if isDismissing { return 32 }
-        return max(appearCornerRadius, dragProgress * 36)
+        return max(appear.cornerRadius, dragProgress * 36)
     }
 
     private var cardOpacity: Double {
         if isDismissing { return 0 }
-        return appearOpacity * (1.0 - Double(dragProgress) * 0.3)
+        return 1.0 - Double(dragProgress) * 0.3
     }
 
     private var cardOffsetY: CGFloat {
@@ -2397,3 +2396,5 @@ private struct StoryGroupIntroOverlay: View {
         return parts.joined(separator: ", ")
     }
 }
+
+struct StoryViewerAppearance: Equatable { var scale: CGFloat = 0.92; var cornerRadius: CGFloat = 24 }

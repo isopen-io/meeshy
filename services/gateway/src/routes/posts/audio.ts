@@ -34,7 +34,7 @@ import { logError } from '../../utils/logger.js';
 //
 // Un client qui doit jouer ces octets présente donc une identité. iOS le fait
 // par `APIClient` ; le web le fait par `fetch` + URL d'objet
-// (`apps/web-v2/src/lib/api/protected-media.ts`) — une balise `<audio src>` ne
+// (`apps/web/src/lib/api/protected-media.ts`) — une balise `<audio src>` ne
 // porte aucun en-tête, ce qui rendait 401 sur TOUTE lecture web avant #7015.
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/sounds';
 

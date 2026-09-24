@@ -339,11 +339,11 @@ readonly SHARED_BASELINE=0
 # scripts/check-any-debt.sh` + son self-test.
 readonly GATEWAY_BASELINE=506
 
-# `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
-# `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
-# `.next/`) ; `.next` est exclu de `find_source_files` pour que la mesure
-# reste identique une fois `apps/web` construit en CI.
-readonly WEB_BASELINE=451
+# `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
+# 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
+# (mesuré sur `apps/web-v2` avant le renommage). Le cliquet ne peut que
+# descendre : la baseline suit donc la nouvelle application, jamais l'ancienne.
+readonly WEB_BASELINE=0
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT

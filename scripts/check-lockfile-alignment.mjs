@@ -83,7 +83,6 @@ const INSTALLED_FIELDS = ['dependencies', 'devDependencies'];
 const TRACKED_PACKAGES = [
   'react',
   'react-dom',
-  'idb-keyval',
   '@playwright/test',
   '@tanstack/react-virtual',
 ];
@@ -95,7 +94,7 @@ const TRACKED_PACKAGES = [
 // entrée qui cesse de contredire ses manifestes fait rougir ce garde, pour que
 // la liste ne pourrisse pas en amnistie permanente. Sa résorption est l'issue
 // #4417 ; cette liste doit finir vide.
-const OVERRIDES_LAGGING_BEHIND_THEIR_MANIFESTS = ['dompurify', 'postcss', 'uuid'];
+const OVERRIDES_LAGGING_BEHIND_THEIR_MANIFESTS = ['dompurify', 'uuid'];
 
 const isRecord = (value) =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -763,9 +762,9 @@ const MUTATIONS = [
     'un override non déclaré qui contredit un manifeste',
     (world) => {
       const root = world.manifests.find(({ directory }) => directory === '');
-      root.document.overrides = { ...root.document.overrides, 'idb-keyval': '1.0.0' };
+      root.document.overrides = { ...root.document.overrides, preact: '1.0.0' };
     },
-    'overrides idb-keyval est épinglé sous une portée déclarée',
+    'overrides preact est épinglé sous une portée déclarée',
   ],
   [
     'un retard déclaré qui a cessé de retarder',
@@ -773,10 +772,10 @@ const MUTATIONS = [
       const root = world.manifests.find(({ directory }) => directory === '');
       root.document.overrides = {
         ...root.document.overrides,
-        postcss: versionEveryManifestWouldAccept(world, 'postcss'),
+        uuid: versionEveryManifestWouldAccept(world, 'uuid'),
       };
     },
-    'overrides postcss ne contredit plus aucun manifeste',
+    'overrides uuid ne contredit plus aucun manifeste',
   ],
   [
     "une portée que pnpm-lock.yaml n'a pas suivie (la dérive de #7303)",

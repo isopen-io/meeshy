@@ -50,7 +50,7 @@ const ATTACHMENT_STREAM_PATH = '/api/v1/attachments/file';
 /**
  * La clé est encodée d'UN SEUL coup, barres comprises (`%2F`) — la forme que
  * la passerelle sérialise déjà pour 539 de ses lignes, et celle que
- * `streamSrc` compose côté web (`apps/web-v2/src/lib/api/media-url.ts`). Deux
+ * `streamSrc` compose côté web (`apps/web/src/lib/api/media-url.ts`). Deux
  * encodages différents pour la même route divergeraient au premier nom de
  * fichier accentué.
  */

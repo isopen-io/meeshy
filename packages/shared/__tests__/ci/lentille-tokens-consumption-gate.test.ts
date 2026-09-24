@@ -25,6 +25,17 @@
 // (« token déclaré ⇒ token consommé », cf. workshop §7bis/§7ter « Reste à
 // faire »).
 //
+// **Le web n'a plus de colonne ici (#7668, 2026-09-24).** Le consommateur CSS
+// de ce garde était le legacy `apps/web` (`--lentille-*`, déclarées par
+// `apps/web/styles/lentille-tokens.css`). Il a quitté le dépôt, et
+// l'application qui a pris son chemin ne lit AUCUNE variable `--lentille-*` :
+// sa palette dérive de `packages/design-tokens/ios.css`, et ses cotes de
+// rivière dérivent du JSON par `src/lib/river/metrics.ts`, gardé par
+// `apps/web/scripts/check-river-metrics.mjs`. Scanner son arbre à la
+// recherche de `--lentille-*` rendrait zéro consommateur — un faux signal.
+// Le garde est donc iOS seul ; ne pas y rebrancher un scan web sans un
+// consommateur CSS réel à y trouver.
+//
 // **Placement.** Comme `ios-pr-compile-gate.test.ts` (même dossier) : ce
 // garde lit des fichiers HORS `packages/shared` (l'app iOS, l'app web) —
 // `packages/shared` est le paquet qui tourne sur CHAQUE PR (`ci.yml`), donc
@@ -61,7 +72,6 @@ const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const TOKENS_JSON_PATH = join(REPO_ROOT, 'packages/shared/design/lentille-tokens.json');
 
 const IOS_APP_ROOT = join(REPO_ROOT, 'apps/ios/Meeshy');
-const WEB_APP_ROOT = join(REPO_ROOT, 'apps/web');
 
 // Fichiers de DÉFINITION des miroirs Swift — une référence qualifiée
 // `LentilleMetrics.Row` n'y apparaît jamais (en interne, l'enum s'écrit
@@ -74,10 +84,6 @@ const IOS_DEFINITION_FILES = [
   'Features/Main/Riviere/Core/RiverMetrics.swift',
 ].map((p) => join(IOS_APP_ROOT, p));
 
-// Fichier de déclaration CSS — se documente lui-même comme inerte/non
-// importé (`apps/web/styles/lentille-tokens.css`, en-tête). Une variable qui
-// n'apparaît QUE là n'est pas consommée, elle est seulement DÉCLARÉE.
-const WEB_DECLARATION_FILE = join(WEB_APP_ROOT, 'styles/lentille-tokens.css');
 
 // ---------------------------------------------------------------------------
 // 1. Aplatir lentille-tokens.json en familles `<section>.<family>`
@@ -143,15 +149,6 @@ const SWIFT_SYMBOL_BY_FAMILY: Record<string, string> = {
   'river.laneHeader': 'RiverMetrics.LaneHeader',
 };
 
-/** camelCase → kebab-case (même règle que `apps/web/styles/lentille-tokens.css`, en-tête). */
-function toKebab(family: string): string {
-  return family.replace(/([A-Z])/g, '-$1').toLowerCase();
-}
-
-function cssVarPrefix(section: TokenSection, family: string): string {
-  return `--lentille-${section}-${toKebab(family)}`;
-}
-
 // ---------------------------------------------------------------------------
 // 3. Exclusions EXPLICITES, DATÉES, ATTRIBUÉES — tokens morts DES DEUX côtés
 // ---------------------------------------------------------------------------
@@ -199,7 +196,23 @@ interface DeadFamilyExclusion {
 // d'échec de `it.each` le demande. Le côté Swift reste sur la géométrie propre
 // de `MeeshyAvatar.onlineDot` — sans conséquence pour cette garde, qui exige UN
 // consommateur réel, Swift OU CSS.
+//
+// TROISIÈME passage, dans l'autre sens (2026-09-24, #7668) : le seul
+// consommateur de `list.presenceDot` était ce `LentilleRow.tsx` du legacy, qui
+// a quitté le dépôt. Le motif du 2026-08-16 redevient vrai — iOS dessine le
+// point sur la géométrie de `MeeshyAvatar.onlineDot`, et le web courant sur
+// celle de son `avatar.tsx` — et l'entrée revient, datée.
 const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
+  {
+    family: 'list.presenceDot',
+    since: '2026-09-24',
+    owner: 'Retrait du legacy web (#7668) — suivi #7722',
+    reason:
+      'Son unique consommateur était `apps/web/components/conversations/lentille/LentilleRow.tsx` ' +
+      '(legacy, retiré). iOS dessine le point de présence sur la géométrie de ' +
+      '`MeeshyAvatar.onlineDot`, le web sur celle de `src/components/avatar.tsx` : aucune ' +
+      'plateforme ne lit la famille. La brancher, ou la retirer du JSON.',
+  },
   {
     family: 'list.agent',
     since: '2026-08-16',
@@ -216,7 +229,7 @@ const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
 const excludedFamilySet = new Set(EXCLUDED_DEAD_FAMILIES.map((e) => e.family));
 
 // ---------------------------------------------------------------------------
-// 4. Scan de source — Swift (iOS) et CSS/TS/TSX (web)
+// 4. Scan de source — Swift (iOS)
 // ---------------------------------------------------------------------------
 
 const IGNORED_DIR_NAMES = new Set(['node_modules', '.next', 'dist', 'build', '.git', 'DerivedData']);
@@ -254,15 +267,8 @@ const IOS_PRODUCTION_SWIFT_FILES = collectFiles(IOS_APP_ROOT, /\.swift$/, []).fi
   (f) => !IOS_DEFINITION_FILES.includes(f),
 );
 
-const webSourceFiles = collectFiles(WEB_APP_ROOT, /\.(css|scss|ts|tsx)$/, [
-  '__tests__',
-  '.test.',
-  WEB_DECLARATION_FILE,
-]);
-
 interface Consumers {
   readonly iosFiles: string[];
-  readonly webFiles: string[];
 }
 
 const fileContentCache = new Map<string, string>();
@@ -280,14 +286,11 @@ function findConsumers(section: TokenSection, family: string): Consumers {
   const swiftPattern = swiftSymbol
     ? new RegExp(`\\b${swiftSymbol.replace('.', '\\.')}\\b`)
     : null;
-  const cssPrefix = cssVarPrefix(section, family);
-
   const iosFiles = swiftPattern
     ? IOS_PRODUCTION_SWIFT_FILES.filter((f) => swiftPattern.test(readCached(f)))
     : [];
-  const webFiles = webSourceFiles.filter((f) => readCached(f).includes(cssPrefix));
 
-  return { iosFiles, webFiles };
+  return { iosFiles };
 }
 
 // ---------------------------------------------------------------------------
@@ -302,8 +305,8 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
     ...families('river', tokens).map((family) => ({ section: 'river' as const, family })),
   ];
 
-  // Leçon 257 : une garde qui scanne zéro famille, zéro fichier Swift ou
-  // zéro fichier web passe toujours au vert sans avoir rien vérifié.
+  // Leçon 257 : une garde qui scanne zéro famille ou zéro fichier Swift
+  // passe toujours au vert sans avoir rien vérifié.
   it('découvre au moins une famille de tokens dans chaque section (jamais zéro)', () => {
     expect(families('list', tokens).length).toBeGreaterThan(0);
     expect(families('thread', tokens).length).toBeGreaterThan(0);
@@ -311,9 +314,8 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
     expect(allFamilies.length).toBeGreaterThan(0);
   });
 
-  it('découvre des fichiers Swift ET des fichiers web à scanner (jamais zéro)', () => {
+  it('découvre des fichiers Swift à scanner (jamais zéro)', () => {
     expect(IOS_PRODUCTION_SWIFT_FILES.length).toBeGreaterThan(0);
-    expect(webSourceFiles.length).toBeGreaterThan(0);
   });
 
   it('chaque famille JSON a une entrée dans SWIFT_SYMBOL_BY_FAMILY (leçon 257)', () => {
@@ -352,10 +354,6 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
     }
   });
 
-  it('le fichier de déclaration CSS existe bien (chemin non périmé)', () => {
-    expect(() => readFileSync(WEB_DECLARATION_FILE, 'utf8')).not.toThrow();
-  });
-
   // --- Le garde central --------------------------------------------------
 
   it('chaque token déclaré a un consommateur réel OU figure dans EXCLUDED_DEAD_FAMILIES', () => {
@@ -363,8 +361,8 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
 
     for (const { section, family } of allFamilies) {
       const key = `${section}.${family}`;
-      const { iosFiles, webFiles } = findConsumers(section, family);
-      const isConsumed = iosFiles.length > 0 || webFiles.length > 0;
+      const { iosFiles } = findConsumers(section, family);
+      const isConsumed = iosFiles.length > 0;
       const isExcused = excludedFamilySet.has(key);
 
       if (!isConsumed && !isExcused) {
@@ -374,7 +372,7 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
 
     expect(
       unexplainedDead,
-      `Token(s) déclaré(s) dans lentille-tokens.json SANS consommateur réel (ni Swift, ni CSS) ` +
+      `Token(s) déclaré(s) dans lentille-tokens.json SANS consommateur Swift réel ` +
         `et SANS exclusion documentée : ${unexplainedDead.join(', ')}. Brancher un consommateur, ` +
         'ou ajouter une entrée datée + attribuée à EXCLUDED_DEAD_FAMILIES (R-b).',
     ).toEqual([]);
@@ -383,19 +381,14 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
   // --- La liste d'exclusions reste honnête --------------------------------
 
   it.each(EXCLUDED_DEAD_FAMILIES)(
-    'exclusion « $family » : toujours réellement morte des deux côtés (sinon retirer l\'entrée)',
+    'exclusion « $family » : toujours réellement morte (sinon retirer l\'entrée)',
     ({ family }) => {
       const [section, familyName] = family.split('.') as [TokenSection, string];
-      const { iosFiles, webFiles } = findConsumers(section, familyName);
+      const { iosFiles } = findConsumers(section, familyName);
 
       expect(
         iosFiles,
         `« ${family} » a maintenant un consommateur Swift RÉEL (${iosFiles.join(', ')}) — ` +
-          'retirer cette entrée de EXCLUDED_DEAD_FAMILIES plutôt que de laisser une exclusion périmée.',
-      ).toEqual([]);
-      expect(
-        webFiles,
-        `« ${family} » a maintenant un consommateur CSS RÉEL (${webFiles.join(', ')}) — ` +
           'retirer cette entrée de EXCLUDED_DEAD_FAMILIES plutôt que de laisser une exclusion périmée.',
       ).toEqual([]);
     },
