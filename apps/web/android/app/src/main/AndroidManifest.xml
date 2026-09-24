@@ -40,16 +40,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- #7844 — sans elle, la WebView n'active pas la détection des changements
          de réseau : navigator.onLine reste true et les événements online /
-         offline ne partent jamais (pastille, socket, accusés en attente). -->
+         offline ne partent jamais (useOnline(), src/lib/net/online.ts, et ses
+         consommateurs socket.ts, receipts.ts, media-absent.ts). L'app native
+         gelée (apps/android) la déclare déjà (AndroidManifest.xml:6). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- #5668 — sans elles, getUserMedia() de la WebView échoue AVANT toute
          demande à l'utilisateur : le composeur n'atteint jamais l'état
          "requesting" (recette QEMU, socle du prompt). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- #7844 — sans elle, la WebView ne peut pas exposer de façon fiable les
-         événements online/offline que useOnline() (src/lib/net/online.ts) et
-         ses consommateurs (socket.ts, receipts.ts, media-absent.ts) écoutent ;
-         l'app native gelée (apps/android) la déclare déjà (AndroidManifest.xml:6). -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>
