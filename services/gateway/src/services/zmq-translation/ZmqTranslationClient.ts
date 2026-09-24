@@ -546,7 +546,7 @@ export class ZmqTranslationClient extends EventEmitter {
       try {
         const message = await this.connectionManager.receive();
 
-        /* istanbul ignore else -- receive() returns Buffer/Buffer[] or throws; null/undefined is structurally unreachable here */
+        /* istanbul ignore else -- `ZmqConnectionManager.receive()` LÈVE quand aucun message n'est disponible (`throw new Error('No message available')`) : il ne rend jamais null/undefined. Vérifié le 2026-09-24. */
         if (message) {
           lastMessageAt = Date.now();
           await this.messageHandler.handleMessage(message);
@@ -776,8 +776,13 @@ export class ZmqTranslationClient extends EventEmitter {
       return true;
 
     } catch (error) {
-      /* istanbul ignore next -- connectionManager.sendPing() catches internally; this outer catch is structurally unreachable */
-      logger.error(`❌ Health check échoué: ${error}`); /* istanbul ignore next */ return false;
+      // Chemin NOMINAL d'un ping qui échoue : `ZmqConnectionManager.sendPing`
+      // journalise puis RELANCE (`ZmqConnectionManager.ts`, `throw error;` du
+      // catch de `sendPing`). Ce bloc n'a jamais été inatteignable — il portait
+      // une annotation qui le disait, et un témoin le prouve désormais
+      // (`__tests__/unit/services/ZmqTranslationClient.healthCheck.test.ts`).
+      logger.error(`❌ Health check échoué: ${error}`);
+      return false;
     }
   }
 
@@ -827,7 +832,7 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info('✅ ZmqTranslationClient arrêté');
 
     } catch (error) {
-      /* istanbul ignore next -- connectionManager.close() has its own internal catch; this outer catch is structurally unreachable */
+      /* istanbul ignore next -- `ZmqConnectionManager.close()` attrape et n'expose rien (son catch journalise SANS relancer, contrairement à `sendPing`). Vérifié le 2026-09-24. */
       logger.error(`❌ Erreur arrêt ZmqTranslationClient: ${error}`);
     }
   }
