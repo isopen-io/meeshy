@@ -334,7 +334,7 @@ extension View {
         userId: String,
         statusViewModel: StatusViewModel,
         router: Router,
-        conversationListViewModel: ConversationListViewModel,
+        conversationListViewModel: ConversationListViewModel?,
         perform: @escaping (MyStoriesFollowUp) -> Void
     ) -> some View {
         sheet(isPresented: isPresented, onDismiss: {
@@ -362,7 +362,7 @@ extension View {
                 }
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
         }
     }
 }

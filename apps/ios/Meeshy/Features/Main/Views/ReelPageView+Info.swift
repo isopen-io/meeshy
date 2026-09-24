@@ -61,19 +61,7 @@ extension ReelPageView {
             if BackgroundSoundBadge.showsMuteButton(for: announcement), isSceneReel {
                 sceneSoundMuteButton
             } else if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
-                Button {
-                    audioPlayer.togglePlayPause()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(audioPlayer.isPlaying
-                    ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
-                    : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
+                ReelBorrowedSoundToggle(audioPlayer: audioPlayer)
             }
         }
     }
@@ -232,5 +220,28 @@ extension ReelPageView {
         }
         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Le muet du son emprunté : la seule vue de la page qui LIT `isPlaying`,
+/// donc la seule qui observe le moteur — la page, elle, ne se ré-évalue plus à
+/// chaque battement de `currentTime`.
+struct ReelBorrowedSoundToggle: View {
+    @ObservedObject var audioPlayer: AudioPlaybackManager
+
+    var body: some View {
+        Button {
+            audioPlayer.togglePlayPause()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
+                .font(MeeshyFont.relative(10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(audioPlayer.isPlaying
+            ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
+            : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
     }
 }
