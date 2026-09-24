@@ -1011,6 +1011,8 @@ const en = {
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',
+  'composer.protection.ephemeral.state': 'Ephemeral mode active',
+  'composer.protection.blur.state': 'Blur mode active',
   'message.location.shared': 'Shared location',
   'message.location.open': 'Open in Maps',
   'message.location.a11y': 'Location: {place}',

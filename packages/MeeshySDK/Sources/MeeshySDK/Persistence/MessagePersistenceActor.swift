@@ -902,12 +902,26 @@ public actor MessagePersistenceActor {
         return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
 
-    public func markDeleted(localId: String, deletedAt: Date) throws {
+    /// - Parameter sparingOpenedViewOnce: `true` pour une suppression annoncée
+    ///   par le SERVEUR (`message:deleted`) : une VUE UNIQUE n'y devient pas
+    ///   « Message supprimé » mais `(1) · Déjà ouvert`, contenu purgé (#7579) —
+    ///   le serveur la détruit quand tous ses destinataires l'ont ouverte, et
+    ///   ce n'est pas une suppression pour qui la voit passer. Une suppression
+    ///   explicite de l'utilisateur passe `false`.
+    public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
+            guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)?.conversationId
+                .fetchOne(db) else { return }
+            affectedConversationId = record.conversationId
+            if sparingOpenedViewOnce, record.holdsViewOnce {
+                record.sealAsOpenedViewOnce(at: deletedAt)
+                record.updatedAt = Date()
+                record.changeVersion += 1
+                try record.update(db)
+                return
+            }
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = ?, content = NULL,
@@ -2018,6 +2032,15 @@ public actor MessagePersistenceActor {
                     // invalidation). A byte-identical echo writes nothing and
                     // posts no refresh — killing the redundant full-list
                     // reconfigure that every duplicate delivery used to cost.
+                    //
+                    // #7579 — une vue unique DÉJÀ OUVERTE par ce lecteur ne
+                    // renaît pas : ni contenu, ni pièce, ni suppression servie.
+                    // Le serveur servait encore le texte au consommateur
+                    // (recette 2026-09-23) ; la colonne locale fait foi.
+                    if existing.viewOnceOpenedAt != nil || api.consumedByMe == true {
+                        existing.sealAsOpenedViewOnce(at: Date())
+                        existing.deletedAt = before.deletedAt
+                    }
                     let rowChanged = !upsertMutatedFieldsEqual(existing, before)
                         || (api.updatedAt != nil && api.updatedAt != before.updatedAt)
                     if rowChanged {
@@ -2046,7 +2069,7 @@ public actor MessagePersistenceActor {
                         }
                     }
                 } else {
-                    let record = MessageRecord(
+                    var record = MessageRecord(
                         localId: api.id, serverId: api.id,
                         conversationId: api.conversationId,
                         senderId: resolvedSenderUserId,
@@ -2107,6 +2130,9 @@ public actor MessagePersistenceActor {
                         // #7508 — le seul porteur d'horloge du temps réel.
                         ephemeralDuration: api.ephemeralDuration
                     )
+                    if api.consumedByMe == true {
+                        record.sealAsOpenedViewOnce(at: Date())
+                    }
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)
                     // `save` (upsert): a dangling PendingIdRecord from a
@@ -2121,7 +2147,12 @@ public actor MessagePersistenceActor {
 
                 // Persist text translations from REST into GRDB so they
                 // survive app restarts and are available on cold-start load.
-                if let apiTranslations = api.translations, !apiTranslations.isEmpty {
+                let viewOnceOpenedForReader = try api.consumedByMe == true
+                    || MessageRecord
+                        .filter(Column("localId") == api.id || Column("serverId") == api.id)
+                        .filter(Column("viewOnceOpenedAt") != nil)
+                        .fetchCount(db) > 0
+                if !viewOnceOpenedForReader, let apiTranslations = api.translations, !apiTranslations.isEmpty {
                     let now = Date()
                     for t in apiTranslations {
                         let record = TranslationRecord(

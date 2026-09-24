@@ -104,6 +104,12 @@ public struct MessageProtectionChrome: View, Equatable {
         switch badge {
         case .ephemeral(.notEphemeral), .ephemeral(.expired):
             EmptyView()
+        case .blurred:
+            // Directive porteur du 2026-09-23 : le flou n'a ni œil ni puce —
+            // c'est la LIGNE du message qui est floutée, et un toucher la
+            // révèle. L'état se dit par le flou lui-même ; le lecteur d'écran
+            // garde sa phrase (`accessibilityLabels(for:)`).
+            EmptyView()
         default:
             let presentation = Self.presentation(for: badge)
             let tint = presentation.tint

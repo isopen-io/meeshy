@@ -75,13 +75,17 @@ export type ProtectionFields = {
 };
 
 export function protectionFieldsOf(protection: ComposeProtection, now: number): ProtectionFields {
+  // Flou et vue unique sont EXCLUSIFS (#7667) : la vue unique, plus forte,
+  // gagne — second verrou derrière `toggledVeil`, miroir
+  // `MessageProtectionIntent.init` (SDK iOS).
+  const blurred = protection.blurred === true && protection.viewOnce !== true;
   let flags = protection.effectFlags ?? 0;
-  if (protection.blurred === true) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+  if (blurred) flags |= MESSAGE_EFFECT_FLAGS.BLURRED;
   if (protection.ephemeralSeconds !== undefined) flags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
   if (protection.viewOnce === true) flags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
   return {
-    isBlurred: protection.blurred === true,
+    isBlurred: blurred,
     isViewOnce: protection.viewOnce === true,
     effectFlags: flags,
     ...(protection.ephemeralSeconds === undefined
@@ -91,20 +95,38 @@ export function protectionFieldsOf(protection: ComposeProtection, now: number): 
 }
 
 /**
- * L'ACCENT SUBSTITUÉ DU COMPOSEUR — miroir `composerAccent`
- * (`ConversationView+Composer.swift:49-59`) : éphémère armé PRIME sur flou,
- * qui PRIME sur un effet en attente, sinon `null` (l'appelant garde alors
- * l'accent de la conversation). Lu depuis les TROIS bascules — jamais depuis
+ * L'ACCENT SUBSTITUÉ DU COMPOSEUR — la protection la plus forte colore TOUTE
+ * la barre (#7667, directive porteur 2026-09-24) : éphémère > vue unique >
+ * flou, miroir `ComposerProtection.dominant` (iOS) ; un effet en attente ne
+ * colore que si aucune protection n'est armée, sinon `null` (l'appelant garde
+ * l'accent de la conversation). Lu depuis les bascules — jamais depuis
  * `effectFlags` recomposé (qui porterait aussi les bits de cycle de vie et
- * ferait gagner « effects » sur « ephemeral »/« blur » par erreur).
+ * ferait gagner « effects » sur une protection par erreur).
  */
-export type ComposerAccentState = 'ephemeral' | 'blur' | 'effects' | null;
+export type ComposerAccentState = 'ephemeral' | 'viewOnce' | 'blur' | 'effects' | null;
 
 export function composerAccentOf(protection: ComposeProtection): ComposerAccentState {
   if (protection.ephemeralSeconds !== undefined) return 'ephemeral';
+  if (protection.viewOnce === true) return 'viewOnce';
   if (protection.blurred === true) return 'blur';
   if ((protection.effectFlags ?? 0) !== 0) return 'effects';
   return null;
+}
+
+/**
+ * LA BASCULE D'UN VOILE (#7667) — « le message ne peut pas être flou et vue
+ * unique » : armer l'un éteint l'autre, désarmer ne touche qu'à lui. Miroir
+ * `ComposerProtection.togglingVeil` (iOS).
+ */
+export type VeilState = { readonly blurred: boolean; readonly viewOnce: boolean };
+
+export function toggledVeil(veil: 'blurred' | 'viewOnce', state: VeilState): VeilState {
+  if (veil === 'blurred') {
+    const blurred = !state.blurred;
+    return { blurred, viewOnce: blurred ? false : state.viewOnce };
+  }
+  const viewOnce = !state.viewOnce;
+  return { blurred: viewOnce ? false : state.blurred, viewOnce };
 }
 
 /**

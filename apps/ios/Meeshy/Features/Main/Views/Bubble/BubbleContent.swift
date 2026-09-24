@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Décrit ce que CE message doit rendre. Construit une fois par cellule,
 /// puis lu par les sous-vues. Aucune sous-vue ne lit `MeeshyMessage` directement —
@@ -9,7 +10,12 @@ nonisolated struct BubbleContent: Equatable {
     enum Kind: Equatable {
         case standard
         case deleted
-        case burned
+        /// Vue unique déjà ouverte par CE lecteur (#7579) : la puce
+        /// `(1) · Déjà ouvert`, permanente, sans contenu. Remplace l'ancien
+        /// « Vu et supprimé », qui se déclenchait sur le compteur GLOBAL du
+        /// serveur — un destinataire qui n'avait rien ouvert lisait alors que
+        /// le message était supprimé.
+        case viewOnceOpened
         /// Vue unique pas encore ouverte (#7618) : le mode rend la seule puce
         /// `(1) · Touchez pour afficher`, rien du contenu — qui n'est d'ailleurs
         /// plus dans ce modèle (`MeeshyMessage.sealedForDisplay`).
@@ -291,10 +297,20 @@ nonisolated struct BubbleContent: Equatable {
     /// (#7452). Projection de `protection.requiresVeil`, le site de la règle.
     var requiresVeil: Bool { protection.requiresVeil }
 
+    /// La puce de vue unique que ce message rend À LA PLACE de son contenu,
+    /// ou `nil` pour un message qui montre son contenu (#7618, #7579).
+    var viewOnceChipState: ViewOnceChip.State? {
+        switch kind {
+        case .viewOnceSealed: return .sealed
+        case .viewOnceOpened: return .opened
+        default: return nil
+        }
+    }
+
     /// Le chrome à peindre au-dessus du message : celui d'une vue unique
     /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
     var chromeProtection: MessageProtectionDescriptor {
-        kind == .viewOnceSealed ? protection.withoutViewOnce : protection
+        kind == .viewOnceSealed || kind == .viewOnceOpened ? protection.withoutViewOnce : protection
     }
     /// Ce message est en train d'être DÉTRUIT sous les yeux du lecteur
     /// (#7467) — projection de `MeeshyMessage.isBurning`.
@@ -303,6 +319,10 @@ nonisolated struct BubbleContent: Equatable {
     /// compatibilite source avec les fixtures existantes, meme patron que
     /// `location` et `sticker` sur `APIMessage`. Le builder l'assigne.
     var isBurning: Bool = false
+    /// Vue unique TEXTE ouverte et lue sur place (#7579) : la retoucher la
+    /// fait passer à « déjà ouvert ». Projection de
+    /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
+    var isViewOnceRevealed: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
     /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
@@ -418,6 +438,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.location == rhs.location
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
+            && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned

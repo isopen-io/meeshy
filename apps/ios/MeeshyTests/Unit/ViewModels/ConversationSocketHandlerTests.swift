@@ -48,7 +48,6 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
 
     // Track calls
     var evictedMessages: [Message] = []
-    var consumedMessageIds: [String] = []
     var syncMissedCalled = false
 
     func evictViewOnceMedia(message: Message) {
@@ -64,9 +63,6 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         messageTranslations.removeValue(forKey: messageId)
     }
 
-    func markMessageAsConsumed(messageId: String) {
-        consumedMessageIds.append(messageId)
-    }
 
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         // no-op in tests

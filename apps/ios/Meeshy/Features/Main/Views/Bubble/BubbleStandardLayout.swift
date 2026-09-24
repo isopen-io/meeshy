@@ -2,7 +2,7 @@
 //
 // Was: the body of `ThemedMessageBubble.messageContent` (Task-14 pivot of the
 // bubble-decompose refactor). This view orchestrates rendering for the
-// `.standard` kind — every other kind (`.deleted`, `.burned`,
+// `.standard` kind — every other kind (`.deleted`, `.viewOnceSealed`, `.viewOnceOpened`,
 // `.ephemeralExpired`) is dispatched in `ThemedMessageBubble.body` and never
 // reaches this view.
 //

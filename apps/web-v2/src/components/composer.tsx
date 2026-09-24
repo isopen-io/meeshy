@@ -13,7 +13,13 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
-import { composerAccentOf, decorativeEffectCountOf, type ComposeProtection } from '@/lib/send/compose-protection';
+import {
+  composerAccentOf,
+  decorativeEffectCountOf,
+  toggledVeil,
+  type ComposeProtection,
+  type VeilState,
+} from '@/lib/send/compose-protection';
 import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
 import { translate } from '@/lib/i18n-catalog';
@@ -227,9 +233,17 @@ export const Composer = memo(function Composer({
    */
   const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(draft?.protection.ephemeralSeconds);
   const [ephemeralPickerOpen, setEphemeralPickerOpen] = useState(false);
-  const [blurred, setBlurred] = useState(draft?.protection.blurred === true);
+  // Un brouillon d'avant #7667 peut porter flou ET vue unique : la vue
+  // unique, plus forte, l'emporte dès la restauration.
+  const [blurred, setBlurred] = useState(draft?.protection.blurred === true && draft?.protection.viewOnce !== true);
   const [viewOnce, setViewOnce] = useState(draft?.protection.viewOnce === true);
   const [effectFlags, setEffectFlags] = useState(draft?.protection.effectFlags ?? 0);
+  /** Flou et vue unique sont EXCLUSIFS (#7667) — la loi pure décide, la
+   * rangée haute ne fait que poser ses deux valeurs. */
+  const applyVeil = (next: VeilState) => {
+    setBlurred(next.blurred);
+    setViewOnce(next.viewOnce);
+  };
   const [effectsSheetOpen, setEffectsSheetOpen] = useState(false);
   const protection: ComposeProtection = useMemo(
     () => ({
@@ -246,15 +260,25 @@ export const Composer = memo(function Composer({
   const sentiment = useSentiment(text);
 
   /**
-   * L'ACCENT SUBSTITUÉ (#6175, revue-correction défaut majeur 2) — éphémère
-   * armé > flou > effets > `undefined` (l'accent de la conversation, hérité
-   * du parent). Voir `composer-accent.ts` pour ce que cette substitution
+   * L'ACCENT SUBSTITUÉ (#6175, puis #7667) — éphémère > vue unique > flou >
+   * effets > `undefined` (l'accent de la conversation, hérité du parent). Voir `composer-accent.ts` pour ce que cette substitution
    * couvre et ce qu'elle diffère. Posé sur la RACINE du composeur : toute
    * surface qui lit déjà `var(--accent)` (le champ, le bouton d'envoi, la
    * pastille de langue…) en hérite sans qu'aucune n'ait à le savoir — le même
    * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
    */
-  const chromeAccentStyle = composerChromeAccentStyle(composerAccentOf(protection));
+  const accentState = composerAccentOf(protection);
+  const chromeAccentStyle = composerChromeAccentStyle(accentState);
+  /** La couleur ne se voit pas au lecteur d'écran : le champ DIT la
+   * protection dominante (#7667, miroir `accessibilityHint` iOS). */
+  const protectionAnnouncement =
+    accentState === 'ephemeral'
+      ? translate(currentInterfaceLanguage(), 'composer.protection.ephemeral.state')
+      : accentState === 'viewOnce'
+        ? translate(currentInterfaceLanguage(), 'composer.viewOnce.active')
+        : accentState === 'blur'
+          ? translate(currentInterfaceLanguage(), 'composer.protection.blur.state')
+          : undefined;
 
   /**
    * LE RAPPORT DE BROUILLON (#6175) — à CHAQUE changement de texte, de
@@ -571,9 +595,9 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
           }}
           blurred={blurred}
-          onToggleBlur={() => setBlurred((v) => !v)}
+          onToggleBlur={() => applyVeil(toggledVeil('blurred', { blurred, viewOnce }))}
           viewOnce={viewOnce}
-          onToggleViewOnce={() => setViewOnce((v) => !v)}
+          onToggleViewOnce={() => applyVeil(toggledVeil('viewOnce', { blurred, viewOnce }))}
           effectCount={decorativeEffectCountOf(effectFlags)}
           onOpenEffects={() => setEffectsSheetOpen(true)}
           sentiment={sentiment}
@@ -706,6 +730,7 @@ export const Composer = memo(function Composer({
               }}
               placeholder="Message…"
               aria-label="Écrire un message"
+              {...(protectionAnnouncement === undefined ? {} : { 'aria-description': protectionAnnouncement })}
               className="min-w-0 flex-1 resize-none bg-transparent py-3 text-input leading-[22px] outline-none placeholder:text-ios-ink-3"
               style={{ paddingInlineStart: canRecord && !focused && !sendTarget ? 2 : 16, paddingInlineEnd: 16 }}
             />

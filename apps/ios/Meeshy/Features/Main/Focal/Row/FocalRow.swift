@@ -63,11 +63,11 @@ struct FocalRow: View {
     var body: some View {
         Group {
             switch content.kind {
-            case .deleted, .burned, .system:
+            case .deleted, .system:
                 systemBody
             case .ephemeralExpired:
                 EmptyView()
-            case .standard, .viewOnceSealed:
+            case .standard, .viewOnceSealed, .viewOnceOpened:
                 standardBody
             }
         }
@@ -293,8 +293,8 @@ struct FocalRow: View {
             // « Voir une fois » n'existait que sur les médias. Un message
             // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
             // jusqu'au toucher qui le consomme.
-            if content.kind == .viewOnceSealed {
-                ViewOnceChip(state: .sealed, isDark: input.isDark) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+            if let chip = content.viewOnceChipState {
+                ViewOnceChip(state: chip, isDark: input.isDark) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             } else if content.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
@@ -306,7 +306,7 @@ struct FocalRow: View {
                     contentSections
                 }
             } else {
-                contentSections
+                contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             }
 
             failedRetrySection

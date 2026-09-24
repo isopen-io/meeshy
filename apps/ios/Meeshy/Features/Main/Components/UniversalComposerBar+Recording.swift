@@ -15,14 +15,19 @@ extension UniversalComposerBar {
     // MARK: - Text Input Field (shown when not recording)
 
     var textInputField: some View {
-        let accent = Color(hex: accentColor)
-        let bgFill = style == .dark
-            ? Color.white.opacity(0.08)
-            : accent.opacity(0.06)
-        let borderDefault: [Color] = style == .dark
-            ? [Color.white.opacity(0.15), Color.white.opacity(0.1)]
-            : [accent.opacity(0.2), accent.opacity(0.15)]
-        let borderFocused: [Color] = [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)]
+        let accent = servedAccent
+        // #7667 — une protection armée teinte la capsule ENTIÈRE, au repos
+        // comme au focus, et dans le style sombre aussi : c'est l'état qu'on
+        // doit lire d'un coup d'œil avant d'envoyer.
+        let protection = dominantProtection
+        let bgFill: Color = protection.map { $0.tint.opacity(isDark ? 0.16 : 0.08) }
+            ?? (style == .dark ? Color.white.opacity(0.08) : accent.opacity(0.06))
+        let borderDefault: [Color] = protection.map { [$0.tint.opacity(0.55), $0.tint.opacity(0.4)] }
+            ?? (style == .dark
+                ? [Color.white.opacity(0.15), Color.white.opacity(0.1)]
+                : [accent.opacity(0.2), accent.opacity(0.15)])
+        let borderFocused: [Color] = protection.map { [$0.tint.opacity(0.8), $0.tint.opacity(0.6)] }
+            ?? [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)]
 
         return HStack(spacing: 0) {
             // Mic button inside field (left) — hidden when focused
@@ -74,7 +79,7 @@ extension UniversalComposerBar {
                     // de mensonge qu'on ne remarque qu'après avoir perdu un
                     // paragraphe.
                     .submitLabel(ComposerActionSlot.exceedsTextStickerLimit(text) ? .return : .send)
-                    .tint(Color(hex: accentColor))
+                    .tint(servedAccent)
                     // `.onSubmit` est posé POUR les versions qui l'honorent sur
                     // un champ à axe vertical ; il ne suffit pas, et la règle
                     // ci-dessous dit pourquoi. Les deux chemins mènent au même
@@ -87,6 +92,7 @@ extension UniversalComposerBar {
                     }
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
+                    .accessibilityHint(protection?.accessibilityState ?? "")
                     .accessibilityIdentifier(MeeshyA11yID.composerTextField)
                     .adaptiveOnChange(of: text) { oldValue, newValue in
                         // **Le saut de ligne qu'un doigt vient d'insérer** — sur
@@ -141,7 +147,7 @@ extension UniversalComposerBar {
                             lineWidth: focusBounce ? 1.5 : 1
                         )
                 )
-                .shadow(color: focusBounce ? MeeshyColors.indigo400.opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
+                .shadow(color: focusBounce ? (protection?.tint ?? MeeshyColors.indigo400).opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
         )
         .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
@@ -160,12 +166,12 @@ extension UniversalComposerBar {
         let isDark = style == .dark
         let bgFill = isDark
             ? Color.white.opacity(0.08)
-            : Color(hex: accentColor).opacity(0.06)
+            : servedAccent.opacity(0.06)
         let borderColor: Color = isDark
             ? Color.white.opacity(0.15)
-            : Color(hex: accentColor).opacity(0.2)
+            : servedAccent.opacity(0.2)
         let timerColor = isDark ? Color.white : theme.textPrimary
-        let waveformColor = isDark ? "FFFFFF" : accentColor
+        let waveformColor = isDark ? "FFFFFF" : servedAccentHex
         let canSend = effectiveDuration >= Self.minimumSendableDuration
         let dotOpacity: Double = reduceMotion
             ? 1
@@ -240,11 +246,11 @@ extension UniversalComposerBar {
                     Circle()
                         .fill(isDark
                             ? Color.white.opacity(0.14)
-                            : Color(hex: accentColor).opacity(0.12))
+                            : servedAccent.opacity(0.12))
                         .frame(width: 32, height: 32)
                     Image(systemName: "stop.fill")
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(isDark ? .white : Color(hex: accentColor))
+                        .foregroundColor(isDark ? .white : servedAccent)
                 }
                 .opacity(canSend ? 1 : 0.4)
                 .frame(width: 44, height: 44)
@@ -269,14 +275,14 @@ extension UniversalComposerBar {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                colors: [servedAccent, servedSecondary],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 32, height: 32)
                         .shadow(
-                            color: Color(hex: accentColor).opacity(canSend ? 0.4 : 0),
+                            color: servedAccent.opacity(canSend ? 0.4 : 0),
                             radius: 6, y: 2
                         )
                     Image(systemName: "arrow.up")

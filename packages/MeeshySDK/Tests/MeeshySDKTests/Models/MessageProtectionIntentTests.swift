@@ -58,13 +58,30 @@ struct MessageProtectionIntentTests {
         #expect(vueUnique.lifecycleFlags == .viewOnce)
     }
 
-    @Test("Trois protections cohabitent dans un seul champ de bits")
-    func test_troisProtections_cohabitent() {
+    @Test("L'éphémère cohabite avec la vue unique dans un seul champ de bits")
+    func test_éphémèreEtVueUnique_cohabitent() {
+        let intent = MessageProtectionIntent(
+            ephemeralDurationSeconds: 60, isViewOnce: true
+        )
+        #expect(intent.lifecycleFlags == [.ephemeral, .viewOnce])
+        #expect(!intent.isEmpty)
+    }
+
+    /// « Le message ne peut pas être flou et vue unique ! » (directive porteur
+    /// 2026-09-24, #7667). Le composeur éteint l'un quand on allume l'autre ;
+    /// l'intention en est le SECOND verrou, celui que tout chemin d'envoi
+    /// traverse — texte, pièces jointes, groupe suivant (#7498). La vue
+    /// unique gagne : elle est la plus forte des deux.
+    @Test("Flou et vue unique armés ensemble : seule la vue unique part")
+    func test_flouEtVueUnique_seuleLaVueUniquePart() {
         let intent = MessageProtectionIntent(
             ephemeralDurationSeconds: 60, isBlurred: true, isViewOnce: true
         )
-        #expect(intent.lifecycleFlags == MessageEffectFlags.lifecycleMask)
-        #expect(!intent.isEmpty)
+        #expect(intent.isViewOnce)
+        #expect(!intent.isBlurred)
+        #expect(intent.lifecycleFlags == [.ephemeral, .viewOnce])
+        #expect(intent.wireIsBlurred == nil)
+        #expect(intent.wireIsViewOnce == true)
     }
 
     /// Un `false` explicite sur le fil écraserait un défaut de conversation
@@ -74,9 +91,12 @@ struct MessageProtectionIntentTests {
         let rien = MessageProtectionIntent.none
         #expect(rien.wireIsViewOnce == nil)
         #expect(rien.wireIsBlurred == nil)
-        let armé = MessageProtectionIntent(isBlurred: true, isViewOnce: true)
-        #expect(armé.wireIsViewOnce == true)
-        #expect(armé.wireIsBlurred == true)
+        let vueUnique = MessageProtectionIntent(isViewOnce: true)
+        #expect(vueUnique.wireIsViewOnce == true)
+        #expect(vueUnique.wireIsBlurred == nil)
+        let flou = MessageProtectionIntent(isBlurred: true)
+        #expect(flou.wireIsBlurred == true)
+        #expect(flou.wireIsViewOnce == nil)
     }
 
     /// Une protection ne touche QUE l'axe du cycle de vie. Les effets

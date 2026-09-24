@@ -190,7 +190,7 @@ struct MessageOverlayMenu: View {
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            isForwardable: message.isForwardable
+            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce
         )
     }
 

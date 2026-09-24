@@ -177,7 +177,7 @@ final class DependencyContainer {
                     callSummaryJson: callSummaryJson, serverUpdatedAt: serverUpdatedAt
                 )
             case let .deleted(messageId, deletedAt):
-                try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt)
+                try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: true)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):
                 try await persistence.appendReaction(
                     localId: messageId, reactionId: reactionId, messageId: messageId,
@@ -189,6 +189,8 @@ final class DependencyContainer {
                 )
             case let .consumed(messageId, viewOnceCount):
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
+            case let .viewOnceOpened(messageId):
+                try await persistence.markViewOnceOpened(localId: messageId)
             }
         } catch {
             containerLogger.error("Realtime message persistence failed: \(error.localizedDescription, privacy: .public)")

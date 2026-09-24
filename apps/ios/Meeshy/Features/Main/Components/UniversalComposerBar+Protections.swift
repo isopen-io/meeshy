@@ -44,12 +44,12 @@ extension UniversalComposerBar {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? MeeshyColors.error : mutedColor)
+                    .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : mutedColor)
 
                 if let duration = ephemeralDuration.wrappedValue {
                     Text(duration.label)
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundColor(ComposerProtection.ephemeral.tint)
                 }
             }
             .padding(.horizontal, 8)
@@ -57,12 +57,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? MeeshyColors.error.opacity(0.15)
+                          ? ComposerProtection.ephemeral.tint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? MeeshyColors.error.opacity(0.3)
+                                    ? ComposerProtection.ephemeral.tint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -96,7 +96,7 @@ extension UniversalComposerBar {
                         .background(
                             Capsule()
                                 .fill(ephemeralDuration.wrappedValue == nil
-                                      ? Color(hex: accentColor)
+                                      ? servedAccent
                                       : style == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
@@ -115,17 +115,17 @@ extension UniversalComposerBar {
                             Text(duration.label)
                                 .font(.caption).fontWeight(.semibold)
                         }
-                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : MeeshyColors.error)
+                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : ComposerProtection.ephemeral.tint)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(ephemeralDuration.wrappedValue == duration
-                                      ? MeeshyColors.error
-                                      : MeeshyColors.error.opacity(0.1))
+                                      ? ComposerProtection.ephemeral.tint
+                                      : ComposerProtection.ephemeral.tint.opacity(0.1))
                                 .overlay(
                                     Capsule()
-                                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
+                                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.3), lineWidth: 0.5)
                                 )
                         )
                     }
@@ -139,7 +139,7 @@ extension UniversalComposerBar {
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 0.5)
+                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 8)
@@ -156,19 +156,17 @@ extension UniversalComposerBar {
         Button {
             onAnyInteraction?()
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isBlurEnabled.wrappedValue.toggle()
-            }
+            toggleVeil(.blurred)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
+                    .foregroundColor(isActive ? ComposerProtection.blurred.tint : mutedColor)
 
                 if isActive {
                     Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(MeeshyColors.indigo600)
+                        .foregroundColor(ComposerProtection.blurred.tint)
                 }
             }
             .padding(.horizontal, 8)
@@ -176,12 +174,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? MeeshyColors.indigo600.opacity(0.15)
+                          ? ComposerProtection.blurred.tint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? MeeshyColors.indigo600.opacity(0.3)
+                                    ? ComposerProtection.blurred.tint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -204,19 +202,17 @@ extension UniversalComposerBar {
         Button {
             onAnyInteraction?()
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isViewOnceEnabled.wrappedValue.toggle()
-            }
+            toggleVeil(.viewOnce)
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
+                    .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : mutedColor)
 
                 if isActive {
                     Text(String(localized: "composer.viewonce.label", defaultValue: "Vue unique", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(MeeshyColors.indigo600)
+                        .foregroundColor(ComposerProtection.viewOnce.tint)
                 }
             }
             .padding(.horizontal, 8)
@@ -224,12 +220,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? MeeshyColors.indigo600.opacity(0.15)
+                          ? ComposerProtection.viewOnce.tint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? MeeshyColors.indigo600.opacity(0.3)
+                                    ? ComposerProtection.viewOnce.tint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -239,6 +235,54 @@ extension UniversalComposerBar {
                             ? String(localized: "composer.viewonce.active", defaultValue: "Mode vue unique actif", bundle: .main)
                             : String(localized: "composer.viewonce.activate", defaultValue: "Activer le mode vue unique", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
+    }
+
+    // ========================================================================
+    // MARK: - La teinte de la barre (#7667)
+    // ========================================================================
+
+    /// La protection armée la plus forte — éphémère > vue unique > flou. Lue
+    /// depuis les bascules de la barre elle-même : aucun hôte ne peut oublier
+    /// de la substituer.
+    var dominantProtection: ComposerProtection? {
+        ComposerProtection.dominant(
+            ephemeral: ephemeralDuration.wrappedValue != nil,
+            viewOnce: isViewOnceEnabled.wrappedValue,
+            blurred: isBlurEnabled.wrappedValue
+        )
+    }
+
+    /// L'accent que TOUTE la barre sert à ses enfants : dépôt, vignettes,
+    /// forme d'onde, bouton d'envoi.
+    var servedAccentHex: String {
+        ComposerProtection.servedAccent(
+            for: dominantProtection,
+            hostAccent: accentColor,
+            hostSecondary: secondaryColor
+        ).primary
+    }
+
+    /// Le jeton d'état quand une protection est armée — jamais `Color(hex:)`
+    /// d'une variable pour une teinte que le design system déclare déjà.
+    var servedAccent: Color {
+        dominantProtection?.tint ?? Color(hex: accentColor)
+    }
+
+    var servedSecondary: Color {
+        dominantProtection?.tint ?? Color(hex: secondaryColor)
+    }
+
+    /// Flou et vue unique sont exclusifs : allumer l'un éteint l'autre.
+    func toggleVeil(_ veil: ComposerProtection) {
+        let next = ComposerProtection.togglingVeil(
+            veil,
+            blurred: isBlurEnabled.wrappedValue,
+            viewOnce: isViewOnceEnabled.wrappedValue
+        )
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if isBlurEnabled.wrappedValue != next.blurred { isBlurEnabled.wrappedValue = next.blurred }
+            if isViewOnceEnabled.wrappedValue != next.viewOnce { isViewOnceEnabled.wrappedValue = next.viewOnce }
+        }
     }
 
 // MARK: - Effects Toggle Button (extension)
@@ -255,12 +299,12 @@ extension UniversalComposerBar {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
+                    .foregroundColor(isActive ? servedAccent : mutedColor)
 
                 if isActive {
                     Text("\(effectCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(servedAccent)
                 }
             }
             .padding(.horizontal, 8)
@@ -268,12 +312,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? Color(hex: accentColor).opacity(0.15)
+                          ? servedAccent.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? Color(hex: accentColor).opacity(0.3)
+                                    ? servedAccent.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -304,12 +348,12 @@ extension UniversalComposerBar {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? Color(hex: accentColor) : mutedColor)
+                    .foregroundColor(isActive ? servedAccent : mutedColor)
 
                 if isActive {
                     Text("\(activeCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(servedAccent)
                 }
             }
             .padding(.horizontal, 8)
@@ -317,12 +361,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? Color(hex: accentColor).opacity(0.15)
+                          ? servedAccent.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? Color(hex: accentColor).opacity(0.3)
+                                    ? servedAccent.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -364,17 +408,17 @@ extension UniversalComposerBar {
                             Text(item.label)
                                 .font(.caption).fontWeight(.semibold)
                         }
-                        .foregroundColor(isSelected ? .white : Color(hex: accentColor))
+                        .foregroundColor(isSelected ? .white : servedAccent)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(isSelected
-                                      ? Color(hex: accentColor)
-                                      : Color(hex: accentColor).opacity(0.1))
+                                      ? servedAccent
+                                      : servedAccent.opacity(0.1))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 0.5)
+                                        .stroke(servedAccent.opacity(0.3), lineWidth: 0.5)
                                 )
                         )
                     }
@@ -391,7 +435,7 @@ extension UniversalComposerBar {
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
+                        .stroke(servedAccent.opacity(0.2), lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 8)
