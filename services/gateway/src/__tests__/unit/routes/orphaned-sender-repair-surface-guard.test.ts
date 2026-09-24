@@ -184,6 +184,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7740 — anti-répétition de Global : `select: { content: true }`, aucun expéditeur.
   'messaging/messagePostSaveEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7740 — la ligne d'arrivées de Global relit ses messages système (`id`,
+  // `metadata`, `deletedAt`) pour retrouver la ligne ouverte : aucun `sender`.
+  'conversations/globalArrivalsNotice.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
