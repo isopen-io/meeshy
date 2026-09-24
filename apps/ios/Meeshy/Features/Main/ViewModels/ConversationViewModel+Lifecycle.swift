@@ -190,6 +190,9 @@ extension ConversationViewModel {
         // — so the throwaway VMs SwiftUI allocates on every parent
         // re-evaluation never fire them (only the installed VM runs start()).
         socketHandler?.activate()
+        // #7847 — les contacts de la liste `@` se lisent en CACHE (sans
+        // réseau) dès l'ouverture : le `@` les sert ainsi à l'image près.
+        Task { [weak self] in await self?.mentionController.primeContacts() }
         // OBSERVER, oui — LIRE, non. La première lecture de fenêtre appartient
         // à `loadMessages()`, que le `.task` de la vue enchaîne juste après
         // `start()` (#4943, D-OPEN-01). Un `Task { await

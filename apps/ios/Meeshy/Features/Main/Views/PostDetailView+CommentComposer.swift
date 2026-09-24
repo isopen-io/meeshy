@@ -59,7 +59,7 @@ extension PostDetailView {
                 }
             ),
             onTextChange: { text in
-                mentionController.handleQuery(in: text)
+                mentionController.handleQuery(in: text, participants: MentionParticipants.of(post: displayPost, comments: viewModel.comments))
                 CommentDraftStore.shared.save(postId: postId, text: text)
             },
             onStartRecording: { startCommentRecording() },

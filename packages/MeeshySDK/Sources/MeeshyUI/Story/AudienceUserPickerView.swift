@@ -15,6 +15,16 @@ extension UserService: AudienceUserSearching {}
 /// and key as the contacts list. Injectable to keep the VM unit-testable.
 public protocol AudienceContactsProviding: Sendable {
     func cachedContacts() async -> [UserSearchResult]
+
+    /// **Le réchauffement** (#7847) : les contacts relus au réseau quand le
+    /// cache est vide ou périmé, `nil` quand rien de plus frais n'est venu.
+    /// Le SDK n'en décide pas — c'est l'app qui orchestre le cache et injecte
+    /// son fournisseur (`EnvironmentValues.mentionContactsProvider`).
+    func refreshedContacts() async -> [UserSearchResult]?
+}
+
+public extension AudienceContactsProviding {
+    func refreshedContacts() async -> [UserSearchResult]? { nil }
 }
 
 /// Default: reads the shared friends GRDB cache (the same store/key the
