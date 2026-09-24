@@ -1,4 +1,6 @@
 import { Glyph } from './glyph';
+import { TypingDots } from './typing-dots';
+import type { ListPaginationState } from '@/lib/lens/pagination';
 import { lastMessageLine, scrollToBottomLabel, unreadHeadline } from '@/lib/view/thread-chrome';
 
 /**
@@ -101,5 +103,99 @@ export function ScrollToBottomButton({
         <Glyph name="caretDown" size={16} />
       )}
     </button>
+  );
+}
+
+/**
+ * LE RETOUR VISIBLE DE LA PAGINATION VERS LE PASSÉ (#6972, extrait de
+ * `routes/thread.tsx` au lot #7429, découpage sans changer un pixel) —
+ * FLOTTANT, frère absolu de `<main>`, exactement comme la pilule de jour et
+ * le bouton « revenir en bas » ci-dessus : posé DANS le défileur il
+ * grandirait le contenu par le HAUT, poussant tout le fil de quarante pixels
+ * à l'instant où la page part et le ramenant quand elle arrive — deux sauts
+ * pour une page qui s'est chargée correctement (voir le doc-comment
+ * d'`OlderHead`, `routes/thread-modes.tsx`). La PRISE reste dans le flux, à
+ * un pixel ; seul le DESSIN flotte.
+ *
+ * Sous la bande, au même repère que la pilule de jour — la pilule de jour ne
+ * colle rien au sommet du fil (`stickyDayOf`, `use-thread-chrome-signals.ts`),
+ * et c'est au sommet, et là seulement, que l'historique se charge : les deux
+ * ne se disputent jamais la place.
+ */
+export function OlderLoadIndicator({
+  state,
+  onRetry,
+}: {
+  readonly state: ListPaginationState;
+  readonly onRetry: () => void;
+}) {
+  if (state !== 'loading-more' && state !== 'error') return null;
+  return (
+    <div
+      className="absolute inset-x-0 z-20 flex justify-center px-4"
+      style={{ top: 'calc(var(--safe-top, 0px) + 60px)' }}
+    >
+      {state === 'loading-more' ? (
+        /* `role="status"` avec un TEXTE visuellement masqué : une région
+           live annonce son CONTENU qui change, jamais son nom calculé
+           (revue-correction #6195, motif `LensPaginationFooter`). */
+        <span
+          role="status"
+          className="glass-prominent glass-card rounded-chip inline-flex items-center px-3 py-1.5"
+          style={{ color: 'var(--color-ios-ink-2)', border: '0.5px solid var(--color-edge)' }}
+        >
+          <TypingDots color="currentColor" />
+          <span className="sr-only">Chargement des messages plus anciens</span>
+        </span>
+      ) : (
+        /* UN REFUS OFFRE SON REJEU — un échec silencieux laisserait le haut
+           du fil muet et l'historique inatteignable sans que rien ne le dise
+           (loi 4 : un contrôle existe s'il a un effet). Cible de 44 px,
+           comme le « Réessayer » de la Lentille. */
+        <button
+          type="button"
+          onClick={onRetry}
+          className="glass-prominent glass-card rounded-chip inline-flex items-center gap-2 px-3 text-mini font-semibold"
+          style={{ color: 'var(--color-ios-ink)', border: '0.5px solid var(--color-edge)', minHeight: 44 }}
+        >
+          Historique indisponible <span aria-hidden>·</span> Réessayer
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * LA PILULE VISIBLE (revue #5814, défaut majeur 10 ; extrait de
+ * `routes/thread.tsx` au lot #7429, découpage sans changer un pixel) — le
+ * refus d'une réaction (plafond de 5), « Message copié », « Message protégé »
+ * n'avaient AUCUN retour à l'œil : leur seul canal était la région
+ * `role="status"` de l'écran hôte, `className="offscreen"` — visuellement
+ * masquée. `aria-hidden` ICI : le MÊME texte est déjà lu par cette
+ * région-là, l'annoncer deux fois doublerait la lecture au lecteur d'écran.
+ *
+ * FLOTTANTE, et ancrée au bord bas MESURÉ (#6213) — jamais dans le flux : en
+ * frère de flux elle poussait tout l'écran d'une trentaine de pixels à
+ * chaque annonce, et le fil sautait sous les yeux du lecteur pour dire
+ * « Message copié ».
+ */
+export function NoticePill({ text }: { readonly text: string }) {
+  if (text === '') return null;
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-4"
+      style={{ bottom: 'var(--thread-notice-bottom)' }}
+      aria-hidden
+    >
+      <span
+        className="glass-prominent glass-card rounded-chip px-3 py-1.5 text-mini font-semibold"
+        style={{
+          color: 'var(--color-ios-ink)',
+          border: '0.5px solid var(--color-edge)',
+        }}
+      >
+        {text}
+      </span>
+    </div>
   );
 }
