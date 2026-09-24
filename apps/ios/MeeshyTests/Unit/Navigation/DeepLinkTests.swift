@@ -388,14 +388,14 @@ final class DeepLinkParserTests: XCTestCase {
         XCTAssertEqual(username, "user name@test")
     }
 
-    func test_parse_magicLink_emptyToken_returnsMagicLinkWithEmptyString() {
+    /// Un jeton VIDE n'est pas un lien magique (#7815). Ce témoin exigeait
+    /// l'inverse — `.magicLink("")` — alors que la voie système le refusait
+    /// déjà : `handleAppLevelDeepLink` le passait à `validateMagicLinkToken`,
+    /// qui DÉCONNECTE le compte courant avant de valider, pour un jeton voué à
+    /// l'échec. Les deux voies partagent désormais le refus.
+    func test_parse_magicLink_emptyToken_isNotAMagicLink() {
         let url = URL(string: "meeshy://auth/magic-link?token=")!
-        let result = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = result else {
-            XCTFail("Expected .magicLink with empty token, got \(result)")
-            return
-        }
-        XCTAssertEqual(token, "")
+        XCTAssertEqual(DeepLinkParser.parse(url), .external(url))
     }
 
     // MARK: - Universal Links (https://meeshy.me)
