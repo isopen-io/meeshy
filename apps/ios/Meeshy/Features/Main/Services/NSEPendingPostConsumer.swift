@@ -11,7 +11,8 @@ import os
 /// while the post fetch was in flight — "on ne tombe sur aucune donnée".
 ///
 /// Mirrors `NSEPendingMessageConsumer`: own directory read (no cross-target
-/// dependency on the NSE's `NSEDataSync`), same ISO8601 date decoding.
+/// dependency on the NSE's `NSEDataSync`); dates decoded by the APIClient's
+/// decoder.
 @MainActor
 final class NSEPendingPostConsumer {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -36,25 +37,19 @@ final class NSEPendingPostConsumer {
     private init() {}
 
     func consumeAll() async {
-        let pending = readPending()
+        await consume(readPending())
+    }
+
+    /// Range des posts préchargés déjà lus. Point d'injection testable : les
+    /// témoins passent leurs propres fichiers sans passer par l'App Group.
+    func consume(_ pending: [(url: URL, data: Data)]) async {
         guard !pending.isEmpty else { return }
 
         logger.info("Consuming \(pending.count) NSE-prefetched posts")
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            // Modern Date.ISO8601FormatStyle supports fractional seconds and
-            // is more efficient than legacy ISO8601DateFormatter.
-            if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                return date
-            }
-            if let date = try? Date(dateStr, strategy: .iso8601) {
-                return date
-            }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
+        // Le décodeur de l'APIClient : UNE source pour le format des dates du
+        // fil (avec ET sans fractions de seconde — `WireDate`).
+        let decoder = APIClient.makeAPIPayloadDecoder()
 
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
 
@@ -71,10 +66,11 @@ final class NSEPendingPostConsumer {
             }
             let feedPost = apiPost.toFeedPost(preferredLanguages: langs)
             // PostDetailViewModel.loadPost keys the feed store by postId and reads
-            // `.first`, so seed exactly that key. A `.fresh` hit then renders the
-            // post from local data instead of a blank state on a cold-start tap.
+            // `.first`, so seed exactly that key. #7809 — l'instantané date du
+            // push (compteurs, rendu servi à la NSE) : il entre `.stale`, donc il
+            // se PEINT tout de suite puis se revalide — jamais servi comme frais.
             do {
-                try await CacheCoordinator.shared.feed.save([feedPost], for: apiPost.id)
+                try await CacheCoordinator.shared.feed.saveAsStale([feedPost], for: apiPost.id)
                 // The post payload (`/posts/:id`) embeds its recent comments, which
                 // INCLUDE the one that triggered a `post_comment` / `comment_reply`
                 // notification. Without persisting them, tapping such a notification

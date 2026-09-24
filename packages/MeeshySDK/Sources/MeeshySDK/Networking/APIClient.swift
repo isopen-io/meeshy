@@ -382,9 +382,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     /// dates ISO 8601 AVEC fractions de seconde (`2026-07-29T10:00:00.000Z`),
     /// que la stratégie `.iso8601` de Foundation REFUSE
     /// (`dataCorrupted("Expected date string to be ISO8601-formatted")`).
-    /// `internal` (pas `private`) pour que les tests décodent avec la stratégie
-    /// de PRODUCTION au lieu d'en réinventer une plus stricte que le serveur.
-    nonisolated static func makeAPIPayloadDecoder() -> JSONDecoder {
+    /// `public` : les tests ET l'app (consommateur NSE, #7809) décodent avec la
+    /// stratégie de PRODUCTION au lieu d'en réinventer une.
+    public nonisolated static func makeAPIPayloadDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()

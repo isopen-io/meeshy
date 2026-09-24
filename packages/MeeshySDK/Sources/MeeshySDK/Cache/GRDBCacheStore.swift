@@ -84,6 +84,19 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     }
 
     public func save(_ items: [Value], for key: Key) async throws {
+        try save(items, for: key, fetchedAt: Date())
+    }
+
+    /// #7809 — écriture d'un INSTANTANÉ qui ne vient pas d'un fetch réseau
+    /// (préchargement de la NSE) : l'horloge SWR est datée juste au-delà de la
+    /// fenêtre fraîche, donc `load` rend `.stale` — la donnée se peint tout de
+    /// suite ET se revalide. Sans fenêtre `staleTTL`, il n'existe aucun état
+    /// `.stale` : repli sur `save`.
+    public func saveAsStale(_ items: [Value], for key: Key) async throws {
+        try save(items, for: key, fetchedAt: Date().addingTimeInterval(-(policy.staleTTL ?? 0)))
+    }
+
+    private func save(_ items: [Value], for key: Key, fetchedAt: Date) throws {
         let trimmed: [Value]
         if let max = policy.maxItemCount, items.count > max {
             trimmed = Array(items.suffix(max))
@@ -94,9 +107,9 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         // Write to L2 BEFORE mutating L1 so a failed write (e.g. encryption
         // failure on an `encrypted: true` store) does not leave L1 caching
         // data that never reached persistent storage.
-        try writeToL2(trimmed, for: namespacedKey(key.description))
+        try writeToL2(trimmed, for: namespacedKey(key.description), fetchedAt: fetchedAt)
 
-        memoryCache[key] = L1Entry(items: trimmed, loadedAt: Date())
+        memoryCache[key] = L1Entry(items: trimmed, loadedAt: fetchedAt)
         touchKey(key)
     }
 
@@ -592,7 +605,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         }
     }
 
-    private nonisolated func writeToL2(_ items: [Value], for keyStr: String) throws {
+    private nonisolated func writeToL2(_ items: [Value], for keyStr: String, fetchedAt: Date) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
@@ -615,7 +628,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                     nextCursor: existingCursor?.nextCursor,
                     hasMore: existingCursor?.hasMore ?? false,
                     totalCount: items.count,
-                    lastFetchedAt: now
+                    lastFetchedAt: fetchedAt
                 )
                 try meta.save(db)
             }
