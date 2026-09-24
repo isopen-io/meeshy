@@ -16,7 +16,8 @@ import { resolveMessageMentions } from '../../services/messaging/messageMentions
 import {
   admitConversationWriteFor,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalHttpResponse
 } from '../../services/messaging/conversationWriteAdmission.js';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
 import { sharedSendReservations } from '../../services/messaging/newcomerSendReservations.js';
@@ -46,20 +47,14 @@ import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
  */
 function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused): void {
   const message = describeConversationWriteRefusal(refusal);
+  const response = writeRefusalHttpResponse(refusal);
 
-  if (refusal.reason === 'conversation-closed') {
-    return sendError(reply, 410, message);
+  if (response.status === 429) {
+    reply.header('Retry-After', String(response.retryAfterSeconds));
+    return sendError(reply, 429, message, { code: response.code });
   }
 
-  if (refusal.reason === 'slow-mode-active') {
-    // Le décompte est toujours porté par la règle ; le repli à 1 s évite
-    // d'annoncer « réessayez dans 0 s » sur un refus, ce qui inviterait à une
-    // boucle serrée.
-    reply.header('Retry-After', String(refusal.retryAfterSeconds ?? 1));
-    return sendError(reply, 429, message, { code: 'SLOW_MODE_ACTIVE' });
-  }
-
-  return sendForbidden(reply, message);
+  return response.status === 410 ? sendError(reply, 410, message) : sendForbidden(reply, message);
 }
 
 /**

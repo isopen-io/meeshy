@@ -401,6 +401,41 @@ export const describeConversationWriteRefusal = (refusal: ConversationWriteRefus
   }
 };
 
+export type WriteRefusalHttpResponse =
+  | { readonly status: 410 | 403 }
+  | {
+      readonly status: 429;
+      readonly code: 'SLOW_MODE_ACTIVE' | 'NEWCOMER_SLOW_MODE';
+      readonly retryAfterSeconds: number;
+    };
+
+const assertNever = (value: never): never => {
+  throw new Error(`Unhandled write refusal: ${String(value)}`);
+};
+
+/**
+ * Ce qu'on RÉPOND en HTTP à un refus, en un seul exemplaire — 410 (parti pour
+ * de bon), 403 (jamais), 429 + `Retry-After` (pas encore). Le `switch` est
+ * EXHAUSTIF : un refus ajouté à l'union ne compile pas tant qu'on n'a pas dit
+ * s'il est définitif ou temporaire. Le repli à 1 s évite d'annoncer
+ * « réessayez dans 0 s », qui inviterait à une boucle serrée.
+ */
+export const writeRefusalHttpResponse = (refusal: ConversationWriteRefused): WriteRefusalHttpResponse => {
+  const reason: ConversationWriteRefusal = refusal.reason;
+  switch (reason) {
+    case 'conversation-closed':
+      return { status: 410 };
+    case 'write-role-insufficient':
+      return { status: 403 };
+    case 'slow-mode-active':
+      return { status: 429, code: 'SLOW_MODE_ACTIVE', retryAfterSeconds: refusal.retryAfterSeconds ?? 1 };
+    case 'newcomer-slow-mode':
+      return { status: 429, code: 'NEWCOMER_SLOW_MODE', retryAfterSeconds: refusal.retryAfterSeconds ?? 1 };
+    default:
+      return assertNever(reason);
+  }
+};
+
 const ADMITTED: ConversationWriteAdmission = { admitted: true };
 const REFUSED = (reason: ConversationWriteRefusal): ConversationWriteAdmission => ({
   admitted: false,

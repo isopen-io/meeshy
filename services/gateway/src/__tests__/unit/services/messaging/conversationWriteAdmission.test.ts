@@ -23,7 +23,8 @@ import {
   admitConversationWriteFor,
   describeConversationWriteRefusal,
   isConversationClosed,
-  isConversationWriteRefused
+  isConversationWriteRefused,
+  writeRefusalHttpResponse
 } from '../../../../services/messaging/conversationWriteAdmission';
 import { cacheSendReservations } from '../../../../services/messaging/newcomerSendReservations';
 
@@ -655,6 +656,37 @@ describe('describeConversationWriteRefusal — le message, en un seul exemplaire
   it('ne dit jamais « undefined » quand le décompte manque', () => {
     expect(describeConversationWriteRefusal({ admitted: false, reason: 'slow-mode-active' }))
       .toBe('Mode lent actif : réessayez dans 1 s');
+  });
+});
+
+// ── Ce qu'on RÉPOND en HTTP ─────────────────────────────────────────────────
+
+describe('writeRefusalHttpResponse — le statut dit « jamais », « plus jamais » ou « pas encore »', () => {
+  it('rend 410 pour une conversation close', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'conversation-closed' }))
+      .toEqual({ status: 410 });
+  });
+
+  it('rend 403 pour un rang insuffisant', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'write-role-insufficient' }))
+      .toEqual({ status: 403 });
+  });
+
+  it('rend 429 + Retry-After pour le mode lent configuré', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'slow-mode-active', retryAfterSeconds: 12 }))
+      .toEqual({ status: 429, code: 'SLOW_MODE_ACTIVE', retryAfterSeconds: 12 });
+  });
+
+  // Le refus TEMPORAIRE des nouveaux comptes ne doit jamais tomber dans le 403
+  // définitif : une file cliente le rangerait en échec au lieu de le reprogrammer.
+  it('rend 429 + Retry-After + NEWCOMER_SLOW_MODE pour le mode lent des nouveaux comptes', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'newcomer-slow-mode', retryAfterSeconds: 21 }))
+      .toEqual({ status: 429, code: 'NEWCOMER_SLOW_MODE', retryAfterSeconds: 21 });
+  });
+
+  it('ne rend jamais Retry-After: 0 quand le décompte manque', () => {
+    expect(writeRefusalHttpResponse({ admitted: false, reason: 'newcomer-slow-mode' }))
+      .toEqual({ status: 429, code: 'NEWCOMER_SLOW_MODE', retryAfterSeconds: 1 });
   });
 });
 
