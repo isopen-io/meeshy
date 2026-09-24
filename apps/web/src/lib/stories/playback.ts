@@ -169,6 +169,10 @@ export type StoryPlaybackStory = {
    * du set » (`StoryViewerView+Sidebar.swift:24-26`). */
   readonly commentCount?: number | null;
   readonly reactionCount?: number | null;
+  /** L'EN-TÊTE de la feuille « Vues » (#7116) lit CE compte AUTORITATIF,
+   * jamais la longueur de sa propre page (`PublicationViewersSheet`, note
+   * C4 — miroir `StoryViewersSheet:1381`). */
+  readonly viewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
 };
 

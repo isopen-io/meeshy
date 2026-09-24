@@ -15,6 +15,7 @@ import { Avatar } from '@/components/avatar';
 import { PersonName } from '@/components/person-name';
 import { Glyph } from '@/components/glyph';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
+import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { STORY_ACTION_RAIL_CORRIDOR, StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
@@ -64,7 +65,10 @@ import {
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
-import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
+import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
+import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
+import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
+import { screenGestureYields } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -508,68 +512,58 @@ export default function StoryScreen() {
     }
   };
 
-  /* L'ONGLET CACHÉ NE CONSOMME PAS UNE STORY (miroir web de
-     `scenePhase == .background ⇒ isPresented = false`,
-     `StoryViewerView.swift:614-622`). `requestAnimationFrame` s'arrête quand
-     l'onglet passe en arrière-plan, mais `elapsedRef` se calcule depuis
-     `performance.now()`, qui, lui, continue : au retour, le PREMIER tick
-     trouvait `ratio >= 1` et avalait la story sans que personne ne l'ait vue.
-     On met donc en pause à la disparition et on ne reprend qu'une pause qu'on
-     a soi-même posée — une pause voulue par l'utilisateur (appui long,
-     double-tap) survit au passage en arrière-plan. */
-  const hiddenPauseRef = useRef(false);
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.hidden) {
-        hiddenPauseRef.current = !paused;
-        if (!paused) pause();
-        return;
-      }
-      if (!hiddenPauseRef.current) return;
-      hiddenPauseRef.current = false;
-      resume();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [paused, pause, resume]);
+  /* L'ONGLET CACHÉ NE CONSOMME PAS UNE STORY — extrait dans
+     `use-story-hidden-tab-pause.ts` (§ budget de la spécification #7116),
+     comportement INCHANGÉ. */
+  useStoryHiddenTabPause({ paused, pause, resume });
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      /* ÉCHAP D'ABORD, ET SANS CONDITION : fermer depuis un champ reste juste,
-         et la feuille de commentaires, qui veut le garder pour elle,
-         l'intercepte en phase de CAPTURE (`story-comments-sheet.tsx`). */
-      if (e.key === 'Escape') {
-        closeViewer();
-        return;
-      }
-      /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, TOUCHE PAR TOUCHE
-         (`lib/view/shortcut-scope.ts`, D-91). Sans cette cession, mesuré au
-         navigateur : « a b » tapé dans le composeur de commentaire rendait
-         « ab » (le raccourci de pause avalait l'espace), une flèche pendant
-         la frappe faisait avancer la story — ce qui ferme la feuille et
-         emporte le brouillon — et Espace n'activait AUCUN bouton du lecteur,
-         le `click` d'un `<button>` naissant d'un `keyup` que le
-         `preventDefault` ci-dessous supprimait. La cession est FINE : un
-         bouton ne réclame qu'Espace et Entrée, sinon cliquer « muet » (ce
-         qui le focalise) figerait les flèches jusqu'au clic suivant. */
-      if (shortcutYieldsToTarget({ target: e.target, key: e.key })) return;
-      /* Feuille ouverte : ses touches ne pilotent pas la story recouverte —
-         la loi du doigt (`screenGestureYields`, plus haut), appliquée au
-         clavier (revue #6484). */
-      if (screenGestureYields({ target: e.target, layerOpen: commentsOpen })) return;
-      if (e.key === 'ArrowLeft') advance('previous');
-      else if (e.key === 'ArrowRight') advance('next');
-      else if (e.key === ' ') {
-        e.preventDefault();
-        if (paused) resume();
-        else pause();
-      } else if (e.key === 'm' || e.key === 'M') {
-        if (showsSound) setStorySoundMuted((m) => !m);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [advance, paused, pause, resume, closeViewer, showsSound, commentsOpen]);
+  /**
+   * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).
+   * `performStoryReaction` distingue trois issues — parti, POSÉ MAIS NON
+   * CONFIRMÉ (réseau, 5xx, 429), REFUSÉ et défait — et rendait ses deux clés
+   * (`STORY_REACTION_PENDING`, `STORY_REACTION_FAILED`) à un appelant qui les
+   * JETAIT (`void storyReactionAction(...)`). Mesuré : aucun site du dépôt ne
+   * lisait ces clés. Un refus permanent retirait donc le cœur SANS un mot —
+   * indiscernable d'un second tap — et un geste hors ligne ressemblait à un
+   * geste confirmé. C'est la « loi qui calcule une valeur que personne ne
+   * lit », et le remède est celui que les Réels emploient déjà sur la MÊME
+   * grammaire d'issues (`usePostGesture` → `reels.tsx`) : une région
+   * `role="status"` unique, la dernière annonce gagnant (`useLiveAnnouncer`).
+   */
+  const { text: announcement, announce } = useLiveAnnouncer();
+
+  /**
+   * **LE PLAN AUTEUR** (#7116) — « Vues », « Partager », « Enregistrer ».
+   * La loi vit dans `use-story-owner-rail.ts` (pause/reprise de la feuille,
+   * téléchargement + livraison de l'export, idempotence du job) : ce lecteur
+   * ne fait que la BRANCHER sur SA région d'annonce et SA pause, exactement
+   * comme `commentsHost` deux blocs plus haut. Déclaré ICI, AVANT le clavier,
+   * pour que `ownerRail.viewersOpen` puisse rejoindre la cession `layerOpen`.
+   */
+  const ownerRail = useStoryOwnerRail({
+    storyId: currentStory?.id,
+    exportMediaId: media?.id,
+    pause,
+    resume,
+    announce: (message) => announce(message),
+    language: interfaceLanguage,
+  });
+
+  /* EXTRAIT dans `use-story-keyboard-shortcuts.ts` (§ budget, #7116) —
+     comportement INCHANGÉ, sauf `layerOpen` qui gagne `ownerRail.viewersOpen` :
+     une flèche tapée pendant que « Vues » est ouverte ne doit pas faire
+     avancer la story recouverte (D-91, même loi que la feuille de
+     commentaires). */
+  useStoryKeyboardShortcuts({
+    advance,
+    paused,
+    pause,
+    resume,
+    closeViewer,
+    showsSound,
+    onToggleMute: () => setStorySoundMuted((m) => !m),
+    layerOpen: commentsOpen || ownerRail.viewersOpen,
+  });
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
      lecteur apprend ensuite est le SON (le sondage de piste audio conclut
@@ -615,21 +609,6 @@ export default function StoryScreen() {
     return () => resume();
   }, [commentsOpen, pause, resume]);
 
-  /**
-   * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).
-   * `performStoryReaction` distingue trois issues — parti, POSÉ MAIS NON
-   * CONFIRMÉ (réseau, 5xx, 429), REFUSÉ et défait — et rendait ses deux clés
-   * (`STORY_REACTION_PENDING`, `STORY_REACTION_FAILED`) à un appelant qui les
-   * JETAIT (`void storyReactionAction(...)`). Mesuré : aucun site du dépôt ne
-   * lisait ces clés. Un refus permanent retirait donc le cœur SANS un mot —
-   * indiscernable d'un second tap — et un geste hors ligne ressemblait à un
-   * geste confirmé. C'est la « loi qui calcule une valeur que personne ne
-   * lit », et le remède est celui que les Réels emploient déjà sur la MÊME
-   * grammaire d'issues (`usePostGesture` → `reels.tsx`) : une région
-   * `role="status"` unique, la dernière annonce gagnant (`useLiveAnnouncer`).
-   */
-  const { text: announcement, announce } = useLiveAnnouncer();
-
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};
     const storyId = currentStory.id;
@@ -646,8 +625,14 @@ export default function StoryScreen() {
          composeur (spécification porteur 2026-05-28). */
       reply: openComments,
       comments: openComments,
+      /* Le plan AUTEUR (`showsViews`/`showsExport`) filtre déjà ces trois sur
+         MA story SEULE (loi 4) — les remettre inconditionnellement ici ne
+         fait apparaître aucun bouton sur la story d'autrui. */
+      views: ownerRail.openViewers,
+      share: ownerRail.onShare,
+      save: ownerRail.onSave,
     };
-  }, [currentStory, showsSound, announce, interfaceLanguage, openComments]);
+  }, [currentStory, showsSound, announce, interfaceLanguage, openComments, ownerRail.openViewers, ownerRail.onShare, ownerRail.onSave]);
 
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */
@@ -962,11 +947,13 @@ export default function StoryScreen() {
               plan={frozenRail.plan}
               language={interfaceLanguage}
               handlers={railHandlers}
-              counts={{ react: currentStory.reactionCount, comments: currentStory.commentCount }}
+              counts={{ react: currentStory.reactionCount, comments: currentStory.commentCount, views: currentStory.viewCount }}
               pressed={{
                 sound: storySoundMuted,
                 react: hasReactedToStory(currentStory, STORY_DEFAULT_REACTION),
               }}
+              saving={ownerRail.saving}
+              onCancelSave={ownerRail.onCancelSave}
               /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :
                  les trois boutons se peignaient PAR-DESSUS la liste de
                  commentaires, et « Commentaires » recouvrait le bouton
@@ -984,11 +971,19 @@ export default function StoryScreen() {
                  contrôles superposés ne sont qu'un seul contrôle pour le
                  doigt : c'est la géométrie du web qui impose le retrait, pas
                  un choix d'iOS qu'on recopierait. */
-              hidden={chromeHidden || commentsOpen}
+              hidden={chromeHidden || commentsOpen || ownerRail.viewersOpen}
             />
           ) : null}
 
           <CommentsSheetPortal host={commentsHost} />
+          {currentStory !== undefined ? (
+            <PublicationViewersSheetPortal
+              open={ownerRail.viewersOpen}
+              postId={currentStory.id}
+              viewCount={currentStory.viewCount ?? 0}
+              onClose={ownerRail.closeViewers}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

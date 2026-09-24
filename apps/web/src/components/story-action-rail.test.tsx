@@ -109,16 +109,15 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     expect(host.querySelector('[data-story-action="translations"]')).toBeNull();
   });
 
-  test('CONTRE-ÉPREUVE — un bouton SANS TRACÉ est absent, même loi verte et gestionnaire branché', async () => {
-    /* `views` est le seul dans ce cas aujourd'hui : son tracé vivrait dans
-       `glyphs-communities.ts`, un jeu d'ÉCRAN que le lecteur de stories
-       tirerait ENTIER pour une action que le web ne sait pas encore faire.
-       Le TROISIÈME garde du rail (le tracé) est structurel comme les deux
-       autres — une branche oubliée ne peut pas le contourner. */
+  test('« Vues » (#7116) a désormais son tracé et son effet — plan AUTEUR complet', async () => {
+    /* `eye` est DÉJÀ dans le socle (`glyphs.ts`) : le rejoindre à la carte du
+       rail coûte 0 octet de PLUS, mesuré (voir `GLYPH_OF`, doc-comment). Le
+       TROISIÈME garde (le tracé) reste structurel — c'est la loi et le
+       gestionnaire qui, ensemble, l'atteignent désormais. */
     const plan = resolveStoryActionRailPlan(inputs({ isOwnStory: true }));
     expect(plan.showsViews).toBe(true);
     const host = await monter({ plan, language: 'fr', handlers: TOUS });
-    expect(actions(host)).not.toContain('views');
+    expect(actions(host)).toContain('views');
   });
 
   test('un rail sans AUCUN bouton atteignable ne peint pas de barre vide', async () => {
@@ -237,5 +236,58 @@ describe('ce que chaque bouton ANNONCE et FAIT', () => {
     expect(rail?.getAttribute('role')).toBe('toolbar');
     expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
     expect(rail?.getAttribute('aria-label')).toBe('Actions de la story');
+  });
+});
+
+/**
+ * **L'ANNEAU D'EXPORT** (#7116) — `save` a une SECONDE forme quand `saving`
+ * porte un job. `share` reste un bouton ORDINAIRE tout du long
+ * (`StoryExportRailButtons.resolve`, iOS : « Partager reste au premier plan
+ * tout du long »).
+ */
+describe('l’anneau d’export remplace « Enregistrer », jamais « Partager »', () => {
+  const plan = () => resolveStoryActionRailPlan(inputs({ isOwnStory: true }));
+
+  test('`saving` absent ⇒ « Enregistrer » reste un bouton plein, comme avant ce lot', async () => {
+    const host = await monter({ plan: plan(), language: 'fr', handlers: TOUS });
+    expect(host.querySelector('[data-story-action="save"]')).not.toBeNull();
+    expect(host.querySelector('[data-story-save-ring]')).toBeNull();
+  });
+
+  test('`saving: { progress: 0.4, cancellable: true }` ⇒ l’anneau REMPLACE « Enregistrer », dans un bouton ANNULABLE', async () => {
+    const cancels: string[] = [];
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: 0.4, cancellable: true, reduceMotion: false },
+      onCancelSave: () => cancels.push('cancel'),
+    });
+    expect(host.querySelector('[data-story-action="save"]')).toBeNull();
+    /* « Partager » reste un `<button>` ordinaire tout du long. */
+    expect(host.querySelector('[data-story-action="share"]')?.tagName).toBe('BUTTON');
+
+    const ring = host.querySelector('[data-story-save-ring]');
+    expect(ring?.getAttribute('role')).toBe('progressbar');
+    // 0,4 × 0,9 × 100 = 36 — le même calcul que `percent()`.
+    expect(ring?.getAttribute('aria-valuenow')).toBe('36');
+
+    const cancelButton = ring?.closest('button');
+    expect(cancelButton).not.toBeNull();
+    expect(cancelButton?.getAttribute('aria-label')).toBe('Annuler l’enregistrement');
+    await act(async () => cancelButton?.click());
+    expect(cancels).toEqual(['cancel']);
+  });
+
+  test('`cancellable: false` ⇒ l’anneau n’est PAS dans un bouton — aucun contrôle inerte (D-88)', async () => {
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: 0.95, cancellable: false, reduceMotion: false },
+    });
+    const ring = host.querySelector('[data-story-save-ring]');
+    expect(ring).not.toBeNull();
+    expect(ring?.closest('button')).toBeNull();
   });
 });

@@ -178,3 +178,31 @@ const GATE: Readonly<Record<StoryActionRailButton, (plan: StoryActionRailPlan) =
 export function storyActionRailButtons(plan: StoryActionRailPlan): readonly StoryActionRailButton[] {
   return STORY_ACTION_RAIL_ORDER.filter((button) => GATE[button](plan));
 }
+
+/**
+ * **LES DEUX FACES DE `showsExport`** (#7116) — miroir vecteur à vecteur de
+ * `StoryExportRailButtons.resolve(showsExport:saveProgress:)`
+ * (`StoryViewerView+Sidebar.swift:93-105`) : « Partager et Enregistrer
+ * apparaissent ou disparaissent TOUJOURS ensemble. Seul Enregistrer bascule
+ * vers l'anneau de progression […] Partager reste au premier plan tout du
+ * long ».
+ *
+ * `saveProgress: null` ⇒ aucun export en cours pour CETTE story : le bouton
+ * plein rend. Une valeur ⇒ l'anneau remplace le bouton, jamais les deux.
+ */
+export type StoryExportRailButtons = {
+  readonly showsShareButton: boolean;
+  readonly showsSaveButton: boolean;
+  readonly showsSaveProgressRing: boolean;
+};
+
+export function resolveStoryExportRailButtons(params: {
+  readonly showsExport: boolean;
+  readonly saveProgress: number | null;
+}): StoryExportRailButtons {
+  return {
+    showsShareButton: params.showsExport,
+    showsSaveButton: params.showsExport && params.saveProgress === null,
+    showsSaveProgressRing: params.showsExport && params.saveProgress !== null,
+  };
+}
