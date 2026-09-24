@@ -33,8 +33,18 @@ export type IdentityTarget =
 export function identityTarget(params: {
   readonly username?: string | null | undefined;
   readonly storyRing?: AuthorStoryRing | undefined;
+  /**
+   * QUELLE STORY LE TOUCHER OUVRE (#7830, jumelle iOS #7831). `always` (le
+   * défaut, #7241) : tout anneau ouvre la story. `unseen` : seule une story
+   * NON VUE s'ouvre au toucher ; une story déjà vue laisse le toucher au
+   * profil, et reste atteignable par le menu d'appui long (« Voir la story »).
+   * C'est la règle de la pile des participants les plus actifs de l'en-tête.
+   */
+  readonly storyOpens?: 'always' | 'unseen' | undefined;
 }): IdentityTarget | null {
-  if (params.storyRing !== undefined) return { kind: 'story', post: params.storyRing.entryStoryId };
+  const ring = params.storyRing;
+  const opensStory = ring !== undefined && (params.storyOpens !== 'unseen' || ring.unseen);
+  if (opensStory) return { kind: 'story', post: ring.entryStoryId };
 
   const username = params.username;
   if (typeof username !== 'string' || username === '') return null;

@@ -4,7 +4,8 @@
  * RÉPAND. Les libellés des liens d'avatar (#7241) et le menu d'appui long
  * d'un avatar (#7828), miroir `avatar.menu.*` d'iOS
  * (`MeeshyAvatar.swift:331-354`), et la feuille de détails d'une
- * conversation (#7829, miroir `ConversationInfoSheet.swift`).
+ * conversation (#7829, miroir `ConversationInfoSheet.swift`), et la pile des
+ * participants les plus actifs de l'en-tête (#7830).
  */
 const itIdentity = {
   'a11y.avatar.profile': 'Vedi il profilo di {name}',
@@ -37,6 +38,7 @@ const itIdentity = {
   'conversation.details.share.copied': 'Link copiato: basta incollarlo.',
   'conversation.details.share.failed': 'Impossibile creare il link: riprova tra un momento.',
   'conversation.details.share.unavailable': 'Impossibile condividere qui: copia il link: {url}',
+  'thread.header.active_members': 'Membri più attivi',
 };
 
 export default itIdentity;

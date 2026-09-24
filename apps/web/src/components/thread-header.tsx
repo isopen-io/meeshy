@@ -1,5 +1,6 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { ActiveMembersStack } from './active-members-stack';
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
 import { PersonName } from './person-name';
@@ -12,6 +13,7 @@ import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 
@@ -33,6 +35,7 @@ export function ThreadHeader({
   viewerId,
   group,
   storyRingOf,
+  activeMembers,
   otherUnread,
   expanded,
   onToggleExpanded,
@@ -50,6 +53,16 @@ export function ThreadHeader({
   readonly group: boolean;
   /** L'anneau de story d'un auteur (#7528) — en direct, le titre déplié mène à la story du pair, sinon à son profil. */
   readonly storyRingOf?: StoryRingOf;
+  /**
+   * LES TROIS PARTICIPANTS LES PLUS ACTIFS D'UN GROUPE (#7830), calculés par
+   * l'hôte sur les messages chargés (`topActiveMembers`). Peints dans l'en-tête
+   * DÉPLIÉ, entre le titre et l'avatar : l'en-tête replié porte déjà, à 320 px,
+   * le retour, le chip de mode, l'appel, la recherche et l'avatar (208 px fixes
+   * plus le chip) — 74 px de plus y écraseraient le chip. Déplié, c'est l'état
+   * d'IDENTITÉ de l'en-tête : le titre y garde une centaine de pixels et
+   * tronque, son nom entier restant dans les détails qu'il ouvre.
+   */
+  readonly activeMembers?: readonly ActiveMember[];
   readonly otherUnread: number;
   readonly expanded: boolean;
   readonly onToggleExpanded: () => void;
@@ -246,6 +259,10 @@ export function ThreadHeader({
             </button>
           </div>
         )}
+
+        {expanded && group && activeMembers !== undefined ? (
+          <ActiveMembersStack members={activeMembers} accent={accent} storyRingOf={storyRingOf} onOpenDetails={onOpenDetails} />
+        ) : null}
 
         <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
           <button

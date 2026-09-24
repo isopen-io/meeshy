@@ -31,6 +31,7 @@ import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
+import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
@@ -289,6 +290,8 @@ export default function ThreadScreen() {
   );
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
+  /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
+  const activeMembers = useMemo(() => (group ? topActiveMembers(messages, viewer.id ?? '') : []), [group, messages, viewer.id]);
 
   /**
    * LE MODE DE LECTURE (#5566, #7429) — l'ORCHESTRATION ENTIÈRE (instant
@@ -615,6 +618,7 @@ export default function ThreadScreen() {
         viewerId={viewer.id ?? ''}
         group={group}
         storyRingOf={storyRingOf}
+        activeMembers={activeMembers}
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}

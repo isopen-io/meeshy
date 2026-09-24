@@ -47,6 +47,7 @@ export function Avatar({
   storyRing,
   mood,
   redundant,
+  storyOpens,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -133,6 +134,11 @@ export function Avatar({
    * focus), où un lien focalisable recevrait le focus sans s'annoncer.
    */
   redundant?: boolean;
+  /**
+   * QUELLE STORY LE TOUCHER OUVRE — voir `identityTarget` (#7830). Défaut :
+   * toute story annoncée par l'anneau.
+   */
+  storyOpens?: 'always' | 'unseen';
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
@@ -307,6 +313,7 @@ export function Avatar({
   const cible = identityTarget({
     ...(profileUsername === undefined ? {} : { username: profileUsername }),
     ...(storyRing === undefined ? {} : { storyRing }),
+    ...(storyOpens === undefined ? {} : { storyOpens }),
   });
   if (cible === null) return corps;
 

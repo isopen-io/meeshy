@@ -55,3 +55,19 @@ describe('et sans rien, elle ne mène NULLE PART', () => {
     expect(identityTarget({ username: '' })).toBe(null);
   });
 });
+
+describe('`storyOpens: unseen` — une story vue laisse le toucher au profil (#7830, jumelle iOS #7831)', () => {
+  const SEEN = { entryStoryId: 'st-1', unseen: false } as const;
+
+  test('une story NON VUE s’ouvre au toucher', () => {
+    expect(identityTarget({ username: 'nour', storyRing: RING, storyOpens: 'unseen' })).toEqual({ kind: 'story', post: 'st-1' });
+  });
+
+  test('une story DÉJÀ VUE laisse le toucher au profil', () => {
+    expect(identityTarget({ username: 'nour', storyRing: SEEN, storyOpens: 'unseen' })).toEqual({ kind: 'profile', username: 'nour' });
+  });
+
+  test('par défaut, tout anneau ouvre sa story (#7241 inchangé)', () => {
+    expect(identityTarget({ username: 'nour', storyRing: SEEN })).toEqual({ kind: 'story', post: 'st-1' });
+  });
+});
