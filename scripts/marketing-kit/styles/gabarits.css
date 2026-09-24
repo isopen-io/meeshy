@@ -1,0 +1,94 @@
+/* ─── Gabarits : la scène autour de l'écran ─── */
+
+.canvas { position: relative; overflow: hidden; }
+.canvas.brut > .ecran { transform-origin: 0 0; }
+
+.canvas.appstore { color: #fff; isolation: isolate; }
+.canvas.appstore.fond-vif { background: var(--kit-grad-hero); }
+.canvas.appstore.fond-nuit { background: var(--kit-grad-night); }
+
+.gab-bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.gab-bg i { position: absolute; border-radius: 50%; display: block; }
+.fond-vif .gab-bg .o1 { width: 520px; height: 520px; top: -180px; left: -200px; background: radial-gradient(circle, color-mix(in srgb, white 34%, transparent), transparent 68%); }
+.fond-vif .gab-bg .o2 { width: 620px; height: 620px; bottom: -260px; right: -260px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-purple-500) 70%, transparent), transparent 70%); }
+.fond-vif .gab-bg .o3 { width: 300px; height: 300px; top: 34%; right: -140px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-indigo-300) 55%, transparent), transparent 70%); }
+.fond-nuit .gab-bg .o1 { width: 560px; height: 560px; top: -220px; right: -240px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-indigo-500) 60%, transparent), transparent 70%); }
+.fond-nuit .gab-bg .o2 { width: 640px; height: 640px; bottom: -300px; left: -280px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-purple-600) 55%, transparent), transparent 70%); }
+.fond-nuit .gab-bg .o3 { width: 280px; height: 280px; top: 30%; left: -150px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-indigo-400) 35%, transparent), transparent 70%); }
+.gab-bg .grain {
+  inset: 0;
+  border-radius: 0;
+  opacity: 0.08;
+  background-image: radial-gradient(color-mix(in srgb, white 70%, transparent) 0.6px, transparent 0.7px);
+  background-size: 7px 7px;
+}
+
+.gab-brand { position: absolute; display: flex; align-items: center; gap: 7px; font-weight: 750; font-size: 14px; letter-spacing: 0.2px; opacity: 0.95; }
+.gab-brand svg { border-radius: 7px; box-shadow: 0 4px 12px color-mix(in srgb, black 25%, transparent); }
+
+.gab-caption { position: absolute; margin: 0; display: flex; flex-direction: column; font-weight: 850; letter-spacing: -1.2px; line-height: 1.02; text-wrap: balance; }
+.gab-caption .l1 { color: #fff; }
+.gab-caption .l2 { background: linear-gradient(90deg, #fff, var(--ios-indigo-200) 55%, color-mix(in srgb, var(--ios-purple-500) 40%, white)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.fond-nuit .gab-caption .l2 { background: linear-gradient(90deg, var(--ios-indigo-300), var(--ios-purple-500)); -webkit-background-clip: text; background-clip: text; }
+[lang='ar'] .gab-caption { letter-spacing: 0; line-height: 1.25; }
+[dir='rtl'] .gab-caption .l2 { background-image: linear-gradient(270deg, #fff, var(--ios-indigo-200) 55%, color-mix(in srgb, var(--ios-purple-500) 40%, white)); }
+[dir='rtl'].fond-nuit .gab-caption .l2 { background-image: linear-gradient(270deg, var(--ios-indigo-300), var(--ios-purple-500)); }
+
+.gab-device { position: absolute; left: 50%; transform-origin: 50% 0; }
+[dir='rtl'] .gab-device { left: 50%; }
+
+/* iPhone 6,9" : scène 440 × 956 */
+.canvas.appstore.iphone .gab-brand { top: 44px; inset-inline-start: 34px; }
+.canvas.appstore.iphone .gab-caption { top: 84px; inset-inline: 32px; font-size: 42px; }
+.canvas.appstore.iphone .gab-device { top: 232px; }
+
+/* iPad 13" paysage : scène 1376 × 1032 */
+.canvas.appstore.ipad .gab-brand { top: 46px; inset-inline-start: 64px; font-size: 16px; }
+.canvas.appstore.ipad .gab-caption { top: 86px; inset-inline: 64px; font-size: 64px; flex-direction: row; gap: 18px; }
+.canvas.appstore.ipad .gab-device { top: 212px; }
+
+/* Surimpression 2.3.3 : 🇫🇷 → 🇰🇷 */
+.gab-overlay.fleche-langues {
+  position: absolute;
+  top: var(--overlay-top, 470px);
+  inset-inline-start: -58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 34px;
+  color: var(--ios-indigo-600);
+  background: #fff;
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--ios-indigo-950) 45%, transparent), 0 0 0 6px color-mix(in srgb, white 25%, transparent);
+  transform: rotate(-5deg);
+  z-index: 5;
+}
+[dir='rtl'] .gab-overlay.fleche-langues { transform: rotate(5deg); }
+.canvas.appstore.iphone .gab-overlay.fleche-langues { --overlay-top: 600px; }
+.canvas.appstore.ipad .gab-overlay.fleche-langues { --overlay-top: 560px; }
+
+/* ─── Cadre d'appareil ─── */
+.device {
+  position: relative;
+  border-radius: var(--r);
+  padding: var(--bezel);
+  background:
+    linear-gradient(145deg, #5b5e6a 0%, #2a2c33 18%, #15161a 50%, #2a2c33 82%, #6b6e7a 100%);
+  box-shadow:
+    0 0 0 1.5px #0b0b0e inset,
+    0 0 0 3px #3a3c44,
+    0 40px 90px color-mix(in srgb, black 55%, transparent),
+    0 12px 30px color-mix(in srgb, black 35%, transparent);
+}
+.device-screen { position: relative; width: 100%; height: 100%; border-radius: var(--sr); overflow: hidden; background: #000; box-shadow: 0 0 0 1px #000; }
+.device-glare { position: absolute; inset: var(--bezel); border-radius: var(--sr); pointer-events: none; background: linear-gradient(115deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 28%); }
+.device .btn { position: absolute; background: linear-gradient(90deg, #2a2c33, #5b5e6a); border-radius: 3px; }
+.device.iphone .b1 { left: -4px; top: 190px; width: 4px; height: 34px; }
+.device.iphone .b2 { left: -4px; top: 250px; width: 4px; height: 64px; }
+.device.iphone .b3 { left: -4px; top: 330px; width: 4px; height: 64px; }
+.device.iphone .b4 { right: -4px; top: 280px; width: 4px; height: 100px; }
+.device.ipad .b1 { top: -4px; right: 120px; width: 70px; height: 4px; }
+.device.ipad .b2 { top: -4px; right: 210px; width: 70px; height: 4px; }
+.device.ipad .b3 { top: -4px; left: 110px; width: 60px; height: 4px; }
+.device.ipad .b4 { display: none; }

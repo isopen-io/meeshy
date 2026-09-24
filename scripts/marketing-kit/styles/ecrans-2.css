@@ -1,0 +1,127 @@
+/* ─── Progression (ProgressionView + ProgressionHub) ─── */
+
+.progression .p-bg,
+.reveal .reveal-glow { position: absolute; inset: 0; }
+.dark.progression .p-bg { background: linear-gradient(135deg, #09090b 0%, #13111c 55%, #1e1b4b 100%); }
+.light.progression .p-bg { background: linear-gradient(135deg, #ffffff 0%, #f8f7ff 55%, #eef2ff 100%); }
+
+.p-nav {
+  position: absolute;
+  top: 62px;
+  inset-inline: 0;
+  padding: 4px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+.meesh-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ios-warning) 14%, var(--kit-glass));
+  color: var(--ios-warning);
+  font: 700 17px var(--kit-font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+.meesh-entry .meesh-coin,
+.meesh-eyebrow .meesh-coin { color: var(--ios-meesh-silver); }
+
+.p-title {
+  position: absolute;
+  top: 118px;
+  inset-inline: 20px;
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+
+.p-list {
+  position: absolute;
+  top: 176px;
+  inset-inline: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.p-card { position: relative; border-radius: 16px; padding: 16px; }
+.p-card.hero { display: flex; align-items: center; gap: 12px; background: color-mix(in srgb, var(--t) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 28%, transparent); }
+.p-card.flamme { background: color-mix(in srgb, var(--t) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 26%, transparent); }
+.p-tile { width: 48px; height: 48px; border-radius: 12px; flex: none; display: grid; place-items: center; color: var(--t); background: color-mix(in srgb, var(--t) 22%, transparent); }
+.p-eyebrow { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.3px; color: var(--kit-muted); }
+.p-strong { font-size: 17px; font-weight: 700; margin: 1px 0; }
+.p-muted { font-size: 12.5px; color: var(--kit-muted); line-height: 1.35; }
+.p-muted.small { font-size: 11.5px; }
+
+.p-card.level,
+.p-card.meesh {
+  border-radius: var(--ios-radius-md);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ios-indigo-500) 16%, transparent), color-mix(in srgb, var(--ios-indigo-500) 5%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-500) 26%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.p-card.meesh { background: var(--kit-bg-2); box-shadow: inset 0 0 0 1px var(--kit-hair); gap: 6px; }
+.p-level-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.p-level { font-size: 34px; font-weight: 800; letter-spacing: -0.6px; }
+.p-score { font-size: 20px; font-weight: 750; color: var(--ios-indigo-500); }
+.dark .p-score { color: var(--ios-indigo-400); }
+.p-bar { height: 8px; border-radius: 4px; background: var(--kit-track); overflow: hidden; }
+.p-bar i { display: block; height: 100%; border-radius: 4px; }
+.meesh-eyebrow { display: flex; align-items: center; gap: 6px; color: var(--ios-warning); }
+.p-meesh-balance { font: 750 22px var(--kit-font-rounded); }
+
+.p-card.elans { background: color-mix(in srgb, var(--t) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 24%, transparent); display: flex; flex-direction: column; gap: 9px; }
+.p-elan-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 750; }
+.p-elan-title .ico { color: var(--ios-indigo-500); }
+.dark .p-elan-title .ico { color: var(--ios-indigo-400); }
+.p-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.p-wrap span { font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; background: var(--kit-fill-2); }
+
+.p-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: var(--ios-radius-md);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--t) 14%, transparent), color-mix(in srgb, var(--t) 4%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 24%, transparent);
+}
+.p-link-tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--t); background: color-mix(in srgb, var(--t) 16%, transparent); }
+.p-link-title { font-size: 16px; font-weight: 600; }
+.p-link-count { margin-inline-start: auto; font-size: 16px; font-weight: 750; color: var(--t); direction: ltr; }
+.p-chev { color: var(--kit-muted); }
+
+/* ─── Révélation de succès (AchievementRevealView) ─── */
+.reveal { --t: var(--ios-indigo-500); }
+.reveal .reveal-glow { background: radial-gradient(circle at 50% 44%, color-mix(in srgb, var(--t) 34%, transparent) 0, transparent 320px), var(--kit-bg); }
+.reveal-rays { position: absolute; left: 50%; top: 40%; width: 0; height: 0; z-index: 1; }
+.reveal-rays i { position: absolute; left: -1.5px; top: -9px; width: 3px; height: 18px; border-radius: 2px; background: color-mix(in srgb, var(--t) 45%, transparent); transform-origin: 1.5px 9px; }
+.reveal-top { position: absolute; top: 66px; inset-inline-end: 18px; z-index: 5; }
+.reveal-center { position: absolute; top: 40%; inset-inline: 24px; transform: translateY(-64px); display: flex; flex-direction: column; align-items: center; text-align: center; z-index: 2; }
+.reveal-medal {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--t), color-mix(in srgb, var(--t) 55%, transparent));
+  box-shadow: 0 10px 48px color-mix(in srgb, var(--t) 55%, transparent);
+  margin-bottom: 26px;
+}
+.reveal-eyebrow { font-size: 12px; font-weight: 750; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ios-indigo-400); }
+.reveal-title { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; margin: 10px 0 10px; }
+.reveal-sub { font-size: 16px; color: var(--kit-ink-2); line-height: 1.4; max-width: 330px; }
+.reveal-actions { position: absolute; bottom: 44px; inset-inline: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 2; }
+.reveal-primary,
+.reveal-secondary { height: 52px; border-radius: 999px; display: grid; place-items: center; font-size: 16px; font-weight: 650; }
+.reveal-primary { background: var(--t); color: #fff; box-shadow: 0 8px 24px color-mix(in srgb, var(--t) 40%, transparent); }
+.reveal-secondary { color: var(--ios-indigo-400); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 50%, transparent); }
