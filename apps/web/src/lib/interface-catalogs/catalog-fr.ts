@@ -1000,6 +1000,15 @@ const fr = {
   'story.action.save': 'Enregistrer',
   'story.action.comments': 'Commentaires',
   'story.action.translations': 'Traductions',
+  'story.views.empty.title': 'Aucune vue pour le moment',
+  'story.views.empty.subtitle': 'Les personnes qui regardent votre story apparaîtront ici.',
+  'story.views.count.one': '{count} vue',
+  'story.views.count.other': '{count} vues',
+  'story.save.progress': 'Enregistrement {percent} %',
+  'story.save.cancel': 'Annuler l’enregistrement',
+  'story.save.success': 'Story enregistrée',
+  'story.save.failed': 'Échec de l’enregistrement',
+  'story.save.cancelled': 'Export annulé',
   /* LA PASTILLE DU PRISME (#7141) — trois SUJETS, parce que « Afficher le
      message… » sur un commentaire serait traduit et faux. Neuf clés plates
      plutôt que trois à paramètre : l'accord (« traduit » / « traduite ») ne

@@ -8,10 +8,12 @@ import { THREAD_STATES_GLYPHS } from '@/components/glyphs-thread-states';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import {
+  resolveStoryExportRailButtons,
   storyActionRailButtons,
   type StoryActionRailButton,
   type StoryActionRailPlan,
 } from '@/lib/stories/action-rail';
+import { percent, ringAppearance } from '@/lib/stories/save-progress';
 
 /**
  * **LE RAIL D'ACTIONS DU LECTEUR DE STORIES** — miroir de
@@ -72,11 +74,14 @@ type RailGlyphs = { readonly idle: GlyphShape; readonly active?: GlyphShape };
  * **UN TROISIÈME GARDE, ET IL EST STRUCTUREL.** Un bouton sans tracé ne se
  * peint pas : la carte est PARTIELLE, et ce qui n'y est pas est absent du
  * rendu exactement comme ce que la loi refuse ou ce qu'aucun gestionnaire
- * n'atteint. `views` n'y figure donc pas — son tracé vivrait dans
- * `glyphs-communities.ts`, un jeu d'ÉCRAN que le lecteur de stories tirerait
- * ENTIER dans son chunk pour une seule action qu'il ne sait pas encore faire
- * (mesuré : +0,9 Ko gzip sur `story_reader`). Le jour où « Vues » aura son
- * effet, il aura son tracé — pas avant.
+ * n'atteint.
+ *
+ * `views` (#7116) REJOINT la carte : `eye` est DÉJÀ dans le socle
+ * (`glyphs.ts:39`, `extract-glyphs.mjs` le compte comme USED) — importer
+ * `GLYPHS` entier coûte 0 octet de PLUS ici, ce fichier l'important déjà pour
+ * `save`/`translations`. La remarque de #7112 (« son tracé vivrait dans
+ * `glyphs-communities.ts`, +0,9 Ko ») décrivait un jeu D'ÉCRAN distinct —
+ * périmée, mesurée le 2026-09-24 (`grep -n "  eye:" glyphs.ts`).
  */
 /**
  * MESURE DU 2026-09-20 (#7121) — RETIRER LES CINQ GLYPHES QUE LE WEB NE SERT
@@ -99,6 +104,7 @@ const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   reply: { idle: THREAD_STATES_GLYPHS.arrowBendUpLeft },
   forward: { idle: FEED_GLYPHS.shareNetwork },
   repost: { idle: FEED_GLYPHS.arrowsClockwise },
+  views: { idle: GLYPHS.eye },
   share: { idle: FEED_GLYPHS.shareNetwork },
   save: { idle: GLYPHS.archive },
   comments: { idle: FEED_GLYPHS.chatCircle },
@@ -166,6 +172,21 @@ export type StoryActionRailProps = {
    * rendu), parce qu'un rail qu'on ne voit plus ne doit pas rester une
    * commande. */
   readonly hidden?: boolean;
+  /**
+   * **L'EXPORT EN COURS** (#7116) — `null`/absent ⇒ le bouton « Enregistrer »
+   * plein rend (comme avant ce lot). Une valeur ⇒ `save` bascule vers
+   * l'anneau (`StoryExportRailButtons.resolve`, `lib/stories/action-rail.ts`),
+   * « Partager » restant un bouton au premier plan tout du long.
+   *
+   * `progress` est la progression BRUTE du téléchargement (0..1, avant
+   * `downloadShare`) — le CHIFFRE et l'ARC du composant `SaveProgressRing`
+   * dérivent tous deux de `lib/stories/save-progress.ts`, jamais recalculés
+   * ici.
+   */
+  readonly saving?: { readonly progress: number; readonly cancellable: boolean; readonly reduceMotion: boolean } | null;
+  /** Le tap sur l'anneau ANNULABLE — absent, l'anneau ne se pose pas dans un
+   * bouton (loi 4 : jamais de contrôle inerte). */
+  readonly onCancelSave?: () => void;
 };
 
 function RailButton({
@@ -219,10 +240,100 @@ function RailButton({
   );
 }
 
+/**
+ * **L'ANNEAU D'EXPORT** (#7116) — miroir de `StorySaveProgressRing.swift` :
+ * le CHIFFRE et l'ARC dérivent tous deux de `lib/stories/save-progress.ts`
+ * (`percent`), jamais un second calcul qui pourrait diverger. `tone`/`sweeps`
+ * viennent de `ringAppearance` — accent tant qu'annulable, inerte + balayage
+ * indéterminé sinon (la seule chose qui bouge pendant une livraison qui ne
+ * publie aucune progression).
+ *
+ * **NON ANNULABLE ⇒ PAS DE `<button>`** (D-88, loi 4 : jamais de contrôle
+ * inerte) — l'anneau se pose alors dans un `<div>` muet, de la même
+ * empreinte que les autres boutons du rail (44×44) pour ne pas décaler ses
+ * voisins.
+ */
+function SaveProgressRing({
+  percentValue,
+  tone,
+  sweeps,
+  cancellable,
+  onCancel,
+  cancelLabel,
+}: {
+  readonly percentValue: number;
+  readonly tone: 'accent' | 'inert';
+  readonly sweeps: boolean;
+  readonly cancellable: boolean;
+  readonly onCancel: (() => void) | undefined;
+  readonly cancelLabel: string;
+}) {
+  const size = 32;
+  const stroke = 3;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.min(100, Math.max(0, percentValue)) / 100);
+  const color = tone === 'accent' ? 'var(--color-ios-brand)' : 'rgba(255,255,255,0.6)';
+
+  const ring = (
+    <span
+      data-story-save-ring
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percentValue}
+      className={sweeps ? 'relative grid place-items-center animate-spin' : 'relative grid place-items-center'}
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <span className="absolute text-mini font-semibold tabular-nums" style={{ color: '#fff', textShadow: TEXT_SHADOW }} aria-hidden="true">
+        {percentValue}
+      </span>
+    </span>
+  );
+
+  if (!cancellable) {
+    return (
+      <div className="grid place-items-center" style={{ width: 44, height: 44 }}>
+        {ring}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-story-save-cancel
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={onCancel}
+      aria-label={cancelLabel}
+      className="pointer-events-auto grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ minWidth: 44, minHeight: 44, outlineColor: '#fff' }}
+    >
+      {ring}
+    </button>
+  );
+}
+
 const usefulCount = (value: number | null | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 
-export function StoryActionRail({ plan, language, handlers, counts, pressed, hidden }: StoryActionRailProps) {
+export function StoryActionRail({ plan, language, handlers, counts, pressed, hidden, saving, onCancelSave }: StoryActionRailProps) {
   /* La loi d'abord, le gestionnaire ensuite — dans CET ordre, pour qu'un
      bouton sans gestionnaire ne soit pas seulement invisible mais ABSENT du
      DOM : un `disabled` annoncerait une action que le produit ne rend pas. */
@@ -275,6 +386,27 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
       inert={masked}
     >
       {boutons.map((action) => {
+        /* **`save` A UNE SECONDE FORME** — l'anneau, quand un export est EN
+           COURS pour cette story. Les deux faces d'`showsExport` (`share` et
+           `save`) apparaissent/disparaissent ENSEMBLE (`resolveStoryExportRailButtons`)
+           — `share` reste ici un bouton ORDINAIRE, `save` seul bascule. */
+        if (action === 'save' && saving !== null && saving !== undefined) {
+          const exportButtons = resolveStoryExportRailButtons({ showsExport: plan.showsExport, saveProgress: saving.progress });
+          if (exportButtons.showsSaveProgressRing) {
+            const appearance = ringAppearance({ cancellable: saving.cancellable, reduceMotion: saving.reduceMotion });
+            return (
+              <SaveProgressRing
+                key="save"
+                percentValue={percent(saving.progress)}
+                tone={appearance.tone}
+                sweeps={appearance.sweeps}
+                cancellable={saving.cancellable}
+                onCancel={onCancelSave}
+                cancelLabel={translate(language, 'story.save.cancel')}
+              />
+            );
+          }
+        }
         /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */
         const glyphs = GLYPH_OF[action] as RailGlyphs;
         const isPressed = pressed?.[action];
