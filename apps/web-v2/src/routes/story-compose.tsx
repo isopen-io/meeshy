@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
+import type { PostVisibility } from '@meeshy/shared/types/post';
+
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
@@ -22,6 +24,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { storyMediaCaptionPayload } from '@/lib/stories/media-caption';
+import { audienceLabelKey, defaultAudienceOf, seededAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind } from '@/lib/stories/publication-kind';
 import {
   buildPreviewCanvasDocument,
@@ -30,7 +33,6 @@ import {
   STORY_PLAIN_BACKGROUND,
   studioMediaIds,
   studioMediaKindOf,
-  type StudioMediaKind,
   type StudioPlane,
   type StudioReadyAsset,
 } from '@/lib/stories/story-document';
@@ -47,6 +49,7 @@ import {
   withSound,
   withSoundPlane,
   withSoundUpload,
+  withAudience,
   withText,
   withTextLayer,
   withVisual,
@@ -71,9 +74,12 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { Link, href, navigate } from '@/routes/route-table';
+import { AudiencePastille, AudienceSheet } from '@/routes/story-compose-audience';
 import { StudioObjectEditor } from '@/routes/story-compose-editor';
+import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import { LayerMark, SlidersMark, StudioAssetRow, StudioChip, StudioDoorButton, StudioRefusal, StudioSoundPlaneToggle } from '@/routes/story-compose-parts';
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
+import { measureSceneText, sameSceneTextBox, type SceneTextBox } from '@/routes/story-compose-text-box';
 
 /**
  * **CRÉER UNE STORY** (#6900, devenue un PLATEAU par #6943/#6944) — plusieurs
@@ -134,37 +140,6 @@ function revokeIfLocal(url: string | undefined): void {
   if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
 }
 
-/** La boîte RÉELLEMENT peinte par le texte SÉLECTIONNÉ, relative à la carte —
- * ni recopiée ni recalculée : la saisie l'ADOPTE telle quelle (défaut 1,
- * revue-correction #6900), quel que soit le retour à la ligne ou la largeur
- * que le moteur a effectivement rendus. `null` tant qu'aucun texte n'est
- * peint (objet vide, ou chunk `ScenePlayer` pas encore résolu) — la saisie
- * retombe alors sur sa position par défaut. */
-type SceneTextBox = { readonly top: number; readonly left: number; readonly width: number; readonly height: number };
-
-/** L'élément que le moteur a peint POUR CET OBJET — `[data-scene-object-id]`,
- * posé par `SceneObjectFrame` (#6943). Avec un seul texte, un
- * `querySelector('[data-scene-text]')` suffisait ; avec plusieurs, il désigne
- * le premier venu. */
-function paintedObject(stage: HTMLElement | null, id: string | null): HTMLElement | null {
-  if (stage === null || id === null) return null;
-  return stage.querySelector<HTMLElement>(`[data-scene-object-id="${CSS.escape(id)}"]`);
-}
-
-function measureSceneText(stage: HTMLElement, id: string | null): SceneTextBox | null {
-  const painted = paintedObject(stage, id);
-  const textEl = painted?.querySelector<HTMLElement>('[data-scene-text]') ?? stage.querySelector<HTMLElement>('[data-scene-text]');
-  if (textEl === null || textEl === undefined) return null;
-  const stageRect = stage.getBoundingClientRect();
-  const textRect = textEl.getBoundingClientRect();
-  return { top: textRect.top - stageRect.top, left: textRect.left - stageRect.left, width: textRect.width, height: textRect.height };
-}
-
-function sameSceneTextBox(a: SceneTextBox | null, b: SceneTextBox | null): boolean {
-  if (a === null || b === null) return a === b;
-  return Math.abs(a.top - b.top) < 0.05 && Math.abs(a.left - b.left) < 0.05 && Math.abs(a.width - b.width) < 0.05 && Math.abs(a.height - b.height) < 0.05;
-}
-
 function uploadStateOf(result: ApiResult<PostMediaUploadResult>): StudioUploadState | null {
   if (result.ok) {
     return {
@@ -194,47 +169,6 @@ async function settle(upload: StudioUploadState | undefined, pending: PendingUpl
   if (upload.phase === 'failed' || pending === null) return { kind: 'failed' };
   const result = await pending;
   return result.ok ? { kind: 'ready', ready: readyAssetFromResult(result.data) } : { kind: 'failed' };
-}
-
-/**
- * LE RAPPORT DU FICHIER LOCAL (§ 0, défaut 7) — connu SANS réseau, dès la
- * sélection : c'est lui, jamais une mesure serveur, que le document (aperçu
- * ET publication) porte dans `payload.aspectRatio`. `null` sur tout échec de
- * décodage (fichier corrompu, format non supporté par ce navigateur) — le
- * document part alors SANS le champ, jamais avec une valeur inventée.
- */
-function measureAspectRatio(previewUrl: string, mediaType: StudioMediaKind): Promise<number | null> {
-  return new Promise((resolve) => {
-    if (mediaType === 'video') {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        resolve(video.videoWidth > 0 && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : null);
-      };
-      video.onerror = () => resolve(null);
-      video.src = previewUrl;
-      return;
-    }
-    const image = new Image();
-    image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : null);
-    image.onerror = () => resolve(null);
-    image.src = previewUrl;
-  });
-}
-
-/** LA DURÉE DU FICHIER LOCAL (#7497) — connue SANS réseau, dès la
- * sélection : c'est elle que la règle du réel compare à ses trois secondes.
- * `null` sur tout échec de décodage — une durée inconnue ne qualifie jamais. */
-function measureDurationMs(previewUrl: string, element: 'video' | 'audio'): Promise<number | null> {
-  return new Promise((resolve) => {
-    const media = document.createElement(element);
-    media.preload = 'metadata';
-    media.onloadedmetadata = () => {
-      resolve(Number.isFinite(media.duration) && media.duration > 0 ? Math.round(media.duration * 1000) : null);
-    };
-    media.onerror = () => resolve(null);
-    media.src = previewUrl;
-  });
 }
 
 const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
@@ -294,8 +228,16 @@ function StoryStudio({
 
   const [draft, setDraft] = useState<StudioDraft>(() => {
     const snapshot = viewerId === null ? null : deps.drafts.get(viewerId);
-    return studioDraftFromSnapshot(snapshot, attachmentSrc, reader.languages[0] ?? 'fr');
+    const seeded = studioDraftFromSnapshot(snapshot, attachmentSrc, reader.languages[0] ?? 'fr');
+    // **RANG 1 le brouillon, RANG 2 la mémoire du dernier choix** (#7683,
+    // `publication-audience.ts` § `seededAudience`) — relue UNE FOIS, à
+    // l'ouverture, jamais à une bascule de format (`ComposerMoodSurface.swift:662-703`).
+    const memoryVisibility = viewerId === null ? null : deps.drafts.lastAudience(viewerId);
+    return { ...seeded, visibility: seededAudience({ draftVisibility: seeded.visibility, memoryVisibility }) };
   });
+  /** LA FEUILLE D'AUDIENCE (#7683) — fermée par défaut, comme les
+   * contrôleurs de l'outil ouvert (§ « les contrôleurs de l'outil »). */
+  const [audienceOpen, setAudienceOpen] = useState(false);
   const { language, setText: reportComposeText } = useComposeLanguage({
     preferred: reader.languages,
     ...(draft.language !== undefined ? { initialLanguage: draft.language } : {}),
@@ -425,6 +367,18 @@ function StoryStudio({
     reportComposeText(value);
   }
 
+  /**
+   * **L'AUDIENCE COMMISE** (#7683) — un seul site, comme `chooseAudience`
+   * iOS (`MeeshyComposerHost+Socle.swift:270-284`) : choisir écrit le
+   * brouillon (persisté par l'effet existant) ET la mémoire, dans le MÊME
+   * geste, puis ferme la feuille — choisir applique et ferme (§ 1.6).
+   */
+  function chooseAudience(visibility: PostVisibility) {
+    setDraft((current) => withAudience(current, visibility));
+    if (viewerId !== null) deps.drafts.rememberAudience(viewerId, visibility);
+    setAudienceOpen(false);
+  }
+
   /** LA POSE COMMISE — un seul site : le geste sur la scène, le clavier et les
    * boutons du rail y aboutissent tous, pour que « quel objet, quelles
    * bornes ? » se réponde une fois. */
@@ -522,6 +476,9 @@ function StoryStudio({
     const result = await publishStory({
       ...deps.api,
       type: chosen,
+      // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le défaut
+      // reste une règle SERVEUR (`core.ts:421`) — jamais un défaut recopié ici.
+      ...(current.visibility !== null ? { visibility: current.visibility } : {}),
       ...(current.texts.some((layer) => layer.text.trim() !== '') ? { originalLanguage: language } : {}),
       ...(mediaCaption !== undefined ? { mediaCaption } : {}),
       storyEffects,
@@ -681,6 +638,15 @@ function StoryStudio({
 
   const canPublish = canPublishStudioDraft(draft);
   const kindRefusal = studioPublishRefusal(draft, kind);
+  /** **CE QUI PARTIRA** (#7683) — l'audience CHOISIE, sinon le défaut de la
+   * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
+   * dit toujours ce qui part, même quand rien n'a été choisi. */
+  const audienceValue = draft.visibility ?? defaultAudienceOf(kind);
+  const audienceSource: 'chosen' | 'default' = draft.visibility === null ? 'default' : 'chosen';
+  /** Ce que CHAQUE format du menu partirait (§ 1.6) — un choix explicite
+   * s'applique aux trois formats identiquement ; sans choix, chacun a son
+   * propre défaut serveur. */
+  const audienceOf = (candidate: PublicationKind) => draft.visibility ?? defaultAudienceOf(candidate);
   const publishLabel = publishing
     ? translate(lang, 'story.studio.publishing')
     : awaitingNetwork
@@ -945,21 +911,28 @@ function StoryStudio({
           </ul>
         ) : null}
         <div className="flex items-center gap-3 pb-3">
+          <AudiencePastille
+            lang={lang}
+            value={audienceValue}
+            source={audienceSource}
+            open={audienceOpen}
+            onOpen={() => setAudienceOpen(true)}
+          />
           <div className="min-w-0 flex-1 text-caption">
             {doorRefusal !== null ? (
-              <p role="alert" style={{ color: 'var(--color-error)' }}>
+              <p role="alert" className="truncate" style={{ color: 'var(--color-error)' }}>
                 {translate(lang, doorRefusal === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
               </p>
             ) : kindRefusal !== null ? (
-              <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
+              <p data-publish-refusal={kindRefusal} className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>
                 {translate(lang, 'story.studio.refusal.reel')}
               </p>
             ) : publishFailure !== null ? (
-              <p role="alert" style={{ color: 'var(--color-error)' }}>
+              <p role="alert" className="truncate" style={{ color: 'var(--color-error)' }}>
                 {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
               </p>
             ) : (
-              <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
+              <p className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
             )}
           </div>
           <PublishSplitButton
@@ -970,12 +943,17 @@ function StoryStudio({
             menuDisabled={!canPublish || publishing}
             busy={publishing || awaitingNetwork}
             refusalOf={(candidate) => (studioPublishRefusal(draft, candidate) === null ? null : translate(lang, 'story.studio.refusal.reel'))}
+            audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
             onPublish={(chosen) => {
               void publish(chosen);
             }}
           />
         </div>
       </footer>
+
+      {audienceOpen ? (
+        <AudienceSheet lang={lang} repostOfId={null} selected={draft.visibility} onChoose={chooseAudience} onClose={() => setAudienceOpen(false)} />
+      ) : null}
     </StudioShell>
   );
 }

@@ -856,6 +856,25 @@ const ar = {
   'story.studio.pose.handle': 'تحريك {name} — الأسهم للتحريك، + و − للحجم، [ و ] للتدوير',
   'story.studio.pose.grip': 'تغيير حجم {name} وتدويره',
 
+  /* ورقة جمهور الاستوديو (#7683) — القيم الست لـ PostVisibility،
+     مرآة PostVisibility.swift (packages/MeeshySDK). */
+  'story.studio.audience.pastille.label': 'الجمهور',
+  'story.studio.audience.title': 'الجمهور',
+  'story.studio.audience.public': 'عام',
+  'story.studio.audience.community': 'المجتمعات',
+  'story.studio.audience.friends': 'جهات الاتصال',
+  'story.studio.audience.except': 'باستثناء…',
+  'story.studio.audience.only': 'فقط…',
+  'story.studio.audience.private': 'خاص',
+  'story.studio.audience.subtitle.public': 'الجميع، بمن فيهم غير المتابعين',
+  'story.studio.audience.subtitle.community': 'أعضاء مجتمعاتك',
+  'story.studio.audience.subtitle.friends': 'جهات اتصالك المقبولة',
+  'story.studio.audience.subtitle.except': 'الجميع باستثناء قائمة',
+  'story.studio.audience.subtitle.only': 'اختيار أشخاص',
+  'story.studio.audience.subtitle.private': 'أنت فقط — لا يُنشر شيء',
+  'story.studio.audience.refusal.people': 'اختيار الأشخاص غير متاح بعد على الويب.',
+  'story.studio.audience.scope': 'الجمهور ملك للمنشور، وليس للتنسيق أبدًا: تغيير التنسيق يحافظ عليه.',
+
   'appUpdate.available': 'يتوفر إصدار جديد من Meeshy!',
   'appUpdate.hint': 'أعد التحميل للحصول على أحدث المزايا.',
   'appUpdate.action': 'تحديث',

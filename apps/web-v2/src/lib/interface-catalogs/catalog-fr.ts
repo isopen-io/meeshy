@@ -924,6 +924,25 @@ const fr = {
   'story.studio.pose.handle': 'Déplacer {name} — flèches pour déplacer, + et − pour la taille, [ et ] pour tourner',
   'story.studio.pose.grip': 'Redimensionner et faire tourner {name}',
 
+  /* LA FEUILLE D'AUDIENCE DU STUDIO (#7683) — les six PostVisibility,
+     miroir de PostVisibility.swift (packages/MeeshySDK). */
+  'story.studio.audience.pastille.label': 'Audience',
+  'story.studio.audience.title': 'Audience',
+  'story.studio.audience.public': 'Public',
+  'story.studio.audience.community': 'Communautés',
+  'story.studio.audience.friends': 'Contacts',
+  'story.studio.audience.except': 'Sauf…',
+  'story.studio.audience.only': 'Seulement…',
+  'story.studio.audience.private': 'Privé',
+  'story.studio.audience.subtitle.public': 'Tout le monde, y compris hors abonnés',
+  'story.studio.audience.subtitle.community': 'Les membres de vos communautés',
+  'story.studio.audience.subtitle.friends': 'Vos contacts acceptés',
+  'story.studio.audience.subtitle.except': 'Tout le monde, sauf une liste',
+  'story.studio.audience.subtitle.only': 'Choisir des personnes',
+  'story.studio.audience.subtitle.private': 'Vous seul — rien n’est publié',
+  'story.studio.audience.refusal.people': 'Le choix de personnes n’est pas encore disponible sur le web.',
+  'story.studio.audience.scope': 'L’audience appartient à la publication, jamais à un format : changer de format la conserve.',
+
   /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
      (`updateAvailable`, `updateNow`, `wait`, dans les catalogues
      `apps/web/locales`), plus l'état du clic et le nom de la région annoncée,

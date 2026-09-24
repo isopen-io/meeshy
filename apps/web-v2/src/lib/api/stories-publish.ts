@@ -1,4 +1,5 @@
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
+import type { PostVisibility } from '@meeshy/shared/types/post';
 
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { unclaimedStoryMediaIds } from '@/lib/stories/story-document';
@@ -11,8 +12,14 @@ import type { ApiResult } from './http';
  * LE PORT DE PUBLICATION D'UNE STORY (#6900, § 3.3 de la spécification) —
  * `POST /api/v1/posts` (`services/gateway/src/routes/posts/core.ts:370-462`),
  * `type: 'STORY'`. `CANVAS_CAPS_HEADERS` part comme sur les trois autres ports
- * de `lib/api/stories.ts` ; `visibility` n'est PAS envoyée (la passerelle pose
- * `FRIENDS` pour une story, `core.ts:421`).
+ * de `lib/api/stories.ts`.
+ *
+ * **`visibility` PART UNIQUEMENT quand l'auteur l'a CHOISIE** (#7683, D-115) :
+ * absente, la passerelle pose son propre défaut (`FRIENDS` pour une story,
+ * `PUBLIC` sinon, `core.ts:421`) — un défaut recopié ici en littéral serait
+ * exactement la faute qui avait laissé les stories web à `FRIENDS` pendant que
+ * les posts naissaient publics. Le studio (`story-compose.tsx`) ne pose ce
+ * champ que depuis `draft.visibility`, jamais un repli inventé.
  *
  * **La garde `MEDIA_NOT_CLAIMED` est rejouée AVANT tout envoi** (`core.ts:146-158`) :
  * un objet qui adresse un `postMediaId` absent de `mediaIds` pointerait dans
@@ -37,6 +44,13 @@ export type PublishStoryParams = ConversationsDeps & {
    * défaut du format (`FRIENDS` pour une story, `PUBLIC` sinon, `core.ts`).
    */
   readonly type?: PublicationKind;
+  /**
+   * **L'AUDIENCE CHOISIE PAR L'AUTEUR** (#7683) — absente tant que rien n'est
+   * choisi (D-111, § « `visibility` n'est PAS envoyée » sans choix). Jamais
+   * `visibilityUserIds` : le studio n'offre aucun mode nominatif choisissable
+   * (`ONLY`/`EXCEPT` restent grisés, `publication-audience.ts`).
+   */
+  readonly visibility?: PostVisibility;
   /**
    * **LE CONTENU DE LA PUBLICATION** — `Post.content`, jamais « la légende »
    * (commentaire corrigé, #6944 : il DISAIT « LA LÉGENDE », et c'est
@@ -91,6 +105,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
     headers: CANVAS_CAPS_HEADERS,
     body: {
       type: params.type ?? 'STORY',
+      ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),
       ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),

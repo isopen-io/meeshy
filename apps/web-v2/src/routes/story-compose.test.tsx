@@ -33,7 +33,10 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  // L'allemand sert le témoin de RANG D-113 (§ 4.4, « en ALLEMAND ») : en
+  // français, un libellé en dur et un libellé du catalogue rendent le même
+  // texte — leçon 261.
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('de')]);
   // Un budget de tours ne peut pas attendre un `import()` : les deux chunks
   // à la demande de l'écran sont réchauffés avant tout montage.
   await Promise.all([import('@/components/scene-player'), import('@/lib/api/post-media-upload')]);
@@ -41,6 +44,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete globals.IS_REACT_ACT_ENVIRONMENT;
+  document.documentElement.lang = 'fr';
   await releaseHappyDomIfRegistered();
 });
 
@@ -583,5 +587,166 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
     act(() => kindChoice('REEL')!.click());
     await flush();
     expect(bench.posts).toHaveLength(0);
+  });
+});
+
+describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (#7683)', () => {
+  const pastille = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-audience]');
+  const openSheet = (host: ParentNode) => act(() => pastille(host)!.click());
+  const choice = (visibility: string) => document.querySelector<HTMLButtonElement>(`[data-audience-choice="${visibility}"]`);
+  const dialogOpen = () => document.querySelector('dialog[open]');
+  const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
+  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+
+  test('choisir « Amis » puis publier ⇒ le corps porte `visibility: FRIENDS`', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Pour mes contacts');
+    openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('ne rien choisir, publier ⇒ la clé `visibility` est ABSENTE (le défaut reste une règle serveur, D-111)', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Sans audience choisie');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
+  });
+
+  test('choisir « Amis », publier ⇒ la mémoire survit à la purge du brouillon, et un remontage la relit', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    typeText(el, 'Une story pour mes amis');
+    openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => publishButton(el)!.click());
+    await flush(() => drafts.get(VIEWER_ID) === null);
+
+    expect(drafts.get(VIEWER_ID)).toBeNull();
+    expect(drafts.lastAudience(VIEWER_ID)).toBe('FRIENDS');
+
+    unmountAll();
+    const remounted = harness({ drafts });
+    const el2 = mount(remounted.deps);
+    expect(pastille(el2)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+    expect(pastille(el2)?.getAttribute('data-audience-source')).toBe('chosen');
+
+    typeText(el2, 'Encore une story');
+    act(() => publishButton(el2)!.click());
+    await flush(() => remounted.posts.length > 0);
+    expect(remounted.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('un brouillon SEMÉ avec la mémoire seule (aucun snapshot) ⇒ la pastille lit la mémoire à l’ouverture', () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const el = mount(harness({ drafts }).deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('COMMUNITY');
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('chosen');
+  });
+
+  test('le brouillon (rang 1) prime sur la mémoire (rang 2)', () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, { texts: [{ id: 't1', text: 'x' }], visibility: 'PRIVATE' });
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const el = mount(harness({ drafts }).deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
+  });
+
+  test('la feuille offre les six, dans l’ordre iOS ; ONLY/EXCEPT sont grisés AVEC leur raison, sans effet', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Un texte');
+    openSheet(el);
+
+    expect(dialogOpen()).not.toBeNull();
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('dialog[open] [data-audience-choice]'));
+    expect(rows.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']);
+
+    const only = choice('ONLY')!;
+    expect(only.getAttribute('aria-disabled')).toBe('true');
+    expect(only.textContent?.trim().length).toBeGreaterThan(0);
+
+    act(() => only.click());
+    expect(dialogOpen()).not.toBeNull();
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('default');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
+  });
+
+  test('choisir une audience CHOISISSABLE applique ET ferme la feuille', () => {
+    const el = mount(harness({}).deps);
+    openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    expect(dialogOpen()).toBeNull();
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+  });
+
+  test('la note de portée est présente ; aucun titre Mentions ni Hashtags', () => {
+    const el = mount(harness({}).deps);
+    openSheet(el);
+    expect(document.querySelector('dialog[open] [data-audience-scope]')).not.toBeNull();
+    const heading = Array.from(document.querySelectorAll('dialog[open] h2, dialog[open] h3')).find((n) =>
+      /mentions|hashtags/i.test(n.textContent ?? ''),
+    );
+    expect(heading).toBeUndefined();
+  });
+
+  test('rien choisi : la pastille dit ce que la passerelle PARTIRAIT — FRIENDS pour une story, PUBLIC pour un post', () => {
+    const story = mount(harness({}).deps, 'STORY');
+    expect(pastille(story)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+    expect(pastille(story)?.getAttribute('data-audience-source')).toBe('default');
+    unmountAll();
+
+    const post = mount(harness({}).deps, 'POST');
+    expect(pastille(post)?.getAttribute('data-audience-value')).toBe('PUBLIC');
+    expect(pastille(post)?.getAttribute('data-audience-source')).toBe('default');
+  });
+
+  test('rien choisi : le menu « Publier comme » dit l’audience de CHAQUE format ; un choix explicite s’applique aux trois', () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un texte, pour que le menu soit atteignable');
+    act(() => kindToggle(el)!.click());
+    expect(kindChoice('STORY')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+    expect(kindChoice('POST')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Public');
+    act(() => kindToggle(el)!.click());
+
+    openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    act(() => kindToggle(el)!.click());
+    for (const kind of ['STORY', 'POST', 'REEL'] as const) {
+      expect(kindChoice(kind)?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Contacts');
+    }
+  });
+
+  test('la pastille annonce « Audience » comme nom, et la valeur comme description', () => {
+    const el = mount(harness({}).deps);
+    const button = pastille(el)!;
+    expect(button.getAttribute('aria-label')).toBe('Audience');
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    const describedBy = button.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    // Le défaut d'une STORY est FRIENDS (« Contacts ») — c'est ce que le
+    // nœud désigné par `aria-describedby` doit porter comme VALEUR.
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Contacts');
+
+    openSheet(el);
+    expect(pastille(el)!.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('en ALLEMAND, la pastille lit le catalogue — jamais un libellé français en dur', () => {
+    document.documentElement.lang = 'de';
+    const el = mount(harness({}).deps, 'POST');
+    expect(pastille(el)?.textContent).toContain('Öffentlich');
+    document.documentElement.lang = 'fr';
   });
 });

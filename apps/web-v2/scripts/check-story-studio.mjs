@@ -23,6 +23,11 @@
  *  6. Un texte tapé SURVIT à un rechargement (le brouillon, `studio-draft-
  *     store.ts`, clé par lecteur).
  *  7. Aucune erreur de page ; clair et sombre rendent la MÊME géométrie.
+ *  8. L'AUDIENCE SE CHOISIT ET VOYAGE (#7683) : la pastille (`[data-story-
+ *     audience]`) ≥ 44 px, dit FRIENDS/`default` sans choix (une story part à
+ *     FRIENDS par défaut, `core.ts:421`) ; sa feuille offre les six audiences
+ *     dans l'ORDRE iOS, `ONLY` est grisé (`aria-disabled`) ; choisir
+ *     « Communautés » se lit ensuite sur la pastille (`COMMUNITY`/`chosen`).
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -276,6 +281,44 @@ async function runScheme(colorScheme) {
     const texteRelu = await page.evaluate(() => document.querySelector('#story-studio-text')?.value ?? null);
     check(texteRelu === 'Recette du gate', `${tag} : le texte du brouillon n'a pas survécu au rechargement — « ${texteRelu} »`);
 
+    /* ── 8. L'AUDIENCE SE CHOISIT ET VOYAGE (#7683) ──────────────────────── */
+    const pastilleBox = await readBox(page, '[data-story-audience]');
+    check(
+      pastilleBox !== null && pastilleBox.width >= MIN_TARGET - 0.5 && pastilleBox.height >= MIN_TARGET - 0.5,
+      `${tag} : la pastille d'audience [data-story-audience] = ${JSON.stringify(pastilleBox)} — attendu ≥ ${MIN_TARGET} px`,
+    );
+    const defaultAudience = await page.evaluate(() => {
+      const el = document.querySelector('[data-story-audience]');
+      return el === null ? null : { value: el.getAttribute('data-audience-value'), source: el.getAttribute('data-audience-source') };
+    });
+    check(
+      defaultAudience !== null && defaultAudience.value === 'FRIENDS' && defaultAudience.source === 'default',
+      `${tag} : une story sans audience choisie doit dire FRIENDS/default — ${JSON.stringify(defaultAudience)}`,
+    );
+
+    await page.click('[data-story-audience]');
+    await page.waitForSelector('dialog[open]', { timeout: 4000 });
+    const rows = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('dialog[open] [data-audience-choice]')).map((el) => el.getAttribute('data-audience-choice')),
+    );
+    check(
+      JSON.stringify(rows) === JSON.stringify(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']),
+      `${tag} : les six audiences, dans l'ordre iOS — reçu ${JSON.stringify(rows)}`,
+    );
+    const onlyDisabled = await page.evaluate(() => document.querySelector('dialog[open] [data-audience-choice="ONLY"]')?.getAttribute('aria-disabled'));
+    check(onlyDisabled === 'true', `${tag} : ONLY doit être grisé (aria-disabled=true) — ${onlyDisabled}`);
+
+    await page.click('dialog[open] [data-audience-choice="COMMUNITY"]');
+    await page.waitForSelector('dialog[open]', { state: 'detached', timeout: 4000 }).catch(() => {});
+    const chosenAudience = await page.evaluate(() => {
+      const el = document.querySelector('[data-story-audience]');
+      return el === null ? null : { value: el.getAttribute('data-audience-value'), source: el.getAttribute('data-audience-source') };
+    });
+    check(
+      chosenAudience !== null && chosenAudience.value === 'COMMUNITY' && chosenAudience.source === 'chosen',
+      `${tag} : choisir « Communautés » doit se lire sur la pastille — ${JSON.stringify(chosenAudience)}`,
+    );
+
     check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
     await context.close();
   }
@@ -301,5 +344,6 @@ console.log(
   `check-story-studio : vert — ${invariants} invariants : Publier inerte sur un brouillon vide, un fond + un son posés font ` +
     'PEINDRE le moteur partagé, la carte est 9:16 centrée dans son plateau aux deux gabarits, cinq cibles ≥ 44 px, la saisie ' +
     'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
-    'tapé survit à un rechargement — clair et sombre identiques.',
+    'tapé survit à un rechargement, l’audience se choisit et voyage (pastille ≥ 44 px, défaut FRIENDS, six audiences dans ' +
+    'l’ordre iOS, ONLY grisé, un choix se lit sur la pastille) — clair et sombre identiques.',
 );

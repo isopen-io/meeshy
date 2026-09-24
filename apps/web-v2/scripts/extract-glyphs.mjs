@@ -857,3 +857,33 @@ emit({
   type: 'LensPreviewGlyphName',
   role: "LE JEU de la ligne d'apercu de la Lentille (#7547) : les icones du composeur partage que le socle ne porte pas.",
 });
+
+/**
+ * LE JEU DE LA FEUILLE D'AUDIENCE DU STUDIO (#7683) — miroir des six
+ * `PostVisibility.icon` (`packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift:22-31`,
+ * SF Symbols `globe`, `person.3.fill`, `person.2.fill`, `person.fill.xmark`,
+ * `person.fill.checkmark`, `lock.fill`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `globe` (public) | `globe` |
+ * | `person.3.fill` (communautes) | `users-three` |
+ * | `person.2.fill` (contacts) | `users` |
+ * | `person.fill.xmark` (sauf...) | `user-minus` |
+ * | `person.fill.checkmark` (seulement...) | `user-check` |
+ * | `lock.fill` (prive) | `lock` |
+ *
+ * `lock` et `users` existent deja au SOCLE (`glyphs.ts`) : deux jeux peuvent
+ * extraire le meme glyphe phosphor dans des modules distincts sans surcout,
+ * la feuille d'audience et le fil ne se chargeant jamais dans le meme tour
+ * critique.
+ */
+const STORY_AUDIENCE = ['globe', 'users-three', 'users', 'user-minus', 'user-check', 'lock'];
+
+emit({
+  ids: STORY_AUDIENCE,
+  output: join(HERE, '../src/components/glyphs-story-audience.ts'),
+  constant: 'STORY_AUDIENCE_GLYPHS',
+  type: 'StoryAudienceGlyphName',
+  role: "LE JEU DE LA FEUILLE D'AUDIENCE DU STUDIO (#7683) : les six PostVisibility, charge avec /stories/new et /posts/new, jamais dans le socle.",
+});

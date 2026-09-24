@@ -103,3 +103,70 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
     expect(store.get(VIEWER)).toEqual({ texts: [layer('x')] });
   });
 });
+
+describe('createStudioDraftStore — l’audience voyage dans le brouillon ET se RETIENT séparément (#7683)', () => {
+  test('un snapshot avec `visibility` fait l’aller-retour set/get', () => {
+    const store = createStudioDraftStore(fakeStorage());
+    store.set(VIEWER, { texts: [layer('Bonjour')], visibility: 'FRIENDS' });
+    expect(store.get(VIEWER)?.visibility).toBe('FRIENDS');
+  });
+
+  test('une `visibility` inconnue en backend ⇒ get() rend null, jamais une exception', () => {
+    const backend = fakeStorage();
+    backend.setItem(`meeshy.draft.story.${VIEWER}`, JSON.stringify({ texts: [layer('x')], visibility: 'BOGUS' }));
+    expect(createStudioDraftStore(backend).get(VIEWER)).toBeNull();
+  });
+
+  test('la mémoire SURVIT à `clear` (une publication réussie purge le brouillon, jamais le souvenir)', () => {
+    const store = createStudioDraftStore(fakeStorage());
+    store.rememberAudience(VIEWER, 'FRIENDS');
+    store.set(VIEWER, { texts: [layer('Bonjour')] });
+    store.clear(VIEWER);
+    expect(store.get(VIEWER)).toBeNull();
+    expect(store.lastAudience(VIEWER)).toBe('FRIENDS');
+  });
+
+  test('ONLY/EXCEPT ne se mémorisent jamais, à l’écriture ET à la lecture', () => {
+    const store = createStudioDraftStore(fakeStorage());
+    store.rememberAudience(VIEWER, 'FRIENDS');
+    store.rememberAudience(VIEWER, 'ONLY');
+    expect(store.lastAudience(VIEWER)).toBe('FRIENDS');
+
+    const backend = fakeStorage();
+    backend.setItem(`meeshy.studio.audience.${VIEWER}`, 'ONLY');
+    expect(createStudioDraftStore(backend).lastAudience(VIEWER)).toBeNull();
+    backend.setItem(`meeshy.studio.audience.${VIEWER}`, 'BOGUS');
+    expect(createStudioDraftStore(backend).lastAudience(VIEWER)).toBeNull();
+  });
+
+  test('la mémoire est PAR LECTEUR — celle de l’un n’est pas celle de l’autre', () => {
+    const store = createStudioDraftStore(fakeStorage());
+    store.rememberAudience(VIEWER, 'PUBLIC');
+    store.rememberAudience(OTHER_VIEWER, 'PRIVATE');
+    expect(store.lastAudience(VIEWER)).toBe('PUBLIC');
+    expect(store.lastAudience(OTHER_VIEWER)).toBe('PRIVATE');
+  });
+
+  test('un backend qui LÈVE ⇒ lastAudience rend quand même la valeur de la session (cache mémoire)', () => {
+    const throwing = {
+      getItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+    };
+    const store = createStudioDraftStore(throwing);
+    expect(() => store.rememberAudience(VIEWER, 'COMMUNITY')).not.toThrow();
+    expect(store.lastAudience(VIEWER)).toBe('COMMUNITY');
+  });
+
+  test('une audience seule ne tient pas un snapshot en vie', () => {
+    const store = createStudioDraftStore(fakeStorage());
+    store.set(VIEWER, { texts: [layer('')], visibility: 'FRIENDS' });
+    expect(store.get(VIEWER)).toBeNull();
+  });
+});

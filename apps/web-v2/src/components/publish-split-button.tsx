@@ -41,6 +41,7 @@ export function PublishSplitButton({
   menuDisabled,
   busy,
   refusalOf,
+  audienceLabelOf,
   onPublish,
 }: {
   readonly language: InterfaceLanguage;
@@ -53,6 +54,10 @@ export function PublishSplitButton({
   readonly busy: boolean;
   /** La raison pour laquelle un format ne peut pas partir, ou `null`. */
   readonly refusalOf: (kind: PublicationKind) => string | null;
+  /** **CE QUE CE FORMAT PARTIRAIT COMME AUDIENCE** (#7683) — optionnel : les
+   * appelants qui n'ont pas d'audience (aucun aujourd'hui hors le studio) ne
+   * rendent aucune ligne, un menu qui n'a rien à dire ne le dit pas. */
+  readonly audienceLabelOf?: (kind: PublicationKind) => string;
   readonly onPublish: (kind: PublicationKind) => void;
 }) {
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -158,6 +163,11 @@ export function PublishSplitButton({
                       {translate(language, `story.studio.kind.${KIND_KEY[choice]}`)}
                       {choice === kind ? <Glyph name="check" size={14} /> : null}
                     </span>
+                    {audienceLabelOf === undefined ? null : (
+                      <span data-publish-kind-audience className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                        {audienceLabelOf(choice)}
+                      </span>
+                    )}
                     {refusal === null ? null : <span className="text-mini">{refusal}</span>}
                   </button>
                 );
