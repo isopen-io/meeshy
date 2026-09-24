@@ -178,8 +178,11 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: { type: 'object' },
 }));
 jest.mock('@meeshy/shared/types', () => ({
-  ErrorCode: { USER_BLOCKED: 'USER_BLOCKED' },
-  ErrorMessages: { USER_BLOCKED: { en: 'User is blocked' } },
+  ErrorCode: { USER_BLOCKED: 'USER_BLOCKED', NEWCOMER_SLOW_MODE: 'NEWCOMER_SLOW_MODE' },
+  ErrorMessages: {
+    USER_BLOCKED: { en: 'User is blocked' },
+    NEWCOMER_SLOW_MODE: { fr: 'Mode lent', en: 'Slow mode' },
+  },
 }));
 jest.mock('@meeshy/shared/utils/errors', () => ({
   createError: jest.fn((code: string, msg?: string) => {

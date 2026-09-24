@@ -390,6 +390,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "qu'un message effacé de l'historique personnel d'un lecteur ne serait " +
       'jamais marqué livré pour lui — donc compté non lu à vie.',
   },
+  'conversations/globalArrivalsNotice.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Ligne d'arrivées de Meeshy Global (#7740) : relit les messages SYSTÈME " +
+      "de la fenêtre (`select: { id, metadata, deletedAt }`) pour retrouver la " +
+      "ligne ouverte et y ajouter un arrivant. Écriture serveur, sans lecteur : " +
+      "masquer ici ouvrirait une seconde ligne dès qu'un seul membre a effacé la sienne.",
+  },
   'messaging/messagePostSaveEffects.ts': {
     kind: 'exempt',
     reads: 1,
