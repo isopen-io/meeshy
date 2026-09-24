@@ -152,10 +152,11 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
             "Sync/ConversationSyncEngine+Chargement.swift",
             "Sync/ConversationSyncEngine+Socket.swift",
             "Sync/ConversationSyncEngine+Ecritures.swift",
+            "Sync/ConversationSyncEngine+Rehydratation.swift",
         ]
         let engine = try famille.map { try Self.source($0) }.joined(separator: "\n")
         let calls = Self.callSites(of: ".toMessage(", in: engine)
-        XCTAssertEqual(calls.count, 4, "ancrage : quatre conversions vivent dans le moteur (chargement, pagination, message:new, message:edited)")
+        XCTAssertEqual(calls.count, 5, "ancrage : cinq conversions vivent dans le moteur (chargement, pagination, message:new, message:edited, messages préchargés par la NSE — #7787)")
         for call in calls {
             XCTAssertTrue(call.contains("preferredLanguages:"), "un `toMessage(` sans prisme sert l'original : \(call)")
         }

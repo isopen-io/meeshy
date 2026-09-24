@@ -65,7 +65,10 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         var riche = MeeshyConversation(
             id: "c1", identifier: "equipe-lagos", type: .group,
-            lastMessageAt: Date().addingTimeInterval(-3_600), unreadCount: 5
+            // L'activité SERVIE par `deltaJSON` : ces scénarios parlent de
+            // champs maigres (renommage), pas d'un message reçu — celui-là se
+            // réhydrate par la route riche (#7787, `…RehydratationTests`).
+            lastMessageAt: WireDate.date(from: "2026-09-04T11:59:00.000Z")!, unreadCount: 5
         )
         riche.title = "Équipe Lagos"
         riche.lastMessagePreview = "On se cale à 15 h ?"

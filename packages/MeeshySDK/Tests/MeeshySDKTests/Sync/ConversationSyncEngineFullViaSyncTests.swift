@@ -130,10 +130,26 @@ final class ConversationSyncEngineFullViaSyncTests: XCTestCase {
         """
     }
 
+    /// Un cache CHAUD dont chaque ligne porte l'activité que `/sync` servira :
+    /// le plein n'a alors rien à réhydrater (#7787). À froid, le plein ne
+    /// passe plus par `/sync` — ses lignes maigres peindraient une liste sans
+    /// aperçus — mais par la route riche.
+    private func semeUnCacheChaud(prefixe: String, de: Int, a: Int) async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let activite = WireDate.date(from: "2026-09-04T11:00:00.000Z")!
+        let lignes = (de...a).map { indice in
+            MeeshyConversation(
+                id: "\(prefixe)\(indice)", identifier: "conv-\(prefixe)\(indice)",
+                type: .group, lastMessageAt: activite, unreadCount: 0
+            )
+        }
+        try? await CacheCoordinator.shared.conversations.save(lignes, for: "list")
+    }
+
     // MARK: - 5a : le compteur
 
-    func test_leFroidDe10000Conversations_faitUneRequeteParPageDAncre_etAucuneAuCheminHistorique() async {
-        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+    func test_laReconciliationDe10000Conversations_faitUneRequeteParPageDAncre_etAucuneAuCheminHistorique() async {
+        await semeUnCacheChaud(prefixe: "c", de: 1, a: 10_000)
         // 10 000 conversations en 20 pages de 500 — le mock chaîne les ancres.
         for page in 0..<20 {
             let debut = page * 500 + 1
@@ -167,7 +183,7 @@ final class ConversationSyncEngineFullViaSyncTests: XCTestCase {
     // MARK: - 5b : le repli nommé
 
     func test_unDeploiementSansLaCollection_rameneLeCheminHistoriqueEntier() async {
-        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await semeUnCacheChaud(prefixe: "h", de: 0, a: 0)
         mockSync.reponses = [.refuse(statut: 400, code: "UNSUPPORTED_COLLECTION")]
         mockService.listResult = .success(OffsetPaginatedAPIResponse<[APIConversation]>(
             success: true,
@@ -189,7 +205,7 @@ final class ConversationSyncEngineFullViaSyncTests: XCTestCase {
     // MARK: - Une panne au milieu n'est PAS un repli
 
     func test_unePanneEnCoursDePagination_rendLaMain_sansRejouerLHistorique() async {
-        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await semeUnCacheChaud(prefixe: "c", de: 1, a: 2)
         mockSync.reponses = [
             .delta(json: pageJSON(
                 lignes: lignesJSON(prefixe: "c", de: 1, a: 2),
