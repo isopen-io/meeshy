@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import deIdentity from './catalog-de-identity';
 
 import deMentions from './catalog-de-mentions';
 
@@ -170,8 +171,7 @@ const de = {
   'feed.allLoaded': 'Alle Beiträge sind geladen',
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
-  'a11y.avatar.profile': 'Profil von {name} ansehen',
-  'a11y.avatar.story': 'Story von {name} ansehen',
+  ...deIdentity,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
   'report.body': 'Wählen Sie den Grund für Ihre Meldung. Unser Moderationsteam erhält sie.',

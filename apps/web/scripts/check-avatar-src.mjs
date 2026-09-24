@@ -51,6 +51,20 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  */
 const EXEMPTIONS = [];
 
+/**
+ * LES RELAIS (#7828) — un composant qui ENVELOPPE `Avatar` et lui RÉPAND ses
+ * props (`<Avatar {...props} />`) ne choisit aucune photo : c'est son hôte
+ * qui la choisit. Le relais sort donc du compte, et sa BALISE y entre à la
+ * place de la sienne — sans quoi renommer `<Avatar` en `<AuthorAvatar` dans la
+ * bulle et la rangée plate les aurait fait sortir de l'inventaire, VERTES par
+ * absence (« un renommage inverse les gardes qui reconnaissent par le nom »).
+ *
+ * Un relais qui cesserait de répandre ses props rougit : il choisirait alors
+ * lui-même, et devrait servir un `src` comme tout le monde.
+ */
+const RELAIS = [{ fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' }];
+const BALISES = ['<Avatar', ...RELAIS.map((relais) => relais.balise)];
+
 const fichiers = [];
 const parcours = (dir) => {
   for (const entry of readdirSync(dir)) {
@@ -95,12 +109,17 @@ const muettes = new Map();
 for (const chemin of fichiers) {
   const source = readFileSync(chemin, 'utf8');
   const cle = relative(SRC, chemin);
-  for (let i = source.indexOf('<Avatar'); i !== -1; i = source.indexOf('<Avatar', i + 1)) {
-    /* `<AvatarQuelqueChose` n'est pas `<Avatar` — la limite de mot compte. */
-    const apres = source[i + '<Avatar'.length];
-    if (apres !== undefined && /[A-Za-z0-9_]/.test(apres)) continue;
-    if (SRC_PROP.test(elementAt(source, i))) continue;
-    muettes.set(cle, (muettes.get(cle) ?? 0) + 1);
+  const relais = RELAIS.some((r) => r.fichier === cle);
+  for (const balise of BALISES) {
+    for (let i = source.indexOf(balise); i !== -1; i = source.indexOf(balise, i + 1)) {
+      /* `<AvatarQuelqueChose` n'est pas `<Avatar` — la limite de mot compte. */
+      const apres = source[i + balise.length];
+      if (apres !== undefined && /[A-Za-z0-9_]/.test(apres)) continue;
+      const element = elementAt(source, i);
+      if (SRC_PROP.test(element)) continue;
+      if (relais && balise === '<Avatar' && /\{\.\.\.props\}/.test(element)) continue;
+      muettes.set(cle, (muettes.get(cle) ?? 0) + 1);
+    }
   }
 }
 
