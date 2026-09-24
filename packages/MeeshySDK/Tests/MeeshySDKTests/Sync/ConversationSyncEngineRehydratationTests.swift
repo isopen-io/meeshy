@@ -220,6 +220,42 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
         XCTAssertEqual(ligne?.lastMessagePreview, "Le train part à 16 h")
     }
 
+    // MARK: - Les messages préchargés par l'extension de notification
+
+    func test_messagesPrecharges_peignentLaLigneDesLeReveil_sansReseau() async {
+        await semeLAncienEtat()
+        let recu = TestFactories.makeAPIMessage(
+            id: "m9", conversationId: "c1", senderId: "u2",
+            content: "Le train part à 16 h", createdAt: Self.date("2026-09-04T11:59:00.000Z")
+        )
+        let plusAncien = TestFactories.makeAPIMessage(
+            id: "m8", conversationId: "c1", senderId: "u2",
+            content: "J'arrive", createdAt: Self.date("2026-09-04T11:58:00.000Z")
+        )
+
+        await engine.peintLesMessagesPrecharges([recu, plusAncien])
+
+        let ligne = await c1()
+        XCTAssertEqual(ligne?.lastMessagePreview, "Le train part à 16 h",
+            "le DERNIER des messages préchargés peint la ligne, quel que soit l'ordre du lot")
+        XCTAssertEqual(ligne?.lastMessageAt, Self.date("2026-09-04T11:59:00.000Z"))
+        XCTAssertEqual(mockAPI.requestCount, 0, "aucun réseau : la ligne est juste dès l'ouverture")
+    }
+
+    func test_messagesPrecharges_conversationInconnue_attendLaRouteRiche() async {
+        await semeLAncienEtat()
+        let recu = TestFactories.makeAPIMessage(
+            id: "m1", conversationId: "c-neuve", senderId: "u2",
+            content: "Salut", createdAt: Self.date("2026-09-04T11:59:00.000Z")
+        )
+
+        await engine.peintLesMessagesPrecharges([recu])
+
+        let liste = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertFalse(liste.contains { $0.id == "c-neuve" },
+            "une ligne n'entre que riche : pas de conversation fabriquée depuis un seul message")
+    }
+
     // MARK: - Le plein
 
     func test_pleinAFroid_lesLignesPortentLeurApercu() async {

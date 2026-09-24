@@ -95,10 +95,14 @@ final class NSEPendingMessageConsumer {
             }
         }
 
-        // The CacheCoordinator upsert above only feeds the conversation LIST
-        // (preview, ordering). The conversation timeline reads GRDB — persist
-        // there too, or a push-prefetched message stays invisible inside the
-        // conversation until the next REST revalidation.
+        // La LIGNE de liste, dès le réveil et sans réseau (#7787). L'upsert
+        // ci-dessus n'écrit que le cache des MESSAGES : sans ce geste, la ligne
+        // gardait l'aperçu d'avant l'arrière-plan jusqu'au rattrapage réseau.
+        await ConversationSyncEngine.shared.peintLesMessagesPrecharges(decodedAPIMessages)
+
+        // The conversation timeline reads GRDB — persist there too, or a
+        // push-prefetched message stays invisible inside the conversation
+        // until the next REST revalidation.
         //
         // Use the AWAITED `upsertFromAPIMessages` (commits before returning),
         // not the fire-and-forget `bufferIncomingAPIMessages` (yields onto an
