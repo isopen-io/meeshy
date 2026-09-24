@@ -191,7 +191,7 @@ export function forwardAttributionOf(
  *
  * Il était EN DUR, en français, sous un doc-comment qui invoquait D-13 à
  * CONTRESENS : « la prose du dépôt reste en français, D-13 ». D-13 dit
- * l'inverse (`apps/web-v2/decisions.md`, § D-13) — la prose qui reste en
+ * l'inverse (`apps/web/decisions.md`, § D-13) — la prose qui reste en
  * français, ce sont « commentaires, messages de gate, documents de décision,
  * messages de commit », et la phrase se termine par « — et les textes
  * affichés à l'utilisateur, QUI RELÈVENT DE L'INTERNATIONALISATION, pas du

@@ -8,7 +8,7 @@ import { outcomeOf } from './outcome';
  * `POST /api/v1/reports` vit côté passerelle depuis longtemps
  * (`services/gateway/src/routes/reports/index.ts:223`), avec ses huit motifs et
  * ses trois limiteurs de débit. Mesuré avant ce lot : pas une occurrence de
- * `v1/reports`, `reportedEntityId` ni `reportType` dans `apps/web-v2/src`.
+ * `v1/reports`, `reportedEntityId` ni `reportType` dans `apps/web/src`.
  *
  * C'est la forme d'absence la plus trompeuse du dépôt : **un port sans appelant
  * ressemble à une feature livrée dans tous les relevés qui comptent les

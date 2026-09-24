@@ -19,7 +19,7 @@ import type { ApiResult, HttpTransport } from './http';
  *
  * **LA PASSERELLE ÉTAIT PRÊTE, LE WEB N'AVAIT PAS DE PORTE.** Le geste
  * d'enregistrement écrit depuis #6278, `post:bookmarked` est écouté depuis
- * #7227, et aucune ligne de `apps/web-v2/src` ne lisait `scope=bookmarks` :
+ * #7227, et aucune ligne de `apps/web/src` ne lisait `scope=bookmarks` :
  * l'effet du geste était invisible pour toujours à celui qui le faisait.
  *
  * **LE CURSEUR EST OPAQUE**, keyset `createdAt + id` de la ligne `PostBookmark`

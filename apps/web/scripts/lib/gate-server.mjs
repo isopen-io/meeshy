@@ -39,7 +39,7 @@ import { extname, join, normalize } from 'node:path';
  * écrite à plusieurs endroits finit par être écrite de plusieurs façons, et
  * c'est l'endroit qu'on ne teste pas qui porte la mauvaise.
  *
- * POURQUOI CE FICHIER NE S'APPELLE PAS `dist-server`. `apps/web-v2/.gitignore`
+ * POURQUOI CE FICHIER NE S'APPELLE PAS `dist-server`. `apps/web/.gitignore`
  * ligne 3 porte `dist-*`, pour les sorties de construction des coques
  * (`dist-capacitor`, `dist-gateway`, `dist-app-update-a`). Un fichier nommé
  * `dist-server.mjs` y tombe : `git add` le refuse, et un `git add -f` le

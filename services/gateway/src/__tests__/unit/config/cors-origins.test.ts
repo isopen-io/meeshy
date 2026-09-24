@@ -284,7 +284,7 @@ describe('la liste d\'origines CORS décide vraiment (#4480)', () => {
  *              (`DefaultScheme = "capacitor"`, `DefaultHostname = "localhost"`)
  *   · Android  `https://localhost`     — `CapConfig.java:38-39` (`hostname =
  *              "localhost"`, `androidScheme = CAPACITOR_HTTPS_SCHEME`),
- *              confirmé par `apps/web-v2/capacitor.config.ts:44`
+ *              confirmé par `apps/web/capacitor.config.ts:44`
  *              (`androidScheme: 'https'`)
  *
  * `docker-compose.staging.yml` déclare la liste effective — ce test lit le

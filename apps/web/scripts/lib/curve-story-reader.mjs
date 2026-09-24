@@ -32,8 +32,8 @@ export function storyReaderCurveFailures({ root }) {
   const sceneShape = read('packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift');
   const sceneFloor = read('packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneFloorView.swift');
   const letterboxSwift = read('packages/MeeshySDK/Sources/MeeshySDK/Story/StoryLetterboxFill.swift');
-  const framing = read('apps/web-v2/src/lib/stories/framing.ts');
-  const letterbox = read('apps/web-v2/src/lib/stories/letterbox.ts');
+  const framing = read('apps/web/src/lib/stories/framing.ts');
+  const letterbox = read('apps/web/src/lib/stories/letterbox.ts');
 
   const first = (pattern, text) => {
     const m = pattern.exec(text);

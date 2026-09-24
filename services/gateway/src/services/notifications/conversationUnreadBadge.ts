@@ -8,7 +8,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * § 3) : « le badge d'icône compte les CONVERSATIONS non lues (hors
  * muettes), comme l'app iOS et comme WhatsApp ». Une conversation à douze
  * messages non lus pèse UN, exactement comme `countUnreadConversations`
- * côté web-v2 (`apps/web-v2/src/lib/view/use-app-badge.ts:36-45`, W4/#7221).
+ * côté web-v2 (`apps/web/src/lib/view/use-app-badge.ts:36-45`, W4/#7221).
  *
  * **Le non-lu se DEMANDE à `getUnreadCountsForUser`, jamais au champ
  * dénormalisé `ConversationReadCursor.unreadCount`.** Ce champ n'est écrit

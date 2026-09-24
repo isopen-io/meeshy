@@ -27,9 +27,9 @@ export function mosaicLayoutCurveFailures({ root, count }) {
   const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshyUI/Story/MosaicLayout.swift`, 'utf8');
   const mosaicSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift`, 'utf8');
   const choiceSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Composer/ComposerMosaicChoice.swift`, 'utf8');
-  const publicationLayout = readFileSync(`${root}apps/web-v2/src/lib/stories/publication-layout.ts`, 'utf8');
+  const publicationLayout = readFileSync(`${root}apps/web/src/lib/stories/publication-layout.ts`, 'utf8');
   const sharedSchema = readFileSync(`${root}packages/shared/types/canvas-v3.ts`, 'utf8');
-  const derived = readFileSync(`${root}apps/web-v2/src/lib/feed/mosaic-layout.ts`, 'utf8');
+  const derived = readFileSync(`${root}apps/web/src/lib/feed/mosaic-layout.ts`, 'utf8');
 
   const first = (text, pattern) => {
     const m = pattern.exec(text);

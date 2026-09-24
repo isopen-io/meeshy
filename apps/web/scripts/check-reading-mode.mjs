@@ -865,7 +865,7 @@ const noRowCarriesContinuousPerspective = (page) =>
    * ci-dessus ne pouvait faire échouer AUCUNE garde sur une rangée SANS
    * ligne basse — exactement la forme où le recouvrement de 9 px a été
    * mesuré. `RIVER_CONTINUATION_WITNESS_ID` (`riv-5`, miroir de la
-   * constante EXPORTÉE `apps/web-v2/src/lib/api/fixtures.ts`) est une
+   * constante EXPORTÉE `apps/web/src/lib/api/fixtures.ts`) est une
    * CONTINUATION (`tail === false`, traduite, sans réaction) ;
    * `RIVER_NO_TRANSLATION_WITNESS_ID` (`riv-12`) ne porte NI traduction NI
    * réaction. `electRow` les ÉLIT explicitement (défilement gradué jusqu'à

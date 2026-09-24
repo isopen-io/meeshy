@@ -191,14 +191,14 @@ jobs:
           echo "🔄 Synchronizing package.json → VERSION files..."
           node scripts/sync-versions.js
 
-      # `changeset version` monte apps/web-v2/package.json SANS construire de
+      # `changeset version` monte apps/web/package.json SANS construire de
       # coque : sans cette étape, main portait 2.0.2 dans package.json et 2.0.0
       # dans build.gradle/project.pbxproj, et « Test web-v2 » y était rouge
       # (témoin #6196, build-shells.test.ts). Le commit de release (`git add -A`)
       # emporte les deux fichiers dérivés.
-      - name: Sync web-v2 shell versions
+      - name: Sync web shell versions
         if: steps.version.outputs.published == 'true'
-        run: node apps/web-v2/scripts/sync-shell-version.mjs
+        run: node apps/web/scripts/sync-shell-version.mjs
 
       - name: Get new version
         id: get-version

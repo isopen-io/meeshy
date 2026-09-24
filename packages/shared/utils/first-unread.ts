@@ -23,7 +23,7 @@
  * le REMAPPE avant de servir
  * (`services/gateway/src/routes/conversations/messages-list-query.ts:618-621`),
  * et c'est cet espace qu'emploie déjà `isMineOf()`
- * (`apps/web-v2/src/lib/view/message.ts:34`). Un appelant qui tiendrait des
+ * (`apps/web/src/lib/view/message.ts:34`). Un appelant qui tiendrait des
  * LIGNES Prisma doit donc passer le `Participant.id` du lecteur, pas son
  * `User.id`.
  *

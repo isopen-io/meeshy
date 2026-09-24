@@ -30,7 +30,7 @@ const addressesOf = (pattern: string): readonly string[] =>
  * **`/u/` SE PARTAGE ENTRE NGINX ET LA V2, ET LA COUPE EST MESURABLE** (#7083).
  *
  * `location /u/` n'est PAS une page : c'est `root /srv/legacy-uploads` +
- * `try_files $uri /index.html` (`apps/web-v2/nginx.conf:61-64`). Le volume
+ * `try_files $uri /index.html` (`apps/web/nginx.conf:61-64`). Le volume
  * `frontend_uploads` y sert les avatars et bannières TÉLÉVERSÉS PAR LE LEGACY,
  * dont l'adresse `https://meeshy.me/u/…` est GRAVÉE EN BASE. Le `try_files`
  * est ce qui fait que `/u/<pseudo>`, qui n'est pas un fichier, retombe sur

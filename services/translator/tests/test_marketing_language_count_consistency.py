@@ -24,24 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MARKETING_FILES = [
     REPO_ROOT / "services/translator/README.md",
     REPO_ROOT / "docs/marketing/app-store-fiche-2026-08.md",
-    REPO_ROOT / "apps/web/locales/en/landing.json",
-    REPO_ROOT / "apps/web/locales/es/landing.json",
-    REPO_ROOT / "apps/web/locales/fr/landing.json",
-    REPO_ROOT / "apps/web/locales/pt/landing.json",
-    REPO_ROOT / "apps/web/locales/en/about.json",
-    REPO_ROOT / "apps/web/locales/fr/about.json",
-    REPO_ROOT / "apps/web/locales/es/about.json",
-    REPO_ROOT / "apps/web/locales/pt/about.json",
-    REPO_ROOT / "apps/web/locales/en/affiliate.json",
-    REPO_ROOT / "apps/web/locales/fr/affiliate.json",
-    REPO_ROOT / "apps/web/locales/es/affiliate.json",
-    REPO_ROOT / "apps/web/locales/pt/affiliate.json",
-    REPO_ROOT / "apps/web/locales/en/metadata.json",
-    REPO_ROOT / "apps/web/locales/fr/metadata.json",
-    REPO_ROOT / "apps/web/locales/es/metadata.json",
-    REPO_ROOT / "apps/web/locales/pt/metadata.json",
-    REPO_ROOT / "apps/web/app/api/metadata/route.ts",
-    REPO_ROOT / "apps/web-v2/src/institutional/about.ts",
+    # Les seize catalogues de locales et la route de métadonnées du legacy
+    # `apps/web` sont partis avec lui (#7668). L'application qui a pris son
+    # chemin n'affirme le compte que dans ses documents institutionnels.
+    REPO_ROOT / "apps/web/src/institutional/about.ts",
+    REPO_ROOT / "apps/web/src/institutional/faq.ts",
 ]
 
 # Chiffres périmés trouvés lors de l'audit #3638. Un support marketing ne

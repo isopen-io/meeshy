@@ -26,7 +26,7 @@ const evenement = (partial: {
  *
  * L'événement `comment:added` EXISTE côté passerelle depuis toujours
  * (`event-names.ts:423`, émis par `SocialEventsHandler`) ; mesuré avant ce lot,
- * `grep -rn "comment:added" apps/web-v2/src/` rendait VIDE. Personne ne
+ * `grep -rn "comment:added" apps/web/src/` rendait VIDE. Personne ne
  * l'écoutait : il fallait recharger pour voir le commentaire d'un tiers.
  *
  * ## LES TROIS PIÈGES, TOUS DÉJÀ PAYÉS PAR LE DÉPÔT

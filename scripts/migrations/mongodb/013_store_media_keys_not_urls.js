@@ -39,7 +39,7 @@
  * entière : ni comptée, ni sauvegardée, ni réécrite, la requête MongoDB
  * elle-même ne la sélectionnant pas. C'est exactement l'adresse que la
  * console de `staging.meeshy.me/notifications` a rendue le 2026-09-13, et
- * que `apps/web-v2/src/lib/api/media-url.ts` (`storageKeyOfLegacyUrl` /
+ * que `apps/web/src/lib/api/media-url.ts` (`storageKeyOfLegacyUrl` /
  * `storageKeyOfPath`, #6388) répare désormais À LA LECTURE, côté client —
  * un correctif de lecture qui achète le temps de CETTE migration, pas un
  * substitut. `MOTIF_A_MIGRER` et `cleDepuisAdresse` ci-dessous en sont le

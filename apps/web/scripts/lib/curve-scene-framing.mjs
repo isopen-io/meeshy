@@ -21,7 +21,7 @@ export function sceneFramingCurveFailures({ root }) {
   const failures = [];
   const swift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshyUI/Story/SceneFraming.swift`, 'utf8');
   const law = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift`, 'utf8');
-  const derived = readFileSync(`${root}apps/web-v2/src/lib/feed/scene-framing.ts`, 'utf8');
+  const derived = readFileSync(`${root}apps/web/src/lib/feed/scene-framing.ts`, 'utf8');
 
   const swiftNumber = (name) => {
     const m = new RegExp(`\\b${name}\\s*:\\s*CGFloat\\s*=\\s*(-?[0-9.]+)`).exec(swift);

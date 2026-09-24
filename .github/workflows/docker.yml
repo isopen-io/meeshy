@@ -21,13 +21,11 @@ on:
     branches: [main, dev]
     tags: ['v*.*.*']
     paths:
-      # `apps/web` (LEGACY) ne déclenche plus ce workflow : son image n'y est
-      # plus construite (directive porteur 2026-09-16). meeshy.me sert
-      # `apps/web-v2` depuis le 2026-09-15, et staging ne servait déjà plus le
-      # legacy depuis #5609 — l'image était poussée au registry et déployée
-      # nulle part. Sa publication de PRODUCTION reste dans `release.yml`
-      # (tag `v*`), inchangée.
-      - 'apps/web-v2/**'
+      # `apps/web` est l'application web servie par meeshy.me (ex `apps/web-v2`,
+      # renommée le 2026-09-24, #7668). Le legacy Next.js qui portait ce chemin
+      # avant elle a quitté le dépôt ; son image `meeshy-web` n'est plus
+      # construite par aucun workflow.
+      - 'apps/web/**'
       - 'packages/design-tokens/**'
       - 'services/gateway/**'
       - 'services/translator/**'
@@ -194,7 +192,7 @@ jobs:
             # rend alors « fatal: bad object » (mesuré). L'ancien repli
             # `HEAD~1 HEAD` ne regardait plus que le DERNIER commit — une
             # poussée de cinq commits dont seul le premier touche
-            # `apps/web-v2/` ne construisait rien, et la livraison était
+            # `apps/web/` ne construisait rien, et la livraison était
             # perdue SANS QUE RIEN NE ROUGISSE.
             #
             # La direction de l'erreur se choisit par son coût de réparation :
@@ -227,7 +225,7 @@ jobs:
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v2/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v31=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -246,12 +244,9 @@ jobs:
             TORCH_INPUT="cpu"
           fi
 
-          # LE LEGACY `web` (image `meeshy-web`) N'EST PLUS CONSTRUIT ICI
-          # (directive porteur 2026-09-16). Il n'était déployé nulle part
-          # depuis #5609 : l'image partait au registry et aucun compose ne la
-          # tirait. `release.yml` continue de la publier sur tag `v*`, donc un
-          # retour arrière garde une image à tirer — ce qui n'a jamais dépendu
-          # de ce workflow-ci.
+          # LE LEGACY `web` (image `meeshy-web`) N'EST PLUS CONSTRUIT (directive
+          # porteur 2026-09-16) et son code a quitté le dépôt (#7668). Sa
+          # dernière forme se restaure depuis le tag `legacy-web-final`.
 
           # LA v3.1 — image `meeshy-web-v31`. C'est le nom que le compose de
           # l'HÔTE de staging tire : le changer ici sans lui figerait staging en
@@ -259,7 +254,7 @@ jobs:
           # été construite. Son renommage est un geste coordonné avec l'hôte.
           if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
             HAS_CHANGES=true
-            VERSION=$(node -p "require('./apps/web-v2/package.json').version" 2>/dev/null || echo "0.0.0")
+            VERSION=$(node -p "require('./apps/web/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
             # **L'origine de l'API se fige au BUILD, pas au démarrage (#5872).**
             # `import.meta.env` est remplacé par Vite à la construction : une
@@ -281,7 +276,7 @@ jobs:
             # fixtures montre Kwame Mensah à de vrais utilisateurs. Le défaut du
             # `Dockerfile` reste `fixtures` pour qu'un build local n'exige aucune
             # passerelle ; une image, elle, en a toujours une.
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v2/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
             FIRST=false
           fi
 

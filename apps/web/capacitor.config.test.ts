@@ -58,7 +58,7 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
    * `scripts/shell-start-path-hook.mjs` en DÉRIVE un chemin de fichier
    * (`join(CAPACITOR_ROOT_DIR, IOS_NATIVE_WEB_DIR, startPath)`), que `join`
    * NORMALISE — `/c/../../../../tmp/x` posait le placeholder dans
-   * `apps/web-v2/tmp/x`, hors de `public/`, pendant que le journal du hook
+   * `apps/web/tmp/x`, hors de `public/`, pendant que le journal du hook
    * annonçait « placeholder posé » et que la coque sortait quand même au
    * lancement. La garde vit ICI, avec les trois autres gardes de FORME : elle
    * couvre les DEUX plateformes (sur Android le même chemin remonterait

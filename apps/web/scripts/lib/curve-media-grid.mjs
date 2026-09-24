@@ -45,9 +45,9 @@ export function mediaGridCurveFailures({ root, count }) {
     `${root}apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Pages.swift`,
     'utf8',
   );
-  const metricsDerived3 = readFileSync(`${root}apps/web-v2/src/lib/reading-mode/metrics.ts`, 'utf8');
-  const mediaGridLayoutDerived = readFileSync(`${root}apps/web-v2/src/lib/view/media-grid-layout.ts`, 'utf8');
-  const mediaStageDerived = readFileSync(`${root}apps/web-v2/src/lib/view/media-stage.ts`, 'utf8');
+  const metricsDerived3 = readFileSync(`${root}apps/web/src/lib/reading-mode/metrics.ts`, 'utf8');
+  const mediaGridLayoutDerived = readFileSync(`${root}apps/web/src/lib/view/media-grid-layout.ts`, 'utf8');
+  const mediaStageDerived = readFileSync(`${root}apps/web/src/lib/view/media-stage.ts`, 'utf8');
 
   /** `nom: CGFloat = valeur` ou `nom = valeur` — motif PARTIE 9 (`bubbleStickerNumber`), généralisé aux cinq sources d'ici. */
   const swiftNumber = (text, name) => {

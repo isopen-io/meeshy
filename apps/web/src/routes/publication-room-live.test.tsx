@@ -30,7 +30,7 @@ import { navigate, Router } from './route-table';
  * `post:join`. Un lecteur non ami d'une publication PUBLIQUE n'est dans aucun
  * salon de fil : sans la salle, rien ne lui parvient — ni la traduction du
  * texte, ni un commentaire, ni un compte d'aimés. Mesuré avant ce lot :
- * `CLIENT_EVENTS.JOIN_POST` n'était émis nulle part dans `apps/web-v2/src`.
+ * `CLIENT_EVENTS.JOIN_POST` n'était émis nulle part dans `apps/web/src`.
  *
  * Les autres témoins temps réel (`card-translation-live`,
  * `comment-translation-live`) remettent la charge à TOUT écouteur : ils

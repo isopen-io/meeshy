@@ -75,8 +75,8 @@ const KOTLIN_AVATAR_SOURCE = join(
   __dirname,
   '../../../apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyAvatar.kt'
 );
-const WEB_AVATAR_SOURCE = join(__dirname, '../../../apps/web-v2/src/components/avatar.tsx');
-const WEB_SOURCES_ROOT = join(__dirname, '../../../apps/web-v2/src');
+const WEB_AVATAR_SOURCE = join(__dirname, '../../../apps/web/src/components/avatar.tsx');
+const WEB_SOURCES_ROOT = join(__dirname, '../../../apps/web/src');
 
 /** Ton logique → hex de référence (SSOT TS). */
 type Tone = 'success' | 'warning' | 'muted';

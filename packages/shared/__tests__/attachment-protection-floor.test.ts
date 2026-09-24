@@ -7,7 +7,7 @@
  * une pièce à la fois à VUE UNIQUE et FLOUTÉE dont la charge dément la seule
  * vue unique repart floutée et plus à vue unique, l'agrégat n'ayant pas bougé.
  * C'est le défaut que la revue adversariale de #7017 a trouvé dans
- * `apps/web-v2/src/lib/api/realtime-apply.ts`, et qu'elle a corrigé CHEZ ELLE —
+ * `apps/web/src/lib/api/realtime-apply.ts`, et qu'elle a corrigé CHEZ ELLE —
  * en recopiant l'inventaire des canaux et le masque d'`effectFlags` dans un
  * `PROTECTION_KEYS` local, gardé par rien.
  *

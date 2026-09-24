@@ -7,7 +7,7 @@ import { REPORT_REASONS, reportUser, type ReportOutcome } from './reports';
  *
  * `POST /api/v1/reports` vit côté passerelle avec ses huit motifs et ses trois
  * limiteurs. Mesuré avant ce lot : pas une occurrence de `v1/reports`,
- * `reportedEntityId` ni `reportType` dans `apps/web-v2/src`.
+ * `reportedEntityId` ni `reportType` dans `apps/web/src`.
  *
  * C'est la forme d'absence la plus trompeuse du dépôt : **un port sans appelant
  * ressemble à une feature livrée dans tous les relevés qui comptent les

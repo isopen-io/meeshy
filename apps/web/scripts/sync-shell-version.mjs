@@ -6,7 +6,7 @@
  * (iOS) à chaque construction de coque, et `build-shells.test.ts` refuse que
  * les fichiers SUIVIS divergent de `package.json`. Mais la release
  * (`.github/workflows/release.yml`, `bunx changeset version`) monte
- * `apps/web-v2/package.json` SANS construire de coque : le 2026-09-13, `main`
+ * `apps/web/package.json` SANS construire de coque : le 2026-09-13, `main`
  * portait `2.0.2` dans `package.json` et `2.0.0` dans les deux coques, et
  * « Test web-v2 » y était rouge. Ce script est l'étape qui manquait —
  * appelé juste après `changeset version`, avant le commit de release.

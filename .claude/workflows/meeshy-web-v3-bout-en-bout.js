@@ -1,9 +1,9 @@
 export const meta = {
   name: 'meeshy-web-v3-bout-en-bout',
   description:
-    'Developper la v3.1 web (apps/web-v2, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
+    'Developper la v3.1 web (apps/web, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3.1 web (apps/web-v2 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter, continu, continu_sauf }.",
+    "Lancer un tour de developpement de la v3.1 web (apps/web — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter, continu, continu_sauf }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux surface par surface CONTRE apps/ios (parity.md, route-inventory), choix des travaux — fable DECRIT", model: 'fable' },
@@ -25,7 +25,7 @@ export const meta = {
 
 const A = args && typeof args === 'object' ? args : {}
 const REPO = typeof A.repo === 'string' && A.repo ? A.repo : '/Users/smpceo/Documents/v2_meeshy'
-const V3 = `${REPO}/apps/web-v2`
+const V3 = `${REPO}/apps/web`
 const IOS = `${REPO}/apps/ios`
 const SDK = `${REPO}/packages/MeeshySDK`
 const SCRATCH = `${REPO}/.cache/web-v2-workflow`
@@ -103,7 +103,7 @@ const enContinu = (cle) => CONTINU && !CONTINU_SAUF.has(cle)
 // ---------------------------------------------------------------------------
 
 const SOCLE = `
-TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web-v2\` — Vite + Preact via preact/compat +
+TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web\` — Vite + Preact via preact/compat +
 Tailwind 4 + TanStack Query + zustand + routeur maison, empaquetable Android/iOS par Capacitor 8),
 monorepo ${REPO}, sur ${NOM_DE_BRANCHE}. Date : ${DATE}.
 
@@ -116,7 +116,7 @@ ta mission, litteralement : \`cd ${REPO} && git branch --show-current\` — elle
 branche attendue. NE CHANGE JAMAIS DE BRANCHE, ne cree pas de worktree.
 
 LA DIRECTIVE DU PORTEUR (2026-09-07 soir), qui gouverne ce chantier :
-« developper dans apps/web-v2 une application similaire a la version iOS (apps/ios) pour le web ET
+« developper dans apps/web une application similaire a la version iOS (apps/ios) pour le web ET
 Android en une fois ; organiser une boucle de developpement qui atteint la maturite feature par
 feature ; recuperer les icones, logo, signature, splashscreen, stickers, features ; verifier la
 coherence generale sur l'emulateur Android (QEMU) et tester sur Chrome en local connecte a
@@ -511,7 +511,7 @@ const TRAVAIL = {
     critere_de_fin: { type: 'string', description: 'OBSERVABLE : une commande, une mesure, une assertion' },
     corps_issue: { type: 'string' },
     reference_ios: { type: 'string', description: "les fichiers Swift qui font foi pour cette surface (Features/…), ou '(infra)' si aucun ecran" },
-    existe_deja: { type: 'string', description: "ce qui existe deja dans apps/web-v2 pour ce travail (fichiers), s'il y a lieu" },
+    existe_deja: { type: 'string', description: "ce qui existe deja dans apps/web pour ce travail (fichiers), s'il y a lieu" },
     detail: { type: 'string' },
   },
 }
@@ -741,7 +741,7 @@ A. LA REINTEGRATION
 3. \`git fetch origin ${DEPUIS}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
 4. \`git log --oneline HEAD..origin/${DEPUIS}\` : compte les commits repris et lis leurs titres.
    \`git diff --stat HEAD...origin/${DEPUIS}\` : note les chemins que dev vient de bouger, en
-   particulier sous apps/web-v2, apps/ios, packages/shared et packages/design-tokens.
+   particulier sous apps/web, apps/ios, packages/shared et packages/design-tokens.
 5. \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git pull --rebase\` ni \`git rebase\` (lecon 324).
    Un conflit se resout en gardant les DEUX apports quand les fichiers le permettent (lecons,
    decisions) ou en reconciliant le CODE par sa logique. Si un conflit demande un arbitrage
@@ -751,7 +751,7 @@ A. LA REINTEGRATION
 
 B. LE RELEVE — CE QUE LES AUTRES SESSIONS TIENNENT
 1. \`gh pr list --state open --limit 30\` : pour chaque PR ouverte, titre, branche head, et les
-   fichiers touches si le titre ne suffit pas. Une PR qui touche apps/web-v2 TIENT son sujet.
+   fichiers touches si le titre ne suffit pas. Une PR qui touche apps/web TIENT son sujet.
 2. \`git branch -r --sort=-committerdate | head -30\` + \`git log --oneline -1 --format='%ci %s' <branche>\`
    sur les branches claude/* de moins de 48 h : une branche vivante qui n'est pas la tienne TIENT son sujet.
 3. \`gh issue list --state open --label web-v3 --limit 30\` (et sans label si vide) : une issue

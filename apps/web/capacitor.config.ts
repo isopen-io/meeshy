@@ -48,7 +48,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  *   · AUCUN segment `..` (revue #6027) — depuis #6027 ce chemin n'est plus
  *     seulement une URL : `scripts/shell-start-path-hook.mjs` en DÉRIVE un
  *     chemin de fichier, que `path.join` NORMALISE. `/c/../../../tmp/x`
- *     posait le placeholder dans `apps/web-v2/tmp/x`, HORS de `public/`,
+ *     posait le placeholder dans `apps/web/tmp/x`, HORS de `public/`,
  *     pendant que le journal du hook annonçait « placeholder posé » et que la
  *     coque sortait quand même au lancement. La garde vit ICI plutôt que dans
  *     le hook parce qu'elle vaut pour les DEUX plateformes et refuse AVANT
