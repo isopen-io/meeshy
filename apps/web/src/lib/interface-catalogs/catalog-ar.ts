@@ -109,7 +109,7 @@ const ar = {
   'feed.post.repost.error': 'تعذّرت إعادة النشر',
   'feed.post.repost.already': 'أُعيد نشره بالفعل',
   'feed.post.repost.offline': 'غير متصل — تعذّر إرسال إعادة النشر.',
-  'feed.post.repost.unconfirmed': 'لم تُؤكَّد إعادة النشر — غير متصل',
+  'feed.post.repost.unconfirmed': 'لم تُؤكَّد إعادة النشر — أعد المحاولة',
   'feed.post.repost.audience': 'سيؤدي هذا الجمهور إلى توسيع نطاق المنشور الأصلي',
   'feed.post.reel.chip': 'ريل',
   'feed.post.reel.of': 'ريل {author}',

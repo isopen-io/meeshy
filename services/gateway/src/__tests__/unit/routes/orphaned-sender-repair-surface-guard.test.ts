@@ -182,6 +182,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
   'messaging/freezeMessageStatus.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7740 — anti-répétition de Global : `select: { content: true }`, aucun expéditeur.
+  'messaging/messagePostSaveEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
+  'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — CELLE-CI sélectionne bien `sender`, et reste pourtant exempte : elle
