@@ -242,7 +242,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // reviendraient à la prochaine régénération. Leur appelant Swift est #7379
 // (`StarredMessagesStore` passe du stockage local au contrat serveur). Valeur
 // MESURÉE sur l'arbre fusionné avec le dev du 2026-09-21.
-const BASELINE_DEAD_ENTRIES = 262;
+// 262 → 263 (#7729) : `MeEndpoint.onboarding` — l'état du parcours
+// d'accueil (`GET|PATCH /me/onboarding`). Morte à la naissance PAR
+// CONSTRUCTION, même raison que #7377 : #7756 livre la moitié SERVEUR seule,
+// l'entrée est GÉNÉRÉE depuis `route-manifest.json`. Son appelant Swift est le
+// `OnboardingService` de `feat/ios-onboarding-7729`, qui annonce passer à
+// `MeEndpoint.onboarding` dès qu'elle est générée. Valeur MESURÉE sur le dev du
+// 2026-09-24.
+const BASELINE_DEAD_ENTRIES = 263;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
