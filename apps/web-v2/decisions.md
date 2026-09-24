@@ -3942,4 +3942,4 @@ C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui t
 
 **LE BROUILLON PERSISTÉ PORTE UN SCHÉMA** (`schema: 2`, D-44) ; la forme précédente (sans schéma) est RELEVÉE en une page `page-1` — un `postMediaId` monté est un aller-retour payé ; un schéma futur est refusé plutôt que lu à moitié.
 
-**HORS TRANCHE, CONSIGNÉ** : le canal story N-posts ; la lecture des scènes suivantes d'un RÉEL et d'une story côté web (les deux lecteurs ne rendent que la scène 0) ; réordonner et dupliquer une page (`moveSlide`, `duplicateSlide`) ; la tuile qui montre la scène composée plutôt que le fond.
+**HORS TRANCHE, CONSIGNÉ** : le canal story N-posts (#7707) ; la lecture des scènes suivantes d'un RÉEL côté web (#7708 — le lecteur ne rend que la scène 0) ; réordonner et dupliquer une page (`moveSlide`, `duplicateSlide`) ; la tuile qui montre la scène composée plutôt que le fond.
