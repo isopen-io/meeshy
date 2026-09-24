@@ -10,7 +10,17 @@ public protocol ShareLinkInfoProviding: Sendable {
     func getLinkInfo(identifier: String) async throws -> ShareLinkInfo
 }
 
-public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable {
+/// La gestion des liens par leur PROPRIÉTAIRE — la fiche détails + édition
+/// (#7797) n'a besoin que de ces cinq capacités.
+public protocol ShareLinkManaging: Sendable {
+    func listMyLinks(offset: Int, limit: Int) async throws -> [MyShareLink]
+    func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats
+    func updateLink(linkId: String, settings: ShareLinkSettings) async throws
+    func toggleLink(linkId: String, isActive: Bool) async throws
+    func deleteLink(linkId: String) async throws
+}
+
+public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, @unchecked Sendable {
     public static let shared = ShareLinkService()
     private let api: APIClientProviding
 
@@ -20,14 +30,33 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     // MARK: - User's Own Links (authenticated)
 
-    /// Liste les liens de partage créés par l'utilisateur connecté
+    /// Liste les liens de partage créés par l'utilisateur connecté, avec leur
+    /// conversation et leur configuration (`expand=conversation,policy`) : la
+    /// fiche d'un lien s'affiche depuis cette liste sans second appel.
     public func listMyLinks(offset: Int = 0, limit: Int = 50) async throws -> [MyShareLink] {
         let response: APIResponse<[MyShareLink]> = try await api.request(
             LinksEndpoint.root,
             queryItems: [URLQueryItem(name: "offset", value: String(offset)),
-                         URLQueryItem(name: "limit", value: String(limit))]
+                         URLQueryItem(name: "limit", value: String(limit)),
+                         URLQueryItem(name: "expand", value: "conversation,policy")]
         )
         return response.data
+    }
+
+    /// Visites, arrivées, langues et pays des arrivants d'UN lien.
+    public func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats {
+        let response: APIResponse<ShareLinkArrivalStats> = try await api.request(
+            LinksEndpoint.byLinkIdStats(linkId: linkId)
+        )
+        return response.data
+    }
+
+    /// Enregistre la configuration ENTIÈRE du lien (`PATCH /links/:linkId`).
+    public func updateLink(linkId: String, settings: ShareLinkSettings) async throws {
+        let _: APIResponse<EmptySuccess> = try await api.patch(
+            LinksEndpoint.byLinkId(linkId: linkId),
+            body: UpdateShareLinkRequest(settings: settings)
+        )
     }
 
     /// Stats globales pour les liens de l'utilisateur

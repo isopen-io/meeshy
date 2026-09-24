@@ -44,10 +44,13 @@ final class HardcodedStringsSweepTests: XCTestCase {
         "conversation.settings.slowmode.1min",
         "conversation.settings.slowmode.5min",
         "conversation.unread_messages",
-        "joinFlow.preview.expires",
-        "joinFlow.preview.invited_by",
-        "joinFlow.preview.languages",
-        "joinFlow.preview.uses",
+        // #7795 — l'aperçu du lien est devenu la page d'invitation : ses
+        // quatre clés balayées ont quitté l'écran ET le catalogue, leurs
+        // successeurs sont gardés ici.
+        "inviteLanding.inviter.invites",
+        "inviteLanding.terms.daysLeft",
+        "inviteLanding.terms.languagesLabel",
+        "inviteLanding.terms.places",
         "location.a11y.hint",
         "location.a11y.label",
         "location.shared",

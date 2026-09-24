@@ -38,7 +38,11 @@ final class ShareLinkServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/links")
-        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
+        XCTAssertEqual(mock.lastRequest?.queryItems, [
+            URLQueryItem(name: "offset", value: "0"),
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "expand", value: "conversation,policy")
+        ])
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
@@ -79,7 +83,11 @@ final class ShareLinkServiceTests: XCTestCase {
             requireAccount: false, requireNickname: false,
             requireEmail: false, requireBirthday: false,
             allowedLanguages: [],
-            conversation: ShareLinkConversation(id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date()),
+            guestRights: .schemaDefaults,
+            conversation: ShareLinkConversation(
+                id: "c1", title: "Chat", description: nil, type: "GROUP", createdAt: Date(),
+                avatar: nil, banner: nil
+            ),
             creator: ShareLinkCreator(id: "u1", username: "alice", firstName: nil, lastName: nil, displayName: "Alice", avatar: nil),
             stats: ShareLinkStats(totalParticipants: 10, memberCount: 8, anonymousCount: 2, languageCount: 3, spokenLanguages: ["fr", "en", "es"])
         )
@@ -128,6 +136,78 @@ final class ShareLinkServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.lastRequest?.endpoint, "/links/lk1")
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+    }
+
+    // MARK: - fetchLinkStats (#7797)
+
+    func test_fetchLinkStats_getsTheLinkStatsAddress() async throws {
+        let stats = ShareLinkArrivalStats(visits: 12, arrivals: 4, anonymousArrivals: 1)
+        mock.stub("/links/mshy_abc/stats", result: APIResponse<ShareLinkArrivalStats>(success: true, data: stats, error: nil))
+
+        let result = try await service.fetchLinkStats(linkId: "mshy_abc")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc/stats")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(result, stats)
+    }
+
+    func test_fetchLinkStats_notFound_propagatesSoTheDetailCanDegrade() async {
+        mock.stubError("/links/mshy_abc/stats", error: MeeshyError.server(statusCode: 404, message: "Not Found"))
+
+        do {
+            _ = try await service.fetchLinkStats(linkId: "mshy_abc")
+            XCTFail("Expected the 404 to propagate")
+        } catch let error as MeeshyError {
+            guard case .server(404, _) = error else { return XCTFail("Expected 404, got \(error)") }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(type(of: error))")
+        }
+    }
+
+    // MARK: - updateLink (#7797)
+
+    private func makeSettings(maxUses: Int? = nil, expiresAt: Date? = nil) -> ShareLinkSettings {
+        ShareLinkSettings(
+            name: "Nova — Discord",
+            description: "Viens !",
+            expiresAt: expiresAt,
+            maxUses: maxUses,
+            maxConcurrentUsers: 50,
+            requireAccount: false,
+            requireNickname: true,
+            requireEmail: false,
+            requireBirthday: false,
+            allowedLanguages: ["fr", "en"],
+            guestRights: ShareLinkGuestRights(messages: true, images: false, files: false, history: true)
+        )
+    }
+
+    func test_updateLink_patchesTheWholeSettings() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<EmptySuccess>(success: true, data: EmptySuccess(), error: nil))
+
+        try await service.updateLink(linkId: "mshy_abc", settings: makeSettings(maxUses: 10))
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(body["name"] as? String, "Nova — Discord")
+        XCTAssertEqual(body["description"] as? String, "Viens !")
+        XCTAssertEqual(body["maxUses"] as? Int, 10)
+        XCTAssertEqual(body["maxConcurrentUsers"] as? Int, 50)
+        XCTAssertEqual(body["allowedLanguages"] as? [String], ["fr", "en"])
+        XCTAssertEqual(body["allowAnonymousImages"] as? Bool, false)
+        XCTAssertEqual(body["allowViewHistory"] as? Bool, true)
+        XCTAssertEqual(body["requireNickname"] as? Bool, true)
+    }
+
+    func test_updateLink_liftedLimits_areSentAsExplicitNulls() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<EmptySuccess>(success: true, data: EmptySuccess(), error: nil))
+
+        try await service.updateLink(linkId: "mshy_abc", settings: makeSettings(maxUses: nil, expiresAt: nil))
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertTrue(body.keys.contains("maxUses"), "an omitted field leaves the old limit in place on the gateway")
+        XCTAssertTrue(body["maxUses"] is NSNull)
+        XCTAssertTrue(body["expiresAt"] is NSNull)
     }
 
     // MARK: - deleteLink

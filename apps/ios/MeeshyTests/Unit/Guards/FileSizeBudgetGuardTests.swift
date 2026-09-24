@@ -468,7 +468,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // budget — `FeedCommentsSheet.postPreview` (−71) et une lecture morte de
     // `colorScheme` dans `StoryViewerView` (−1) : le plafond reprend les 72
     // lignes dans le même lot.
-    private static let legacyLineCeiling = 52_072
+    //
+    // **52 062 depuis #7795.** `RootView` ne construit plus lui-même le choix
+    // d'un lien de partage : `ShareLinkEntryResolver.Resolution.landing(...)`
+    // le rend, et le `switch` de cinq cas devient une garde (−10) — le plafond
+    // reprend les 10 lignes dans le même lot.
+    private static let legacyLineCeiling = 52_062
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

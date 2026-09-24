@@ -180,7 +180,11 @@ struct MeeshyApp: App {
                                     isDeliberate: guestSession.isDeliberate
                                 )
                             },
-                            onDismiss: { dismissGuestSession() }
+                            onDismiss: { dismissGuestSession() },
+                            onAccountRequest: { entry in
+                                deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
+                                dismissGuestSession()
+                            }
                         )
                     }
                 }
@@ -673,6 +677,7 @@ struct MeeshyApp: App {
                     )
                     if isAuth {
                         activeGuestSession = nil
+                        deepLinkRouter.replayShareLinkAwaitingAccount()
                         // Re-arm every coordinator after a logout/login cycle.
                         // `start()` is idempotent-guarded, so without the
                         // matching `reset()` on the logout branch below the

@@ -76,19 +76,15 @@ extension iPadRootView {
                 return
             }
 
-            switch resolution.intent {
-            case .openConversation(let conversationId):
-                navigateToConversationById(conversationId)
-            case .chooseIdentity(let conversationId):
-                shareLinkChoice = ShareLinkIdentityChoice(
-                    identifier: identifier,
-                    conversationId: conversationId,
-                    conversationTitle: resolution.conversationTitle,
-                    resumesGuestSession: AnonymousSessionStore.load(linkId: identifier) != nil
-                )
-            case .joinWithAccount, .joinAnonymously, .resumeGuestSession, .requiresAccount:
-                joinViaShareLink(identifier: identifier)
+            if let landing = resolution.landing(identifier: identifier) {
+                shareLinkChoice = landing
+                return
             }
+            guard case .openConversation(let conversationId) = resolution.intent else {
+                joinViaShareLink(identifier: identifier)
+                return
+            }
+            navigateToConversationById(conversationId)
         }
     }
 
