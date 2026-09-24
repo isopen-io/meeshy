@@ -411,7 +411,9 @@ extension UniversalComposerBar {
         // mouvement qu'on subit, pas une information qu'on perd — le cadre de
         // tête reste celui que l'auteur emploie, donc rien ne manque.
         .onReceive(stickerRotationTimer) { _ in
-            guard !reduceMotion else { return }
+            // La barre entière se ré-évalue à chaque pas : on ne tourne que
+            // quand la pastille est À L'ÉCRAN.
+            guard !reduceMotion, actionSlot == .textSticker else { return }
             withAnimation(.easeInOut(duration: 0.28)) { stickerRotationStep += 1 }
         }
         // **Les dix cadres à mots, ouverts par un appui long sur la pastille**
