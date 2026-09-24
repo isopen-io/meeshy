@@ -5,7 +5,7 @@ import MeeshySDK
 
 // MARK: - Deep Link Destination (used by RootView openURL handler)
 
-enum DeepLinkDestination {
+enum DeepLinkDestination: Equatable {
     case ownProfile
     case userProfile(username: String)
     /// `draftText` porte le brouillon des surfaces widget / App Shortcut
@@ -33,6 +33,9 @@ enum DeepLinkDestination {
     case userLinks
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    /// Un réel NOMMÉ (`/reel/<id>`, `/reels?seed=<id>`, `meeshy://reel/<id>`) :
+    /// il s'ouvre dans le lecteur de réels, comme depuis le fil (#7805).
+    case reel(postId: String)
     case hashtag(tag: String)
     case external(URL)
 }
@@ -239,6 +242,9 @@ enum DeepLinkParser {
             if components.count >= 3, postSegments.contains(components[1]) {
                 return .postDetail(postId: components[2])
             }
+        case "reel":
+            // meeshy://reel/{postId} — miroir du lien universel `/reel/<id>`.
+            if components.count >= 2 { return .reel(postId: components[1]) }
         case "story", "stories", "s":
             // meeshy://story/{postId} (or meeshy://stories/{postId} or
             // meeshy://s/{postId}) — matches the canonical share URL the
@@ -287,8 +293,20 @@ enum DeepLinkParser {
             return .postDetail(postId: components[2])
         }
 
+        // https://meeshy.me/reels?seed=<id> — la porte du Flux web. Le CHEMIN
+        // `/reel/<id>` l'emporte quand les deux formes nomment un réel (miroir
+        // de `reelSeedOf`, `apps/web/src/lib/reels/thread.ts`).
+        if let seed = reelsSeed(components: components, url: url) {
+            return .reel(postId: seed)
+        }
+
         if components.count >= 2 {
             let head = components[0]
+            // Réel — `/reel/<id>`, l'adresse que la passerelle grave dans chaque
+            // partage de réel (`PostService.shareWithTrackingLink`).
+            if head == "reel" {
+                return .reel(postId: components[1])
+            }
             // User profile — `u` (canonical) and `users` (plural alias).
             if userSegments.contains(head) {
                 return .userProfile(username: components[1])
@@ -331,6 +349,15 @@ enum DeepLinkParser {
         return .external(url)
     }
 
+    /// `/reels?seed=<id>` — `nil` sans graine non vide : la liste nue des réels
+    /// n'est pas une destination nommée.
+    static func reelsSeed(components: [String], url: URL) -> String? {
+        guard components == ["reels"],
+              let seed = queryValue("seed", in: url)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !seed.isEmpty else { return nil }
+        return seed
+    }
+
     // MARK: - Share Query Parser
 
     private static func parseShareQuery(_ url: URL) -> DeepLinkDestination {
@@ -352,6 +379,8 @@ enum DeepLink: Equatable {
     case conversation(id: String)
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels (#7805).
+    case reel(postId: String)
     case userProfile(username: String)
     case ownProfile
     case userLinks
@@ -454,7 +483,8 @@ final class DeepLinkRouter: ObservableObject {
             // `targetId` est un ObjectId d'utilisateur, pas un pseudo — la
             // fabrique du SDK distingue les deux et laisse l'écran résoudre.
             case "PROFILE": return .userProfile(username: targetId)
-            case "REEL", "POST", "STATUS": return .postDetail(postId: targetId)
+            case "REEL": return .reel(postId: targetId)
+            case "POST", "STATUS": return .postDetail(postId: targetId)
             default: break
             }
         }
@@ -476,6 +506,7 @@ final class DeepLinkRouter: ObservableObject {
     static func destination(forOriginalURL url: URL) -> DeepLink? {
         switch DeepLinkParser.parse(url) {
         case .storyDetail(let id):        return .storyDetail(postId: id)
+        case .reel(let id):               return .reel(postId: id)
         case .postDetail(let id):         return .postDetail(postId: id)
         case .post(let id):               return .postDetail(postId: id)
         case .conversation(let id, _):    return .conversation(id: id)
@@ -562,6 +593,19 @@ final class DeepLinkRouter: ObservableObject {
         case "hashtag":
             guard let tag = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .hashtag(tag: tag)
+            return true
+
+        case "reel":
+            // `/reel/{postId}` — le partage d'un réel (#7805).
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .reel(postId: postId)
+            return true
+
+        case "reels":
+            // `/reels?seed={postId}` — la porte du Flux web. Sans graine, la
+            // liste nue n'est pas revendiquée.
+            guard let seed = DeepLinkParser.reelsSeed(components: pathComponents, url: url) else { return false }
+            pendingDeepLink = .reel(postId: seed)
             return true
 
         case "feeds":
@@ -737,6 +781,12 @@ final class DeepLinkRouter: ObservableObject {
                   DeepLinkParser.isPostSegment(pathComponents[0]) else { return false }
             guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "reel":
+            // meeshy://reel/{postId} — miroir du lien universel `/reel/<id>`.
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .reel(postId: postId)
             return true
 
         case "story", "stories", "s":

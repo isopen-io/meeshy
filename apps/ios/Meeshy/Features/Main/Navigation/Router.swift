@@ -474,13 +474,15 @@ final class Router: ObservableObject {
                 push(.postDetail(postId))
 
             case .storyDetail(let postId):
-                // In-app `Link` taps land here. Unlike the cold-launch path
-                // (RootView.handleDeepLink) we don't have access to the
-                // local story tray from this scope, so we route to
-                // PostDetailView — the universal fallback that renders any
-                // post including stories. The viewer-preferred path stays
-                // reserved for cold launch / push notification dispatch.
-                push(.postDetail(postId))
+                // Un lien tapé dans l'app prend la voie du lancement système :
+                // la racine ouvre le lecteur sur CETTE story par `StoryDoor`,
+                // comme le même lien reçu de l'extérieur (#7808).
+                DeepLinkRouter.shared.pendingDeepLink = .storyDetail(postId: postId)
+
+            case .reel(let postId):
+                // Même voie que le lancement système : la racine ouvre le
+                // réel par `ReelDoor`, dans le lecteur de réels (#7805).
+                DeepLinkRouter.shared.pendingDeepLink = .reel(postId: postId)
 
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
