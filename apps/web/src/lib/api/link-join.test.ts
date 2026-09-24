@@ -89,17 +89,25 @@ const poisonedPreview = () => ({
   currentUser: { id: 'u2', displayName: SECRET_MEMBER },
 });
 
-describe('decodeLinkInvitation — une invitation, et rien de la conversation', () => {
-  test('rend EXACTEMENT ce que l’écran affiche : qui invite, le titre, le type, le droit de lecture', () => {
+describe('decodeLinkInvitation — une invitation, et rien de ce qui IDENTIFIE un membre', () => {
+  test('rend ce que la page d’accueil affiche : qui invite, son message, le groupe, les chiffres, la porte', () => {
     expect(decodeLinkInvitation(servedPreview())).toEqual({
+      linkId: 'mshy_equipe_7f3a',
       title: 'Équipe déploiement',
       kind: 'group',
-      inviter: { name: 'Awa D.', avatar: '2026/09/awa/photo.png' },
+      inviter: { name: 'Awa D.', username: 'awa', avatar: '2026/09/awa/photo.png' },
+      message: 'Rejoignez-nous',
+      group: { description: 'Nos échanges internes', createdAt: '2026-09-01T10:00:00.000Z', avatar: null, banner: null },
+      stats: {
+        people: 14,
+        languages: [
+          { code: 'fr', count: null },
+          { code: 'en', count: null },
+          { code: 'wo', count: null },
+        ],
+      },
+      limits: { expiresAt: null, maxUses: 50, currentUses: 12 },
       readsHistory: true,
-      /* Les CONDITIONS de la porte anonyme (#5561) — ce que l'écran doit
-         connaître avant d'offrir quoi que ce soit. Rien de la conversation :
-         ni compteur, ni membre, ni langue PARLÉE (`stats.spokenLanguages`),
-         seulement les langues que le lien ACCEPTE. */
       guest: {
         allowed: true,
         nicknameRequired: true,
@@ -107,18 +115,77 @@ describe('decodeLinkInvitation — une invitation, et rien de la conversation', 
         birthdayRequired: false,
         languages: ['fr'],
         mayWrite: true,
+        mayImages: true,
+        mayFiles: false,
       },
     });
   });
 
-  test('une charge qui porte messages, membres et invités : le décodeur les JETTE', () => {
+  test('une charge qui porte messages, membres et invités : le décodeur les JETTE, identifiants compris', () => {
     const decoded = decodeLinkInvitation(poisonedPreview());
     expect(decoded).not.toBeNull();
-    expect(Object.keys(decoded ?? {}).sort()).toEqual(['guest', 'inviter', 'kind', 'readsHistory', 'title']);
+    expect(Object.keys(decoded ?? {}).sort()).toEqual(['group', 'guest', 'inviter', 'kind', 'limits', 'linkId', 'message', 'readsHistory', 'stats', 'title']);
     const carried = JSON.stringify(decoded);
-    for (const secret of [SECRET_MESSAGE, SECRET_MEMBER, SECRET_GUEST, CONVERSATION_ID, 'Nos échanges internes', 'wo', 'bruno']) {
+    for (const secret of [SECRET_MESSAGE, SECRET_MEMBER, SECRET_GUEST, CONVERSATION_ID, 'bruno', '64f1c2a9e8b7d6c5b4a39283']) {
       expect({ secret, carried: carried.includes(secret) }).toEqual({ secret, carried: false });
     }
+  });
+
+  test('logo et bannière du groupe passent quand la passerelle les sert, et restent nuls sinon', () => {
+    const base = servedPreview();
+    const decoded = decodeLinkInvitation({ ...base, conversation: { ...base.conversation, avatar: 'g/logo.png', banner: 'g/banniere.jpg' } });
+    expect(decoded?.group.avatar).toBe('g/logo.png');
+    expect(decoded?.group.banner).toBe('g/banniere.jpg');
+    expect(decodeLinkInvitation({ ...base, conversation: { ...base.conversation, avatar: '  ', banner: null } })?.group).toEqual({
+      description: 'Nos échanges internes',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      avatar: null,
+      banner: null,
+    });
+  });
+
+  test('un message d’invitation vide ou une date illisible ne s’affichent pas', () => {
+    const base = servedPreview();
+    const decoded = decodeLinkInvitation({ ...base, description: '   ', conversation: { ...base.conversation, createdAt: 'hier' } });
+    expect(decoded?.message).toBeNull();
+    expect(decoded?.group.createdAt).toBeNull();
+  });
+
+  test('les langues parlées : codes dédoublonnés et normalisés, et des COMPTES quand la passerelle en sert', () => {
+    const base = servedPreview();
+    expect(decodeLinkInvitation({ ...base, stats: { ...base.stats, spokenLanguages: ['FR', 'fr', ' en ', ''] } })?.stats.languages).toEqual([
+      { code: 'fr', count: null },
+      { code: 'en', count: null },
+    ]);
+    const counted = decodeLinkInvitation({
+      ...base,
+      stats: { ...base.stats, spokenLanguages: [{ language: 'es', count: 3 }, { language: 'ko', count: 7 }, { language: 'xx', count: -1 }] },
+    });
+    expect(counted?.stats.languages).toEqual([
+      { code: 'ko', count: 7 },
+      { code: 'es', count: 3 },
+    ]);
+  });
+
+  test('sans statistiques servies, les chiffres sont INCONNUS, jamais zéro', () => {
+    const { stats: _stats, ...base } = servedPreview();
+    expect(decodeLinkInvitation(base)?.stats).toEqual({ people: null, languages: [] });
+  });
+
+  test('les limites : utilisations et expiration telles que servies, un compteur illisible vaut zéro', () => {
+    const base = servedPreview();
+    expect(decodeLinkInvitation({ ...base, expiresAt: '2026-10-01T00:00:00.000Z', maxUses: null, currentUses: null })?.limits).toEqual({
+      expiresAt: '2026-10-01T00:00:00.000Z',
+      maxUses: null,
+      currentUses: 0,
+    });
+  });
+
+  test('une permission ABSENTE est refusée : images et fichiers ne se promettent pas', () => {
+    const { allowAnonymousImages: _images, allowAnonymousFiles: _files, ...base } = servedPreview();
+    const guest = decodeLinkInvitation(base)?.guest;
+    expect(guest?.mayImages).toBe(false);
+    expect(guest?.mayFiles).toBe(false);
   });
 
   test('le nom de l’invitant suit `ShareLinkCreator.name` d’iOS : affiché, puis prénom nom, puis pseudo', () => {
@@ -287,6 +354,8 @@ const TERMS: GuestTerms = {
   birthdayRequired: false,
   languages: [],
   mayWrite: true,
+  mayImages: true,
+  mayFiles: false,
 };
 
 const draft = (partial: Partial<GuestDraft> = {}): GuestDraft => ({

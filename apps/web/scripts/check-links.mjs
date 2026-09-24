@@ -24,9 +24,11 @@
  *     « Inactif » écrit sur les trois liens inactifs ;
  *  4. « copier » met `https://meeshy.me/chat/<identifiant>` dans le presse-papiers
  *     (l'origine PUBLIQUE, jamais celle de la page) et le dit, visiblement ;
- *  5. le détail : « Désactiver » se lit AU GESTE (moins de 500 ms), la liste le
- *     relit, « Activer » le rend ; un lien dont la conversation est fermée n'offre
- *     aucune des deux et dit pourquoi ; un linkId inconnu rend le refus ;
+ *  5. le détail (la page du créateur, #7797) : la carte du lien, ses
+ *     statistiques et sa configuration se lisent ; « Désactiver » se lit AU
+ *     GESTE (moins de 500 ms), la liste le relit, « Activer » le rend ; un lien
+ *     dont la conversation est fermée n'offre aucune des deux et dit pourquoi ;
+ *     « Enregistrer » change la page au geste ; un linkId inconnu rend le refus ;
  *  6. la création : pas de slug, bouton désactivé tant qu'aucune conversation
  *     n'est choisie, aucun DM proposé, « compte requis » éteint ses voisins, une
  *     limite hors bornes se refuse SOUS son champ, puis le lien créé REMPLACE
@@ -225,27 +227,47 @@ try {
       await page.waitForURL(`**/links/share/${DEPLOIEMENT}`);
       await page.waitForSelector('[data-share-link-hero]');
       check((await textOf(page, 'header h1')) === 'Invitation de l’équipe', `${label} : le détail porte le nom du lien`);
-      check(JSON.stringify(await actionsOf(page)) === JSON.stringify(['copy', 'share', 'disable']), `${label} : Copier, Partager, Désactiver — et pas « Supprimer »`);
-      check((await textOf(page, '[data-share-link-url]')) === `${PUBLIC_ORIGIN}/chat/equipe-deploiement`, `${label} : l'adresse du lien se lit`);
-      check((await textOf(page, '[data-share-link-stat="uses"] strong')) === '12' && (await textOf(page, '[data-share-link-stat="max"] strong')) === '50', `${label} : utilisations et maximum`);
       check(
-        JSON.stringify(await page.$$eval('[data-share-link-info]', (els) => els.map((el) => el.getAttribute('data-share-link-info')))) === JSON.stringify(['identifier', 'created']),
-        `${label} : identifiant et création, sans expiration inventée`,
+        JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy', 'disable', 'delete']),
+        `${label} : Partager et Copier le lien sur la carte, Désactiver et Supprimer sous l'édition (#7797) — ${JSON.stringify(await actionsOf(page))}`,
       );
+      check((await textOf(page, '[data-share-link-url]')) === 'meeshy.me/chat/equipe-deploiement', `${label} : l'adresse du lien se lit, sans protocole`);
+      check((await textOf(page, '[data-share-link-stat="arrivals"] strong')) === '412', `${label} : les arrivées servies se lisent`);
+      check((await textOf(page, '[data-share-link-config="uses"] dd')) === '12 / 50', `${label} : utilisations et maximum dans la configuration`);
+      check((await textOf(page, '[data-share-link-config="expires"] dd')) === 'Jamais', `${label} : aucune expiration inventée`);
+      check((await page.$$('[data-share-link-arrival]')).length === 3, `${label} : les trois derniers arrivés`);
       await capture(page, `detail-${slug}`);
-      assertReach(label, 'le détail', await reachAtRest(page, { controls: 'header a, [data-share-link-action]', texts: 'header h1, [data-share-link-title], [data-share-link-status], [data-share-link-url]' }), {
-        controls: 3,
-        texts: 4,
-      });
+      assertReach(
+        label,
+        'le détail',
+        await reachAtRest(page, {
+          controls: 'header a, [data-share-link-hero] [data-share-link-action]',
+          texts: 'header h1, [data-share-link-conversation], [data-share-link-status], [data-share-link-url]',
+        }),
+        { controls: 3, texts: 4 },
+      );
       await assertInks(label, 'le détail', page, {
-        titre: '[data-share-link-title]',
-        etat: '[data-share-link-status]',
         conversation: '[data-share-link-hero] [data-share-link-conversation]',
+        etat: '[data-share-link-status]',
         adresse: '[data-share-link-url]',
-        action: '[data-share-link-action="copy"] .text-chip',
-        'information, libellé': '[data-share-link-info="identifier"] dt',
-        'information, valeur': '[data-share-link-info="identifier"] dd',
+        partager: '[data-share-link-action="share"]',
+        copier: '[data-share-link-action="copy"]',
+        tuile: '[data-share-link-stat="visits"] strong',
+        'tuile sans compte': '[data-share-link-stat="anonymous"] span',
+        'configuration, libellé': '[data-share-link-config="uses"] dt',
+        'configuration, valeur': '[data-share-link-config="uses"] dd',
       });
+
+      /* ENREGISTRER EST OPTIMISTE (#7797) : le nom change dans la configuration
+         AU GESTE, puis l'enregistrement s'annonce. Le nom est remis ensuite pour
+         que la suite du parcours relise le lien d'origine. */
+      await page.fill('#link-edit-message', 'Message du gate');
+      await page.click('[data-share-link-save]');
+      const savedAtOnce = await page
+        .waitForFunction(() => document.querySelector('[data-share-link-message]')?.textContent?.includes('Message du gate') === true, null, { timeout: 500 })
+        .then(() => true, () => false);
+      check(savedAtOnce, `${label} : « Enregistrer » change la carte AU GESTE`);
+      check(await announced(page, 'Modifications enregistrées.'), `${label} : l'enregistrement s'annonce`);
 
       /* UN DOUBLE TAP (#6417) : « Désactiver » devient « Activer » au premier
          tap, À LA MÊME PLACE ; le second tap, 120 ms plus tard, ne doit pas le
@@ -286,7 +308,7 @@ try {
       // ------------------------------------------------ 5. conversation fermée, lien inconnu
       await page.goto(`${BASE}/links/share/${SALON}`, { waitUntil: 'load' });
       await page.waitForSelector('[data-share-link-hero]');
-      check(JSON.stringify(await actionsOf(page)) === JSON.stringify(['copy', 'share']), `${label} : conversation fermée, ni « Activer » ni « Désactiver »`);
+      check(JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy', 'delete']), `${label} : conversation fermée, ni « Activer » ni « Désactiver »`);
       check((await textOf(page, '[data-share-link-reason]')) === 'La conversation est fermée : ce lien ne permet plus d’entrer.', `${label} : et la cause se lit`);
       await page.goto(`${BASE}/links/share/mshy_inconnu`, { waitUntil: 'load' });
       await page.waitForSelector('[data-share-link-refused]');
@@ -343,8 +365,8 @@ try {
       await page.waitForURL(/\/links\/share\/mshy_recette_\d+$/);
       await page.waitForSelector('[data-share-link-hero]');
       check((await textOf(page, 'header h1')) === 'Recette du gate', `${label} : le lien créé REMPLACE l'écran de création`);
-      check((await textOf(page, '[data-share-link-stat="max"] strong')) === '25', `${label} : avec sa limite`);
-      check((await page.$('[data-share-link-info="expires"]')) !== null, `${label} : et son expiration`);
+      check((await textOf(page, '[data-share-link-config="uses"] dd')) === '0 / 25', `${label} : avec sa limite`);
+      check(((await textOf(page, '[data-share-link-config="expires"] dd')) ?? 'Jamais') !== 'Jamais', `${label} : et son expiration`);
       await capture(page, `cree-${slug}`);
       await page.goBack();
       await page.waitForURL('**/links/share');

@@ -928,6 +928,7 @@ const es = {
   'story.save.offline': 'Sin conexión — inténtalo de nuevo cuando vuelva la red.',
   'story.save.refused': 'Inicia sesión para guardar esta historia.',
   'story.save.missing': 'Este contenido ya no está disponible.',
+  'story.save.retry': 'Inténtalo de nuevo — toca Guardar otra vez.',
   'prism.translated.message': 'Mensaje traducido',
   'prism.translated.comment': 'Comentario traducido',
   'prism.translated.post': 'Publicación traducida',

@@ -367,9 +367,9 @@
     "share_link_detail": {
       "pattern": "^assets/share-link-[A-Za-z0-9_-]{8}\\.js$",
       "kb": {
-        "value": 3,
-        "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
-        "source": "Mesure du 2026-09-14 : 1 073 o gzip -9 pour assets/share-link-<hash>.js -- l'ECRAN du detail d'un lien (routes/share-link.tsx). Le motif exige HUIT caracteres apres share-link- : il exclut share-link-new- et share-link-eligibility-. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+        "value": 10,
+        "status": "CIBLE -- MESUREE PAR #7797, NON ARBITREE",
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9, zlib) : 8 237 o pour assets/share-link-<hash>.js -- la PAGE DU CREATEUR refondue par #7797 (routes/share-link.tsx, share-link-detail-parts.tsx, share-link-edit.tsx : carte, tuiles, arrivees, configuration, edition complete, confirmation de suppression), contre 1 073 o pour l ancien detail (#6361). Le motif exige HUIT caracteres apres share-link- : il exclut share-link-new-, share-link-form- et share-link-eligibility-. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
       }
     },
     "share_link_create": {
@@ -427,6 +427,23 @@
         "value": 10,
         "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
         "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+      }
+    },
+    "chat_join": {
+      "pattern": "^assets/chat-join-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 11,
+        "status": "CIBLE -- MESUREE PAR #7796, NON ARBITREE",
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9, zlib) : 9 379 o pour assets/chat-join-<hash>.js -- la page d accueil d invitation (routes/chat-join.tsx, chat-join-parts.tsx, chat-join-guest.tsx, port link-join.ts). La barre des langues (language-share-bar-, 1,3 Ko) est partagee avec la page du createur. Arrondi au Ko SUPERIEUR (10) + 1 Ko de marge."
+      }
+    },
+    "interface_catalogs_invite": {
+      "pattern": "^assets/catalog-invite-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 20,
+        "status": "CIBLE -- MESUREE PAR #7796/#7797, NON ARBITREE",
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9, zlib) : 19 195 o pour les SEPT catalogues des invitations (invite.* et linkDetail.*, 171 cles), de 2,49 Ko (en) a 2,99 Ko (ar). Charges avec /chat/:link et /links/share/:link seulement ; un lecteur n en telecharge qu UN (~2,7 Ko). Arrondi au Ko SUPERIEUR (19) + 1 Ko de marge."
       }
     }
   },

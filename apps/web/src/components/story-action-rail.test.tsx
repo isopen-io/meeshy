@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { resolveStoryActionRailPlan, type StoryActionRailInputs } from '@/lib/stories/action-rail';
+import { GLYPHS } from '@/components/glyphs';
 
 import { StoryActionRail, type StoryActionRailHandlers } from './story-action-rail';
 
@@ -118,6 +119,27 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     expect(plan.showsViews).toBe(true);
     const host = await monter({ plan, language: 'fr', handlers: TOUS });
     expect(actions(host)).toContain('views');
+  });
+
+  test('« Enregistrer » porte le tracé « télécharger », pas « archiver » (revue #7116)', async () => {
+    /* Mesuré le 2026-09-24 : `downloadSimple` rejoint le socle (`glyphs.ts`,
+       déjà importé pour `archive`/`eye`/`translate`) SANS faire bouger
+       `story_reader` — GLYPHS y est une table PARTAGÉE (chunk `glyph-*.js`),
+       jamais dupliquée dans ce chunk (`node scripts/measure-weight.mjs` :
+       10,93 Ko avant et après, plafond 11 Ko inchangé). Le miroir de
+       `square.and.arrow.down.fill` (iOS, `StoryViewerView+Sidebar.swift:788-795`)
+       n'avait donc pas de coût à arbitrer — `archive` restait un FAUX AMI
+       sémantique (dimension 6) sans même la justification du poids. */
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })),
+      language: 'fr',
+      handlers: TOUS,
+    });
+    const trace = host.querySelector('[data-story-action="save"] svg path')?.getAttribute('d');
+    const traceAttendu = /d="([^"]+)"/.exec(GLYPHS.downloadSimple.body)?.[1];
+    const traceArchive = /d="([^"]+)"/.exec(GLYPHS.archive.body)?.[1];
+    expect(trace).toBe(traceAttendu);
+    expect(trace).not.toBe(traceArchive);
   });
 
   test('un rail sans AUCUN bouton atteignable ne peint pas de barre vide', async () => {

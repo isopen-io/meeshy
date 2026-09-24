@@ -16,12 +16,26 @@ import { hasFileDeliveryDoor, type FileDeliveryHost } from './file-delivery-host
  * pas une annulation (typiquement `NotAllowedError` : l'activation du geste a
  * expiré pendant le téléchargement).
  *
- * **TROIS ISSUES, jamais deux** (revue #7116) : `delivered`, `cancelled`
- * (l'utilisateur a fermé la feuille — une décision) et `unavailable` (aucune
- * porte n'a abouti). Le premier jet rendait `cancelled` dans ce dernier cas, et
- * le lecteur annonçait « Export annulé » pour un échec.
+ * **QUATRE ISSUES, jamais trois** (revue #7116, deux passes) : `delivered`,
+ * `cancelled` (l'utilisateur a fermé la feuille — une décision) et
+ * `unavailable` (aucune porte n'a abouti). Le premier jet rendait `cancelled`
+ * dans ce dernier cas, et le lecteur annonçait « Export annulé » pour un
+ * échec.
+ *
+ * **`expired` REJOINT à la revue suivante** — une coque (pas d'ancre
+ * `<a download>`, mesuré : ni `@capacitor/android` ni `@capacitor/ios` 8.5.1
+ * ne branchent le téléchargement de leur WebView) dont la SEULE porte est le
+ * partage de fichier peut voir `navigator.share` refuser par
+ * `NotAllowedError` — l'activation du geste a expiré PENDANT le
+ * téléchargement, qui se place entre le tap et l'appel. Un navigateur avec
+ * ancre ne voit jamais cette issue : l'ancre ne dépend d'aucune activation, et
+ * `shareFile` refusé y retombe toujours sur `downloadThroughAnchor`. Sans
+ * ancre, rien ne peut réparer CE geste — mais rien ne dit que le SUIVANT
+ * échouera : le prochain tap sur « Enregistrer » est une activation FRAÎCHE.
+ * `unavailable` annoncerait un échec définitif ; `expired` dit au lecteur
+ * « retapez », ce qui est vrai et ce que `unavailable` ne peut pas dire.
  */
-export type DeliverFileOutcome = 'delivered' | 'cancelled' | 'unavailable';
+export type DeliverFileOutcome = 'delivered' | 'cancelled' | 'unavailable' | 'expired';
 
 export type FileDeliveryPortal = {
   readonly deliver: (blob: Blob, fileName: string, mimeType: string) => Promise<DeliverFileOutcome>;
@@ -43,13 +57,19 @@ function downloadThroughAnchor(
   return 'delivered';
 }
 
-async function shareFile(host: FileDeliveryHost, file: File): Promise<DeliverFileOutcome | 'refused'> {
+/** `refused` — aucune porte, ou un refus qui n'est ni une annulation ni une
+ * expiration d'activation : ces deux-là se disent au lecteur (`cancelled`,
+ * `expired`), `refused` seul retombe sur l'ancre quand elle existe. */
+async function shareFile(host: FileDeliveryHost, file: File): Promise<'delivered' | 'cancelled' | 'expired' | 'refused'> {
   if (host.canShareFiles === undefined || host.shareFiles === undefined || !host.canShareFiles({ files: [file] })) return 'refused';
   try {
     await host.shareFiles({ files: [file] });
     return 'delivered';
   } catch (error) {
-    return error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'refused';
+    if (!(error instanceof Error)) return 'refused';
+    if (error.name === 'AbortError') return 'cancelled';
+    if (error.name === 'NotAllowedError') return 'expired';
+    return 'refused';
   }
 }
 
@@ -61,8 +81,11 @@ export function fileDeliveryPortal(host: FileDeliveryHost): FileDeliveryPortal |
   return {
     deliver: async (blob, fileName, mimeType) => {
       const shared = await shareFile(host, new File([blob], fileName, { type: mimeType }));
-      if (shared !== 'refused') return shared;
-      return anchor === null ? 'unavailable' : downloadThroughAnchor(anchor, blob, fileName);
+      if (shared === 'delivered' || shared === 'cancelled') return shared;
+      if (anchor !== null) return downloadThroughAnchor(anchor, blob, fileName);
+      /* Pas d'ancre : `refused` n'a plus de recours, `expired` n'en a jamais
+         eu — mais dire lequel change ce que le lecteur ENTEND (doc ci-dessus). */
+      return shared === 'expired' ? 'expired' : 'unavailable';
     },
   };
 }

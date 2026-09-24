@@ -5,7 +5,7 @@ import MeeshySDK
 
 // MARK: - Deep Link Destination (used by RootView openURL handler)
 
-enum DeepLinkDestination {
+enum DeepLinkDestination: Equatable {
     case ownProfile
     case userProfile(username: String)
     /// `draftText` porte le brouillon des surfaces widget / App Shortcut
@@ -33,6 +33,15 @@ enum DeepLinkDestination {
     case userLinks
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    /// Un réel NOMMÉ (`/reel/<id>`, `/reels?seed=<id>`, `meeshy://reel/<id>`) :
+    /// il s'ouvre dans le lecteur de réels, comme depuis le fil (#7805).
+    case reel(postId: String)
+    /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`) (#7811).
+    case community(id: String)
+    /// `meeshy://conversations/recent` — widget et App Shortcut (#7811).
+    case recentConversation
+    /// `meeshy://conversations/unread` — widgets « Non lus » (#7811).
+    case unreadConversations
     case hashtag(tag: String)
     case external(URL)
 }
@@ -124,7 +133,7 @@ enum DeepLinkParser {
     ///
     /// Everything else -> `.external` (caller opens in Safari).
     static func parse(_ url: URL) -> DeepLinkDestination {
-        if url.scheme == "meeshy" {
+        if url.scheme?.lowercased() == "meeshy" {
             return parseCustomScheme(url)
         }
 
@@ -160,175 +169,118 @@ enum DeepLinkParser {
 
     // MARK: - Private
 
+    // meeshy://me -> host="me", path="" ; meeshy://u/atabeth -> host="u",
+    // path="/atabeth". Le host est normalisé en minuscules : `meeshy://Join/X`
+    // (majuscule posée par un clavier) route comme `meeshy://join/X`.
     private static func parseCustomScheme(_ url: URL) -> DeepLinkDestination {
-        // meeshy://me -> host="me", path=""
-        // meeshy://u/atabeth -> host="u", path="/atabeth"
-        // meeshy://auth/magic-link?token=xxx -> host="auth", path="/magic-link"
-        let host = url.host ?? ""
-        let pathSegments = url.pathComponents.filter { $0 != "/" }
-        let components = host.isEmpty ? pathSegments : [host] + pathSegments
-
-        guard let first = components.first else { return .external(url) }
-
-        switch first {
-        case "me":
-            return .ownProfile
-        case "links":
-            return .userLinks
-        case "share":
-            return parseShareQuery(url)
-        case "auth":
-            if components.count >= 2, components[1] == "magic-link",
-               let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-               let token = queryItems.first(where: { $0.name == "token" })?.value {
-                return .magicLink(token: token)
-            }
-        case "u", "users":
-            // meeshy://u/{username} (or meeshy://users/{username}).
-            if components.count >= 2 { return .userProfile(username: components[1]) }
-        case "hashtag":
-            // meeshy://hashtag/{tag}.
-            if components.count >= 2, !components[1].isEmpty { return .hashtag(tag: components[1]) }
-        case "join":
-            // meeshy://join/{linkId} — conversation invitation share link.
-            if components.count >= 2 { return .joinLink(identifier: components[1]) }
-        case "l":
-            // meeshy://l/{token} — tracked share link (post/reel/story/invitation).
-            // Resolved async by targetType; NOT assumed to be a conversation join.
-            if components.count >= 2 { return .trackedLink(token: components[1]) }
-        case "chat":
-            // meeshy://chat/{linkId} — direct chat share link (web fallback
-            // redirect emits this from /chat/[id]).
-            if components.count >= 2 { return .chatLink(identifier: components[1]) }
-        case "c", "conversation":
-            if components.count >= 2 { return .conversation(id: components[1], draftText: nil) }
-        case "contact":
-            // meeshy://contact/{id} — ligne du widget Favoris. L'identifiant
-            // est celui d'une CONVERSATION, pas d'un utilisateur :
-            // `WidgetDataManager.publishFavoriteContacts` écrit `conv.id` dans
-            // `FavoriteContact.id`. Le nom du host décrit ce que la ligne
-            // MONTRE, pas ce qu'elle porte.
-            if components.count >= 2 { return .conversation(id: components[1], draftText: nil) }
-        case "quickreply":
-            // meeshy://quickreply/{conversationId}?text=… — boutons du widget
-            // Réponse rapide. Le texte voyage DANS la destination pour que la
-            // voie in-app (`Router.handleConversationDeepLink`) le dépose en
-            // brouillon comme la voie système (`DeepLinkRouter.handleCustomScheme`)
-            // le fait déjà — sans lui, le tap in-app ouvrait la conversation vide.
-            if components.count >= 2 {
-                return .conversation(id: components[1], draftText: queryValue("text", in: url))
-            }
-        case "send":
-            // meeshy://send?contactId=…&message=… — App Shortcut « Send
-            // Message ». `ContactEntity.id` provient de la même clé App Group
-            // `favorite_contacts` que le widget : c'est donc, là aussi, un
-            // identifiant de conversation. `message` est le brouillon dicté à
-            // Siri — déposé, jamais envoyé sans confirmation.
-            if let conversationId = queryValue("contactId", in: url) {
-                return .conversation(id: conversationId, draftText: queryValue("message", in: url))
-            }
-        case "post", "p":
-            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
-            // shortcut to a post detail view.
-            if components.count >= 2 { return .postDetail(postId: components[1]) }
-        case "feeds":
-            // meeshy://feeds/post/{postId} — mirror of the web Universal Link
-            // path so the custom scheme accepts the same shape as the
-            // production URL recipients see in clipboards / email previews.
-            // `feeds/p/{postId}` is accepted as a short alias.
-            if components.count >= 3, postSegments.contains(components[1]) {
-                return .postDetail(postId: components[2])
-            }
-        case "story", "stories", "s":
-            // meeshy://story/{postId} (or meeshy://stories/{postId} or
-            // meeshy://s/{postId}) — matches the canonical share URL the
-            // iOS app already mints (`https://meeshy.me/story/<postId>`).
-            // Stories carry a `postId` because they live in the `Post`
-            // table with `type: STORY`.
-            if components.count >= 2 { return .storyDetail(postId: components[1]) }
-        default:
-            break
-        }
-
-        return .external(url)
+        let host = (url.host ?? "").lowercased()
+        let path = segments(of: url)
+        let components = host.isEmpty ? path : [host] + path
+        return destination(for: components, url: url, customScheme: true) ?? .external(url)
     }
 
+    // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari.
     private static func parseMeeshyWeb(_ url: URL) -> DeepLinkDestination {
-        let components = url.pathComponents.filter { $0 != "/" }
+        destination(for: segments(of: url), url: url, customScheme: false) ?? .external(url)
+    }
 
-        if components.first == "me" {
-            return .ownProfile
-        }
+    /// Segments de chemin sans vide ni `/` : `//join/X` et `/./join/X` ont la
+    /// forme de `/join/X`.
+    private static func segments(of url: URL) -> [String] {
+        url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
+    }
 
-        if components.first == "links" {
-            return .userLinks
-        }
+    /// Le segment `index`, s'il nomme quelque chose. Un identifiant vide ou
+    /// blanc (`/join/%20`, `/c//`) n'ouvre RIEN : il échouerait côté serveur en
+    /// 404 opaque, et le refuser tôt laisse le système rendre le lien à Safari.
+    private static func identifier(_ components: [String], _ index: Int) -> String? {
+        guard components.indices.contains(index) else { return nil }
+        let trimmed = components[index].trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
-        // https://meeshy.me/share?text=...&url=...
-        if components.first == "share" {
-            return parseShareQuery(url)
-        }
-
-        // https://meeshy.me/auth/magic-link?token=xxx
-        if components.count >= 2, components[0] == "auth", components[1] == "magic-link",
-           let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
-           let token = queryItems.first(where: { $0.name == "token" })?.value {
+    /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
+    /// schéma `meeshy://`. Les surfaces propres aux widgets et aux App
+    /// Shortcuts (`contact`, `quickreply`, `send`, `conversations`) ne sont
+    /// lues que sous `meeshy://` — l'AASA ne les revendique pas sur le web.
+    private static func destination(for components: [String], url: URL,
+                                     customScheme: Bool) -> DeepLinkDestination? {
+        guard let head = components.first else { return nil }
+        let id = identifier(components, 1)
+        switch head {
+        case "me": return .ownProfile
+        case "links": return .userLinks
+        case "share": return parseShareQuery(url)
+        case "auth":
+            // `/auth/magic-link?token=…` ou `/auth/magic-link/<token>`.
+            guard id == "magic-link",
+                  let token = identifier(components, 2) ?? queryValue("token", in: url) else { return nil }
             return .magicLink(token: token)
+        case "hashtag": return id.map { .hashtag(tag: $0) }
+        // Invitation de conversation — `/join/<id>` (canonique).
+        case "join": return id.map { .joinLink(identifier: $0) }
+        // Lien de suivi — `/l/<token>` (post, réel, story, invitation), résolu
+        // en asynchrone par `targetType`, jamais présumé être une jointure.
+        case "l": return id.map { .trackedLink(token: $0) }
+        // Lien de discussion partagé — `/chat/<id>`.
+        case "chat": return id.map { .chatLink(identifier: $0) }
+        case "c", "conversation": return id.map { .conversation(id: $0, draftText: nil) }
+        // Réel — `/reel/<id>`, l'adresse que la passerelle grave dans chaque
+        // partage de réel ; `/reels?seed=<id>`, la porte du Flux web (#7805).
+        case "reel": return id.map { .reel(postId: $0) }
+        case "reels": return reelsSeed(components: components, url: url).map { .reel(postId: $0) }
+        // Communauté — `/communities/<id>` ; `/communities/new` est l'écran de
+        // création du web, pas une communauté (#7811).
+        case "community", "communities": return id.flatMap(communityIdentifier).map { .community(id: $0) }
+        // `/feeds/post/<id>` — l'URL de partage canonique d'un post ;
+        // `/feeds/p/<id>` en est l'alias court.
+        case "feeds":
+            guard let keyword = id, isPostSegment(keyword) else { return nil }
+            return identifier(components, 2).map { .postDetail(postId: $0) }
+        // Ligne du widget Favoris : l'identifiant est celui d'une CONVERSATION
+        // (`WidgetDataManager.publishFavoriteContacts` écrit `conv.id`).
+        case "contact" where customScheme: return id.map { .conversation(id: $0, draftText: nil) }
+        // Widget Réponse rapide : le texte voyage dans la destination, pour être
+        // DÉPOSÉ en brouillon — jamais envoyé sans confirmation.
+        case "quickreply" where customScheme:
+            return id.map { .conversation(id: $0, draftText: queryValue("text", in: url)) }
+        // App Shortcut « Send Message » : `contactId` est un identifiant de
+        // conversation (même clé App Group que le widget), `message` la dictée.
+        case "send" where customScheme:
+            return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
+        // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
+        case "conversations" where customScheme: return id.flatMap(conversationListEntry)
+        default: break
         }
+        // Post (`post`, `p`), story (`story`, `stories`, `s`), profil (`u`, `users`).
+        if isPostSegment(head) { return id.map { .postDetail(postId: $0) } }
+        if isStorySegment(head) { return id.map { .storyDetail(postId: $0) } }
+        if isUserSegment(head) { return id.map { .userProfile(username: $0) } }
+        return nil
+    }
 
-        // https://meeshy.me/feeds/post/{postId} -> post detail.
-        // Claimed as a Universal Link in apple-app-site-association so iOS
-        // opens this directly inside the app whenever it's installed; the
-        // Next.js rewrite serves the same path on the web for non-iOS
-        // recipients (or when the app rejects the link).
-        // The short alias `feeds/p/{postId}` resolves to the same destination
-        // so any pasted shorthand still routes in-app.
-        if components.count >= 3, components[0] == "feeds", postSegments.contains(components[1]) {
-            return .postDetail(postId: components[2])
+    /// Un identifiant de communauté, jamais le segment réservé `new` (création).
+    static func communityIdentifier(_ segment: String) -> String? {
+        let id = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+        return id.isEmpty || id == "new" ? nil : id
+    }
+
+    /// `recent` / `unread` sous `meeshy://conversations/`.
+    static func conversationListEntry(_ segment: String) -> DeepLinkDestination? {
+        switch segment {
+        case "recent": return .recentConversation
+        case "unread": return .unreadConversations
+        default: return nil
         }
+    }
 
-        if components.count >= 2 {
-            let head = components[0]
-            // User profile — `u` (canonical) and `users` (plural alias).
-            if userSegments.contains(head) {
-                return .userProfile(username: components[1])
-            }
-            // Hashtag results — `hashtag/{tag}`.
-            if head == "hashtag", !components[1].isEmpty {
-                return .hashtag(tag: components[1])
-            }
-            // Story — `story`, `stories`, `s`.
-            if storySegments.contains(head) {
-                return .storyDetail(postId: components[1])
-            }
-            // Post — short forms at root (`post/<id>`, `p/<id>`). The
-            // canonical share URL stays `/feeds/post/<id>` (handled above)
-            // but pasted/handwritten variants without the `feeds` prefix
-            // are accepted so any sensible shape lands in the app.
-            if postSegments.contains(head) {
-                return .postDetail(postId: components[1])
-            }
-            switch head {
-            case "c", "conversation": return .conversation(id: components[1], draftText: nil)
-            // Invitation / share links — `/join/<id>` (canonical) and
-            // `/l/<id>` (legacy / tracking alias). Both are claimed as
-            // Universal Links in apple-app-site-association and resolve to
-            // the same authenticated/anonymous join flow. Recognising them
-            // here is what lets `isMeeshyDeepLink` return `true` so
-            // `AppDelegate.application(_:continue:)` claims the cold-launch
-            // Universal Link instead of bouncing it to Safari.
-            case "join": return .joinLink(identifier: components[1])
-            // Tracked share link — `/l/<token>` (post/reel/story/invitation).
-            // Resolved async by targetType (no longer assumed to be a join).
-            case "l": return .trackedLink(token: components[1])
-            // Direct chat share link — `/chat/<id>`.
-            case "chat": return .chatLink(identifier: components[1])
-            default: break
-            }
-        }
-
-        // Unknown meeshy.me path (e.g. /settings) -> open in Safari
-        return .external(url)
+    /// `/reels?seed=<id>` — `nil` sans graine non vide : la liste nue des réels
+    /// n'est pas une destination nommée.
+    static func reelsSeed(components: [String], url: URL) -> String? {
+        guard components == ["reels"],
+              let seed = queryValue("seed", in: url)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !seed.isEmpty else { return nil }
+        return seed
     }
 
     // MARK: - Share Query Parser
@@ -352,6 +304,11 @@ enum DeepLink: Equatable {
     case conversation(id: String)
     case postDetail(postId: String)
     case storyDetail(postId: String)
+    /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels (#7805).
+    case reel(postId: String)
+    case community(id: String)
+    case recentConversation
+    case unreadConversations
     case userProfile(username: String)
     case ownProfile
     case userLinks
@@ -371,6 +328,23 @@ enum DeepLink: Equatable {
     /// désactivé, et chaque story de plus de 24 h (son expiration désactive ses
     /// liens de suivi, cf. `deactivatePostTrackingLinks` côté gateway).
     case unresolvedTrackedLink(token: String)
+
+    /// **Reçu sans compte, ce lien attend-il la connexion ?** (#7811)
+    ///
+    /// Un lien de CONTENU survit à la connexion : `pendingDeepLink` n'est pas
+    /// consommé tant que la personne n'a pas de session, et la racine le reprend
+    /// à son montage. L'écran de connexion le dit. Une invitation et un lien
+    /// magique s'ouvrent SANS compte, un lien externe part dans Safari, et un
+    /// lien non résolu n'a rien à promettre.
+    var opensAfterSignIn: Bool {
+        switch self {
+        case .joinLink, .chatLink, .magicLink, .externalLink, .unresolvedTrackedLink:
+            return false
+        case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
+            return true
+        }
+    }
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -454,7 +428,8 @@ final class DeepLinkRouter: ObservableObject {
             // `targetId` est un ObjectId d'utilisateur, pas un pseudo — la
             // fabrique du SDK distingue les deux et laisse l'écran résoudre.
             case "PROFILE": return .userProfile(username: targetId)
-            case "REEL", "POST", "STATUS": return .postDetail(postId: targetId)
+            case "REEL": return .reel(postId: targetId)
+            case "POST", "STATUS": return .postDetail(postId: targetId)
             default: break
             }
         }
@@ -475,7 +450,28 @@ final class DeepLinkRouter: ObservableObject {
     /// Safari. `nil` quand l'URL n'ouvre rien (schéma non web, forme vide).
     static func destination(forOriginalURL url: URL) -> DeepLink? {
         switch DeepLinkParser.parse(url) {
+        case .external(let target):
+            // Seul le web s'ouvre. Un `javascript:` ou un schéma inconnu remonté
+            // par un lien de suivi ne doit jamais être passé à `UIApplication`.
+            guard let scheme = target.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return nil }
+            return .externalLink(url: target)
+        case let destination:
+            return link(for: destination)
+        }
+    }
+
+    /// **La seule traduction destination analysée → lien à ouvrir.** `nil` pour
+    /// ce qui ne s'ouvre pas tel quel : un `/l/<token>` (il se résout d'abord —
+    /// depuis une `originalUrl`, le re-résoudre ferait une boucle), un partage
+    /// brut, un lien externe (chaque appelant décide s'il l'ouvre).
+    static func link(for destination: DeepLinkDestination) -> DeepLink? {
+        switch destination {
         case .storyDetail(let id):        return .storyDetail(postId: id)
+        case .reel(let id):               return .reel(postId: id)
+        case .community(let id):          return .community(id: id)
+        case .recentConversation:         return .recentConversation
+        case .unreadConversations:        return .unreadConversations
         case .postDetail(let id):         return .postDetail(postId: id)
         case .post(let id):               return .postDetail(postId: id)
         case .conversation(let id, _):    return .conversation(id: id)
@@ -486,270 +482,33 @@ final class DeepLinkRouter: ObservableObject {
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
-        case .external(let target):
-            // Seul le web s'ouvre. Un `javascript:` ou un schéma inconnu remonté
-            // par un lien de suivi ne doit jamais être passé à `UIApplication`.
-            guard let scheme = target.scheme?.lowercased(),
-                  scheme == "http" || scheme == "https" else { return nil }
-            return .externalLink(url: target)
-        // `/l/<token>` imbriqué, partage brut : rien à ouvrir depuis une
-        // `originalUrl`, et re-résoudre ferait une boucle.
-        case .trackedLink, .share:        return nil
+        case .trackedLink, .share, .external: return nil
         }
     }
 
-    // MARK: - Universal Link Handling
+    // MARK: - Lancement système (lien universel, schéma meeshy://)
 
+    /// **Traduit, n'analyse pas** (#7815). L'analyse est celle de
+    /// `DeepLinkParser.parse`, la même que le tap in-app : deux `switch` recopiés
+    /// faisaient diverger les portes au premier format oublié dans l'un d'eux.
+    /// Ne restent ici que les trois gestes propres au lancement système :
+    /// résoudre un `/l/<token>`, déposer le brouillon d'un raccourci, et ne pas
+    /// revendiquer ce qui n'est pas une destination (`/share`, le web externe).
     func handle(url: URL) -> Bool {
-        guard let host = url.host?.lowercased() else { return false }
-
-        let meeshyHosts = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
-        guard meeshyHosts.contains(host) else { return handleCustomScheme(url: url) }
-
-        // Filter out empty path segments so that `//join/X` or `/./join/X`
-        // collapse to the same shape as `/join/X`. The previous filter
-        // only stripped literal "/" entries, leaving empty strings from
-        // double-slashes in place and shifting `pathComponents[1]` to
-        // an empty identifier.
-        let pathComponents = url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
-
-        guard !pathComponents.isEmpty else { return false }
-
-        let head = pathComponents[0]
-
-        switch head {
-        case "join":
-            guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-            pendingDeepLink = .joinLink(identifier: identifier)
-            return true
-
-        case "l":
-            guard let token = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+        switch DeepLinkParser.parse(url) {
+        case .trackedLink(let token):
             resolveTrackedLink(token)
             return true
-
-        case "chat":
-            guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-            pendingDeepLink = .chatLink(identifier: identifier)
+        case .conversation(let id, let draftText):
+            stageDraft(draftText, for: id)
+            pendingDeepLink = .conversation(id: id)
             return true
-
-        case "auth":
-            guard pathComponents.count >= 3, pathComponents[1] == "magic-link" else { return false }
-            guard let token = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
-            pendingDeepLink = .magicLink(token: token)
-            return true
-
-        case "c", "conversation":
-            guard let conversationId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-            pendingDeepLink = .conversation(id: conversationId)
-            return true
-
-        case "me":
-            // `/me` — own profile. Single-segment path, no identifier
-            // needed. Dispatch pops to the conversation list root then
-            // pushes the profile screen so the back-swipe takes the user
-            // back to the home surface (not the previous nav stack).
-            pendingDeepLink = .ownProfile
-            return true
-
-        case "links":
-            // `/links` — own user links hub (tracking links, share links,
-            // affiliate, etc.). Same surface as the in-app `Link` tap that
-            // already routes to `.links` via Router.handleDeepLink.
-            pendingDeepLink = .userLinks
-            return true
-
-        case "hashtag":
-            guard let tag = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-            pendingDeepLink = .hashtag(tag: tag)
-            return true
-
-        case "feeds":
-            // `/feeds/post/{postId}` — Universal Link surface for the public
-            // share URL minted by the gateway (`FRONTEND_URL/feeds/post/<id>`).
-            // The recipient lands directly inside PostDetailView when the app
-            // is installed; the same path is served by the Next.js rewrite
-            // for non-iOS recipients. `/feeds/p/{postId}` is accepted as a
-            // short alias so the handler stays in lockstep with the parser
-            // (in-app Link taps on either shape both resolve in-app).
-            guard pathComponents.count >= 3,
-                  DeepLinkParser.isPostSegment(pathComponents[1]) else { return false }
-            guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
-            pendingDeepLink = .postDetail(postId: postId)
-            return true
-
-        default:
-            // Multi-segment helpers — collapsed under `default` so we can
-            // share the same `nonEmptyIdentifier(at: 1, ...)` validation
-            // across every `/<keyword>/<id>` shape. Each branch checks the
-            // helper set declared on `DeepLinkParser` so the parser
-            // (in-app Link tap) and this router stay in lockstep — adding
-            // a new alias requires extending only the set.
-
-            if DeepLinkParser.isPostSegment(head) {
-                // `/post/{postId}` or `/p/{postId}` at root — short form
-                // accepted alongside the canonical `/feeds/post/<id>`.
-                guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-                pendingDeepLink = .postDetail(postId: postId)
-                return true
-            }
-
-            if DeepLinkParser.isStorySegment(head) {
-                // `/story/{postId}`, `/stories/{postId}`, `/s/{postId}` —
-                // dispatch prefers StoryViewer when the story is in the
-                // local tray, with a PostDetailView fallback for expired /
-                // unknown stories.
-                guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-                pendingDeepLink = .storyDetail(postId: postId)
-                return true
-            }
-
-            if DeepLinkParser.isUserSegment(head) {
-                // `/u/{username}` or `/users/{username}` — opens the user
-                // profile sheet over the conversation list.
-                guard let username = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-                pendingDeepLink = .userProfile(username: username)
-                return true
-            }
-
+        case .share, .external:
             return false
-        }
-    }
-
-    /// Return the path component at `index` only if it is a non-empty,
-    /// non-whitespace string. Used to keep the `pendingDeepLink` from
-    /// being populated with `""` or `" "` for malformed URLs like
-    /// `/join/%20` or `/c//`, both of which would later fail server-side
-    /// with an opaque 404 — we'd rather refuse them up front so the
-    /// caller (AppDelegate / .onOpenURL) can fall back appropriately.
-    private func nonEmptyIdentifier(at index: Int, in components: [String]) -> String? {
-        guard components.indices.contains(index) else { return nil }
-        let trimmed = components[index].trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    // MARK: - Custom URL Scheme (meeshy://)
-
-    private func handleCustomScheme(url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "meeshy" else { return false }
-
-        // Lowercase the host so `meeshy://Join/X` (autocorrect-capitalised
-        // by some keyboards) routes the same as `meeshy://join/X`.
-        let host = (url.host ?? "").lowercased()
-        // Same empty-segment cleanup as the Universal Link branch above.
-        let pathComponents = url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
-
-        switch host {
-        case "join":
-            guard let identifier = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .joinLink(identifier: identifier)
+        case let destination:
+            guard let link = Self.link(for: destination) else { return false }
+            pendingDeepLink = link
             return true
-
-        case "l":
-            guard let token = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            resolveTrackedLink(token)
-            return true
-
-        case "chat":
-            guard let identifier = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .chatLink(identifier: identifier)
-            return true
-
-        case "auth":
-            guard !pathComponents.isEmpty, pathComponents[0] == "magic-link" else { return false }
-            let rawToken = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "token" })?.value
-            guard let token = rawToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
-                return false
-            }
-            pendingDeepLink = .magicLink(token: token)
-            return true
-
-        case "c", "conversation":
-            // meeshy://c/{id} — short alias mirroring the Universal Link
-            // `/c/<id>` shape (and `DeepLinkParser.parseCustomScheme`'s own
-            // `case "c", "conversation":`) so a pasted/handwritten short
-            // scheme URL doesn't silently no-op. Previously only
-            // `"conversation"` was handled here, dropping `meeshy://c/<id>`
-            // even though the parser already resolved it to `.conversation`.
-            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .conversation(id: conversationId)
-            return true
-
-        case "contact":
-            // meeshy://contact/{id} — ligne du widget Favoris. L'identifiant
-            // porté est celui d'une CONVERSATION (cf. `DeepLinkParser`), donc
-            // la destination est la même que `meeshy://c/{id}`.
-            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .conversation(id: conversationId)
-            return true
-
-        case "quickreply":
-            // meeshy://quickreply/{conversationId}?text=… — les quatre boutons
-            // du widget Réponse rapide. Le texte n'est pas ENVOYÉ : il est
-            // déposé en brouillon et le composer s'ouvre pré-rempli. Envoyer
-            // sans confirmation ferait d'un tap accidenté sur l'écran d'accueil
-            // un message irrattrapable.
-            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            stageDraft(DeepLinkParser.queryValue("text", in: url), for: conversationId)
-            pendingDeepLink = .conversation(id: conversationId)
-            return true
-
-        case "send":
-            // meeshy://send?contactId=…&message=… — App Shortcut « Send
-            // Message » (Siri / Spotlight / Raccourcis). Même dépôt de
-            // brouillon que la réponse rapide, même refus d'envoyer sans
-            // confirmation : Siri a pu mal transcrire la dictée.
-            guard let conversationId = DeepLinkParser.queryValue("contactId", in: url) else { return false }
-            stageDraft(DeepLinkParser.queryValue("message", in: url), for: conversationId)
-            pendingDeepLink = .conversation(id: conversationId)
-            return true
-
-        case "me":
-            // meeshy://me — single-host shortcut to own profile.
-            pendingDeepLink = .ownProfile
-            return true
-
-        case "links":
-            // meeshy://links — single-host shortcut to the user links hub.
-            pendingDeepLink = .userLinks
-            return true
-
-        case "u", "users":
-            // meeshy://u/{username} (or meeshy://users/{username}) — opens
-            // the user profile sheet over the conversation list.
-            guard let username = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .userProfile(username: username)
-            return true
-
-        case "post", "p":
-            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
-            // custom-scheme shortcut to the post detail view.
-            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .postDetail(postId: postId)
-            return true
-
-        case "feeds":
-            // meeshy://feeds/post/{postId} — mirror of the Universal Link
-            // shape so any pasted form of the share URL works identically.
-            // `feeds/p/{postId}` is accepted as a short alias.
-            guard !pathComponents.isEmpty,
-                  DeepLinkParser.isPostSegment(pathComponents[0]) else { return false }
-            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
-            pendingDeepLink = .postDetail(postId: postId)
-            return true
-
-        case "story", "stories", "s":
-            // meeshy://story/{postId} — direct custom-scheme shortcut to
-            // the story viewer (or PostDetailView fallback). Plural alias
-            // `meeshy://stories/{postId}` and short alias `meeshy://s/{id}`
-            // accepted for symmetry with the web Universal Link surface.
-            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
-            pendingDeepLink = .storyDetail(postId: postId)
-            return true
-
-        default:
-            return false
         }
     }
 

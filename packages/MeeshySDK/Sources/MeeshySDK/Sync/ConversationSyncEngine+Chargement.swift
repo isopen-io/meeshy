@@ -52,7 +52,7 @@ extension ConversationSyncEngine {
     /// (last message, preferences, participants) on the main thread during the
     /// background sync. `[APIConversation]` and `[MeeshyConversation]` are both
     /// Sendable and `toConversation` is a nonisolated pure function.
-    private static func mapConversationsOffMain(
+    /* partagé entre les fichiers du moteur (#7787) */ static func mapConversationsOffMain(
         _ apiConversations: [APIConversation],
         userId: String
     ) async -> [MeeshyConversation] {
@@ -67,13 +67,23 @@ extension ConversationSyncEngine {
         isSyncing = true
         defer { isSyncing = false }
 
-        // LA VOIE `/sync` D'ABORD (#4172, seconde moitié du critère 1) : le
-        // démarrage à froid en pages d'ancre au lieu de ≈ 100 requêtes par
-        // rang. Le repli est la condition NOMMÉE du critère 2 — la collection
+        // LA VOIE `/sync` D'ABORD sur un cache CHAUD (#4172, seconde moitié du
+        // critère 1) : la réconciliation en pages d'ancre au lieu de ≈ 100
+        // requêtes par rang. Le repli est la condition NOMMÉE du critère 2 — la collection
         // non servie par ce déploiement (`UNSUPPORTED_COLLECTION`, mesuré en
         // production le 2026-09-04) ramène le chemin historique ENTIER,
         // jamais un `try?` qui fondrait un refus dans une panne.
-        switch await fullSyncViaSyncPages() {
+        // À FROID, `/sync` peindrait une liste SANS APERÇUS (#7787) : ses lignes
+        // maigres ne portent ni le dernier message ni les non-lus, et chacune
+        // serait à réhydrater. La route riche sert tout en un passage.
+        let aFroid = (await cache.conversations.load(for: "list").snapshot() ?? []).isEmpty
+        let issueDuPlein: IssueDuPleinParSync
+        if aFroid {
+            issueDuPlein = .indisponible(.cacheVide)
+        } else {
+            issueDuPlein = await fullSyncViaSyncPages()
+        }
+        switch issueDuPlein {
         case .fait:
             return true
         case .echouee:
@@ -439,6 +449,7 @@ extension ConversationSyncEngine {
         var pages = 0
         let maxPages = 100
         var dernierCheckpoint: String? = nil
+        var fenetre: Date? = nil
 
         while pages < maxPages {
             pages += 1
@@ -459,14 +470,17 @@ extension ConversationSyncEngine {
             case .inchange:
                 // Un 304 sur un plein sans validateur ne devrait pas tomber ;
                 // s'il tombe, la fenêtre est réputée vide — fin de pagination.
-                return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint) ? .fait : .echouee
+                return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint, rehydrater: fenetre)
             case let .delta(delta, _):
                 let collection = delta.collections["conversations"]
                 let recues = (collection?.added ?? []) + (collection?.modified ?? [])
                 let mappees = await Self.mapConversationsOffMain(recues, userId: userId)
+                fenetre = [fenetre, Self.fenetreDeRehydratation(servies: mappees, cache: parId)].compactMap { $0 }.min()
                 for ligne in mappees where !idsServis.contains(ligne.id) {
                     idsServis.insert(ligne.id)
-                    servies.append(Self.fusionneLigneDeSync(existante: parId[ligne.id], recue: ligne))
+                    // Une ligne NEUVE n'entre que riche : la réhydratation l'ajoute.
+                    guard let existante = parId[ligne.id] else { continue }
+                    servies.append(Self.fusionneLigneDeSync(existante: existante, recue: ligne))
                 }
                 dernierCheckpoint = delta.checkpoint ?? dernierCheckpoint
 
@@ -482,7 +496,7 @@ extension ConversationSyncEngine {
                 let suite = collection?.nextCursor
                 let continuer = (delta.hasMore || (collection?.truncated ?? false)) && suite != nil
                 if !continuer {
-                    return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint) ? .fait : .echouee
+                    return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint, rehydrater: fenetre)
                 }
                 ancre = suite
             }
@@ -490,18 +504,23 @@ extension ConversationSyncEngine {
         // Plafond de sécurité atteint : la liste est peut-être incomplète —
         // on la garde peinte mais on signale l'échec, comme la queue
         // séquentielle du chemin historique.
-        _ = await finaliseLePlein(servies, baseline: baseline, checkpoint: nil)
+        _ = await finaliseLePlein(servies, baseline: baseline, checkpoint: nil, rehydrater: fenetre)
         return .echouee
     }
 
     /// La CLÔTURE du plein : persistance, index, watermark serveur (jamais
     /// l'horloge de l'appareil — R15b), et la fenêtre de réconciliation.
+    ///
+    /// Les lignes que `/sync` a laissées en retard (`rehydrater`) passent
+    /// ensuite par la route riche ; si elle échoue, le watermark recule sous
+    /// leur fenêtre pour que le prochain delta les resserve (#7787).
     @discardableResult
     private func finaliseLePlein(
         _ servies: [MeeshyConversation],
         baseline: [MeeshyConversation],
-        checkpoint: String?
-    ) async -> Bool {
+        checkpoint: String?,
+        rehydrater fenetre: Date?
+    ) async -> IssueDuPleinParSync {
         await saveSorted(servies, to: "list", baseline: baseline)
         await SearchIndex.shared.indexConversations(servies.filter(\.isActive))
         _conversationsDidChange.send()
@@ -512,7 +531,12 @@ extension ConversationSyncEngine {
             lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: [plusRecente], fallback: lastSyncTimestamp)
         }
         lastFullReconcileAt = Date()
-        return true
+        guard let fenetre else { return .fait }
+        guard await rehydrateDepuisLaRouteRiche(depuis: fenetre) != .echouee else {
+            lastSyncTimestamp = min(lastSyncTimestamp, fenetre)
+            return .echouee
+        }
+        return .fait
     }
 
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
@@ -544,13 +568,33 @@ extension ConversationSyncEngine {
         isSyncing = true
         defer { isSyncing = false }
 
+        let outcome = await deltaSansGarde()
+        // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
+        // essai tombe souvent sur un réseau pas encore rétabli, et le signal
+        // suivant (reconnexion du socket, coordinateur de premier plan) doit
+        // retenter au lieu d'être absorbé pendant `deltaSyncCooldown` (#7787).
+        if !outcome.succeeded { lastDeltaSyncAt = .distantPast }
+        return outcome
+    }
+
+    private func deltaSansGarde() async -> DeltaOutcome {
         // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) : UN aller-retour au
         // lieu du rejouage à la main, la requête Prisma rétrécie côté serveur.
         // Le repli vers `GET /conversations?updatedSince=` est NOMMÉ (critère 2)
         // — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        let sinceAvant = lastSyncTimestamp
         switch await deltaViaSync() {
-        case .traite(let outcome):
+        case let .traite(outcome, nil):
             return outcome
+        case let .traite(outcome, .some(fenetre)):
+            switch await rehydrateDepuisLaRouteRiche(depuis: fenetre) {
+            case let .faite(resteAuServeur):
+                return DeltaOutcome(succeeded: outcome.succeeded, mayHaveMore: outcome.mayHaveMore || resteAuServeur)
+            case .echouee:
+                // La fenêtre reste REJOUABLE : ses aperçus n'ont pas été lus.
+                lastSyncTimestamp = sinceAvant
+                return .failed
+            }
         case .repli(let raison):
             Self.logger.notice("[SyncEngine] delta /sync → repli \(raison.rawValue) : GET /conversations?updatedSince")
         }
@@ -665,10 +709,13 @@ extension ConversationSyncEngine {
         case creanceAbsente = "creance-absente"
         case survolMuet = "survol-muet"
         case syncRefuse = "sync-refuse"
+        case cacheVide = "cache-vide"
     }
 
     private enum CheminDuDelta {
-        case traite(DeltaOutcome)
+        /// `rehydrater` : la fenêtre des lignes que `/sync` a laissées en
+        /// retard (#7787), à relire par la route riche.
+        case traite(DeltaOutcome, rehydrater: Date?)
         case repli(RaisonDuRepliDeSync)
     }
 
@@ -713,7 +760,7 @@ extension ConversationSyncEngine {
             return .repli(.syncRefuse)
         case .inchange:
             // La fenêtre n'a pas bougé : rien à peindre, rien à avancer.
-            return .traite(.complete)
+            return .traite(.complete, rehydrater: nil)
         case let .delta(delta, _):
             let collection = delta.collections["conversations"]
             let recues = (collection?.added ?? []) + (collection?.modified ?? [])
@@ -724,7 +771,12 @@ extension ConversationSyncEngine {
 
             let userId = await currentUserId()
             let mappees = await Self.mapConversationsOffMain(recues, userId: userId)
-            let deltaConversations = mappees.map { Self.fusionneLigneDeSync(existante: parId[$0.id], recue: $0) }
+            let fenetre = Self.fenetreDeRehydratation(servies: mappees, cache: parId)
+            // Une ligne NEUVE et active n'entre que riche : la réhydratation
+            // l'ajoute. Une neuve INACTIVE passe — elle ne fait que retirer.
+            let deltaConversations = mappees
+                .filter { parId[$0.id] != nil || !$0.isActive }
+                .map { Self.fusionneLigneDeSync(existante: parId[$0.id], recue: $0) }
 
             let (merged, removedIds) = Self.mergeDeltaConversations(
                 existing: existing,
@@ -753,7 +805,7 @@ extension ConversationSyncEngine {
                let date = WireDate.date(from: checkpoint) {
                 lastSyncTimestamp = max(lastSyncTimestamp, date)
             }
-            return .traite(DeltaOutcome(succeeded: true, mayHaveMore: incomplet))
+            return .traite(DeltaOutcome(succeeded: true, mayHaveMore: incomplet), rehydrater: fenetre)
         }
     }
 
@@ -775,12 +827,15 @@ extension ConversationSyncEngine {
         fusion.communityId = recue.communityId
         fusion.isActive = recue.isActive
         fusion.memberCount = recue.memberCount
-        fusion.lastMessageAt = recue.lastMessageAt
         fusion.encryptionMode = recue.encryptionMode
         fusion.updatedAt = recue.updatedAt
         fusion.slowModeSeconds = recue.slowModeSeconds
         fusion.autoTranslateEnabled = recue.autoTranslateEnabled
         fusion.closedAt = recue.closedAt
+        // `lastMessageAt` NE s'avance PAS ici (#7787) : l'activité voyage avec
+        // son aperçu, que seule la route riche sert. Une ligne dont l'activité
+        // a bougé est réhydratée (`doitEtreRehydratee`) ; si la réhydratation
+        // échoue, l'ancienne activité reste, et le prochain delta la redétecte.
         // Ce que `/sync` NE SERT PAS ne bouge pas : `userState` (non-lus, nom
         // personnalisé), l'aperçu et ses traductions, les pièces, les
         // participants, le rôle courant, les vignettes — et la palette (`let`),

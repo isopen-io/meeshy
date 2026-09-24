@@ -181,6 +181,7 @@ const USED = [
   // liste, et le titre de l'écran : le SEUL glyphe de ce lot qui entre au
   // socle — les quatorze autres vivent dans le jeu d'écran ci-dessous.
   'trophy',
+  'download-simple',
 ];
 
 /**

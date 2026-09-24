@@ -63,11 +63,8 @@ const HOOK_NAMES = [
   'useOnline',
   'useConversationsSnapshot',
   'useReaderLanguages',
-  'useReplyToPreview',
   'useLiveAnnouncer',
   'useSend',
-  'usePersistedReadingMode',
-  'useThreadDraft',
   'useThreadData',
   'useVirtualizer',
   'useThreadScene',
@@ -75,6 +72,18 @@ const HOOK_NAMES = [
   'useThreadChromeSignals',
   'useThreadTyping',
   'useMessageMenu',
+  'useAuthorStoryRings',
+  'useEphemeralDestruction',
+  'useOlderMessages',
+  'useReadTracking',
+  'useThreadOpenScroll',
+  'useUnreadBoundary',
+  // #7429 — les trois hooks nés du découpage de cet écran ; ceux qu'ils ont
+  // emportés (`usePersistedReadingMode`, `useThreadDraft`, `useReplyToPreview`)
+  // ont quitté la liste avec lui : elle dit ce que l'hôte APPELLE.
+  'useThreadReadingMode',
+  'useThreadCompose',
+  'useThreadJump',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [
@@ -101,5 +110,25 @@ describe('ThreadScreen — Rules of Hooks : aucun hook après un retour anticip�
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * LA CONTRE-ÉPREUVE D'INVENTAIRE (#7429, découpage de `thread.tsx`) — la
+   * liste `HOOK_NAMES` ci-dessus est tenue À LA MAIN, et une liste tenue à la
+   * main DIVERGE (leçon 640) : elle avait déjà six absents avant ce lot
+   * (`useAuthorStoryRings`, `useEphemeralDestruction`, `useOlderMessages`,
+   * `useReadTracking`, `useThreadOpenScroll`, `useUnreadBoundary`), rendant le
+   * témoin ci-dessus vert PAR OMISSION — un hook de plus posé après un retour
+   * anticipé, parmi ces six, serait passé inaperçu. Ce test DÉRIVE
+   * l'inventaire du CODE plutôt que l'inverse : tout appel `use[A-Z]…(` doit
+   * figurer dans `HOOK_NAMES`, faute de quoi il grossit la liste au lieu
+   * d'échapper à la vérification.
+   */
+  test('tout appel de hook du CODE de ThreadScreen figure dans HOOK_NAMES — aucune liste tenue à la main ne diverge de ce qu’elle énumère', () => {
+    const callPattern = /\buse[A-Z]\w*(?=\()/g;
+    const found = new Set(code.match(callPattern) ?? []);
+    const knownNames: readonly string[] = HOOK_NAMES;
+    const missing = [...found].filter((name) => !knownNames.includes(name)).sort();
+    expect(missing).toEqual([]);
   });
 });

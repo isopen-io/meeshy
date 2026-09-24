@@ -27,19 +27,16 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         "conversation": "meeshy://conversation/conv1",
         "contact": "meeshy://contact/conv1",
         "quickreply": "meeshy://quickreply/conv1?text=OK",
-        "send": "meeshy://send?contactId=conv1&message=Salut"
+        "send": "meeshy://send?contactId=conv1&message=Salut",
+        // Widgets « Non lus » / « Récentes » et App Shortcut « Open Recent
+        // Conversation » : élus par `ConversationListEntry` (#7811).
+        "conversations": "meeshy://conversations/unread"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande
     /// une surface produit qui n'existe pas aujourd'hui — les brancher sur une
     /// destination approximative serait pire que l'inaction actuelle.
     private static let deliberatelyUnroutedHosts: Set<String> = [
-        // `meeshy://conversations/recent` et `…/unread` (fond des widgets
-        // Conversations récentes / Non lus, et App Shortcut « Open Recent
-        // Conversation »). « Récente » et « non lue » désignent une
-        // conversation que seul l'app-side sait élire ; aucune destination
-        // `DeepLink` ne porte cette élection aujourd'hui.
-        "conversations",
         // `meeshy://call/mute`, `meeshy://call/end` (boutons de la Live
         // Activity) et `meeshy://call?contactId=…&type=…` (App Shortcut
         // « Call Contact »). Les deux premiers sont hors d'atteinte : le

@@ -7,15 +7,11 @@ import { compile, match } from '@/lib/router';
 
 import {
   LinksHeader,
-  ShareLinkActions,
-  ShareLinkHero,
-  ShareLinkInformation,
   ShareLinkRefused,
   ShareLinkRow,
   ShareLinksEmpty,
   ShareLinksFamilyCard,
   ShareLinksStats,
-  ShareLinkUsage,
 } from './links-parts';
 import { ROUTES } from './route-table';
 import { ACCESS_RULES, ConversationChoice, LimitsFields, RulesSection } from './share-link-form';
@@ -43,6 +39,8 @@ const link = (overrides: Partial<MyShareLink> = {}): MyShareLink => ({
   createdAt: '2026-09-10T09:00:00.000Z',
   conversationTitle: 'Équipe déploiement',
   inactiveReason: null,
+  description: null,
+  policy: null,
   ...overrides,
 });
 
@@ -120,43 +118,6 @@ describe('la liste', () => {
 });
 
 describe('le détail', () => {
-  test('un lien actif offre Copier, Partager, Désactiver — et jamais « Supprimer »', () => {
-    const html = renderToStaticMarkup(<ShareLinkActions language="fr" link={link()} copied={false} onCopy={noop} onShare={noop} onToggle={noop} />);
-    expect(html.match(/data-share-link-action="([a-z]+)"/g)).toEqual(['data-share-link-action="copy"', 'data-share-link-action="share"', 'data-share-link-action="disable"']);
-    expect(html).not.toContain('Supprimer');
-  });
-
-  test('un lien désactivé à la main offre « Activer »', () => {
-    const html = renderToStaticMarkup(<ShareLinkActions language="fr" link={link({ isActive: false, inactiveReason: 'REVOKED' })} copied={false} onCopy={noop} onShare={noop} onToggle={noop} />);
-    expect(html).toContain('data-share-link-action="activate"');
-  });
-
-  test('une conversation fermée : pas d’« Activer », et la cause se lit', () => {
-    const closed = link({ isActive: false, inactiveReason: 'CONVERSATION_CLOSED' });
-    const actions = renderToStaticMarkup(<ShareLinkActions language="fr" link={closed} copied={false} onCopy={noop} onShare={noop} onToggle={noop} />);
-    expect(actions).not.toMatch(/data-share-link-action="(activate|disable)"/);
-    const hero = renderToStaticMarkup(<ShareLinkHero language="fr" link={closed} url="https://meeshy.me/chat/mshy_l1" />);
-    expect(hero).toContain('data-share-link-reason');
-    expect(hero).toContain('Inactif');
-    expect(hero).toContain('https://meeshy.me/chat/mshy_l1');
-  });
-
-  test('sans limite, le maximum se lit « ∞ » et s’annonce « Illimité »', () => {
-    const unlimited = renderToStaticMarkup(<ShareLinkUsage language="fr" link={link()} />);
-    expect(unlimited).toContain('∞');
-    expect(unlimited).toContain('Illimité');
-    expect(renderToStaticMarkup(<ShareLinkUsage language="fr" link={link({ maxUses: 50 })} />)).not.toContain('∞');
-  });
-
-  test('les informations : l’identifiant (ou le linkId), la création, et l’expiration seulement si elle existe', () => {
-    const none = renderToStaticMarkup(<ShareLinkInformation language="fr" link={link()} />);
-    expect(none).toContain('mshy_l1');
-    expect(none).not.toContain('data-share-link-info="expires"');
-    expect(renderToStaticMarkup(<ShareLinkInformation language="fr" link={link({ identifier: 'equipe', expiresAt: '2026-12-31T23:00:00.000Z' })} />)).toContain(
-      'data-share-link-info="expires"',
-    );
-  });
-
   test('le refus ne dit pas si le lien existe, et ramène à la liste', () => {
     const html = renderToStaticMarkup(<ShareLinkRefused language="fr" />);
     expect(html).toContain('Lien introuvable');

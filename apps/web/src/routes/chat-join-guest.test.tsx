@@ -3,10 +3,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { GuestDraft, GuestTerms } from '@/lib/api/link-join';
+import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { defaultGuestLanguage, guestLanguageOptions, GuestForm } from './chat-join-guest';
+import { defaultGuestLanguage, GUEST_FORM_ID, guestLanguageOptions, GuestForm, GuestSubmit } from './chat-join-guest';
 
 /**
  * **LE FORMULAIRE D'INVITÉ, SEUL** (#5561).
@@ -19,7 +20,8 @@ import { defaultGuestLanguage, guestLanguageOptions, GuestForm } from './chat-jo
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadInviteCatalog('fr');
   ensureHappyDomRegistered({ url: 'http://localhost/chat/mshy_equipe_7f3a' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -44,6 +46,8 @@ const TERMS: GuestTerms = {
   birthdayRequired: false,
   languages: [],
   mayWrite: true,
+  mayImages: true,
+  mayFiles: false,
 };
 
 const DRAFT: GuestDraft = { nickname: '', email: '', birthday: '', language: 'fr' };
@@ -64,6 +68,7 @@ function mount(overrides: Partial<Parameters<typeof GuestForm>[0]> = {}): {
   act(() => {
     root.render(
       <GuestForm
+        language="fr"
         terms={TERMS}
         draft={DRAFT}
         busy={false}
@@ -136,10 +141,16 @@ describe('GuestForm — le geste atteint `onEdit`', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Une information manque');
   });
 
-  test('hors ligne : le bouton est inactif et l’écran le dit', () => {
-    const { host } = mount({ online: false });
-    expect(host.querySelector<HTMLButtonElement>('[data-guest-submit]')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Hors ligne');
+  test('hors ligne : le bouton (hors du formulaire, rattaché par `form`) est inactif et l’écran le dit', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted = { container, root };
+    act(() => root.render(<GuestSubmit language="fr" busy={false} online={false} />));
+    const button = container.querySelector<HTMLButtonElement>('[data-guest-submit]');
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttribute('form')).toBe(GUEST_FORM_ID);
+    expect(container.textContent).toContain('Hors ligne');
   });
 });
 

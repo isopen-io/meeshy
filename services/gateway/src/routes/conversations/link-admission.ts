@@ -37,6 +37,12 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
+import {
+  lookupArrivalCountry,
+  recordArrivalCountry,
+  type ArrivalCountryLookup,
+} from '../../services/conversations/arrivalCountry';
 
 // ─── Types partagés par les trois portes (canonique + deux adaptateurs) ──────
 
@@ -79,6 +85,9 @@ export interface LinkJoinParams {
    * refusé, consommant une place du lien sur un compte qu'il croyait utiliser.
    */
   readonly rejectedCredential?: boolean;
+  /** #7797 — coutures du pays d'arrivée ; la production prend les défauts. */
+  readonly afterResponse?: AfterResponse;
+  readonly lookupCountry?: ArrivalCountryLookup;
 }
 
 export type LinkJoinOutcome =
@@ -275,11 +284,10 @@ async function joinAsGuest(
         session: {
           sessionTokenHash,
           ipAddress: requestIp,
-          // `country` n'est plus déduit ici : `extractCountryFromIP`
-          // (`routes/anonymous.ts`) est un heuristique décoratif (premier
-          // octet de l'IP, repli `'FR'`) — #4167 critère 5 le retire de
-          // l'ADMISSION ; le propager dans du code NEUF pour du stockage
-          // informatif referait la même fausse promesse ailleurs.
+          // Le pays d'arrivée vit sur `Participant.joinCountry` (#7797),
+          // posé après la réponse par la vraie géolocalisation
+          // (`services/conversations/arrivalCountry.ts`) — jamais par
+          // l'heuristique du premier octet que #4167 a retirée.
           country: null,
           deviceFingerprint: profile.deviceFingerprint || null,
           connectedAt: new Date(),
@@ -479,11 +487,26 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
     return { kind: 'validation', message: "Le nom d'utilisateur est obligatoire pour rejoindre cette conversation" };
   }
 
-  if (identity.kind === 'guest') {
-    return joinAsGuest(prisma, shareLink, profile, requestIp, broadcast);
+  const outcome = identity.kind === 'guest'
+    ? await joinAsGuest(prisma, shareLink, profile, requestIp, broadcast)
+    : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
+
+  // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
+  // l'IP après la réponse ; l'IP n'est pas écrite sur le participant.
+  if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
+    const participantId = outcome.participant.id;
+    (params.afterResponse ?? deferAfterResponse)(
+      () => recordArrivalCountry({
+        prisma,
+        participantId,
+        requestIp,
+        lookupCountry: params.lookupCountry ?? lookupArrivalCountry,
+      }),
+      'link-arrival-country',
+    );
   }
 
-  return joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
+  return outcome;
 }
 
 // ─── Sessions invitées : PATCH|DELETE /guest-sessions/me ─────────────────────

@@ -3,8 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <!-- `viewport-fit=cover` expose les encoches a env(safe-area-inset-*) : sans
-         lui, la coque Capacitor rend l'en-tete SOUS l'encoche. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+         lui, la coque Capacitor rend l'en-tete SOUS l'encoche.
+         `interactive-widget=resizes-content` (#7799) : sans lui, Chrome Android
+         laisse 100dvh intact quand le clavier s'ouvre, et le clavier recouvre
+         le composeur des ecrans `h-dvh` — la coque et iOS, eux, reduisent. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" data-scheme="dark" />
     <meta name="theme-color" content="#f1f3f9" media="(prefers-color-scheme: light)" data-scheme="light" />
     <meta name="description" content="Messagerie multilingue temps reel" />

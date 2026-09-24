@@ -253,7 +253,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // désormais `MeEndpoint.onboarding` et retire son `OnboardingEndpoint` écrit à
 // la main — l'entrée n'est plus morte. Valeur MESURÉE sur l'arbre fusionné avec
 // le dev du 2026-09-24.
-const BASELINE_DEAD_ENTRIES = 262;
+// 262 → 263 (#7797) : `LinksEndpoint.byLinkIdStats` — les statistiques d'un
+// lien d'invitation (`GET /links/:linkId/stats`). Morte à la naissance PAR
+// CONSTRUCTION, même raison que #7377 et #7729 : la PR passerelle livre la
+// moitié SERVEUR seule, l'entrée est GÉNÉRÉE depuis `route-manifest.json`. Son
+// appelant Swift est l'écran de détail du lien (`ShareLinkDetailView`, lot iOS
+// de #7797, développé en parallèle) ; ce lot rabaisse la référence. Valeur
+// MESURÉE en CI sur la branche du 2026-09-24.
+const BASELINE_DEAD_ENTRIES = 263;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

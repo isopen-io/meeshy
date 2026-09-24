@@ -388,14 +388,14 @@ final class DeepLinkParserTests: XCTestCase {
         XCTAssertEqual(username, "user name@test")
     }
 
-    func test_parse_magicLink_emptyToken_returnsMagicLinkWithEmptyString() {
+    /// Un jeton VIDE n'est pas un lien magique (#7815). Ce témoin exigeait
+    /// l'inverse — `.magicLink("")` — alors que la voie système le refusait
+    /// déjà : `handleAppLevelDeepLink` le passait à `validateMagicLinkToken`,
+    /// qui DÉCONNECTE le compte courant avant de valider, pour un jeton voué à
+    /// l'échec. Les deux voies partagent désormais le refus.
+    func test_parse_magicLink_emptyToken_isNotAMagicLink() {
         let url = URL(string: "meeshy://auth/magic-link?token=")!
-        let result = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = result else {
-            XCTFail("Expected .magicLink with empty token, got \(result)")
-            return
-        }
-        XCTAssertEqual(token, "")
+        XCTAssertEqual(DeepLinkParser.parse(url), .external(url))
     }
 
     // MARK: - Universal Links (https://meeshy.me)
@@ -1449,5 +1449,80 @@ final class DeepLinkRouterConversationAliasLockstepTests: XCTestCase {
 
             XCTAssertEqual(parsedId, routedId, "Parser/router disagree on conversation id for alias '\(alias)'")
         }
+    }
+}
+
+// MARK: - DeepLinkParser Reel Tests (#7805)
+
+/// `/reel/<id>` est l'adresse que la passerelle grave dans chaque partage de
+/// réel (`PostService.shareWithTrackingLink`) et que le web sert ; `/reels?seed=`
+/// est la porte du Flux web. Toutes ouvrent le LECTEUR de réels — un parseur qui
+/// ne les connaît pas renvoie le lien à Safari.
+@MainActor
+final class DeepLinkParserReelTests: XCTestCase {
+
+    func test_parse_webUrl_reel_returnsReel() {
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://meeshy.me/reel/r1")!), .reel(postId: "r1"))
+    }
+
+    func test_parse_webUrl_reel_wwwSubdomain() {
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://www.meeshy.me/reel/r2")!), .reel(postId: "r2"))
+    }
+
+    /// Le CHEMIN nomme le réel ; `?seed=` n'est qu'un paramètre (miroir de
+    /// `reelSeedOf`, `apps/web/src/lib/reels/thread.ts`).
+    func test_parse_webUrl_reel_pathWinsOverSeed() {
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://meeshy.me/reel/r3?seed=autre")!), .reel(postId: "r3"))
+    }
+
+    func test_parse_webUrl_reelsSeed_returnsReel() {
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://meeshy.me/reels?seed=r4")!), .reel(postId: "r4"))
+    }
+
+    func test_parse_webUrl_reelsWithoutSeed_isExternal() {
+        let url = URL(string: "https://meeshy.me/reels")!
+        XCTAssertEqual(DeepLinkParser.parse(url), .external(url))
+    }
+
+    func test_parse_customScheme_reel_returnsReel() {
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "meeshy://reel/r5")!), .reel(postId: "r5"))
+    }
+
+    func test_isMeeshyDeepLink_reel_isClaimed() {
+        XCTAssertTrue(DeepLinkParser.isMeeshyDeepLink(URL(string: "https://meeshy.me/reel/r6")!))
+    }
+
+    func test_destinationForOriginalURL_reel_returnsReel() {
+        XCTAssertEqual(DeepLinkRouter.destination(forOriginalURL: URL(string: "https://meeshy.me/reel/r7")!), .reel(postId: "r7"))
+    }
+}
+
+// MARK: - DeepLinkRouter Reel (système : lien universel, schéma meeshy://) (#7805)
+
+@MainActor
+final class DeepLinkRouterReelTests: XCTestCase {
+
+    func test_handle_universalLink_reel_setsPendingReel() {
+        let sut = DeepLinkRouter()
+        XCTAssertTrue(sut.handle(url: URL(string: "https://meeshy.me/reel/r1")!))
+        XCTAssertEqual(sut.pendingDeepLink, .reel(postId: "r1"))
+    }
+
+    func test_handle_universalLink_reelsSeed_setsPendingReel() {
+        let sut = DeepLinkRouter()
+        XCTAssertTrue(sut.handle(url: URL(string: "https://meeshy.me/reels?seed=r2")!))
+        XCTAssertEqual(sut.pendingDeepLink, .reel(postId: "r2"))
+    }
+
+    func test_handle_customScheme_reel_setsPendingReel() {
+        let sut = DeepLinkRouter()
+        XCTAssertTrue(sut.handle(url: URL(string: "meeshy://reel/r3")!))
+        XCTAssertEqual(sut.pendingDeepLink, .reel(postId: "r3"))
+    }
+
+    func test_handle_universalLink_reelWithoutId_isRefused() {
+        let sut = DeepLinkRouter()
+        XCTAssertFalse(sut.handle(url: URL(string: "https://meeshy.me/reel/%20")!))
+        XCTAssertNil(sut.pendingDeepLink)
     }
 }

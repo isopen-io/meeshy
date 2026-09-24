@@ -93,12 +93,16 @@ describe('fileDeliveryPortal — aucune porte ⇒ aucun bouton (loi 4)', () => {
     expect(downloaded).toBe(true);
   });
 
-  test('le partage REFUSÉ (hors activation) sans ancre de repli ⇒ `unavailable`, jamais un succès annoncé (revue #7116)', async () => {
+  test('l’activation EXPIRÉE (`NotAllowedError`) sans ancre de repli ⇒ `expired`, jamais `cancelled` ni `unavailable` (revue #7116)', async () => {
     /* La coque iOS : la feuille du système ne s'ouvre que pendant
        l'activation du geste, et un téléchargement la fait expirer
        (`NotAllowedError`). Le premier jet rendait alors `cancelled` — « Export
        annulé » annoncé pour une livraison que l'utilisateur n'avait pas
-       annulée. */
+       annulée. La deuxième revue a corrigé vers `unavailable` — « Échec de
+       l'enregistrement » pour un tap SUIVANT qui, lui, repartirait d'une
+       activation fraîche et pourrait réussir : `expired` est la troisième
+       forme, celle qui dit au lecteur de retaper au lieu d'annoncer un échec
+       définitif. */
     const portal = fileDeliveryPortal({
       canShareFiles: () => true,
       shareFiles: async () => {
@@ -107,6 +111,30 @@ describe('fileDeliveryPortal — aucune porte ⇒ aucun bouton (loi 4)', () => {
         throw error;
       },
     });
-    expect(await portal!.deliver(blob(), 'x.jpg', 'image/jpeg')).toBe('unavailable');
+    expect(await portal!.deliver(blob(), 'x.jpg', 'image/jpeg')).toBe('expired');
+  });
+
+  test('l’activation EXPIRÉE AVEC une ancre de repli retombe sur le téléchargement, comme tout autre refus', async () => {
+    /* L'ancre ne dépend d'aucune activation : un navigateur (jamais une
+       coque, `browserFileDeliveryHost`) ne voit donc jamais `expired` — le
+       geste réussit toujours par l'ancre. */
+    let downloaded = false;
+    const anchor = { href: '', download: '', click: () => {} } as unknown as HTMLAnchorElement;
+    const portal = fileDeliveryPortal({
+      canShareFiles: () => true,
+      shareFiles: async () => {
+        const error = new Error('not allowed');
+        error.name = 'NotAllowedError';
+        throw error;
+      },
+      document: {
+        createElement: () => anchor,
+        body: { appendChild: () => { downloaded = true; return anchor; }, removeChild: () => anchor },
+      } as never,
+      createObjectURL: () => 'blob:1',
+      revokeObjectURL: () => {},
+    });
+    expect(await portal!.deliver(blob(), 'x.jpg', 'image/jpeg')).toBe('delivered');
+    expect(downloaded).toBe(true);
   });
 });

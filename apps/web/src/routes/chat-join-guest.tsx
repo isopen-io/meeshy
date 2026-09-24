@@ -2,7 +2,9 @@ import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { Field } from '@/components/field';
 import type { GuestDraft, GuestField, GuestTerms } from '@/lib/api/link-join';
+import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LE FORMULAIRE D'INVITÉ** (#5561) — ce qu'on demande à quelqu'un qui n'a pas
@@ -61,7 +63,12 @@ const FIELD_TINT = 'var(--ios-indigo-500)';
 const INPUT_CLASS = 'min-w-0 flex-1 bg-transparent text-body outline-none';
 const INPUT_STYLE = { minHeight: 44, color: 'var(--color-ios-ink)' } as const;
 
+/** L'identifiant du formulaire : son bouton vit HORS de lui (la barre collée
+ * au bas de l'écran, `chat-join.tsx`) et le soumet par l'attribut `form`. */
+export const GUEST_FORM_ID = 'chat-join-guest-form';
+
 export type GuestFormProps = {
+  readonly language: InterfaceLanguage;
   readonly terms: GuestTerms;
   readonly draft: GuestDraft;
   readonly busy: boolean;
@@ -76,10 +83,10 @@ export type GuestFormProps = {
 };
 
 export function GuestForm({
+  language,
   terms,
   draft,
   busy,
-  online,
   refusedField,
   refusalMessage,
   focused,
@@ -91,11 +98,12 @@ export function GuestForm({
     refusedField === field && refusalMessage !== null ? refusalMessage : undefined;
 
   const languages = guestLanguageOptions(terms);
-  const disabled = busy || !online;
 
   return (
     <form
+      id={GUEST_FORM_ID}
       noValidate
+      aria-busy={busy}
       data-guest-form
       onSubmit={(event) => {
         event.preventDefault();
@@ -107,7 +115,7 @@ export function GuestForm({
           passerelle n'a rattaché à rien. Au-dessus du formulaire, jamais sous
           un champ deviné. */}
       {refusedField === null && refusalMessage !== null ? (
-        <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
+        <p role="alert" className="text-caption" style={{ color: 'var(--color-error)' }}>
           {refusalMessage}
         </p>
       ) : null}
@@ -116,7 +124,7 @@ export function GuestForm({
         <div className="min-w-[10rem] flex-1">
           <Field
             id="chat-join-nickname"
-            label={terms.nicknameRequired ? 'Votre pseudo' : 'Votre pseudo (facultatif)'}
+            label={translateInvite(language, terms.nicknameRequired ? 'invite.guest.nickname' : 'invite.guest.nickname.optional')}
             icon="user"
             tint={FIELD_TINT}
             focused={focused === 'nickname'}
@@ -135,7 +143,7 @@ export function GuestForm({
                 spellCheck={false}
                 maxLength={50}
                 value={draft.nickname}
-                placeholder={terms.nicknameRequired ? 'Comment vous appeler ?' : 'Laissez vide pour un pseudo généré'}
+                placeholder={translateInvite(language, terms.nicknameRequired ? 'invite.guest.nickname.placeholder' : 'invite.guest.nickname.placeholder.optional')}
                 onInput={(event) => onEdit('nickname', event.currentTarget.value)}
                 onFocus={() => onFocus('nickname')}
                 onBlur={() => onFocus(null)}
@@ -149,7 +157,7 @@ export function GuestForm({
         <div className="min-w-[8rem] flex-1">
           <Field
             id="chat-join-language"
-            label="Votre langue"
+            label={translateInvite(language, 'invite.guest.language')}
             icon="translate"
             tint={FIELD_TINT}
             focused={focused === 'language'}
@@ -183,7 +191,7 @@ export function GuestForm({
       {terms.emailRequired ? (
         <Field
           id="chat-join-email"
-          label="Votre e-mail"
+          label={translateInvite(language, 'invite.guest.email')}
           icon="envelopeOpen"
           tint={FIELD_TINT}
           focused={focused === 'email'}
@@ -200,7 +208,7 @@ export function GuestForm({
               aria-invalid={refusedField === 'email'}
               autoComplete="email"
               value={draft.email}
-              placeholder="vous@exemple.com"
+              placeholder={translateInvite(language, 'invite.guest.email.placeholder')}
               onInput={(event) => onEdit('email', event.currentTarget.value)}
               onFocus={() => onFocus('email')}
               onBlur={() => onFocus(null)}
@@ -214,7 +222,7 @@ export function GuestForm({
       {terms.birthdayRequired ? (
         <Field
           id="chat-join-birthday"
-          label="Votre date de naissance"
+          label={translateInvite(language, 'invite.guest.birthday')}
           /* Aucun glyphe : le jeu du socle n'a pas de calendrier, et en
              emprunter un d'un autre sens (horloge, minuterie) dirait autre
              chose que « date de naissance ». Un champ sans icône se lit ; un
@@ -243,26 +251,51 @@ export function GuestForm({
         </Field>
       ) : null}
 
+    </form>
+  );
+}
+
+/**
+ * « CONTINUER EN ANONYME » — le bouton du formulaire, rendu HORS de lui (#7796,
+ * revue) : sous 768 px il vit seul dans la barre collée au bas de l'écran,
+ * pendant que les champs restent dans le fil de la page. L'attribut `form` le
+ * rattache au formulaire : Entrée dans un champ et le bouton soumettent la
+ * MÊME chose, et un formulaire incomplet renvoie au champ fautif.
+ */
+export function GuestSubmit({
+  language,
+  busy,
+  online,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly busy: boolean;
+  readonly online: boolean;
+}) {
+  const disabled = busy || !online;
+  return (
+    <div className="grid w-full gap-2">
       <button
         type="submit"
+        form={GUEST_FORM_ID}
         data-guest-submit
         disabled={disabled}
         aria-busy={busy}
-        className="grid w-full place-items-center rounded-[14px] font-bold text-white transition-opacity"
+        className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
-          minHeight: 52,
-          background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))',
+          minHeight: 54,
+          backgroundColor: 'var(--ios-indigo-600)',
+          backgroundImage: 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, black))',
+          outlineColor: 'var(--color-ios-brand)',
           opacity: disabled ? 0.6 : 1,
         }}
       >
-        {busy ? 'Entrée dans la conversation…' : 'Continuer en anonyme'}
+        {translateInvite(language, busy ? 'invite.join.joining' : 'invite.guest.continue')}
       </button>
-
       {online ? null : (
         <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Hors ligne — rejoindre attendra le retour du réseau.
+          {translateInvite(language, 'invite.join.offline')}
         </p>
       )}
-    </form>
+    </div>
   );
 }

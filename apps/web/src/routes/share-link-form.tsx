@@ -39,7 +39,7 @@ const ROW_DIVIDER = '[&>*+*]:border-t [&>*+*]:border-[color-mix(in_srgb,var(--co
  */
 export type PickableConversation = { readonly id: string; readonly title: string; readonly avatar?: string };
 
-type RuleKey = Extract<
+export type RuleKey = Extract<
   keyof ShareLinkDraft,
   'requireAccount' | 'requireNickname' | 'requireEmail' | 'requireBirthday' | 'allowAnonymousMessages' | 'allowAnonymousImages' | 'allowAnonymousFiles' | 'allowViewHistory'
 >;
@@ -189,7 +189,9 @@ export function RulesSection({
   readonly subtitle: string;
   readonly icon: ReactNode;
   readonly rules: readonly RuleSpec[];
-  readonly draft: ShareLinkDraft;
+  /** Les huit bascules seulement : la création (`ShareLinkDraft`) et l'édition
+   * (`ShareLinkEditDraft`, #7797) les portent toutes deux. */
+  readonly draft: Pick<ShareLinkDraft, RuleKey>;
   readonly onToggle: (key: RuleKey, next: boolean) => void;
 }) {
   return (

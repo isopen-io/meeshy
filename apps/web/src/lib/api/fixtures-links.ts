@@ -1,6 +1,14 @@
 import { CONVERSATIONS } from './fixtures';
 import type { ApiResult } from './http';
-import { SHARE_LINKS_PAGE_SIZE, type CreateShareLinkBody, type MyShareLink, type ShareLinkResult, type ShareLinksPage } from './links';
+import {
+  SHARE_LINKS_PAGE_SIZE,
+  type CreateShareLinkBody,
+  type MyShareLink,
+  type ShareLinkPatch,
+  type ShareLinkPolicy,
+  type ShareLinkResult,
+  type ShareLinksPage,
+} from './links';
 
 /**
  * **LES LIENS DU LECTEUR DE RECETTE** (#6361) — servis par le MÊME chemin que
@@ -16,6 +24,21 @@ import { SHARE_LINKS_PAGE_SIZE, type CreateShareLinkBody, type MyShareLink, type
  * l'onglet : le gate navigateur les relit au retour sur la liste.
  */
 
+/** La politique par défaut d'un lien de recette — celle de la création
+ * (`defaultShareLinkDraft`), plus une limite de personnes en même temps. */
+const POLICY: ShareLinkPolicy = {
+  maxConcurrentUsers: 50,
+  requireAccount: false,
+  requireNickname: true,
+  requireEmail: false,
+  requireBirthday: false,
+  allowAnonymousMessages: true,
+  allowAnonymousImages: true,
+  allowAnonymousFiles: false,
+  allowViewHistory: false,
+  allowedLanguages: [],
+};
+
 const INITIAL: readonly MyShareLink[] = [
   {
     id: 'link-deploiement',
@@ -29,6 +52,8 @@ const INITIAL: readonly MyShareLink[] = [
     createdAt: '2026-09-10T09:00:00.000Z',
     conversationTitle: 'Équipe déploiement',
     inactiveReason: null,
+    description: 'Viens suivre la mise en production avec nous : chacun écrit dans sa langue, tout le monde lit dans la sienne.',
+    policy: { ...POLICY, allowViewHistory: true },
   },
   {
     id: 'link-newsletter',
@@ -42,6 +67,8 @@ const INITIAL: readonly MyShareLink[] = [
     createdAt: '2026-09-05T16:20:00.000Z',
     conversationTitle: 'Annonces produit',
     inactiveReason: 'REVOKED',
+    description: null,
+    policy: POLICY,
   },
   {
     id: 'link-annonces',
@@ -55,6 +82,8 @@ const INITIAL: readonly MyShareLink[] = [
     createdAt: '2026-08-02T14:30:00.000Z',
     conversationTitle: 'Annonces produit',
     inactiveReason: null,
+    description: 'Les nouveautés du produit, une fois par semaine.',
+    policy: { ...POLICY, requireAccount: true, requireNickname: false, maxConcurrentUsers: null, allowedLanguages: ['fr', 'en'] },
   },
   {
     id: 'link-salon',
@@ -68,6 +97,8 @@ const INITIAL: readonly MyShareLink[] = [
     createdAt: '2026-07-01T08:00:00.000Z',
     conversationTitle: 'Salon d’été',
     inactiveReason: 'CONVERSATION_CLOSED',
+    description: null,
+    policy: POLICY,
   },
   {
     id: 'link-atelier',
@@ -81,6 +112,8 @@ const INITIAL: readonly MyShareLink[] = [
     createdAt: '2026-05-20T10:00:00.000Z',
     conversationTitle: 'Salle sécurisée',
     inactiveReason: 'LINK_EXPIRED',
+    description: null,
+    policy: { ...POLICY, requireEmail: true },
   },
 ];
 
@@ -127,6 +160,19 @@ export function fixtureCreateShareLink(body: CreateShareLinkBody, now: Date): Ap
     createdAt: now.toISOString(),
     conversationTitle: conversation?.title ?? null,
     inactiveReason: null,
+    description: body.description ?? null,
+    policy: {
+      maxConcurrentUsers: null,
+      requireAccount: body.requireAccount,
+      requireNickname: body.requireNickname,
+      requireEmail: body.requireEmail,
+      requireBirthday: body.requireBirthday,
+      allowAnonymousMessages: body.allowAnonymousMessages,
+      allowAnonymousImages: body.allowAnonymousImages,
+      allowAnonymousFiles: body.allowAnonymousFiles,
+      allowViewHistory: body.allowViewHistory,
+      allowedLanguages: [],
+    },
   };
   store = [created, ...store];
   return {
@@ -137,4 +183,35 @@ export function fixtureCreateShareLink(body: CreateShareLinkBody, now: Date): Ap
       shareLink: { id: created.id, linkId, name: created.name, description: body.description ?? null, expiresAt, isActive: true },
     },
   };
+}
+
+/**
+ * MODIFIER ET SUPPRIMER, SANS RÉSEAU (#7797). Le nom `refuse-moi` fait REFUSER
+ * l'enregistrement (403) : l'état « retour arrière » de la mise à jour
+ * optimiste se rejoue ainsi dans un navigateur, sans passerelle.
+ */
+export function fixtureUpdateShareLink(linkId: string, patch: ShareLinkPatch): ApiResult<{ readonly linkId: string }> {
+  const current = store.find((link) => link.linkId === linkId);
+  if (current === undefined) return { ok: false, status: 404, error: 'Lien de partage non trouvé' };
+  if (patch.name === 'refuse-moi') return { ok: false, status: 403, error: 'Permissions insuffisantes pour modifier ce lien' };
+  const { name, description, expiresAt, maxUses, ...policy } = patch;
+  store = store.map((link) =>
+    link.linkId === linkId
+      ? {
+          ...link,
+          ...(name === undefined ? {} : { name: name.trim() === '' ? null : name }),
+          ...(description === undefined ? {} : { description: description.trim() === '' ? null : description }),
+          ...(expiresAt === undefined ? {} : { expiresAt }),
+          ...(maxUses === undefined ? {} : { maxUses }),
+          policy: link.policy === null ? null : { ...link.policy, ...policy },
+        }
+      : link,
+  );
+  return { ok: true, data: { linkId } };
+}
+
+export function fixtureDeleteShareLink(linkId: string): ApiResult<{ readonly linkId: string }> {
+  if (!store.some((link) => link.linkId === linkId)) return { ok: false, status: 404, error: 'Lien non trouvé' };
+  store = store.filter((link) => link.linkId !== linkId);
+  return { ok: true, data: { linkId } };
 }

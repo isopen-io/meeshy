@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
 import { createHttpTransport } from './http';
-import { performCreateShareLink, performSetShareLinkActive, type LinkActionDeps } from './link-actions';
+import { performCreateShareLink, performDeleteShareLink, performSetShareLinkActive, performUpdateShareLink, type LinkActionDeps } from './link-actions';
 import { defaultShareLinkDraft, SHARE_LINKS_QUERY_KEY, type MyShareLink, type ShareLinksData } from './links';
 
 /**
@@ -24,6 +24,19 @@ const link = (overrides: Partial<MyShareLink> = {}): MyShareLink => ({
   createdAt: '2026-09-10T09:00:00.000Z',
   conversationTitle: 'Équipe',
   inactiveReason: null,
+  description: null,
+  policy: {
+    maxConcurrentUsers: null,
+    requireAccount: false,
+    requireNickname: true,
+    requireEmail: false,
+    requireBirthday: false,
+    allowAnonymousMessages: true,
+    allowAnonymousImages: true,
+    allowAnonymousFiles: false,
+    allowViewHistory: false,
+    allowedLanguages: [],
+  },
   ...overrides,
 });
 
@@ -177,5 +190,70 @@ describe('performCreateShareLink', () => {
     const outcome = await performCreateShareLink({ draft: defaultShareLinkDraft('c-annonces'), conversationTitle: 'Annonces', deps, now: NOW });
     expect(outcome).toEqual({ status: 'offline' });
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('performUpdateShareLink (#7797) — Enregistrer, optimiste', () => {
+  test('le cache change AVANT la réponse, et seul le corps changé part', async () => {
+    const seen: (string | null | undefined)[] = [];
+    const { deps, queryClient, calls } = depsReplying(
+      { status: 200, body: { success: true, data: { id: 'l1', linkId: 'mshy_l1' } } },
+      { onRequest: (client) => seen.push(cached(client)?.pages[0]?.links[0]?.name) },
+    );
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, seeded([link()]));
+    const outcome = await performUpdateShareLink({ link: link(), patch: { name: 'Nova — Discord', allowAnonymousFiles: true }, deps });
+    expect(outcome).toBe('done');
+    expect(seen).toEqual(['Nova — Discord']);
+    expect(calls.map(({ url, method, body }) => [url, method, body])).toEqual([
+      ['https://gate.test/api/v1/links/mshy_l1', 'PATCH', '{"name":"Nova — Discord","allowAnonymousFiles":true}'],
+    ]);
+    expect(cached(queryClient)?.pages[0]?.links[0]?.policy?.allowAnonymousFiles).toBe(true);
+  });
+
+  test('un refus RESTAURE le lien tel qu’il était (retour arrière)', async () => {
+    const { deps, queryClient } = depsReplying({ status: 403, body: { success: false, error: 'Permissions insuffisantes' } });
+    const before = seeded([link()]);
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, before);
+    const outcome = await performUpdateShareLink({ link: link(), patch: { name: 'Autre' }, deps });
+    expect(outcome).toBe('failed');
+    expect(cached(queryClient)).toEqual(before);
+  });
+
+  test('hors ligne : rien ne part, rien ne change', async () => {
+    const { deps, queryClient, calls } = depsReplying({ status: 200, body: { success: true, data: {} } }, { online: false });
+    const before = seeded([link()]);
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, before);
+    expect(await performUpdateShareLink({ link: link(), patch: { name: 'Autre' }, deps })).toBe('offline');
+    expect(calls).toHaveLength(0);
+    expect(cached(queryClient)).toEqual(before);
+  });
+
+  test('un corps vide ne part pas', async () => {
+    const { deps, calls } = depsReplying({ status: 200, body: { success: true, data: {} } });
+    expect(await performUpdateShareLink({ link: link(), patch: {}, deps })).toBe('unchanged');
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('performDeleteShareLink (#7797) — Supprimer', () => {
+  test('le lien quitte la liste et le résumé au geste, puis DELETE part', async () => {
+    const seen: number[] = [];
+    const { deps, queryClient, calls } = depsReplying(
+      { status: 200, body: { success: true, data: { message: 'Lien fermé avec succès' } } },
+      { onRequest: (client) => seen.push(cached(client)?.pages[0]?.links.length ?? -1) },
+    );
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, seeded([link(), link({ id: 'l2', linkId: 'mshy_l2' })]));
+    expect(await performDeleteShareLink({ link: link(), deps })).toBe('done');
+    expect(seen).toEqual([1]);
+    expect(calls.map(({ url, method }) => [url, method])).toEqual([['https://gate.test/api/v1/links/mshy_l1', 'DELETE']]);
+    expect(cached(queryClient)?.pages[0]?.summary?.totalLinks).toBe(1);
+  });
+
+  test('un refus remet le lien à sa place', async () => {
+    const { deps, queryClient } = depsReplying({ status: 403, body: { success: false, error: 'non' } });
+    const before = seeded([link()]);
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, before);
+    expect(await performDeleteShareLink({ link: link(), deps })).toBe('failed');
+    expect(cached(queryClient)).toEqual(before);
   });
 });
