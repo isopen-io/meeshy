@@ -14,7 +14,8 @@ import Metal
 ///
 /// We cannot synthesize `AVAsynchronousVideoCompositionRequest` directly (no public initializer),
 /// so these tests exercise the same `CIDissolveTransition` + `CIContext.render` path that
-/// `startRequest` runs internally, in parallel, to validate the per-call context pattern.
+/// `startRequest` runs internally, in parallel, through ONE shared `CIContext` — the compositor
+/// builds a single context and every frame renders through it.
 final class DissolveVideoCompositor_ThreadSafetyTests: XCTestCase {
 
     // MARK: - Test fixtures
@@ -41,6 +42,13 @@ final class DissolveVideoCompositor_ThreadSafetyTests: XCTestCase {
         return buffer
     }
 
+    nonisolated(unsafe) private static let sharedContext: CIContext = {
+        if let device = MTLCreateSystemDefaultDevice() {
+            return CIContext(mtlDevice: device)
+        }
+        return CIContext()
+    }()
+
     private func renderDissolveFrame(tween: Float) -> CVPixelBuffer? {
         guard let from = makePixelBuffer(),
               let to = makePixelBuffer(),
@@ -54,13 +62,7 @@ final class DissolveVideoCompositor_ThreadSafetyTests: XCTestCase {
         filter.setValue(tween, forKey: kCIInputTimeKey)
         guard let outputImage = filter.outputImage else { return nil }
 
-        let ctx: CIContext = {
-            if let device = MTLCreateSystemDefaultDevice() {
-                return CIContext(mtlDevice: device)
-            }
-            return CIContext()
-        }()
-        ctx.render(outputImage, to: out)
+        Self.sharedContext.render(outputImage, to: out)
         return out
     }
 
@@ -95,9 +97,9 @@ final class DissolveVideoCompositor_ThreadSafetyTests: XCTestCase {
     // MARK: - Core thread-safety contracts
 
     /// Drives the exact CIDissolveTransition + CIContext.render path used by
-    /// `DissolveVideoCompositor.startRequest`, from many threads at once, and asserts no crash.
-    /// Before the fix (shared lazy `ciContext`), this would intermittently corrupt or trip a
-    /// Metal command-buffer assertion.
+    /// `DissolveVideoCompositor.startRequest`, from many threads at once through one shared
+    /// context, and asserts no crash. The historical failure came from a `lazy var` context (its
+    /// first access races); a context built once and shared is Apple's documented thread-safe use.
     func test_concurrentStartRequest_noCrash() {
         let iterations = 10
         let expectation = expectation(description: "all concurrent dissolves complete")

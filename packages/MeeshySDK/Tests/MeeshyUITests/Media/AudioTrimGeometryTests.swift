@@ -134,4 +134,11 @@ final class AudioTrimGeometryTests: XCTestCase {
         XCTAssertFalse(dite.contains(":"), "une horloge ne s'annonce pas — VoiceOver lirait « deux-points »")
         XCTAssertFalse(dite.isEmpty)
     }
+
+    func test_laDureeParlee_suitLaLocaleDemandee_memeApresUnePremiereLocale() {
+        let francais = MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "fr_FR"))
+        let anglais = MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "en_US"))
+        XCTAssertNotEqual(francais, anglais, "le formateur mis en cache ne doit pas servir la locale d'un autre appel")
+        XCTAssertEqual(francais, MeeshyAudioTrimmer.spokenDuration(72, locale: Locale(identifier: "fr_FR")))
+    }
 }
