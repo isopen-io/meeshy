@@ -91,6 +91,12 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   test('feed', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'feed' })).toBe('redirect-login'));
   // #7286 — les trois routes `/me/starred-messages` refusent un contexte sans
   // compte (le favori est réservé aux inscrits, décision serveur de #7377).
+  /* L'ACCUEIL POST-INSCRIPTION (#7729) — `GET /me/onboarding` exige une
+     session ; un parcours sans compte n'a rien à créditer. */
+  test('onboarding', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'onboarding' })).toBe('redirect-login'));
+  test('onboarding refusé à l’invité d’un lien', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'guest', source: 'gateway', routeKey: 'onboarding' })).toBe('redirect-login'));
   test('starredMessages', () =>
     expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'starredMessages' })).toBe('redirect-login'));
   // #6288 — les six routes `/notifications*` de la passerelle portent toutes

@@ -71,12 +71,12 @@ const it = {
 
   'onboarding.recap.title': 'Ben fatto!',
   'onboarding.recap.calm': 'È tutto pronto. Potrai farlo quando vuoi.',
-  'onboarding.recap.points': '+{points} pt',
-  'onboarding.recap.level': 'Livello 1',
-  'onboarding.recap.streak': 'Serie 1 🔥',
+  'onboarding.recap.points': '{points} pt',
+  'onboarding.recap.level': 'Livello {level}',
+  'onboarding.recap.streak': 'Serie di {days} 🔥',
   'onboarding.recap.badges': 'Badge: {count}',
   'onboarding.recap.friends': 'Richieste in arrivo: {count}',
-  'onboarding.recap.tomorrow': 'Domani la tua serie può arrivare a 2.',
+  'onboarding.recap.tomorrow': 'Domani la tua serie può arrivare a {next}.',
   'onboarding.recap.explore': 'Continua a esplorare',
   'onboarding.recap.done': 'Per oggi basta così',
 } satisfies OnboardingCatalog;

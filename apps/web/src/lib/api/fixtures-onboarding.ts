@@ -14,7 +14,7 @@ import { ONBOARDING_STEPS } from './onboarding';
  * conversation que les fixtures connaissent.
  */
 
-const SUGGESTIONS: readonly OnboardingSuggestion[] = [
+const SUGGESTIONS: OnboardingSuggestion[] = [
   { id: 'u-onb-aicha', username: 'aicha', displayName: 'Aïcha', avatarUrl: portraitStandIn('#f472b6', '#7c3aed'), languages: ['fr', 'ar'] },
   { id: 'u-onb-tomas', username: 'tomas', displayName: 'Tomás', avatarUrl: portraitStandIn('#fbbf24', '#ea580c'), languages: ['es', 'fr'] },
   { id: 'u-onb-lena', username: 'lena', displayName: 'Lena', avatarUrl: portraitStandIn('#34d399', '#0f766e'), languages: ['de', 'en'] },

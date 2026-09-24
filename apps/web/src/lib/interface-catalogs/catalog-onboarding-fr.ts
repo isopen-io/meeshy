@@ -79,12 +79,12 @@ const fr = {
 
   'onboarding.recap.title': 'Bien joué !',
   'onboarding.recap.calm': 'Tout est prêt. Tu pourras le faire quand tu veux.',
-  'onboarding.recap.points': '+{points} pts',
-  'onboarding.recap.level': 'Niveau 1',
-  'onboarding.recap.streak': 'Série 1 🔥',
+  'onboarding.recap.points': '{points} pts',
+  'onboarding.recap.level': 'Niveau {level}',
+  'onboarding.recap.streak': 'Série de {days} 🔥',
   'onboarding.recap.badges': 'Badges : {count}',
   'onboarding.recap.friends': 'Demandes en route : {count}',
-  'onboarding.recap.tomorrow': 'Demain, ta série peut passer à 2.',
+  'onboarding.recap.tomorrow': 'Demain, ta série peut passer à {next}.',
   'onboarding.recap.explore': 'Continuer à explorer',
   'onboarding.recap.done': 'C’est bon pour aujourd’hui',
 } as const;

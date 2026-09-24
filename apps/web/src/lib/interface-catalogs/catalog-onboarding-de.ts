@@ -71,12 +71,12 @@ const de = {
 
   'onboarding.recap.title': 'Gut gemacht!',
   'onboarding.recap.calm': 'Alles bereit. Du kannst es jederzeit machen.',
-  'onboarding.recap.points': '+{points} Pkt.',
-  'onboarding.recap.level': 'Level 1',
-  'onboarding.recap.streak': 'Serie 1 🔥',
+  'onboarding.recap.points': '{points} Pkt.',
+  'onboarding.recap.level': 'Level {level}',
+  'onboarding.recap.streak': 'Serie: {days} 🔥',
   'onboarding.recap.badges': 'Abzeichen: {count}',
   'onboarding.recap.friends': 'Anfragen unterwegs: {count}',
-  'onboarding.recap.tomorrow': 'Morgen kann deine Serie auf 2 steigen.',
+  'onboarding.recap.tomorrow': 'Morgen kann deine Serie auf {next} steigen.',
   'onboarding.recap.explore': 'Weiter entdecken',
   'onboarding.recap.done': 'Genug für heute',
 } satisfies OnboardingCatalog;

@@ -71,12 +71,12 @@ const ar = {
 
   'onboarding.recap.title': 'أحسنت!',
   'onboarding.recap.calm': 'كل شيء جاهز. يمكنك فعل ذلك متى شئت.',
-  'onboarding.recap.points': '+{points} نقطة',
-  'onboarding.recap.level': 'المستوى 1',
-  'onboarding.recap.streak': 'السلسلة 1 🔥',
+  'onboarding.recap.points': '{points} نقطة',
+  'onboarding.recap.level': 'المستوى {level}',
+  'onboarding.recap.streak': 'سلسلة {days} 🔥',
   'onboarding.recap.badges': 'الشارات: {count}',
   'onboarding.recap.friends': 'طلبات في الطريق: {count}',
-  'onboarding.recap.tomorrow': 'غدًا يمكن أن تصل سلسلتك إلى 2.',
+  'onboarding.recap.tomorrow': 'غدًا يمكن أن تصل سلسلتك إلى {next}.',
   'onboarding.recap.explore': 'تابع الاستكشاف',
   'onboarding.recap.done': 'يكفي لهذا اليوم',
 } satisfies OnboardingCatalog;

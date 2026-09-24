@@ -22,7 +22,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
-import { studioPublishRefusal, type PublicationKind } from '@/lib/stories/publication-kind';
+import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
 import {
   buildPreviewCanvasDocument,
@@ -177,26 +177,52 @@ const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post'
 export default function StoryComposeScreen({
   deps = defaultStoryStudioDeps,
   initialKind = 'STORY',
-}: { readonly deps?: StoryStudioDeps; readonly initialKind?: PublicationKind } = {}) {
+  requestedAudience = null,
+  origin = null,
+}: {
+  readonly deps?: StoryStudioDeps;
+  readonly initialKind?: PublicationKind;
+  readonly requestedAudience?: ChoosableAudience | null;
+  readonly origin?: StudioOrigin | null;
+} = {}) {
   const session = useStore(sessionStore, (s) => s.session);
   if (session.status === 'guest') {
-    return <StudioShell kind={initialKind}>{<StudioRefusal lang={currentInterfaceLanguage()} />}</StudioShell>;
+    return <StudioShell kind={initialKind} origin={origin}>{<StudioRefusal lang={currentInterfaceLanguage()} />}</StudioShell>;
   }
   const viewerId = session.status === 'authenticated' ? session.user.id : null;
-  return <StoryStudio key={viewerId ?? 'anonymous'} deps={deps} viewerId={viewerId} initialKind={initialKind} />;
+  return (
+    <StoryStudio
+      key={viewerId ?? 'anonymous'}
+      deps={deps}
+      viewerId={viewerId}
+      initialKind={initialKind}
+      requestedAudience={requestedAudience}
+      origin={origin}
+    />
+  );
 }
 
 /** La barre haute d'iOS (`ComposerTopBar.swift:49-71`) : ✕ · rail · ⋯. Le
  * rail des scènes (#7684) prend la place du titre dès la deuxième page — le
  * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
  * quand le rail apparaît. */
-function StudioShell({ kind, rail, children }: { readonly kind: PublicationKind; readonly rail?: ReactNode; readonly children: ReactNode }) {
+function StudioShell({
+  kind,
+  origin,
+  rail,
+  children,
+}: {
+  readonly kind: PublicationKind;
+  readonly origin: StudioOrigin | null;
+  readonly rail?: ReactNode;
+  readonly children: ReactNode;
+}) {
   const lang = currentInterfaceLanguage();
   return (
     <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <Link
-          to={kind === 'STORY' ? 'list' : 'feed'}
+          to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
           aria-label={translate(lang, 'story.studio.cancel')}
           className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
@@ -217,10 +243,14 @@ function StoryStudio({
   deps,
   viewerId,
   initialKind,
+  requestedAudience,
+  origin,
 }: {
   readonly deps: StoryStudioDeps;
   readonly viewerId: string | null;
   readonly initialKind: PublicationKind;
+  readonly requestedAudience: ChoosableAudience | null;
+  readonly origin: StudioOrigin | null;
 }) {
   const lang = currentInterfaceLanguage();
   const reader = useReaderLanguages();
@@ -233,7 +263,7 @@ function StoryStudio({
     // `publication-audience.ts` § `seededAudience`) — relue UNE FOIS, à
     // l'ouverture, jamais à une bascule de format (`ComposerMoodSurface.swift:662-703`).
     const memoryVisibility = viewerId === null ? null : deps.drafts.lastAudience(viewerId);
-    return { ...seeded, visibility: seededAudience({ draftVisibility: seeded.visibility, memoryVisibility }) };
+    return { ...seeded, visibility: seededAudience({ draftVisibility: seeded.visibility, requestedVisibility: requestedAudience, memoryVisibility }) };
   });
   /** LA FEUILLE D'AUDIENCE (#7683) — fermée par défaut, comme les
    * contrôleurs de l'outil ouvert (§ « les contrôleurs de l'outil »). */
@@ -520,7 +550,7 @@ function StoryStudio({
     });
     if (chosen.kind === 'STORY') {
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
-      navigate(href('stories'));
+      navigate(origin === 'onboarding' ? href('onboarding', undefined, { story: 'published' }) : href('stories'), origin === 'onboarding');
       return;
     }
     // Le rafraîchissement du fil ne retient pas la navigation, et son
@@ -684,6 +714,7 @@ function StoryStudio({
   return (
     <StudioShell
       kind={kind}
+      origin={origin}
       rail={
         draft.pages.length > 1 ? (
           <Suspense fallback={<span className="min-w-0 flex-1" />}>

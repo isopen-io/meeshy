@@ -99,7 +99,8 @@ export function defaultAudienceOf(kind: PublicationKind): ChoosableAudience {
 
 /**
  * **LA GRAINE DE L'AUDIENCE** — rang 1 le brouillon persisté (un choix déjà
- * fait pour CETTE publication), rang 2 la mémoire du dernier choix
+ * fait pour CETTE publication), rang 2 l'audience demandée par l'adresse
+ * (`requestedAudienceFromSearch`, #7729), rang 3 la mémoire du dernier choix
  * (`StudioDraftStore.lastAudience`), sinon `null` : rien n'est choisi, la
  * pastille affichera le défaut de la passerelle (`defaultAudienceOf`).
  * Jamais un mode NOMINATIF, À AUCUN DES DEUX RANGS : le studio ne sait pas
@@ -110,10 +111,27 @@ export function defaultAudienceOf(kind: PublicationKind): ChoosableAudience {
  */
 export function seededAudience(params: {
   readonly draftVisibility: PostVisibility | null;
+  readonly requestedVisibility?: ChoosableAudience | null;
   readonly memoryVisibility: PostVisibility | null;
 }): ChoosableAudience | null {
   if (isRememberableAudience(params.draftVisibility)) return params.draftVisibility;
+  if (params.requestedVisibility !== undefined && params.requestedVisibility !== null) return params.requestedVisibility;
   return isRememberableAudience(params.memoryVisibility) ? params.memoryVisibility : null;
+}
+
+const REQUESTABLE: Readonly<Record<string, ChoosableAudience>> = { public: 'PUBLIC', friends: 'FRIENDS' };
+
+/**
+ * **L'AUDIENCE DEMANDÉE PAR L'ADRESSE** (#7729) — `?audience=friends|public`,
+ * posée par l'accueil post-inscription depuis la visibilité par défaut que le
+ * SERVEUR sert (`storyDefaultVisibility` : « amis » pour un mineur ou un âge
+ * inconnu). Elle se range entre le brouillon et la mémoire : un choix déjà
+ * fait pour CETTE publication garde la main, un souvenir d'un autre jour ne
+ * l'emporte pas sur la règle du régime protégé. Deux valeurs seulement : une
+ * adresse ne peut pas ouvrir un mode nominatif, ni « privé » par surprise.
+ */
+export function requestedAudienceFromSearch(search: URLSearchParams): ChoosableAudience | null {
+  return REQUESTABLE[search.get('audience') ?? ''] ?? null;
 }
 
 const AUDIENCE_LABEL_KEY: Readonly<Record<PostVisibility, AudienceLabelKey>> = {

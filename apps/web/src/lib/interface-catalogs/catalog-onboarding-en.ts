@@ -71,12 +71,12 @@ const en = {
 
   'onboarding.recap.title': 'Nice one!',
   'onboarding.recap.calm': 'You’re all set. You can do it whenever you like.',
-  'onboarding.recap.points': '+{points} pts',
-  'onboarding.recap.level': 'Level 1',
-  'onboarding.recap.streak': 'Streak 1 🔥',
+  'onboarding.recap.points': '{points} pts',
+  'onboarding.recap.level': 'Level {level}',
+  'onboarding.recap.streak': '{days}-day streak 🔥',
   'onboarding.recap.badges': 'Badges: {count}',
   'onboarding.recap.friends': 'Requests on their way: {count}',
-  'onboarding.recap.tomorrow': 'Tomorrow, your streak can reach 2.',
+  'onboarding.recap.tomorrow': 'Tomorrow, your streak can reach {next}.',
   'onboarding.recap.explore': 'Keep exploring',
   'onboarding.recap.done': 'That’s it for today',
 } satisfies OnboardingCatalog;

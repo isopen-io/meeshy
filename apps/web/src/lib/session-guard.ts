@@ -55,6 +55,12 @@ export type RouteKey =
    * elle peindrait un écran qui reçoit un 401 en silence.
    */
   | 'starredMessages'
+  /**
+   * L'ACCUEIL POST-INSCRIPTION (#7729) — PRIVÉE : `GET`/`PATCH
+   * /me/onboarding` exigent une session, et un parcours dont chaque carte
+   * crédite un COMPTE n'a rien à offrir à un visiteur ni à l'invité d'un lien.
+   */
+  | 'onboarding'
   | 'stories'
   | 'storyCompose'
   | 'story'
@@ -232,6 +238,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'bookmarks',
   /* LES MESSAGES FAVORIS (#7286) — voir la raison écrite sur `RouteKey`. */
   'starredMessages',
+  /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
+  'onboarding',
   'stories',
   'storyCompose',
   'story',

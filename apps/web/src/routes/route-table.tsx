@@ -1,6 +1,7 @@
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
 /**
@@ -54,6 +55,12 @@ const adminConversationScreen = () =>
    jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
+   (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
+   ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
+   `translateOnboarding` lève sur un catalogue non chargé. */
+const onboardingScreen = () =>
+  Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -142,6 +149,9 @@ export const ROUTES = {
   /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
      (`welcomeStore`), miroir `WelcomeView.swift`. */
   welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },
+  /* L'ACCUEIL POST-INSCRIPTION (#7729) — les cinq cartes jouées une fois après
+     l'inscription, proposées depuis `/` (`lib/onboarding/landing.ts`). PRIVÉE. */
+  onboarding: { pattern: '/onboarding', screen: onboardingScreen },
   /* L'INVITATION REÇUE PAR SMS (#7297) — `/download` est l'adresse que l'app
      PUBLIÉE envoie à quelqu'un qui ne connaît pas encore Meeshy
      (`DiscoverViewModel.swift:285`, `PhonebookViewModel.swift:282`). Elle vit
