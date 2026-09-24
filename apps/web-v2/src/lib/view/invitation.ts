@@ -1,3 +1,5 @@
+import { appelNatif, coqueCourante, type CoqueNative } from '@/lib/native-shell';
+
 /**
  * **Partager Meeshy — le seul démarrage que la v3.1 sache VRAIMENT offrir.**
  *
@@ -35,17 +37,6 @@ type NavigateurPartage = {
 };
 
 /**
- * Ce que la coque Capacitor pose sur `window.Capacitor` AVANT le premier
- * script (`native-bridge.js`, `JSExport`) : la liste des plugins natifs
- * enregistrés et l'appel brut. Lu tel quel — importer `@capacitor/core` pour
- * deux champs pèserait sur le bundle web qui n'en a pas l'usage.
- */
-type CoqueNative = {
-  readonly PluginHeaders?: ReadonlyArray<{ readonly name: string }>;
-  readonly nativePromise?: (plugin: string, methode: string, options: DonneesPartage) => Promise<unknown>;
-};
-
-/**
  * Le pont de partage de la coque Android (#7710) — `MeeshySharePlugin.java`.
  * La WebView Android n'implémente pas l'API Web Share (`navigator.share`
  * absent, crbug 765923) : sans ce pont, « Partager » y copiait le lien là où
@@ -61,14 +52,13 @@ const PONT_PARTAGE = 'MeeshyShare';
  */
 export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coque: CoqueNative | undefined }): PortailPartage {
   const { nav, coque } = hote;
-  const nativePromise = coque?.nativePromise;
-  const pontDeclare = coque?.PluginHeaders?.some((plugin) => plugin.name === PONT_PARTAGE) === true;
+  const pont = appelNatif(coque, PONT_PARTAGE);
   // `exactOptionalPropertyTypes` : une clé optionnelle s'OMET, elle ne se pose
   // pas à `undefined` — d'où la composition par épandage conditionnel.
   const partage = typeof nav.share === 'function'
     ? { share: (d: DonneesPartage) => nav.share!(d) }
-    : pontDeclare && typeof nativePromise === 'function'
-      ? { share: async (d: DonneesPartage) => void (await nativePromise(PONT_PARTAGE, 'share', d)) }
+    : pont !== null
+      ? { share: async (d: DonneesPartage) => void (await pont('share', d)) }
       : {};
   const copie = nav.clipboard && typeof nav.clipboard.writeText === 'function'
     ? { copier: (t: string) => nav.clipboard!.writeText(t) }
@@ -83,8 +73,7 @@ export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coqu
  */
 export function portailDuNavigateur(): PortailPartage {
   if (typeof navigator === 'undefined') return {};
-  const coque = (globalThis as { Capacitor?: CoqueNative }).Capacitor;
-  return portailDe({ nav: navigator as NavigateurPartage, coque });
+  return portailDe({ nav: navigator as NavigateurPartage, coque: coqueCourante() });
 }
 
 export function partagerInvitation(
