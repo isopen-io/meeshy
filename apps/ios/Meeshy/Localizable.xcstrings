@@ -40503,6 +40503,53 @@
         }
       }
     },
+    "auth.pendingLink.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سجّل الدخول: سيُفتح المحتوى الذي شاركه أحدهم معك مباشرةً بعد ذلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melde dich an: Der mit dir geteilte Inhalt öffnet sich direkt danach."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in: the content shared with you will open right after."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión: el contenido que te compartieron se abrirá justo después."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connectez-vous : le contenu qu'on vous a partagé s'ouvrira juste après."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accedi: il contenuto condiviso con te si aprirà subito dopo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre na sua conta: o conteúdo compartilhado com você abrirá logo em seguida."
+          }
+        }
+      }
+    },
     "auth.signup.email.label": {
       "extractionState": "manual",
       "localizations": {

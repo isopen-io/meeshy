@@ -145,6 +145,16 @@ extension iPadRootView {
             rightPanelRoute = .links
         case .hashtag(let tag):
             rightPanelRoute = .hashtagResults(tag: tag)
+        case .community(let id):
+            rightPanelRoute = .communityDetail(id)
+        case .unreadConversations:
+            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce.
+            conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
+        case .recentConversation:
+            // App Shortcut « Open Recent Conversation » et widget (#7811).
+            if let id = ConversationListEntry.recentConversationId(in: conversationViewModel.conversations) {
+                navigateToConversationById(id)
+            }
         case .externalLink(let url):
             // Cible EXTERNAL d'un `/l/<token>` : elle s'ouvre, elle ne se
             // rejoint pas. Même geste que `RootView`.
