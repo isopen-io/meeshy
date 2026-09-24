@@ -3,14 +3,8 @@ import { useStore } from 'zustand/react';
 
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 
-import {
-  MENTION_SUGGESTION_LIMIT,
-  activeMentionQuery,
-  filterMentionCandidates,
-  mergeMentionCandidates,
-  queriesRemote,
-  type MentionQuery,
-} from './mention-query';
+import { useMentionContacts } from './mention-contacts';
+import { activeMentionQuery, composeMentionList, filterMentionCandidates, queriesRemote, type MentionQuery } from './mention-query';
 import { mentionSourceStore, type MentionSource } from './mention-source';
 
 /** Le débounce de la recherche distante — `MentionComposerController.debounceMs`. */
@@ -53,16 +47,23 @@ const remember = (cache: RemoteCache, key: string, items: readonly MentionCandid
 };
 
 /**
- * LA LISTE DE MENTIONS DU COMPOSEUR (#7826) — miroir de
- * `MentionComposerController.handleQuery` :
+ * LA LISTE DE MENTIONS D'UN CHAMP (#7826, #7846) — miroir de
+ * `MentionComposerController.handleQuery`, et règle du porteur du 2026-09-24 :
  *
- * 1. les candidats LOCAUX (expéditeurs du fil) répondent IMMÉDIATEMENT, dès
- *    le `@` nu, sans réseau ;
- * 2. à partir de deux caractères, la passerelle est interrogée après 300 ms
- *    de silence ; une frappe plus récente ANNULE la précédente
+ * 1. `@` seul ⇒ les CONTACTS (cache persisté, `mention-contacts.ts`) puis
+ *    les PARTICIPANTS du contexte répondent IMMÉDIATEMENT, sans réseau ;
+ * 2. une lettre ⇒ ces deux groupes se filtrent ET se trient sous le doigt
+ *    (`rankMentionCandidates`), toujours sans réseau ;
+ * 3. deux lettres ⇒ la passerelle (ou l'annuaire) est interrogée après
+ *    300 ms de silence ; une frappe plus récente ANNULE la précédente
  *    (`AbortController`), jamais une réponse périmée ne remplace une liste
  *    plus juste ;
- * 3. la fusion garde les locaux en tête (`mergeMentionCandidates`).
+ * 4. la composition garde contacts → participants → autres, sans doublon
+ *    (`composeMentionList`).
+ *
+ * `source` : celle du champ (`useMentionSource`) ; ABSENTE, c'est celle que
+ * le fil ouvert publie (`mention-source.ts`), lue seulement quand une requête
+ * est active — le composeur du fil au repos ne re-rend pas à chaque message.
  *
  * Deux choix propres au web :
  * - pendant qu'une requête plus longue est en vol, la réponse de la requête
@@ -80,12 +81,15 @@ export function useMentionSuggestions(input: {
   readonly text: string;
   readonly caret: number;
   readonly enabled: boolean;
+  readonly source?: MentionSource | null;
 }): MentionSuggestions {
   const { text, caret, enabled } = input;
   const query = useMemo(() => (enabled ? activeMentionQuery(text, caret) : null), [enabled, text, caret]);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const active = query !== null && query.start !== dismissedAt;
-  const source = useStore(mentionSourceStore, (state) => (active ? state.source : null));
+  const published = useStore(mentionSourceStore, (state) => (active && input.source === undefined ? state.source : null));
+  const source = input.source === undefined ? published : active ? input.source : null;
+  const contacts = useMentionContacts({ active: source !== null, selfId: source?.selfId ?? null });
 
   useEffect(() => {
     if (query === null) setDismissedAt(null);
@@ -133,13 +137,8 @@ export function useMentionSuggestions(input: {
        réponse PROLONGÉE (`al` servie pendant que `ali` est en vol) est
        filtrée localement, faute de mieux. */
     const served = !usable ? NO_CANDIDATES : remote.key === needle ? remote.items : filterMentionCandidates(remote.items, query.query);
-    const merged = mergeMentionCandidates({
-      locals: filterMentionCandidates(source.locals, query.query),
-      remote: served,
-      selfId: source.selfId,
-    });
-    return merged.slice(0, MENTION_SUGGESTION_LIMIT);
-  }, [active, source, query, remote, needle]);
+    return composeMentionList({ contacts, participants: source.locals, remote: served, query: query.query, selfId: source.selfId });
+  }, [active, source, query, remote, needle, contacts]);
 
   const open = active && source !== null && (items.length > 0 || !resolving);
 

@@ -605,6 +605,7 @@ class ConversationViewModel: ObservableObject {
         reportService: ReportServiceProviding = ReportService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         mentionService: MentionServiceProviding = MentionService.shared,
+        mentionContacts: MentionContactsProviding = MentionContactsStore.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         dependencies: ConversationDependencies = .live,
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
@@ -669,15 +670,17 @@ class ConversationViewModel: ObservableObject {
         )
         self.messageStore = store
         // Wire up the mention controller for this conversation.
-        // localCandidates closure is evaluated lazily when a mention query fires,
+        // participants closure is evaluated lazily when a mention query fires,
         // so mentionCandidates (which depend on messages) is always up-to-date.
-        // messageStore is initialized first: the localCandidates closure
+        // messageStore is initialized first: the participants closure
         // transitively reads it through `mentionCandidates` -> `messages`,
         // so forming it before messageStore is set is a use-before-init error.
         self.mentionController = MentionComposerController(
             context: .conversation(id: conversationId),
-            localCandidates: { [weak self] in self?.mentionCandidates ?? [] },
-            service: mentionService
+            participants: { [weak self] in self?.mentionCandidates ?? [] },
+            service: mentionService,
+            contacts: mentionContacts,
+            currentUserId: authManager.currentUser?.id
         )
         let handler = ConversationSocketHandler(
             conversationId: conversationId,

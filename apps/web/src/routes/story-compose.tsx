@@ -92,6 +92,7 @@ import {
 } from '@/routes/story-compose-parts';
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
 import { measureSceneText, sameSceneTextBox, type SceneTextBox } from '@/routes/story-compose-text-box';
+import { StudioTextInput } from '@/routes/story-compose-text-input';
 
 /**
  * **CRÉER UNE STORY** (#6900, devenue un PLATEAU par #6943/#6944) — plusieurs
@@ -840,41 +841,15 @@ function StoryStudio({
                 </button>
               </>
             ) : null}
-            <label htmlFor="story-studio-text" className="offscreen">
-              {translate(lang, 'story.studio.text.label')}
-            </label>
-            {/* LA SAISIE, TRANSPARENTE ET ALIGNÉE AU PIXEL PRÈS sur ce que le
-             * moteur peint pour l'objet SÉLECTIONNÉ (défaut 1,
-             * revue-correction #6900) : sa boîte est celle MESURÉE, jamais une
-             * largeur/hauteur fixes qui coupaient les lignes ou décalaient le
-             * curseur d'une ligne entière. Sans texte peint (objet vide), elle
-             * retombe sur le centre par défaut, à la même ancre que l'objet. */}
-            <textarea
-              id="story-studio-text"
-              data-story-text-input
-              data-story-text-target={selectedId ?? undefined}
-              lang={selectedLayer?.language ?? language}
-              dir="auto"
-              disabled={selectedLayer === null}
-              value={selectedLayer?.text ?? ''}
-              onInput={(event) => onTextChange(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  void publish();
-                }
-              }}
-              placeholder={translate(lang, 'story.studio.text.placeholder')}
-              rows={1}
-              className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white placeholder:text-white placeholder:opacity-60"
-              style={{
-                ...(textBox !== null
-                  ? { top: textBox.top, left: textBox.left, width: textBox.width, height: textBox.height }
-                  : { top: '50%', left: '50%', width: '85%', transform: 'translate(-50%, -50%)' }),
-                ...(textAppearance !== null ? { fontSize: `${textAppearance.widthFraction * 100}cqw` } : {}),
-                lineHeight: 1.2,
-                zIndex: 2,
-              }}
+            <StudioTextInput
+              lang={lang}
+              targetId={selectedId}
+              layer={selectedLayer}
+              fallbackLanguage={language}
+              textBox={textBox}
+              fontSize={textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null}
+              onText={onTextChange}
+              onPublish={() => void publish()}
             />
             {/* LES POIGNÉES — seule chose posée sur la scène, et elles ne
                 règlent rien : elles SONT l'objet qu'on saisit. */}

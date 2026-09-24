@@ -2,12 +2,47 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
+import { mentionOptionId, type MentionField } from '@/lib/view/use-mention-field';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from './avatar';
 
-/** L'identifiant d'une rangée — `aria-activedescendant` du champ le vise. */
-export const mentionOptionId = (listId: string, index: number): string => `${listId}-option-${index}`;
+export { mentionOptionId };
+
+/** Où la liste flotte par rapport à son ancre (`relative`) : AU-DESSUS d'un
+ * composeur posé en bas d'écran, AU-DESSOUS d'un champ posé dans une liste
+ * ou en haut d'une scène. */
+export type MentionPlacement = 'above' | 'below';
+
+const PLACEMENT_CLASS: Record<MentionPlacement, string> = { above: 'bottom-full mb-2', below: 'top-full mt-2' };
+
+/**
+ * LA LISTE D'UN CHAMP QUI MENTIONNE (#7846) — la même pour tous les sites,
+ * branchée sur le mécanisme unique (`useMentionField`). Rien n'est rendu tant
+ * qu'aucune requête `@` n'est ouverte.
+ */
+export function MentionFieldPanel({
+  field,
+  language,
+  placement = 'above',
+}: {
+  readonly field: MentionField;
+  readonly language: InterfaceLanguage;
+  readonly placement?: MentionPlacement;
+}) {
+  if (!field.suggestions.open) return null;
+  return (
+    <MentionSuggestions
+      listId={field.listId}
+      items={field.suggestions.items}
+      activeIndex={field.suggestions.activeIndex}
+      language={language}
+      onPick={field.pick}
+      onHighlight={field.suggestions.highlight}
+      placement={placement}
+    />
+  );
+}
 
 /**
  * LA LISTE DE MENTIONS, POSÉE AU-DESSUS DU COMPOSEUR (#7826) — miroir de
@@ -33,7 +68,9 @@ export function MentionSuggestions({
   language,
   onPick,
   onHighlight,
+  placement = 'above',
 }: {
+  readonly placement?: MentionPlacement;
   readonly listId: string;
   readonly items: readonly MentionCandidate[];
   readonly activeIndex: number;
@@ -45,7 +82,7 @@ export function MentionSuggestions({
   return (
     <div
       data-mention-suggestions
-      className="glass-prominent absolute inset-x-3 bottom-full mb-2 overflow-hidden rounded-card shadow-cast"
+      className={`glass-prominent absolute inset-x-3 ${PLACEMENT_CLASS[placement]} overflow-hidden rounded-card shadow-cast`}
       style={{ zIndex: 5 }}
     >
       <p role="status" className="sr-only">

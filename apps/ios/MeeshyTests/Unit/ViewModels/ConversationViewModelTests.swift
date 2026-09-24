@@ -85,6 +85,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
+            mentionContacts: MockMentionContacts(),
             messageSocket: mockMessageSocket,
             dependencies: deps,
             activeCallService: activeCallService ?? ActiveCallService.shared,

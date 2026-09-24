@@ -14,14 +14,16 @@ final class MentionComposerControllerTests: XCTestCase {
         localCandidates: [MentionCandidate] = [],
         service: MockMentionService = MockMentionService(),
         directory: MockUserDirectorySearch = MockUserDirectorySearch(),
+        contacts: MockMentionContacts = MockMentionContacts(),
         currentUserId: String? = "moi"
     ) -> (sut: MentionComposerController, mock: MockMentionService) {
         let mock = service
         let sut = MentionComposerController(
             context: context,
-            localCandidates: { localCandidates },
+            participants: { localCandidates },
             service: mock,
             directory: directory,
+            contacts: contacts,
             currentUserId: currentUserId
         )
         return (sut, mock)
@@ -39,9 +41,10 @@ final class MentionComposerControllerTests: XCTestCase {
         let annuaire = MockUserDirectorySearch()
         let sut = MentionComposerController(
             context: context,
-            localCandidates: { localCandidates },
+            participants: { localCandidates },
             service: MockMentionService(),
             directory: annuaire,
+            contacts: MockMentionContacts(),
             currentUserId: currentUserId
         )
         return (sut, annuaire)

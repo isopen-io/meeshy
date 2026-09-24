@@ -3,12 +3,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
 import { CommentList } from '@/components/comment-list';
 import type { CommentGestureHandlers } from '@/components/comment-row';
+import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
+import { appQueryClient } from '@/lib/api/query-client';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
@@ -47,6 +50,19 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
     () => flattenCommentPages(query.data as CommentInfiniteData | undefined),
     [query.data],
   );
+
+  /**
+   * LES PARTICIPANTS D'UNE PUBLICATION (#7846) — son auteur, puis ceux qui
+   * la commentent, le plus récent d'abord ; la recherche distante interroge
+   * `contextType=post`. L'auteur vient de la carte déjà en cache (fil,
+   * détail) : rien n'est chargé pour le connaître.
+   */
+  const people = useMemo(() => {
+    const author = findCardPost(appQueryClient, postId)?.author;
+    const commenters = [...comments].reverse().map((comment) => comment.author);
+    return author === undefined || author === null ? commenters : [author, ...commenters];
+  }, [postId, comments]);
+  const mentionSource = useMentionSource({ postId, people });
 
   /* `minute` réévalue `new Date()` — même motif que le fil : une seule
      horloge par minute, jamais un `new Date()` par rangée à chaque rendu. */
@@ -148,9 +164,10 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
               if (failed !== undefined) void runGesture(failed.request);
             },
             busyOf: (commentId) => busy.has(commentId),
+            mentionSource,
           }
         : undefined,
-    [canWrite, viewerId, postId, language, runGesture, failures, busy],
+    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource],
   );
 
   return (
@@ -188,7 +205,7 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
       {/* UN VISITEUR ANONYME NE COMMENTE PAS — la passerelle exige un
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}
-      <CommentComposer language={language} onSend={onSend} canWrite={canWrite} />
+      <CommentComposer language={language} onSend={onSend} canWrite={canWrite} mentionSource={mentionSource} />
     </section>
   );
 }

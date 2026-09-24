@@ -1398,7 +1398,7 @@ struct CommentsSheetView: View {
                 ? nil
                 : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
-                mentionController.handleQuery(in: text)
+                mentionController.handleQuery(in: text, participants: MentionParticipants.of(post: post, comments: comments))
                 // Persiste le brouillon par post (un envoi vide le texte → efface).
                 CommentDraftStore.shared.save(postId: post.id, text: text)
             },
