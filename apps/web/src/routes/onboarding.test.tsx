@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingPatchBody, OnboardingState, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+import type { OnboardingPatchBody, OnboardingState, OnboardingStepId, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 
 import type { HttpRequest } from '@/lib/api/http';
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
@@ -71,7 +71,14 @@ function memoryStorage() {
   };
 }
 
-function harness(options: { readonly state?: OnboardingState; readonly greeting?: GreetingSend; readonly askable?: boolean } = {}) {
+function harness(
+  options: {
+    readonly state?: OnboardingState;
+    readonly greeting?: GreetingSend;
+    readonly askable?: boolean;
+    readonly confirmed?: readonly OnboardingStepId[];
+  } = {},
+) {
   const state = options.state ?? served();
   const patches: OnboardingPatchBody[] = [];
   const greetings: { conversationId: string; content: string; language: string }[] = [];
@@ -92,10 +99,13 @@ function harness(options: { readonly state?: OnboardingState; readonly greeting?
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(ONBOARDING_QUERY_KEY, state);
 
+  const progress = createJourneyProgressStore({ storage: memoryStorage() });
+  progress.write('u-maya', { done: options.confirmed ?? [], friendRequests: [] });
+
   const deps: OnboardingScreenDeps = {
     api: { source: 'gateway', transport },
     queryClient,
-    progress: createJourneyProgressStore({ storage: memoryStorage() }),
+    progress,
     sendGreeting: async (input) => {
       greetings.push({ conversationId: input.conversationId, content: input.content, language: input.language });
       return options.greeting ?? 'sent';
@@ -241,6 +251,55 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     await click(action(host, 'global.continue'));
     expect(patches).toEqual([{ step: 'global', outcome: 'done' }]);
     expect(card(host)).toBe('story');
+  });
+});
+
+describe('ce qui s’est confirmé ne se rejoue pas — ni second salut, ni seconde story', () => {
+  test('l’étape s’écrit sur le serveur à l’ACCUSÉ du salut, pas au tap « Continuer »', async () => {
+    signIn();
+    const { deps, patches } = harness();
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('step=global')} clearSearch={() => undefined} />);
+    await click(action(host, 'global.send'));
+    expect(patches).toEqual([{ step: 'global', outcome: 'done' }]);
+  });
+
+  test('un salut accusé puis un rechargement avant « Continuer » : la reprise ne rouvre pas le composeur', async () => {
+    signIn();
+    const { deps, greetings } = harness({ state: served({ seenSteps: ['languages'] }), confirmed: ['global'] });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('story');
+    expect(host.querySelector('[data-onb-greeting]')).toBeNull();
+    expect(greetings).toEqual([]);
+  });
+
+  test('la carte du salut rouverte par son adresse se montre ENVOYÉE, sans « Envoyer »', async () => {
+    signIn();
+    const { deps, greetings } = harness({ state: served({ seenSteps: ['languages'] }), confirmed: ['global'] });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('step=global')} clearSearch={() => undefined} />);
+    expect(host.querySelector('[data-onb-greeting]')).toBeNull();
+    expect(action(host, 'global.send')).toBeNull();
+    expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
+    await click(action(host, 'global.continue'));
+    expect(greetings).toEqual([]);
+    expect(card(host)).toBe('story');
+  });
+
+  test('au retour d’une publication, l’étape story s’écrit tout de suite', async () => {
+    signIn();
+    const { deps, patches } = harness();
+    await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('story=published')} clearSearch={() => undefined} />);
+    expect(patches).toEqual([{ step: 'story', outcome: 'done' }]);
+  });
+
+  test('une story publiée puis un rechargement : la carte 3 se montre publiée, sans « Créer ma story »', async () => {
+    signIn();
+    const { deps, patches } = harness({ state: served({ seenSteps: ['languages', 'global'] }), confirmed: ['story'] });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('step=story')} clearSearch={() => undefined} />);
+    expect(action(host, 'story.create')).toBeNull();
+    expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
+    await click(action(host, 'story.continue'));
+    expect(patches).toEqual([{ step: 'story', outcome: 'done' }]);
+    expect(card(host)).toBe('friends');
   });
 });
 

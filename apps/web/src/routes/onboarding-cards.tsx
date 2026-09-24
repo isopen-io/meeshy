@@ -205,6 +205,7 @@ type GlobalPhase = 'draft' | 'sending' | 'sent' | 'failed';
 export function GlobalCard({
   host,
   available,
+  alreadySent,
   name,
   languagesLabel,
   pick,
@@ -215,6 +216,8 @@ export function GlobalCard({
 }: {
   readonly host: CardHost;
   readonly available: boolean;
+  /** Le salut s'est déjà confirmé sur cet appareil : la carte se rouvre ENVOYÉE, jamais sur un composeur neuf. */
+  readonly alreadySent: boolean;
   readonly name: string;
   readonly languagesLabel: string;
   readonly pick: (count: number) => number;
@@ -229,7 +232,8 @@ export function GlobalCard({
   const [index, setIndex] = useState(() => pick(templates.length));
   const [draft, setDraft] = useState<GreetingDraft>(() => draftAt(index));
   const [text, setText] = useState(draft.text);
-  const [phase, setPhase] = useState<GlobalPhase>('draft');
+  const [phase, setPhase] = useState<GlobalPhase>(alreadySent ? 'sent' : 'draft');
+  const [sentText, setSentText] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   const fieldId = useId();
@@ -255,6 +259,7 @@ export function GlobalCard({
     setOffline(false);
     const outcome = await send(content);
     if (outcome === 'sent') {
+      setSentText(content);
       setPhase('sent');
       onReward();
       return;
@@ -295,9 +300,11 @@ export function GlobalCard({
         <p className="onb-note">{translateOnboarding(lang, 'onboarding.global.unavailable')}</p>
       ) : sent ? (
         <div className="onb-sent" data-onb-sent>
-          <div className="onb-sent-bubble" lang={host.lang}>
-            {text.trim()}
-          </div>
+          {sentText === null ? null : (
+            <div className="onb-sent-bubble" lang={host.lang}>
+              {sentText}
+            </div>
+          )}
           <p className="onb-sent-title">{translateOnboarding(lang, 'onboarding.global.sent')}</p>
           <div className="onb-rewards">
             <span className="onb-reward-chip">{translateOnboarding(lang, 'onboarding.global.badge')}</span>

@@ -58,6 +58,14 @@ describe('resumeStep — la reprise rouvre la PREMIÈRE étape manquante', () =>
     expect(resumeStep(context({ state: allButLast }))).toBe('notifications');
   });
 
+  test('une étape CONFIRMÉE sur cet appareil est réglée, même si le serveur ne l’a pas encore vue', () => {
+    const greeted = withDone(EMPTY_PROGRESS, 'global');
+    expect(resumeStep(context({ state: state({ seenSteps: ['languages'] }), progress: greeted }))).toBe('story');
+    const published = withDone(greeted, 'story');
+    expect(resumeStep(context({ state: state({ seenSteps: ['languages'] }), progress: published }))).toBe('friends');
+    expect(nextStepAfter('languages', context({ progress: published }))).toBe('friends');
+  });
+
   test('une demande d’ami envoyée compte comme une production', () => {
     const allButLast = state({ seenSteps: ['languages', 'global', 'story', 'friends'] });
     expect(resumeStep(context({ state: allButLast, progress: withFriendRequest(EMPTY_PROGRESS, 'u1') }))).toBe('notifications');

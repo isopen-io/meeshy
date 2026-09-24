@@ -56,8 +56,15 @@ export function producedSomething(context: Pick<JourneyContext, 'state' | 'progr
   );
 }
 
+/**
+ * **UNE ÉTAPE EST RÉGLÉE DÈS QU'ELLE S'EST CONFIRMÉE ICI** — vue par le
+ * serveur, pré-cochée par lui, OU confirmée sur cet appareil (`progress.done`).
+ * Le troisième terme ferme la fenêtre entre l'accusé et l'écriture serveur :
+ * un salut accusé puis un rechargement avant que la passerelle ait enregistré
+ * l'étape rouvrirait sinon un composeur neuf — et un second salut partirait.
+ */
 const isSettled = (step: OnboardingStepId, context: JourneyContext): boolean =>
-  context.state.seenSteps.includes(step) || context.state.prefilledSteps.includes(step);
+  context.state.seenSteps.includes(step) || context.state.prefilledSteps.includes(step) || context.progress.done.includes(step);
 
 const isOffered = (step: OnboardingStepId, context: JourneyContext): boolean =>
   step !== 'notifications' || (context.notificationsAskable && producedSomething(context));

@@ -227,6 +227,21 @@ export function OnboardingJourney({
   const { flight, bump, travelling, announcement, celebrate } = useRewardFlight(lang);
   const actionDeps: OnboardingActionDeps = useMemo(() => ({ ...deps.api, queryClient: deps.queryClient }), [deps.api, deps.queryClient]);
 
+  /* UNE ÉCRITURE PAR ÉTAPE ET PAR MONTAGE — l'accusé (salut, story) écrit
+     l'étape tout de suite ; « Continuer » ne la réécrit pas. Une écriture
+     refusée s'efface du registre : le geste suivant la retente. */
+  const recorded = useRef(new Set<OnboardingStepId>());
+  const record = useCallback(
+    (from: OnboardingStepId, outcome: OnboardingStepOutcome) => {
+      if (recorded.current.has(from)) return;
+      recorded.current.add(from);
+      void recordStep(actionDeps, from, outcome).then((ok) => {
+        if (!ok) recorded.current.delete(from);
+      });
+    },
+    [actionDeps],
+  );
+
   const context = useMemo<JourneyContext | null>(
     () => (state === undefined ? null : { state, progress, notificationsAskable: askable }),
     [state, progress, askable],
@@ -241,6 +256,7 @@ export function OnboardingJourney({
     if (search.get('story') === 'published') {
       setStoryPublished(true);
       setProgress((current) => withDone(current, 'story'));
+      record('story', 'done');
       celebrate(stepPoints('story'));
       setStep('story');
       clearSearch();
@@ -258,7 +274,7 @@ export function OnboardingJourney({
       return;
     }
     setStep(resumeStep(context));
-  }, [context, step, search, clearSearch, setProgress, celebrate, deps]);
+  }, [context, step, search, clearSearch, setProgress, record, celebrate, deps]);
 
   const leave = useCallback(
     (path: string) => {
@@ -271,18 +287,19 @@ export function OnboardingJourney({
   const advance = useCallback(
     (from: OnboardingStepId, outcome: OnboardingStepOutcome) => {
       if (context === null) return;
-      void recordStep(actionDeps, from, outcome);
+      record(from, outcome);
       setStep(nextStepAfter(from, context));
     },
-    [actionDeps, context],
+    [record, context],
   );
 
   const reward = useCallback(
     (step: OnboardingStepId) => {
       setProgress((current) => withDone(current, step));
+      record(step, 'done');
       celebrate(stepPoints(step));
     },
-    [setProgress, celebrate],
+    [setProgress, record, celebrate],
   );
 
   if (context === null || state === undefined || step === null) {
@@ -345,6 +362,7 @@ export function OnboardingJourney({
           <GlobalCard
             host={host}
             available={state.globalConversationId !== null}
+            alreadySent={progress.done.includes('global')}
             name={displayName}
             languagesLabel={languagesLabel}
             pick={(n) => Math.floor(deps.random() * n)}
@@ -363,7 +381,7 @@ export function OnboardingJourney({
             audience={state.storyDefaultVisibility}
             name={displayName}
             avatar={avatar}
-            published={storyPublished}
+            published={storyPublished || progress.done.includes('story')}
             onOpen={() => deps.navigate(href('storyCompose', undefined, { audience: state.storyDefaultVisibility, from: 'onboarding' }))}
             onDone={() => advance('story', 'done')}
             onLater={() => advance('story', 'skipped')}
