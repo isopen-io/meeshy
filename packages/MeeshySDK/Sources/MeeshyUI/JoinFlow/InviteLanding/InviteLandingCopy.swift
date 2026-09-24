@@ -23,7 +23,7 @@ public enum InviteLandingCopy {
     // MARK: - Group card
 
     static func createdOn(_ date: Date) -> String {
-        let formatted = date.formatted(date: .long, time: .omitted)
+        let formatted = ShareLinkDateFormat.day(date)
         return String(localized: "inviteLanding.group.createdOn", defaultValue: "créé le \(formatted)", bundle: .module)
     }
 

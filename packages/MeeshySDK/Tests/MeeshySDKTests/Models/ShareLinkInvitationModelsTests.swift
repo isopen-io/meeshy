@@ -136,6 +136,20 @@ final class ShareLinkInvitationModelsTests: XCTestCase {
         XCTAssertEqual(ShareLinkAddress.display(origin: "https://meeshy.me", linkId: "mshy_Kq7"), "meeshy.me/chat/mshy_Kq7")
     }
 
+    // MARK: - Dates (Gregorian in every locale)
+
+    func test_dates_stayGregorianEvenWhereTheLocaleDefaultsToAnotherCalendar() {
+        let date = Date(timeIntervalSince1970: 1_756_807_200) // 2 sept. 2025, 10:00 UTC
+        let utc = TimeZone(identifier: "UTC")!
+
+        let arabic = ShareLinkDateFormat.day(date, locale: Locale(identifier: "ar_SA"), timeZone: utc)
+        let french = ShareLinkDateFormat.day(date, locale: Locale(identifier: "fr_FR"), timeZone: utc)
+
+        XCTAssertFalse(arabic.contains("هـ"), "no Hijri era marker: \(arabic)")
+        XCTAssertTrue(arabic.contains("٢٠٢٥") || arabic.contains("2025"), arabic)
+        XCTAssertTrue(french.contains("2025") && french.contains("sept"), french)
+    }
+
     // MARK: - Choice matrix (session × requireAccount × open)
 
     func test_choices_signedOut_anonymousFirst_thenAccountEntries() {

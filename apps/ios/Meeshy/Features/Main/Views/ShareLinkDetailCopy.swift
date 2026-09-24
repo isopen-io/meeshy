@@ -10,7 +10,7 @@ enum ShareLinkDetailCopy {
     // MARK: - Hero
 
     static func createdOn(_ date: Date) -> String {
-        let formatted = date.formatted(date: .abbreviated, time: .omitted)
+        let formatted = ShareLinkDateFormat.day(date)
         return String(localized: "shareLink.detail.createdOn", defaultValue: "Lien créé le \(formatted)", bundle: .main)
     }
 
@@ -64,28 +64,42 @@ enum ShareLinkDetailCopy {
     }
 
     static func expiryValue(_ date: Date?) -> String {
-        date.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? never
+        date.map { ShareLinkDateFormat.dayAndTime($0) } ?? never
     }
 
     static func languages(_ codes: [String]) -> String {
         codes.isEmpty ? allLanguages : ListFormatter.localizedString(byJoining: codes.map(LanguageData.autonym(for:)))
     }
 
-    static func askedFields(_ settings: ShareLinkSettings) -> String {
+    /// « Prénom, nom et pseudo » : une seule phrase, liée à la façon de la
+    /// locale, majuscule au premier mot seulement. Les noms de champ vivent au
+    /// catalogue dans la casse de leur langue (minuscule en français, nom
+    /// commun capitalisé en allemand) — jamais abaissés par le code.
+    static func askedFields(_ settings: ShareLinkSettings, locale: Locale = .current) -> String {
         let fields = ShareLinkInvitationTerms.requestedFields(
             requireNickname: settings.requireNickname,
             requireEmail: settings.requireEmail,
             requireBirthday: settings.requireBirthday
         )
-        return ListFormatter.localizedString(byJoining: fields.map(fieldName))
+        return sentence(fields.flatMap(fieldNames), locale: locale)
     }
 
-    static func fieldName(_ field: InviteRequestedField) -> String {
+    static func sentence(_ items: [String], locale: Locale) -> String {
+        let joined = items.formatted(.list(type: .and).locale(locale))
+        guard let first = joined.first else { return joined }
+        return String(first).uppercased(with: locale) + joined.dropFirst()
+    }
+
+    static func fieldNames(_ field: InviteRequestedField) -> [String] {
         switch field {
-        case .name: return String(localized: "shareLink.detail.fieldName", defaultValue: "Nom complet", bundle: .main)
-        case .nickname: return String(localized: "shareLink.detail.fieldNickname", defaultValue: "Pseudo", bundle: .main)
-        case .email: return String(localized: "shareLink.detail.fieldEmail", defaultValue: "E-mail", bundle: .main)
-        case .birthday: return String(localized: "shareLink.detail.fieldBirthday", defaultValue: "Date de naissance", bundle: .main)
+        case .name:
+            return [
+                String(localized: "shareLink.detail.fieldFirstName", defaultValue: "prénom", bundle: .main),
+                String(localized: "shareLink.detail.fieldLastName", defaultValue: "nom", bundle: .main),
+            ]
+        case .nickname: return [String(localized: "shareLink.detail.fieldNickname", defaultValue: "pseudo", bundle: .main)]
+        case .email: return [String(localized: "shareLink.detail.fieldEmail", defaultValue: "e-mail", bundle: .main)]
+        case .birthday: return [String(localized: "shareLink.detail.fieldBirthday", defaultValue: "date de naissance", bundle: .main)]
         }
     }
 

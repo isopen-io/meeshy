@@ -391,7 +391,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // suit les CLÉS jusqu'à leur nouveau fichier (leçon 578). La page
         // d'invitation (#7795) vit dans MeeshyUI, catalogue du SDK.
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 0
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift",  // 58
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailCopy.swift",  // 59
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
         // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
         // propre fichier (RootView.swift dépassait le plafond dur de 1200

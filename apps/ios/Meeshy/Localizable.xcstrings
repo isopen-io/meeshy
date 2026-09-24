@@ -193568,53 +193568,6 @@
         }
       }
     },
-    "shareLink.detail.fieldName": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاسم الكامل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vollständiger Name"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Full name"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nombre completo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom complet"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome completo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome completo"
-          }
-        }
-      }
-    },
     "shareLink.detail.fieldNickname": {
       "extractionState": "manual",
       "localizations": {
@@ -193633,31 +193586,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Username"
+            "value": "username"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seudónimo"
+            "value": "seudónimo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pseudo"
+            "value": "pseudo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome utente"
+            "value": "nome utente"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apelido"
+            "value": "apelido"
           }
         }
       }
@@ -193680,31 +193633,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email"
+            "value": "email"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Correo electrónico"
+            "value": "correo electrónico"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail"
+            "value": "e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail"
+            "value": "e-mail"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail"
+            "value": "e-mail"
           }
         }
       }
@@ -193727,31 +193680,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Date of birth"
+            "value": "date of birth"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fecha de nacimiento"
+            "value": "fecha de nacimiento"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Date de naissance"
+            "value": "date de naissance"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data di nascita"
+            "value": "data di nascita"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data de nascimento"
+            "value": "data de nascimento"
           }
         }
       }
@@ -194457,6 +194410,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "A ação não foi concluída. Tente de novo."
+          }
+        }
+      }
+    },
+    "shareLink.detail.fieldFirstName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الاسم الأول"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorname"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "first name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nombre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "prénom"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nome"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nome"
+          }
+        }
+      }
+    },
+    "shareLink.detail.fieldLastName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسم العائلة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nachname"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "last name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apellido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nom"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cognome"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sobrenome"
           }
         }
       }
