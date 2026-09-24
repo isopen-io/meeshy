@@ -181,6 +181,13 @@
  * relèvent d'une passe qui leur est propre.
  */
 
+import { randomUUID } from 'crypto';
+import {
+  isSendReservationRefused,
+  newcomerSendReservationKey,
+  type SendReservationStore
+} from './newcomerSendReservations';
+
 /** La hiérarchie d'écriture, telle que `defaultWriteRole` la nomme au schéma. */
 const WRITE_ROLE_RANK: Readonly<Record<string, number>> = {
   everyone: 0,
@@ -331,7 +338,16 @@ export type ConversationWriteRefusal =
   | 'newcomer-slow-mode';
 
 export type ConversationWriteAdmission =
-  | { readonly admitted: true }
+  | {
+      readonly admitted: true;
+      /**
+       * Règle 4 — la fenêtre du mode lent que cet envoi a RÉSERVÉE. L'appelant
+       * la rend s'il n'écrit finalement pas le message (refus plus loin, panne
+       * de persistance) ; une fois la ligne écrite, il la laisse expirer.
+       * Absente partout ailleurs.
+       */
+      readonly releaseReservation?: () => Promise<void>;
+    }
   | {
       readonly admitted: false;
       readonly reason: ConversationWriteRefusal;
@@ -459,16 +475,24 @@ export async function admitConversationWriteFor(
      */
     readonly conversationId: string;
     readonly senderParticipantId: string;
+    /**
+     * Règle 4 — où la fenêtre du mode lent se RÉSERVE. EXIGÉE pour la même
+     * raison que `conversationId` : une lecture seule de la base laisse passer
+     * toute une rafale simultanée (cf. `newcomerSendReservations`).
+     */
+    readonly reservations: SendReservationStore;
+    /** L'identifiant de l'envoi (`clientMessageId`), pour laisser passer son rejeu. */
+    readonly sendId?: string;
     /** Injectable pour les tests ; `Date.now()` en production. */
     readonly now?: number;
   }
 ): Promise<ConversationWriteAdmission> {
-  const { conversation, conversationId, senderParticipantId, now = Date.now() } = params;
+  const { conversation, conversationId, senderParticipantId, reservations, sendId, now = Date.now() } = params;
 
   if (isConversationClosed(conversation)) return REFUSED('conversation-closed');
   if (!conversation) return ADMITTED;
   if (conversation.type === NEWCOMER_THROTTLED_TYPE) {
-    return admitGlobalNewcomer(prisma, { conversationId, senderParticipantId, now });
+    return admitGlobalNewcomer(prisma, { conversationId, senderParticipantId, reservations, sendId, now });
   }
   if (!hasWriteHierarchy(conversation)) return ADMITTED;
 
@@ -544,20 +568,33 @@ async function secondsUntilNextSend(
   // n'est sûre — plafond au réglage (une ligne datée dans le futur ne promet pas
   // plus d'attente que le mode lent lui-même), plancher à 1 s (jamais un refus
   // qui invite à réessayer immédiatement, ni un décompte négatif).
-  const remainingMs = lastSendAt.getTime() + slowModeSeconds * 1000 - now;
-  const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-  return Math.min(slowModeSeconds, remainingSeconds);
+  return waitSeconds(lastSendAt.getTime() + slowModeSeconds * 1000 - now, slowModeSeconds);
 }
+
+/** Une attente en millisecondes, rendue en secondes entières dans `[1, windowSeconds]`. */
+const waitSeconds = (remainingMs: number, windowSeconds: number): number =>
+  Math.min(windowSeconds, Math.max(1, Math.ceil(remainingMs / 1000)));
 
 /**
  * Règle 4 — le salon global ne connaît ni rang ni mode lent configuré, mais il
  * ralentit les comptes de moins de 24 h. Une lecture (rang + rôle plateforme +
  * date de création du compte) ; la fenêtre de débit n'est lue que pour un
  * nouveau compte. Une date de création absente ne fabrique pas un « nouveau ».
+ *
+ * Lire la base ne suffit PAS à trancher : la ligne n'existe qu'après
+ * `saveMessage`, et une rafale simultanée lisait « rien » à chaque envoi. La
+ * base écarte ce qui est déjà écrit ; la RÉSERVATION atomique départage les
+ * envois en vol — un seul la prend, les autres attendent ce qu'elle a d'âge.
  */
 async function admitGlobalNewcomer(
   prisma: Pick<ConversationWriteReader, 'participant' | 'message'>,
-  params: { readonly conversationId: string; readonly senderParticipantId: string; readonly now: number }
+  params: {
+    readonly conversationId: string;
+    readonly senderParticipantId: string;
+    readonly reservations: SendReservationStore;
+    readonly sendId: string | undefined;
+    readonly now: number;
+  }
 ): Promise<ConversationWriteAdmission> {
   const sender = await prisma.participant.findUnique({
     where: { id: params.senderParticipantId },
@@ -580,7 +617,17 @@ async function admitGlobalNewcomer(
     windowSeconds: GLOBAL_NEWCOMER_SLOW_MODE_SECONDS,
     now: params.now
   });
-  return retryAfterSeconds === 0 ? ADMITTED : THROTTLED(retryAfterSeconds, 'newcomer-slow-mode');
+  if (retryAfterSeconds > 0) return THROTTLED(retryAfterSeconds, 'newcomer-slow-mode');
+
+  const reservation = await params.reservations.reserve({
+    key: newcomerSendReservationKey(params.conversationId, params.senderParticipantId),
+    holder: params.sendId || randomUUID(),
+    windowMs: GLOBAL_NEWCOMER_SLOW_MODE_SECONDS * 1000,
+    now: params.now
+  });
+  return isSendReservationRefused(reservation)
+    ? THROTTLED(waitSeconds(reservation.retryAfterMs, GLOBAL_NEWCOMER_SLOW_MODE_SECONDS), 'newcomer-slow-mode')
+    : { admitted: true, releaseReservation: reservation.release };
 }
 
 /**
@@ -596,6 +643,8 @@ export async function admitConversationWrite(
   params: {
     readonly conversationId: string;
     readonly senderParticipantId: string;
+    readonly reservations: SendReservationStore;
+    readonly sendId?: string;
     /** Injectable pour les tests ; `Date.now()` en production. */
     readonly now?: number;
   }
@@ -616,6 +665,8 @@ export async function admitConversationWrite(
     conversation,
     conversationId: params.conversationId,
     senderParticipantId: params.senderParticipantId,
+    reservations: params.reservations,
+    sendId: params.sendId,
     now: params.now
   });
 }

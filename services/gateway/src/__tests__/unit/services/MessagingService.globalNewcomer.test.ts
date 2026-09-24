@@ -91,6 +91,17 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { cacheSendReservations } from '../../../services/messaging/newcomerSendReservations';
+
+/** Le cache partagé des réservations, `setnx` atomique comme Redis `SET NX` — neuf à chaque témoin. */
+const freshReservations = () => {
+  const entries = new Map<string, string>();
+  return cacheSendReservations(() => ({
+    setnx: async (key: string, value: string) => (entries.has(key) ? false : (entries.set(key, value), true)),
+    get: async (key: string) => entries.get(key) ?? null,
+    del: async (key: string) => { entries.delete(key); }
+  }));
+};
 
 describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans Meeshy Global (#7740)', () => {
   let service: MessagingService;
@@ -211,7 +222,9 @@ describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans
     service = new MessagingService(
       mockPrisma as unknown as PrismaClient,
       mockTranslationService,
-      mockNotificationService
+      mockNotificationService,
+      undefined,
+      freshReservations()
     );
   });
 
@@ -252,6 +265,52 @@ describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans
     const response = await service.handleMessage(validRequest, testParticipantId);
 
     expect(response.success).toBe(true);
+  });
+
+  // La règle se lisait AVANT l'écriture sans rien réserver : dix envois dans le
+  // même tick lisaient tous « aucun message » et passaient tous.
+  it('n’écrit qu’UN des deux envois simultanés d’un compte de 2 h, et refuse l’autre en mode lent', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: true });
+    mockPrisma.participant.findUnique.mockResolvedValue(globalMember(NEWCOMER_CREATED_AT()));
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+
+    const responses = await Promise.all([
+      service.handleMessage({ ...validRequest, clientMessageId: 'cmid-a' }, testParticipantId),
+      service.handleMessage({ ...validRequest, clientMessageId: 'cmid-b' }, testParticipantId)
+    ]);
+
+    expect(responses.filter((r) => r.success)).toHaveLength(1);
+    const refused = responses.filter((r) => !r.success);
+    expect(refused).toHaveLength(1);
+    expect(refused[0].code).toBe('NEWCOMER_SLOW_MODE');
+    expect(refused[0].retryAfter).toBe(30);
+    expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rend la fenêtre quand l’écriture de l’envoi admis échoue : le réessai immédiat passe', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: true });
+    mockPrisma.participant.findUnique.mockResolvedValue(globalMember(NEWCOMER_CREATED_AT()));
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    mockPrisma.message.create.mockRejectedValueOnce(new Error('mongo indisponible'));
+
+    const failed = await service.handleMessage({ ...validRequest, clientMessageId: 'cmid-a' }, testParticipantId);
+    const retried = await service.handleMessage({ ...validRequest, clientMessageId: 'cmid-a' }, testParticipantId);
+
+    expect(failed.success).toBe(false);
+    expect(failed.code).toBeUndefined();
+    expect(retried.success).toBe(true);
+  });
+
+  it('garde la fenêtre après un envoi écrit : le suivant, encore en vol, attend', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: true });
+    mockPrisma.participant.findUnique.mockResolvedValue(globalMember(NEWCOMER_CREATED_AT()));
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+
+    const first = await service.handleMessage({ ...validRequest, clientMessageId: 'cmid-a' }, testParticipantId);
+    const second = await service.handleMessage({ ...validRequest, clientMessageId: 'cmid-b' }, testParticipantId);
+
+    expect(first.success).toBe(true);
+    expect(second.code).toBe('NEWCOMER_SLOW_MODE');
   });
 
   it('ne porte ni code ni décompte sur un refus définitif', async () => {

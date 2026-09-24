@@ -25,6 +25,17 @@ import {
   isConversationClosed,
   isConversationWriteRefused
 } from '../../../../services/messaging/conversationWriteAdmission';
+import { cacheSendReservations } from '../../../../services/messaging/newcomerSendReservations';
+
+/** Une réservation neuve par admission : ces témoins portent sur la LECTURE de la base (cf. `globalNewcomerReservation.test.ts`). */
+const freshReservations = () => {
+  const entries = new Map<string, string>();
+  return cacheSendReservations(() => ({
+    setnx: async (key: string, value: string) => (entries.has(key) ? false : (entries.set(key, value), true)),
+    get: async (key: string) => entries.get(key) ?? null,
+    del: async (key: string) => { entries.delete(key); }
+  }));
+};
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const SENDER = 'participant-1';
@@ -129,6 +140,7 @@ const admitFor = (
       conversation: policy === null ? null : buildPolicy(policy),
       conversationId: CONVERSATION_ID,
       senderParticipantId: SENDER,
+      reservations: freshReservations(),
       now: NOW
     })
   };
@@ -661,7 +673,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(isConversationWriteRefused(admission)).toBe(true);
@@ -673,7 +686,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(isConversationWriteRefused(admission)).toBe(false);
@@ -687,7 +701,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(admission).toEqual({ admitted: false, reason: 'write-role-insufficient' });
@@ -703,7 +718,8 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
 
     await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
-      senderParticipantId: SENDER
+      senderParticipantId: SENDER,
+      reservations: freshReservations()
     });
 
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
@@ -729,6 +745,7 @@ describe('admitConversationWrite — la lecture, pour le point de convergence', 
     const admission = await admitConversationWrite(prisma, {
       conversationId: CONVERSATION_ID,
       senderParticipantId: SENDER,
+      reservations: freshReservations(),
       now: NOW
     });
 

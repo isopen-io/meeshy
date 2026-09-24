@@ -19,6 +19,7 @@ import {
   describeConversationWriteRefusal
 } from '../../services/messaging/conversationWriteAdmission.js';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
+import { sharedSendReservations } from '../../services/messaging/newcomerSendReservations.js';
 import { resolveParticipantRights } from '../../services/participantRights.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
@@ -290,7 +291,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const anonymousAdmission = await admitConversationWriteFor(fastify.prisma, {
         conversation: participantShareLink.conversation,
         conversationId: participantShareLink.conversationId,
-        senderParticipantId: anonymousParticipant.id
+        senderParticipantId: anonymousParticipant.id,
+        reservations: sharedSendReservations
       });
       if (isConversationWriteRefused(anonymousAdmission)) {
         return sendWriteRefusal(reply, anonymousAdmission);

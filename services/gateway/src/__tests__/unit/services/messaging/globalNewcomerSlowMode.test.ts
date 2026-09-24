@@ -20,6 +20,17 @@ import {
   GLOBAL_NEWCOMER_SLOW_MODE_SECONDS,
   GLOBAL_NEWCOMER_WINDOW_HOURS
 } from '../../../../services/messaging/conversationWriteAdmission';
+import { cacheSendReservations } from '../../../../services/messaging/newcomerSendReservations';
+
+/** Une réservation neuve par admission : ces témoins portent sur la LECTURE de la base (cf. `globalNewcomerReservation.test.ts`). */
+const freshReservations = () => {
+  const entries = new Map<string, string>();
+  return cacheSendReservations(() => ({
+    setnx: async (key: string, value: string) => (entries.has(key) ? false : (entries.set(key, value), true)),
+    get: async (key: string) => entries.get(key) ?? null,
+    del: async (key: string) => { entries.delete(key); }
+  }));
+};
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const SENDER = 'participant-newcomer';
@@ -67,6 +78,7 @@ const admit = (conversationType: string, sender: Sender) => {
       },
       conversationId: CONVERSATION_ID,
       senderParticipantId: SENDER,
+      reservations: freshReservations(),
       now: NOW
     })
   };
