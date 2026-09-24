@@ -484,6 +484,15 @@ final class Router: ObservableObject {
                 // réel par `ReelDoor`, dans le lecteur de réels (#7805).
                 DeepLinkRouter.shared.pendingDeepLink = .reel(postId: postId)
 
+            case .community(let id):
+                push(.communityDetail(id))
+
+            case .recentConversation:
+                DeepLinkRouter.shared.pendingDeepLink = .recentConversation
+
+            case .unreadConversations:
+                DeepLinkRouter.shared.pendingDeepLink = .unreadConversations
+
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
 

@@ -36,6 +36,12 @@ enum DeepLinkDestination: Equatable {
     /// Un réel NOMMÉ (`/reel/<id>`, `/reels?seed=<id>`, `meeshy://reel/<id>`) :
     /// il s'ouvre dans le lecteur de réels, comme depuis le fil (#7805).
     case reel(postId: String)
+    /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`) (#7811).
+    case community(id: String)
+    /// `meeshy://conversations/recent` — widget et App Shortcut (#7811).
+    case recentConversation
+    /// `meeshy://conversations/unread` — widgets « Non lus » (#7811).
+    case unreadConversations
     case hashtag(tag: String)
     case external(URL)
 }
@@ -245,6 +251,12 @@ enum DeepLinkParser {
         case "reel":
             // meeshy://reel/{postId} — miroir du lien universel `/reel/<id>`.
             if components.count >= 2 { return .reel(postId: components[1]) }
+        case "community", "communities":
+            // meeshy://community/{id} — miroir de `/communities/<id>` (#7811).
+            if components.count >= 2, let id = communityIdentifier(components[1]) { return .community(id: id) }
+        case "conversations":
+            // meeshy://conversations/{recent|unread} — widgets et App Shortcut.
+            if components.count >= 2, let entry = conversationListEntry(components[1]) { return entry }
         case "story", "stories", "s":
             // meeshy://story/{postId} (or meeshy://stories/{postId} or
             // meeshy://s/{postId}) — matches the canonical share URL the
@@ -307,6 +319,11 @@ enum DeepLinkParser {
             if head == "reel" {
                 return .reel(postId: components[1])
             }
+            // Communauté — `/communities/<id>`, l'adresse que le web sert ;
+            // `/communities/new` est son écran de création, pas une communauté.
+            if head == "communities", let id = communityIdentifier(components[1]) {
+                return .community(id: id)
+            }
             // User profile — `u` (canonical) and `users` (plural alias).
             if userSegments.contains(head) {
                 return .userProfile(username: components[1])
@@ -349,6 +366,21 @@ enum DeepLinkParser {
         return .external(url)
     }
 
+    /// Un identifiant de communauté, jamais le segment réservé `new` (création).
+    static func communityIdentifier(_ segment: String) -> String? {
+        let id = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+        return id.isEmpty || id == "new" ? nil : id
+    }
+
+    /// `recent` / `unread` sous `meeshy://conversations/`.
+    static func conversationListEntry(_ segment: String) -> DeepLinkDestination? {
+        switch segment {
+        case "recent": return .recentConversation
+        case "unread": return .unreadConversations
+        default: return nil
+        }
+    }
+
     /// `/reels?seed=<id>` — `nil` sans graine non vide : la liste nue des réels
     /// n'est pas une destination nommée.
     static func reelsSeed(components: [String], url: URL) -> String? {
@@ -381,6 +413,9 @@ enum DeepLink: Equatable {
     case storyDetail(postId: String)
     /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels (#7805).
     case reel(postId: String)
+    case community(id: String)
+    case recentConversation
+    case unreadConversations
     case userProfile(username: String)
     case ownProfile
     case userLinks
@@ -400,6 +435,23 @@ enum DeepLink: Equatable {
     /// désactivé, et chaque story de plus de 24 h (son expiration désactive ses
     /// liens de suivi, cf. `deactivatePostTrackingLinks` côté gateway).
     case unresolvedTrackedLink(token: String)
+
+    /// **Reçu sans compte, ce lien attend-il la connexion ?** (#7811)
+    ///
+    /// Un lien de CONTENU survit à la connexion : `pendingDeepLink` n'est pas
+    /// consommé tant que la personne n'a pas de session, et la racine le reprend
+    /// à son montage. L'écran de connexion le dit. Une invitation et un lien
+    /// magique s'ouvrent SANS compte, un lien externe part dans Safari, et un
+    /// lien non résolu n'a rien à promettre.
+    var opensAfterSignIn: Bool {
+        switch self {
+        case .joinLink, .chatLink, .magicLink, .externalLink, .unresolvedTrackedLink:
+            return false
+        case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
+            return true
+        }
+    }
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -507,6 +559,9 @@ final class DeepLinkRouter: ObservableObject {
         switch DeepLinkParser.parse(url) {
         case .storyDetail(let id):        return .storyDetail(postId: id)
         case .reel(let id):               return .reel(postId: id)
+        case .community(let id):          return .community(id: id)
+        case .recentConversation:         return .recentConversation
+        case .unreadConversations:        return .unreadConversations
         case .postDetail(let id):         return .postDetail(postId: id)
         case .post(let id):               return .postDetail(postId: id)
         case .conversation(let id, _):    return .conversation(id: id)
@@ -599,6 +654,14 @@ final class DeepLinkRouter: ObservableObject {
             // `/reel/{postId}` — le partage d'un réel (#7805).
             guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .reel(postId: postId)
+            return true
+
+        case "communities":
+            // `/communities/{id}` — une communauté ; `/communities/new` (création
+            // web) n'est pas revendiqué (#7811).
+            guard let raw = nonEmptyIdentifier(at: 1, in: pathComponents),
+                  let id = DeepLinkParser.communityIdentifier(raw) else { return false }
+            pendingDeepLink = .community(id: id)
             return true
 
         case "reels":
@@ -787,6 +850,22 @@ final class DeepLinkRouter: ObservableObject {
             // meeshy://reel/{postId} — miroir du lien universel `/reel/<id>`.
             guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .reel(postId: postId)
+            return true
+
+        case "community", "communities":
+            guard let raw = nonEmptyIdentifier(at: 0, in: pathComponents),
+                  let id = DeepLinkParser.communityIdentifier(raw) else { return false }
+            pendingDeepLink = .community(id: id)
+            return true
+
+        case "conversations":
+            // meeshy://conversations/{recent|unread} — widgets et App Shortcut.
+            guard let raw = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            switch DeepLinkParser.conversationListEntry(raw) {
+            case .recentConversation: pendingDeepLink = .recentConversation
+            case .unreadConversations: pendingDeepLink = .unreadConversations
+            default: return false
+            }
             return true
 
         case "story", "stories", "s":

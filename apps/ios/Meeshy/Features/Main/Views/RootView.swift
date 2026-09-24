@@ -655,6 +655,18 @@ struct RootView: View {
         case .hashtag(let tag):
             router.push(.hashtagResults(tag: tag))
 
+        case .community(let id):
+            router.push(.communityDetail(id))
+
+        case .recentConversation, .unreadConversations:
+            // Widgets et App Shortcut (#7811) : élections de `ConversationListEntry`.
+            router.popToRoot()
+            if deepLink == .unreadConversations {
+                conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
+            } else if let id = ConversationListEntry.recentConversationId(in: conversationViewModel.conversations) {
+                navigateToConversationById(id)
+            }
+
         case .externalLink(let url):
             // `/l/<token>` de cible EXTERNAL (façade d'une URL postée dans un
             // message) : la destination vit sur le web. Elle s'ouvre — elle ne
