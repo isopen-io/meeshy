@@ -928,6 +928,7 @@ const it = {
   'story.save.offline': 'Offline — riprova al ritorno della rete.',
   'story.save.refused': 'Accedi per salvare questa storia.',
   'story.save.missing': 'Questo contenuto non è più disponibile.',
+  'story.save.retry': 'Riprova — tocca di nuovo Salva.',
   'prism.translated.message': 'Messaggio tradotto',
   'prism.translated.comment': 'Commento tradotto',
   'prism.translated.post': 'Post tradotto',

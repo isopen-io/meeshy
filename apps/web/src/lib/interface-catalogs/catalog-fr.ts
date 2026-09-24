@@ -1017,6 +1017,7 @@ const fr = {
   'story.save.offline': 'Hors ligne — réessayez au retour du réseau.',
   'story.save.refused': 'Connectez-vous pour enregistrer cette story.',
   'story.save.missing': 'Ce média n’est plus disponible.',
+  'story.save.retry': 'Réessayez — appuyez de nouveau sur Enregistrer.',
   /* LA PASTILLE DU PRISME (#7141) — trois SUJETS, parce que « Afficher le
      message… » sur un commentaire serait traduit et faux. Neuf clés plates
      plutôt que trois à paramètre : l'accord (« traduit » / « traduite ») ne

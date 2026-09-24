@@ -928,6 +928,7 @@ const en = {
   'story.save.offline': 'Offline — try again when you’re back online.',
   'story.save.refused': 'Sign in to save this story.',
   'story.save.missing': 'This media is no longer available.',
+  'story.save.retry': 'Try again — tap Save once more.',
   'prism.translated.message': 'Translated message',
   'prism.translated.comment': 'Translated comment',
   'prism.translated.post': 'Translated post',

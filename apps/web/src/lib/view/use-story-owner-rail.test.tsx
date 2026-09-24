@@ -155,10 +155,15 @@ describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
     expect(Object.keys(probe.rail().handlers)).toEqual(['views']);
   });
 
-  test('un hôte SANS porte de livraison (coque Android) ⇒ « Vues » seule — aucun bouton sans effet', () => {
+  test('un hôte SANS porte de livraison DE FICHIER (coque Android) ⇒ Vues + Partager, jamais Enregistrer (revue #7116, défaut 2)', () => {
+    /* `share` ne lit jamais `host` — il partage un LIEN par
+       `sharePublicationLink` → `portailDuNavigateur()`, où la coque Android a
+       `MeeshySharePlugin` (#7710) même sans porte de fichier. Le retirer avec
+       `save` aurait caché un bouton qui, lui, aurait un effet — loi 4 lue à
+       l'envers. */
     probe = mountProbe({});
     probe.render(storyOf('st-a'));
-    expect(Object.keys(probe.rail().handlers)).toEqual(['views']);
+    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['share', 'views']);
   });
 });
 
@@ -217,6 +222,27 @@ describe('useStoryOwnerRail — « Enregistrer » : un job, un anneau, une issue
       probe.unmount();
       probe = undefined;
     }
+  });
+
+  test('l’activation expirée pendant l’export ANNONCE de retaper, jamais un échec définitif (revue #7116, défaut 1)', async () => {
+    /* Une coque sans ancre de repli, dont la seule porte de partage refuse par
+       `NotAllowedError` — le téléchargement a fait expirer l'activation du
+       geste. Le job se libère : le PROCHAIN tap est une activation fraîche. */
+    serveImage();
+    const expiringHost: FileDeliveryHost = {
+      canShareFiles: () => true,
+      shareFiles: async () => {
+        const error = new Error('not allowed');
+        error.name = 'NotAllowedError';
+        throw error;
+      },
+    };
+    probe = mountProbe(expiringHost);
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.announced).toEqual(['Réessayez — appuyez de nouveau sur Enregistrer.']);
+    expect(probe.rail().saving).toBeNull();
   });
 
   test('un SECOND tap pendant l’export est IGNORÉ — un seul téléchargement part', async () => {

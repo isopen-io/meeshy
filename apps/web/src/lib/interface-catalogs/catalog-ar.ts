@@ -925,6 +925,7 @@ const ar = {
   'story.save.offline': 'غير متصل — أعد المحاولة عند عودة الشبكة.',
   'story.save.refused': 'سجّل الدخول لحفظ هذه القصة.',
   'story.save.missing': 'لم تعد هذه الوسائط متاحة.',
+  'story.save.retry': 'أعد المحاولة — اضغط على حفظ مرة أخرى.',
   'prism.translated.message': 'رسالة مترجمة',
   'prism.translated.comment': 'تعليق مترجم',
   'prism.translated.post': 'منشور مترجم',

@@ -928,6 +928,7 @@ const de = {
   'story.save.offline': 'Offline — versuche es erneut, sobald das Netz zurück ist.',
   'story.save.refused': 'Melde dich an, um diese Story zu speichern.',
   'story.save.missing': 'Dieses Medium ist nicht mehr verfügbar.',
+  'story.save.retry': 'Versuche es erneut — tippe noch einmal auf Speichern.',
   'prism.translated.message': 'Übersetzte Nachricht',
   'prism.translated.comment': 'Übersetzter Kommentar',
   'prism.translated.post': 'Übersetzter Beitrag',
