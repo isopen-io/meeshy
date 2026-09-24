@@ -108,6 +108,18 @@ struct MeeshyApp: App {
             }
     }
 
+    /// L'aperçu DEBUG de l'onboarding REMPLACE l'écran de connexion au lieu de
+    /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
+    /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
+    /// le calque débordait alors de 19 pt, coupant son bouton au bord (#7729).
+    private static var onboardingPreviewReplacesLogin: Bool {
+        #if DEBUG
+        OnboardingPreviewLaunch.isActive
+        #else
+        false
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             SystemThemeDetector {
@@ -115,7 +127,7 @@ struct MeeshyApp: App {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
-                        } else if hasCheckedSession {
+                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
                             LoginView()
                         }
                     }
