@@ -21,6 +21,7 @@ import { resolveSceneText } from '@/lib/canvas/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { storyReturn } from '@/lib/onboarding/story-return';
 import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind, type StudioOrigin } from '@/lib/stories/publication-kind';
 import { layoutIsServed, type PublishChoice } from '@/lib/stories/publication-layout';
@@ -550,7 +551,12 @@ function StoryStudio({
     });
     if (chosen.kind === 'STORY') {
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
-      navigate(origin === 'onboarding' ? href('onboarding', undefined, { story: 'published' }) : href('stories'), origin === 'onboarding');
+      if (origin === 'onboarding') {
+        storyReturn.note(result.data.id);
+        navigate(href('onboarding', undefined, { story: result.data.id }), true);
+        return;
+      }
+      navigate(href('stories'), false);
       return;
     }
     // Le rafraîchissement du fil ne retient pas la navigation, et son

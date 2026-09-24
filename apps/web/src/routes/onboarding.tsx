@@ -35,6 +35,7 @@ import {
   type JourneyStep,
 } from '@/lib/onboarding/journey';
 import { journeyProgressStore, type JourneyProgressStore } from '@/lib/onboarding/progress-store';
+import { storyReturn } from '@/lib/onboarding/story-return';
 import { useSearch } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
@@ -90,6 +91,8 @@ export type OnboardingScreenDeps = {
   readonly notificationsAskable: () => boolean;
   readonly askNotifications: () => Promise<void>;
   readonly loadRecap: () => Promise<RecapNumbers | null>;
+  /** Le retour du studio n'est crédité qu'avec sa preuve (`story-return.ts`). */
+  readonly takeStoryProof: (storyId: string) => boolean;
   readonly random: () => number;
   readonly navigate: (path: string, replace?: boolean) => void;
 };
@@ -138,6 +141,7 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
     const { level, streak, badgesEarned } = result.data;
     return { points: level.value, level: level.level, streakDays: streak.currentDays, badges: badgesEarned };
   },
+  takeStoryProof: storyReturn.take,
   random: Math.random,
   navigate,
 };
@@ -259,13 +263,14 @@ export function OnboardingJourney({
     [state, progress, askable],
   );
 
-  /* L'ENTRÉE — une fois l'état connu (cache d'abord) : `?story=published` au
-     retour du studio, sinon `?step=` (un lien de reprise), sinon la première
-     étape manquante. Le paramètre est retiré de l'adresse : un rechargement
+  /* L'ENTRÉE — une fois l'état connu (cache d'abord) : `?story=<id>` au
+     retour du studio, crédité seulement avec sa preuve (`story-return.ts`),
+     sinon `?step=` (un lien de reprise), sinon la première étape manquante. Le paramètre est retiré de l'adresse : un rechargement
      ne rejoue pas la récompense. */
   useEffect(() => {
     if (context === null || step !== null) return;
-    if (search.get('story') === 'published') {
+    const returned = search.get('story');
+    if (returned !== null && deps.takeStoryProof(returned)) {
       setStoryPublished(true);
       setProgress((current) => withDone(current, 'story'));
       record('story', 'done');
@@ -274,6 +279,7 @@ export function OnboardingJourney({
       clearSearch();
       return;
     }
+    if (returned !== null) clearSearch();
     const asked = search.get('step');
     if (isStepId(asked)) {
       setStep(asked);

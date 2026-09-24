@@ -79,6 +79,8 @@ function harness(
     readonly confirmed?: readonly OnboardingStepId[];
     /** Un cache PERSISTÉ vieux d'une heure : l'écran s'ouvre dessus, puis la relecture de `state` arrive quand le témoin la relâche. */
     readonly staleCache?: OnboardingState;
+    /** L'id de la story que le studio vient VRAIMENT de publier (sa preuve de retour). */
+    readonly publishedStory?: string;
   } = {},
 ) {
   const state = options.state ?? served();
@@ -131,6 +133,7 @@ function harness(
       asked += 1;
     },
     loadRecap: async () => null,
+    takeStoryProof: (storyId) => storyId === options.publishedStory,
     random: () => 0,
     navigate: (path, replace = false) => visits.push({ path, replace }),
   };
@@ -343,9 +346,23 @@ describe('ce qui s’est confirmé ne se rejoue pas — ni second salut, ni seco
 
   test('au retour d’une publication, l’étape story s’écrit tout de suite', async () => {
     signIn();
-    const { deps, patches } = harness();
-    await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('story=published')} clearSearch={() => undefined} />);
+    const { deps, patches } = harness({ publishedStory: 'story-1' });
+    await mount(<OnboardingJourney deps={deps} search={new URLSearchParams('story=story-1')} clearSearch={() => undefined} />);
     expect(patches).toEqual([{ step: 'story', outcome: 'done' }]);
+  });
+
+  test('une adresse de retour SANS preuve de publication ne crédite rien : le parcours reprend normalement', async () => {
+    signIn();
+    const { deps, patches } = harness();
+    let cleared = 0;
+    const host = await mount(
+      <OnboardingJourney deps={deps} search={new URLSearchParams('story=published')} clearSearch={() => (cleared += 1)} />,
+    );
+    await landed();
+    expect(patches).toEqual([]);
+    expect(card(host)).toBe('languages');
+    expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
+    expect(cleared).toBe(1);
   });
 
   test('une story publiée puis un rechargement : la carte 3 se montre publiée, sans « Créer ma story »', async () => {
@@ -372,10 +389,10 @@ describe('carte 3 — la première story, visibilité servie', () => {
 
   test('au retour d’une publication : +10, et l’adresse est nettoyée', async () => {
     signIn();
-    const { deps } = harness();
+    const { deps } = harness({ publishedStory: 'story-1' });
     let cleared = 0;
     const host = await mount(
-      <OnboardingJourney deps={deps} search={new URLSearchParams('story=published')} clearSearch={() => (cleared += 1)} />,
+      <OnboardingJourney deps={deps} search={new URLSearchParams('story=story-1')} clearSearch={() => (cleared += 1)} />,
     );
     expect(card(host)).toBe('story');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();

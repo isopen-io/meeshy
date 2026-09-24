@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
+import { storyReturn } from '@/lib/onboarding/story-return';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { buttonNamed } from '@/test-support/act-mount';
@@ -727,7 +728,8 @@ describe('StoryComposeScreen — ouvert par l’accueil post-inscription (#7729)
     await flush(() => window.location.pathname === '/onboarding');
 
     expect(bench.posts[0]?.visibility).toBe('FRIENDS');
-    expect(`${window.location.pathname}${window.location.search}`).toBe('/onboarding?story=published');
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/onboarding?story=post-1');
+    expect(storyReturn.take('post-1')).toBe(true);
     dispose();
     goTo(before);
   });
