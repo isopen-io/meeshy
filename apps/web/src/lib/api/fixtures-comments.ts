@@ -88,6 +88,17 @@ const FILS: Readonly<Record<string, readonly PostComment[]>> = {
     comment('cm-st-3', TARIQ, 'On y retourne quand ?', 52, { originalLanguage: 'fr' }),
   ],
   'st-mienne': [comment('cm-mienne-1', NOA, 'Ça fait plaisir de te lire !', 9, { originalLanguage: 'fr' })],
+  /* LE RÉEL DU GATE NAVIGATEUR (#6484, `scripts/check-reels.mjs`, `SEED =
+     'reel-portrait'`) — DEUX commentaires, jamais onze : `REEL_PORTRAIT.
+     commentCount` (`fixtures-feed.ts`) est passé de 11 à 2 dans le MÊME lot,
+     pour qu'un compteur annonçant onze ne surplombe plus un fil qui n'en
+     porte aucun (cycle 122 du CLAUDE.md racine : « qui AFFICHE ce qu'il
+     élit ? »). Auteurs du corpus EXISTANT (Noa, Tariq) — jamais Kwame/Amina/
+     Fatou/Bruno, les preuves « ceci est une fixture » du socle. */
+  'reel-portrait': [
+    comment('cm-reel-portrait-1', NOA, 'La reprise du refrain est parfaite.', 6, { originalLanguage: 'fr' }),
+    comment('cm-reel-portrait-2', TARIQ, 'On sent que le groupe est chaud ce soir.', 22, { originalLanguage: 'fr' }),
+  ],
 };
 
 const EMPTY_PAGE: CommentPage = {

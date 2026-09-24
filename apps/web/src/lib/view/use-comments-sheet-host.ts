@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * LA LOI D'HÔTE DE LA FEUILLE DE COMMENTAIRES (#6484, D-89) — ce qu'un écran
@@ -30,16 +30,13 @@ export type CommentsSheetHost = {
   readonly close: () => void;
 };
 
+/* `open`/`close` ne sont PAS mémoïsés (`useCallback`) — rien en aval ne
+ * compare leur identité (`RailButton` n'est pas `memo()`), et le mémoïser
+ * n'aurait payé qu'un import et deux enveloppes pour rien (mesuré :
+ * `measure-weight.mjs`, chunk `reels`, marge serrée). */
 export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHost {
   const [postId, setPostId] = useState<string | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-
-  const open = useCallback((id: string) => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPostId(id);
-  }, []);
-
-  const close = useCallback(() => setPostId(null), []);
 
   useEffect(() => {
     if (postId !== null) return;
@@ -55,5 +52,12 @@ export function useCommentsSheetHost(closeWhenChanges: unknown): CommentsSheetHo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeWhenChanges]);
 
-  return { postId, open, close };
+  return {
+    postId,
+    open: (id: string) => {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPostId(id);
+    },
+    close: () => setPostId(null),
+  };
 }

@@ -1,9 +1,9 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useStore } from 'zustand/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
+import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { ReelPage } from '@/components/reel-page';
 import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
@@ -11,8 +11,6 @@ import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
-import { sessionStore } from '@/lib/api/session';
-import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -28,15 +26,8 @@ import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSettled } from '@/lib/view/use-settled';
+import { useViewer } from '@/lib/view/use-viewer';
 import { href, navigate } from '@/routes/route-table';
-
-/** La feuille de commentaires — chargée À LA DEMANDE (motif D-54, comme
- * `routes/story.tsx`) : un lecteur qui regarde des réels sans les commenter
- * ne paie ni la liste, ni le composeur, ni leur requête. Composant PARTAGÉ
- * avec le lecteur de stories (D-89, #6484) — `components/publication-comments-sheet.tsx`. */
-const PublicationCommentsSheet = lazy(() =>
-  import('@/components/publication-comments-sheet').then((m) => ({ default: m.PublicationCommentsSheet })),
-);
 
 /**
  * LES RÉELS (#6457) — miroir de `ReelsPlayerView` et `ReelsViewModel` (iOS) :
@@ -193,11 +184,10 @@ export default function ReelsScreen() {
   const [soundOn, setSoundOn] = useState(hasUserActivation);
 
   /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
-     exigent un `registeredUser` (`interactions.ts:826-828`,
-     `comments.ts:184-186`), même garde que `CommentThread.canWrite`. Offrir
-     les boutons puis refuser en 401 serait un contrôle qui ment (loi 4). */
-  const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+     exigent un `registeredUser`, même garde que `CommentThread.canWrite`.
+     `useViewer` est PARTAGÉ avec `comment-thread.tsx` (#6484,
+     `lib/view/use-viewer.ts`) : aucun des deux ne le paie deux fois. */
+  const viewer = useViewer();
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
@@ -344,11 +334,7 @@ export default function ReelsScreen() {
           />
         ))}
       </div>
-      {comments.postId !== null ? (
-        <Suspense fallback={null}>
-          <PublicationCommentsSheet postId={comments.postId} onClose={comments.close} />
-        </Suspense>
-      ) : null}
+      <CommentsSheetPortal host={comments} />
     </>
   );
 

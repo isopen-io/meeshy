@@ -14,6 +14,7 @@ import { useStore } from 'zustand/react';
 import { Avatar } from '@/components/avatar';
 import { PersonName } from '@/components/person-name';
 import { Glyph } from '@/components/glyph';
+import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { STORY_ACTION_RAIL_CORRIDOR, StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
@@ -62,6 +63,7 @@ import {
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -72,13 +74,9 @@ import { Link, href, navigate } from '@/routes/route-table';
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
  * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
 const StorySceneLayer = lazy(() => import('./story-scene-layer'));
-
-/** Le fil de commentaires — chargé À LA DEMANDE (motif D-54) : un lecteur qui
- * regarde des stories sans les commenter ne paie ni la liste, ni le
- * composeur, ni leur requête. */
-const StoryCommentsSheet = lazy(() =>
-  import('@/components/publication-comments-sheet').then((m) => ({ default: m.PublicationCommentsSheet })),
-);
+/* Le fil de commentaires — `CommentsSheetPortal` (import ci-dessus) PARTAGE
+ * l'appel `lazy()` et le montage `Suspense` avec `routes/reels.tsx` (#6484,
+ * `publication-comments-sheet-lazy.tsx`), motif D-54. */
 
 /**
  * **LE LECTEUR PLEIN ÉCRAN DE STORIES** (#5817, D-1) — la référence est le
@@ -319,23 +317,15 @@ export default function StoryScreen() {
   const [frozenRail, setFrozenRail] = useState<FrozenStoryActionRail | null>(null);
   /** Le fil de commentaires, ouvert par « Commentaires » ou par « Répondre »
    * — une seule zone de saisie pour les deux (spécification porteur du
-   * 2026-05-28, citée par `StoryComposerBarView`). */
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  /**
-   * **CE QUI AVAIT LE FOCUS QUAND LA FEUILLE S'EST OUVERTE**, mémorisé par
-   * l'HÔTE et non par la feuille (revue #7112) — parce que c'est l'hôte qui
-   * le détruit : il rend le rail `inert` à l'ouverture (D-90), et un
-   * sous-arbre inerte ÉJECTE le focus qu'il contient. Une feuille qui lirait
-   * `document.activeElement` à son montage trouverait déjà `<body>` — mesuré
-   * au navigateur, c'est exactement ce que le témoin a rendu avant ce
-   * correctif. On retient donc AVANT d'ouvrir, et on rend APRÈS avoir
-   * refermé, quand l'inertie est levée.
-   */
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+   * 2026-05-28, citée par `StoryComposerBarView`). La loi d'hôte (focus,
+   * fermeture au changement de story) est PARTAGÉE avec le lecteur des Réels
+   * (#6484, `use-comments-sheet-host.ts`) — un second `commentsOpen` inline
+   * ici l'aurait dupliquée. */
+  const commentsHost = useCommentsSheetHost(currentStory?.id);
+  const commentsOpen = commentsHost.postId !== null;
   const openComments = useCallback(() => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setCommentsOpen(true);
-  }, []);
+    if (currentStory !== undefined) commentsHost.open(currentStory.id);
+  }, [currentStory, commentsHost]);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   /**
    * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
@@ -457,7 +447,7 @@ export default function StoryScreen() {
    * `useState` semé UNE fois, que `resume()` défait sans que rien ne la
    * ré-affirme. La feuille n'occupe que le bas de l'écran ; un tap sur la
    * scène NUE au-dessus valait « reprendre » (`decideTouchDown`), la story
-   * avançait six secondes plus tard, `setCommentsOpen(false)` fermait le fil
+   * avançait six secondes plus tard, `commentsHost.close()` fermait le fil
    * — et le commentaire à moitié écrit partait avec. C'est le symptôme 2 de
    * D-91 par l'autre entrée : la cession avait été écrite pour les touches,
    * jamais pour le doigt. La loi vit à UN seul endroit, avec sa jumelle du
@@ -612,28 +602,14 @@ export default function StoryScreen() {
   }, [currentStory]);
 
   /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
-     le fil qu'on lit, et le composeur changerait de publication à mi-phrase. */
+     le fil qu'on lit, et le composeur changerait de publication à mi-phrase.
+     Le focus et la fermeture au changement de story sont la loi PARTAGÉE de
+     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. */
   useEffect(() => {
     if (!commentsOpen) return;
     pause();
     return () => resume();
   }, [commentsOpen, pause, resume]);
-
-  /* ET LE FOCUS REVIENT D'OÙ IL EST PARTI. L'effet tourne APRÈS le commit qui
-     retire `inert` du rail : rendre le focus plus tôt le verrait rejeté par
-     l'inertie encore posée. `isConnected` parce que la feuille se ferme AUSSI
-     quand la story change — le bouton d'origine peut alors n'être plus là. */
-  useEffect(() => {
-    if (commentsOpen) return;
-    const target = returnFocusRef.current;
-    returnFocusRef.current = null;
-    if (target !== null && target.isConnected) target.focus();
-  }, [commentsOpen]);
-
-  /* Une nouvelle story ferme le fil : il appartenait à la précédente. */
-  useEffect(() => {
-    setCommentsOpen(false);
-  }, [currentStory?.id]);
 
   /**
    * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).
@@ -1008,11 +984,7 @@ export default function StoryScreen() {
             />
           ) : null}
 
-          {commentsOpen ? (
-            <Suspense fallback={null}>
-              <StoryCommentsSheet postId={currentStory.id} onClose={() => setCommentsOpen(false)} />
-            </Suspense>
-          ) : null}
+          <CommentsSheetPortal host={commentsHost} />
         </div>
       ) : null}
     </div>
