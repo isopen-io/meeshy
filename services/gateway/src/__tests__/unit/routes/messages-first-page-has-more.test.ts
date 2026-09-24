@@ -11,7 +11,7 @@
  * le sautent), et `pagination.hasMore` en dérive correctement douze lignes
  * plus bas (`buildPaginationMeta` : `offset + resultCount < total`). Une
  * seule charge portait donc DEUX `hasMore` contradictoires — et le client lit
- * celui qui ment (`apps/web-v2/src/lib/api/messages.ts:50` → `hasOlder`, qui
+ * celui qui ment (`apps/web/src/lib/api/messages.ts:50` → `hasOlder`, qui
  * libelle « Sur les N derniers messages » du Résumé Vivant).
  *
  * ## Le rang sur lequel ces témoins sont écrits

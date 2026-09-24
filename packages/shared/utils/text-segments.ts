@@ -11,7 +11,7 @@
  * Deux consommateurs TypeScript existent déjà — `apps/web` (legacy,
  * `components/v2/PostContentText.tsx`) et `apps/web-v2` — et c'est le critère
  * du dépôt pour qu'une loi monte dans `packages/shared` (D-24 de
- * `apps/web-v2/decisions.md`). Écrite dans un client, elle serait recopiée
+ * `apps/web/decisions.md`). Écrite dans un client, elle serait recopiée
  * dans l'autre au premier lot de parité, et les deux copies diraient deux
  * choses différentes au second.
  *

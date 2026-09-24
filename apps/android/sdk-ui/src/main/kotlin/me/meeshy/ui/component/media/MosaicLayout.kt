@@ -48,7 +48,7 @@ public sealed interface MosaicArrangement {
 /**
  * **La géométrie des agencements d'une publication** (#6514), portée de
  * `MosaicLayout.swift` (`packages/MeeshySDK/Sources/MeeshyUI/Story/`) cote pour
- * cote. `apps/web-v2/src/lib/feed/mosaic-layout.ts` en dérive la même.
+ * cote. `apps/web/src/lib/feed/mosaic-layout.ts` en dérive la même.
  *
  * Une règle PURE plutôt que cinq vues : cinq `@Composable` divergeraient sur ce
  * qu'ils ont en commun (le plafond de quatre, le report, la légende). Le rendu

@@ -234,7 +234,7 @@ eux, des lecteurs clients et sont deja servis calcules; leur retrait est un lot 
 
 **Statut**: Accepté (gateway/shared livrés ; web hors de ce lot)
 
-**Contexte**: #6534 laissait `PostMedia.alt` explicitement hors du lot #6280 (§ ci-dessus, point 3), en attente d'une mesure d'usage réel avant décision (dimension 10, Utilité). La mesure : `alt` a un producteur ET un consommateur réels sur le WEB (`apps/web/components/v2/MediaAccessibilityFields.tsx` → `<img alt=...>` dans `ImageGallery`/`PostCard`/`PostDetail`/`CanvasV3Scene`) — ce n'est pas un champ mort. iOS écrit `alt` sans jamais le rendre à VoiceOver (#6738, défaut d'accessibilité indépendant de la traduction) ; Android n'a ni producteur ni consommateur (#6739).
+**Contexte**: #6534 laissait `PostMedia.alt` explicitement hors du lot #6280 (§ ci-dessus, point 3), en attente d'une mesure d'usage réel avant décision (dimension 10, Utilité). La mesure : `alt` a un producteur ET un consommateur réels sur le WEB (`legacy-web-final:apps/web/components/v2/MediaAccessibilityFields.tsx` → `<img alt=...>` dans `ImageGallery`/`PostCard`/`PostDetail`/`CanvasV3Scene`) — ce n'est pas un champ mort. iOS écrit `alt` sans jamais le rendre à VoiceOver (#6738, défaut d'accessibilité indépendant de la traduction) ; Android n'a ni producteur ni consommateur (#6739).
 
 **Décision**:
 1. **OUI, `alt` se traduit comme `caption`** — le web a une valeur immédiate et mesurée ; iOS/Android en auront une une fois leurs prérequis respectifs livrés (#6738, #6739), hors périmètre de ce lot.

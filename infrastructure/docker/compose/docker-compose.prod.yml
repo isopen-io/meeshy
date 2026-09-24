@@ -372,7 +372,7 @@ services:
   # `gate.meeshy.me`) : aucune variable d'environnement, et aucune dépendance à
   # la passerelle pour démarrer. Le volume `frontend_uploads`, que le legacy
   # remplissait sous `/app/public/u`, est servi en LECTURE SEULE sous `/u/`
-  # (`apps/web-v2/nginx.conf`) : les avatars et bannières déjà téléversés gardent
+  # (`apps/web/nginx.conf`) : les avatars et bannières déjà téléversés gardent
   # leur adresse. Retour arrière : `FRONTEND_IMAGE=isopen/meeshy-web:latest` et
   # le bloc précédent de ce service (port 3100, variables `NEXT_PUBLIC_*`).
   frontend:

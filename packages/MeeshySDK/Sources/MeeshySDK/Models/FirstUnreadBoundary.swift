@@ -59,7 +59,7 @@ public enum FirstUnreadBoundary {
         /// le préfixe contigu vu et que la fenêtre paginée gardait alors des
         /// candidats déjà comptés lus. Le rebrancher sur le séparateur rouvre
         /// la divergence séparateur ↔ ligne de liste. Le miroir web
-        /// (`apps/web-v2/src/lib/view/unread-boundary.ts`) le lit encore.
+        /// (`apps/web/src/lib/view/unread-boundary.ts`) le lit encore.
         public let unreadCount: Int
 
         public init(firstUnreadId: String, unreadCount: Int) {

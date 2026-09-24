@@ -227,7 +227,7 @@ export const parseCatalogBlock = (blockLines) => {
 // 268 → 269 (#5743) : `me.meeshMint` (`POST /me/meesh/mint`, la frappe d'une
 // Meesh). La raison DIFFÈRE des deux précédentes, et c'est pourquoi elle est
 // écrite plutôt que rangée sous « même forme que » : cette route A un appelant
-// client — `mintMeesh` dans `apps/web-v2/src/lib/api/engagement.ts` — mais il
+// client — `mintMeesh` dans `apps/web/src/lib/api/engagement.ts` — mais il
 // ne passe PAS par ce catalogue. La v3.1 n'importe `@meeshy/shared/api/endpoints`
 // nulle part : ses 444 adresses se paieraient avant le premier pixel (D-14), et
 // chaque kilo-octet y est mesuré par un gate. Elle adresse donc ses routes par
@@ -316,7 +316,13 @@ export const parseCatalogBlock = (blockLines) => {
 // — que ce script ne balaie pas, voir la note sur
 // `posts.mediaByMediaIdCaptionTranslate` —, et #7379 côté iOS (catalogue
 // Swift). Valeur MESURÉE sur l'arbre fusionné avec le dev du 2026-09-21.
-const BASELINE_DEAD_ENTRIES = 284;
+// 284 → 455 (#7668, 2026-09-24) : aucune entrée ajoutée — c'est le CLIENT qui
+// est parti. `SEARCH_ROOTS` balayait le legacy `apps/web`, seul consommateur
+// d'`API_ENDPOINTS` ; il a quitté le dépôt, et l'application qui a pris son
+// chemin écrit ses adresses en littéraux (`path: '/api/v1/…'`) sans importer
+// le catalogue. 455 entrées sur 459 n'ont donc plus d'appelant. Trancher entre
+// « le web adopte le catalogue » et « le catalogue part » : #7716.
+const BASELINE_DEAD_ENTRIES = 455;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

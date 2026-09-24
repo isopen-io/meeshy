@@ -197,64 +197,42 @@ jobs:
       # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
       # filtre), donc son verdict dépend de la température du cache — un run à
       # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste
-      # informative (`continue-on-error`) ; le verdict qui COMPTE pour
-      # `apps/web` est l'étape « debt ratchet » plus bas, qui invoque `eslint`
-      # directement et ne dépend d'aucun cache.
+      # informative (`continue-on-error`). Le cliquet ESLint qui en tenait lieu
+      # pour le legacy `apps/web` est parti avec lui (#7668) : il mesurait une
+      # dette qui n'existe plus.
       - name: Lint
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
-      # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web-v2` (2026-09-07).
+      # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web` (2026-09-07).
       #
       # Elle existait pour l'ancienne refonte v3, annulée puis retirée du dépôt
-      # (#5994). Le nom `@meeshy/web-v2` désigne la v3.1 (ex `web-v4`), qui
-      # n'a pas encore de configuration ESLint :
+      # (#5994). Le nom `@meeshy/web` désigne l'application Vite + Preact
+      # (ex `web-v2`, renommée le 2026-09-24, #7668), qui n'a pas encore de
+      # configuration ESLint :
       # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
       # rien — un signal pire que l'absence de signal, parce qu'on le croit.
       #
       # Ce qui tient la place en attendant : le type-check bloquant ci-dessous
-      # et les gates de l'application (jetons dérivés, poids). L'ESLint de la
-      # v3.1 est un suivi, pas un oubli.
+      # et les gates de l'application (jetons dérivés, poids). Son ESLint est
+      # un suivi, pas un oubli.
 
-      # Lint (apps/web — debt ratchet), jumeau de #5442 pour ESLint : la même
-      # amnistie de cache qui rend `bun run lint` illisible touche `apps/web`,
-      # dont la dette réelle (4034 erreurs) n'apparaît que sur un cache froid.
-      # Comme le ratchet de types ci-dessous, ce script appelle `eslint`
-      # directement, sans passer par Turborepo — son verdict ne dépend donc
-      # jamais d'un cache.
-      - name: Lint (apps/web — debt ratchet)
-        run: bash scripts/check-lint-debt.sh --self-test && bash scripts/check-lint-debt.sh
-
-      # Type-check, en DEUX étapes plutôt qu'une amnistie.
+      # Type-check BLOQUANT, une seule étape, aucun `continue-on-error`.
       #
-      # L'étape unique qui précédait portait `continue-on-error: true`, et ce
-      # drapeau n'était pas un avis sur le typage : c'était la seule façon pour
-      # elle d'être verte, `apps/web` portant une dette de types que les trois
-      # autres packages TypeScript n'ont pas. Une amnistie, quatre packages —
-      # les 1241 erreurs du quatrième achetaient le silence sur le zéro des
-      # trois premiers.
+      # Il y en a eu deux (cycle 105 bis) : celle-ci, et un ratchet de dette
+      # pour le legacy `apps/web` (1241 erreurs, `check-type-debt.sh`). Une
+      # amnistie qui couvrait quatre packages achetait le silence sur le zéro
+      # des trois autres — et une violation du contrat d'émission Socket.IO de
+      # la passerelle produit `TS2345`/`TS2322`, les deux codes que `ts-jest`
+      # ignore : ce job est le seul qui puisse rougir dessus.
       #
-      # Le prix n'était pas théorique : les cycles 99–104 ont bâti pour la
-      # passerelle un contrat d'émission Socket.IO dont une violation produit
-      # `TS2345` ou `TS2322` — les deux codes que le `ts-jest` de la passerelle
-      # a dans son `diagnostics.ignoreCodes`. Ni le job de test ni celui-ci ne
-      # pouvaient donc rougir sur une charge fausse. Mesuré en retirant un champ
-      # requis d'une émission de `preferences-broadcast.ts`.
-      # `@meeshy/web-v2` entre ICI et nulle part ailleurs. Le ratchet ci-dessous
-      # est gagé sur `WEB_BASELINE`, la dette de types d'`apps/web` LEGACY : y
-      # faire entrer la v3 lui offrirait un budget d'erreurs qu'elle n'a pas à
-      # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
-      # le garantir — elle ne porte pas `continue-on-error`.
-      # `@meeshy/web-v2` désigne, depuis le 2026-09-07, la NOUVELLE application
-      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte, annulée, a quitté le
-      # dépôt (#5994). La nouvelle naît à zéro erreur, donc elle reste dans
-      # l'étape BLOQUANTE et hors du ratchet gagé sur la dette du legacy.
-      #
-      # Elle n'y était pas avant ce jour : sous son ancien nom, aucun filtre de
-      # ce fichier ne la citait, et sa PR pouvait être verte avec l'application
-      # cassée. Un gate qui ne tourne pas n'est pas un gate.
+      # Le legacy a quitté le dépôt le 2026-09-24 avec son ratchet (#7668).
+      # `@meeshy/web` désigne depuis l'application Vite + Preact + Capacitor
+      # (ex `@meeshy/web-v2`), née à zéro erreur : elle est ICI, dans l'étape
+      # bloquante, et nulle part ailleurs. Un gate qui ne tourne pas n'est pas
+      # un gate.
       - name: Type-check (contract packages — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web-v2
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web
 
       # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
       # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
@@ -267,7 +245,7 @@ jobs:
       # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
       # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
       # coût d'étape est négligeable.
-      - name: Gates web-v2 (jetons dérivés + poids de la première peinture)
+      - name: Gates web (jetons dérivés + poids de la première peinture)
         run: |
           # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
           # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
@@ -275,7 +253,7 @@ jobs:
           # qui la portent déjà.
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-          cd ../../apps/web-v2
+          cd ../../apps/web
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
           # #5606 — les actifs DÉRIVÉS de l'icône iOS (icônes PWA, splashs des
           # deux coques) sont commités : sans ce contrôle, une icône iOS
@@ -315,22 +293,13 @@ jobs:
           node scripts/check-docker-context.mjs
           node scripts/check-git-tracking.mjs
 
-      - name: Type-check (apps/web — debt ratchet)
-        run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
-
-      # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
-      # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
-      # `services/gateway/src` et `packages/shared` n'ont pas de config
-      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), et
-      # `apps/web` en a une mais règle cette directive en `warn` — jamais
-      # comptée par le cliquet ESLint jumeau (`check-lint-debt.sh`), qui ne
-      # garde que les erreurs. Ce script mesure donc par motif plutôt que par
-      # AST sur les trois paquets, pour une seule définition de « ce qui
-      # compte comme `any` » — cf. son en-tête pour le détail et pour
-      # pourquoi il tourne APRÈS le build web ci-dessus (`.next/` exclu).
-      # `packages/shared` est tenu à zéro (CLAUDE.md l'exige déjà pour ce
-      # paquet) ; `gateway` et `web` portent chacun une baseline qui ne peut
-      # que descendre.
+      # #3679 — cliquet sur l'usage explicite de `any`, mesuré par motif
+      # plutôt que par AST : aucun des trois paquets ne demande
+      # `@typescript-eslint/no-explicit-any` à un ESLint, et une seule
+      # définition de « ce qui compte comme `any` » vaut mieux que trois
+      # (cf. l'en-tête du script). `packages/shared` et `apps/web` sont tenus
+      # à zéro — le web depuis le retrait du legacy et de ses 451 `any`
+      # (#7668) ; `gateway` porte une baseline qui ne peut que descendre.
       - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
@@ -553,7 +522,7 @@ jobs:
   # ===========================================================================
   # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
   # ===========================================================================
-  # Un job À PART de « Gates web-v2 » (job `quality`), et pour une raison de
+  # Un job À PART de « Gates web » (job `quality`), et pour une raison de
   # coût : celui-ci lève un navigateur, donc télécharge Chromium. `quality` est
   # la dépendance de presque tout le workflow — l'y ajouter retarderait chaque
   # autre job d'une minute pour une preuve qui n'intéresse que cinq documents.
@@ -569,7 +538,7 @@ jobs:
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
   institutionnel-v3:
-    name: Peaux web-v2 (institutionnel, Lentille, états et virtualisation du fil)
+    name: Peaux web (institutionnel, Lentille, états et virtualisation du fil)
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: 25
@@ -622,9 +591,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v2
+      - name: Build apps/web
         run: |
-          cd apps/web-v2
+          cd apps/web
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -646,7 +615,7 @@ jobs:
       - name: Gate cache institutionnel
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-institutional.mjs
 
       # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
@@ -655,7 +624,7 @@ jobs:
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-lens.mjs
 
       # #6975 — L'INVENTAIRE : aucune surface ne monte `Avatar` sans `src`, sauf
@@ -666,7 +635,7 @@ jobs:
       - name: Gate inventaire des avatars (aucun `Avatar` muet)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-avatar-src.mjs
 
       # #6975 — UNE PHOTO DE PROFIL EST PEINTE, pas seulement passée. Tous les
@@ -678,7 +647,7 @@ jobs:
       - name: Gate photo de profil peinte (trois rangs, pixels)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-avatar-pixels.mjs
 
       # #6277 / #6133 — aucun disque flottant ne recouvre, au repos, un texte de
@@ -688,7 +657,7 @@ jobs:
       - name: Gate couloir des disques flottants (Flux et liste)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-floating-clearance.mjs
 
       # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
@@ -699,7 +668,7 @@ jobs:
       - name: Gate disque du Flux (bascule, appui long, glisser)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-feed-disc.mjs
 
       # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
@@ -710,7 +679,7 @@ jobs:
       - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-notifications.mjs
 
       # #6289 — le profil : il se lit (contact masqué, trois rangs du Prisme,
@@ -721,7 +690,7 @@ jobs:
       - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-profile.mjs
 
       # #5563 — les réglages : le thème bascule à chaud et persiste, la langue
@@ -732,7 +701,7 @@ jobs:
       - name: Gate réglages (thème, langue d'interface, bascules, legacy, déconnexion)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-settings.mjs
 
       # Le critère de fin de #5561 est une mesure de GÉOMÉTRIE : l'action
@@ -742,7 +711,7 @@ jobs:
       - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-join-first-screen.mjs
 
       # #6364 — ses communautés : la grille remplace l'écran d'attente, la
@@ -754,7 +723,7 @@ jobs:
       - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-communities.mjs
 
       # #6362 — le journal d'appels : il remplace l'écran d'attente, les trois
@@ -765,7 +734,7 @@ jobs:
       - name: Gate journal d'appels (directions, filtre, fil, hors-ligne)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-calls.mjs
 
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
@@ -776,7 +745,7 @@ jobs:
       - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-discover.mjs
 
       # #6361 — Mes liens : le hub ne montre que la famille servie, la liste
@@ -787,7 +756,7 @@ jobs:
       - name: Gate Mes liens (hub, liens de partage, détail, création)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-links.mjs
 
       # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
@@ -799,7 +768,7 @@ jobs:
       - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-reels.mjs
 
       # #6807 — LES MÉDIAS DU FIL ET DES STORIES SE JOUENT. Mesure l'EFFET, pas
@@ -809,7 +778,7 @@ jobs:
       - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-feed-media.mjs
 
       # #7449 — LE FIL SE LIT DANS UNE COLONNE, ET ON Y PUBLIE. Le SEUL gate du
@@ -822,7 +791,7 @@ jobs:
       - name: Gate colonne du fil (centrage large, porte de création, publication)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-feed-column.mjs
 
       # #7135 — LES GESTES D'UNE RANGÉE DE COMMENTAIRE ONT UN EFFET. Les
@@ -834,7 +803,7 @@ jobs:
       - name: Gate commentaires (aimer, modifier, supprimer — optimiste et refus)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-post-comments.mjs
 
       # #7022 — UN MÉDIA ABSENT DÉGRADE PROPREMENT. 8 fichiers sur 2912 sont
@@ -845,7 +814,7 @@ jobs:
       - name: Gate médias absents (état dessiné, annoncé, non destructeur)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-medias-absents.mjs
 
       # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
@@ -855,7 +824,7 @@ jobs:
       - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-feed-scenes.mjs
 
       # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
@@ -866,7 +835,7 @@ jobs:
       - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-story-scene.mjs
 
       # #7015 — LE SON DE FOND EMPRUNTÉ À LA BIBLIOTHÈQUE JOUE. Mesuré en
@@ -877,7 +846,7 @@ jobs:
       - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-story-sound.mjs
 
       # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
@@ -888,7 +857,7 @@ jobs:
       - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-story-studio.mjs
 
       # #6943/#6944 — LE PLATEAU : poser DEUX objets texte, en déplacer un au
@@ -902,7 +871,7 @@ jobs:
       - name: Gate plateau de story (deux textes, gestes, langue, style, légende, document publié)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-story-plateau.mjs
 
       # #6150 — les DEUX portes de ma cellule du rail de stories : le (+) au
@@ -913,13 +882,13 @@ jobs:
       - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-story-self-rail.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-thread-states.mjs
 
       # #5910 — CINQ MAILLONS DU COMPOSITE QUI NE S'EXÉCUTAIENT NULLE PART.
@@ -934,13 +903,13 @@ jobs:
       - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-list-actions.mjs
 
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-reading-mode.mjs
 
       # #5774 — LE CHROME DU FIL : escamotage au geste, pilule de jour
@@ -950,7 +919,7 @@ jobs:
       - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-thread-chrome.mjs
 
       # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
@@ -959,7 +928,7 @@ jobs:
       - name: Gate pilule de jour au repos (#6101)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-day-pill-rest.mjs
 
       # #6206 — UNE SECONDE LANGUE D'INTERFACE S'AFFICHE RÉELLEMENT : <html lang>
@@ -969,7 +938,7 @@ jobs:
       - name: Gate langue d'interface (#6206)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-interface-language.mjs
 
       # #6213 — LE FIL DÉFILE D'UN BORD À L'AUTRE DE L'ÉCRAN. Miroir de
@@ -978,13 +947,13 @@ jobs:
       - name: Gate arêtes de défilement du fil (#6213)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-thread-scroll-edges.mjs
 
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-field-focus.mjs
 
       # #6643 — chaque page et état d'accès (connexion et second facteur,
@@ -995,13 +964,13 @@ jobs:
       - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-access-column.mjs
 
       - name: Gate dist de la coque Capacitor (variante B)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-shell-dist.mjs
 
       # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
@@ -1010,13 +979,13 @@ jobs:
       - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-capacitor-config.mjs
 
       - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-gateway-build.mjs
 
       # #6936 — LE PARCOURS DE MISE À JOUR, de bout en bout : deux versions
@@ -1028,7 +997,7 @@ jobs:
       - name: Gate mise à jour de l'application (bannière, purge, session gardée)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-app-update.mjs
 
       # #7032 — le TEXTE ENRICHI : une mention validée est un lien qui, CLIQUÉ,
@@ -1041,7 +1010,7 @@ jobs:
       - name: Gate texte enrichi (liens, mentions, quatre emphases, texte traduit)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-rich-text.mjs
 
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
@@ -1052,7 +1021,7 @@ jobs:
       - name: Gate barreau Administration du menu flottant (#6458)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-admin-rung.mjs
 
       # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
@@ -1065,7 +1034,7 @@ jobs:
       - name: Gate lecture souveraine et section Agent (#6862, #6733)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-admin-souverain.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
@@ -1074,7 +1043,7 @@ jobs:
       - name: Gate adaptateur unique de apiConfig.source (#6151)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-api-source.mjs
 
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
@@ -1084,7 +1053,7 @@ jobs:
       - name: Gate virtualisation du fil (500 messages)
         if: ${{ !cancelled() }}
         run: |
-          cd apps/web-v2
+          cd apps/web
           node scripts/check-thread-virtualization.mjs
 
   # ===========================================================================
@@ -1120,11 +1089,6 @@ jobs:
             filter: '@meeshy/shared'
             timeoutMinutes: 20
             testTimeoutMinutes: 15
-          - name: web
-            path: apps/web
-            filter: '@meeshy/web'
-            timeoutMinutes: 20
-            testTimeoutMinutes: 15
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
@@ -1135,9 +1099,9 @@ jobs:
             filter: '@meeshy/agent'
             timeoutMinutes: 20
             testTimeoutMinutes: 15
-          - name: web-v2
-            path: apps/web-v2
-            filter: '@meeshy/web-v2'
+          - name: web
+            path: apps/web
+            filter: '@meeshy/web'
             timeoutMinutes: 20
             testTimeoutMinutes: 15
 
@@ -1216,10 +1180,10 @@ jobs:
         if: env.PACKAGE_MANAGER == 'bun'
         timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: |
-          # Web tests must use Jest (configured with Next.js)
-          if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v2" ]; then
+          # Le web lance sa suite depuis son répertoire (`bun test`, happy-dom).
+          if [ "${{ matrix.package.name }}" = "web" ]; then
             cd ${{ matrix.package.path }}
-            echo "Running web tests with Jest via bun..."
+            echo "Running web tests with bun test..."
             bun run test:coverage
           else
             bun run test:coverage --filter=${{ matrix.package.filter }}
@@ -2144,17 +2108,10 @@ jobs:
           pnpm run build
 
       # LE LEGACY `apps/web` N'EST PLUS CONSTRUIT ICI (directive porteur
-      # 2026-09-16). meeshy.me sert `apps/web-v2` depuis le 2026-09-15 : bâtir
-      # le legacy à chaque PR payait plusieurs minutes de CI pour un artefact
-      # que plus rien ne sert. Son image de production reste publiée par
-      # `release.yml` (tag `v*`) — le retour arrière garde donc une image, ce
-      # qui n'a jamais dépendu de cette étape-ci.
-      #
-      # Ce qui EXERCE encore `apps/web` reste en place et le doit : le job
-      # `Test web`, et les cliquets de dette `Lint (apps/web — debt ratchet)` et
-      # `Type-check (apps/web — debt ratchet)`. Ils mesurent une dette dont la
-      # référence ne doit pas dériver tant que le code vit dans le dépôt —
-      # retirer un cliquet est une décision distincte de retirer un build.
+      # 2026-09-16), et il a quitté le dépôt le 2026-09-24 (#7668) avec ses
+      # trois témoins — `Test web` et les cliquets de dette ESLint et de
+      # types. Sa dernière forme reste restaurable depuis le tag
+      # `legacy-web-final` : `git checkout legacy-web-final -- apps/web`.
 
   # ===========================================================================
   # SUMMARY
@@ -2174,7 +2131,7 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web-v2 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY

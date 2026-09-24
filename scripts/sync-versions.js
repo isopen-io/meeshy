@@ -10,12 +10,6 @@ const path = require('path');
 // Mapping des packages vers leurs fichiers VERSION
 const VERSION_FILES = [
   {
-    packagePath: 'apps/web/package.json',
-    versionPath: 'apps/web/VERSION',
-    name: 'web',
-    type: 'package.json'
-  },
-  {
     packagePath: 'services/gateway/package.json',
     versionPath: 'services/gateway/VERSION',
     name: 'gateway',
