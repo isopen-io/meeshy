@@ -32,6 +32,21 @@ import {
 // d'API-simplification) — jamais un `Deprecation`/`Link` écrit à la main ici.
 import { depreciee } from '../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { shareLinkPreviewConversationJsonSchema } from '@meeshy/shared/types/share-link-stats';
+import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
+import { deferAfterResponse, type AfterResponse } from '../utils/after-response';
+import { recordShareLinkVisit } from '../services/conversations/shareLinkVisits';
+
+/**
+ * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
+ * témoin attende la visite comptée au lieu de mesurer le vide, et la porte
+ * d'identité FACULTATIVE de l'aperçu, qui ne sert qu'à ne pas compter l'auteur
+ * du lien quand il regarde son propre aperçu.
+ */
+export type AnonymousRoutesOptions = {
+  readonly afterResponse?: AfterResponse;
+  readonly optionalAuth?: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+};
 
 // #4165 — plafond de l'échantillon de participants actifs lu par
 // `GET /anonymous/link/:identifier` pour estimer les langues parlées d'un
@@ -56,7 +71,13 @@ const refreshSessionSchema = z.object({
   sessionToken: z.string().min(1, 'Session token requis')
 });
 
-export async function anonymousRoutes(fastify: FastifyInstance) {
+export async function anonymousRoutes(fastify: FastifyInstance, options: AnonymousRoutesOptions = {}) {
+  const afterResponse = options.afterResponse ?? deferAfterResponse;
+  const optionalAuth = options.optionalAuth ?? createUnifiedAuthMiddleware(fastify.prisma, {
+    requireAuth: false,
+    allowAnonymous: true,
+  });
+
   /**
    * Resout l'ID de ConversationShareLink reel a partir d'un identifiant (peut etre un ObjectID ou un identifier)
    */
@@ -439,6 +460,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
   // Route pour verifier les informations d'un lien (avant de rejoindre)
   // Accepte soit un linkId (format mshy_...) soit un conversationShareLinkId (ID de base de donnees)
   fastify.get('/anonymous/link/:identifier', {
+    onRequest: [optionalAuth],
     schema: {
       description: 'Get share link information before joining. Validates link availability, returns conversation details, creator info, requirements (email, nickname, birthday), and statistics (participants, languages). Accepts either linkId (format: mshy_...) or database ID.',
       tags: ['anonymous'],
@@ -476,16 +498,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
                 allowAnonymousFiles: { type: 'boolean', description: 'Guests may send files' },
                 allowAnonymousImages: { type: 'boolean', description: 'Guests may send images' },
                 allowViewHistory: { type: 'boolean', description: 'Guests may read messages posted before they joined' },
-                conversation: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    title: { type: 'string' },
-                    description: { type: 'string', nullable: true },
-                    type: { type: 'string', enum: ['direct', 'group'] },
-                    createdAt: { type: 'string', format: 'date-time' }
-                  }
-                },
+                // #7794 — logo et bannière du groupe, et les types RÉELS
+                // (le schéma ne connaissait que `direct`/`group`). Rien qui
+                // identifie un membre : l'invité ne voit personne avant
+                // d'avoir rejoint.
+                conversation: shareLinkPreviewConversationJsonSchema,
                 creator: {
                   type: 'object',
                   properties: {
@@ -577,6 +594,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             title: true,
             description: true,
             type: true,
+            avatar: true,
+            banner: true,
             createdAt: true
           }
         },
@@ -690,6 +709,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
         })
       ]);
+
+      // #7794 — la VISITE : l'aperçu d'un lien ouvert vient d'être servi.
+      // Comptée APRÈS la réponse (jamais sur son chemin), jamais pour
+      // l'auteur du lien qui regarde son propre aperçu, et un compteur en
+      // panne ne fait jamais échouer l'aperçu (`deferAfterResponse` garde le
+      // rejet).
+      const viewerUserId = (request as UnifiedAuthRequest).authContext?.isAuthenticated
+        ? (request as UnifiedAuthRequest).authContext?.userId
+        : undefined;
+      if (viewerUserId !== shareLink.creator.id) {
+        const visitedLinkId = shareLink.id;
+        afterResponse(() => recordShareLinkVisit(fastify.prisma, visitedLinkId), 'share-link-visit');
+      }
 
       const totalParticipants = memberCount + anonymousCount;
 

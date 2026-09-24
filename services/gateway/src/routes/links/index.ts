@@ -7,6 +7,7 @@ import { registerMessagesRetrievalRoutes } from './messages-retrieval';
 import { registerMessageRoutes } from './messages';
 import { registerAdminRoutes } from './admin';
 import { registerUserRoutes } from './user';
+import { registerLinkStatsRoutes } from './stats';
 
 /**
  * Point d'entrée principal pour toutes les routes de liens de partage
@@ -22,5 +23,6 @@ export async function linksRoutes(fastify: FastifyInstance) {
   await registerMessagesRetrievalRoutes(fastify);
   await registerMessageRoutes(fastify);
   await registerManagementRoutes(fastify);
+  await registerLinkStatsRoutes(fastify);
   await registerAdminRoutes(fastify);
 }

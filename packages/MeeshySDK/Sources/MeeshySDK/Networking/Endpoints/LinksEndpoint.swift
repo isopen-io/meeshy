@@ -17,6 +17,7 @@ public enum LinksEndpoint: MeeshyEndpoint, Sendable {
     case byKeyMembers(key: String)
     case byLinkId(linkId: String)
     case byLinkIdExtend(linkId: String)
+    case byLinkIdStats(linkId: String)
     case byLinkIdToggle(linkId: String)
     case checkIdentifierByIdentifier(identifier: String)
     case myLinks
@@ -30,6 +31,7 @@ public enum LinksEndpoint: MeeshyEndpoint, Sendable {
         case .byKeyMembers(let key): return "/api/v1/links/\(key)/members"
         case .byLinkId(let linkId): return "/api/v1/links/\(linkId)"
         case .byLinkIdExtend(let linkId): return "/api/v1/links/\(linkId)/extend"
+        case .byLinkIdStats(let linkId): return "/api/v1/links/\(linkId)/stats"
         case .byLinkIdToggle(let linkId): return "/api/v1/links/\(linkId)/toggle"
         case .checkIdentifierByIdentifier(let identifier): return "/api/v1/links/check-identifier/\(identifier)"
         case .myLinks: return "/api/v1/links/my-links"

@@ -49,6 +49,9 @@ export * from './affiliate.js';
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
+// Lien d'invitation (#7794, #7797) — aperçu du groupe et statistiques du lien
+export * from './share-link-stats.js';
+
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
 
