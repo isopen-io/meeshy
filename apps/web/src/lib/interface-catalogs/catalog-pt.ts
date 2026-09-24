@@ -1,4 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import ptIdentity from './catalog-pt-identity';
+
+import ptMentions from './catalog-pt-mentions';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -172,8 +175,7 @@ const pt = {
   'feed.allLoaded': 'Todas as publicações foram carregadas',
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
-  'a11y.avatar.profile': 'Ver o perfil de {name}',
-  'a11y.avatar.story': 'Ver a story de {name}',
+  ...ptIdentity,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
   'report.body': 'Escolha o motivo da sua denúncia. A nossa equipa de moderação irá recebê-la.',
@@ -1103,6 +1105,7 @@ const pt = {
   'message.detail.sent': 'Enviada',
   'message.detail.language.original': '{language} (original)',
 
+  ...ptMentions,
 } satisfies InterfaceCatalog;
 
 export default pt;

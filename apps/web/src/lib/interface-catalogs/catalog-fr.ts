@@ -9,7 +9,9 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frMentions from './catalog-fr-mentions';
 import frThreadStates from './catalog-fr-thread-states';
+import frIdentity from './catalog-fr-identity';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -209,8 +211,7 @@ const fr = {
   'feed.allLoaded': 'Toutes les publications sont chargées',
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
-  'a11y.avatar.profile': 'Voir le profil de {name}',
-  'a11y.avatar.story': 'Voir la story de {name}',
+  ...frIdentity,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
@@ -1154,6 +1155,7 @@ const fr = {
   'message.location.a11y': 'Position : {place}',
 
   ...frThreadStates,
+  ...frMentions,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en

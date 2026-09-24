@@ -1,4 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import enIdentity from './catalog-en-identity';
+
+import enMentions from './catalog-en-mentions';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -168,8 +171,7 @@ const en = {
   'feed.allLoaded': 'All posts are loaded',
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
-  'a11y.avatar.profile': 'View {name}’s profile',
-  'a11y.avatar.story': 'View {name}’s story',
+  ...enIdentity,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
   'report.body': 'Choose what prompts your report. Our moderation team will receive it.',
@@ -1099,6 +1101,7 @@ const en = {
   'message.detail.sent': 'Sent',
   'message.detail.language.original': '{language} (original)',
 
+  ...enMentions,
 } satisfies InterfaceCatalog;
 
 export default en;

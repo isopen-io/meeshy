@@ -15,7 +15,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
-import { Avatar } from './avatar';
+import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
@@ -589,7 +589,7 @@ export function Bubble({
               style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-meta)' }}
             >
               {showsIdentity ? (
-                <Avatar
+                <AuthorAvatar
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
                   size={32}

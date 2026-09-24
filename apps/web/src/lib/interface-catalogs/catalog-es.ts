@@ -1,4 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import esIdentity from './catalog-es-identity';
+
+import esMentions from './catalog-es-mentions';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -168,8 +171,7 @@ const es = {
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
-  'a11y.avatar.profile': 'Ver el perfil de {name}',
-  'a11y.avatar.story': 'Ver la historia de {name}',
+  ...esIdentity,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
   'report.body': 'Elija el motivo de su denuncia. Nuestro equipo de moderación la recibirá.',
@@ -1099,6 +1101,7 @@ const es = {
   'message.detail.sent': 'Enviado',
   'message.detail.language.original': '{language} (original)',
 
+  ...esMentions,
 } satisfies InterfaceCatalog;
 
 export default es;

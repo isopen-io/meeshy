@@ -327,26 +327,7 @@ extension ConversationViewModel {
 
     func topActiveMembersList(accentColor: String) -> [ConversationActiveMember] {
         if let cached = _topActiveMembers { return cached }
-        var counts: [String: (name: String, color: String, avatarURL: String?, count: Int)] = [:]
-        for msg in messages where !msg.isMe {
-            let id = msg.senderId
-            guard !id.isEmpty else { continue }
-            if var existing = counts[id] {
-                existing.count += 1
-                counts[id] = existing
-            } else {
-                counts[id] = (
-                    name: msg.senderName ?? "?",
-                    color: msg.senderColor ?? accentColor,
-                    avatarURL: msg.senderAvatarURL,
-                    count: 1
-                )
-            }
-        }
-        let result = counts
-            .sorted { $0.value.count > $1.value.count }
-            .prefix(3)
-            .map { ConversationActiveMember(id: $0.key, name: $0.value.name, color: $0.value.color, avatarURL: $0.value.avatarURL) }
+        let result = ConversationActiveMember.ranked(from: messages, fallbackColor: accentColor)
         _topActiveMembers = result
         return result
     }
