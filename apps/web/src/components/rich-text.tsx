@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type CSSProperties, type ReactNode } from 'react';
 
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment } from '@meeshy/shared/utils/text-segments';
 
 import { Link } from '@/routes/route-table';
@@ -39,6 +40,15 @@ import { Link } from '@/routes/route-table';
  * cliquable là-bas installerait un lien vers un écran qui ne peut rien servir.
  */
 
+/**
+ * LE LIBELLÉ D'UN LIEN COURT (#7827) — `m+Ab12cd` est un code, pas une
+ * adresse : l'afficher tel quel ne dit pas au lecteur qu'il peut le suivre.
+ * L'URL d'origine n'est plus dans le texte (la passerelle l'a réécrite), donc
+ * le libellé montre l'adresse PUBLIQUE du lien de suivi — celle que le lien
+ * ouvre, et celle qu'iOS construit (`MessageTextRenderer.swift`).
+ */
+const trackedLinkLabel = (token: string): string => `meeshy.me/l/${token}`;
+
 /** La teinte d'un lien, quand la surface ne la donne pas. */
 const DEFAULT_LINK_COLOR = 'var(--color-ios-brand)';
 
@@ -73,6 +83,15 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
         return (
           <Link key={key} to="hashtag" params={{ tag: segment.tag }} style={linkStyle} className="hover:underline">
             {segment.text}
+          </Link>
+        );
+      case 'tracked-link':
+        /* INTERNE — `/l/$token` est une route de l'app (`routes/tracking-link.tsx`)
+           qui compte le clic puis ouvre la cible : même onglet, navigation du
+           routeur. Une URL brute suivie garde son TEXTE ; seul le lien change. */
+        return (
+          <Link key={key} to="trackingLink" params={{ token: segment.token }} style={{ color: hosts.linkColor }} className="underline">
+            {segment.url === null ? trackedLinkLabel(segment.token) : segment.text}
           </Link>
         );
       case 'url':
@@ -138,6 +157,7 @@ export function RichText({
   mentions,
   linkColor = DEFAULT_LINK_COLOR,
   plainTextHidden = false,
+  trackingLinks,
   ...rest
 }: {
   readonly text: string;
@@ -155,10 +175,18 @@ export function RichText({
    * indigo, sur lequel la teinte de marque ne se lit pas. */
   readonly linkColor?: string;
   readonly plainTextHidden?: boolean;
+  /** Les URL BRUTES que la passerelle a rendues traçables (#7827) — décodées
+   * par `trackingLinksOf` ; absentes ⇒ chaque URL est un lien direct. */
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
   const segments = useMemo(
-    () => segmentText(text, { hashtags, ...(mentions === undefined ? {} : { mentions }) }),
-    [text, hashtags, mentions],
+    () =>
+      segmentText(text, {
+        hashtags,
+        ...(mentions === undefined ? {} : { mentions }),
+        ...(trackingLinks === undefined ? {} : { trackingLinks }),
+      }),
+    [text, hashtags, mentions, trackingLinks],
   );
   return (
     <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>

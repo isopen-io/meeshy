@@ -559,6 +559,7 @@ export const FocalRow = memo(function FocalRow({
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           style={{ color: 'var(--color-ios-ink)' }}
           mentions={message.validatedMentions}
+          trackingLinks={message.trackingLinks}
           plainTextHidden
         />
       ) : null}
