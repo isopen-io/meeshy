@@ -54,7 +54,7 @@ const es = {
   'onboarding.story.done': '¡Story publicada!',
 
   'onboarding.friends.title': 'Encuentra a tu gente',
-  'onboarding.friends.body': 'Añade a 3 personas que se parezcan a ti. Cuando acepten, ganáis +7 los dos.',
+  'onboarding.friends.body': 'Añade a 3 personas que se parezcan a ti. Cuando acepten, ganáis\u00A0+7 los dos.',
   'onboarding.friends.add': 'Añadir',
   'onboarding.friends.addNamed': 'Añadir a {name}',
   'onboarding.friends.added': 'Enviada',
@@ -73,7 +73,8 @@ const es = {
   'onboarding.recap.calm': 'Todo listo. Podrás hacerlo cuando quieras.',
   'onboarding.recap.points': '{points} pts',
   'onboarding.recap.level': 'Nivel {level}',
-  'onboarding.recap.streak': 'Racha de {days} 🔥',
+  'onboarding.recap.streak.one': 'Racha: {days} día',
+  'onboarding.recap.streak.other': 'Racha: {days} días',
   'onboarding.recap.badges': 'Insignias: {count}',
   'onboarding.recap.friends': 'Solicitudes en camino: {count}',
   'onboarding.recap.tomorrow': 'Mañana tu racha puede llegar a {next}.',

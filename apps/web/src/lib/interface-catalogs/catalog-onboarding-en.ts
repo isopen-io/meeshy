@@ -54,7 +54,7 @@ const en = {
   'onboarding.story.done': 'Story posted!',
 
   'onboarding.friends.title': 'Find your crew',
-  'onboarding.friends.body': 'Add 3 people who vibe like you. When they accept, you both get +7.',
+  'onboarding.friends.body': 'Add 3 people who vibe like you. When they accept, you both get\u00A0+7.',
   'onboarding.friends.add': 'Add',
   'onboarding.friends.addNamed': 'Add {name}',
   'onboarding.friends.added': 'Sent',
@@ -73,7 +73,8 @@ const en = {
   'onboarding.recap.calm': 'You’re all set. You can do it whenever you like.',
   'onboarding.recap.points': '{points} pts',
   'onboarding.recap.level': 'Level {level}',
-  'onboarding.recap.streak': '{days}-day streak 🔥',
+  'onboarding.recap.streak.one': 'Streak: {days} day',
+  'onboarding.recap.streak.other': 'Streak: {days} days',
   'onboarding.recap.badges': 'Badges: {count}',
   'onboarding.recap.friends': 'Requests on their way: {count}',
   'onboarding.recap.tomorrow': 'Tomorrow, your streak can reach {next}.',

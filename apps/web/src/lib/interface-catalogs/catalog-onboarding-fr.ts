@@ -62,7 +62,7 @@ const fr = {
   'onboarding.story.done': 'Story publiée !',
 
   'onboarding.friends.title': 'Trouve ta bande',
-  'onboarding.friends.body': 'Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez +7 tous les deux.',
+  'onboarding.friends.body': 'Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez\u00A0+7 tous les deux.',
   'onboarding.friends.add': 'Ajouter',
   'onboarding.friends.addNamed': 'Ajouter {name}',
   'onboarding.friends.added': 'Envoyée',
@@ -81,7 +81,8 @@ const fr = {
   'onboarding.recap.calm': 'Tout est prêt. Tu pourras le faire quand tu veux.',
   'onboarding.recap.points': '{points} pts',
   'onboarding.recap.level': 'Niveau {level}',
-  'onboarding.recap.streak': 'Série de {days} 🔥',
+  'onboarding.recap.streak.one': 'Série : {days} jour',
+  'onboarding.recap.streak.other': 'Série : {days} jours',
   'onboarding.recap.badges': 'Badges : {count}',
   'onboarding.recap.friends': 'Demandes en route : {count}',
   'onboarding.recap.tomorrow': 'Demain, ta série peut passer à {next}.',

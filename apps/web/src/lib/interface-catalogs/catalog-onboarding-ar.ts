@@ -54,7 +54,7 @@ const ar = {
   'onboarding.story.done': 'نُشرت القصة!',
 
   'onboarding.friends.title': 'اعثر على جماعتك',
-  'onboarding.friends.body': 'أضف 3 أشخاص يشبهونك. حين يقبلون، يربح كلٌّ منكما \u2066+7\u2069.',
+  'onboarding.friends.body': 'أضف 3 أشخاص يشبهونك. حين يقبلون، يربح كلٌّ منكما\u00A0\u2066+7\u2069.',
   'onboarding.friends.add': 'إضافة',
   'onboarding.friends.addNamed': 'إضافة {name}',
   'onboarding.friends.added': 'أُرسل',
@@ -73,7 +73,8 @@ const ar = {
   'onboarding.recap.calm': 'كل شيء جاهز. يمكنك فعل ذلك متى شئت.',
   'onboarding.recap.points': '{points} نقطة',
   'onboarding.recap.level': 'المستوى {level}',
-  'onboarding.recap.streak': 'سلسلة {days} 🔥',
+  'onboarding.recap.streak.one': 'السلسلة: يوم \u2066{days}\u2069',
+  'onboarding.recap.streak.other': 'أيام السلسلة: \u2066{days}\u2069',
   'onboarding.recap.badges': 'الشارات: {count}',
   'onboarding.recap.friends': 'طلبات في الطريق: {count}',
   'onboarding.recap.tomorrow': 'غدًا يمكن أن تصل سلسلتك إلى {next}.',

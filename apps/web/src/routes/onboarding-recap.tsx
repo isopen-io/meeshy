@@ -4,6 +4,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { JourneyRecap } from '@/lib/onboarding/journey';
 
 import { CardFrame, type CardHost } from './onboarding-cards';
@@ -28,13 +29,18 @@ export type RecapNumbers = {
   readonly badges: number;
 };
 
+function streakText(lang: InterfaceLanguage, days: number): string {
+  const key = new Intl.PluralRules(lang).select(days) === 'one' ? 'onboarding.recap.streak.one' : 'onboarding.recap.streak.other';
+  return translateOnboarding(lang, key, { days: String(days) });
+}
+
 export function recapTiles(host: CardHost, numbers: RecapNumbers, pendingFriends: number): readonly RecapTile[] {
   const lang = host.lang;
   const tiles: readonly (RecapTile | null)[] = [
     { id: 'points', glyph: PROGRESSION_GLYPHS.star, text: translateOnboarding(lang, 'onboarding.recap.points', { points: String(numbers.points) }) },
     numbers.level > 0 ? { id: 'level', glyph: PROGRESSION_GLYPHS.medal, text: translateOnboarding(lang, 'onboarding.recap.level', { level: String(numbers.level) }) } : null,
     numbers.streakDays > 0
-      ? { id: 'streak', glyph: PROGRESSION_GLYPHS.fire, text: translateOnboarding(lang, 'onboarding.recap.streak', { days: String(numbers.streakDays) }), tone: 'warm' }
+      ? { id: 'streak', glyph: PROGRESSION_GLYPHS.fire, text: streakText(lang, numbers.streakDays), tone: 'warm' }
       : null,
     numbers.badges > 0 ? { id: 'badges', glyph: GLYPHS.trophy, text: translateOnboarding(lang, 'onboarding.recap.badges', { count: String(numbers.badges) }) } : null,
     pendingFriends > 0 ? { id: 'friends', glyph: DISCOVER_GLYPHS.userPlus, text: translateOnboarding(lang, 'onboarding.recap.friends', { count: String(pendingFriends) }) } : null,

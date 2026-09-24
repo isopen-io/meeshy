@@ -104,6 +104,19 @@ describe('l’arabe — un « +N » ou un « N / M » ne se retourne pas', () =>
   });
 });
 
+describe('un « +N » dans une phrase ne tombe jamais seul en fin de ligne', () => {
+  /* Un montant qui clôt une phrase peut passer seul à la ligne (« +7. » en
+     veuve, vu sur 4-friends.ar). Il se lie au mot qui le précède par une
+     espace insécable (U+00A0), isolat LTR compris. */
+  test('aucune espace sécable devant un montant signé, dans aucune langue', async () => {
+    for (const [language, catalog] of await loadAll()) {
+      for (const [key, value] of Object.entries(catalog)) {
+        expect({ language, key, breakable: /[ \t]\u2066?\+[\d{]/.test(value) }).toEqual({ language, key, breakable: false });
+      }
+    }
+  });
+});
+
 describe('translateOnboarding', () => {
   test('interpole les paramètres', async () => {
     await loadOnboardingCatalog('en');

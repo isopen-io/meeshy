@@ -54,7 +54,7 @@ const pt = {
   'onboarding.story.done': 'Story publicada!',
 
   'onboarding.friends.title': 'Encontra a tua malta',
-  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo. Quando aceitarem, ganham +7 os dois.',
+  'onboarding.friends.body': 'Adiciona 3 pessoas parecidas contigo. Quando aceitarem, ganham\u00A0+7 os dois.',
   'onboarding.friends.add': 'Adicionar',
   'onboarding.friends.addNamed': 'Adicionar {name}',
   'onboarding.friends.added': 'Enviado',
@@ -73,7 +73,8 @@ const pt = {
   'onboarding.recap.calm': 'Está tudo pronto. Podes fazê-lo quando quiseres.',
   'onboarding.recap.points': '{points} pts',
   'onboarding.recap.level': 'Nível {level}',
-  'onboarding.recap.streak': 'Sequência de {days} 🔥',
+  'onboarding.recap.streak.one': 'Sequência: {days} dia',
+  'onboarding.recap.streak.other': 'Sequência: {days} dias',
   'onboarding.recap.badges': 'Emblemas: {count}',
   'onboarding.recap.friends': 'Pedidos a caminho: {count}',
   'onboarding.recap.tomorrow': 'Amanhã a tua sequência pode chegar a {next}.',
