@@ -131,6 +131,14 @@ struct MeeshyApp: App {
                             .task { await launchSplash.holdUntilCeiling() }
                             .zIndex(1)
                     }
+
+                    #if DEBUG
+                    // Aperçu de l'onboarding (#7729) pour la vérification au
+                    // simulateur — voir `OnboardingPreviewLaunch`.
+                    if OnboardingPreviewLaunch.isActive {
+                        OnboardingPreviewScreen().zIndex(2)
+                    }
+                    #endif
                 }
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un

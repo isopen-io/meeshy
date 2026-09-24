@@ -262,6 +262,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // La célébration d'un palier (#5809) — l'hôte est écrit une seule
             // fois et vit chez les deux racines à l'identique.
             .engagementReveal(router: router)
+            // L'onboarding post-inscription (#7729) — le même hôte que sur iPhone.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
             .storyComposerCover(
                 viewModel: storyViewModel,
                 router: router,

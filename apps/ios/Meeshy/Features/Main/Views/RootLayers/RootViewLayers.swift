@@ -171,6 +171,9 @@ struct RootStoryDoorsLayer: ViewModifier {
             // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
             // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
             .engagementReveal(router: router)
+            // L'onboarding post-inscription (#7729), en calque : les présentations
+            // ci-dessus et ci-dessous (célébration, composeur) jouent PAR-DESSUS.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
             // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
             // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
             // liste de conversations ET par la feuille de feed qui la recouvre sans
