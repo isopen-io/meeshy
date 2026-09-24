@@ -700,6 +700,12 @@ model ConversationShareLink {
   currentConcurrentUsers Int       @default(0)
   maxUniqueSessions      Int?
   currentUniqueSessions  Int       @default(0)
+  /// Nombre de fois où l'aperçu public du lien (`GET /anonymous/link/:identifier`)
+  /// a été servi pour un lien ouvert — le chiffre « Visites » des statistiques
+  /// du lien (#7794). Jamais incrémenté pour le créateur du lien. Les liens créés
+  /// avant la colonne ne l'ont pas : l'écriture passe par un pipeline `$ifNull`
+  /// (Prisma+Mongo traduit `increment` en `$add`, qui rendrait `null`).
+  visitCount             Int       @default(0)
   expiresAt              DateTime?
   isActive               Boolean   @default(true)
   allowAnonymousMessages Boolean   @default(true)
@@ -760,6 +766,13 @@ model Participant {
   /// ID du share link utilisé pour rejoindre (null = ajout direct)
   shareLinkId String? @db.ObjectId
 
+  /// Pays d'ARRIVÉE par lien de partage (ISO 3166-1 alpha-2, majuscules), dérivé
+  /// de l'IP de la requête de jointure par géolocalisation — l'IP elle-même n'est
+  /// PAS stockée ici. `null` = inconnu (adresse privée, tiers indisponible, ou
+  /// participant ajouté hors lien). Alimente « Arrivés récemment » et la
+  /// répartition par pays de `GET /links/:linkId/stats` (#7797).
+  joinCountry String?
+
   /// Octroi d'historique PAR DATE, posé par un administrateur de la
   /// conversation sur CE participant : il lit tout ce qui a été écrit depuis
   /// cet instant, quel que soit son `joinedAt` et quel que soit le droit figé.
@@ -801,6 +814,7 @@ model Participant {
   @@index([userId, isActive])
   @@index([type])
   @@index([sessionTokenHash])
+  @@index([shareLinkId, joinedAt])
 }
 
 /// Message dans une conversation

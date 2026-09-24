@@ -4,9 +4,10 @@ import { apiConfig } from '@/lib/api/config';
 import type { MyShareLink } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { partagerLien, portailDuNavigateur, type PortailPartage } from '@/lib/view/invitation';
+import { partagerLien, portailDuNavigateur } from '@/lib/view/invitation';
 import { useLiveAnnouncer, type Announcer } from '@/lib/view/use-live-announcer';
 
+import { copyLinkText, LINK_ANNOUNCE_MS } from './link-copy';
 import { displayNameOf, joinUrlOf } from './view';
 import { webOriginOf } from './web-origin';
 
@@ -18,20 +19,9 @@ import { webOriginOf } from './web-origin';
  * indisponible ou refusé se DIT : un geste sans effet ne se tait pas.
  */
 
-export const LINK_ANNOUNCE_MS = 4000;
 const COPIED_MS = 2000;
 
-export type CopyOutcome = 'copied' | 'unavailable' | 'failed';
-
-export async function copyLinkText(url: string, portail: PortailPartage): Promise<CopyOutcome> {
-  if (portail.copier === undefined) return 'unavailable';
-  try {
-    await portail.copier(url);
-    return 'copied';
-  } catch {
-    return 'failed';
-  }
-}
+export { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from './link-copy';
 
 export type LinkSharing = {
   readonly announcer: Announcer;

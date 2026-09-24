@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { ApiResult } from '@/lib/api/http';
 import type { GuestJoinBody, LinkGuestJoined, LinkInvitation, LinkJoined } from '@/lib/api/link-join';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
+import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { compile, match } from '@/lib/router';
 import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -23,7 +24,8 @@ import { ROUTES } from './route-table';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadInviteCatalog('fr');
   ensureHappyDomRegistered({ url: 'http://localhost/chat/mshy_equipe_7f3a' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -54,15 +56,31 @@ const OPEN_TERMS = {
   birthdayRequired: false,
   languages: [] as readonly string[],
   mayWrite: true,
+  mayImages: true,
+  mayFiles: false,
 } as const;
 
 const INVITATION: LinkInvitation = {
+  linkId: 'mshy_equipe_7f3a',
   title: 'Équipe déploiement',
   kind: 'group',
-  inviter: { name: 'Awa Diallo', avatar: null },
+  inviter: { name: 'Awa Diallo', username: 'awa', avatar: null },
+  message: 'Viens suivre la mise en production avec nous.',
+  group: { description: 'Le fil de l’équipe qui livre Meeshy.', createdAt: '2025-09-02T09:00:00.000Z', avatar: null, banner: null },
+  stats: {
+    people: 248,
+    languages: [
+      { code: 'fr', count: 3 },
+      { code: 'es', count: 1 },
+    ],
+  },
+  limits: { expiresAt: '2026-09-30T13:00:00.000Z', maxUses: 50, currentUses: 12 },
   readsHistory: false,
   guest: OPEN_TERMS,
 };
+
+const NOW = new Date('2026-09-24T12:00:00.000Z');
+const ORIGIN = 'https://meeshy.me';
 
 const JOINED: ApiResult<LinkJoined> = { ok: true, data: { conversationId: 'c-deploiement', alreadyMember: false } };
 
@@ -80,6 +98,8 @@ const GUEST_JOINED: ApiResult<LinkGuestJoined> = {
 };
 
 type Recorded = {
+  readonly copies: string[];
+  readonly shares: Array<{ readonly title: string; readonly text: string; readonly url: string }>;
   readonly loads: string[];
   readonly joins: Array<readonly [string, string | null]>;
   readonly guestJoins: Array<readonly [string, GuestJoinBody]>;
@@ -88,7 +108,7 @@ type Recorded = {
 };
 
 function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJoinDeps; readonly recorded: Recorded } {
-  const recorded: Recorded = { loads: [], joins: [], guestJoins: [], adopted: [], order: [] };
+  const recorded: Recorded = { copies: [], shares: [], loads: [], joins: [], guestJoins: [], adopted: [], order: [] };
   const deps: ChatJoinDeps = {
     load: async (link) => {
       recorded.loads.push(link);
@@ -116,6 +136,16 @@ function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJ
       recorded.order.push('expire');
       sessionStore.getState().clearSession();
     },
+    copyText: async (url) => {
+      recorded.copies.push(url);
+      return 'copied';
+    },
+    shareUrl: async (data) => {
+      recorded.shares.push(data);
+      return 'partage';
+    },
+    origin: () => ORIGIN,
+    now: () => NOW,
     ...overrides,
   };
   return { deps, recorded };
@@ -148,7 +178,7 @@ const signIn = () =>
     });
   });
 
-const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/gu, ' ');
+const text = (el: Element | null) => (el?.textContent ?? '').replace(/[\u2068\u2069]/gu, '').replace(/\s+/gu, ' ');
 const joinButton = (el: HTMLElement) =>
   [...el.querySelectorAll('button')].find((button) => /Rejoindre|Entrée dans la conversation/u.test(text(button))) ?? null;
 const anchorTo = (el: HTMLElement, pathname: string) =>
@@ -173,7 +203,18 @@ describe('ROUTES — /chat/$link', () => {
   });
 });
 
-describe('l’invitation', () => {
+const withTerms = (terms: Partial<LinkInvitation['guest']>) => ({
+  load: async (): Promise<ApiResult<LinkInvitation>> => ({
+    ok: true,
+    data: { ...INVITATION, guest: { ...OPEN_TERMS, ...terms } },
+  }),
+});
+
+const withInvitation = (overrides: Partial<LinkInvitation>) => ({
+  load: async (): Promise<ApiResult<LinkInvitation>> => ({ ok: true, data: { ...INVITATION, ...overrides } }),
+});
+
+describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la maquette', () => {
   test('chargement : l’écran s’annonce avant que l’invitation n’arrive', async () => {
     const { deps } = depsWith({ load: () => never() });
     const el = await mount(deps);
@@ -182,21 +223,160 @@ describe('l’invitation', () => {
     expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 
-  test('dit qui invite, le titre, le type et ce qu’on pourra lire', async () => {
+  test('a. qui invite d’abord, puis son MESSAGE dans une bulle', async () => {
     const { deps, recorded } = depsWith();
     const el = await mount(deps);
     expect(recorded.loads).toEqual([LINK]);
-    const rendu = text(el);
-    expect(rendu).toContain('Awa Diallo');
-    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
-    expect(rendu).toContain('Conversation de groupe');
-    expect(rendu).toContain('après votre arrivée');
+    const inviter = el.querySelector('[data-invite-inviter]');
+    expect(text(inviter)).toContain('Awa Diallo t’invite');
+    expect(text(inviter)).toContain('@awa');
+    expect(text(el.querySelector('[data-invite-message]'))).toBe('Viens suivre la mise en production avec nous.');
+    const order = [...el.querySelectorAll('[data-invite-inviter], [data-invite-group], [data-invite-figures], [data-invite-rights], [data-invite-join]')].map(
+      (node) => [...node.attributes].find((attribute) => attribute.name.startsWith('data-invite-'))?.name,
+    );
+    expect(order).toEqual(['data-invite-inviter', 'data-invite-group', 'data-invite-figures', 'data-invite-rights', 'data-invite-join']);
   });
 
-  test('le droit de lire l’historique change la phrase', async () => {
-    const { deps } = depsWith({ load: async () => ({ ok: true, data: { ...INVITATION, readsHistory: true } }) });
+  test('un message d’invitation vide n’ouvre aucune bulle', async () => {
+    const { deps } = depsWith(withInvitation({ message: null }));
     const el = await mount(deps);
-    expect(text(el)).toContain('messages déjà échangés');
+    expect(el.querySelector('[data-invite-message]')).toBeNull();
+  });
+
+  test('b. le groupe : nom, type et date de création, description, puis son lien — jamais `/l/`', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
+    expect(text(el.querySelector('[data-invite-meta]'))).toBe('Groupe · créé le 2 sept. 2025');
+    expect(text(el.querySelector('[data-invite-description]'))).toBe('Le fil de l’équipe qui livre Meeshy.');
+    const url = text(el.querySelector('[data-invite-url]'));
+    expect(url).toContain('meeshy.me/chat/mshy_equipe_7f3a');
+    expect(url).not.toContain('/l/');
+  });
+
+  test('sans bannière ni logo : un dégradé et les initiales ; avec : leurs images', async () => {
+    const plain = await mount(depsWith().deps);
+    expect(plain.querySelector('[data-invite-banner]')?.getAttribute('data-invite-banner')).toBe('gradient');
+    expect(plain.querySelector('[data-invite-group] img')).toBeNull();
+    act(() => mounted?.root.unmount());
+    const rich = await mount(depsWith(withInvitation({ group: { ...INVITATION.group, avatar: 'g/logo.png', banner: 'g/banniere.jpg' } })).deps);
+    expect(rich.querySelector('[data-invite-banner]')?.getAttribute('data-invite-banner')).toBe('image');
+    expect(rich.querySelector('[data-invite-group] img[alt="Logo de Équipe déploiement"]')).not.toBeNull();
+  });
+
+  test('logo : sans image, les INITIALES du groupe ; une image qui ne charge pas retombe sur elles', async () => {
+    const plain = await mount(depsWith(withInvitation({ title: 'Nova Club' })).deps);
+    expect(text(plain.querySelector('[data-invite-logo]'))).toBe('NC');
+    act(() => mounted?.root.unmount());
+    const broken = await mount(depsWith(withInvitation({ title: 'Nova Club', group: { ...INVITATION.group, avatar: 'g/introuvable.png' } })).deps);
+    const image = broken.querySelector('[data-invite-logo] img');
+    expect(image).not.toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('');
+    await act(async () => {
+      image?.dispatchEvent(new Event('error'));
+    });
+    expect(broken.querySelector('[data-invite-logo] img')).toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('NC');
+  });
+
+  test('le lien affiché est celui que sert la passerelle, pas l’adresse tapée', async () => {
+    const { deps } = depsWith(withInvitation({ linkId: 'mshy_canonique' }));
+    const el = await mount(deps, 'mshy_alias-du-nom');
+    expect(text(el.querySelector('[data-invite-url]'))).toContain('meeshy.me/chat/mshy_canonique');
+  });
+
+  test('c. les chiffres sans identité : personnes, langues, et la légende en toutes lettres', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(text(el.querySelector('[data-invite-figure="people"]'))).toContain('personnes');
+    expect(text(el.querySelector('[data-invite-figure="people"] strong'))).toBe('248');
+    expect(text(el.querySelector('[data-invite-figure="languages"]'))).toContain('langues parlées');
+    expect(text(el.querySelector('[data-language-share="fr"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Français 75 %');
+    expect(text(el.querySelector('[data-language-share="es"]')).replace(/[\u2068\u2069]/gu, '')).toBe('Español 25 %');
+  });
+
+  test('sans chiffres servis, la section ne s’affiche pas', async () => {
+    const { deps } = depsWith(withInvitation({ stats: { people: null, languages: [] } }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-figures]')).toBeNull();
+  });
+
+  test('d. « En anonyme, tu pourras » : quatre droits cochés ou barrés', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const rows = [...el.querySelectorAll('[data-invite-right]')].map((row) => [row.getAttribute('data-invite-right'), row.getAttribute('data-granted')]);
+    expect(rows).toEqual([
+      ['messages', 'true'],
+      ['images', 'true'],
+      ['files', 'false'],
+      ['history', 'false'],
+    ]);
+    expect(text(el.querySelector('[data-invite-right="files"]'))).toContain('non autorisé');
+  });
+
+  test('d. ce qu’on demandera, les langues acceptées, la validité et les places restantes', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const terms = text(el.querySelector('[data-invite-terms]'));
+    expect(terms).toContain('On te demandera : un prénom');
+    expect(terms).toContain('Langues acceptées : toutes');
+    expect(terms).toContain('Lien valable encore 7 jours · 38 places restantes');
+  });
+
+  test('d. sans expiration ni maximum : sans limite de durée, places illimitées ; langues nommées dans leur écriture', async () => {
+    const { deps } = depsWith(
+      withInvitation({ limits: { expiresAt: null, maxUses: null, currentUses: 3 }, guest: { ...OPEN_TERMS, languages: ['fr', 'ar'], emailRequired: true } }),
+    );
+    const el = await mount(deps);
+    const terms = text(el.querySelector('[data-invite-terms]'));
+    expect(terms).toContain('sans limite de durée · places illimitées');
+    /* `Intl.ListFormat` ISOLE chaque élément (U+2068…U+2069) : l'arabe ne retourne pas la phrase française autour de lui. */
+    expect(terms.replace(/[\u2068\u2069]/gu, '')).toContain('Langues acceptées : Français et العربية');
+    expect(terms).toContain('un prénom et une adresse e-mail');
+  });
+
+  test('d. un lien qui exige un compte ne décrit pas une porte anonyme fermée', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-invite-rights]')).toBeNull();
+  });
+});
+
+describe('Copier et Repartager (#7796 § 3)', () => {
+  test('« Copier » copie l’adresse ENTIÈRE, devient « Copié » et le dit', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
+    expect(recorded.copies).toEqual(['https://meeshy.me/chat/mshy_equipe_7f3a']);
+    expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copié');
+    expect(text(el.querySelector('[data-invite-announce]'))).toBe('Lien copié.');
+  });
+
+  test('un presse-papiers refusé se DIT, en erreur', async () => {
+    const { deps } = depsWith({ copyText: async () => 'failed' });
+    const el = await mount(deps);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-copy]'));
+    expect(text(el.querySelector('[data-invite-copy]'))).toBe('Copier');
+    expect(el.querySelector('[data-invite-announce]')?.getAttribute('data-announce-tone')).toBe('error');
+  });
+
+  test('« Repartager » ouvre la feuille de partage avec le nom du groupe et l’adresse', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await click(el.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(recorded.shares).toEqual([
+      { title: 'Équipe déploiement', text: 'Rejoins Équipe déploiement sur Meeshy — chacun y écrit dans sa langue.', url: 'https://meeshy.me/chat/mshy_equipe_7f3a' },
+    ]);
+  });
+
+  test('sans feuille de partage, la copie de repli se dit ; sans rien du tout, l’absence aussi', async () => {
+    const copied = await mount(depsWith({ shareUrl: async () => 'copie' }).deps);
+    await click(copied.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(text(copied.querySelector('[data-invite-announce]'))).toBe('Lien copié.');
+    act(() => mounted?.root.unmount());
+    const none = await mount(depsWith({ shareUrl: async () => 'indisponible' }).deps);
+    await click(none.querySelector<HTMLButtonElement>('[data-invite-reshare]'));
+    expect(text(none.querySelector('[data-invite-announce]'))).toBe('Le partage n’est pas disponible ici.');
   });
 });
 
@@ -215,7 +395,7 @@ describe('un visiteur CONNECTÉ rejoint', () => {
     const { deps } = depsWith();
     const el = await mount(deps);
     await click(joinButton(el));
-    expect(text(el.querySelector('[role="status"]'))).toContain('Vous avez rejoint');
+    expect(text(el.querySelector('[role="status"]'))).toContain('Tu as rejoint');
   });
 
   test('un membre EXISTANT est redirigé vers son fil', async () => {
@@ -263,7 +443,7 @@ describe('un visiteur SANS session', () => {
     expect(joinButton(el)).toBeNull();
     const login = anchorTo(el, '/login');
     const signup = anchorTo(el, '/signup');
-    expect(text(login)).toBe('Se connecter pour rejoindre');
+    expect(text(login)).toBe('Se connecter');
     expect(text(signup)).toBe('Créer un compte');
     expect(nextOf(login)).toBe('/chat/mshy_equipe_7f3a');
     expect(nextOf(signup)).toBe('/chat/mshy_equipe_7f3a');
@@ -298,12 +478,6 @@ const nicknameField = (el: HTMLElement) => el.querySelector<HTMLInputElement>('[
 const languageField = (el: HTMLElement) => el.querySelector<HTMLSelectElement>('[data-guest-language]');
 const guestSubmit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-guest-submit]');
 
-const withTerms = (terms: Partial<LinkInvitation['guest']>) => ({
-  load: async (): Promise<ApiResult<LinkInvitation>> => ({
-    ok: true,
-    data: { ...INVITATION, guest: { ...OPEN_TERMS, ...terms } },
-  }),
-});
 
 /**
  * SOUMET LE FORMULAIRE, JAMAIS EN CLIQUANT SON BOUTON — même méthode que
@@ -400,7 +574,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(guestForm(el)).not.toBeNull();
     expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
     const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
-    expect(text(el.querySelector(`#${described.split(' ')[0]}`))).toContain('Choisissez un pseudo');
+    expect(text(el.querySelector(`#${described.split(' ')[0]}`))).toContain('Choisis un prénom');
   });
 
   test('pseudo PRIS : le formulaire est GARDÉ, la suggestion pré-remplie, et on peut réessayer', async () => {
@@ -444,19 +618,66 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(joinButton(el)).not.toBeNull();
   });
 
-  test('le détail des droits est REPLIÉ, et dit ce que l’invité pourra faire', async () => {
+  test('la matrice des choix : visiteur sur un lien ouvert — le formulaire, puis se connecter ou créer un compte', async () => {
     const { deps } = depsWith();
     const el = await mount(deps);
-    const details = el.querySelector<HTMLDetailsElement>('[data-join-rights]');
-    expect(details?.open).toBe(false);
-    expect(text(details)).toContain('après votre arrivée');
-    expect(text(details)).toContain('Écrire dans la conversation');
+    const join: HTMLElement = el;
+    expect(join?.querySelector('[data-guest-form]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-up]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-join-account]')).toBeNull();
+    expect(text(join)).toContain('ou avec ton compte');
   });
 
-  test('un lien en LECTURE SEULE le dit dans le détail des droits', async () => {
-    const { deps } = depsWith(withTerms({ mayWrite: false }));
+  test('la barre collée ne porte QUE l’action primaire ; champs et sorties restent dans la page', async () => {
+    const { deps } = depsWith();
     const el = await mount(deps);
-    expect(text(el.querySelector('[data-join-rights]'))).toContain('Lire seulement');
+    const bar = el.querySelector('[data-invite-primary-bar]');
+    expect(bar?.querySelector('[data-guest-submit]')).not.toBeNull();
+    expect(bar?.querySelector('[data-guest-nickname], [data-guest-language], [data-invite-sign-in], [data-invite-sign-up]')).toBeNull();
+    expect(el.querySelector('[data-invite-join] [data-guest-nickname]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-exits] [data-invite-sign-in]')).not.toBeNull();
+    expect(guestSubmit(el)?.getAttribute('form')).toBe(guestForm(el)?.id);
+  });
+
+  test('un formulaire incomplet MÈNE au prénom : le champ reçoit le focus, et rien ne part', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await submitGuest(el);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(document.activeElement).toBe(nicknameField(el));
+  });
+
+  test('connecté : la barre porte « Rejoindre avec mon compte » ; compte requis : « Se connecter »', async () => {
+    signIn();
+    const account = await mount(depsWith().deps);
+    expect(text(account.querySelector('[data-invite-primary-bar] [data-invite-join-account]'))).toBe('Rejoindre avec mon compte');
+    act(() => {
+      mounted?.root.unmount();
+      sessionStore.getState().clearSession();
+    });
+    const required = await mount(depsWith(withTerms({ allowed: false })).deps);
+    expect(required.querySelector('[data-invite-primary-bar] [data-invite-sign-in]')).not.toBeNull();
+    expect(required.querySelector('[data-invite-exits]')).toBeNull();
+  });
+
+  test('la matrice des choix : compte connecté — « Rejoindre avec mon compte », et aucune porte anonyme', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const join: HTMLElement = el;
+    expect(text(join?.querySelector('[data-invite-join-account]') ?? null)).toBe('Rejoindre avec mon compte');
+    expect(join?.querySelector('[data-guest-form]')).toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')).toBeNull();
+  });
+
+  test('la matrice des choix : visiteur, compte requis — se connecter devient l’action primaire', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    const join: HTMLElement = el;
+    expect(join?.querySelector('[data-guest-form]')).toBeNull();
+    expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
+    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-white');
   });
 });
 
@@ -468,8 +689,8 @@ const REFUSALS: ReadonlyArray<readonly [number, string | undefined, string]> = [
   [410, 'CONVERSATION_CLOSED', 'terminée'],
   [409, 'LINK_EXHAUSTED', 'limite de participants'],
   [410, 'LINK_MAX_USES', 'limite de participants'],
-  [403, 'LANGUAGE_NOT_ALLOWED', 'votre langue'],
-  [403, 'BANNED', 'ne pouvez plus rejoindre'],
+  [403, 'LANGUAGE_NOT_ALLOWED', 'ta langue'],
+  [403, 'BANNED', 'ne peux plus rejoindre'],
   [429, undefined, 'Trop de tentatives'],
   [0, undefined, 'hors ligne'],
 ];
@@ -496,7 +717,7 @@ describe('chaque refus est un bandeau qui dit la cause et garde une sortie', () 
     const { deps, recorded } = depsWith({ join: async () => failure(403, 'LANGUAGE_NOT_ALLOWED') });
     const el = await mount(deps);
     await click(joinButton(el));
-    expect(text(el.querySelector('[role="alert"]'))).toContain('votre langue');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('ta langue');
     expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
     expect(joinButton(el)).toBeNull();
     expect(recorded.order).toEqual([]);

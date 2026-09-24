@@ -327,7 +327,11 @@ export const parseCatalogBlock = (blockLines) => {
 // (`feat/web-v2-onboarding-7729`, `lib/api/onboarding.ts`) écrit l'adresse en
 // littéral, comme tout `apps/web` depuis #7668 : elle reste morte ici tant que
 // #7716 n'a pas tranché, au même titre que les 455 précédentes.
-const BASELINE_DEAD_ENTRIES = 456;
+// 456 → 457 (#7797, 2026-09-24) : l'entrée de `GET /links/:linkId/stats`,
+// générée depuis le manifeste quand la passerelle a monté la route. Son client
+// web (l'écran de détail d'un lien, développé en parallèle) écrit l'adresse en
+// littéral comme tout `apps/web` : morte ici au même titre, jusqu'à #7716.
+const BASELINE_DEAD_ENTRIES = 457;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

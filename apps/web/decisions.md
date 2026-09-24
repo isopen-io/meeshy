@@ -3963,3 +3963,25 @@ C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui t
 **LE BROUILLON PERSISTÉ PORTE UN SCHÉMA** (`schema: 2`, D-44) ; la forme précédente (sans schéma) est RELEVÉE en une page `page-1` — un `postMediaId` monté est un aller-retour payé ; un schéma futur est refusé plutôt que lu à moitié.
 
 **HORS TRANCHE, CONSIGNÉ** : le canal story N-posts (#7707) ; la lecture des scènes suivantes d'un RÉEL côté web (#7708 — le lecteur ne rend que la scène 0) ; réordonner et dupliquer une page (`moveSlide`, `duplicateSlide`) ; la tuile qui montre la scène composée plutôt que le fond.
+
+## D-117 — L'invitation montre le groupe SANS personne ; la page du créateur lit la politique du lien et ses statistiques ; « Supprimer » revient, honnête (2026-09-24, #7796, #7797)
+
+**Le constat.** `/chat/:link` jetait au décodage la description, les chiffres, les langues et le message d'invitation (`link-join.ts`, #5561 : « rien de la conversation avant le choix »), et ne montrait ni le lien, ni Copier / Repartager, ni la date, ni le logo. La page d'un lien de partage (`/links/share/:link`) n'affichait qu'utilisations et maximum. Le porteur a validé une maquette des deux (artifact « Design » du 2026-09-24 : `WebMobile`, `WebBureau`, `WebLienDetail`, `IosLienDetail`).
+
+**LA PROJECTION DE L'INVITATION S'ÉLARGIT À CE QUI N'IDENTIFIE PERSONNE.** Entrent : le message d'invitation (`description` du lien), la description, la date de création, le logo et la bannière (`conversation.avatar`/`banner`, servis par #7794, optionnels), le nombre de personnes, les langues parlées (codes aujourd'hui, `{ language, count }` demain — sans compte, AUCUN pourcentage ne s'affiche : une part égale inventée serait un chiffre faux), la validité, les places, et les droits images / fichiers. Restent sur le fil : identifiants de la conversation et du créateur, membres, invités, messages. Témoin : `link-join.test.ts § une charge qui porte messages, membres et invités`.
+
+**LES CHOIX SONT COLLÉS AU BAS DE L'ÉCRAN SOUS 768 PX.** La maquette termine la page par eux ; la page est désormais bien plus haute qu'un écran, et #5561 exige l'action primaire dans le premier écran (`check-join-first-screen.mjs`). Le panneau est `sticky` — au bas de la GRILLE entière, pas de sa colonne : un élément collé ne sort jamais de son parent. Au-delà de 768 px, deux colonnes, les choix dans la colonne de droite.
+
+**UN COMPTE CONNECTÉ NE SE VOIT PAS OFFRIR « REJOINDRE EN ANONYME ».** Le web tient une identité à la fois (`session.ts § establishGuest` remplace la session) : entrer en invité fermerait le compte sans le dire (`joinChoicesOf`).
+
+**LA PAGE DU CRÉATEUR LIT LA POLITIQUE DANS LA LISTE** (`GET /links?expand=policy`) — le lien reste lu dans la liste de SES liens (D-63), jamais par identifiant public. Le message et la politique entrent dans la projection persistée ; le créateur, la conversation, les plages IP et les pays, non. Une ligne lue avant ce lot (cache persisté sans politique) se relit une fois en silence ; d'ici là la configuration le dit et l'édition attend.
+
+**LES STATISTIQUES ONT LEUR PORT** (`lib/api/link-stats.ts`, `GET /links/:linkId/stats`, #7794 en parallèle). Tant que la route répond 404, le port rend `null` : les tuiles portent « — » et le disent, jamais des zéros qui diraient « personne n'est venu ». Cache d'abord (entrée persistée, une minute de fraîcheur).
+
+**ENREGISTRER N'ENVOIE QUE CE QUI A CHANGÉ, ET EST OPTIMISTE** (`lib/links/edit-draft.ts`, `performUpdateShareLink`) : la carte, la configuration et la ligne de la liste changent au geste ; un refus restaure l'instantané ET le brouillon.
+
+**« SUPPRIMER » REVIENT, SANS PROMETTRE L'IRRÉVERSIBLE.** D-63 l'avait retiré parce que `DELETE /links/:linkId` ne fait que fermer la ligne. Le porteur le redemande (#7797). Il part confirmé ; la confirmation dit ce que le geste FAIT (le lien cesse de fonctionner, les invités sans compte perdent l'accès), et le lien quitte la liste au geste. Tant que #6411 n'a pas tranché la suppression réelle, une relecture de la liste le rendra « inactif ».
+
+**LES LIBELLÉS VIVENT DANS UN CATALOGUE À LA DEMANDE** (`i18n-invite-catalog.ts`, `invite.*` et `linkDetail.*`, sept langues), chargé avec les deux écrans comme ceux de l'administration et de l'accueil — `catalog-fr.ts` a passé le budget de taille. La page d'accueil était en français codé en dur : elle ne l'est plus.
+
+**Divergences assumées avec la maquette.** Ni barre latérale de navigation sur le bureau (l'application n'en a nulle part ; les menus flottants sont sa navigation) — le fil d'Ariane seul ; ni « Voir les N arrivées » (aucune page ne les liste encore : un lien vers rien serait un contrôle qui ment).

@@ -9,6 +9,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { useThreadDraft } from './use-draft';
 import type { ComposerDraftReport } from './use-draft';
 import { useReplyToPreview, type ReplyToPreview } from './use-reply-preview';
+import type { useSend } from './use-send';
 
 export type ThreadComposeSendInput = {
   readonly text: string;
@@ -20,7 +21,6 @@ export type ThreadComposeSendInput = {
 
 export type ThreadComposeState = {
   readonly initialDraft: ComposerDraft | null;
-  readonly replyTarget: string | null;
   readonly setReplyTarget: (id: string | null) => void;
   readonly replyTo: ReplyToPreview | undefined;
   readonly reportComposerDraft: (report: ComposerDraftReport) => void;
@@ -57,15 +57,9 @@ export function useThreadCompose(params: {
   readonly readerLanguages: readonly string[];
   /** `send` de `useSend` — LA RÈGLE d'envoi (débounce, accusé, reprise) vit
    * ailleurs ; ce hook ne fait que lui remettre le message CITÉ ENTIER
-   * (revue-correction #5813, défaut majeur 6), jamais son seul identifiant. */
-  readonly send: (
-    text: string,
-    attachments: readonly PendingAttachment[],
-    replyTo: Message | null,
-    language: string,
-    protection: ComposeProtection,
-    place: SharedPlace | null,
-  ) => void;
+   * (revue-correction #5813, défaut majeur 6), jamais son seul identifiant.
+   * Type DÉRIVÉ du hook, jamais une signature recopiée. */
+  readonly send: ReturnType<typeof useSend>['send'];
 }): ThreadComposeState {
   const { store, scope, conversationId, messages, readerLanguages, send } = params;
 
@@ -108,5 +102,5 @@ export function useThreadCompose(params: {
 
   const onCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
-  return { initialDraft, replyTarget, setReplyTarget, replyTo, reportComposerDraft, onSend, onCancelReply };
+  return { initialDraft, setReplyTarget, replyTo, reportComposerDraft, onSend, onCancelReply };
 }

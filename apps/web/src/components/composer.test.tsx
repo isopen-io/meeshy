@@ -913,7 +913,7 @@ describe('Composer — la langue d’écriture est un contrôle avec effet (#582
  * PASSAGE de React par cette frontière, pas l'exécution de la fonction
  * mémoïsée ; ce n'est donc pas l'outil qui répond à la question posée ici).
  * Il rougirait si `memo(...)` était un jour retiré — la stabilité des props
- * que `thread.tsx` lui fournit désormais (`handleComposerSend`/`replyTo` via
+ * que l'hôte lui fournit désormais (`onSend`/`replyTo` de `useThreadCompose` via
  * `useCallback`/`useMemo`) est ce qui rend ce `memo` UTILE, documentée à son
  * site d'appel plutôt que reprouvée ici par une seconde méthode.
  */

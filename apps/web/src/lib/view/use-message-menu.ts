@@ -389,3 +389,12 @@ export function useMessageMenu(params: {
     starOf,
   };
 }
+
+/**
+ * LE CONTRÔLEUR DU MENU, TEL QUE L'HÔTE LE REÇOIT (#7429) — DÉRIVÉ du hook,
+ * jamais redéclaré : une déclaration à la main serait une jumelle à tenir à
+ * jour à chaque champ ajouté. Ses consommateurs en prennent la part qu'ils
+ * lisent (`Pick`), ce qui DIT leur contrat et rend leurs bouchons de test
+ * honnêtes sans `as`.
+ */
+export type MessageMenuController = ReturnType<typeof useMessageMenu>;

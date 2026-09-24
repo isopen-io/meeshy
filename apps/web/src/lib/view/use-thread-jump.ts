@@ -6,6 +6,12 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 import type { PlacedMessage } from '@/lib/grouping';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 
+/** La DURÉE de la mise en évidence d'un saut — nommée parce que deux
+ * lecteurs en dépendent : ce hook, qui l'efface, et
+ * `scripts/lib/check-summary.mjs`, qui la mesure au navigateur PAR CONDITION
+ * (jamais au chronomètre, #6115). */
+export const HIGHLIGHT_MS = 1600;
+
 export type ThreadJump = {
   readonly highlightedId: string | null;
   readonly jumpToMessage: (messageId: string) => void;
@@ -22,10 +28,18 @@ export type ThreadJump = {
  * accessible et ne faisait rien. `scrollToIndex` amène le message cité dans
  * la fenêtre virtualisée ; la mise en évidence s'efface d'elle-même, jamais
  * un état qui s'accumule sans fin.
+ *
+ * UN IDENTIFIANT ABSENT de `placed` est aujourd'hui SANS EFFET (la fenêtre
+ * chargée ne le contient pas). #7420 y ajoutera le chargement de la fenêtre
+ * `?around=` (`messages-list.ts`, `allowsAround`) — ICI, jamais dans l'hôte.
+ *
+ * `virtualizer` n'est demandé que pour `scrollToIndex` (`Pick`) : c'est la
+ * SEULE capacité du virtualiseur qu'un saut emploie, et un bouchon de test
+ * s'en remplit sans `as`.
  */
 export function useThreadJump(params: {
   readonly placed: readonly PlacedMessage[];
-  readonly virtualizer: Virtualizer<HTMLElement, Element>;
+  readonly virtualizer: Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>;
   readonly noteProgrammaticScroll: () => void;
   readonly mode: ConversationReadingMode;
 }): ThreadJump {
@@ -53,7 +67,7 @@ export function useThreadJump(params: {
       virtualizer.scrollToIndex(index, { align: 'center' });
       setHighlightedId(messageId);
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
+      highlightTimer.current = setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
     },
     [placed, virtualizer, noteProgrammaticScroll],
   );

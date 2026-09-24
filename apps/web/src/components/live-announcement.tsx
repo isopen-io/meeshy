@@ -41,6 +41,7 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 const MARKERS = {
   discover: { 'data-discover-announce': '' },
   profile: { 'data-profile-announce': '' },
+  invite: { 'data-invite-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;
