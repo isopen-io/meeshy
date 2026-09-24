@@ -98,6 +98,27 @@ export interface PostSaveEngagementService {
 }
 
 /**
+ * Les types de conversation OUVERTS à qui veut entrer : `public`, et Meeshy
+ * Global (`global`, `InitService`), le salon où tout compte est ajouté. Global
+ * n'est pas une conversation privée : y écrire est un geste public (#7739).
+ */
+const PUBLIC_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['public', 'global']);
+
+/**
+ * L'axe « conversation distincte » d'une conversation (#5538, #5539, #5540,
+ * #7739). `communityId` PRIME sur `type` (docs/product/streaks-badges-modele.md
+ * § 2) ; puis les types ouverts ; puis tout le reste, privé.
+ */
+export function conversationEngagementAxis(conversation: {
+  readonly type: string;
+  readonly communityId: string | null;
+}): EngagementAxisKey {
+  if (conversation.communityId) return 'conversation.community';
+  if (PUBLIC_CONVERSATION_TYPES.has(conversation.type)) return 'conversation.public';
+  return 'conversation.private';
+}
+
+/**
  * La poussée d'un message au translator, sous la forme que le service attend.
  *
  * Extraite parce qu'elle a DEUX appelants : les effets post-commit ci-dessous,
@@ -278,14 +299,9 @@ export function runMessagePostSaveEffects(params: {
           select: { type: true, communityId: true },
         });
         if (!conversation) return;
-        const axisKey = conversation.communityId
-          ? 'conversation.community'
-          : conversation.type === 'public'
-            ? 'conversation.public'
-            : 'conversation.private';
         await engagementService.recordConversationActivity(
           senderUserId,
-          axisKey,
+          conversationEngagementAxis(conversation),
           message.conversationId
         );
       })
