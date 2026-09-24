@@ -26,11 +26,12 @@ import { navigate, Router } from './route-table';
  * traduction reçue par la socket change le TEXTE PEINT et son `lang` — ni un
  * état local figé au montage, ni une caisse lue à côté ne la retient.
  *
- * Les hôtes sont DEUX, et ils partagent la même caisse (`commentsQueryKey`) et
- * la même surface (`CommentThread`) : la fiche d'une publication
- * (`routes/post.tsx`) et la feuille de commentaires du lecteur de stories
- * (`story-comments-sheet.tsx`, ouverte par le bouton « Commentaires » du rail).
- * Aucune carte du Flux, des Réels, d'un profil ou d'un hashtag ne peint de
+ * Les hôtes sont TROIS (#6484), et ils partagent la même caisse
+ * (`commentsQueryKey`) et la même surface (`CommentThread`) : la fiche d'une
+ * publication (`routes/post.tsx`) et la feuille de commentaires PARTAGÉE par
+ * le lecteur de stories et le lecteur des Réels
+ * (`publication-comments-sheet.tsx`, D-89, ouverte par le bouton
+ * « Commentaires » du rail). Aucune carte du Flux, des Réels, d'un profil ou d'un hashtag ne peint de
  * commentaire (`FeedPost` ne déclare pas `comments`).
  *
  * **CE QUE CE NIVEAU NE PEUT PAS DIRE : LE RANG.** Sous `bun test`, le prisme

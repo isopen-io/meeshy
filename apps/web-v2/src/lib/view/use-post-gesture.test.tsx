@@ -163,3 +163,43 @@ describe('usePostGesture — commenter conduit au fil, à son ancre (#7113)', ()
     expect(adresseDuTap('p2')).toBe('/post/p2#commentaires');
   });
 });
+
+/**
+ * REPARTAGER (#6484) — le QUATRIÈME geste de la rangée, même patron que
+ * « J'aime » (l'annonce ci-dessus) : sous fixtures, `performRepost` réussit
+ * toujours et rend `feed.post.repost.success`, que ce hook doit traduire
+ * avant de l'`announce()`r — jamais la clé brute.
+ */
+describe('usePostGesture — repartager annonce dans la langue d’interface (#6484)', () => {
+  function RepostHarness({ postId }: { readonly postId: string }) {
+    const { announcement, onRepost } = usePostGesture();
+    return (
+      <div>
+        <span data-live>{announcement}</span>
+        <button type="button" data-repost onClick={() => onRepost(postId)} />
+      </div>
+    );
+  }
+
+  function montreRepost(postId: string): HTMLDivElement {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<RepostHarness postId={postId} />);
+    });
+    return container;
+  }
+
+  test('fr : le repost s’annonce en français, jamais la clé brute', async () => {
+    document.documentElement.lang = 'fr';
+    const el = montreRepost('reel-1');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-repost]')!.click();
+    });
+    await laisserPasser();
+    const texte = liveOf(el);
+    expect(texte).not.toBe('feed.post.repost.success');
+    expect(texte).toBe(translate('fr', 'feed.post.repost.success'));
+  });
+});

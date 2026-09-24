@@ -138,6 +138,14 @@ const fr = {
   'feed.post.pin_failed': 'Impossible d’épingler la publication',
   'feed.post.deleted': 'Publication supprimée',
   'feed.post.delete_failed': 'Erreur lors de la suppression',
+  /* REPARTAGER DEPUIS LE RAIL DES RÉELS (#6484) — miroir `ReelsViewModel.repost`
+     (iOS, append-only). */
+  'feed.post.repost.success': 'Repartage',
+  'feed.post.repost.error': 'Erreur lors du repost',
+  'feed.post.repost.already': 'Déjà repartagé',
+  'feed.post.repost.offline': 'Hors ligne — le repartage n’a pas pu partir.',
+  'feed.post.repost.unconfirmed': 'Repartage non confirmé — hors ligne',
+  'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',
   /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :

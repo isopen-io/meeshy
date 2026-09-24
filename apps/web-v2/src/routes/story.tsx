@@ -77,7 +77,7 @@ const StorySceneLayer = lazy(() => import('./story-scene-layer'));
  * regarde des stories sans les commenter ne paie ni la liste, ni le
  * composeur, ni leur requête. */
 const StoryCommentsSheet = lazy(() =>
-  import('@/components/story-comments-sheet').then((m) => ({ default: m.StoryCommentsSheet })),
+  import('@/components/publication-comments-sheet').then((m) => ({ default: m.PublicationCommentsSheet })),
 );
 
 /**

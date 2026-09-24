@@ -1,4 +1,5 @@
 import type { InfiniteData } from '@tanstack/react-query';
+import type { PostVisibility } from '@meeshy/shared/types/post';
 
 /**
  * LE VOCABULAIRE DU FIL DES PUBLICATIONS (#5893) — la forme EXACTE que
@@ -145,6 +146,25 @@ export type FeedPost = {
   readonly isLikedByMe?: boolean | null;
   readonly isBookmarkedByMe?: boolean | null;
   readonly isRepostedByMe?: boolean | null;
+  /**
+   * L'AUDIENCE DE LA CARTE (#6484) — `postScalarSelect` la sert TOUJOURS
+   * (`postIncludes.ts:341`) ; absente seulement quand un `select` plus
+   * étroit ne la demande pas (une fixture, un port qui ne l'a jamais lue).
+   * `performRepost` la lit pour appliquer la loi d'audience PARTAGÉE
+   * (`@meeshy/shared/utils/repost-audience`, D-100) : jamais élargir la
+   * diffusion d'un original restreint.
+   */
+  readonly visibility?: PostVisibility | null;
+  /** LE MAILLON — le repost VISÉ, pas la racine (`repost-target.ts` §
+   * FORMAT). `originalRepostOfId` ci-dessous grimpe déjà à la racine côté
+   * serveur ; les deux voyagent ensemble parce que `repostTargetId()` a
+   * besoin des deux pour décider laquelle sert de cible. */
+  readonly repostOfId?: string | null;
+  /** LA RACINE de la chaîne de republications (#6484,
+   * `@meeshy/shared/utils/repost-target`) — `repostTargetId()` grimpe
+   * jusqu'ici pour que republier un repost republie l'ORIGINAL, jamais une
+   * coquille encastrée. */
+  readonly originalRepostOfId?: string | null;
 };
 
 /**

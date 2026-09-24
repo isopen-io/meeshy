@@ -115,3 +115,26 @@ export function withCommentCount(post: FeedPost, change: CommentCountDelta): Fee
   if (post.id !== change.postId) return post;
   return { ...post, commentCount: shiftedCount(post.commentCount, change.delta) };
 }
+
+/**
+ * LE REPARTAGE, CÔTÉ CACHE (#6484) — APPEND-ONLY côté geste utilisateur, comme
+ * iOS (`ReelsViewModel.repostedIds`, commentaire « pas d'un-repost ») : rien
+ * dans ce module n'offre de retirer un repost posé. `unmarkReposted` existe
+ * quand même, pour UNE seule raison — le ROLLBACK d'un optimiste que la
+ * passerelle a refusé (`performRepost`, `lib/api/publication-repost.ts`) :
+ * ce n'est pas « défaire un repost », c'est corriger une supposition locale
+ * qui ne s'est jamais produite côté serveur.
+ *
+ * `postId !== ...` n'est PAS testé ici, à la différence de `withCommentCount` —
+ * ces deux fonctions ne reçoivent que la carte DÉJÀ appariée (`updateCardPost`
+ * filtre par id avant d'appeler `apply`), et une seconde garde y serait morte.
+ */
+export function markReposted(post: FeedPost): FeedPost {
+  if (post.isRepostedByMe === true) return post;
+  return { ...post, isRepostedByMe: true, repostCount: shiftedCount(post.repostCount, 1) };
+}
+
+export function unmarkReposted(post: FeedPost): FeedPost {
+  if (post.isRepostedByMe !== true) return post;
+  return { ...post, isRepostedByMe: false, repostCount: shiftedCount(post.repostCount, -1) };
+}

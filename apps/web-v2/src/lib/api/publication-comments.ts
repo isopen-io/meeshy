@@ -729,9 +729,10 @@ export function applyCommentLikeEvent(queryClient: QueryClient, payload: unknown
  * publication : la prochaine lecture du fil rendrait exactement ce que la
  * fusion vient de ranger, et le rang reste l'affaire du résolveur.
  *
- * **UNE SEULE CAISSE, DEUX HÔTES** — `commentsQueryKey(postId)`, sur TOUTES
- * ses pages : la fiche (`routes/post.tsx`) et la feuille du lecteur de
- * stories (`story-comments-sheet.tsx`) montent la même surface
+ * **UNE SEULE CAISSE, TROIS HÔTES** (#6484) — `commentsQueryKey(postId)`, sur
+ * TOUTES ses pages : la fiche (`routes/post.tsx`) et la feuille partagée par
+ * le lecteur de stories et le lecteur des Réels
+ * (`components/publication-comments-sheet.tsx`, D-89) montent la même surface
  * (`CommentThread`) sur le même cache. Aucune carte ne peint de commentaire
  * (`FeedPost` ne déclare pas `comments`), et web-v2 n'a pas de caisse de
  * réponses imbriquées (#7118) : une réponse n'y entre que par `comment:added`,

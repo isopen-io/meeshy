@@ -138,7 +138,7 @@ export type FeedCardStats = {
 /** CE QUE LE LECTEUR A DÉJÀ FAIT de ce post (#6278) — `isLikedByMe` (le nom SERVI — `PostFeedService.ts:1197` ; le wire n'a jamais porté `isLiked`) /
  * `isBookmarkedByMe` servis par la passerelle ; non servi ⇒ `false`, le
  * contrôle se peint vide plutôt que d'affirmer un geste jamais posé. */
-export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boolean };
+export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boolean; readonly reposted: boolean };
 
 /** LA SCÈNE D'UNE PUBLICATION (D-78, #6898) — le document canvas v3 déjà
  * PARSÉ (`parseCanvasDocument`, `lib/canvas/document.ts`) et son PORTEUR : les
@@ -382,7 +382,7 @@ export function resolveFeedCardModel(
 
   return {
     id: post.id,
-    viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true },
+    viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
     isReel,
     author: {
       name: authorName,

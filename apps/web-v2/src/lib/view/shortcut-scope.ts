@@ -39,7 +39,7 @@
  *
  * Échap n'entre pas dans cette loi : il appartient à l'appelant, qui le
  * traite AVANT (fermer depuis un champ reste juste), et la couche qui veut
- * le garder l'intercepte en phase de CAPTURE (`story-comments-sheet.tsx`).
+ * le garder l'intercepte en phase de CAPTURE (`publication-comments-sheet.tsx`).
  */
 
 /**

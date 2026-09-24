@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
 
 import { resolveFeedCardModel } from './card-model';
-import { mapCardPosts, togglePost, withServedCount, type PostToggle, type ServedCount } from './interactions';
+import { mapCardPosts, markReposted, togglePost, unmarkReposted, withServedCount, type PostToggle, type ServedCount } from './interactions';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
@@ -43,12 +43,12 @@ const gestureStateOf = (data: FeedInfiniteData | undefined, id: string) => {
 describe('resolveFeedCardModel — l’état PROPRE AU LECTEUR voyage jusqu’à la carte', () => {
   test('`isLikedByMe` et `isBookmarkedByMe` servis deviennent `viewer.liked` / `viewer.bookmarked`', () => {
     const model = resolveFeedCardModel(post({ isLikedByMe: true, isBookmarkedByMe: false }), { preferredLanguages: ['fr'], now: NOW });
-    expect(model.viewer).toEqual({ liked: true, bookmarked: false });
+    expect(model.viewer).toEqual({ liked: true, bookmarked: false, reposted: false });
   });
 
   test('un état NON servi (`null`, absent) se lit « pas encore », jamais « inconnu » affiché plein', () => {
     const model = resolveFeedCardModel(post({ isLikedByMe: null }), { preferredLanguages: ['fr'], now: NOW });
-    expect(model.viewer).toEqual({ liked: false, bookmarked: false });
+    expect(model.viewer).toEqual({ liked: false, bookmarked: false, reposted: false });
   });
 });
 
@@ -111,6 +111,41 @@ describe('togglePost × mapCardPosts — le geste optimiste, IMMUABLE, sur une c
     expect(applyPostToggle(undefined, { postId: 'p1', kind: 'like', on: true })).toBeUndefined();
     const data = pagesOf([post({ id: 'autre' })]);
     expect(applyPostToggle(data, { postId: 'p1', kind: 'like', on: true })).toBe(data);
+  });
+});
+
+describe('markReposted / unmarkReposted — repartager, côté cache (append-only, #6484)', () => {
+  test('markReposted ⇒ isRepostedByMe: true, repostCount +1', () => {
+    const next = markReposted(post({ isRepostedByMe: false, repostCount: 3 }));
+    expect(next.isRepostedByMe).toBe(true);
+    expect(next.repostCount).toBe(4);
+  });
+
+  test('markReposted est IDEMPOTENT — déjà repartagé ⇒ la MÊME référence', () => {
+    const already = post({ isRepostedByMe: true, repostCount: 4 });
+    expect(markReposted(already)).toBe(already);
+  });
+
+  test('markReposted sur un compte non servi (`null`/absent) part de zéro', () => {
+    const next = markReposted(post({ isRepostedByMe: null, repostCount: null }));
+    expect(next.isRepostedByMe).toBe(true);
+    expect(next.repostCount).toBe(1);
+  });
+
+  test('unmarkReposted ⇒ isRepostedByMe: false, repostCount −1', () => {
+    const next = unmarkReposted(post({ isRepostedByMe: true, repostCount: 4 }));
+    expect(next.isRepostedByMe).toBe(false);
+    expect(next.repostCount).toBe(3);
+  });
+
+  test('unmarkReposted est IDEMPOTENT — pas repartagé ⇒ la MÊME référence', () => {
+    const untouched = post({ isRepostedByMe: false, repostCount: 0 });
+    expect(unmarkReposted(untouched)).toBe(untouched);
+  });
+
+  test('unmarkReposted ne passe JAMAIS sous zéro — la borne basse de #6278, rejouée ici', () => {
+    const next = unmarkReposted(post({ isRepostedByMe: true, repostCount: 0 }));
+    expect(next.repostCount).toBe(0);
   });
 });
 

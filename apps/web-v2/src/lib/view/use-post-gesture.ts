@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
-import { deletePostAction, pinPostAction, postGestureAction, recordShareAction, reportPostAction } from '@/lib/api/query';
+import { deletePostAction, pinPostAction, postGestureAction, recordShareAction, repostAction, reportPostAction } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { publicationShareUrl, RETOUR_PARTAGE_PUBLICATION } from '@/lib/feed/share-url';
@@ -40,6 +40,12 @@ import { useLiveAnnouncer } from './use-live-announcer';
  * Il NAVIGUE plutôt qu'il n'ouvre une couche : iOS présente
  * `FeedCommentsSheet`, le web a déjà une adresse pour ce fil, et y mener garde
  * un lien PARTAGEABLE — jamais un état modal sans URL.
+ *
+ * REPARTAGER (#6484) — le QUATRIÈME geste, même raison que les trois autres :
+ * `ReelRail` (`components/reel-page.tsx`) en avait besoin, et le rail iOS
+ * (`ReelActionRail`) le porte à côté de « J'aime » et « Commenter ». `onRepost`
+ * ANNONCE son issue exactement comme `onGesture` — succès, refus ou geste déjà
+ * posé (`feed.post.repost.already`, append-only, iOS `ReelsViewModel.repost`).
  */
 /** Une UNION LITTÉRALE, jamais le catalogue entier — voir `PostGestureMessageKey`. */
 type MenuNotice =
@@ -58,6 +64,7 @@ export function usePostGesture(): {
   readonly onGesture: (postId: string, kind: PostToggleKind) => void;
   readonly onShare: (postId: string) => void;
   readonly onComment: (postId: string) => void;
+  readonly onRepost: (postId: string) => void;
   readonly menu: PostMenuHost;
 } {
   const { text: announcement, announce } = useLiveAnnouncer();
@@ -90,6 +97,16 @@ export function usePostGesture(): {
   const onComment = useCallback((postId: string) => {
     navigate(withCommentsAnchor(href('post', { post: postId })));
   }, []);
+
+  const onRepost = useCallback(
+    (postId: string) => {
+      void repostAction(postId).then((result) => {
+        if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
+        else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+      });
+    },
+    [announce],
+  );
 
   /**
    * LE MENU « ⋯ » (#7533) — ses gestes vivent ICI pour la raison même des
@@ -127,5 +144,5 @@ export function usePostGesture(): {
     };
   }, [viewerId, announce]);
 
-  return { announcement, onGesture, onShare, onComment, menu };
+  return { announcement, onGesture, onShare, onComment, onRepost, menu };
 }

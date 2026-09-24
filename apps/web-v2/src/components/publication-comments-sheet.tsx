@@ -8,34 +8,42 @@ import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 
 /**
- * **LE FIL DE COMMENTAIRES D'UNE STORY**, posé en feuille au-dessus de la
- * scène — miroir de l'overlay `showCommentsOverlay` du lecteur iOS
- * (`StoryViewerView+Sidebar.swift`, `loadStoryComments`) : la LISTE et UNE
- * seule zone de saisie (spécification porteur du 2026-05-28).
+ * **LE FIL DE COMMENTAIRES D'UNE PUBLICATION**, posé en feuille au-dessus du
+ * lecteur qui la monte — miroir de l'overlay `showCommentsOverlay` du lecteur
+ * de stories iOS (`StoryViewerView+Sidebar.swift`, `loadStoryComments`) : la
+ * LISTE et UNE seule zone de saisie (spécification porteur du 2026-05-28).
+ *
+ * **DEUX HÔTES, UN SEUL COMPOSANT** (D-89, #6484) — le lecteur de stories
+ * (`routes/story.tsx`) et le lecteur des Réels (`routes/reels.tsx`) montent
+ * la MÊME feuille : une story et un réel sont tous deux des publications, et
+ * leur fil de commentaires en est un aussi (ex `StoryCommentsSheet`, renommé
+ * quand le second hôte est arrivé — la raison même pour laquelle ce composant
+ * ne porte plus le nom d'un seul de ses deux hôtes).
  *
  * **LE FIL EST CELUI DE LA PUBLICATION** — `CommentThread`, la même surface
- * que `/post/$post`, sur le même cache : un commentaire posé depuis une story
- * apparaît dans le détail de la publication sans relecture. Une story EST une
- * publication éphémère ; lui écrire un second fil aurait fait diverger les
- * deux au premier ajustement.
+ * que `/post/$post`, sur le même cache : un commentaire posé depuis cette
+ * feuille apparaît dans le détail de la publication sans relecture. Une story
+ * ou un réel EST une publication ; lui écrire un second fil aurait fait
+ * diverger les deux au premier ajustement.
  *
  * **LA LECTURE EST EN PAUSE TANT QUE LA FEUILLE EST OUVERTE** — c'est l'hôte
  * qui la pose (`onOpenChange`), parce que lui seul tient l'horloge ; sans
- * cela la story avancerait sous le fil qu'on est en train de lire, et le
- * composeur changerait de publication à mi-phrase.
+ * cela le média sous-jacent avancerait sous le fil qu'on est en train de
+ * lire, et le composeur changerait de publication à mi-phrase.
  *
  * **ÉCHAP ET LE RETOUR FERMENT LA FEUILLE, PAS LE LECTEUR.** Le lecteur écoute
- * déjà `Escape` pour se fermer (`routes/story.tsx`) : sans cette capture, une
- * seule touche fermerait les deux, et le texte en cours de frappe partirait
- * avec. La capture se fait en phase de CAPTURE, sur `document`, pour passer
- * AVANT l'écouteur du lecteur quel que soit l'ordre de montage.
+ * déjà `Escape` pour se fermer (`routes/story.tsx`, `routes/reels.tsx`) : sans
+ * cette capture, une seule touche fermerait les deux, et le texte en cours de
+ * frappe partirait avec. La capture se fait en phase de CAPTURE, sur
+ * `document`, pour passer AVANT l'écouteur du lecteur quel que soit l'ordre
+ * de montage.
  */
-export type StoryCommentsSheetProps = {
+export type PublicationCommentsSheetProps = {
   readonly postId: string;
   readonly onClose: () => void;
 };
 
-export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps) {
+export function PublicationCommentsSheet({ postId, onClose }: PublicationCommentsSheetProps) {
   const language = currentInterfaceLanguage();
   const panneau = useRef<HTMLDivElement | null>(null);
   /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
@@ -75,6 +83,11 @@ export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps)
 
   return (
     <div
+      /* Le nom de l'attribut reste `story-comments-sheet` (#6484) — c'est le
+         hook que `scripts/check-story-scene.mjs` et
+         `publication-room-live.test.tsx` lisent déjà : le renommer aurait
+         élargi ce lot à des gates qu'il ne touche pas, pour un gain nul (les
+         DEUX hôtes ont un contrat IDENTIQUE sur cet attribut). */
       data-story-comments-sheet={postId}
       role="dialog"
       /**

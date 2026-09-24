@@ -18,6 +18,7 @@ import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
 import { commentsInfiniteOptions, performComment, type CommentResult } from './publication-comments';
 import { postQueryOptions } from './publication-detail';
+import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { paginationStateOf } from '@/lib/lens/pagination';
 import type { Conversation, Message, Participant } from './types';
@@ -186,6 +187,14 @@ export function refreshFeedAction(): Promise<void> {
  */
 export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** `repostAction` (#6484) — RÉFÉRENCE DE MODULE STABLE, MÊME motif que
+ * `postGestureAction` : le repost écrit sur l'instance PARTAGÉE
+ * `appQueryClient`, donc un réel repartagé depuis le lecteur des Réels
+ * l'est aussi dans le Flux, sans relecture. */
+export function repostAction(postId: string, intent?: RepostIntent): Promise<RepostResult> {
+  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) });
 }
 
 /** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,

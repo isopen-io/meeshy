@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -10,6 +11,8 @@ import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -19,12 +22,21 @@ import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageMode
 import { useRoute } from '@/lib/router';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
+import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSettled } from '@/lib/view/use-settled';
 import { href, navigate } from '@/routes/route-table';
+
+/** La feuille de commentaires — chargée À LA DEMANDE (motif D-54, comme
+ * `routes/story.tsx`) : un lecteur qui regarde des réels sans les commenter
+ * ne paie ni la liste, ni le composeur, ni leur requête. Composant PARTAGÉ
+ * avec le lecteur de stories (D-89, #6484) — `components/publication-comments-sheet.tsx`. */
+const PublicationCommentsSheet = lazy(() =>
+  import('@/components/publication-comments-sheet').then((m) => ({ default: m.PublicationCommentsSheet })),
+);
 
 /**
  * LES RÉELS (#6457) — miroir de `ReelsPlayerView` et `ReelsViewModel` (iOS) :
@@ -177,8 +189,16 @@ export default function ReelsScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare } = usePostGesture();
+  const { announcement, onGesture, onShare, onRepost } = usePostGesture();
   const [soundOn, setSoundOn] = useState(hasUserActivation);
+
+  /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
+     exigent un `registeredUser` (`interactions.ts:826-828`,
+     `comments.ts:184-186`), même garde que `CommentThread.canWrite`. Offrir
+     les boutons puis refuser en 401 serait un contrôle qui ment (loi 4). */
+  const session = useStore(sessionStore, (s) => s.session);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const canWrite = viewer.id !== null && !viewer.isAnonymous;
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
      et ses bascules (aimer, enregistrer) s'y reflètent. */
@@ -217,7 +237,12 @@ export default function ReelsScreen() {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
-  usePublicationRoom(useSettled(models[active]?.id ?? '', REEL_ROOM_SETTLE_MS));
+  const activeId = models[active]?.id ?? '';
+  usePublicationRoom(useSettled(activeId, REEL_ROOM_SETTLE_MS));
+  /* LA FEUILLE DE COMMENTAIRES, PARTAGÉE avec le lecteur de stories (D-89,
+     #6484) — la loi d'hôte (focus, fermeture au changement de réel) vit dans
+     `use-comments-sheet-host.ts`, extraite de `routes/story.tsx`. */
+  const comments = useCommentsSheetHost(activeId);
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -285,33 +310,46 @@ export default function ReelsScreen() {
   ) : count === 0 ? (
     <ReelsEmpty language={language} />
   ) : (
-    <div
-      ref={scroller}
-      id="contenu"
-      role="feed"
-      aria-label={translate(language, 'reels.title')}
-      aria-busy={isFetchingNextPage}
-      data-reels-pager
-      onScroll={onScroll}
-      className="scrollbar-none h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
-    >
-      {models.map((model, index) => (
-        <ReelPage
-          key={model.id}
-          model={model}
-          index={index}
-          count={count}
-          mode={pageModeOf(index, active)}
-          soundOn={soundOn}
-          language={language}
-          preferredLanguages={readerLanguages}
-          onToggleSound={() => setSoundOn((on) => !on)}
-          onGesture={onGesture}
-          onShare={onShare}
-          onSoundBlocked={() => setSoundOn(false)}
-        />
-      ))}
-    </div>
+    <>
+      <div
+        ref={scroller}
+        id="contenu"
+        role="feed"
+        aria-label={translate(language, 'reels.title')}
+        aria-busy={isFetchingNextPage}
+        data-reels-pager
+        onScroll={onScroll}
+        /* LA FEUILLE RÉCLAME LE GESTE (D-90, miroir du rail `inert` de
+           `routes/story.tsx`) — un sous-arbre inerte n'intercepte plus le
+           doigt ni le clavier : sans elle, un balayage sous la feuille
+           ferait avancer le pager derrière le fil qu'on lit. */
+        inert={comments.postId !== null}
+        className="scrollbar-none h-full snap-y snap-mandatory overflow-y-auto overscroll-contain"
+      >
+        {models.map((model, index) => (
+          <ReelPage
+            key={model.id}
+            model={model}
+            index={index}
+            count={count}
+            mode={pageModeOf(index, active)}
+            soundOn={soundOn}
+            language={language}
+            preferredLanguages={readerLanguages}
+            onToggleSound={() => setSoundOn((on) => !on)}
+            onGesture={onGesture}
+            onShare={onShare}
+            onSoundBlocked={() => setSoundOn(false)}
+            {...(canWrite ? { onComment: comments.open, onRepost } : {})}
+          />
+        ))}
+      </div>
+      {comments.postId !== null ? (
+        <Suspense fallback={null}>
+          <PublicationCommentsSheet postId={comments.postId} onClose={comments.close} />
+        </Suspense>
+      ) : null}
+    </>
   );
 
   return (

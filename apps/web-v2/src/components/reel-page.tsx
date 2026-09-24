@@ -51,6 +51,15 @@ export type ReelPageProps = {
   readonly onToggleSound: () => void;
   readonly onGesture: GestureHandler;
   readonly onShare: (postId: string) => void;
+  /** Ouvre la feuille de commentaires PARTAGÉE (D-89, #6484) — jamais une
+   * navigation : contrairement à la carte du Flux, le lecteur des Réels
+   * reste en place, la feuille se pose PAR-DESSUS lui. `undefined` ⇒
+   * l'écran ne l'offre pas encore (visiteur anonyme, même garde que
+   * `CommentThread.canWrite`) et le bouton ne se rend pas (loi 4). */
+  readonly onComment?: (postId: string) => void;
+  /** Repartage SIMPLE, optimiste, append-only (#6484, miroir
+   * `ReelsViewModel.repost`). Même garde d'absence que `onComment`. */
+  readonly onRepost?: (postId: string) => void;
   /** Un `play()` SONORE de la SCÈNE refusé par la politique de lecture
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
@@ -297,8 +306,12 @@ function ReelRail({
   onToggleSound,
   onGesture,
   onShare,
-}: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare'> & { readonly playable: boolean }) {
-  const { liked, bookmarked } = model.viewer;
+  onComment,
+  onRepost,
+}: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare' | 'onComment' | 'onRepost'> & {
+  readonly playable: boolean;
+}) {
+  const { liked, bookmarked, reposted } = model.viewer;
   return (
     <div data-reel-rail className="pointer-events-auto flex shrink-0 flex-col items-center gap-3">
       <RailButton
@@ -310,6 +323,20 @@ function ReelRail({
         ink={liked ? 'var(--color-error)' : 'white'}
         onPress={() => onGesture(model.id, 'like')}
       />
+      {/* COMMENTER — ordre iOS (`ReelActionRail`, aimer · commenter · …),
+          rang DEUX. Sans teinte au repos : c'est la luminance du réel qui
+          commande (#6693/#6704), comme sur iOS. N'existe que pour un
+          lecteur qui PEUT écrire (loi 4, même garde que `CommentThread`). */}
+      {onComment !== undefined ? (
+        <RailButton
+          gesture="comment"
+          label={translate(language, 'feed.post.action.comment')}
+          glyph="chatCircle"
+          count={model.stats.commentCount}
+          ink="white"
+          onPress={() => onComment(model.id)}
+        />
+      ) : null}
       <RailButton
         gesture="bookmark"
         pressed={bookmarked}
@@ -319,6 +346,21 @@ function ReelRail({
         ink="white"
         onPress={() => onGesture(model.id, 'bookmark')}
       />
+      {/* REPARTAGER — rang QUATRE (ordre iOS : aimer · commenter · enregistrer
+          · repartager). `var(--color-ok)` une fois posé (append-only, miroir
+          `MeeshyColors.success` de `ReelActionRail.swift:92`) — jamais défait
+          par un second tap, iOS ne l'offre pas non plus. */}
+      {onRepost !== undefined ? (
+        <RailButton
+          gesture="repost"
+          pressed={reposted}
+          label={translate(language, 'feed.post.action.repost')}
+          glyph="arrowsClockwise"
+          count={model.stats.repostCount}
+          ink={reposted ? 'var(--color-ok)' : 'white'}
+          onPress={() => onRepost(model.id)}
+        />
+      ) : null}
       <RailButton
         gesture="share"
         label={translate(language, 'reels.action.share')}
@@ -440,6 +482,8 @@ export function ReelPage(props: ReelPageProps) {
           onToggleSound={props.onToggleSound}
           onGesture={props.onGesture}
           onShare={props.onShare}
+          {...(props.onComment !== undefined ? { onComment: props.onComment } : {})}
+          {...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {})}
         />
       </div>
     </article>

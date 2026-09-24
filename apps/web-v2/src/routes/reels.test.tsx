@@ -95,6 +95,55 @@ describe('ReelPage — un réel VIDÉO', () => {
   });
 });
 
+/**
+ * COMMENTER ET REPARTAGER (#6484) — miroir `ReelActionRail.swift:23-111` :
+ * aimer · commenter · enregistrer · repartager · « … » (web : partager, son).
+ * Les DEUX gestes n'existent que si l'écran les OFFRE (`onComment`/`onRepost`
+ * non `undefined`) — même garde que `CommentThread.canWrite`, loi 4 : un
+ * visiteur anonyme n'a ni l'un ni l'autre, la passerelle exigeant
+ * `registeredUser` sur les deux routes.
+ */
+describe('ReelPage — commenter et repartager depuis le rail (#6484)', () => {
+  test('absents tant que l’écran ne les offre pas (visiteur anonyme)', () => {
+    const html = page(REEL_SUNSET_EN);
+    expect(html).not.toContain('data-reel-gesture="comment"');
+    expect(html).not.toContain('data-reel-gesture="repost"');
+  });
+
+  test('offerts par l’écran : présents, avec leur compte et leur libellé', () => {
+    const html = page(REEL_SUNSET_EN, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toContain('data-reel-gesture="comment"');
+    expect(html).toContain('data-reel-gesture="repost"');
+    expect(html).toContain('Commenter');
+    expect(html).toContain('Repartager');
+  });
+
+  test('l’ORDRE du rail suit iOS : j’aime · commenter · enregistrer · repartager · partager · son', () => {
+    const html = page(REEL_STUDIO, { onComment: () => undefined, onRepost: () => undefined, soundOn: true });
+    const order = ['like', 'comment', 'bookmark', 'repost', 'share', 'sound'].map((gesture) =>
+      html.indexOf(`data-reel-gesture="${gesture}"`),
+    );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  test('repartagé ⇒ `aria-pressed="true"` et la teinte `var(--color-ok)`, jamais défait (append-only)', () => {
+    const html = page({ ...REEL_SUNSET_EN, isRepostedByMe: true }, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toMatch(/data-reel-gesture="repost"[^>]*aria-pressed="true"/);
+    expect(html).toContain('var(--color-ok)');
+  });
+
+  test('pas encore repartagé ⇒ `aria-pressed="false"`, blanc', () => {
+    const html = page(REEL_SUNSET_EN, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toMatch(/data-reel-gesture="repost"[^>]*aria-pressed="false"/);
+  });
+
+  test('un compte à zéro reste AFFICHÉ (comportement existant, distinct d’iOS — #7449)', () => {
+    const html = page({ ...REEL_SUNSET_EN, commentCount: 0 }, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toMatch(/data-reel-gesture="comment"[\s\S]*?tabular-nums"[^>]*>0</);
+  });
+});
+
 describe('ReelPage — la légende passe par le Prisme', () => {
   test('rang 1 : original anglais, traduction française servie, dans sa langue', () => {
     const html = page(REEL_SUNSET_EN);
