@@ -86,6 +86,8 @@ const rendre = async ({ formats, langs, gabarits }) => {
   return produits
 }
 
+export const nomPlanche = (format, { brut }) => `${format}${brut ? '-ecrans' : ''}`
+
 // Planche contact : une ligne par langue, une colonne par gabarit, vignettes réduites.
 const planche = async (browser, format, { brut }) => {
   const dossier = resolve(OUT_DIR, format)

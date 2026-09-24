@@ -32,6 +32,8 @@ const horsReseau = async (context, reseau) => {
   })
 }
 
+export const corpsDeSerie = async () => null
+
 const verifierPng = (png, { width, height }) => {
   const info = pngInfo(png)
   const erreurs = []

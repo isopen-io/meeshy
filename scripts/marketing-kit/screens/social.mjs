@@ -71,10 +71,12 @@ export const ecranFil = (ctx) =>
 
 // PeopleDiscoveryView (onglet Découvrir de ContactsHubView) + la demande acceptée.
 // Aucune pastille de présence : elle n'est servie qu'entre amis acceptés (presence-visibility).
+const POOL_DECOUVERTE = ['kwame.m', 'giulia.r', 'lucas.olv', 'priya.n', 'jonas.wb', 'maya.chen', 'amara.d']
+
+export const suggestionsDecouverte = (lang) => POOL_DECOUVERTE.filter((p) => p !== DEMO.lecteurs[lang]).slice(0, 5)
+
 export const ecranDecouverte = (ctx) => {
-  const lecteur = DEMO.lecteurs[ctx.lang]
-  const pool = ['kwame.m', 'giulia.r', 'lucas.olv', 'priya.n', 'jonas.wb', 'maya.chen', 'amara.d']
-  const profils = pool.filter((p) => p !== lecteur).slice(0, 5)
+  const profils = suggestionsDecouverte(ctx.lang)
   return html`<div class="ecran iphone decouverte ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}">
     <div class="p-bg"></div>
     ${statusBar()}
