@@ -1,22 +1,23 @@
 // Contenus de démo — docs/marketing/campagne-2026-09/captures-app-store.md § 6.
-// Personnes FICTIVES, majeures (18-24 ans), aucune marque : le fandom est le « Nova Club »,
+// Personnes FICTIVES, majeures (18-24 ans), aucune marque ; `genre` accorde la copie qui les
+// désigne (« il m'entend », « elle lit ») : le fandom est le « Nova Club »,
 // fan-club d'un groupe inventé (« Nova »). Chaque texte porte sa langue d'origine et sa
 // traduction dans les sept langues de lecture : le Prisme (lib/prism.mjs) sert au lecteur
 // sa langue, et un texte sans traduction fait échouer le rendu.
 
 const profils = [
-  { pseudo: 'lea.mtn', prenom: 'Léa', nom: 'Martin', ville: 'Lyon', drapeau: '🇫🇷', lang: 'fr', regional: 'en', age: 21, teinte: '6366F1' },
-  { pseudo: 'minjun.p', prenom: 'Min-jun', nom: 'Park', ville: 'Séoul', drapeau: '🇰🇷', lang: 'ko', regional: 'en', age: 22, teinte: 'C1292E' },
-  { pseudo: 'sofi.romero', prenom: 'Sofía', nom: 'Romero', ville: 'Madrid', drapeau: '🇪🇸', lang: 'es', regional: 'en', age: 20, teinte: 'F4A261' },
-  { pseudo: 'aiko.t', prenom: 'Aiko', nom: 'Tanaka', ville: 'Osaka', drapeau: '🇯🇵', lang: 'ja', regional: 'en', age: 19, teinte: 'F28482' },
-  { pseudo: 'lucas.olv', prenom: 'Lucas', nom: 'Oliveira', ville: 'São Paulo', drapeau: '🇧🇷', lang: 'pt', regional: 'es', age: 23, teinte: '00B4D8' },
-  { pseudo: 'amara.d', prenom: 'Amara', nom: 'Diallo', ville: 'Dakar', drapeau: '🇸🇳', lang: 'fr', regional: 'wo', age: 20, teinte: '34D399' },
-  { pseudo: 'yusuf.h', prenom: 'Yusuf', nom: 'Haddad', ville: 'Amman', drapeau: '🇯🇴', lang: 'ar', regional: 'en', age: 22, teinte: 'E9C46A' },
-  { pseudo: 'jonas.wb', prenom: 'Jonas', nom: 'Weber', ville: 'Berlin', drapeau: '🇩🇪', lang: 'de', regional: 'en', age: 24, teinte: '264653' },
-  { pseudo: 'giulia.r', prenom: 'Giulia', nom: 'Rossi', ville: 'Bologne', drapeau: '🇮🇹', lang: 'it', regional: 'fr', age: 21, teinte: 'E76F51' },
-  { pseudo: 'kwame.m', prenom: 'Kwame', nom: 'Mensah', ville: 'Accra', drapeau: '🇬🇭', lang: 'en', regional: 'tw', age: 23, teinte: '2A9D8F' },
-  { pseudo: 'priya.n', prenom: 'Priya', nom: 'Nair', ville: 'Bangalore', drapeau: '🇮🇳', lang: 'en', regional: 'hi', age: 22, teinte: 'F4845F' },
-  { pseudo: 'maya.chen', prenom: 'Maya', nom: 'Chen', ville: 'Toronto', drapeau: '🇨🇦', lang: 'en', regional: 'zh', age: 18, teinte: '818CF8' },
+  { pseudo: 'lea.mtn', genre: 'f', prenom: 'Léa', nom: 'Martin', ville: 'Lyon', drapeau: '🇫🇷', lang: 'fr', regional: 'en', age: 21, teinte: '6366F1' },
+  { pseudo: 'minjun.p', genre: 'm', prenom: 'Min-jun', nom: 'Park', ville: 'Séoul', drapeau: '🇰🇷', lang: 'ko', regional: 'en', age: 22, teinte: 'C1292E' },
+  { pseudo: 'sofi.romero', genre: 'f', prenom: 'Sofía', nom: 'Romero', ville: 'Madrid', drapeau: '🇪🇸', lang: 'es', regional: 'en', age: 20, teinte: 'F4A261' },
+  { pseudo: 'aiko.t', genre: 'f', prenom: 'Aiko', nom: 'Tanaka', ville: 'Osaka', drapeau: '🇯🇵', lang: 'ja', regional: 'en', age: 19, teinte: 'F28482' },
+  { pseudo: 'lucas.olv', genre: 'm', prenom: 'Lucas', nom: 'Oliveira', ville: 'São Paulo', drapeau: '🇧🇷', lang: 'pt', regional: 'es', age: 23, teinte: '00B4D8' },
+  { pseudo: 'amara.d', genre: 'f', prenom: 'Amara', nom: 'Diallo', ville: 'Dakar', drapeau: '🇸🇳', lang: 'fr', regional: 'wo', age: 20, teinte: '34D399' },
+  { pseudo: 'yusuf.h', genre: 'm', prenom: 'Yusuf', nom: 'Haddad', ville: 'Amman', drapeau: '🇯🇴', lang: 'ar', regional: 'en', age: 22, teinte: 'E9C46A' },
+  { pseudo: 'jonas.wb', genre: 'm', prenom: 'Jonas', nom: 'Weber', ville: 'Berlin', drapeau: '🇩🇪', lang: 'de', regional: 'en', age: 24, teinte: '264653' },
+  { pseudo: 'giulia.r', genre: 'f', prenom: 'Giulia', nom: 'Rossi', ville: 'Bologne', drapeau: '🇮🇹', lang: 'it', regional: 'fr', age: 21, teinte: 'E76F51' },
+  { pseudo: 'kwame.m', genre: 'm', prenom: 'Kwame', nom: 'Mensah', ville: 'Accra', drapeau: '🇬🇭', lang: 'en', regional: 'tw', age: 23, teinte: '2A9D8F' },
+  { pseudo: 'priya.n', genre: 'f', prenom: 'Priya', nom: 'Nair', ville: 'Bangalore', drapeau: '🇮🇳', lang: 'en', regional: 'hi', age: 22, teinte: 'F4845F' },
+  { pseudo: 'maya.chen', genre: 'f', prenom: 'Maya', nom: 'Chen', ville: 'Toronto', drapeau: '🇨🇦', lang: 'en', regional: 'zh', age: 18, teinte: '818CF8' },
 ]
 
 const lecteurs = {

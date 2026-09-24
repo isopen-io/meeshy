@@ -10,6 +10,8 @@ import { ANNONCES, CARROUSELS, CARROUSEL_TITRES, LIBELLES, THREADS_QUESTION, YOU
 import { PUBLICATIONS } from '../templates/social/textes/publications.mjs'
 import { CONTENUS_SOCIAUX, MA_VILLE, MON_BONJOUR } from '../templates/social/textes/demo-social.mjs'
 import { HASHTAG } from '../templates/social/textes/langues.mjs'
+import { AMI_C1 } from '../templates/social/carrousels.mjs'
+import { DEMO, profilDe } from '../textes/demo.mjs'
 
 const ids = (format) => VISUELS.filter((v) => v.format === format).map((v) => v.id)
 const nature = (id) => VISUELS.find((v) => v.id === id)?.nature
@@ -163,11 +165,18 @@ describe('claims (campagne-virale-2026-09.md § 2) sur tout texte social', () =>
 })
 
 describe('personnages', () => {
-  test('Min-jun Park (Séoul) est un garçon : la copie qui le désigne est au masculin', () => {
-    const FEMININ = { fr: /\bElle\b|\belle\b/, en: /\b(She|she|her|hers)\b/, es: /\bElla\b|\bella\b/, de: /\b(Sie|sie) (hört|liest)|\bihrer\b/, it: /\bLei\b|\blei\b/, pt: /\bEla\b|\bela\b|\bdela\b/, ar: /وهي|تسمعني|تسمعك|تقرأ بلغتها|تسمعها/ }
-    const copie = [VIDEOS.V1.hook, ...VIDEOS.V1.sous, CARROUSELS.C1[1], CARROUSELS.C1[2]]
-    const fautes = KIT_LANGS.flatMap((lang) => copie.map((t) => t[lang]).filter((s) => FEMININ[lang].test(s)).map((s) => `${lang} : ${s}`))
-    expect(fautes).toEqual([])
+  const FEMININ = { fr: /\bElle\b|\belle\b/, en: /\b(She|she|her|hers)\b/, es: /\bElla\b|\bella\b/, de: /\b(Sie|sie) (hört|liest)|hört sie\b|\bihrer\b/, it: /\bLei\b|\blei\b/, pt: /\bEla\b|\bela\b|\bdela\b/, ar: /وهي|تسمعني|تسمعك|تقرأ بلغتها|تسمعها/ }
+  const MASCULIN = { fr: /\bIl\b|\bil\b/, en: /\b(He|he|his)\b/, es: /(^|\s)[Éé]l\s/u, de: /\b(Er|er) (hört|liest)|hört er\b|\bseiner\b/, it: /\bLui\b|\blui\b/, pt: /\bEle\b|\bele\b|\bdele\b/, ar: /وهو|يسمعني|يسمعك|يقرأ بلغته|يسمعها/ }
+  const accord = (textes, genre) => KIT_LANGS.flatMap((lang) => textes.map((t) => t[lang]).filter((s) => !(genre === 'm' ? MASCULIN : FEMININ)[lang].test(s)).map((s) => `${lang} : ${s}`))
+
+  test('Min-jun Park (Séoul) est un garçon : la copie qui le désigne (V1, C1-3) est au masculin', () => {
+    expect(profilDe('minjun.p').genre).toBe('m')
+    expect(accord([VIDEOS.V1.hook, VIDEOS.V1.sous[1], CARROUSELS.C1[2]], 'm')).toEqual([])
+  })
+
+  test('C1-2 : l’amie qui lit dans sa langue est, dans chaque langue, un profil féminin', () => {
+    for (const lang of KIT_LANGS) expect({ lang, genre: profilDe(DEMO.lecteurs[AMI_C1[lang]]).genre }).toEqual({ lang, genre: 'f' })
+    expect(accord([CARROUSELS.C1[1]], 'f')).toEqual([])
   })
 })
 

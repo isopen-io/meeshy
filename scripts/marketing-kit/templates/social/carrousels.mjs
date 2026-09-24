@@ -13,7 +13,8 @@ import { CARROUSELS, LIBELLES } from './textes/annonces.mjs'
 
 const F = '4x5'
 const FONDS = { C1: 'vif', C2: 'nuit', C3: 'aube', C4: 'vif' }
-const AMI = { fr: 'es', en: 'es', es: 'fr', de: 'es', it: 'pt', pt: 'es', ar: 'en' }
+// C1-2 : l'amie qui lit le message dans SA langue — un profil féminin, la copie dit « elle ».
+export const AMI_C1 = { fr: 'es', en: 'es', es: 'fr', de: 'es', it: 'es', pt: 'es', ar: 'en' }
 const sc = (ctx, theme) => contexte({ lang: ctx.lang, theme })
 
 const compteur = (i, n, ctx) =>
@@ -67,7 +68,7 @@ const storyMiniature = (ctx) =>
 export const CARROUSELS_4x5 = {
   C1: [
     (ctx) => slide({ ctx, c: 'C1', i: 0, visuel: html`${telGauche(ecran('dm', sc(ctx, 'dark')))}${loupe(ecran('dm', sc(ctx, 'dark')), { cible: '.msg-row.mine .bubble', x: 190, y: 420, largeur: 330, hauteur: 110, rotation: -2 })}` }),
-    (ctx) => slide({ ctx, c: 'C1', i: 1, visuel: html`${telGauche(E.ecranChezLAmi(AMI[ctx.lang], ctx.lang))}${loupe(E.ecranChezLAmi(AMI[ctx.lang], ctx.lang), { cible: '.bubble.theirs', x: 190, y: 420, largeur: 330, hauteur: 120, rotation: 2 })}${drapeauxFleche(ctx, ctx.lang, AMI[ctx.lang], { x: 300, y: 330, taille: 28 })}` }),
+    (ctx) => slide({ ctx, c: 'C1', i: 1, visuel: html`${telGauche(E.ecranChezLAmi(AMI_C1[ctx.lang], ctx.lang))}${loupe(E.ecranChezLAmi(AMI_C1[ctx.lang], ctx.lang), { cible: '.bubble.theirs', x: 190, y: 420, largeur: 330, hauteur: 120, rotation: 2 })}${drapeauxFleche(ctx, ctx.lang, AMI_C1[ctx.lang], { x: 300, y: 330, taille: 28 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 2, visuel: html`${telGauche(ecran('dm', sc(ctx, 'dark')))}${loupe(ecran('dm', sc(ctx, 'dark')), { cible: '.bubble.audio', x: 170, y: 380, largeur: 350, hauteur: 230, rotation: -2 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 3, titreOpts: { taille: 36 }, visuel: html`${telGauche(E.ecranConsentementVoix(sc(ctx, 'light')))}${loupe(E.ecranConsentementVoix(sc(ctx, 'light')), { cible: '.voix-lignes', x: 170, y: 400, largeur: 350, hauteur: 160, rotation: 2 })}` }),
     (ctx) => slide({ ctx, c: 'C1', i: 4, visuel: murDeLangues() }),

@@ -6,7 +6,7 @@ import { t } from './langues.mjs'
 export const CARROUSELS = {
   C1: [
     t('Tu écris dans ta langue.', 'You type in your language.', 'Escribes en tu idioma.', 'Du schreibst in deiner Sprache.', 'Scrivi nella tua lingua.', 'Você escreve na sua língua.', 'تكتب بلغتك.'),
-    t('Il lit dans la sienne.', 'He reads it in his.', 'Él lo lee en el suyo.', 'Er liest es in seiner.', 'Lui legge nella sua.', 'Ele lê na dele.', 'وهو يقرأ بلغته.'),
+    t('Elle lit dans la sienne.', 'She reads it in hers.', 'Ella lo lee en el suyo.', 'Sie liest es in ihrer.', 'Lei legge nella sua.', 'Ela lê na dela.', 'وهي تقرأ بلغتها.'),
     t('Tu parles. Il t’entend dans sa langue.', 'You talk. He hears you in his language.', 'Hablas. Él te oye en su idioma.', 'Du sprichst. Er hört dich in seiner Sprache.', 'Parli. Lui ti sente nella sua lingua.', 'Você fala. Ele te ouve na língua dele.', 'تتكلم. وهو يسمعك بلغته.'),
     t(
       'Avec une voix qui ressemble à la tienne (si tu l’actives).',
