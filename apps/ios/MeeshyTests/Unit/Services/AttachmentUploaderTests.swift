@@ -15,11 +15,13 @@ private final class StubURLProtocol: URLProtocol {
     // single request it triggers, so there is no concurrent access.
     nonisolated(unsafe) static var stubData: Data?
     nonisolated(unsafe) static var stubStatusCode: Int = 200
+    nonisolated(unsafe) static var lastRequest: URLRequest?
 
     override nonisolated class func canInit(with request: URLRequest) -> Bool { true }
     override nonisolated class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override nonisolated func startLoading() {
+        Self.lastRequest = request
         let url = request.url ?? URL(string: "https://stub.meeshy.test")!
         let response = HTTPURLResponse(
             url: url, statusCode: Self.stubStatusCode, httpVersion: nil,
@@ -69,6 +71,22 @@ final class AttachmentUploaderTests: XCTestCase {
 
         XCTAssertEqual(resultURL.absoluteString, expectedURLString,
             "uploadAvatar must decode the gateway's real `fileUrl` key")
+    }
+
+    func test_uploadAvatar_carriesClientIdentity_valueForValue() async throws {
+        StubURLProtocol.stubStatusCode = 200
+        StubURLProtocol.stubData = Data("""
+        {"success":true,"data":{"attachments":[{"fileUrl":"https://gate.meeshy.me/uploads/a.jpg"}]}}
+        """.utf8)
+        StubURLProtocol.lastRequest = nil
+
+        _ = try await AttachmentUploader(urlSession: makeStubbedSession()).uploadAvatar(makeTinyJPEGData())
+
+        let request = try XCTUnwrap(StubURLProtocol.lastRequest)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Canvas-Caps"), "3")
+        for (name, value) in ClientInfoProvider.identityHeaders() {
+            XCTAssertEqual(request.value(forHTTPHeaderField: name), value, "header \(name)")
+        }
     }
 
     func test_uploadAvatar_whenResponseOnlyHasLegacyUrlKey_throws() async {
