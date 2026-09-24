@@ -10,8 +10,7 @@ import { directionOf } from '../../lib/locales.mjs'
 import { langue } from '../../lib/langues.mjs'
 import { typo } from '../../lib/composants.mjs'
 import { icon } from '../../lib/icons.mjs'
-import { meeshEntry } from '../../screens/progression.mjs'
-import { DEMO } from '../../textes/demo.mjs'
+import { carteMeesh } from '../../screens/progression.mjs'
 import { kitCss } from '../../lib/styles.mjs'
 import { contexte, coupeLegende, ecran } from '../../lib/gabarits.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
@@ -89,9 +88,10 @@ const DECORS = {
     html`<div class="as-rangee as-bonjours">${BONJOURS.filter((b) => b.lang !== ctx.lang).slice(0, appareil === 'iphone' ? 3 : 6).map(
       (b) => html`<span class="as-bonjour" lang="${b.lang}" dir="${directionOf(b.lang)}"><span>${langue(b.lang).drapeau}</span>${b.texte}</span>`,
     )}</div>`,
-  // Loupe sur le solde (ProgressionMeeshEntry) : un zoom de l'interface, pas une promesse.
-  meesh: () =>
-    html`<span class="as-anneau" data-anneau=".reveal-top .meesh-entry"></span><div class="as-loupe dark" data-loupe=".reveal-top .meesh-entry">${meeshEntry(DEMO.progression.meesh)}</div>`,
+  // La frappe MONTRÉE : la carte Meesh de l'écran Progression (solde, frappées depuis toujours,
+  // prochaine frappe) flotte sous le badge — un fragment réel de l'interface, pas une promesse.
+  'carte-meesh': (ctx) =>
+    html`<div class="as-carte-flottante light" dir="${ctx.dir}" lang="${ctx.lang}">${carteMeesh(contexte({ lang: ctx.lang, theme: 'light' }))}</div>`,
 }
 
 const rangeeDecor = (decor) => decor === 'drapeaux-groupe' || decor === 'drapeaux-monde' || decor === 'bonjours'
@@ -109,7 +109,8 @@ export const pageCapture = ({ appareil, lang, rang }) => {
   const capture = captureDe({ appareil, rang })
   const ctx = contexte({ lang, theme: capture.theme })
   const { width, height } = scene(appareil)
-  const { echelle, deviceTop } = SCENES[appareil]
+  const { echelle } = SCENES[appareil]
+  const deviceTop = capture.deviceTop ?? SCENES[appareil].deviceTop
   const device = tailleCadre(appareil)
   const decor = capture.decor ? DECORS[capture.decor](ctx, appareil) : ''
   const ton = capture.theme === 'dark' ? 'as-sombre' : 'as-clair'

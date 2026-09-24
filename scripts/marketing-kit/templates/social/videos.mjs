@@ -1,6 +1,7 @@
 // 9:16 — couverture + 3 images-clés de storyboard pour V1-V8 (contenu-par-format.md § 1).
 // Scène 540 × 960 ; zone sûre des vidéos verticales : texte entre 5 % et 84 % de la hauteur,
-// 11 % libres côté fin de ligne (boutons de l'app de diffusion). Logo en carte de fin seulement.
+// 11 % libres côté fin de ligne (boutons de l'app de diffusion) ; une COUVERTURE tient entre
+// 15 % et 85 % (grille 3:4 des profils, rendu.mjs). Logo en carte de fin seulement.
 import { html } from '../../lib/html.mjs'
 import { icon } from '../../lib/icons.mjs'
 import { avatar, typo } from '../../lib/composants.mjs'
@@ -21,10 +22,10 @@ const dm = (ctx) => ecran('dm', sc(ctx, 'dark'))
 // Téléphone « plan » : centré, en haut, le bas libre pour les sous-titres.
 const telPlan = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 304, x: 118, y: 64, ...options })
 const telFin = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 290, x: 125, y: 430, rotation: -3, ...options })
-const telCouv = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 310, x: 115, y: 350, rotation: -3, ...options })
+const telCouv = (ecranHtml, options = {}) => telephone(ecranHtml, { largeur: 310, x: 115, y: 404, rotation: -3, ...options })
 
 const couverture = ({ ctx, code, fond = 'vif', visuel, taille = 46, hauteur = 270 }) =>
-  scene({ format: F, ctx, fond, classe: 'couverture', contenu: html`${titre(VIDEOS[code].hook[ctx.lang], ctx, { x: 34, y: 96, largeur: 440, hauteur, taille })}${visuel}` })
+  scene({ format: F, ctx, fond, classe: 'couverture', contenu: html`${titre(VIDEOS[code].hook[ctx.lang], ctx, { x: 34, y: 150, largeur: 440, hauteur, taille })}${visuel}` })
 
 const plan = ({ ctx, code, n, fond = 'nuit', visuel, sous, stY = 718, stH = 88, chipEnBas = false }) =>
   scene({
@@ -75,7 +76,7 @@ const commentaireFlottant = (ctx, c) => {
 
 export const VIDEOS_9x16 = {
   V1: [
-    (ctx) => couverture({ ctx, code: 'V1', visuel: html`${telCouv(dm(ctx))}${drapeauxFleche(ctx, ctx.lang, 'ko', { x: 22, y: 420, taille: 34 })}` }),
+    (ctx) => couverture({ ctx, code: 'V1', visuel: html`${telCouv(dm(ctx))}${drapeauxFleche(ctx, ctx.lang, 'ko', { x: 22, y: 474, taille: 34 })}` }),
     (ctx) => plan({ ctx, code: 'V1', n: 2, visuel: html`${telPlan(E.ecranEnregistrement(sc(ctx, 'dark')))}${loupe(E.ecranEnregistrement(sc(ctx, 'dark')), { cible: '.composer.enregistre', x: 24, y: 500, largeur: 492, hauteur: 120, marge: 8, rotation: -2 })}`, sous: sous('V1', 0, ctx) }),
     (ctx) => plan({ ctx, code: 'V1', n: 3, visuel: html`${telPlan(dm(ctx), { x: 60 })}${loupe(dm(ctx), { cible: '.bubble.audio', x: 136, y: 350, largeur: 390, hauteur: 260, rotation: 2 })}`, sous: sous('V1', 1, ctx) }),
     (ctx) => carteFin({ ctx, code: 'V1', visuel: html`${telFin(dm(ctx))}${drapeauxFleche(ctx, ctx.lang, 'ko', { x: 24, y: 560, taille: 28 })}` }),
@@ -83,7 +84,7 @@ export const VIDEOS_9x16 = {
   V2: [
     (ctx) => couverture({
       ctx, code: 'V2',
-      visuel: html`${telCouv(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 3 }))}${nuageBonjours([[BONJOURS[2], 20, 380, -6], [BONJOURS[4], 400, 420, 5, 'ar'], [BONJOURS[3], 10, 560, 4], [BONJOURS[5], 412, 600, -5], [BONJOURS[9], 18, 730, -3], [BONJOURS[10], 404, 770, 6]])}`,
+      visuel: html`${telCouv(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 3 }))}${nuageBonjours([[BONJOURS[2], 20, 434, -6], [BONJOURS[4], 400, 474, 5, 'ar'], [BONJOURS[3], 10, 600, 4], [BONJOURS[5], 412, 640, -5], [BONJOURS[9], 18, 750, -3], [BONJOURS[10], 404, 780, 6]])}`,
     }),
     (ctx) => plan({ ctx, code: 'V2', n: 2, visuel: telPlan(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 0, saisie: true })), sous: sous('V2', 0, ctx) }),
     (ctx) => plan({
@@ -96,7 +97,7 @@ export const VIDEOS_9x16 = {
   V3: [
     (ctx) => couverture({
       ctx, code: 'V3', fond: 'nuit',
-      visuel: html`<div class="orbite">${drapeauxRencontres.slice(0, 12).map((d, i) => html`<span style="--a:${-132 + i * 24}deg">${d}</span>`)}</div>${emblemeFlamme(ctx, 30, { x: 120, y: 390, taille: 300 })}`,
+      visuel: html`<div class="orbite">${drapeauxRencontres.slice(0, 12).map((d, i) => html`<span style="--a:${-132 + i * 24}deg">${d}</span>`)}</div>${emblemeFlamme(ctx, 30, { x: 120, y: 436, taille: 300 })}`,
     }),
     (ctx) => plan({
       ctx, code: 'V3', n: 2,
@@ -126,7 +127,7 @@ export const VIDEOS_9x16 = {
   V5: [
     (ctx) => couverture({
       ctx, code: 'V5', hauteur: 300, taille: 42,
-      visuel: html`${telCouv(E.ecranMaStory(sc(ctx, 'dark')), { y: 360, x: 150, largeur: 290 })}${E.commentairesPour(sc(ctx, 'dark'), 3).map((c, i) => puce(commentaireFlottant(ctx, c), { x: [14, 196, 26][i], y: [430, 610, 770][i], rotation: [-3, 2, -2][i], classe: 'com-puce' }))}`,
+      visuel: html`${telCouv(E.ecranMaStory(sc(ctx, 'dark')), { y: 414, x: 150, largeur: 290 })}${E.commentairesPour(sc(ctx, 'dark'), 3).map((c, i) => puce(commentaireFlottant(ctx, c), { x: [14, 196, 26][i], y: [480, 636, 776][i], rotation: [-3, 2, -2][i], classe: 'com-puce' }))}`,
     }),
     (ctx) => plan({ ctx, code: 'V5', n: 2, visuel: telPlan(E.ecranMaStory(sc(ctx, 'dark'))), sous: sous('V5', 0, ctx) }),
     (ctx) => plan({
@@ -137,7 +138,7 @@ export const VIDEOS_9x16 = {
     (ctx) => carteFin({ ctx, code: 'V5', visuel: telFin(ecran('decouverte', sc(ctx, 'dark'))) }),
   ],
   V6: [
-    (ctx) => couverture({ ctx, code: 'V6', hauteur: 300, taille: 42, visuel: html`${telCouv(ecran('appel', sc(ctx, 'dark')), { y: 380, rotation: 3 })}${puce('😂', { x: 30, y: 500, classe: 'emoji-geant', rotation: -10 })}${loupe(ecran('appel', sc(ctx, 'dark')), { cible: '.call-captions', x: 36, y: 650, largeur: 468, hauteur: 190, rotation: -2 })}` }),
+    (ctx) => couverture({ ctx, code: 'V6', hauteur: 300, taille: 42, visuel: html`${telCouv(ecran('appel', sc(ctx, 'dark')), { y: 434, rotation: 3 })}${puce('😂', { x: 30, y: 540, classe: 'emoji-geant', rotation: -10 })}${loupe(ecran('appel', sc(ctx, 'dark')), { cible: '.call-captions', x: 36, y: 650, largeur: 468, hauteur: 190, rotation: -2 })}` }),
     (ctx) => plan({ ctx, code: 'V6', n: 2, visuel: telPlan(ecran('appel', sc(ctx, 'dark'))), sous: sous('V6', 0, ctx) }),
     (ctx) => plan({
       ctx, code: 'V6', n: 3,
@@ -151,7 +152,7 @@ export const VIDEOS_9x16 = {
       scene({
         format: F, ctx, fond: 'nuit', classe: 'couverture',
         contenu: html`<div class="stitch" data-sur><div class="st-tete"><span class="st-av">?</span><b>${LIBELLES.commentaire[ctx.lang]}</b></div><p>${typo(VIDEOS.V7.hook[ctx.lang].replace(VIDEOS.V7.ecoute[ctx.lang], '').trim(), ctx.lang)}</p></div>
-          ${titre(VIDEOS.V7.ecoute[ctx.lang], ctx, { x: 34, y: 330, largeur: 440, hauteur: 110, taille: 84, classe: 'ecoute' })}
+          ${titre(VIDEOS.V7.ecoute[ctx.lang], ctx, { x: 34, y: 384, largeur: 440, hauteur: 110, taille: 84, classe: 'ecoute' })}
           <div class="pile-audio">${carteAudio(ctx, { libelle: LIBELLES.original[ctx.lang], drapeau: langue(ctx.lang).drapeau, duree: '0:12' })}${carteAudio(ctx, { libelle: LIBELLES.traduit[ctx.lang], drapeau: langue('ko').drapeau, duree: '0:12', active: true, graine: 7 })}</div>`,
       }),
     (ctx) => plan({
@@ -166,9 +167,9 @@ export const VIDEOS_9x16 = {
     (ctx) =>
       scene({
         format: F, ctx, fond: 'vif', classe: 'couverture',
-        contenu: html`${texte(HASHTAG[ctx.lang], ctx, { x: 34, y: 92, largeur: 440, hauteur: 64, taille: 44, classe: 'hashtag' })}
-          ${titre(VIDEOS.V8.hook[ctx.lang], ctx, { x: 34, y: 170, largeur: 440, hauteur: 230, taille: 38 })}
-          ${telCouv(ecran('global', sc(ctx, 'dark')), { y: 410 })}`,
+        contenu: html`${texte(HASHTAG[ctx.lang], ctx, { x: 34, y: 150, largeur: 440, hauteur: 64, taille: 44, classe: 'hashtag' })}
+          ${titre(VIDEOS.V8.hook[ctx.lang], ctx, { x: 34, y: 226, largeur: 440, hauteur: 220, taille: 38 })}
+          ${telCouv(ecran('global', sc(ctx, 'dark')), { y: 462 })}`,
       }),
     (ctx) => plan({ ctx, code: 'V8', n: 2, visuel: telPlan(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 0, saisie: true })), sous: sous('V8', 0, ctx) }),
     (ctx) => plan({ ctx, code: 'V8', n: 3, visuel: telPlan(E.ecranGlobalBonjour(sc(ctx, 'dark'), { reponses: 4 })), sous: sous('V8', 1, ctx) }),

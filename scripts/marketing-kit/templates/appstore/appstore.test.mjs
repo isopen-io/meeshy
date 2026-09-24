@@ -107,10 +107,10 @@ describe('capture 8 — badges et Meesh frappées', () => {
 })
 
 describe('appel vidéo — le correspondant', () => {
-  test('la vidéo est un portrait flouté sans traits de visage, et ses initiales sont posées dessus', () => {
+  test('la vidéo du correspondant porte ses initiales (portrait flouté, sans visage dessiné)', () => {
     for (const lang of ['fr', 'ar']) {
       const html = pageCapture({ appareil: 'iphone', lang, rang: 9 })
-      expect(html).toContain('class="call-illu')
+      expect(html).toContain('call-illu')
       expect(html).toMatch(/class="call-avatar[\s\S]*?>MP</)
     }
     const ipad = pageCapture({ appareil: 'ipad', lang: 'fr', rang: 6 })

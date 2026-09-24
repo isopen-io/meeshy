@@ -105,7 +105,7 @@ export const ipadProgression = (ctx) =>
 export const ipadAppel = (ctx) =>
   html`<div class="ecran ipad appel dark plein" dir="${ctx.dir}" lang="${ctx.lang}">
     <div class="ipad-call-grid">
-      <div class="tile">${illustration('appel-seoul', { className: 'call-illu' })}<span class="tag">Min-jun 🇰🇷</span></div>
+      <div class="tile">${illustration('appel-seoul', { className: 'call-illu' })}<div class="call-avatar">${avatar(profilDe('minjun.p'), 150)}</div><span class="tag">Min-jun 🇰🇷</span></div>
       <div class="tile alt">${avatar(profilDe('sofi.romero'), 180)}<span class="tag">Sofía 🇪🇸</span></div>
     </div>
     ${statusBar({ onMedia: true })}

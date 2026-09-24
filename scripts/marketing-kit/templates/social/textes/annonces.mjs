@@ -6,8 +6,8 @@ import { t } from './langues.mjs'
 export const CARROUSELS = {
   C1: [
     t('Tu écris dans ta langue.', 'You type in your language.', 'Escribes en tu idioma.', 'Du schreibst in deiner Sprache.', 'Scrivi nella tua lingua.', 'Você escreve na sua língua.', 'تكتب بلغتك.'),
-    t('Elle lit dans la sienne.', 'She reads it in hers.', 'Ella lo lee en el suyo.', 'Sie liest es in ihrer.', 'Lei legge nella sua.', 'Ela lê na dela.', 'وهي تقرأ بلغتها.'),
-    t('Tu parles. Elle t’entend dans sa langue.', 'You talk. She hears you in her language.', 'Hablas. Ella te oye en su idioma.', 'Du sprichst. Sie hört dich in ihrer Sprache.', 'Parli. Lei ti sente nella sua lingua.', 'Você fala. Ela te ouve na língua dela.', 'تتكلم. وهي تسمعك بلغتها.'),
+    t('Il lit dans la sienne.', 'He reads it in his.', 'Él lo lee en el suyo.', 'Er liest es in seiner.', 'Lui legge nella sua.', 'Ele lê na dele.', 'وهو يقرأ بلغته.'),
+    t('Tu parles. Il t’entend dans sa langue.', 'You talk. He hears you in his language.', 'Hablas. Él te oye en su idioma.', 'Du sprichst. Er hört dich in seiner Sprache.', 'Parli. Lui ti sente nella sua lingua.', 'Você fala. Ele te ouve na língua dele.', 'تتكلم. وهو يسمعك بلغته.'),
     t(
       'Avec une voix qui ressemble à la tienne (si tu l’actives).',
       'In a voice that sounds like yours (if you turn it on).',
@@ -61,11 +61,11 @@ export const ANNONCES = {
     post: t(
       'Tu envoies un vocal en français. Ton ami à Séoul l’écoute en coréen, avec une voix qui ressemble à la tienne si tu l’actives. Meeshy est disponible.',
       'You send a voice note in English. Your friend in Seoul hears it in Korean, in a voice that sounds like yours if you turn it on. Meeshy is out now.',
-      'Mandas un audio en español. Tu amiga en Seúl lo escucha en coreano, con una voz que se parece a la tuya si la activas. Meeshy ya está disponible.',
-      'Du schickst eine Sprachnachricht auf Deutsch. Deine Freundin in Seoul hört sie auf Koreanisch, mit einer Stimme, die wie deine klingt, wenn du das aktivierst. Meeshy ist da.',
-      'Mandi un vocale in italiano. La tua amica a Seul lo ascolta in coreano, con una voce che somiglia alla tua se la attivi. Meeshy è disponibile.',
-      'Você manda um áudio em português. Sua amiga em Seul ouve em coreano, com uma voz parecida com a sua se você ativar. O Meeshy já está disponível.',
-      'ترسل رسالة صوتية بالعربية. صديقتك في سيول تسمعها بالكورية، بصوت يشبه صوتك إذا فعّلته. Meeshy متاح الآن.',
+      'Mandas un audio en español. Tu amigo en Seúl lo escucha en coreano, con una voz que se parece a la tuya si la activas. Meeshy ya está disponible.',
+      'Du schickst eine Sprachnachricht auf Deutsch. Dein Freund in Seoul hört sie auf Koreanisch, mit einer Stimme, die wie deine klingt, wenn du das aktivierst. Meeshy ist da.',
+      'Mandi un vocale in italiano. Il tuo amico a Seul lo ascolta in coreano, con una voce che somiglia alla tua se la attivi. Meeshy è disponibile.',
+      'Você manda um áudio em português. Seu amigo em Seul ouve em coreano, com uma voz parecida com a sua se você ativar. O Meeshy já está disponível.',
+      'ترسل رسالة صوتية بالعربية. صديقك في سيول يسمعها بالكورية، بصوت يشبه صوتك إذا فعّلته. Meeshy متاح الآن.',
     ),
   },
   X2: {
@@ -165,7 +165,7 @@ export const YOUTUBE = {
       '6 países organizam uma viagem sem língua em comum',
       '6 بلدان تخطط لرحلة بلا لغة مشتركة',
     ),
-    accroche: t('6 PAYS. 0 LANGUE COMMUNE.', '6 COUNTRIES. 0 SHARED LANGUAGE.', '6 PAÍSES. 0 IDIOMA EN COMÚN.', '6 LÄNDER. 0 GEMEINSAME SPRACHE.', '6 PAESI. 0 LINGUE IN COMUNE.', '6 PAÍSES. 0 LÍNGUA EM COMUM.', '6 بلدان. ولا لغة مشتركة.'),
+    accroche: t('6 PAYS. 0 LANGUE COMMUNE.', '6 COUNTRIES. NO SHARED LANGUAGE.', '6 PAÍSES. NINGÚN IDIOMA EN COMÚN.', '6 LÄNDER. KEINE GEMEINSAME SPRACHE.', '6 PAESI. 0 LINGUE IN COMUNE.', '6 PAÍSES. NENHUMA LÍNGUA EM COMUM.', '6 بلدان. ولا لغة مشتركة.'),
   },
 }
 

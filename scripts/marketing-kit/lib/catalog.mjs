@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { catalogLocale } from './locales.mjs'
+import { ACCORDS_ARABES } from '../textes/accords-arabes.mjs'
 
 export const REPO_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..')
 
@@ -43,9 +44,23 @@ export const createCatalog = (catalogs) => {
   }
 }
 
+const variantes = (formes) => ({ variations: { plural: Object.fromEntries(Object.entries(formes).map(([k, v]) => [k, { stringUnit: { state: 'translated', value: v } }])) } })
+
+// Pose les formes arabes du kit sur les clés dont l'arabe du catalogue ne les a pas encore.
+export const avecAccordsArabes = (strings) =>
+  Object.fromEntries(
+    Object.entries(strings).map(([cle, entree]) => {
+      const formes = ACCORDS_ARABES[cle]
+      if (!formes || entree.localizations?.ar?.variations?.plural?.many) return [cle, entree]
+      return [cle, { ...entree, localizations: { ...entree.localizations, ar: variantes(formes) } }]
+    }),
+  )
+
 let appCatalog
 
 export const loadAppCatalog = () => {
-  appCatalog ??= createCatalog(APP_CATALOGS.map((path) => JSON.parse(readFileSync(resolve(REPO_ROOT, path), 'utf8'))))
+  appCatalog ??= createCatalog(
+    APP_CATALOGS.map((path) => JSON.parse(readFileSync(resolve(REPO_ROOT, path), 'utf8'))).map((c) => ({ ...c, strings: avecAccordsArabes(c.strings) })),
+  )
   return appCatalog
 }

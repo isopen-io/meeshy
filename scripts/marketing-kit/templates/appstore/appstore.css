@@ -123,6 +123,16 @@
 [dir='rtl'] .as-loupe { transform-origin: 0 0; }
 .as-loupe .meesh-entry { zoom: 1.9; }
 
+/* Carte Meesh de Progression, flottante sous le badge (capture 8). */
+.as-carte-flottante {
+  position: absolute; z-index: 4; inset-inline: 52px; bottom: 16px;
+  border-radius: calc(var(--ios-radius-md) * 1.2); color: var(--kit-ink);
+  transform: rotate(-2.5deg);
+  box-shadow: 0 0 0 6px color-mix(in srgb, white 30%, transparent), 0 28px 60px color-mix(in srgb, black 50%, transparent), 0 0 70px color-mix(in srgb, var(--ios-warning) 35%, transparent);
+}
+[dir='rtl'] .as-carte-flottante { transform: rotate(2.5deg); }
+.as-carte-flottante .p-card.meesh { zoom: 1.12; margin: 0; background: #fff; }
+
 /* ─── iPad 13" paysage : scène 1376 × 1032 ─── */
 .as-ipad .as-head { top: 30px; inset-inline: 88px; align-items: center; text-align: center; gap: 12px; }
 .as-ipad .as-caption { font-size: 64px; letter-spacing: -2px; display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.28em; text-wrap: nowrap; }

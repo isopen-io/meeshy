@@ -73,6 +73,8 @@
 /* ─── Appel vidéo (CallView) ─── */
 .appel .call-video { position: absolute; inset: 0; }
 .appel .call-illu { width: 100%; height: 100%; display: block; }
+.appel .call-avatar { position: absolute; left: 50%; top: 40.5%; transform: translate(-50%, -50%); border-radius: 50%; padding: 5px; background: color-mix(in srgb, white 14%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, white 22%, transparent), 0 18px 50px color-mix(in srgb, black 45%, transparent); backdrop-filter: blur(6px); }
+.ipad .ipad-call-grid .call-avatar { position: relative; left: auto; top: -60px; transform: none; }
 .call-shade { position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, black 50%, transparent) 0%, transparent 20%, transparent 48%, color-mix(in srgb, black 78%, transparent) 100%); }
 .call-top { position: absolute; top: 64px; inset-inline: 16px; display: flex; align-items: center; gap: 12px; color: #fff; z-index: 5; }
 .call-pill { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; transform: rotate(-90deg); }

@@ -33,7 +33,7 @@ export const appelControles = (ctx) =>
 export const ecranAppel = (ctx) => {
   const minjun = profilDe('minjun.p')
   return html`<div class="ecran iphone appel dark" dir="${ctx.dir}" lang="${ctx.lang}">
-    <div class="call-video">${illustration('appel-seoul', { className: 'call-illu' })}</div>
+    <div class="call-video">${illustration('appel-seoul', { className: 'call-illu' })}<div class="call-avatar">${avatar(minjun, 104)}</div></div>
     <div class="call-shade"></div>
     ${statusBar({ onMedia: true })}
     <div class="call-top">

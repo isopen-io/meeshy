@@ -19,7 +19,7 @@ export const APPAREILS = {
       { ecran: 'decouverte', legende: 'L5', theme: 'dark', decor: 'drapeaux-monde' },
       { ecran: 'story', legende: 'L6', theme: 'dark' },
       { ecran: 'progression', legende: 'L7', theme: 'light' },
-      { ecran: 'succes', legende: 'L8', theme: 'dark', decor: 'meesh' },
+      { ecran: 'succes', legende: 'L8', theme: 'dark', decor: 'carte-meesh', deviceTop: 226 },
       { ecran: 'appel', legende: 'L9', theme: 'dark' },
       { ecran: 'invitation', legende: 'L10', theme: 'light' },
     ],

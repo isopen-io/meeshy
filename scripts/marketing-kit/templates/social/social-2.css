@@ -5,13 +5,13 @@
 .vers-haut { transform: rotate(-90deg); }
 
 /* ─── V7 : le commentaire « stitché » et les pistes audio ─── */
-.stitch { position: absolute; top: 108px; inset-inline: 34px 66px; z-index: 8; padding: 16px 20px 18px; border-radius: 24px; background: #fff; color: #111827; box-shadow: 0 24px 60px color-mix(in srgb, black 40%, transparent); transform: rotate(-2deg); }
+.stitch { position: absolute; top: 158px; inset-inline: 34px 66px; z-index: 8; padding: 16px 20px 18px; border-radius: 24px; background: #fff; color: #111827; box-shadow: 0 24px 60px color-mix(in srgb, black 40%, transparent); transform: rotate(-2deg); }
 .st-tete { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: #6b7280; }
 .st-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; background: linear-gradient(135deg, var(--ios-indigo-300), var(--ios-indigo-500)); }
 .stitch p { margin: 10px 0 0; font-size: 32px; font-weight: 850; line-height: 1.15; letter-spacing: -0.02em; }
 .canvas.social .gab-caption.titre.ecoute { letter-spacing: -0.04em; }
 
-.pile-audio { position: absolute; top: 480px; inset-inline: 40px 60px; display: flex; flex-direction: column; gap: 16px; z-index: 6; }
+.pile-audio { position: absolute; top: 520px; inset-inline: 40px 60px; display: flex; flex-direction: column; gap: 16px; z-index: 6; }
 .pile-audio.grand { top: 150px; gap: 10px; }
 .pa-fleche { display: grid; place-items: center; color: var(--ios-indigo-200); }
 .carte-audio { padding: 14px 16px; border-radius: 24px; background: color-mix(in srgb, white 10%, transparent); border: 0.5px solid color-mix(in srgb, white 20%, transparent); backdrop-filter: blur(12px); }
@@ -120,6 +120,7 @@
 .yt-bulles { position: absolute; top: 118px; inset-inline-start: 244px; z-index: 6; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .yt-b { padding: 10px 22px; border-radius: 28px; font-size: 40px; font-weight: 900; line-height: 1.1; white-space: nowrap; box-shadow: 0 14px 34px color-mix(in srgb, #0f0c29 45%, transparent); }
 .yt-b.ko { color: #111827; background: #fff; border-end-start-radius: 8px; }
+.canvas[dir='rtl'] .yt-b.ko { border-radius: 28px 28px 8px 28px; }
 .yt-b.moi { color: #1f1300; background: var(--ios-warning); border-end-end-radius: 8px; }
 .yt-fleche { color: #fff; padding-inline-start: 36px; }
 .bloc.yt-gros { font-weight: 900; line-height: 0.95; text-align: end; letter-spacing: -0.04em; color: #fff; text-shadow: 0 6px 0 color-mix(in srgb, #0f0c29 40%, transparent); }
@@ -169,3 +170,5 @@
 .rec-onde { flex: 1; height: 24px; display: flex; align-items: center; gap: 2px; }
 .rec-onde i { flex: 1; border-radius: 1px; background: var(--ios-indigo-400); }
 .mic-btn.actif { width: 52px; height: 52px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--ios-indigo-500) 25%, transparent), 0 8px 24px color-mix(in srgb, var(--ios-indigo-500) 55%, transparent); }
+.yt-signature .sig-marque span { color: #fff; }
+.yt-signature .sig-langues { font-size: 13.5px; padding: 7px 12px; white-space: nowrap; }

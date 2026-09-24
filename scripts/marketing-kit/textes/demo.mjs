@@ -295,8 +295,10 @@ const progression = {
   meeshFrappees: 352,
   meeshProgression: 0.62,
   meeshManquants: 38,
-  serie: 12,
-  record: 21,
+  // Série, record et reste entre 3 et 10 : le catalogue iOS n'accorde pas encore l'arabe hors de
+  // cette plage (#7772). Le jalon suit EngagementCatalog.streakThresholds (3, 7, 14, 30…).
+  serie: 7,
+  record: 10,
   serieJalon: 14,
   elan: 3,
   elanFamilles: ['conversation', 'content', 'social'],

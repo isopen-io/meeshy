@@ -5,19 +5,23 @@
 //   V1 — « Ta voix parle 76 langues » confondait traduction (76) et voix (≈ 25, sur
 //        consentement) : la carte de fin dit « Ta voix. Leur langue. » + « 76 langues traduisibles ».
 //   V7 — « Teste avec ta propre voix » se lit « avec ta voix » : « Teste-le toi-même, en vocal. »
+//   V3 — « parler à des inconnus » place l'app en « chat with strangers » devant des 16-25 ans
+//        (sécurité de marque, modération publicitaire) : « Jour 30. Des amis dans 12 pays. »
+//   V8, S4 — « défi » ne se pose sur aucun visuel montrant l'app : « Ton tour : » et « Cette
+//        semaine » ; le mot ne vit que dans la légende de publication (#DisBonjourAuMonde).
 import { HASHTAG, t } from './langues.mjs'
 
 export const VIDEOS = {
   V1: {
     titre: t('Ta voix. Leur langue.', 'Your voice. Their language.', 'Tu voz. Su idioma.', 'Deine Stimme. Ihre Sprache.', 'La tua voce. La loro lingua.', 'Sua voz. A língua deles.', 'صوتك. بلغتهم.'),
     hook: t(
-      'Je parle français. Elle m’entend en coréen.',
-      'I speak English. She hears me in Korean.',
-      'Hablo español. Ella me oye en coreano.',
-      'Ich spreche Deutsch. Sie hört mich auf Koreanisch.',
-      'Parlo italiano. Lei mi sente in coreano.',
-      'Eu falo português. Ela me ouve em coreano.',
-      'أتكلم العربية. وهي تسمعني بالكورية.',
+      'Je parle français. Il m’entend en coréen.',
+      'I speak English. He hears me in Korean.',
+      'Hablo español. Él me oye en coreano.',
+      'Ich spreche Deutsch. Er hört mich auf Koreanisch.',
+      'Parlo italiano. Lui mi sente in coreano.',
+      'Eu falo português. Ele me ouve em coreano.',
+      'أتكلم العربية. وهو يسمعني بالكورية.',
     ),
     sous: [
       t(
@@ -30,13 +34,13 @@ export const VIDEOS = {
         'أسجّل رسالة صوتية… بالعربية.',
       ),
       t(
-        'À Séoul, elle l’écoute en coréen.',
-        'In Seoul, she plays it in Korean.',
-        'En Seúl, ella lo escucha en coreano.',
-        'In Seoul hört sie es auf Koreanisch.',
-        'A Seul, lei lo ascolta in coreano.',
-        'Em Seul, ela ouve em coreano.',
-        'في سيول، تسمعها بالكورية.',
+        'À Séoul, il l’écoute en coréen.',
+        'In Seoul, he plays it in Korean.',
+        'En Seúl, él lo escucha en coreano.',
+        'In Seoul hört er es auf Koreanisch.',
+        'A Seul, lui lo ascolta in coreano.',
+        'Em Seul, ele ouve em coreano.',
+        'في سيول، يسمعها بالكورية.',
       ),
     ],
     cta: t('Ta voix. Leur langue.', 'Your voice. Their language.', 'Tu voz. Su idioma.', 'Deine Stimme. Ihre Sprache.', 'La tua voce. La loro lingua.', 'Sua voz. A língua deles.', 'صوتك. بلغتهم.'),
@@ -85,13 +89,13 @@ export const VIDEOS = {
   V3: {
     titre: t('La série', 'The streak', 'La racha', 'Die Serie', 'La serie', 'A sequência', 'السلسلة'),
     hook: t(
-      'Jour 30 à parler à des inconnus du monde entier.',
-      'Day 30 of talking to strangers all over the world.',
-      'Día 30 hablando con desconocidos de todo el mundo.',
-      'Tag 30: Ich rede mit Fremden aus aller Welt.',
-      'Giorno 30 a parlare con sconosciuti da tutto il mondo.',
-      'Dia 30 falando com desconhecidos do mundo todo.',
-      'اليوم 30 من الحديث مع غرباء من كل العالم.',
+      'Jour 30. Des amis dans 12 pays.',
+      'Day 30. Friends in 12 countries.',
+      'Día 30. Amigos en 12 países.',
+      'Tag 30. Freunde in 12 Ländern.',
+      'Giorno 30. Amici in 12 paesi.',
+      'Dia 30. Amigos em 12 países.',
+      'اليوم 30. أصدقاء في 12 بلدًا.',
     ),
     sous: [
       t('30 jours d’affilée. Record battu.', '30 days in a row. New record.', '30 días seguidos. Récord batido.', '30 Tage am Stück. Neuer Rekord.', '30 giorni di fila. Record battuto.', '30 dias seguidos. Recorde batido.', '30 يومًا متتالية. رقم قياسي جديد.'),
@@ -228,13 +232,13 @@ export const VIDEOS = {
   V8: {
     titre: HASHTAG,
     hook: t(
-      'Défi : dis bonjour dans Global et montre qui te répond.',
-      'Challenge: say hi in Global and show who answers.',
-      'Reto: saluda en Global y enseña quién te responde.',
-      'Challenge: Sag Hallo in Global und zeig, wer antwortet.',
-      'Sfida: saluta in Global e mostra chi ti risponde.',
-      'Desafio: diga oi no Global e mostre quem responde.',
-      'تحدٍّ: قل مرحبًا في Global وأرِنا من يرد عليك.',
+      'Ton tour : dis bonjour dans Global et montre qui te répond.',
+      'Your turn: say hi in Global and show who answers.',
+      'Te toca: saluda en Global y enseña quién te responde.',
+      'Du bist dran: Sag Hallo in Global und zeig, wer antwortet.',
+      'Tocca a te: saluta in Global e mostra chi ti risponde.',
+      'Sua vez: diga oi no Global e mostre quem responde.',
+      'دورك: قل مرحبًا في Global وأرِنا من يرد عليك.',
     ),
     sous: [
       t('J’ouvre Global. Je poste mon bonjour.', 'I open Global. I post my hello.', 'Abro Global. Publico mi hola.', 'Ich öffne Global. Ich poste mein Hallo.', 'Apro Global. Posto il mio ciao.', 'Abro o Global. Posto meu oi.', 'أفتح Global. وأنشر تحيتي.'),
@@ -260,7 +264,7 @@ export const STORIES = {
     ligne: t('Chaque nouveau compte y arrive.', 'Every new account lands there.', 'Cada cuenta nueva llega ahí.', 'Jedes neue Konto landet dort.', 'Ogni nuovo account arriva lì.', 'Toda conta nova chega lá.', 'كل حساب جديد يصل إلى هناك.'),
   },
   S4: {
-    surtitre: t('Défi de la semaine', 'Challenge of the week', 'Reto de la semana', 'Challenge der Woche', 'Sfida della settimana', 'Desafio da semana', 'تحدي الأسبوع'),
+    surtitre: t('Cette semaine', 'This week', 'Esta semana', 'Diese Woche', 'Questa settimana', 'Esta semana', 'هذا الأسبوع'),
     etapes: [
       t('Poste ton bonjour dans Global', 'Post your hello in Global', 'Publica tu hola en Global', 'Poste dein Hallo in Global', 'Posta il tuo ciao in Global', 'Poste seu oi no Global', 'انشر تحيتك في Global'),
       t('Lis les réponses dans ta langue', 'Read the replies in your language', 'Lee las respuestas en tu idioma', 'Lies die Antworten in deiner Sprache', 'Leggi le risposte nella tua lingua', 'Leia as respostas na sua língua', 'اقرأ الردود بلغتك'),

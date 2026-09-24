@@ -63,31 +63,35 @@ const SCENES = {
     <rect width="400" height="700" fill="url(#${id}s)"/>
     ${skyline(5, 640, '#2e1065', { count: 9, min: 90, max: 240 })}
     <rect y="636" width="400" height="64" fill="#2e1065"/>`,
+  // Vidéo d'appel en basse lumière : une chambre le soir, une lampe chaude, et le correspondant
+  // en silhouette FLOUTÉE — aucun trait de visage, personne d'identifiable. Ses initiales sont
+  // posées dessus par l'écran (CallView), comme une caméra qui n'a pas encore fait le point.
   'appel-seoul': (id) => `
     <defs>
-      <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f0c29"/><stop offset=".55" stop-color="#312e81"/><stop offset="1" stop-color="#1e1b4b"/></linearGradient>
-      <radialGradient id="${id}l" cx=".75" cy=".22" r=".55"><stop offset="0" stop-color="#f28482" stop-opacity=".5"/><stop offset="1" stop-color="#f28482" stop-opacity="0"/></radialGradient>
-      <linearGradient id="${id}h" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e76f51"/><stop offset="1" stop-color="#8b2d4f"/></linearGradient>
-      <linearGradient id="${id}f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6d2b4"/><stop offset="1" stop-color="#d9a37f"/></linearGradient>
-      <filter id="${id}b"><feGaussianBlur stdDeviation="6"/></filter>
+      <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#140f33"/><stop offset=".5" stop-color="#2b2360"/><stop offset="1" stop-color="#1a1440"/></linearGradient>
+      <radialGradient id="${id}l" cx=".82" cy=".2" r=".6"><stop offset="0" stop-color="#fbbf24" stop-opacity=".55"/><stop offset=".45" stop-color="#f28482" stop-opacity=".22"/><stop offset="1" stop-color="#f28482" stop-opacity="0"/></radialGradient>
+      <radialGradient id="${id}p" cx=".62" cy=".28" r=".75"><stop offset="0" stop-color="#b08ab8"/><stop offset=".5" stop-color="#6b5596"/><stop offset="1" stop-color="#3a2d66"/></radialGradient>
+      <linearGradient id="${id}r" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#fcd34d" stop-opacity=".95"/><stop offset=".4" stop-color="#f4845f" stop-opacity="0"/></linearGradient>
+      <filter id="${id}b" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="7"/></filter>
+      <filter id="${id}f" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="11"/></filter>
+      <filter id="${id}g"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .07 0"/></filter>
     </defs>
     <rect width="400" height="860" fill="url(#${id}s)"/>
     <rect width="400" height="860" fill="url(#${id}l)"/>
+    <ellipse cx="200" cy="380" rx="190" ry="230" fill="#8b5cf6" fill-opacity=".14" filter="url(#${id}f)"/>
     <g filter="url(#${id}b)">
-      ${[[40, 120, 22, '#fbbf24'], [90, 190, 14, '#f28482'], [300, 100, 26, '#818cf8'], [350, 210, 16, '#fbbf24'], [60, 300, 18, '#a5b4fc'], [330, 330, 20, '#f4845f'], [150, 80, 12, '#fde68a'], [250, 170, 10, '#fde68a']]
-        .map(([x, y, r, c]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" fill-opacity=".45"/>`).join('')}
+      <rect x="292" y="120" width="70" height="210" rx="10" fill="#fcd34d" fill-opacity=".16"/>
+      ${[[330, 150, 26, '#fbbf24'], [60, 140, 18, '#a5b4fc'], [96, 250, 12, '#f28482'], [352, 330, 16, '#fde68a'], [40, 420, 22, '#818cf8'], [360, 470, 14, '#f4845f'], [150, 110, 10, '#fde68a']]
+        .map(([x, y, r, c]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" fill-opacity=".5"/>`).join('')}
     </g>
-    <path d="M40 860 C46 580 110 496 200 496 C290 496 354 580 360 860z" fill="url(#${id}h)"/>
-    <path d="M150 506 Q200 556 250 506 L240 496 Q200 524 160 496z" fill="#6b2140" fill-opacity=".6"/>
-    <rect x="176" y="430" width="48" height="74" rx="22" fill="#d9a37f"/>
-    <ellipse cx="200" cy="360" rx="74" ry="90" fill="url(#${id}f)"/>
-    <ellipse cx="126" cy="372" rx="12" ry="20" fill="#d9a37f"/>
-    <ellipse cx="274" cy="372" rx="12" ry="20" fill="#d9a37f"/>
-    <circle cx="124" cy="392" r="7" fill="#fff"/><circle cx="276" cy="392" r="7" fill="#fff"/>
-    <path d="M122 356 C112 270 160 238 206 240 C262 242 292 282 280 350 C270 310 244 298 214 300 C176 302 150 300 132 330z" fill="#1a1740"/>
-    <path d="M150 262 C176 246 214 246 240 262 C214 256 180 258 150 276z" fill="#fff" fill-opacity=".08"/>
-    <path d="M182 404 Q200 414 218 404" stroke="#a05a45" stroke-width="4" stroke-linecap="round" fill="none"/>
-    <path d="M40 860 C46 580 110 496 200 496" stroke="#fff" stroke-opacity=".08" stroke-width="10" fill="none"/>`,
+    <g filter="url(#${id}f)">
+      <path d="M30 860 C40 610 110 540 200 536 C290 540 360 610 370 860z" fill="url(#${id}p)"/>
+      <rect x="170" y="440" width="60" height="110" rx="28" fill="#5a4a8c"/>
+      <ellipse cx="200" cy="370" rx="92" ry="112" fill="url(#${id}p)"/>
+      <path d="M200 262 C262 262 296 316 292 380 L290 420 C300 330 250 286 200 286z" fill="url(#${id}r)"/>
+      <path d="M322 860 C318 660 300 590 262 560 C318 580 356 640 362 860z" fill="url(#${id}r)"/>
+    </g>
+    <rect width="400" height="860" filter="url(#${id}g)"/>`,
 }
 
 const TAILLES = { 'coucher-osaka': [400, 300], paulista: [400, 700], madrid: [400, 700], 'appel-seoul': [400, 860] }

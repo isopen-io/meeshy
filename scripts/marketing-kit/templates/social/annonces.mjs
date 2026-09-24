@@ -8,7 +8,7 @@ import { langue } from '../../lib/langues.mjs'
 import { waveformHeights } from '../../screens/audio.mjs'
 import { serve } from '../../lib/prism.mjs'
 import { profilDe } from '../../textes/demo.mjs'
-import { loupe, marqueDiscrete, puce, scene, telephone, texte, titre } from './decor.mjs'
+import { loupe, marqueDiscrete, puce, scene, signature, telephone, texte, titre } from './decor.mjs'
 import { LANGUES_TRADUISIBLES } from './langues-traduisibles.mjs'
 import { MESSAGE_VOYAGE } from './textes/demo-social.mjs'
 import { ANNONCES, YOUTUBE } from './textes/annonces.mjs'
@@ -137,9 +137,9 @@ export const MINIATURES_YT = {
       format: 'yt', ctx, fond: 'vif', classe: 'miniature',
       contenu: html`<div class="yt-visage">😮</div>
         <div class="yt-bulles" data-sur>
-          <div class="yt-b ko" lang="ko">안녕!</div>
+          <div class="yt-b ko" lang="ko" dir="ltr">안녕!</div>
           <div class="yt-fleche">${icon('arrowRight', { size: 26, className: 'vers-bas' })}</div>
-          <div class="yt-b moi">${typo(YOUTUBE.Y1.salut[ctx.lang], ctx.lang)}</div>
+          <div class="yt-b moi" lang="${ctx.lang}" dir="${ctx.dir}">${typo(YOUTUBE.Y1.salut[ctx.lang], ctx.lang)}</div>
         </div>
         ${texte(YOUTUBE.Y1.jours[ctx.lang], ctx, { x: 392, y: 34, largeur: 230, hauteur: 150, taille: 78, classe: 'yt-gros' })}
         <div class="yt-drapeaux" data-sur><span>${langue(ctx.lang).drapeau}</span><span>${langue('ko').drapeau}</span></div>`,
@@ -150,7 +150,8 @@ export const MINIATURES_YT = {
       format: 'yt', ctx, fond: 'nuit', classe: 'miniature',
       contenu: html`<div class="yt-mosaique">${MOSAIQUE.map((p) => html`<div class="yt-tuile">${avatar(profilDe(p), 104)}<span>${profilDe(p).drapeau}</span></div>`)}</div>
         <div class="yt-groupe" data-sur><span class="t">${typo(servi.text, ctx.lang)}</span><span class="fl">${icon('translate', { size: 13 })}${flagChip(servi.originalLang)}${flagChip(ctx.lang, { active: true })}</span></div>
-        ${titre(YOUTUBE.Y2.accroche[ctx.lang], ctx, { x: 390, y: 40, largeur: 226, hauteur: 280, taille: 50 })}`,
+        ${titre(YOUTUBE.Y2.accroche[ctx.lang], ctx, { x: 390, y: 36, largeur: 226, hauteur: 200, taille: 50 })}
+        ${signature(ctx, { x: 390, y: 252, largeur: 226, taille: 40, classe: 'yt-signature' })}`,
     })
   },
 }

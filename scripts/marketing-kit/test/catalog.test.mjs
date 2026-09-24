@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createCatalog, loadAppCatalog } from '../lib/catalog.mjs'
+import { avecAccordsArabes, createCatalog, loadAppCatalog } from '../lib/catalog.mjs'
 
 const catalogue = (strings) => createCatalog([{ sourceLanguage: 'fr', strings }])
 
@@ -72,5 +72,29 @@ describe('catalogue de chaînes iOS (xcstrings)', () => {
     }
     expect(t('progression.hero.streak', 'fr')).toBe('Série')
     expect(t('bubble.joinNotice.joined', 'fr', 'Amara')).toBe('Amara a rejoint la conversation')
+  })
+})
+
+describe('accords arabes du kit — en attente du catalogue iOS', () => {
+  const pluriel = (formes) => ({ variations: { plural: Object.fromEntries(Object.entries(formes).map(([k, v]) => [k, { stringUnit: { value: v } }])) } })
+
+  test('une clé dont l’arabe n’a que « one » / « other » reçoit les six formes : 2 ⇒ duel, 11-99 ⇒ singulier', () => {
+    const strings = avecAccordsArabes({ 'progression.streak.days': { localizations: { ar: pluriel({ one: 'يوم واحد متتالٍ', other: '%lld أيام متتالية' }) } } })
+    const t = createCatalog([{ strings }])
+    expect(t('progression.streak.days', 'ar', 7)).toBe('7 أيام متتالية')
+    expect(t('progression.streak.days', 'ar', 12)).toBe('12 يومًا متتاليًا')
+    expect(t('progression.streak.days', 'ar', 2)).toBe('يومان متتاليان')
+  })
+
+  test('« reste N avant le jalon M » garde le jalon quand la forme omet le compte', () => {
+    const strings = avecAccordsArabes({ 'progression.next.streak': { localizations: { ar: { stringUnit: { value: '%lld أيام متبقية قبل معلم %lld' } } } } })
+    const t = createCatalog([{ strings }])
+    expect(t('progression.next.streak', 'ar', 2, 14)).toBe('يومان متبقيان قبل معلم 14')
+    expect(t('progression.next.streak', 'ar', 3, 10)).toBe('3 أيام متبقية قبل معلم 10')
+  })
+
+  test('le catalogue iOS reprend la main dès qu’il porte ses propres formes arabes', () => {
+    const strings = avecAccordsArabes({ 'progression.streak.days': { localizations: { ar: pluriel({ one: 'أ', many: 'CATALOGUE %lld', other: 'autre %lld' }) } } })
+    expect(createCatalog([{ strings }])('progression.streak.days', 'ar', 12)).toBe('CATALOGUE 12')
   })
 })

@@ -9,15 +9,18 @@ const arrondi = (n) => Math.round(n * 10) / 10
 // Zone où le texte posé par le kit doit tenir. Vidéos verticales : l'interface de l'app de
 // diffusion couvre le haut, le bas (légende, boutons) et la fin de ligne. Stories Meeshy :
 // les barres de progression en haut, le champ de réponse en bas.
+// Couvertures : Instagram et TikTok les montrent en grille 3:4, recadrées au centre (bande
+// 12,5 % → 87,5 %) — le texte y garde 2,5 % de marge de plus.
 export const zoneSure = ({ format, role, dir }) => {
   const { largeur: W, hauteur: H } = tailleScene(format)
   if (format !== '9x16') return { haut: 12, bas: H - 12, gauche: 12, droite: W - 12 }
   const story = role === 'story Meeshy'
+  const couverture = role === 'couverture'
   const debut = arrondi(W * (story ? 0.04 : 0.06))
   const fin = arrondi(W * (story ? 0.04 : 0.11))
   return {
-    haut: arrondi(H * (story ? 0.14 : 0.05)),
-    bas: arrondi(H * 0.84),
+    haut: arrondi(H * (story ? 0.14 : couverture ? 0.15 : 0.05)),
+    bas: arrondi(H * (couverture ? 0.85 : 0.84)),
     gauche: dir === 'rtl' ? fin : debut,
     droite: arrondi(W - (dir === 'rtl' ? debut : fin)),
   }

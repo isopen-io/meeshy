@@ -21,6 +21,18 @@ const tuile = (nom, teinte) =>
 export const meeshEntry = (solde) =>
   html`<div class="meesh-entry glass"><span>${solde}</span>${meeshCoin(20)}</div>`
 
+// ProgressionMeeshCard — le solde, ce qui a été frappé depuis toujours, la prochaine frappe.
+export const carteMeesh = ({ ui }) => {
+  const warning = 'var(--ios-warning)'
+  return html`<section class="p-card meesh" style="--t:${warning}">
+        <div class="p-eyebrow meesh-eyebrow">${meeshCoin(16)}${ui('progression.meesh.title')}</div>
+        <div class="p-meesh-balance">${ui('progression.meesh.many', P.meesh)}</div>
+        <div class="p-muted small">${ui('progression.meesh.minted.many', P.meeshFrappees)}</div>
+        ${bar(P.meeshProgression, warning)}
+        <div class="p-muted small">${ui('progression.meesh.missing', P.meeshManquants)}</div>
+      </section>`
+}
+
 // ProgressionLayout.blocks : dernier succès → niveau → Meesh → élans → série → sections.
 // La section « Défis » n'est pas montrée : la campagne n'emploie pas ce mot sur un écran iOS (§ 2).
 export const progressionCartes = (ctx) => {
@@ -48,13 +60,7 @@ export const progressionCartes = (ctx) => {
         <div class="p-muted">${ui('progression.next.level', P.pointsAvantNiveau, P.niveau + 1)}</div>
       </section>
 
-      <section class="p-card meesh" style="--t:${warning}">
-        <div class="p-eyebrow meesh-eyebrow">${meeshCoin(16)}${ui('progression.meesh.title')}</div>
-        <div class="p-meesh-balance">${ui('progression.meesh.many', P.meesh)}</div>
-        <div class="p-muted small">${ui('progression.meesh.minted.many', P.meeshFrappees)}</div>
-        ${bar(P.meeshProgression, warning)}
-        <div class="p-muted small">${ui('progression.meesh.missing', P.meeshManquants)}</div>
-      </section>
+      ${carteMeesh(ctx)}
 
       <section class="p-card elans" style="--t:${brand}">
         <div class="p-elan-title">${icon('sparkles', { size: 18 })}<span>${titreElan(ui)}</span></div>
