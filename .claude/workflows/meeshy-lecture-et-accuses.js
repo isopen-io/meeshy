@@ -1,7 +1,7 @@
 export const meta = {
   name: 'meeshy-lecture-et-accuses',
   description:
-    'Lecture / non-lecture (notifications, conversations, messages, separateur « messages non lus » en couleur primaire) et accuses + progression media (emis, recu, vu, ouvertures, audio/video lus jusqu ou) — sur iOS ET web-v2, trois chaines paralleles (gateway, web-v2, iOS) en lots TDD, revue-correction opus, PR auto-merge vers dev, validation a deux comptes sur staging (Chrome + simulateur), en boucle jusqu a un etat acceptable — sonnet DEVELOPPE, haiku fait le MECANIQUE, opus RELIT, CORRIGE, VALIDE et LIVRE',
+    'Lecture / non-lecture (notifications, conversations, messages, separateur « messages non lus » en couleur primaire) et accuses + progression media (emis, recu, vu, ouvertures, audio/video lus jusqu ou) — sur iOS ET apps/web, trois chaines paralleles (gateway, apps/web, iOS) en lots TDD, revue-correction opus, PR auto-merge vers dev, validation a deux comptes sur staging (Chrome + simulateur), en boucle jusqu a un etat acceptable — sonnet DEVELOPPE, haiku fait le MECANIQUE, opus RELIT, CORRIGE, VALIDE et LIVRE',
   whenToUse:
     "Lancer un tour du chantier « lecture et accuses » (directive porteur 2026-09-21, spec docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md). Args : { repo_web, repo_gw, repo_ios, repo_principal, recette, base, date, attribution, tours, lots, sauter, sim_native, sim_coque, valider, livrer_main, modeles }.",
   phases: [
@@ -36,7 +36,7 @@ const LIVRER_MAIN = A.livrer_main === true
 // recette staging n'a rien à mesurer : la phase Valider est sautée et se rejoue au tour suivant.
 const AUTO_MERGE = A.auto_merge !== false
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
-// Simulateurs : le NATIF de reference (l'app apps/ios) et la COQUE Capacitor de web-v2 — deux
+// Simulateurs : le NATIF de reference (l'app apps/ios) et la COQUE Capacitor de apps/web — deux
 // appareils, jamais un seul (meme bundle id me.meeshy.app, installer l'un remplace l'autre).
 // JAMAIS Meeshy-iOS26 (C295B364…) : c'est le simulateur du porteur, pilote par lui en meme temps.
 const SIM_NATIVE = typeof A.sim_native === 'string' && A.sim_native ? A.sim_native : '171765AF-36FD-45B1-9B9D-570E24C72E11'
@@ -120,7 +120,7 @@ const LOTS_PAR_DEFAUT = [
   { cle: 'W7', chaine: 'web', famille: 'B', taille: 'developper',
     titre: 'La fiche « Infos du message » dit qui a reçu, qui a vu, qui a écouté ou regardé jusqu\'où, et combien de fois une pièce a été ouverte',
     critere: "depuis le menu d'un message envoyé : feuille alimentée par GET /conversations/:id/receipts?detail=people (receipts.ts ~l.600) et GET /attachments/:id/status-details (messages-reads.ts ~l.570) ; sections Reçu par / Vu par / Pas encore ; par pièce : ouvertures, téléchargements, écouté/regardé jusqu'à mm:ss (barre), « Nx » ; mise à jour sur attachment-status:updated ; disposition = iOS MessageViewsDetailView (cité) ; opt-out showReadReceipts respecté ; témoins",
-    existe: 'rien sur web-v2 ; iOS MessageViewsDetailView.swift est la référence',
+    existe: 'rien sur apps/web ; iOS MessageViewsDetailView.swift est la référence',
     depend: [] },
   { cle: 'W8', chaine: 'web', famille: 'B', taille: 'developper',
     titre: 'Les Réels apprennent ce que le Flux apprend, et les réactions, éditions et suppressions arrivent en direct',
@@ -155,7 +155,7 @@ const LOTS_PAR_DEFAUT = [
   { cle: 'I5', chaine: 'ios', famille: 'A', taille: 'developper', issue: 7236,
     titre: "Le badge d'icône iOS compte les CONVERSATIONS non lues, hors muettes — le même nombre que le serveur pousse (D-L1)",
     critere: "ConversationReadLedger.swift (~l.272-281, aujourd'hui une SOMME des unreadCount) expose conversationUnreadTotal = nombre d'entrées dont unreadCount > 0 et qui ne sont pas muettes, et NotificationCoordinator.recomputeTotal / badgeTotal (~l.77) lit CE compte : app fermée (aps.badge servi par G3, PR #7289) et app au premier plan affichent le MÊME nombre ; la pastille de l'onglet Conversations peut garder la somme des messages si elle la montre déjà, mais l'ICÔNE compte des conversations ; XCTest : trois conversations dont une muette et une à 12 messages ⇒ badge 2 ; commentaire de clôture sur #7236 (décision = D-L1) avec Closes #7236",
-    existe: "ConversationReadLedger.swift:272-281 somme les messages ; NotificationCoordinator.swift:77 badgeTotal ; web-v2 countUnreadConversations (use-app-badge.ts) et gateway computeConversationUnreadBadge (G3) comptent déjà des conversations",
+    existe: "ConversationReadLedger.swift:272-281 somme les messages ; NotificationCoordinator.swift:77 badgeTotal ; apps/web countUnreadConversations (use-app-badge.ts) et gateway computeConversationUnreadBadge (G3) comptent déjà des conversations",
     depend: [] },
 ]
 
@@ -196,7 +196,7 @@ SOURCES DE VÉRITÉ, dans cet ordre :
    services/gateway/src/socketio/**). Cite fichier:ligne pour CHAQUE route ou événement consommé. Un
    endpoint qui n'existe pas ne s'invente pas.
 2. apps/ios et packages/MeeshySDK sont la RÉFÉRENCE de disposition, hiérarchie, états et gestes pour
-   web-v2 (D-1) : un écran web-v2 se spécifie en CITANT les fichiers Swift qui font foi.
+   apps/web (D-1) : un écran apps/web se spécifie en CITANT les fichiers Swift qui font foi.
 3. ${REPO_PAR_CHAINE[chaine]}/apps/web/decisions.md (D-1…D-100+), services/gateway/decisions.md, apps/ios/decisions.md.
 4. CLAUDE.md (injecté) : TDD non négociable, TypeScript strict sans any, immutabilité, budget 1000-1200
    lignes par fichier (un fichier déjà hors budget : extraire d'abord, ajouter ensuite), UNE source de
@@ -204,7 +204,7 @@ SOURCES DE VÉRITÉ, dans cet ordre :
 5. tasks/lessons.md (tail -300) : le dépôt a déjà payé ces erreurs.
 
 RÈGLES DE FORME DU DÉPÔT :
-- Commits : titre en français qui dit le RÉSULTAT (\`feat(web-v2): …\`, \`fix(gateway): …\`, \`feat(ios): …\`,
+- Commits : titre en français qui dit le RÉSULTAT (\`feat(web): …\`, \`fix(gateway): …\`, \`feat(ios): …\`,
   \`feat(shared): …\`), corps bref (ce qui était absent, la forme retenue), \`Closes #n\` pour l'issue du lot
   (JAMAIS \`Closes #0\`), et en fin de message EXACTEMENT :
 ${ATTRIBUTION}
@@ -542,7 +542,7 @@ Dépôt GitHub : isopen-io/meeshy. Projet : « Meeshy — pilotage » (org isope
 1. Milestones : la famille A va dans « Un non-lu n'a qu'une source — conversations, cloche et badge disent
    la même chose » (numéro 103). La famille B va dans « Un envoi dit s'il est reçu, vu, écouté — et jusqu'où »
    : \`gh api repos/isopen-io/meeshy/milestones --jq '.[] | select(.title | startswith("Un envoi dit"))'\` ;
-   s'il n'existe pas, crée-le (\`gh api -X POST repos/isopen-io/meeshy/milestones -f title=... -f due_on=2026-10-15T00:00:00Z -f description='Accusés émis / reçu / vu, ouvertures d une pièce, audio et vidéo lus jusqu où — sur iOS et web-v2, validés sur staging.'\`).
+   s'il n'existe pas, crée-le (\`gh api -X POST repos/isopen-io/meeshy/milestones -f title=... -f due_on=2026-10-15T00:00:00Z -f description='Accusés émis / reçu / vu, ouvertures d une pièce, audio et vidéo lus jusqu où — sur iOS et apps/web, validés sur staging.'\`).
 2. Pour chaque lot : s'il porte déjà un numéro (issue: n), réutilise-le. Sinon cherche une issue OUVERTE
    au même sujet (\`gh issue list --state open --search "<mots clés>" --limit 5\`) ; à défaut crée-la :
    titre = le titre du lot VERBATIM (sémantique, pas de code interne) ; corps = Contexte (deux phrases,
