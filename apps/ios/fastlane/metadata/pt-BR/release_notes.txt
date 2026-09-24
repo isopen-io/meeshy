@@ -12,7 +12,7 @@ DECORAR — 200 FIGURINHAS, 14 EFEITOS DE TEXTO
 • O texto passa de 4 para 14 efeitos (brilho, sombra, relevo, neon), com 18 estilos e suas fontes
 • Uma decoração pode carregar dados vivos: lugar, hora, clima, suas próprias palavras
 
-SUA VOZ, NO IDIOMA DELES
+SEUS ÁUDIOS, NO IDIOMA DELES
 • Sua mensagem de voz é transcrita no aparelho assim que você solta: o texto está ali na hora, sem esperar o servidor
 • O áudio de uma publicação, de um reel ou de um comentário agora toca no idioma de quem escuta
 • Uma única tela para gravar, cortar e posicionar um som: fundo de cena, trilha sonora ou conteúdo para ouvir sob o texto

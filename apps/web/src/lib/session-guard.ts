@@ -60,6 +60,18 @@ export type RouteKey =
   | 'story'
   | 'feed'
   /**
+   * MON HUMEUR (#7462) — PRIVÉE, comme `storyCompose` et `postCompose` :
+   * `POST /api/v1/posts` (type `STATUS`) porte `requiredAuth`
+   * (`routes/posts/core.ts:370-384`), et le corpus qui pré-sélectionne
+   * l'emoji courant (`GET /social/posts?scope=statuses`) rend 401 sans compte.
+   * Non déclarée ici, la route était PUBLIQUE par défaut (voir `routeKey`
+   * plus bas) : un visiteur sans compte choisissait une humeur, écrivait son
+   * mot, et découvrait à « Publier » que la passerelle refuse. Trouvée en
+   * déclarant `postCompose` (#7449) — la même classe de défaut, une porte
+   * plus loin.
+   */
+  | 'statusCompose'
+  /**
    * PUBLIER DANS LE FIL (#7449) — PRIVÉE, comme `feed` et `storyCompose` :
    * `POST /api/v1/posts` exige une session (`fastify.authenticate`), et
    * `POST /api/v1/uploads` aussi. Non déclarée ici, elle serait PUBLIQUE par
@@ -68,6 +80,18 @@ export type RouteKey =
    * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
    */
   | 'postCompose'
+  /**
+   * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
+   * dernières portes `/…/new` : `POST /api/v1/links` exige un compte
+   * (`routes/links/creation.ts:24-33`, `requireAuth: true`,
+   * `allowAnonymous: false`) et `POST /api/v1/communities` aussi
+   * (`routes/communities/core.ts:387-388`, `fastify.authenticate`). Non
+   * déclarées, elles étaient PUBLIQUES par défaut : un visiteur sans compte
+   * remplissait nom, description et options avant le refus. Le témoin de la
+   * famille `/…/new`, DÉRIVÉ de la table des routes, les a trouvées.
+   */
+  | 'shareLinkNew'
+  | 'communityNew'
   /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
@@ -236,8 +260,14 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'storyCompose',
   'story',
   'feed',
+  /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
+  'statusCompose',
   /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
+  /* CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — voir la raison
+     écrite sur `RouteKey` plus haut. */
+  'shareLinkNew',
+  'communityNew',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',
