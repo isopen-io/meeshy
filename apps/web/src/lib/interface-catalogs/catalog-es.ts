@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esIdentity from './catalog-es-identity';
 
 import esMentions from './catalog-es-mentions';
+import esStoriesMine from './catalog-es-stories-mine';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1102,6 +1103,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default es;

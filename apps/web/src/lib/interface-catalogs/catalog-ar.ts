@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arIdentity from './catalog-ar-identity';
 
 import arMentions from './catalog-ar-mentions';
+import arStoriesMine from './catalog-ar-stories-mine';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1099,6 +1100,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default ar;

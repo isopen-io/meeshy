@@ -62,6 +62,9 @@ export type RouteKey =
    */
   | 'onboarding'
   | 'stories'
+  /** « MES STORIES » (#6149) — même port que `stories` (`?scope=stories`,
+   * requiredAuth) : un visiteur sans compte n'a de toute façon rien à gérer. */
+  | 'storiesMine'
   | 'storyCompose'
   | 'story'
   | 'feed'
@@ -265,6 +268,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
   'onboarding',
   'stories',
+  /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
+  'storiesMine',
   'storyCompose',
   'story',
   'feed',

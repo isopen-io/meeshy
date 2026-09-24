@@ -170,12 +170,15 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
       style={{ width: cellule }}
     >
       <div className="relative grid place-items-center" style={{ width: anneau, height: anneau }}>
-        {entry.entryStoryId === undefined ? (
-          pastille
-        ) : (
+        {/* **LE LISTING, JAMAIS LE LECTEUR DIRECT** (#6149) — miroir
+            `ConversationListView.swift:1394-1397` : le tap sur MON avatar
+            ouvre TOUJOURS « Mes stories », y compris quand mes seules
+            stories sont expirées (`hasAnyStory`, `StoryTrayActions.swift:71-75`).
+            Créer une story reste le rôle du (+) ; ouvrir directement une
+            story reste celui d'une tuile D'AUTRUI. */}
+        {entry.hasAnyStory ? (
           <Link
-            to="story"
-            params={{ post: entry.entryStoryId }}
+            to="storiesMine"
             data-story-self-open
             aria-label={translate(language, 'stories.mine')}
             className="rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -183,6 +186,8 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
           >
             {pastille}
           </Link>
+        ) : (
+          pastille
         )}
 
         {/* LE (+) — DÉBUT de ligne, en haut. `inset-inline-start` porte le

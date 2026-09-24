@@ -12,6 +12,7 @@
 import frMentions from './catalog-fr-mentions';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
+import frStoriesMine from './catalog-fr-stories-mine';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1186,6 +1187,7 @@ const fr = {
   'message.detail.sent': 'Envoyé',
   'message.detail.language.original': '{language} (original)',
 
+  ...frStoriesMine,
 } as const;
 
 export default fr;

@@ -133,6 +133,14 @@ export const ROUTES = {
      voir » et « voir les siennes », parce que c'est le même écran avec un
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
+  /* **« MES STORIES »** (#6149) — le listing que la pastille « moi » du rail
+     ouvre désormais, TOUJOURS, dès que j'ai publié au moins une story (active
+     ou dans sa fenêtre d'archive) : miroir `MyStoriesView.swift`,
+     `ConversationListView.swift:1394-1397` (« Tap sur MON avatar du rail ⇒
+     TOUJOURS le listing »). Une ADRESSE, pas une feuille (D-83 § « une
+     ADRESSE, pas un mode ») : le retour matériel Android et le partage
+     d'adresse le demandent, comme `/status/new`. */
+  storiesMine: { pattern: '/stories/mine', screen: () => import('@/routes/stories-mine') },
   /* LE COMPOSER UNIQUE (#7497) — `/stories/new` et `/posts/new` montent le
      MÊME studio ; le format d'entrée est celui que la capsule
      `[Publier … | ▾]` publie si l'auteur ne touche pas au chevron. */

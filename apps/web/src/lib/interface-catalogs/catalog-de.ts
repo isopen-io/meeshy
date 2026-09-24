@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deIdentity from './catalog-de-identity';
 
 import deMentions from './catalog-de-mentions';
+import deStoriesMine from './catalog-de-stories-mine';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1102,6 +1103,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default de;

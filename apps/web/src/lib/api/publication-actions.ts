@@ -5,6 +5,8 @@ import { removeCardPost } from './card-caches';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { FEED_QUERY_KEY } from './feed';
+import { removeStoryFromCaches } from './story-caches';
+import { STORIES_QUERY_PREFIX } from './stories';
 
 /**
  * **LES GESTES DE L'AUTEUR SUR SA PUBLICATION** (#7533) — ceux du menu « ⋯ »
@@ -41,13 +43,25 @@ const send = (deps: PostActionDeps, method: 'POST' | 'DELETE', path: string): Pr
  * des caisses) avant la réponse. Un échec RELIT les listes plutôt que de
  * reposer un instantané : une liste a pu bouger entre-temps (temps réel,
  * pagination), et une relecture ne ment jamais sur l'ordre.
+ *
+ * **UNE STORY EST AUSSI UNE PUBLICATION** (#6149) — le listing « Mes stories »
+ * appelle ce MÊME geste (`deletePostAction`) plutôt que d'en écrire un second :
+ * `removeStoryFromCaches` retire la ligne des DEUX corpus de stories et de sa
+ * fiche unitaire (aucun effet sur une carte du Flux, qui n'y figure jamais —
+ * la garde « rien à écrire » de `story-caches.ts` s'en assure), et un échec
+ * relit `STORIES_QUERY_PREFIX` en plus du Flux : la story revient au listing
+ * exactement comme une carte revient au Flux.
  */
 export async function deletePost(params: { readonly postId: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
   const { postId, deps } = params;
   removeCardPost(deps.queryClient, postId);
+  removeStoryFromCaches(deps.queryClient, postId);
 
   const result = outcome(await send(deps, 'DELETE', `/api/v1/posts/${encodeURIComponent(postId)}`));
-  if (result !== 'done') void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
+  if (result !== 'done') {
+    void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
+    void deps.queryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
+  }
   return result;
 }
 

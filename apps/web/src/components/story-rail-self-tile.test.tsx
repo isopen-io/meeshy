@@ -68,7 +68,7 @@ const group = (authorId: string, displayName: string, isMine = false): StoryTray
 const self = (over: Partial<StoryRailSelfEntry> = {}): StoryRailSelfEntry => ({
   viewerId: 'u-moi',
   hasActiveStory: false,
-  entryStoryId: undefined,
+  hasAnyStory: false,
   moodEmoji: undefined,
   avatar: undefined,
   ...over,
@@ -138,7 +138,7 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     const el = mount({
       variant: 'grande',
       groups: [group('u-moi', 'moi', true), group('u-ines', 'Inès')],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     expect(el.querySelectorAll('li[data-story-self]').length).toBe(1);
     expect(el.querySelectorAll('[data-story-author="u-moi"]').length).toBe(0);
@@ -154,7 +154,7 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     const el = mount({
       variant: 'pinned',
       groups: [group('u-moi', 'moi', true)],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     expect(el.querySelector('li[data-story-self]')).toBeNull();
     expect(el.querySelector('[data-story-author="u-moi"]')).not.toBeNull();
@@ -277,7 +277,7 @@ describe('deux pastilles sur un avatar — le piège d\'accessibilité', () => {
     const el = mount({
       variant: 'grande',
       groups: [],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     for (const prise of ['[data-self-create]', '[data-self-mood]']) {
       const n = el.querySelector(prise);
@@ -304,12 +304,36 @@ describe('où mènent les deux portes', () => {
     expect(el.querySelector('[data-story-self-open]')).toBeNull();
   });
 
-  test('avec une story, ma pastille centrale ouvre MA story', () => {
+  /**
+   * **LE LISTING, JAMAIS LE LECTEUR DIRECT** (#6149, amendement de D-83) —
+   * miroir `ConversationListView.swift:1394-1397` : le tap sur MON avatar
+   * ouvre TOUJOURS « Mes stories », jamais ma story elle-même. C'est le
+   * changement que cette issue demandait : avant lui, ma pastille se
+   * comportait comme celle d'un autre auteur.
+   */
+  test('avec une story active, ma pastille centrale ouvre LE LISTING de mes stories', () => {
     const el = mount({
       variant: 'grande',
       groups: [],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
-    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/story/st-u-moi');
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
+  });
+
+  /**
+   * **LA PORTE RESTE OUVERTE SUR UNE ARCHIVE MORTE** — miroir
+   * `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`
+   * (`StoryTrayActions.swift:71-75` : `.manageStories` même quand seules des
+   * stories EXPIRÉES existent, « aucun chemin ne menait plus vers ses
+   * stories passées »). L'anneau n'est plus accentué (`hasActiveStory` faux),
+   * mais le lien vers le listing demeure.
+   */
+  test('avec seulement des stories expirées, ma pastille mène quand même au listing', () => {
+    const el = mount({
+      variant: 'grande',
+      groups: [],
+      self: self({ hasActiveStory: false, hasAnyStory: true }),
+    });
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
   });
 });

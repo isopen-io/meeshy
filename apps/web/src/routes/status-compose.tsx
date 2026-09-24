@@ -155,7 +155,7 @@ export default function StatusComposeScreen() {
      seconde lecture du corpus, qui pourrait un jour élire une autre ligne que
      celle que la pastille montre. */
   const courante = useMemo(
-    () => selfRailEntry({ viewerId: viewer.id ?? undefined, groups: [], moods: moods.data ?? [] })?.moodEmoji,
+    () => selfRailEntry({ viewerId: viewer.id ?? undefined, groups: [], moods: moods.data ?? [], now: Date.now() })?.moodEmoji,
     [viewer.id, moods.data],
   );
 

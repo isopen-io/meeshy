@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptIdentity from './catalog-pt-identity';
 
 import ptMentions from './catalog-pt-mentions';
+import ptStoriesMine from './catalog-pt-stories-mine';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1106,6 +1107,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default pt;

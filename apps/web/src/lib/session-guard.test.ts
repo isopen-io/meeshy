@@ -22,6 +22,7 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'bookmarks',
   'starredMessages',
   'stories',
+  'storiesMine',
   'storyCompose',
   'story',
   'feed',

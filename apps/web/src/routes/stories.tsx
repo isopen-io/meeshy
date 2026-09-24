@@ -14,6 +14,15 @@ import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/l
 import { useSearch } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 
+/* LA COQUILLE COMMUNE (#6149) — extraite dans `stories-parts.tsx` pour que
+   `/stories/mine` puisse l'importer sans tirer cet écran entier dans son
+   propre chunk. RÉ-EXPORTÉE ici : ce fichier reste l'adresse historique de
+   ces trois pièces (`stories-i18n.test.tsx` les importe encore d'ici), et
+   `StoriesScreen` plus bas les consomme depuis ce même import. */
+import { StoriesHeader, StoriesLoadError, StoriesLoading } from './stories-parts';
+
+export { StoriesHeader, StoriesLoading, StoriesLoadError };
+
 /**
  * **TOUTES LES STORIES** (#6080) — la destination du second bouton flottant du
  * rail (« Voir toutes les stories »).
@@ -42,40 +51,6 @@ import { Link } from '@/routes/route-table';
  * lire `currentInterfaceLanguage()` elle-même, pour rester testable par
  * `renderToStaticMarkup` sans DOM ni magasin.
  */
-export function StoriesHeader({ language, title }: { readonly language: InterfaceLanguage; readonly title: string }) {
-  return (
-    <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
-      <Link
-        to="list"
-        aria-label={translate(language, 'pending.back')}
-        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ outlineColor: 'var(--color-ios-brand)' }}
-      >
-        <span aria-hidden="true" className="text-lg leading-none">‹</span>
-      </Link>
-      <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {title}
-      </h1>
-    </header>
-  );
-}
-
-export function StoriesLoading({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <p role="status" className="py-8 text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-      {translate(language, 'stories.loading')}
-    </p>
-  );
-}
-
-export function StoriesLoadError({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <p role="alert" className="py-8 text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-      {translate(language, 'stories.error')}
-    </p>
-  );
-}
-
 export function StoriesEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div className="grid flex-1 content-center justify-items-center gap-3 px-6 py-12 text-center">
