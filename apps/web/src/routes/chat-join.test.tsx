@@ -178,7 +178,7 @@ const signIn = () =>
     });
   });
 
-const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/gu, ' ');
+const text = (el: Element | null) => (el?.textContent ?? '').replace(/[\u2068\u2069]/gu, '').replace(/\s+/gu, ' ');
 const joinButton = (el: HTMLElement) =>
   [...el.querySelectorAll('button')].find((button) => /Rejoindre|Entrée dans la conversation/u.test(text(button))) ?? null;
 const anchorTo = (el: HTMLElement, pathname: string) =>
@@ -262,6 +262,21 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     const rich = await mount(depsWith(withInvitation({ group: { ...INVITATION.group, avatar: 'g/logo.png', banner: 'g/banniere.jpg' } })).deps);
     expect(rich.querySelector('[data-invite-banner]')?.getAttribute('data-invite-banner')).toBe('image');
     expect(rich.querySelector('[data-invite-group] img[alt="Logo de Équipe déploiement"]')).not.toBeNull();
+  });
+
+  test('logo : sans image, les INITIALES du groupe ; une image qui ne charge pas retombe sur elles', async () => {
+    const plain = await mount(depsWith(withInvitation({ title: 'Nova Club' })).deps);
+    expect(text(plain.querySelector('[data-invite-logo]'))).toBe('NC');
+    act(() => mounted?.root.unmount());
+    const broken = await mount(depsWith(withInvitation({ title: 'Nova Club', group: { ...INVITATION.group, avatar: 'g/introuvable.png' } })).deps);
+    const image = broken.querySelector('[data-invite-logo] img');
+    expect(image).not.toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('');
+    await act(async () => {
+      image?.dispatchEvent(new Event('error'));
+    });
+    expect(broken.querySelector('[data-invite-logo] img')).toBeNull();
+    expect(text(broken.querySelector('[data-invite-logo]'))).toBe('NC');
   });
 
   test('le lien affiché est celui que sert la passerelle, pas l’adresse tapée', async () => {

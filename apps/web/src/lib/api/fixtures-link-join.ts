@@ -90,7 +90,9 @@ const NOVA_CLUB: LinkInvitation = {
   group: {
     description: 'Le club des fans de Nova, de Séoul à Dakar. Théories, extraits, sorties : on en parle tous ensemble.',
     createdAt: '2025-09-02T09:00:00.000Z',
-    avatar: portraitStandIn('#312e81', '#6366f1', 'aucune'),
+    /* Un logo VISIBLE (un buste sur fond chaud), distinct du dégradé de repli :
+       un dégradé nu passerait pour un logo absent. */
+    avatar: portraitStandIn('#f59e0b', '#db2777'),
     banner: portraitStandIn('#7c3aed', '#c026d3', 'aucune'),
   },
   stats: { people: 3, languages: [{ code: 'fr', count: null }, { code: 'ko', count: null }] },

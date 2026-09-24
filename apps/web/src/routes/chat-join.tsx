@@ -45,6 +45,7 @@ import {
   InvitationPending,
   InviteHeader,
   InviterBlock,
+  isolated,
   RefusalBanner,
   RightsCard,
 } from '@/routes/chat-join-parts';
@@ -446,7 +447,7 @@ function JoinPanel({ language, title, children }: { readonly language: Interface
       }}
     >
       <h2 id="invite-join-title" className="sr-only text-thread font-extrabold md:not-sr-only" style={{ color: INK }}>
-        {translateInvite(language, 'invite.join.title', { name: title })}
+        {translateInvite(language, 'invite.join.title', { name: isolated(title) })}
       </h2>
       {children}
     </section>

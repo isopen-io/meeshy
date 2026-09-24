@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { Avatar } from '@/components/avatar';
@@ -99,6 +100,10 @@ const REFUSAL_KEY: Readonly<Record<LinkRefusal, Extract<InviteCatalogKey, `invit
 
 export const refusalText = (language: InterfaceLanguage, refusal: LinkRefusal): string => translateInvite(language, REFUSAL_KEY[refusal]);
 
+/** Un nom saisi par un utilisateur, ISOLÉ (U+2068 … U+2069) dans une phrase de
+ * l'interface : « Priya N. » ne devient pas « .Priya N » dans une phrase arabe. */
+export const isolated = (name: string): string => `\u2068${name}\u2069`;
+
 const plural = <K extends InviteCatalogKey>(count: number, one: K, other: K): K => (count === 1 ? one : other);
 
 /** L'en-tête de la page — la marque, et « Se connecter » pour qui n'a pas de session. */
@@ -144,7 +149,7 @@ export function InviterBlock({ language, invitation }: { readonly language: Inte
       <div className="grid min-w-0 flex-1 gap-2.5">
         <div className="grid gap-0.5 md:flex md:items-baseline md:gap-2.5">
           <p id="invite-inviter" className="text-thread font-extrabold tracking-tight md:text-section" style={{ color: INK }}>
-            {inviter === null ? translateInvite(language, 'invite.inviter.unnamed') : translateInvite(language, 'invite.inviter.named', { name: inviter.name })}
+            {inviter === null ? translateInvite(language, 'invite.inviter.unnamed') : translateInvite(language, 'invite.inviter.named', { name: isolated(inviter.name) })}
           </p>
           {inviter?.username == null ? null : (
             <p className="text-caption" style={{ color: INK_2 }} dir="ltr">
@@ -169,9 +174,14 @@ export function InviterBlock({ language, invitation }: { readonly language: Inte
 }
 
 /** Le logo du groupe — son image, sinon ses initiales sur le dégradé de la marque. */
+/** Le logo du groupe — son image tant qu'elle se CHARGE ; absente, vide ou en
+ * échec, les initiales sur le dégradé de la marque (jamais un carré vide). */
 function GroupLogo({ language, title, avatar }: { readonly language: InterfaceLanguage; readonly title: string; readonly avatar: string | null }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const shown = avatar !== null && avatar !== failedSrc ? avatar : null;
   return (
     <span
+      data-invite-logo
       className="relative -mt-[34px] grid size-[76px] shrink-0 place-items-center overflow-hidden rounded-[22px] md:-mt-10 md:size-[88px] md:rounded-[26px]"
       style={{
         border: '4px solid var(--color-ios-card)',
@@ -179,12 +189,17 @@ function GroupLogo({ language, title, avatar }: { readonly language: InterfaceLa
         boxShadow: '0 8px 20px color-mix(in srgb, var(--ios-indigo-900) 25%, transparent)',
       }}
     >
-      {avatar === null ? (
+      {shown === null ? (
         <span aria-hidden="true" className="text-section font-extrabold text-white">
           {initialsOf(title)}
         </span>
       ) : (
-        <img src={attachmentSrc(avatar)} alt={translateInvite(language, 'invite.group.logo', { name: title })} className="size-full object-cover" />
+        <img
+          src={attachmentSrc(shown)}
+          alt={translateInvite(language, 'invite.group.logo', { name: title })}
+          onError={() => setFailedSrc(shown)}
+          className="size-full object-cover"
+        />
       )}
     </span>
   );
