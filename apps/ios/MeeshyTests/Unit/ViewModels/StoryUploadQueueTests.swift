@@ -264,6 +264,98 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertTrue(sut.activeUploads.isEmpty)
     }
 
+    // MARK: - Le succès annoncé (onboarding #7729)
+
+    /// Qui écoute le succès d'une publication (la carte 3 de l'onboarding) doit
+    /// l'entendre AVANT que la ligne ne quitte la file — sinon le retrait se
+    /// lit comme une annulation.
+    private func recordSucceededUploads() -> (ids: () -> [String], stillQueued: () -> [Bool], bag: AnyCancellable) {
+        var ids: [String] = []
+        var stillQueued: [Bool] = []
+        let bag = sut.storyUploadSucceeded.sink { [unowned self] id in
+            ids.append(id)
+            stillQueued.append(sut.activeUploads.contains { $0.id == id })
+        }
+        return ({ ids }, { stillQueued }, bag)
+    }
+
+    func test_uploadSucceeds_announcesItsIdBeforeLeavingTheQueue() async {
+        let recorder = recordSucceededUploads()
+        publish()
+        let uploadId = sut.activeUploads.first?.id
+
+        await waitUntil("la file d'upload se vide") { [self] in sut.activeUploads.isEmpty }
+
+        XCTAssertEqual(recorder.ids(), [uploadId].compactMap { $0 })
+        XCTAssertEqual(recorder.stillQueued(), [true])
+        recorder.bag.cancel()
+    }
+
+    func test_uploadFailure_announcesNoSuccess() async {
+        let recorder = recordSucceededUploads()
+        mockPostService.createStoryResult = .failure(URLError(.notConnectedToInternet))
+        publish()
+
+        await waitUntil("la story échoue") { [self] in
+            sut.activeUploads.contains { if case .failed = $0.phase { return true }; return false }
+        }
+
+        XCTAssertTrue(recorder.ids().isEmpty)
+        recorder.bag.cancel()
+    }
+
+    func test_cancelUpload_announcesNoSuccess() async {
+        let recorder = recordSucceededUploads()
+        mockPostService.createStoryResult = .failure(URLError(.notConnectedToInternet))
+        publish()
+        await waitUntil("l'entrée est préparée") { [self] in
+            sut.activeUploads.first.map { $0.phase != .preparing } ?? false
+        }
+        guard let id = sut.activeUploads.first?.id else { return XCTFail("upload absent") }
+
+        sut.cancelUpload(id: id)
+
+        XCTAssertTrue(recorder.ids().isEmpty)
+        recorder.bag.cancel()
+    }
+
+    func test_publishSucceededFromQueue_announcesTheRowItRemoves() async {
+        let recorder = recordSucceededUploads()
+        mockPostService.createStoryResult = .failure(URLError(.timedOut))
+        publish()
+        await waitUntil("l'entrée porte son queueId") { [self] in
+            sut.activeUploads.first?.queueId != nil
+        }
+        guard let row = sut.activeUploads.first, let queueId = row.queueId else { return XCTFail("queueId absent") }
+
+        StoryPublishQueue.shared.publishSucceeded.send(
+            StoryPublishSuccess(queueId: queueId, tempStoryId: "pending_x", publishedStoryId: "story-1")
+        )
+
+        await waitUntil("la ligne quitte la file") { [self] in sut.activeUploads.isEmpty }
+        XCTAssertEqual(recorder.ids(), [row.id])
+        XCTAssertEqual(recorder.stillQueued(), [true])
+        recorder.bag.cancel()
+    }
+
+    func test_publishFailedFromQueue_announcesNoSuccess() async {
+        let recorder = recordSucceededUploads()
+        mockPostService.createStoryResult = .failure(URLError(.timedOut))
+        publish()
+        await waitUntil("l'entrée porte son queueId") { [self] in
+            sut.activeUploads.first?.queueId != nil
+        }
+        guard let queueId = sut.activeUploads.first?.queueId else { return XCTFail("queueId absent") }
+
+        StoryPublishQueue.shared.publishFailed.send(
+            StoryPublishFailure(queueId: queueId, tempStoryId: "pending_x", reason: .maxRetriesReached)
+        )
+
+        await waitUntil("la ligne migre vers l'historique") { [self] in sut.activeUploads.isEmpty }
+        XCTAssertTrue(recorder.ids().isEmpty)
+        recorder.bag.cancel()
+    }
+
     // MARK: - Revendication (S3.4)
 
     func test_uploadFailureBeforeAnyCommit_releasesQueueInFlightMarker() async {

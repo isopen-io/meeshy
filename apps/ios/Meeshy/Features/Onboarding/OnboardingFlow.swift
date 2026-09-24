@@ -19,6 +19,22 @@ enum OnboardingSendState: Equatable {
     case failed
 }
 
+/// Où en est la première story. `.publishing` ne crédite RIEN : seul le
+/// succès confirmé de l'upload (`.published`) rapporte des points.
+enum OnboardingStoryState: Equatable {
+    case idle
+    case publishing
+    case failed
+    case published
+}
+
+/// Ce que l'hôte relaie d'un upload de story : son identité et s'il a échoué.
+/// Le modèle n'a pas à connaître `StoryUploadState` ni ses médias.
+struct OnboardingStoryUpload: Equatable {
+    let id: String
+    let failed: Bool
+}
+
 /// Un « +N » à faire s'envoler vers la pastille de points. L'identité change à
 /// chaque gain : deux gains égaux de suite restent deux envolées.
 struct OnboardingReward: Equatable, Identifiable {
@@ -88,6 +104,35 @@ enum OnboardingFlow {
 
     static func alreadyProduced(_ state: APIOnboardingState) -> Bool {
         !productiveSteps.isDisjoint(with: state.prefilledSteps)
+    }
+}
+
+// MARK: - Tenir dans l'écran
+
+/// Les règles qui font TENIR une carte dans la hauteur d'un iPhone, sans
+/// défilement caché : l'illustration — décorative — cède la place au contenu,
+/// jamais l'inverse ; la carte 4 ne montre que les trois profils que son texte
+/// demande, le reste derrière « Voir plus ».
+enum OnboardingCardFit {
+    /// En deçà, une illustration réduite n'est plus lisible : on la retire.
+    static let minimumIllustrationHeight: CGFloat = 72
+    static let suggestionsShown = 3
+
+    /// L'échelle de l'illustration pour la place qui reste (`room`), dans
+    /// ]0, 1] — ou 0 pour la retirer. Tant que la taille naturelle n'est pas
+    /// mesurée (`natural` ≤ 0), rien ne change.
+    static func illustrationScale(natural: CGFloat, room: CGFloat) -> CGFloat {
+        guard natural > 0, room < natural else { return 1 }
+        guard room >= minimumIllustrationHeight else { return 0 }
+        return room / natural
+    }
+
+    static func visibleSuggestions(_ all: [APIOnboardingSuggestion], expanded: Bool) -> [APIOnboardingSuggestion] {
+        expanded ? all : Array(all.prefix(suggestionsShown))
+    }
+
+    static func hiddenSuggestionCount(_ all: [APIOnboardingSuggestion], expanded: Bool) -> Int {
+        all.count - visibleSuggestions(all, expanded: expanded).count
     }
 }
 

@@ -15,6 +15,9 @@ import MeeshyUI
 /// `-MeeshyOnboardingPreviewDone YES` montre la carte APRÈS son geste (salut
 /// envoyé, story publiée, demandes envoyées) — « +N » compris.
 /// `-MeeshyOnboardingPreviewProtected YES` joue le régime protégé.
+/// `-MeeshyOnboardingPreviewStory publishing|failed` montre la carte 3 pendant
+/// l'upload ou après son échec. `-MeeshyOnboardingPreviewSuggestions 6` sert
+/// six profils (le plafond du contrat) au lieu de quatre.
 ///
 /// Rien de ceci n'existe dans un build Release : le fichier entier est sous
 /// `#if DEBUG`, et son seul site d'appel aussi.
@@ -37,6 +40,16 @@ enum OnboardingPreviewLaunch {
         UserDefaults.standard.bool(forKey: "MeeshyOnboardingPreviewDone")
     }
 
+    /// `-MeeshyOnboardingPreviewStory publishing|failed` : la carte 3 pendant
+    /// l'upload, ou après son échec.
+    static var storyState: OnboardingStoryState? {
+        switch UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewStory") {
+        case "publishing": return .publishing
+        case "failed": return .failed
+        default: return nil
+        }
+    }
+
     static var isProtected: Bool {
         UserDefaults.standard.bool(forKey: "MeeshyOnboardingPreviewProtected")
     }
@@ -50,13 +63,22 @@ enum OnboardingPreviewLaunch {
             globalConversationId: "66f1c0ffee00000000000001",
             protectedRegime: protected,
             storyDefaultVisibility: protected ? .friends : .public,
-            suggestions: [
-                APIOnboardingSuggestion(id: "p1", username: "lina.novaclub", displayName: "Lina", avatarUrl: nil, languages: ["fr", "es"]),
-                APIOnboardingSuggestion(id: "p2", username: "kenji_nova", displayName: "Kenji", avatarUrl: nil, languages: ["ja", "en"]),
-                APIOnboardingSuggestion(id: "p3", username: "amara.sings", displayName: "Amara", avatarUrl: nil, languages: ["en", "fr"]),
-                APIOnboardingSuggestion(id: "p4", username: "sofi_lx", displayName: "Sofia", avatarUrl: nil, languages: ["pt", "es"]),
-            ]
+            suggestions: Array(fixtureSuggestions.prefix(suggestionCount))
         )
+    }
+
+    nonisolated private static let fixtureSuggestions: [APIOnboardingSuggestion] = [
+        APIOnboardingSuggestion(id: "p1", username: "lina.novaclub", displayName: "Lina", avatarUrl: nil, languages: ["fr", "es"]),
+        APIOnboardingSuggestion(id: "p2", username: "kenji_nova", displayName: "Kenji", avatarUrl: nil, languages: ["ja", "en"]),
+        APIOnboardingSuggestion(id: "p3", username: "amara.sings", displayName: "Amara", avatarUrl: nil, languages: ["en", "fr"]),
+        APIOnboardingSuggestion(id: "p4", username: "sofi_lx", displayName: "Sofia", avatarUrl: nil, languages: ["pt", "es"]),
+        APIOnboardingSuggestion(id: "p5", username: "yusuf.nova", displayName: "Yusuf", avatarUrl: nil, languages: ["ar", "fr"]),
+        APIOnboardingSuggestion(id: "p6", username: "mila_beats", displayName: "Mila", avatarUrl: nil, languages: ["de", "en"]),
+    ]
+
+    nonisolated private static var suggestionCount: Int {
+        let requested = UserDefaults.standard.integer(forKey: "MeeshyOnboardingPreviewSuggestions")
+        return requested > 0 ? requested : 4
     }
 
     static var fixtureUser: MeeshyUser {
@@ -88,6 +110,10 @@ struct OnboardingPreviewScreen: View {
                                        jumpTo: OnboardingPreviewLaunch.requestedCard)
             // Le geste « arrive » une fois la carte à l'écran, comme en vrai :
             // c'est ce qui laisse le « +N » s'envoler vers la pastille.
+            if let storyState = OnboardingPreviewLaunch.storyState {
+                model.debugSetStoryState(storyState)
+                return
+            }
             guard OnboardingPreviewLaunch.showsDoneVariant else { return }
             do { try await Task.sleep(nanoseconds: 1_200_000_000) } catch { return }
             model.debugApplyDoneVariant()

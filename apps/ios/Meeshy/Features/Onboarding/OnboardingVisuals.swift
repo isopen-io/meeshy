@@ -17,6 +17,14 @@ struct OnboardingAction {
 /// Le gabarit des cinq cartes : illustration, titre, phrase, contenu propre à
 /// la carte, puis UN bouton principal pré-rempli et un « Plus tard » discret.
 ///
+/// **Une carte TIENT dans l'écran.** Les boutons vivent SOUS la zone de la
+/// carte, jamais par-dessus : rien de ce que la carte montre — la jauge du
+/// niveau 1, la note « +7 chacun » — ne peut passer derrière eux. Pour tenir,
+/// c'est l'illustration, décorative, qui cède : elle se réduit à la place qui
+/// reste, puis disparaît sous `OnboardingCardFit.minimumIllustrationHeight`.
+/// Si le contenu déborde encore (iPhone SE, grandes tailles de texte), la
+/// barre de défilement est MONTRÉE et un fondu signale la suite.
+///
 /// **Une carte = un conteneur VoiceOver**, lu dans l'ordre titre → texte →
 /// contenu → action → « Plus tard ». En tailles d'accessibilité, les boutons
 /// quittent le bas de l'écran pour suivre le contenu dans le défilement :
@@ -32,66 +40,90 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// La plus grande hauteur vue : le clavier qui monte ne doit pas faire
+    /// sauter l'illustration sous le doigt de qui écrit.
+    @State private var roomyViewport: CGFloat = 0
+    @State private var viewport: CGFloat = 0
+    @State private var scrolledContent: CGFloat = 0
+    @State private var cardBody: CGFloat = 0
+    @State private var naturalIllustration: CGFloat = 0
+
+    private static var cardPadding: CGFloat { MeeshySpacing.lg }
+    private static var cardSpacing: CGFloat { MeeshySpacing.lg }
+    private static var scrollTop: CGFloat { MeeshySpacing.sm }
+    private static var scrollBottom: CGFloat { MeeshySpacing.lg }
+
+    private var isAccessibilitySize: Bool { dynamicTypeSize.isAccessibilitySize }
+
+    private var illustrationScale: CGFloat {
+        guard !isAccessibilitySize, roomyViewport > 0, cardBody > 0 else { return 1 }
+        let rest = cardBody + Self.cardPadding * 2 + Self.cardSpacing + Self.scrollTop + Self.scrollBottom
+        return OnboardingCardFit.illustrationScale(natural: naturalIllustration, room: roomyViewport - rest)
+    }
+
+    private var overflows: Bool { viewport > 0 && scrolledContent > viewport + 1 }
+
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: MeeshySpacing.xl) {
-                card
-                if dynamicTypeSize.isAccessibilitySize { actions }
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: overflows) {
+                VStack(spacing: MeeshySpacing.xl) {
+                    card
+                    if isAccessibilitySize { actions }
+                }
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, Self.scrollTop)
+                .padding(.bottom, Self.scrollBottom)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { scrolledContent = $0 }
             }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.md)
-            .padding(.bottom, MeeshySpacing.xl)
-        }
-        .onboardingScrollClipDisabled()
-        .safeAreaInset(edge: .bottom) {
-            if !dynamicTypeSize.isAccessibilitySize {
+            .onboardingScrollClip(disabled: !overflows)
+            .onboardingFlashIndicators(when: overflows)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                viewport = height
+                roomyViewport = max(roomyViewport, height)
+            }
+            .overlay(alignment: .bottom) { if overflows { moreBelow } }
+            if !isAccessibilitySize {
                 actions
                     .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.xxl)
-                    .padding(.bottom, MeeshySpacing.md)
-                    .background(bottomFade)
+                    .padding(.top, MeeshySpacing.sm)
+                    .padding(.bottom, MeeshySpacing.sm)
             }
         }
     }
 
-    /// Le contenu qui défile sous les boutons s'efface au lieu d'être coupé net.
-    private var bottomFade: some View {
+    /// Le contenu qui continue plus bas s'efface au lieu d'être coupé net.
+    private var moreBelow: some View {
         LinearGradient(
             colors: [MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0),
-                     MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0.92)],
-            startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)
+                     MeeshyColors.backgroundPrimary(isDark: isDark).opacity(0.85)],
+            startPoint: .top, endPoint: .bottom
         )
-        .ignoresSafeArea(edges: .bottom)
+        .frame(height: 28)
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var card: some View {
-        VStack(spacing: MeeshySpacing.xl) {
-            // Décorative et masquée à VoiceOver, l'illustration plafonne sa
-            // taille de texte : en AX5, ses bulles déborderaient la carte sans
-            // rien apprendre à personne. Le titre, le texte et les actions,
-            // eux, suivent Dynamic Type jusqu'au bout.
-            illustration()
-                .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 110)
-                .accessibilityHidden(true)
+        VStack(spacing: Self.cardSpacing) {
+            if illustrationScale > 0 { illustrationSlot }
+            VStack(spacing: Self.cardSpacing) {
+                VStack(spacing: MeeshySpacing.sm) {
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize + 4, weight: .bold, design: .rounded))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                        .accessibilityAddTraits(.isHeader)
+                    Text(message)
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize))
+                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: MeeshySpacing.sm) {
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.titleSize + 4, weight: .bold, design: .rounded))
-                    .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
-                    .accessibilityAddTraits(.isHeader)
-                Text(message)
-                    .font(MeeshyFont.relative(MeeshyFont.headlineSize))
-                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                content()
             }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-
-            content()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardBody = $0 }
         }
-        .padding(MeeshySpacing.xl)
+        .padding(Self.cardPadding)
         .frame(maxWidth: 560)
         .background(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -105,8 +137,24 @@ struct OnboardingCardLayout<Illustration: View, Content: View>: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .stroke(MeeshyColors.glassBorderGradient(isDark: isDark), lineWidth: 1)
         )
-        .shadow(color: MeeshyColors.indigo700.opacity(isDark ? 0.45 : 0.16), radius: 30, y: 14)
+        .shadow(color: MeeshyColors.indigo700.opacity(isDark ? 0.45 : 0.16), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
+    }
+
+    /// Décorative et masquée à VoiceOver, l'illustration plafonne sa taille de
+    /// texte : en AX5, ses bulles déborderaient la carte sans rien apprendre à
+    /// personne. Elle est mesurée à sa taille NATURELLE, puis réduite d'un
+    /// bloc — une réduction qui garde ses proportions, jamais une coupe.
+    private var illustrationSlot: some View {
+        let scale = illustrationScale
+        return illustration()
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { naturalIllustration = $0 }
+            .scaleEffect(scale)
+            .frame(maxWidth: .infinity)
+            .frame(height: naturalIllustration > 0 ? naturalIllustration * scale : nil)
+            .accessibilityHidden(true)
     }
 
     private var actions: some View {
@@ -335,12 +383,27 @@ struct OnboardingProgressBar: View {
 // MARK: - Défilement
 
 private extension View {
-    /// L'ombre de la carte déborde du défilement au lieu d'y être tranchée net
-    /// (iOS 17+ ; en iOS 16 l'ombre reste simplement coupée au bord).
+    /// Une carte qui déborde le DIT : la barre de défilement clignote à
+    /// l'apparition (iOS 17+ ; en iOS 16, elle reste simplement visible).
     @ViewBuilder
-    func onboardingScrollClipDisabled() -> some View {
+    func onboardingFlashIndicators(when overflows: Bool) -> some View {
         if #available(iOS 17.0, *) {
-            scrollClipDisabled()
+            scrollIndicatorsFlash(trigger: overflows)
+        } else {
+            self
+        }
+    }
+
+    /// Tant que la carte TIENT, son ombre déborde du défilement au lieu d'y
+    /// être tranchée net, et rien ne rebondit. Dès qu'elle déborde, le
+    /// défilement coupe de nouveau à son bord : sans ça, le contenu qui monte
+    /// se dessinerait sous les boutons, là même où ce gabarit l'interdit.
+    @ViewBuilder
+    func onboardingScrollClip(disabled: Bool) -> some View {
+        if #available(iOS 17.0, *) {
+            scrollClipDisabled(disabled).scrollBounceBehavior(.basedOnSize)
+        } else if #available(iOS 16.4, *) {
+            scrollBounceBehavior(.basedOnSize)
         } else {
             self
         }

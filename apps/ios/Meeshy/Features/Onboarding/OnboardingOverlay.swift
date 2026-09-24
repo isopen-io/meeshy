@@ -16,6 +16,7 @@ import MeeshyUI
 struct OnboardingOverlay: View {
     @ObservedObject var model: OnboardingViewModel
     let onOpenStory: () -> Void
+    var onRetryStory: () -> Void = {}
     let onExplore: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -37,7 +38,8 @@ struct OnboardingOverlay: View {
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.sm)
                     .zIndex(1)
-                OnboardingCardView(model: model, isDark: isDark, onOpenStory: onOpenStory, onExplore: onExplore)
+                OnboardingCardView(model: model, isDark: isDark, onOpenStory: onOpenStory,
+                                   onRetryStory: onRetryStory, onExplore: onExplore)
                     .id(model.card)
                     .transition(reduceMotion
                                 ? .opacity
@@ -141,13 +143,13 @@ struct OnboardingHost: ViewModifier {
 
     @StateObject private var model = OnboardingViewModel()
     @State private var startedForUserId: String?
-    @State private var storyUploadsAtOpen: Int?
 
     func body(content: Content) -> some View {
         content
             .overlay {
                 if model.isPresented {
-                    OnboardingOverlay(model: model, onOpenStory: openStoryComposer, onExplore: exploreGlobal)
+                    OnboardingOverlay(model: model, onOpenStory: openStoryComposer,
+                                      onRetryStory: retryStory, onExplore: exploreGlobal)
                         .transition(.opacity)
                 }
             }
@@ -157,12 +159,29 @@ struct OnboardingHost: ViewModifier {
                 startedForUserId = user.id
                 Task { await model.start(user: user) }
             }
+            // Le composeur fermé dit qu'une publication est PARTIE, jamais
+            // qu'elle a abouti. La file est relue après le saut de boucle :
+            // `publishStoryInBackground` y ajoute l'upload AVANT de fermer.
             .onReceive(storyViewModel.$showStoryComposer.dropFirst().receive(on: DispatchQueue.main)) { showing in
-                guard !showing, let before = storyUploadsAtOpen else { return }
-                storyUploadsAtOpen = nil
-                let published = storyViewModel.activeUploads.count > before
-                Task { await model.storyComposerClosed(published: published) }
+                guard !showing else { return }
+                model.storyComposerClosed(uploads: Self.snapshot(storyViewModel.activeUploads))
             }
+            // Synchrones, et dans cet ordre côté `StoryViewModel` : le succès
+            // est annoncé AVANT que la ligne quitte la file. Un saut de boucle
+            // ici pourrait faire lire ce retrait comme une annulation.
+            .onReceive(storyViewModel.$activeUploads) { uploads in
+                model.storyUploadsChanged(Self.snapshot(uploads))
+            }
+            .onReceive(storyViewModel.storyUploadSucceeded) { id in
+                model.storyUploadSucceeded(id: id)
+            }
+    }
+
+    private static func snapshot(_ uploads: [StoryViewModel.StoryUploadState]) -> [OnboardingStoryUpload] {
+        uploads.map { upload in
+            if case .failed = upload.phase { return OnboardingStoryUpload(id: upload.id, failed: true) }
+            return OnboardingStoryUpload(id: upload.id, failed: false)
+        }
     }
 
     /// La visibilité par défaut de la première story suit le régime serveur :
@@ -173,8 +192,15 @@ struct OnboardingHost: ViewModifier {
         if model.storyDefaultVisibility == .friends {
             StoryVisibilityPreferenceStore().remember(PostVisibility.friends.rawValue)
         }
-        storyUploadsAtOpen = storyViewModel.activeUploads.count
+        model.storyComposerOpened(uploadIds: storyViewModel.activeUploads.map(\.id))
         storyViewModel.showStoryComposer = true
+    }
+
+    /// « Réessayer » relance l'upload SUIVI — la story composée n'est pas
+    /// perdue, et aucun composeur ne se rouvre.
+    private func retryStory() {
+        guard let id = model.trackedStoryUploadId else { return }
+        storyViewModel.retryUpload(id: id)
     }
 
     private func exploreGlobal() {

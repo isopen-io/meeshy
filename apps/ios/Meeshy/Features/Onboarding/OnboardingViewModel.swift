@@ -12,7 +12,7 @@ import os
 /// d'affichage et le moment de la carte notifications.
 ///
 /// **Aucun gain inventé.** Un « +N » ne s'affiche qu'après l'accusé du serveur
-/// (message envoyé, story partie en publication) ; la demande d'ami n'affiche
+/// (message envoyé, story dont l'upload a ABOUTI — jamais au simple départ) ; la demande d'ami n'affiche
 /// rien, parce que rien n'est crédité avant l'acceptation. Le récapitulatif
 /// relit la progression serveur — et, s'il ne le peut pas, n'affiche que ce que
 /// la session a vraiment gagné.
@@ -31,7 +31,7 @@ final class OnboardingViewModel: ObservableObject {
     @Published private(set) var lastReward: OnboardingReward?
     @Published var greetingDraft = ""
     @Published private(set) var greetingState: OnboardingSendState = .idle
-    @Published private(set) var storyPublished = false
+    @Published private(set) var storyState: OnboardingStoryState = .idle
     @Published private(set) var requestedProfileIds: Set<String> = []
     @Published private(set) var failedProfileId: String?
     @Published private(set) var primaryLanguage = "fr"
@@ -42,6 +42,9 @@ final class OnboardingViewModel: ObservableObject {
 
     private(set) var storyDefaultVisibility: OnboardingStoryVisibility = .friends
     private(set) var globalConversationId: String?
+    /// L'upload de story que la carte 3 suit : celui qu'elle a vu naître à la
+    /// fermeture du composeur. `nil` quand rien n'est en vol.
+    private(set) var trackedStoryUploadId: String?
 
     private let service: any OnboardingServiceProviding
     private let messages: any MessageServiceProviding
@@ -59,6 +62,7 @@ final class OnboardingViewModel: ObservableObject {
     private var composedGreeting = ""
     private var initialLanguages: (primary: String, secondary: String?) = ("fr", nil)
     private var rewardSequence = 0
+    private var storyUploadIdsAtOpen: Set<String>?
 
     init(
         service: any OnboardingServiceProviding = OnboardingService.shared,
@@ -91,6 +95,8 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     var stepCount: Int { plannedSteps.count }
+
+    var storyPublished: Bool { storyState == .published }
 
     /// Le prénom affiché (anneau de story) — celui du profil lu au démarrage.
     var userDisplayName: String {
@@ -129,6 +135,11 @@ final class OnboardingViewModel: ObservableObject {
         if target == .step(.notifications) { notificationsPending = false }
     }
 
+    /// Aperçu DEBUG : la carte 3 pendant l'upload, ou après son échec.
+    func debugSetStoryState(_ state: OnboardingStoryState) {
+        storyState = state
+    }
+
     /// Aperçu DEBUG : la carte courante APRÈS son geste, « +N » compris.
     func debugApplyDoneVariant() {
         switch card {
@@ -137,7 +148,7 @@ final class OnboardingViewModel: ObservableObject {
             reward(OnboardingRewards.greeting)
         case .step(.story):
             sessionPoints = OnboardingRewards.greeting
-            storyPublished = true
+            storyState = .published
             reward(OnboardingRewards.story)
         case .step(.friends):
             sessionPoints = OnboardingRewards.greeting + OnboardingRewards.story
@@ -325,14 +336,49 @@ final class OnboardingViewModel: ObservableObject {
 
     // MARK: - Carte 3 — première story
 
-    /// Appelé par l'hôte quand le composeur de story se referme. `published`
-    /// dit si une publication est PARTIE (upload lancé ou file hors-ligne).
-    func storyComposerClosed(published: Bool) async {
-        guard published, !storyPublished else { return }
-        storyPublished = true
+    /// L'hôte ouvre le composeur : on note les uploads DÉJÀ en file, pour
+    /// reconnaître à la fermeture celui que ce composeur a lancé.
+    func storyComposerOpened(uploadIds: [String]) {
+        storyUploadIdsAtOpen = Set(uploadIds)
+    }
+
+    /// Le composeur se referme. Un upload NOUVEAU dans la file veut dire qu'une
+    /// publication est PARTIE — pas qu'elle a abouti : la carte affiche « ta
+    /// story part… », sans « +N » ni étape écrite.
+    func storyComposerClosed(uploads: [OnboardingStoryUpload]) {
+        guard let before = storyUploadIdsAtOpen else { return }
+        storyUploadIdsAtOpen = nil
+        guard !storyPublished, let started = uploads.first(where: { !before.contains($0.id) }) else { return }
+        trackedStoryUploadId = started.id
+        storyState = started.failed ? .failed : .publishing
+    }
+
+    /// La file d'uploads a changé. L'upload suivi qui échoue laisse la carte
+    /// en « réessayer » ; relancé, il repart en « part… ». S'il QUITTE la file
+    /// sans succès annoncé (annulé, abandonné par la file), la carte revient à
+    /// son geste initial — rien n'a été gagné, rien n'est retiré.
+    func storyUploadsChanged(_ uploads: [OnboardingStoryUpload]) {
+        guard let tracked = trackedStoryUploadId else { return }
+        guard let upload = uploads.first(where: { $0.id == tracked }) else {
+            trackedStoryUploadId = nil
+            storyState = .idle
+            return
+        }
+        storyState = upload.failed ? .failed : .publishing
+    }
+
+    /// L'upload suivi a ABOUTI côté serveur : c'est le SEUL moment où la story
+    /// rapporte ses points et où l'étape s'écrit `done`. L'état change
+    /// SYNCHRONEMENT — `StoryViewModel` annonce le succès juste avant de
+    /// retirer l'upload de sa file, et ce retrait ne doit pas le défaire.
+    @discardableResult
+    func storyUploadSucceeded(id: String) -> Task<Void, Never>? {
+        guard id == trackedStoryUploadId, !storyPublished else { return nil }
+        trackedStoryUploadId = nil
+        storyState = .published
         producedSomething = true
         reward(OnboardingRewards.story)
-        await record(.story, .done)
+        return Task { await record(.story, .done) }
     }
 
     // MARK: - Carte 4 — trouve ta bande

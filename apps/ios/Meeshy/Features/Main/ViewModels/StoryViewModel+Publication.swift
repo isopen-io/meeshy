@@ -946,6 +946,7 @@ extension StoryViewModel {
                 if let draftId = finished?.draftId {
                     self.draftStore.delete(draftId: draftId)
                 }
+                self.storyUploadSucceeded.send(id)
                 self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))

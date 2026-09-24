@@ -251,27 +251,121 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertEqual(sut.model.storyDefaultVisibility, .friends)
     }
 
-    func test_storyComposerClosed_published_creditsTenAndRecordsDone() async {
+    private func upload(_ id: String, failed: Bool = false) -> OnboardingStoryUpload {
+        OnboardingStoryUpload(id: id, failed: failed)
+    }
+
+    /// Ouvre le composeur au-dessus d'une file qui porte déjà `existing`, puis
+    /// le referme sur `uploads` — ce que l'hôte relaie depuis `StoryViewModel`.
+    private func publishFromComposer(_ sut: SUT, existing: [String] = ["old"], uploads: [OnboardingStoryUpload]) {
+        sut.model.storyComposerOpened(uploadIds: existing)
+        sut.model.storyComposerClosed(uploads: uploads)
+    }
+
+    func test_storyComposerClosed_uploadStarted_showsSendingWithoutCreditOrRecord() async {
         let sut = makeSUT(state: makeState(seen: [.languages, .global]))
         await sut.model.start(user: makeUser())
 
-        await sut.model.storyComposerClosed(published: true)
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
 
-        XCTAssertEqual(sut.model.sessionPoints, 10)
+        XCTAssertEqual(sut.model.storyState, .publishing)
+        XCTAssertEqual(sut.model.sessionPoints, 0)
+        XCTAssertNil(sut.model.lastReward)
+        XCTAssertTrue(sut.service.recorded.isEmpty)
+    }
+
+    func test_storyUpload_startedThenFailed_creditsNothingAndRecordsNothing() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
+
+        sut.model.storyUploadsChanged([upload("old"), upload("s1", failed: true)])
+
+        XCTAssertEqual(sut.model.storyState, .failed)
+        XCTAssertEqual(sut.model.trackedStoryUploadId, "s1")
+        XCTAssertEqual(sut.model.card, .step(.story))
+        XCTAssertEqual(sut.model.sessionPoints, 0)
+        XCTAssertNil(sut.model.lastReward)
+        XCTAssertFalse(sut.service.recorded.contains { $0.step == .story && $0.outcome == .done })
+    }
+
+    func test_storyUpload_succeeded_creditsTenAndRecordsDone() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
+
+        await sut.model.storyUploadSucceeded(id: "s1")?.value
+
+        XCTAssertEqual(sut.model.storyState, .published)
         XCTAssertTrue(sut.model.storyPublished)
+        XCTAssertEqual(sut.model.sessionPoints, 10)
+        XCTAssertEqual(sut.model.lastReward?.points, 10)
         XCTAssertEqual(sut.service.recorded.last?.step, .story)
         XCTAssertEqual(sut.service.recorded.last?.outcome, .done)
     }
 
-    func test_storyComposerClosed_notPublished_keepsTheCardWithoutCredit() async {
+    func test_storyUpload_failedThenRetriedThenSucceeded_creditsOnce() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
+        sut.model.storyUploadsChanged([upload("old"), upload("s1", failed: true)])
+
+        sut.model.storyUploadsChanged([upload("old"), upload("s1")])
+        XCTAssertEqual(sut.model.storyState, .publishing)
+        await sut.model.storyUploadSucceeded(id: "s1")?.value
+        await sut.model.storyUploadSucceeded(id: "s1")?.value
+
+        XCTAssertEqual(sut.model.sessionPoints, 10)
+        XCTAssertEqual(sut.service.recorded.filter { $0.step == .story }.count, 1)
+    }
+
+    func test_storyUpload_removedWithoutSuccess_returnsToIdleWithoutCredit() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
+
+        sut.model.storyUploadsChanged([upload("old")])
+        let late = sut.model.storyUploadSucceeded(id: "s1")
+        await late?.value
+
+        XCTAssertNil(late)
+        XCTAssertEqual(sut.model.storyState, .idle)
+        XCTAssertNil(sut.model.trackedStoryUploadId)
+        XCTAssertEqual(sut.model.sessionPoints, 0)
+        XCTAssertTrue(sut.service.recorded.isEmpty)
+    }
+
+    func test_storyUploadSucceeded_forAnotherUpload_isIgnored() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+        publishFromComposer(sut, uploads: [upload("old"), upload("s1")])
+
+        await sut.model.storyUploadSucceeded(id: "old")?.value
+
+        XCTAssertEqual(sut.model.storyState, .publishing)
+        XCTAssertEqual(sut.model.sessionPoints, 0)
+        XCTAssertTrue(sut.service.recorded.isEmpty)
+    }
+
+    func test_storyComposerClosed_nothingPublished_keepsTheCardWithoutCredit() async {
         let sut = makeSUT(state: makeState(seen: [.languages, .global]))
         await sut.model.start(user: makeUser())
 
-        await sut.model.storyComposerClosed(published: false)
+        publishFromComposer(sut, uploads: [upload("old")])
 
         XCTAssertEqual(sut.model.card, .step(.story))
+        XCTAssertEqual(sut.model.storyState, .idle)
         XCTAssertEqual(sut.model.sessionPoints, 0)
         XCTAssertTrue(sut.service.recorded.isEmpty)
+    }
+
+    func test_storyUploadsChanged_withoutATrackedUpload_changesNothing() async {
+        let sut = makeSUT(state: makeState(seen: [.languages, .global]))
+        await sut.model.start(user: makeUser())
+
+        sut.model.storyUploadsChanged([upload("other", failed: true)])
+
+        XCTAssertEqual(sut.model.storyState, .idle)
     }
 
     // MARK: - Carte 4 — trouve ta bande
@@ -453,5 +547,32 @@ final class OnboardingViewModelTests: XCTestCase {
             XCTAssertFalse(text.contains("%"), "gabarit \(index) garde un spécificateur : \(text)")
             XCTAssertFalse(text.hasPrefix("onboarding."), "gabarit \(index) absent du catalogue")
         }
+    }
+
+    // MARK: - Tenir dans l'écran sans défiler
+
+    func test_illustrationScale_whenTheCardFits_keepsTheIllustrationWhole() {
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 210, room: 260), 1)
+    }
+
+    func test_illustrationScale_whenRoomIsShort_shrinksToTheRoomLeft() {
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 200, room: 150), 0.75, accuracy: 0.0001)
+    }
+
+    func test_illustrationScale_belowTheLegibleMinimum_dropsTheIllustration() {
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 210, room: OnboardingCardFit.minimumIllustrationHeight - 1), 0)
+    }
+
+    func test_illustrationScale_beforeMeasuring_changesNothing() {
+        XCTAssertEqual(OnboardingCardFit.illustrationScale(natural: 0, room: 10), 1)
+    }
+
+    func test_visibleSuggestions_showsThreeFirstUntilExpanded() {
+        let six = (1...6).map { APIOnboardingSuggestion(id: "u\($0)", username: "u\($0)", displayName: "U\($0)", avatarUrl: nil, languages: ["fr"]) }
+
+        XCTAssertEqual(OnboardingCardFit.visibleSuggestions(six, expanded: false).map(\.id), ["u1", "u2", "u3"])
+        XCTAssertEqual(OnboardingCardFit.visibleSuggestions(six, expanded: true).count, 6)
+        XCTAssertEqual(OnboardingCardFit.hiddenSuggestionCount(six, expanded: false), 3)
+        XCTAssertEqual(OnboardingCardFit.hiddenSuggestionCount(Array(six.prefix(2)), expanded: false), 0)
     }
 }

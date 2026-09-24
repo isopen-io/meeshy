@@ -9,7 +9,10 @@ struct OnboardingCardView: View {
     @ObservedObject var model: OnboardingViewModel
     let isDark: Bool
     let onOpenStory: () -> Void
+    let onRetryStory: () -> Void
     let onExplore: () -> Void
+
+    @State private var showsAllSuggestions = false
 
     var body: some View {
         switch model.card {
@@ -48,10 +51,12 @@ struct OnboardingCardView: View {
             secondary: later,
             illustration: { OnboardingPrismIllustration(isDark: isDark) },
             content: {
+                // La jauge juste sous le texte : c'est la SEULE récompense de
+                // cette carte, elle se voit avant les réglages.
                 VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                    OnboardingLevelGauge(points: model.sessionPoints, threshold: OnboardingRewards.firstLevel, isDark: isDark)
                     primaryLanguagePicker
                     secondaryLanguageChips
-                    OnboardingLevelGauge(points: model.sessionPoints, threshold: OnboardingRewards.firstLevel, isDark: isDark)
                 }
             }
         )
@@ -173,39 +178,73 @@ struct OnboardingCardView: View {
     // MARK: 3 — première story
 
     private var story: some View {
-        let published = model.storyPublished
-        return OnboardingCardLayout(
+        OnboardingCardLayout(
             title: String(localized: "onboarding.story.title", bundle: .main),
             message: String(localized: "onboarding.story.body", bundle: .main),
             isDark: isDark,
-            primary: published ? proceed : OnboardingAction(
-                title: String(localized: "onboarding.story.create", bundle: .main),
-                identifier: "onboarding.story.create", perform: onOpenStory
-            ),
-            secondary: published ? nil : later,
+            primary: storyPrimary,
+            secondary: model.storyState == .idle || model.storyState == .failed ? later : nil,
             illustration: { OnboardingStoryIllustration(name: model.userDisplayName, isDark: isDark) },
             content: {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    if published {
-                        outcomeBanner(
-                            text: String(localized: "onboarding.story.published", bundle: .main),
-                            reward: String.localizedStringWithFormat(String(localized: "onboarding.story.reward", bundle: .main), OnboardingRewards.story)
-                        )
-                    } else {
-                        Label(
-                            model.storyDefaultVisibility == .friends
-                                ? String(localized: "onboarding.story.audience.friends", bundle: .main)
-                                : String(localized: "onboarding.story.audience.public", bundle: .main),
-                            systemImage: model.storyDefaultVisibility == .friends ? "person.2.fill" : "globe"
-                        )
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
-                        .frame(maxWidth: .infinity)
-                    }
+                    storyStatus
                     OnboardingLevelGauge(points: model.sessionPoints, threshold: OnboardingRewards.firstLevel, isDark: isDark)
                 }
             }
         )
+    }
+
+    /// Partie ≠ publiée : tant que l'upload n'a pas abouti, la carte dit « ta
+    /// story part… » et n'affiche AUCUN « +N ». On peut continuer sans
+    /// attendre — les points arriveront avec le succès, où qu'on soit.
+    private var storyPrimary: OnboardingAction {
+        switch model.storyState {
+        case .published, .publishing:
+            return proceed
+        case .failed:
+            return OnboardingAction(title: String(localized: "onboarding.story.retry", bundle: .main),
+                                    identifier: "onboarding.story.retry", perform: onRetryStory)
+        case .idle:
+            return OnboardingAction(title: String(localized: "onboarding.story.create", bundle: .main),
+                                    identifier: "onboarding.story.create", perform: onOpenStory)
+        }
+    }
+
+    @ViewBuilder
+    private var storyStatus: some View {
+        switch model.storyState {
+        case .published:
+            outcomeBanner(
+                text: String(localized: "onboarding.story.published", bundle: .main),
+                reward: String.localizedStringWithFormat(String(localized: "onboarding.story.reward", bundle: .main), OnboardingRewards.story)
+            )
+        case .publishing:
+            statusBanner(
+                text: String(localized: "onboarding.story.sending", bundle: .main),
+                detail: String(localized: "onboarding.story.sending.detail", bundle: .main),
+                tint: MeeshyColors.indigo500
+            ) { ProgressView().tint(MeeshyColors.indigo500) }
+        case .failed:
+            statusBanner(
+                text: String(localized: "onboarding.story.failed", bundle: .main),
+                detail: String(localized: "onboarding.story.failed.detail", bundle: .main),
+                tint: MeeshyColors.warning
+            ) {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize))
+                    .foregroundStyle(MeeshyColors.warning)
+            }
+        case .idle:
+            Label(
+                model.storyDefaultVisibility == .friends
+                    ? String(localized: "onboarding.story.audience.friends", bundle: .main)
+                    : String(localized: "onboarding.story.audience.public", bundle: .main),
+                systemImage: model.storyDefaultVisibility == .friends ? "person.2.fill" : "globe"
+            )
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+            .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+            .frame(maxWidth: .infinity)
+        }
     }
 
     // MARK: 4 — trouve ta bande
@@ -227,7 +266,7 @@ struct OnboardingCardView: View {
             illustration: { OnboardingFriendsIllustration(names: model.suggestions.map(\.displayName), isDark: isDark) },
             content: {
                 VStack(spacing: MeeshySpacing.sm) {
-                    ForEach(model.suggestions) { suggestion in
+                    ForEach(OnboardingCardFit.visibleSuggestions(model.suggestions, expanded: showsAllSuggestions)) { suggestion in
                         OnboardingSuggestionRow(
                             suggestion: suggestion,
                             isRequested: model.requestedProfileIds.contains(suggestion.id),
@@ -235,11 +274,24 @@ struct OnboardingCardView: View {
                             isDark: isDark
                         ) { Task { await model.addFriend(id: suggestion.id) } }
                     }
+                    let hidden = OnboardingCardFit.hiddenSuggestionCount(model.suggestions, expanded: showsAllSuggestions)
+                    if hidden > 0 {
+                        Button {
+                            withAnimation(.easeOut(duration: 0.25)) { showsAllSuggestions = true }
+                        } label: {
+                            Label(String(localized: "onboarding.friends.more", bundle: .main), systemImage: "chevron.down")
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
+                                .foregroundStyle(MeeshyColors.indigo500)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("onboarding.friends.more")
+                    }
                     Label(String.localizedStringWithFormat(String(localized: "onboarding.friends.pending", bundle: .main), OnboardingRewards.friendship),
                           systemImage: "hourglass")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
-                        .padding(.top, MeeshySpacing.xs)
                 }
             }
         )
@@ -305,6 +357,30 @@ struct OnboardingCardView: View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
+    }
+
+    /// Un état EN COURS ou À REPRENDRE : même gabarit que la réussite, sans
+    /// coche ni « +N » — rien n'est encore gagné.
+    private func statusBanner<Leading: View>(text: String, detail: String, tint: Color,
+                                             @ViewBuilder leading: () -> Leading) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            leading()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MeeshySpacing.md)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.12)))
+        .accessibilityElement(children: .combine)
     }
 
     private func outcomeBanner(text: String, reward: String) -> some View {
