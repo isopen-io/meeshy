@@ -6,6 +6,7 @@ import type { ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
 import type { SharedPlace } from '@/lib/send/shared-place';
 
+import { usePublishMentionSource } from './mention-source';
 import { useThreadDraft } from './use-draft';
 import type { ComposerDraftReport } from './use-draft';
 import { useReplyToPreview, type ReplyToPreview } from './use-reply-preview';
@@ -76,6 +77,11 @@ export function useThreadCompose(params: {
    * (`useThreadDraft`, ci-dessus). Une cible qui a QUITTÉ le cache rend
    * `undefined` — fail-closed, jamais une citation FANTÔME (`replyTo` suit).
    */
+  /* LA SOURCE DES MENTIONS (#7826) — ce hook possède déjà la conversation et
+     ses messages : il les PUBLIE pour le composeur, qui ne les reçoit pas en
+     props (`mention-source.ts`). */
+  usePublishMentionSource({ conversationId, messages });
+
   const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
   const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
 

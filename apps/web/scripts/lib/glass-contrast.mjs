@@ -221,6 +221,22 @@ export const GLASS_CONTRAST_INVENTORY = [
     kind: 'text',
   },
   {
+    /* #7826 — la liste de mentions flotte AU-DESSUS du fil qu'on lit : même
+       densité que la bande du composeur (D-51). Le nom est du TEXTE. */
+    site: 'src/components/mention-suggestions.tsx — le nom d’une personne à mentionner (#7826)',
+    tone: '--ios-surface',
+    ink: '--ios-ink',
+    density: 'glass-prominent',
+    kind: 'text',
+  },
+  {
+    site: 'src/components/mention-suggestions.tsx — le @pseudo et « Aucune personne trouvée » (#7826)',
+    tone: '--ios-surface',
+    ink: '--ios-ink-2',
+    density: 'glass-prominent',
+    kind: 'text',
+  },
+  {
     site: 'src/components/thread-chrome.tsx — DayPill, la pilule de jour collante',
     tone: '--ios-surface-card',
     ink: '--ios-day-ink',

@@ -1,5 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 
+import arMentions from './catalog-ar-mentions';
+
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
   'announce.messageCopied': 'تم نسخ الرسالة',
@@ -1096,6 +1098,7 @@ const ar = {
   'message.detail.sent': 'أُرسلت',
   'message.detail.language.original': '{language} (الأصل)',
 
+  ...arMentions,
 } satisfies InterfaceCatalog;
 
 export default ar;

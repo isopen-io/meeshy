@@ -1,5 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 
+import deMentions from './catalog-de-mentions';
+
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
   'announce.messageCopied': 'Nachricht kopiert',
@@ -1099,6 +1101,7 @@ const de = {
   'message.detail.sent': 'Gesendet',
   'message.detail.language.original': '{language} (Original)',
 
+  ...deMentions,
 } satisfies InterfaceCatalog;
 
 export default de;

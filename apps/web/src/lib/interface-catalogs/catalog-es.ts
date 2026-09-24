@@ -1,5 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 
+import esMentions from './catalog-es-mentions';
+
 const es = {
   'announce.messageSent': 'Mensaje enviado',
   'announce.messageCopied': 'Mensaje copiado',
@@ -1099,6 +1101,7 @@ const es = {
   'message.detail.sent': 'Enviado',
   'message.detail.language.original': '{language} (original)',
 
+  ...esMentions,
 } satisfies InterfaceCatalog;
 
 export default es;
