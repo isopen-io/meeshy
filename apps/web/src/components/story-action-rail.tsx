@@ -100,6 +100,19 @@ type RailGlyphs = { readonly idle: GlyphShape; readonly active?: GlyphShape };
  *
  * Mesuré parce que la revue de #7112 les désignait comme LE poids à rendre.
  * Ils ne le sont pas. Ne pas rejouer ce nettoyage en espérant un gain.
+ *
+ * **`save` PORTE `GLYPHS.downloadSimple` DEPUIS LA REVUE DE #7116, MESURÉ LE
+ * 2026-09-24** — miroir de `square.and.arrow.down.fill`
+ * (`StoryViewerView+Sidebar.swift:788-795`), là où `archive` n'était qu'un
+ * FAUX AMI sémantique (dimension 6 : « archiver » et « enregistrer sur
+ * l'appareil » ne sont pas le même geste pour l'utilisateur). La même raison
+ * STRUCTURELLE ci-dessus joue en sens inverse pour un AJOUT : `downloadSimple`
+ * rejoint le socle (`glyphs.ts`, déjà importé ici pour `archive`/`eye`/
+ * `translate`), une table PARTAGÉE dont `story_reader` ne reçoit qu'une
+ * RÉFÉRENCE — `node scripts/measure-weight.mjs` rend 10,93 Ko avant et après,
+ * plafond 11 Ko inchangé. Aucune arbitrage porteur n'était donc dû : la
+ * revue avait mesuré un AUTRE ajout (une clé absente du socle, coûtant sa
+ * table entière) et généralisé à tort à celui-ci.
  */
 const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   sound: { idle: MEDIA_TRANSPORT_GLYPHS.speakerSlash, active: MEDIA_TRANSPORT_GLYPHS.speakerHigh },
@@ -109,7 +122,7 @@ const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   repost: { idle: FEED_GLYPHS.arrowsClockwise },
   views: { idle: GLYPHS.eye },
   share: { idle: FEED_GLYPHS.shareNetwork },
-  save: { idle: GLYPHS.archive },
+  save: { idle: GLYPHS.downloadSimple },
   comments: { idle: FEED_GLYPHS.chatCircle },
   translations: { idle: GLYPHS.translate },
 };
