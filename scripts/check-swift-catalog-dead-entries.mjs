@@ -249,7 +249,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `OnboardingService` de `feat/ios-onboarding-7729`, qui annonce passer à
 // `MeEndpoint.onboarding` dès qu'elle est générée. Valeur MESURÉE sur le dev du
 // 2026-09-24.
-const BASELINE_DEAD_ENTRIES = 263;
+// 263 → 262 (#7729) : `OnboardingService` (feat/ios-onboarding-7729) appelle
+// désormais `MeEndpoint.onboarding` et retire son `OnboardingEndpoint` écrit à
+// la main — l'entrée n'est plus morte. Valeur MESURÉE sur l'arbre fusionné avec
+// le dev du 2026-09-24.
+const BASELINE_DEAD_ENTRIES = 262;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
