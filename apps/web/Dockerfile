@@ -1,253 +1,188 @@
 # syntax=docker.io/docker/dockerfile:1
 # =============================================================================
-# MEESHY WEB - Next.js Application
-# Build context: monorepo root (../../)
-# Dockerfile: apps/web/Dockerfile
-# Supports: bun (default) or pnpm via PACKAGE_MANAGER build arg
+# MEESHY WEB v3.1 — l'application à page unique, servie en STATIQUE
+# Contexte de construction : la racine du monorepo (../../)
+# Dockerfile : apps/web/Dockerfile
 # =============================================================================
-# ===== BUN DIST =====
-# Binaire bun copié depuis l'image officielle (Docker Hub, variante alpine —
-# la base est node:22-alpine/musl) plutôt que téléchargé via bun.sh/install :
-# l'installateur tire GitHub Releases, dont le transport meurt par
-# intermittence (release v1.25.9 échouée le 2026-08-12 malgré 3 tentatives ×
-# 5 essais curl). Docker Hub est déjà l'origine authentifiée des images de
-# base — plus aucun téléchargement GitHub dans le chemin de build.
-ARG BUN_VERSION=1.3.14
-FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS bun-dist
-
-FROM node:22-alpine AS base
-
-# === MAINTAINER INFORMATION ===
-LABEL maintainer="Meeshy Development Team <dev@meeshy.me>" \
-      description="Meeshy Web - Next.js Application with SSR/SSG support" \
-      version="1.0.0" \
-      org.opencontainers.image.source="https://github.com/isopen-io/meeshy" \
-      org.opencontainers.image.documentation="https://docs.meeshy.me/web" \
-      org.opencontainers.image.vendor="Meeshy" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="Meeshy Web" \
-      org.opencontainers.image.description="Next.js web application for Meeshy platform"
-
-# === BUILD METADATA ===
-ARG BUILD_DATE
-ARG VCS_REF
-ARG VERSION=1.0.0
-
-LABEL org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.version="${VERSION}"
-
-# === BUILD ARGUMENTS ===
-ARG PACKAGE_MANAGER=bun
-ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.3.14
-ARG NEXT_TELEMETRY_DISABLED=1
-
-# === ENVIRONMENT VARIABLES ===
-ENV NODE_ENV=production \
-    PORT=3100 \
-    HOSTNAME=0.0.0.0 \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PNPM_HOME="/pnpm" \
-    BUN_INSTALL="/bun" \
-    PATH="/pnpm:/bun/bin:$PATH" \
-    NPM_CONFIG_CACHE="/tmp/.npm" \
-    NEXT_CACHE_DIR="/app/.next/cache"
-
-# ===== DEPS STAGE =====
-FROM base AS deps
-ARG PACKAGE_MANAGER=bun
-ARG PNPM_VERSION=9.15.0
+# CE QUI CHANGE PAR RAPPORT À apps/web-old-version3/Dockerfile, et pourquoi :
+#
+#   · L'image finale est nginx, pas Node. Cette application n'a AUCUN rendu à
+#     l'exécution : Vite émet un bundle et cinq documents préchauffés, point.
+#     Un runtime Node n'aurait rien à exécuter — il ne ferait que servir des
+#     fichiers, pour ~150 Mo au lieu de ~50.
+#
+#   · DEUX paquets du monorepo entrent, et seulement ceux que le manifeste
+#     déclare : `@meeshy/design-tokens` (la palette dérivée d'iOS) et
+#     `@meeshy/shared` (les types du domaine et trois lois — Prisme, présence,
+#     accent de conversation). La règle du dépôt est la même dans les deux
+#     sens : tout ce que l'application importe hors de `apps/web/` doit
+#     entrer dans l'image ET dans les déclencheurs de `docker.yml`, et rien
+#     d'autre n'y entre « au cas où ». `packages/shared` a rejoint cette liste
+#     avec #5493, quand la projection locale des types a été retirée.
+#
+#   · La construction TOURNE SOUS BUN, et ce n'est pas une préférence : le
+#     greffon de préchauffage de `vite.config.ts` lance
+#     `bun run scripts/prerender-institutional.tsx`, qui rend du JSX avec la
+#     pragma preact. Une image de construction sans bun produirait un `dist`
+#     sans les cinq pages — et un service worker qui servirait la coquille de
+#     l'application à leur place. Défaut SILENCIEUX : le build sortirait vert.
 ARG BUN_VERSION=1.3.14
 
-RUN apk add --no-cache libc6-compat tini curl bash
+# ===== CONSTRUCTION =====
+FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files from monorepo (not lockfiles - they're for full monorepo workspace)
+# LE MANIFESTE DE L'APPLICATION DEVIENT CELUI DE LA RACINE, et on lui greffe la
+# liste des workspaces RÉELLEMENT présents dans l'image. C'est le motif éprouvé
+# d'`apps/web/Dockerfile`, et il ferme un piège : recopier le manifeste de la
+# racine du dépôt déclarerait `apps/*`, `services/*`, `packages/*` — neuf
+# workspaces dont un seul est ici. L'installation chercherait alors des arbres
+# absents.
+#
+# Corollaire, pour la même raison : PAS de `--frozen-lockfile`. Le lockfile du
+# dépôt décrit les neuf workspaces ; l'image n'en porte qu'un, donc un gel
+# échouerait sur un écart qui est voulu.
 COPY apps/web/package.json ./
-
-# Copy shared package (full source for building)
+COPY packages/design-tokens/ ./packages/design-tokens/
+# `@meeshy/shared` est la source de vérité des types ET de trois lois que
+# l'application ne réécrit pas (Prisme, présence, accent de conversation). Son
+# `exports` pointe `dist/`, donc l'image doit le CONSTRUIRE — c'est du `tsc`
+# seul : aucune entrée de son `tsconfig` n'importe `@prisma/client`, ce qui
+# tient la génération Prisma hors de cette image.
 COPY packages/shared/ ./packages/shared/
 
-# === SETUP WORKSPACE CONFIG ===
-# For bun: add workspaces to package.json (bun also reads pnpm-workspace.yaml)
-# For pnpm: create pnpm-workspace.yaml
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "=== Configuring bun workspace ===" && \
-      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
-      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    else \
-      echo "=== Configuring pnpm workspace ===" && \
-      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    fi
+# `bun -e` et non `node -e` : l'image de construction est celle de bun, et rien
+# n'y garantit un binaire node.
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens','packages/shared'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+    && printf 'packages:\n  - "packages/design-tokens"\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
-# === INSTALL DEPENDENCIES ===
-COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "=== Installing with bun ===" && \
-      bun install --no-save; \
-    else \
-      echo "=== Installing with pnpm ===" && \
-      corepack enable pnpm && \
-      corepack prepare pnpm@${PNPM_VERSION} --activate && \
-      pnpm install --no-frozen-lockfile; \
-    fi
+# `--ignore-scripts` : le postinstall de `grpc-tools` télécharge un binaire par
+# une URL S3 que les proxys sortants réécrivent, et l'installation s'arrête là
+# en laissant des arbres partiels. Aucun gate de cette application n'en dépend
+# (§ « Local Test Parity » du CLAUDE.md racine).
+RUN bun install --ignore-scripts --no-save
 
-# === BUILD SHARED PACKAGE ===
-# Use the build script defined in package.json which runs tsc
-RUN echo "=== Building shared package (v3) ===" && \
-    cd packages/shared && \
-    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      bun run build; \
-    else \
-      pnpm run build; \
-    fi && \
-    cd /app
-
-# ===== BUILDER STAGE =====
-FROM base AS builder
-ARG PACKAGE_MANAGER=bun
-ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.3.14
-
-RUN apk add --no-cache curl bash
-
-WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages ./packages
-
-# Package manager binary (copié depuis bun-dist — cf. l'étage en tête)
-COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
-
-# Copy web app source (includes public/sounds/ with pre-generated notification sounds)
+# CETTE COPIE ÉCRASE LE MANIFESTE PATCHÉ ci-dessus — c'est le défaut que le
+# Dockerfile de l'ancienne application avait déjà documenté, et il ne se voit
+# pas : l'installation a déjà eu lieu, les liens de workspace tiennent, et rien
+# ne rougit tant que personne ne relance une résolution. On le referme en
+# rejouant le patch, et on VÉRIFIE que le lien du seul paquet du monorepo est
+# bien là avant de construire.
 COPY apps/web/ ./
 
-# === RECREATE WORKSPACE CONFIG ===
-# apps/web/ copy overwrites workspace config with wrong paths
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
-      printf 'packages:\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    else \
-      printf 'packages:\n  - "."\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
-    fi
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens','packages/shared'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+    && test -e node_modules/@meeshy/design-tokens \
+    || { echo "le lien de workspace @meeshy/design-tokens est absent"; exit 1; }
+RUN test -e node_modules/@meeshy/shared \
+    || { echo "le lien de workspace @meeshy/shared est absent"; exit 1; }
 
-# === BUILD ENVIRONMENT VARIABLES ===
-# Use placeholder values that will be replaced at runtime by entrypoint.sh
-# This allows the same image to work in any environment
-ARG NEXT_PUBLIC_API_URL=__RUNTIME_API_URL__
-ARG NEXT_PUBLIC_WS_URL=__RUNTIME_WS_URL__
-ARG NEXT_PUBLIC_BACKEND_URL=__RUNTIME_BACKEND_URL__
-ARG NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=false
-ARG NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=true
-ARG NEXT_PUBLIC_ENABLE_PASSWORD_RESET=true
-ARG NEXT_PUBLIC_FRONTEND_URL=__RUNTIME_FRONTEND_URL__
-ARG NEXT_PUBLIC_TRANSLATION_URL=__RUNTIME_TRANSLATION_URL__
-ARG NEXT_PUBLIC_STATIC_URL=__RUNTIME_STATIC_URL__
+# `@meeshy/shared` sert son `dist/` : sans cette étape, l'import se résout sur
+# un répertoire vide et le build échoue — ou pire, un bundler indulgent le
+# laisse passer et l'application perd le Prisme en silence.
+RUN cd packages/shared && bun run build
+RUN test -s packages/shared/dist/utils/conversation-helpers.js \
+    || { echo "packages/shared n'a pas produit son dist"; exit 1; }
 
-# Feature flags (placeholders replaced at runtime)
-ARG NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS=__RUNTIME_ENABLE_PUSH_NOTIFICATIONS__
+# **L'ORIGINE DE L'API SE FIGE ICI, ou nulle part (#5872).** `import.meta.env`
+# est remplacé à la CONSTRUCTION : une variable posée au démarrage du conteneur
+# n'atteindrait jamais le bundle. Sans cet `ARG`, `resolveApiConfig` retombe
+# sur l'origine de PRODUCTION — un défaut qui fonctionne, mais qui fait pointer
+# staging vers la passerelle de production. C'est le workflow qui déclare la
+# valeur par environnement (`docker.yml`, § build-args de `web-v31`).
+ARG VITE_API_BASE=""
+ENV VITE_API_BASE=${VITE_API_BASE}
 
-# Firebase configuration (placeholders replaced at runtime)
-ARG NEXT_PUBLIC_FIREBASE_API_KEY=__RUNTIME_FIREBASE_API_KEY__
-ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=__RUNTIME_FIREBASE_AUTH_DOMAIN__
-ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID=__RUNTIME_FIREBASE_PROJECT_ID__
-ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=__RUNTIME_FIREBASE_STORAGE_BUCKET__
-ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=__RUNTIME_FIREBASE_MESSAGING_SENDER_ID__
-ARG NEXT_PUBLIC_FIREBASE_APP_ID=__RUNTIME_FIREBASE_APP_ID__
-ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=__RUNTIME_FIREBASE_MEASUREMENT_ID__
-ARG NEXT_PUBLIC_FIREBASE_VAPID_KEY=__RUNTIME_FIREBASE_VAPID_KEY__
+# **LA SOURCE DE DONNÉES SE FIGE ICI AUSSI, et pour la même raison (#5929).**
+# `config.ts` rend `env.VITE_DATA_SOURCE === 'gateway' ? 'gateway' : 'fixtures'` :
+# sans cet `ARG`, l'image se construit sur les FIXTURES — Kwame Mensah, Amina
+# Diallo — tout en pointant la vraie passerelle. C'est le pire des deux mondes :
+# l'application A L'AIR branchée, et `staging.meeshy.me` a servi des données
+# fabriquées jusqu'au 2026-09-10 sans que rien ne rougisse.
+#
+# Le défaut reste `fixtures` : un `bun run build` local n'exige alors aucune
+# passerelle. C'est le workflow qui pose `gateway` sur les images DÉPLOYÉES
+# (`docker.yml`, § build-args de `web-v31`), là où une passerelle existe.
+ARG VITE_DATA_SOURCE=""
+ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
 
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
-    NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
-    NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL} \
-    NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION} \
-    NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY} \
-    NEXT_PUBLIC_ENABLE_PASSWORD_RESET=${NEXT_PUBLIC_ENABLE_PASSWORD_RESET} \
-    NEXT_PUBLIC_FRONTEND_URL=${NEXT_PUBLIC_FRONTEND_URL} \
-    NEXT_PUBLIC_TRANSLATION_URL=${NEXT_PUBLIC_TRANSLATION_URL} \
-    NEXT_PUBLIC_STATIC_URL=${NEXT_PUBLIC_STATIC_URL} \
-    NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS=${NEXT_PUBLIC_ENABLE_PUSH_NOTIFICATIONS} \
-    NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY} \
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN} \
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID} \
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET} \
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID} \
-    NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID} \
-    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID} \
-    NEXT_PUBLIC_FIREBASE_VAPID_KEY=${NEXT_PUBLIC_FIREBASE_VAPID_KEY} \
-    NEXT_TELEMETRY_DISABLED=1
+# Le troisième levier de construction, DÉCLARÉ pour être réglable — même s'il
+# n'est surchargé nulle part aujourd'hui : `vite.config.ts` lit
+# `VITE_READING_MODES !== 'off'`, donc son absence VAUT « activés ». Un
+# interrupteur qu'aucun `ARG` n'expose ne peut pas être actionné au
+# déploiement, quelle que soit la valeur qu'on croit lui donner.
+ARG VITE_READING_MODES=""
+ENV VITE_READING_MODES=${VITE_READING_MODES}
 
-# Build with appropriate package manager
-RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      echo "=== Building with bun ===" && \
-      bun run build; \
-    else \
-      echo "=== Building with pnpm ===" && \
-      corepack enable pnpm && \
-      corepack prepare pnpm@${PNPM_VERSION} --activate && \
-      pnpm run build; \
-    fi
+# **LA RÉVISION SERVIE DOIT ÊTRE LISIBLE DE L'EXTÉRIEUR, comme pour le gateway
+# (#6551).** `VCS_REF`/`BUILD_DATE` sont déjà poussés à CHAQUE image du
+# workflow (`docker.yml`, § build-args de `Build and push` — le bloc n'est
+# pas conditionné par service), mais cette image ne les DÉCLARAIT pas : des
+# `--build-arg` sans `ARG` correspondant sont silencieusement ignorés. Sans
+# ça, un gate de dérive ne peut confronter que la passerelle à sa branche —
+# jamais le frontend, qui peut pourtant rester périmé SEUL (c'est l'incident
+# que #6551 documente : `gateway-staging` recréé, `frontend-staging` non).
+#
+# Contrairement au gateway, il n'y a ici AUCUN process au runtime pour lire
+# une variable d'environnement — nginx sert des fichiers. La révision est
+# donc gravée en fichier STATIQUE au build, dans la même forme que
+# `resolveBuildInfo()` (`packages/shared/utils/build-info.ts`) sert sous
+# `/health` côté gateway : `{ build: { commit, commitShort, builtAt } }`. Le
+# gate de dérive (`revision-drift-check.yml`) lit `.build.commit` sur les
+# deux sans distinguer leur origine.
+ARG VCS_REF=""
+ARG BUILD_DATE=""
 
-# ===== RUNNER STAGE =====
-FROM base AS runner
-WORKDIR /app
+# Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
+# documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.
+RUN bun run build
 
-# VCS_REF / BUILD_DATE sont RE-DÉCLARÉS ici : un ARG n'est visible que dans le
-# stage qui le déclare, et ceux du stage `base` ne franchissent pas ce `FROM` —
-# même en en héritant. Sans cette redéclaration, les ENV ci-dessous seraient
-# vides et /api/health annoncerait un commit `null` sur toutes les images.
-ARG VCS_REF
-ARG BUILD_DATE
+# Aucune valeur de repli fabriquée : une image construite sans `VCS_REF` (un
+# `bun run build` local, hors CI) rend `commit: null`, jamais une chaîne
+# plausible qui se lirait comme une révision réelle — même règle que
+# `resolveBuildInfo()` côté gateway.
+RUN bun -e "\
+  const fs = require('fs'); \
+  const commit = (process.env.VCS_REF || '').trim() || null; \
+  const info = { build: { commit, commitShort: commit ? commit.slice(0, 7) : null, builtAt: (process.env.BUILD_DATE || '').trim() || null } }; \
+  fs.writeFileSync('dist/build-info.json', JSON.stringify(info)); \
+"
 
-# === PRODUCTION ENVIRONMENT ===
-# GIT_COMMIT / BUILD_DATE : le label OCI grave déjà la révision, mais un label
-# n'est lisible que par `docker inspect` sur l'hôte. En variable
-# d'environnement, `resolveBuildInfo` la remonte dans /api/health : identifier
-# le code servi devient un `curl`, plus une corrélation entre l'uptime du
-# container et l'horodatage des tags `sha-<short>` du registre.
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    PORT=3100 \
-    HOSTNAME="0.0.0.0" \
-    GIT_COMMIT=${VCS_REF} \
-    BUILD_DATE=${BUILD_DATE}
+# La preuve que les cinq documents ET la révision sont là — ici, pas en
+# production. Sans elle, une régression du greffon donnerait une image qui
+# démarre, sert l'application, et rend une page blanche sur /about au
+# deuxième passage ; sans la seconde, le gate de dérive rougirait sur CHAQUE
+# image plutôt que sur une seule périmée.
+RUN set -eu; for p in about contact partners privacy terms; do \
+      test -s "/app/dist/$p.html" || { echo "MANQUE dist/$p.html"; exit 1; }; \
+      test -s "/app/dist/$p/index.html" || { echo "MANQUE dist/$p/index.html"; exit 1; }; \
+    done; \
+    grep -q 'about.html' /app/dist/sw.js || { echo "sw.js ne precache pas les pages"; exit 1; }; \
+    test -s /app/dist/build-info.json \
+      || { echo "MANQUE dist/build-info.json"; exit 1; }; \
+    echo "les cinq pages sont presentes et precachees, build-info.json ecrit"
 
-# Create nextjs user and install tini and wget
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs && \
-    apk add --no-cache tini wget
+# ===== SERVICE =====
+FROM docker.io/nginx:1.29-alpine AS runner
 
-# Copy public assets
-COPY --from=builder /app/public ./public
+RUN apk add --no-cache tini curl
 
-# Copy standalone build
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist/ /usr/share/nginx/html/
 
-# Copy entrypoint script for runtime URL injection
-COPY apps/web/docker-entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# LES ADRESSES PUBLIQUES DU DOMAINE (#6713) — le legacy est décommissionné
+# (#6702) : liens universels, robots, logo des e-mails, anciens formats de lien
+# et redirections relatives. Prouvées ICI, sur le serveur construit : une image
+# dont une adresse est fausse ne se construit pas.
+COPY apps/web/scripts/check-nginx-public.sh /tmp/check-nginx-public.sh
+RUN sh /tmp/check-nginx-public.sh && rm /tmp/check-nginx-public.sh
 
-# Create logs directory and set permissions
-RUN mkdir -p /app/logs && \
-    chown -R nextjs:nodejs /app && \
-    chmod -R 755 /app
+# 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
+# tourner côte à côte pendant la bascule.
+EXPOSE 3400
 
-# Switch to non-root user
-USER nextjs
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3400/healthz || exit 1
 
-# Expose port
-EXPOSE 3100
-
-# Use tini as entrypoint for proper signal handling, then our entrypoint script
-ENTRYPOINT ["/sbin/tini", "--", "/app/entrypoint.sh"]
-
-# === HEALTH CHECK ===
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD wget -q --spider http://localhost:3100/ || exit 1
-
-# Start Next.js in production mode (standalone)
-CMD ["node", "server.js"]
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["nginx", "-g", "daemon off;"]

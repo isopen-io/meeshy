@@ -197,7 +197,7 @@ SOURCES DE VÉRITÉ, dans cet ordre :
    endpoint qui n'existe pas ne s'invente pas.
 2. apps/ios et packages/MeeshySDK sont la RÉFÉRENCE de disposition, hiérarchie, états et gestes pour
    web-v2 (D-1) : un écran web-v2 se spécifie en CITANT les fichiers Swift qui font foi.
-3. ${REPO_PAR_CHAINE[chaine]}/apps/web-v2/decisions.md (D-1…D-100+), services/gateway/decisions.md, apps/ios/decisions.md.
+3. ${REPO_PAR_CHAINE[chaine]}/apps/web/decisions.md (D-1…D-100+), services/gateway/decisions.md, apps/ios/decisions.md.
 4. CLAUDE.md (injecté) : TDD non négociable, TypeScript strict sans any, immutabilité, budget 1000-1200
    lignes par fichier (un fichier déjà hors budget : extraire d'abord, ajouter ensuite), UNE source de
    vérité, Prisme Linguistique, Instant App (optimistic update, cache-first), treize dimensions.
@@ -234,10 +234,10 @@ const GATES_PAR_CHAINE = {
   le run CI de ${BASE} : \`gh run list --branch ${BASE} --limit 5\`, \`gh run view <id> --log-failed | grep <suite>\` — JAMAIS par
   un clone ou un checkout temporaire, JAMAIS en touchant aux worktrees) n'arrête pas la livraison : il se DIT dans la PR.`,
   web: `GATES WEB-V2 (${REPO_WEB}) :
-- rapides, à chaque étape : \`cd ${REPO_WEB}/apps/web-v2 && bun run type-check && bun test 2>&1 | tail -15\`.
+- rapides, à chaque étape : \`cd ${REPO_WEB}/apps/web && bun run type-check && bun test 2>&1 | tail -15\`.
   ATTENTION : \`bun test\` n'applique AUCUN typage — un témoin vert sans type-check ne prouve rien.
 - si packages/shared est touché ou vient de bouger : \`cd ${REPO_WEB}/packages/shared && bun run build\` d'abord.
-- avant la PR : \`cd ${REPO_WEB}/apps/web-v2 && bun run gate 2>&1 | tail -40\` (composite : tokens, type-check,
+- avant la PR : \`cd ${REPO_WEB}/apps/web && bun run gate 2>&1 | tail -40\` (composite : tokens, type-check,
   test, build, ~50 check-*.mjs). Corriger, jamais contourner ; un rouge PRÉEXISTANT se prouve et se dit.
 - captures : \`node scripts/capture.mjs\` selon README.md, dans ${SCRATCH}/captures/<cle>/ (clair + sombre).`,
   ios: `GATES iOS (${REPO_IOS}) :
@@ -429,7 +429,7 @@ Pour CHACUN des trois worktrees — ${REPO_GW} (gateway), ${REPO_WEB} (web), ${R
    ATTENTION au sens d'un diff : \`git diff A..origin/${BASE}\` liste comme « supprimé » ce que A porte et que
    ${BASE} n'a PAS ENCORE — c'est le travail du lot, pas un retrait de ${BASE}. Lis \`git log origin/${BASE} -- <fichier>\`
    avant d'annoncer que ${BASE} a retiré quelque chose.
-4. \`ls packages/shared/dist | head -3\` et \`ls apps/web-v2/node_modules | wc -l\` : si absent,
+4. \`ls packages/shared/dist | head -3\` et \`ls apps/web/node_modules | wc -l\` : si absent,
    \`bun install --ignore-scripts\`, puis \`cd packages/shared && npx prisma generate --generator client && bun run build\`.
    Si \`git diff --stat HEAD@{1}..HEAD -- packages/shared\` montre du mouvement, rebâtis shared.
 

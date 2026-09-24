@@ -2059,8 +2059,9 @@ disjoints, savoir lequel s'applique :
 - L'étape « Type-check » de `.github/workflows/ci.yml` a porté
   `continue-on-error: true` jusqu'au cycle 105 bis, qui l'a SCINDÉE : les trois
   packages TypeScript à zéro erreur (`shared`, `gateway`, `agent`) sont
-  désormais BLOQUANTS ; `apps/web`, qui en porte 1241, passe par un cliquet
-  chiffré (`scripts/check-type-debt.sh`).
+  désormais BLOQUANTS ; le legacy `apps/web`, qui en portait 1241, passait par
+  un cliquet chiffré, retiré avec lui (#7668). L'application web qui a pris son
+  chemin est dans l'étape bloquante, à zéro erreur.
 
 Noter les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement ceux
 qu'un couple `(événement, charge)` dépareillé produit. **Un témoin ne peut donc

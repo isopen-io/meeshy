@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * La géométrie des agencements d'une publication (#6514), cotes reprises de
  * `MosaicLayout.swift` (`packages/MeeshySDK/Sources/MeeshyUI/Story/`) — la
- * même que celle que `apps/web-v2/src/lib/feed/mosaic-layout.ts` dérive. Les
+ * même que celle que `apps/web/src/lib/feed/mosaic-layout.ts` dérive. Les
  * cadres sont des FRACTIONS de la boîte de la mosaïque.
  */
 class MosaicLayoutTest {

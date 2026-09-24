@@ -21,18 +21,12 @@
 #   - apps/ios/Meeshy/Features/Main/Lentille/** (except Core/** — hosts law mirrors)
 #   - apps/ios/Meeshy/Features/Main/Focal/** (except Core/** — hosts law mirrors)
 #   - apps/ios/Meeshy/Features/Main/Riviere/** (except Core/** — hosts law mirrors)
-#   - apps/web/components/conversations/lentille/**, focal/**, riviere/**
-#   - apps/web/hooks/lentille/**
-#   - apps/web/components/conversations/reading/** (DateSticker, LensSwitcher,
-#     ScrollTimePill — REV-4bis/V4ter-B3: la réconciliation a fait entrer ces
-#     peaux de lecture SANS étendre la garde ; R15 les couvrait de nom mais
-#     pas en pratique)
-#   - apps/web/components/common/bubble-message/FocalRow.tsx (fichier NOMMÉ,
-#     pas tout le dossier `bubble-message/` : ce dossier est par ailleurs le
-#     chrome de message GÉNÉRIQUE — édition, suppression, réactions, appels,
-#     signalement — hors loi Lentille/Focal ; scanner tout le dossier
-#     inonderait la garde de faux positifs sur du code qui n'a jamais cité la
-#     loi. Seul `FocalRow` y consomme la spec Focal.)
+#
+# Le web n'a plus de racine de peau ICI : les peaux Lentille/Focal/Rivière du
+# legacy `apps/web` ont quitté le dépôt avec lui (#7668). La garde R15 de
+# l'application web qui l'a remplacé vit à côté de ses cotes, dans
+# `apps/web/scripts/check-river-metrics.mjs` (partie 3 : `metrics.ts` ne porte
+# aucune constante de LOI, le `Core` ne lit pas de pixels).
 #
 # The `Core/**` exclusion is TARGETED to the immediate `<skin-root>/Core/`
 # subtree of Lentille/Focal/Riviere ONLY — never a repo-wide `--exclude-dir=Core`,
@@ -65,18 +59,12 @@ declare -a SKIN_DIRS=(
   "apps/ios/Meeshy/Features/Main/Lentille"
   "apps/ios/Meeshy/Features/Main/Focal"
   "apps/ios/Meeshy/Features/Main/Riviere"
-  "apps/web/components/conversations/lentille"
-  "apps/web/components/conversations/focal"
-  "apps/web/components/conversations/riviere"
-  "apps/web/hooks/lentille"
-  "apps/web/components/conversations/reading"
 )
 
-# Fichier de peau ciblé nommément (pas tout son dossier — voir commentaire
-# au-dessus des SKIN_DIRS) : n'ajoute PAS de racine de recherche générique.
-declare -a SKIN_FILES=(
-  "apps/web/components/common/bubble-message/FocalRow.tsx"
-)
+# Fichiers de peau ciblés nommément (pas tout leur dossier) : n'ajoute PAS de
+# racine de recherche générique. Vide depuis #7668 : son unique entrée,
+# `FocalRow.tsx` du legacy `apps/web`, a quitté le dépôt avec lui.
+declare -a SKIN_FILES=()
 
 # Forbidden literals (hard, no nuance)
 HARD_LITERALS=("520" "380" "160" "140" "45" "0.45" "0.82" "0.40" "0.35" "0.04" "900")

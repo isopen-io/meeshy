@@ -4,7 +4,7 @@
  * sur iOS (`ConversationReadLedger.total(excludingOpen:excludingMuted:)`,
  * `packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationReadLedger.swift:272-281`)
  * et comme `countUnreadConversations` sur web-v2
- * (`apps/web-v2/src/lib/view/use-app-badge.ts:36-45`, W4/#7221).
+ * (`apps/web/src/lib/view/use-app-badge.ts:36-45`, W4/#7221).
  *
  * **Le faux Prisma de ce fichier modélise la BASE telle qu'elle est, pas
  * telle qu'elle arrangerait le calcul** : `ConversationReadCursor.unreadCount`

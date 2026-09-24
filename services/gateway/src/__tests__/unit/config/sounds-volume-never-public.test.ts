@@ -27,7 +27,7 @@
  *
  * Le web a donc reçu l'autre voie : les octets voyagent par `fetch`, avec
  * l'en-tête que la session porte déjà, et l'élément média reçoit une URL
- * d'objet (`apps/web-v2/src/lib/api/protected-media.ts`). Aucun jeton dans
+ * d'objet (`apps/web/src/lib/api/protected-media.ts`). Aucun jeton dans
  * une URL, aucune nouvelle surface publique.
  *
  * ## Pourquoi un témoin, alors que rien n'est cassé

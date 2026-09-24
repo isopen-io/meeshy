@@ -348,7 +348,7 @@ Le bitfield `effectFlags` est persisté par le gateway et lu par TOUS les client
 
 **Sources de vérité jumelles — toute évolution de la règle touche les deux :**
 - Swift : `MessageEffectPlan` (`packages/MeeshySDK/.../Models/MessageEffects.swift`)
-- TypeScript : `resolveMessageEffectPlan()` (`apps/web/lib/message-effects.ts`)
+- TypeScript : `effectPlaybackPlanOf()` (`apps/web/src/lib/effects-playback.ts`) — ex `resolveMessageEffectPlan()` du legacy retiré le 2026-09-24 (#7668)
 
 Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEffectFlags`.
 

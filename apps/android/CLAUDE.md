@@ -6,7 +6,7 @@
 > ## 🧊 CE CHANTIER EST GELÉ — NE PAS Y DÉVELOPPER (directive porteur 2026-09-16)
 > **L'application native Kotlin ne reçoit plus de développement.** Avant d'ouvrir un fichier de ce répertoire, lire le § « LE DÉVELOPPEMENT ANDROID KOTLIN EST GELÉ » du `CLAUDE.md` racine — il fait foi. En résumé : aucune feature, aucun portage, aucune mise à parité, **même si une issue ouverte avant le 2026-09-16 le demande** ; seule exception, un incident de production, une faille de sécurité ou une régression bloquante sur l'application déjà publiée.
 >
-> **Android continue d'exister dans le produit** — par la coque Capacitor de `apps/web-v2` (0 Kotlin écrit à la main), qui sert « le web ET Android en une fois » (directive 2026-09-07). Une demande « faire X sur Android » se réalise DONC dans `apps/web-v2`, pas ici.
+> **Android continue d'exister dans le produit** — par la coque Capacitor de `apps/web` (ex `apps/web-v2`, renommée le 2026-09-24, #7668 ; 0 Kotlin écrit à la main), qui sert « le web ET Android en une fois » (directive 2026-09-07). Une demande « faire X sur Android » se réalise DONC dans `apps/web`, pas ici.
 >
 > **Les règles « toute évolution touche les TROIS » se lisent « les DEUX » (web et iOS) tant que ce gel tient**, et la divergence des miroirs Kotlin de `apps/android/core/model/` n'est pas un défaut à corriger. Tout le reste de ce fichier décrit un chantier à l'ARRÊT : ses conventions restent vraies pour lire le code, jamais pour en écrire.
 

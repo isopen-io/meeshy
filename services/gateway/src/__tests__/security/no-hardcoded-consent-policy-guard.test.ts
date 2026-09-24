@@ -32,9 +32,13 @@ const RACINE = join(__dirname, '../../../../..');
 /** Une date ISO courte écrite en dur — la forme qu'a prise la recopie. */
 const VERSION_EN_DUR = /['"`]\d{4}-\d{2}-\d{2}['"`]/;
 
-/** Les fichiers qui PARLENT de consentement hors du site unique. */
+/**
+ * Les fichiers qui PARLENT de consentement hors du site unique. Le hook de
+ * profil vocal du legacy `apps/web` en était un ; il est parti avec lui
+ * (#7668), et l'application web qui a pris son chemin n'écrit encore aucun
+ * consentement. Le jour où elle en écrit un (#7721), son site entre ici.
+ */
 const SITES = [
-  'apps/web/hooks/use-voice-profile-management.ts',
   'services/gateway/src/routes/me/consents.ts',
 ] as const;
 

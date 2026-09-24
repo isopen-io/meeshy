@@ -8,7 +8,7 @@ import MeeshyUI
 /// score, la série qui court et son record, les badges par famille d'axe avec
 /// le palier suivant, les succès débloqués et ceux qu'il reste à débloquer.
 ///
-/// Même anatomie que la v3.1 web (`apps/web-v2/src/routes/progression.tsx`,
+/// Même anatomie que la v3.1 web (`apps/web/src/routes/progression.tsx`,
 /// #5547), dessinés ensemble : en-tête flottant sans barre de navigation
 /// système, deux cartes de résumé, des sections en cartes teintées — la
 /// hiérarchie de `UserStatsView` / `SettingsView`. Ce que l'écran REFUSE :
