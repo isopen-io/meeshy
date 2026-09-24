@@ -118,16 +118,16 @@ extension iPadRootView {
             // iPad surfaces the post detail in the right column, matching
             // the existing post-notification handling above.
             rightPanelRoute = .postDetail(postId)
+        case .reel(let postId):
+            // Même porte que l'iPhone : le lecteur de réels (#7805, #7806).
+            openReel(postId: postId)
         case .storyDetail(let postId):
-            // Mirror of the existing `storyDetail:` push-notification
-            // handler below (handlePushNavigateToRoute). Try to surface
-            // the dedicated story viewer when the group is in the local
-            // tray, otherwise fall back to the post detail right pane.
-            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else {
-                rightPanelRoute = .postDetail(postId)
+            // La même porte que l'iPhone (#7807) : le lecteur s'ouvre sur
+            // CETTE story, chargée si le tray l'ignore ; le détail du post
+            // n'est que le repli d'une story expirée ou supprimée.
+            Task { @MainActor in
+                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
+                    .open(postId: postId) { rightPanelRoute = .postDetail(postId) }
             }
         case .userProfile(let username):
             // Opens the profile sheet over the two-pane layout. Same
@@ -632,9 +632,10 @@ extension iPadRootView {
     // (`postType`, or `contentType` for the `friend_new_*` family) decides the
     // surface, the notification type only decides the intent.
     //
-    // iPad has no immersive reel viewer, so a réel lands on the universal
-    // `.postDetail` surface (which renders it) — but it is NEVER sent to the
-    // story notification screen, which would resolve an unrelated story.
+    // A réel opens in the immersive reel reader — the same `ReelDoor` as
+    // iPhone (#7806; `iPadCoversAndChromeLayer` mounts `ReelsPresenter`) —
+    // and is NEVER sent to the story notification screen, which would resolve
+    // an unrelated story.
 
     func routeSocialNotification(
         postId: String,
@@ -661,7 +662,9 @@ extension iPadRootView {
                 commentId: commentId,
                 parentCommentId: parentCommentId
             ))
-        case .reel, .post:
+        case .reel:
+            openReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
+        case .post:
             rightPanelRoute = .postDetail(
                 postId,
                 nil,
@@ -669,6 +672,18 @@ extension iPadRootView {
                 commentId: commentId,
                 parentCommentId: parentCommentId
             )
+        }
+    }
+
+    /// Ouvre un réel nommé par la porte partagée avec l'iPhone (#7806). Un post
+    /// trouvé qui n'est pas un réel se rend dans la colonne droite, semé du
+    /// post déjà chargé et avec sa cible commentaire.
+    func openReel(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
+        Task { @MainActor in
+            await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
+                rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
+                                              commentId: commentId, parentCommentId: parentCommentId)
+            }
         }
     }
 

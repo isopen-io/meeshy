@@ -30,10 +30,20 @@ final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
         XCTAssertEqual(d, .joinLink(identifier: "mshy_x"))
     }
 
-    func test_reel_routesToPostDetail() {
+    /// Un réel partagé s'ouvre dans le LECTEUR de réels, comme depuis le fil ou
+    /// sa notification — jamais dans le détail d'un post (#7805).
+    func test_reel_routesToReelReader() {
         let d = DeepLinkRouter.trackedDestination(
             for: resolved(kind: "tracking", type: "REEL", targetId: "p1"), token: "tok")
-        XCTAssertEqual(d, .postDetail(postId: "p1"))
+        XCTAssertEqual(d, .reel(postId: "p1"))
+    }
+
+    /// L'`originalUrl` que la passerelle grave pour un réel (`/reel/<id>`) se
+    /// reparse vers le lecteur quand le type manque.
+    func test_reelOriginalUrl_withoutType_routesToReelReader() {
+        let d = DeepLinkRouter.trackedDestination(
+            for: resolved(originalUrl: "https://meeshy.me/reel/r9"), token: "tok")
+        XCTAssertEqual(d, .reel(postId: "r9"))
     }
 
     func test_post_and_status_routeToPostDetail() {
