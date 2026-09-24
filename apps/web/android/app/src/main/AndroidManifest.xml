@@ -43,4 +43,9 @@
          "requesting" (recette QEMU, socle du prompt). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- #7844 — sans elle, la WebView ne peut pas exposer de façon fiable les
+         événements online/offline que useOnline() (src/lib/net/online.ts) et
+         ses consommateurs (socket.ts, receipts.ts, media-absent.ts) écoutent ;
+         l'app native gelée (apps/android) la déclare déjà (AndroidManifest.xml:6). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>

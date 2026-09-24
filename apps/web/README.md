@@ -117,6 +117,20 @@ CONNECTENT AU STAGING** — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
 | connexion réelle (#5815) | compte `cible-web-trois` : Lentille avec « Voyage Lisbonne » épinglée et le Salon Rivière — capture `render/shell.android.png` | idem, `render/shell.ios.png` |
 | origine de la WebView (CORS) | `https://localhost` (`CapConfig.java:38-39`) | `capacitor://localhost` (`CAPInstanceDescriptor.m:10-11`) |
 
+**Permissions de la coque Android — `scripts/check-android-manifest.mjs` (#7844).**
+`android/app/src/main/AndroidManifest.xml` doit déclarer TOUTE permission
+qu'un consommateur du web utilise réellement : `INTERNET`, `RECORD_AUDIO`,
+`MODIFY_AUDIO_SETTINGS` (#5668) et, depuis #7844, `ACCESS_NETWORK_STATE` —
+sans elle, la WebView peut ne jamais faire lever les événements `online`/
+`offline` que `useOnline()` (`src/lib/net/online.ts`) et ses trois
+consommateurs (`socket.ts`, `receipts.ts`, `media-absent.ts`) écoutent ;
+l'app native gelée (`apps/android/app/src/main/AndroidManifest.xml:6`) la
+déclare déjà. Ce gate est dans `bun run gate` et nomme la permission
+manquante s'il rougit. **Recette manuelle restante, non exécutable depuis un
+conteneur Linux** (aucun émulateur Android ici) : sur l'AVD
+`Meeshy_Poc_Web-v31`, mode avion → une pastille hors-ligne doit apparaître,
+retour réseau → le socket doit se reconnecter sans relance de l'app.
+
 **Le piège de `cap sync`, à connaître avant toute recette.** `bun run gate`
 reconstruit `dist/` en variante **A** (base absolue, service worker) : un
 `cap sync` lancé juste après pousserait CE dist dans les coques, qui
