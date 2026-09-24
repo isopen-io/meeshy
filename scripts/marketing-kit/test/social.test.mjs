@@ -127,7 +127,7 @@ describe('textes du kit social', () => {
 describe('claims (campagne-virale-2026-09.md § 2) sur tout texte social', () => {
   const corpus = chaines([VIDEOS, STORIES, CARROUSELS, CARROUSEL_TITRES, ANNONCES, THREADS_QUESTION, YOUTUBE, LIBELLES, PUBLICATIONS.map((p) => p.texte), CONTENUS_SOCIAUX(), MA_VILLE, MON_BONJOUR])
   const DEFI = /\bd[ée]fis?\b|\bchallenges?\b|\bretos?\b|\bsfid[ae]\b|\bdesafios?\b|تحد[ٍّي]/i
-  const campagne = chaines([VIDEOS.V8.hook, STORIES.S4.surtitre, PUBLICATIONS[9].texte])
+  const campagne = chaines([PUBLICATIONS[9].texte])
 
   test('« 76 langues traduisibles » seulement — jamais 80+ ni 200', () => {
     expect(corpus.filter((s) => /\b80\s*\+|\b200\b|plus de 80|more than 80/i.test(s))).toEqual([])
@@ -148,8 +148,43 @@ describe('claims (campagne-virale-2026-09.md § 2) sur tout texte social', () =>
     expect(corpus.filter((s) => /k-?pop|\bbts\b|blackpink|anime|naruto|one piece|fortnite|minecraft|real madrid|tiktok|instagram|marvel|pok[ée]mon/i.test(s))).toEqual([])
   })
 
-  test('le mot « défi » n’appartient qu’au défi de CAMPAGNE, jamais à un écran', () => {
+  test('le mot « défi » n’appartient qu’à la LÉGENDE de publication du défi de campagne, jamais à un visuel', () => {
     expect(corpus.filter((s) => DEFI.test(s) && !campagne.includes(s))).toEqual([])
+  })
+
+  test('aucune promesse « parler à des inconnus » (sécurité de marque, 16-25 ans)', () => {
+    expect(corpus.filter((s) => /inconnu|stranger|desconocid|fremde|sconosciut|desconhecid|غرباء/i.test(s))).toEqual([])
+  })
+
+  test('V8 : l’invitation de campagne se dit « Ton tour », avec le hashtag à côté', () => {
+    expect(VIDEOS.V8.hook.fr).toStartWith('Ton tour : ')
+    for (const lang of KIT_LANGS) expect(pageSociale({ id: 'V8-0-couverture', lang })).toContain(HASHTAG[lang])
+  })
+})
+
+describe('personnages', () => {
+  test('Min-jun Park (Séoul) est un garçon : la copie qui le désigne est au masculin', () => {
+    const FEMININ = { fr: /\bElle\b|\belle\b/, en: /\b(She|she|her|hers)\b/, es: /\bElla\b|\bella\b/, de: /\b(Sie|sie) (hört|liest)|\bihrer\b/, it: /\bLei\b|\blei\b/, pt: /\bEla\b|\bela\b|\bdela\b/, ar: /وهي|تسمعني|تسمعك|تقرأ بلغتها|تسمعها/ }
+    const copie = [VIDEOS.V1.hook, ...VIDEOS.V1.sous, CARROUSELS.C1[1], CARROUSELS.C1[2]]
+    const fautes = KIT_LANGS.flatMap((lang) => copie.map((t) => t[lang]).filter((s) => FEMININ[lang].test(s)).map((s) => `${lang} : ${s}`))
+    expect(fautes).toEqual([])
+  })
+})
+
+describe('miniatures YouTube', () => {
+  test('Y2 : « aucune langue commune » s’écrit sans « 0 » quand la langue ne le permet pas', () => {
+    expect(YOUTUBE.Y2.accroche.en).toBe('6 COUNTRIES. NO SHARED LANGUAGE.')
+    expect(YOUTUBE.Y2.accroche.de).toBe('6 LÄNDER. KEINE GEMEINSAME SPRACHE.')
+    expect(YOUTUBE.Y2.accroche.es).toBe('6 PAÍSES. NINGÚN IDIOMA EN COMÚN.')
+    expect(YOUTUBE.Y2.accroche.pt).toBe('6 PAÍSES. NENHUMA LÍNGUA EM COMUM.')
+  })
+
+  test('Y2 : la moitié droite signe la marque et « 76 langues traduisibles »', () => {
+    for (const lang of KIT_LANGS) {
+      const page = pageSociale({ id: 'Y2', lang })
+      expect(page).toContain('class="signature')
+      expect(page).toContain(LIBELLES.langues76[lang])
+    }
   })
 })
 

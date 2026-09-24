@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chromium } from '@playwright/test'
 import { preparer, verifier, zoneSure } from '../templates/social/rendu.mjs'
 import { pageSociale } from '../templates/social/page.mjs'
+import { VISUELS } from '../templates/social/catalogue.mjs'
 
 let browser
 let page
@@ -19,9 +20,16 @@ const scene = (corps) =>
   `<!doctype html><html lang="fr" dir="ltr"><body style="margin:0"><div class="canvas social" style="position:relative;overflow:hidden;width:540px;height:960px">${corps}</div></body></html>`
 
 describe('zone sûre', () => {
-  test('les vidéos verticales gardent 5 % en haut, 16 % en bas et 11 % en fin de ligne', () => {
-    expect(zoneSure({ format: '9x16', role: 'couverture', dir: 'ltr' })).toEqual({ haut: 48, bas: 806.4, gauche: 32.4, droite: 480.6 })
-    expect(zoneSure({ format: '9x16', role: 'couverture', dir: 'rtl' })).toEqual({ haut: 48, bas: 806.4, gauche: 59.4, droite: 507.6 })
+  test('une image-clé verticale garde 5 % en haut, 16 % en bas et 11 % en fin de ligne', () => {
+    expect(zoneSure({ format: '9x16', role: 'plan clé 1', dir: 'ltr' })).toEqual({ haut: 48, bas: 806.4, gauche: 32.4, droite: 480.6 })
+    expect(zoneSure({ format: '9x16', role: 'plan clé 1', dir: 'rtl' })).toEqual({ haut: 48, bas: 806.4, gauche: 59.4, droite: 507.6 })
+  })
+
+  test('une couverture tient dans la grille 3:4 d’Instagram et de TikTok (bande 120 → 840, avec marge)', () => {
+    const z = zoneSure({ format: '9x16', role: 'couverture', dir: 'ltr' })
+    expect(z.haut).toBeGreaterThanOrEqual(140)
+    expect(z.bas).toBeLessThanOrEqual(820)
+    expect(zoneSure({ format: '9x16', role: 'couverture', dir: 'rtl' }).gauche).toBe(59.4)
   })
 
   test('une story Meeshy laisse les barres et le champ de réponse du lecteur', () => {
@@ -50,6 +58,21 @@ describe('mise en page dans le navigateur', () => {
     await page.setContent(scene('<p class="autofit" data-sur style="position:absolute;left:40px;top:100px;width:60px;height:20px;margin:0;font-size:20px;white-space:nowrap;overflow:hidden">Impossible à caser</p>'))
     await preparer(page)
     expect((await verifier(page, { haut: 0, bas: 960, gauche: 0, droite: 540 })).some((p) => p.includes('déborde'))).toBe(true)
+  })
+
+  test('le titre de chaque couverture 9:16 tient dans la zone 3:4, en français comme en arabe', async () => {
+    const couvertures = VISUELS.filter((v) => v.role === 'couverture')
+    expect(couvertures).toHaveLength(8)
+    const fautes = []
+    for (const v of couvertures) {
+      for (const lang of ['fr', 'de', 'ar']) {
+        await page.setContent(pageSociale({ id: v.id, lang }))
+        await preparer(page)
+        const releves = await verifier(page, zoneSure({ format: '9x16', role: 'couverture', dir: lang === 'ar' ? 'rtl' : 'ltr' }))
+        releves.forEach((r) => fautes.push(`${lang}/${v.id} — ${r}`))
+      }
+    }
+    expect(fautes).toEqual([])
   })
 
   test('une loupe se cadre sur sa cible dans l’écran reproduit', async () => {

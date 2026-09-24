@@ -90,3 +90,30 @@ describe('pages composées', () => {
     }
   })
 })
+
+describe('capture 8 — badges et Meesh frappées', () => {
+  test('la légende dit « badges », comme l’écran (« Badge gagné »)', () => {
+    expect(LEGENDES.L8.fr).toStartWith('Débloque des badges.')
+    expect(LEGENDES.L8.en).toStartWith('Unlock badges.')
+  })
+
+  test('la frappe est MONTRÉE : la carte Meesh de Progression flotte sous le badge, sans loupe redondante sur le solde', () => {
+    for (const lang of KIT_LANGS) {
+      const html = pageCapture({ appareil: 'iphone', lang, rang: 8 })
+      expect(html).not.toContain('data-loupe=')
+      expect(html).toMatch(/class="as-carte-flottante[^"]*"[\s\S]*class="p-card meesh"/)
+    }
+  })
+})
+
+describe('appel vidéo — le correspondant', () => {
+  test('la vidéo est un portrait flouté sans traits de visage, et ses initiales sont posées dessus', () => {
+    for (const lang of ['fr', 'ar']) {
+      const html = pageCapture({ appareil: 'iphone', lang, rang: 9 })
+      expect(html).toContain('class="call-illu')
+      expect(html).toMatch(/class="call-avatar[\s\S]*?>MP</)
+    }
+    const ipad = pageCapture({ appareil: 'ipad', lang: 'fr', rang: 6 })
+    expect(ipad).toMatch(/class="call-avatar[\s\S]*?>MP</)
+  })
+})
