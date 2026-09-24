@@ -712,7 +712,7 @@ jobs:
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 180 \
-            -quiet
+            2>&1 | grep -E --line-buffered "error:|failed|XCTAssert|Fatal|crash" ; exit ${PIPESTATUS[0]}
 
       - name: Surface test failures
         if: always() && env.COMPILE_ONLY != 'true'
