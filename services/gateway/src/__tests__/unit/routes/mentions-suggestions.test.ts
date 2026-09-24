@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionSuggestion } from '../../../services/MentionService';
+import { ACCESS_DENIED as CONVERSATION_ACCESS_DENIED } from '../../../services/mentions/mentionSuggestions';
 
 const VALID_CONV_ID = '507f1f77bcf86cd799439011';
 const VALID_POST_ID = '507f1f77bcf86cd799439022';
@@ -292,6 +293,17 @@ describe('GET /mentions/suggestions — route handler wiring', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/mentions/suggestions?contextId=${VALID_POST_ID}&contextType=post`,
+      headers: { authorization: 'Bearer fake-token' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('conversation dont l’appelant n’est pas membre → 403, jamais 500 (#7852)', async () => {
+    mockGetSuggestionsForConversation.mockRejectedValue(new Error(CONVERSATION_ACCESS_DENIED));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/mentions/suggestions?contextId=${VALID_CONV_ID}&contextType=conversation&query=me`,
       headers: { authorization: 'Bearer fake-token' },
     });
     expect(res.statusCode).toBe(403);
