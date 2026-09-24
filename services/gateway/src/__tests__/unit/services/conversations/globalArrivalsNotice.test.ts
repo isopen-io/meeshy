@@ -151,9 +151,23 @@ describe('postGlobalArrival — une ligne par fenêtre de 10 minutes (#7740)', (
     expect(h.prisma.message.create).toHaveBeenCalledTimes(1);
   });
 
-  it('ne rejette jamais : une mise à jour en panne rend null', async () => {
+  // Jamais une arrivée perdue en silence : la ligne ouverte refuse sa mise à
+  // jour ⇒ l'arrivant ouvre une ligne neuve (le comportement d'avant #7740).
+  it('une mise à jour en panne retombe sur une ligne neuve qui compte l’arrivant', async () => {
     const h = harness([openLine()]);
     h.prisma.message.update.mockRejectedValue(new Error('mongo down'));
+
+    await expect(postGlobalArrival(h.deps, arrival('p-tom', 'Tom'))).resolves.not.toBeNull();
+    expect(h.prisma.message.create).toHaveBeenCalledTimes(1);
+    const { data } = h.prisma.message.create.mock.calls[0][0] as any;
+    expect(parseArrivalsNotice(data.metadata)).toMatchObject({ count: 1, arrivals: [{ displayName: 'Tom' }] });
+    expect(h.broadcastUpdate).not.toHaveBeenCalled();
+  });
+
+  it('ne rejette jamais : mise à jour ET création en panne rendent null', async () => {
+    const h = harness([openLine()]);
+    h.prisma.message.update.mockRejectedValue(new Error('mongo down'));
+    h.prisma.message.create.mockRejectedValue(new Error('mongo down'));
 
     await expect(postGlobalArrival(h.deps, arrival('p-tom', 'Tom'))).resolves.toBeNull();
   });

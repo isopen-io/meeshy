@@ -89,7 +89,12 @@ async function openNewLine(deps: GlobalArrivalsDeps, input: GlobalArrivalInput, 
   );
 }
 
-async function extendLine(deps: GlobalArrivalsDeps, input: GlobalArrivalInput, line: OpenLine): Promise<unknown | null> {
+async function extendLine(
+  deps: GlobalArrivalsDeps,
+  input: GlobalArrivalInput,
+  line: OpenLine,
+  now: Date,
+): Promise<unknown | null> {
   const notice = withArrival(line.notice, { participantId: input.participantId, displayName: input.displayName });
   if (notice === line.notice) return null;
 
@@ -101,11 +106,11 @@ async function extendLine(deps: GlobalArrivalsDeps, input: GlobalArrivalInput, l
       include: { sender: { select: { id: true, userId: true, displayName: true } } },
     } as never);
   } catch (error) {
-    logger.warn('arrivals line not updated', {
+    logger.warn('arrivals line not updated — opening a new one', {
       conversationId: input.conversationId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return null;
+    return openNewLine(deps, input, now);
   }
 
   if (deps.broadcastUpdate) {
@@ -127,7 +132,8 @@ async function extendLine(deps: GlobalArrivalsDeps, input: GlobalArrivalInput, l
  *
  * **Ne rejette jamais** — même loi que `postJoinSystemMessage` : l'avis est un
  * accessoire de l'inscription. Une lecture en panne retombe sur une ligne
- * neuve (le comportement d'avant #7740) ; une écriture en panne rend `null`.
+ * neuve (le comportement d'avant #7740), une mise à jour en panne aussi ;
+ * seule une création en panne rend `null`.
  */
 export function postGlobalArrival(deps: GlobalArrivalsDeps, input: GlobalArrivalInput): Promise<unknown | null> {
   return enqueue(input.conversationId, async () => {
@@ -141,7 +147,7 @@ export function postGlobalArrival(deps: GlobalArrivalsDeps, input: GlobalArrival
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    return line ? extendLine(deps, input, line) : openNewLine(deps, input, now);
+    return line ? extendLine(deps, input, line, now) : openNewLine(deps, input, now);
   });
 }
 
