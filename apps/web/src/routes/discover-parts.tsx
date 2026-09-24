@@ -1,5 +1,5 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { memo, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { memo, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
@@ -15,7 +15,6 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { findFocusableIndex } from '@/lib/view/roving-menu';
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -804,68 +803,11 @@ export function DiscoverSkeleton() {
 }
 
 /**
- * LA CONFIRMATION DE DÉBLOCAGE — l'`alert` de `BlockedTab`. Un `<dialog>`
- * ouvert par `showModal()`, comme `Sheet` : piège de focus, Échap et inertie
- * de l'arrière-plan natifs ; le retour matériel d'Android la ferme sans quitter
- * l'écran (`useBackDismiss`).
+ * **LA CONFIRMATION DE DÉBLOCAGE VIT DÉSORMAIS DANS `ConfirmDialog`**
+ * (revue-correction #6149, défaut majeur 2, issue #7858) — c'était la
+ * SECONDE copie divergente du dépôt : `<dialog>` + `showModal()` recopiés,
+ * un geste destructif en blanc sur `--color-warning` mêlé de noir. Le composant
+ * partagé (`components/confirm-dialog.tsx`) est monté directement par
+ * `routes/discover.tsx`, qui porte déjà le NOM (« celui qu'on débloque »)
+ * dans ses libellés.
  */
-export function UnblockConfirm({
-  language,
-  name,
-  onCancel,
-  onConfirm,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly name: string;
-  readonly onCancel: () => void;
-  readonly onConfirm: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useBackDismiss(onCancel);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog === null) return undefined;
-    if (!dialog.open && typeof dialog.showModal === 'function') dialog.showModal();
-    dialog.addEventListener('close', onCancel);
-    return () => dialog.removeEventListener('close', onCancel);
-  }, [onCancel]);
-
-  return (
-    <dialog
-      ref={ref}
-      data-unblock-confirm
-      aria-labelledby={titleId}
-      className="m-auto w-[min(20rem,calc(100vw-2rem))] rounded-card p-5 backdrop:bg-black/50"
-      style={{ backgroundColor: 'var(--color-ios-card)', color: INK }}
-    >
-      <h2 id={titleId} className="text-body font-semibold">
-        {translate(language, 'discover.blocked.confirm.title')}
-      </h2>
-      <p className="mt-1 text-caption" style={{ color: INK_2 }}>
-        {translate(language, 'discover.blocked.confirm.body', { name })}
-      </p>
-      <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          data-unblock-cancel
-          onClick={onCancel}
-          className={`grid flex-1 place-items-center rounded-chip text-body font-semibold ${BRAND_INK} ${FOCUS}`}
-          style={{ minHeight: 44, backgroundColor: FIELD_FILL, outlineColor: BRAND }}
-        >
-          {translate(language, 'discover.blocked.confirm.cancel')}
-        </button>
-        <button
-          type="button"
-          data-unblock-confirm-action
-          onClick={onConfirm}
-          className={`grid flex-1 place-items-center rounded-chip text-body font-semibold text-white ${FOCUS}`}
-          style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-warning) 62%, black)', outlineColor: BRAND }}
-        >
-          {translate(language, 'discover.blocked.unblock')}
-        </button>
-      </div>
-    </dialog>
-  );
-}

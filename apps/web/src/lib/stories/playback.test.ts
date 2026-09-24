@@ -11,6 +11,7 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  scopeToSingleGroup,
   slideDurationForScene,
   slideDurationMs,
   storyMediaUrl,
@@ -320,6 +321,37 @@ describe('nextPosition / previousPosition', () => {
 
   test('en tête du premier groupe, ne fait RIEN', () => {
     expect(previousPosition(groups, { groupIndex: idxA, storyIndex: 0 })).toBeNull();
+  });
+});
+
+describe('scopeToSingleGroup — la portée « un seul groupe » (revue de #6149, défaut majeur 3)', () => {
+  const groups = groupForPlayback(
+    [
+      story({ id: 'a1', authorId: 'a', createdAt: '2026-09-13T09:00:00.000Z' }),
+      story({ id: 'a2', authorId: 'a', createdAt: '2026-09-13T10:00:00.000Z' }),
+      story({ id: 'b1', authorId: 'b', createdAt: '2026-09-13T08:00:00.000Z' }),
+    ],
+    { viewerId: undefined },
+  );
+
+  test('restreint le tableau au SEUL groupe qui porte la story ouverte', () => {
+    const scoped = scopeToSingleGroup(groups, 'a1');
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0]?.authorId).toBe('a');
+  });
+
+  test('épuisé le seul groupe restant, `nextPosition` FERME — il ne passe plus à l\'auteur suivant', () => {
+    const scoped = scopeToSingleGroup(groups, 'a1');
+    expect(nextPosition(scoped, { groupIndex: 0, storyIndex: 1 }, NOW)).toBe('close');
+  });
+
+  test('un id absent du corpus rend le tableau INCHANGÉ — jamais un lecteur vide', () => {
+    expect(scopeToSingleGroup(groups, 'inconnu')).toBe(groups);
+  });
+
+  test('le groupIndex ORIGINAL ne fuit pas : la story ciblée est retrouvée à l\'index 0 du tableau restreint', () => {
+    const scoped = scopeToSingleGroup(groups, 'a2');
+    expect(resolvePosition(scoped, 'a2')).toEqual({ groupIndex: 0, storyIndex: 1 });
   });
 });
 

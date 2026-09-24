@@ -305,6 +305,39 @@ async function runScheme({ colorScheme, locale, dir }) {
   await page.waitForSelector('[data-my-stories-empty]', { timeout: 8000 });
   check(true, `${tag} : le corpus vidé rend l'état VIDE, jamais un écran blanc`);
 
+  /* ── 8. SANS AUCUNE STORY, LA PASTILLE CENTRALE OUVRE LE STUDIO ──────────
+     (revue de #6149, défaut majeur 4) — miroir
+     `StoryTrayActionResolver.avatarTap` : `.createStory` quand ni
+     `hasMyStory` ni `hasAnyStory`. Le rail lit le MÊME cache que le listing
+     (`useStoryTray`) : revenir sur « / » après la suppression doit donc
+     montrer une cellule dont le centre n'est plus INERTE. */
+  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.waitForSelector(CELL, { timeout: 8000 });
+  const apresSuppression = await page.evaluate(
+    (cell) => ({
+      listing: document.querySelector(`${cell} [data-story-self-open]`)?.getAttribute('href') ?? null,
+      studio: document.querySelector(`${cell} [data-story-self-create]`)?.getAttribute('href') ?? null,
+    }),
+    CELL,
+  );
+  check(apresSuppression.listing === null, `${tag} : sans aucune story, ma pastille centrale ne lie plus « /stories/mine » — obtenu « ${apresSuppression.listing} »`);
+  check(
+    apresSuppression.studio === '/stories/new',
+    `${tag} : sans aucune story, ma pastille centrale doit lier le studio « /stories/new » — obtenu « ${apresSuppression.studio} »`,
+  );
+  const centre = await page.evaluate((cell) => {
+    const box = document.querySelector(`${cell} [data-anneau]`)?.getBoundingClientRect();
+    if (box === undefined) return null;
+    return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+  }, CELL);
+  await (centre === null ? Promise.resolve() : page.mouse.click(centre.x, centre.y));
+  await page.waitForFunction(() => location.pathname === '/stories/new', { timeout: 8000 }).catch(() => null);
+  const apresClicCentre = new URL(page.url()).pathname;
+  check(
+    apresClicCentre === '/stories/new',
+    `${tag} : un VRAI clic au CENTRE de la pastille (94 px, jadis INERTE) ouvre le studio — arrivé sur « ${apresClicCentre} »`,
+  );
+
   check(errors.length === 0, `${tag} : erreurs de page — ${errors.join(' | ')}`);
 
   const geometry =

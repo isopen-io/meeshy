@@ -317,11 +317,28 @@ describe('où mènent les deux portes', () => {
     expect(el.querySelector('[data-self-mood]')?.getAttribute('href')).toBe('/status/new');
   });
 
-  /** Sans story, la cellule n'est pas un lien : un anneau qui promet un contenu
-   * que rien n'ouvre est un contrôle qui ment (loi 4). */
-  test('sans story, ma pastille centrale n\'est pas un lien', () => {
+  /**
+   * **SANS AUCUNE STORY, LA PASTILLE CENTRALE OUVRE LE STUDIO** (revue de
+   * #6149, défaut majeur 4) — un anneau qui ne mène nulle part est un
+   * contrôle qui ment (loi 4) : après suppression de ma dernière story, un
+   * relevé au navigateur montrait la cible centrale (94 px) totalement
+   * INERTE, alors qu'iOS ouvre le studio dans ce même cas
+   * (`StoryTrayActionResolver.avatarTap` ⇒ `.createStory` quand ni
+   * `hasMyStory` ni `hasAnyStory`). Elle n'ouvre jamais `/stories/mine` — il
+   * n'y a rien à y gérer — et reste distincte du (+) haut-gauche.
+   */
+  test('sans aucune story, ma pastille centrale ouvre le studio de création', () => {
     const el = mount({ variant: 'grande', groups: [], self: self() });
     expect(el.querySelector('[data-story-self-open]')).toBeNull();
+    expect(el.querySelector('[data-story-self-create]')?.getAttribute('href')).toBe('/stories/new');
+  });
+
+  /** Le libellé DÉCRIT la destination réelle (miroir
+   * `avatarAccessibilityLabel` : `.createStory` ⇒ « Créer une story »),
+   * jamais celui du listing qu'elle ne sert pas dans ce cas. */
+  test('sans aucune story, le lien de ma pastille centrale s\'annonce « Créer une story »', () => {
+    const el = mount({ variant: 'grande', groups: [], self: self() });
+    expect(el.querySelector('[data-story-self-create]')?.getAttribute('aria-label')).toBe('Créer une story');
   });
 
   /**

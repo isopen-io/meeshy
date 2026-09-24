@@ -175,7 +175,19 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
             ouvre TOUJOURS « Mes stories », y compris quand mes seules
             stories sont expirées (`hasAnyStory`, `StoryTrayActions.swift:71-75`).
             Créer une story reste le rôle du (+) ; ouvrir directement une
-            story reste celui d'une tuile D'AUTRUI. */}
+            story reste celui d'une tuile D'AUTRUI.
+
+            **NI L'UN NI L'AUTRE : LE STUDIO** (revue de #6149, défaut majeur
+            4) — miroir `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`
+            (`StoryTrayActions.swift:73-77`), dont ce fichier ne portait que
+            deux branches sur trois : sans AUCUNE story (y compris expirée),
+            iOS route vers `.createStory`, jamais vers un listing vide. Sans ce
+            troisième cas, un compte qui vient de supprimer sa dernière story
+            voyait sa cible centrale de 94 px devenir INERTE — mesuré au
+            navigateur, aucun geste n'y avait plus d'effet (loi 4). Le libellé
+            suit `avatarAccessibilityLabel` pour ce même cas : « Créer une
+            story », jamais « Gérer mes stories » qui annoncerait un listing
+            vide. */}
         {entry.hasAnyStory ? (
           <Link
             to="storiesMine"
@@ -190,7 +202,15 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
             {pastille}
           </Link>
         ) : (
-          pastille
+          <Link
+            to="storyCompose"
+            data-story-self-create
+            aria-label={translate(language, 'stories.create')}
+            className="rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ outlineColor: 'var(--color-ios-brand)' }}
+          >
+            {pastille}
+          </Link>
         )}
 
         {/* LE (+) — DÉBUT de ligne, en haut. `inset-inline-start` porte le

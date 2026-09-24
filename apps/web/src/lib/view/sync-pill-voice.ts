@@ -35,8 +35,15 @@
  * pastille, et les inscrire sans mesure ferait taire la pastille là où elle ne
  * recouvre rien. Chacun entre quand son chevauchement est relevé ; le
  * MÉCANISME, lui, est posé une fois pour toutes, ici.
+ *
+ * **`storiesMine` a rejoint la liste en revue-correction de #6149** : le
+ * bandeau `[data-my-stories-offline]` de « Mes stories »
+ * (« Hors ligne — la suppression sera possible au retour du réseau. »)
+ * mesurait le MÊME chevauchement que `/u/` et `/me` — la pastille globale
+ * posée par-dessus, aux deux schémas — pour la même raison : sa carte dit un
+ * sur-ensemble strict de ce que la pastille dirait seule.
  */
-const ROUTES_WITH_OWN_OFFLINE_CARD: ReadonlySet<string> = new Set(['profile', 'userProfile']);
+const ROUTES_WITH_OWN_OFFLINE_CARD: ReadonlySet<string> = new Set(['profile', 'userProfile', 'storiesMine']);
 
 /** `false` ⇒ la pastille se tait sur l'état `offline` de cette route : l'écran
  * porte déjà cette voix, en plus riche. */

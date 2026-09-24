@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { apiDeps } from '@/lib/api/deps';
 import {
   performDeleteShareLink,
@@ -26,7 +27,7 @@ import { useTapGate } from '@/lib/view/tap-gate';
 import { LinksAnnouncement, LinksHeader, LinksLoadError, LinksOfflineNotice, ShareLinkDetailSkeleton, ShareLinkRefused } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
 import { ArrivalLanguages, ConfigurationCard, InviteLinkCard, LinkBreadcrumb, LinkStatTiles, RecentArrivals } from '@/routes/share-link-detail-parts';
-import { ConfirmDelete, EditLinkForm } from '@/routes/share-link-edit';
+import { EditLinkForm } from '@/routes/share-link-edit';
 
 /**
  * **LA PAGE DU CRÉATEUR D'UN LIEN D'INVITATION** (#7797, maquette validée) —
@@ -182,8 +183,23 @@ export default function ShareLinkScreen() {
                   onDelete={() => setConfirming(true)}
                 />
               )}
+              {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149,
+                  défaut majeur 2, issue #7858) — `ConfirmDelete` était la
+                  TROISIÈME copie divergente, et la seule avec un rayon écrit
+                  à la main. `busy` reste posé : cet écran attend encore la
+                  réponse réseau avant de fermer (#6411). */}
               {confirming ? (
-                <ConfirmDelete language={language} busy={deleting} onConfirm={() => void remove(link)} onCancel={() => setConfirming(false)} />
+                <ConfirmDialog
+                  name="deleteShareLink"
+                  title={translateInvite(language, 'linkDetail.delete.title')}
+                  body={translateInvite(language, 'linkDetail.delete.body')}
+                  cancelLabel={translateInvite(language, 'linkDetail.delete.cancel')}
+                  confirmLabel={translateInvite(language, 'linkDetail.delete.confirm')}
+                  tone="destructive"
+                  busy={deleting}
+                  onConfirm={() => void remove(link)}
+                  onCancel={() => setConfirming(false)}
+                />
               ) : null}
             </div>
           ) : state === 'refused' ? (

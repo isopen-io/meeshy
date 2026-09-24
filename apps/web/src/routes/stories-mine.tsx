@@ -126,9 +126,16 @@ export function MyStoryCard({
       className="flex flex-col overflow-hidden rounded-card"
       style={{ backgroundColor: 'var(--color-ios-card)' }}
     >
+      {/* `?scope=mine` (revue de #6149, défaut majeur 3) — mesuré au
+          navigateur : sans lui, le lecteur poursuivait sur les stories
+          D'AUTRES auteurs une fois mon groupe épuisé. Miroir
+          `StoryViewerRequest(singleGroup: true)` (`StoryTrayView.swift:75`) :
+          `scopeToSingleGroup` (`lib/stories/playback.ts`) referme le lecteur
+          en fin de MON groupe. */}
       <Link
         to="story"
         params={{ post: story.id }}
+        search={{ scope: 'mine' }}
         aria-label={dateLabel}
         data-my-story-open
         className="block focus-visible:outline-2 focus-visible:-outline-offset-2"
@@ -141,6 +148,7 @@ export function MyStoryCard({
         <Link
           to="story"
           params={{ post: story.id }}
+          search={{ scope: 'mine' }}
           aria-label={translate(language, 'storiesMine.action.open')}
           data-my-story-open-action
           className="grid place-items-center rounded-chip focus-visible:outline-2"

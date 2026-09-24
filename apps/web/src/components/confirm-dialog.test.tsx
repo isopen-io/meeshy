@@ -26,7 +26,7 @@ afterAll(async () => {
 const mounter = createActMounter();
 afterEach(() => mounter.unmountAll());
 
-const mountDialog = async (over: { readonly onConfirm?: () => void; readonly onCancel?: () => void } = {}) =>
+const mountDialog = async (over: { readonly onConfirm?: () => void; readonly onCancel?: () => void; readonly busy?: boolean } = {}) =>
   mounter.mount(
     <ConfirmDialog
       name="probe"
@@ -37,6 +37,7 @@ const mountDialog = async (over: { readonly onConfirm?: () => void; readonly onC
       tone="destructive"
       onConfirm={over.onConfirm ?? (() => undefined)}
       onCancel={over.onCancel ?? (() => undefined)}
+      {...(over.busy === undefined ? {} : { busy: over.busy })}
     />,
   );
 
@@ -79,11 +80,54 @@ describe('ConfirmDialog — une modale nommée, deux gestes, un effet chacun', (
     expect(confirm?.style.backgroundColor ?? '').not.toContain('--color-error');
   });
 
+  /**
+   * **UN LIBELLÉ D'UN SEUL MOT NE TRONQUE JAMAIS, MÊME À 320 px** (revue-
+   * correction #6149, régression mesurée par `check-settings.mjs` : « aucun
+   * bouton de la confirmation ne tronque son libellé — ["Déconnexion"] »).
+   * `grid-cols-2` contraint chaque bouton à une colonne FIXE, où un mot
+   * comme « Déconnexion » ne peut se couper nulle part et déborde
+   * horizontalement. `flex-wrap` + `flex-auto` laisse les deux boutons
+   * passer chacun sur sa PROPRE ligne, pleine largeur, dès qu'ils ne
+   * tiennent plus côte à côte.
+   */
+  test('les deux gestes passent chacun sur sa PROPRE ligne au besoin — jamais une colonne fixe', async () => {
+    const host = await mountDialog();
+    const row = host.querySelector('[data-confirm-dialog="probe"] [data-confirm="cancel"]')?.parentElement;
+    expect(row?.className).toContain('flex-wrap');
+    expect(row?.className).not.toContain('grid-cols-2');
+    for (const action of ['cancel', 'confirm']) {
+      expect(host.querySelector(`[data-confirm="${action}"]`)?.className).toContain('flex-auto');
+    }
+  });
+
   test('les deux gestes offrent une cible de 44 px au moins', async () => {
     const host = await mountDialog();
     for (const action of ['cancel', 'confirm']) {
       const button = host.querySelector<HTMLButtonElement>(`[data-confirm="${action}"]`);
       expect(Number.parseInt(button?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  /**
+   * **`busy`, POUR L'ÉCRAN QUI ATTEND ENCORE LE SERVEUR** (migration #7858,
+   * `ConfirmDelete` de `share-link-edit.tsx`) — `false` par défaut, comme
+   * « Mes stories » (#6149) qui se ferme au geste sans jamais le poser.
+   * SEUL le bouton de confirmation grise : « Annuler » reste un geste
+   * immédiat, même en attente réseau.
+   */
+  test('`busy` grise SEULEMENT la confirmation — « Annuler » reste actionnable', async () => {
+    const host = await mountDialog({ busy: true });
+    const confirm = host.querySelector<HTMLButtonElement>('[data-confirm="confirm"]');
+    const cancel = host.querySelector<HTMLButtonElement>('[data-confirm="cancel"]');
+    expect(confirm?.disabled).toBe(true);
+    expect(confirm?.getAttribute('aria-busy')).toBe('true');
+    expect(cancel?.disabled).toBe(false);
+  });
+
+  test('sans `busy` (par défaut), la confirmation reste actionnable', async () => {
+    const host = await mountDialog();
+    const confirm = host.querySelector<HTMLButtonElement>('[data-confirm="confirm"]');
+    expect(confirm?.disabled).toBe(false);
+    expect(confirm?.getAttribute('aria-busy')).toBe('false');
   });
 });
