@@ -171,9 +171,6 @@ struct RootStoryDoorsLayer: ViewModifier {
             // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
             // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
             .engagementReveal(router: router)
-            // L'onboarding post-inscription (#7729), en calque : les présentations
-            // ci-dessus et ci-dessous (célébration, composeur) jouent PAR-DESSUS.
-            .onboardingHost(storyViewModel: storyViewModel, router: router)
             // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
             // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
             // liste de conversations ET par la feuille de feed qui la recouvre sans
@@ -203,6 +200,7 @@ struct RootStoryDoorsLayer: ViewModifier {
 struct RootChromeLayer: ViewModifier {
     @ObservedObject var reelsPresenter: ReelsPresenter
     let conversationViewModel: ConversationListViewModel
+    let storyViewModel: StoryViewModel
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     @ObservedObject var router: Router
     let activeConversationId: () -> String?
@@ -281,6 +279,16 @@ struct RootChromeLayer: ViewModifier {
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)
+            // L'onboarding post-inscription (#7729), DERNIER calque du chrome :
+            // un `.overlay` ne recouvre que ce qui est chaîné avant lui. Posé
+            // plus tôt, la pastille de synchronisation — « Synchronisation »,
+            // l'état le plus probable au démarrage à froid qui suit
+            // l'inscription — flottait sur la carte, et la toucher naviguait
+            // sous le calque ; le mini-lecteur et la bannière d'appel aussi.
+            // Les présentations (célébration, composeur, appel plein écran)
+            // restent modales, donc PAR-DESSUS. Garde :
+            // `OnboardingAboveGlobalChromeGuardTests`.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
     }
 }
 

@@ -262,8 +262,6 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // La célébration d'un palier (#5809) — l'hôte est écrit une seule
             // fois et vit chez les deux racines à l'identique.
             .engagementReveal(router: router)
-            // L'onboarding post-inscription (#7729) — le même hôte que sur iPhone.
-            .onboardingHost(storyViewModel: storyViewModel, router: router)
             .storyComposerCover(
                 viewModel: storyViewModel,
                 router: router,
@@ -324,5 +322,10 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 miniPlayerOnTapBody: onMiniPlayerTap,
                 miniPlayerCurrentConversationId: { activeConversationId }
             ))
+            // L'onboarding post-inscription (#7729) — le même hôte que sur
+            // iPhone, au même rang : APRÈS la pastille et la présentation
+            // d'appel, qu'un `.overlay` posé plus tôt laisserait flotter sur la
+            // carte. Garde : `OnboardingAboveGlobalChromeGuardTests`.
+            .onboardingHost(storyViewModel: storyViewModel, router: router)
     }
 }
