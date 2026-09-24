@@ -37,6 +37,11 @@ nonisolated enum MessageListCellSizingLaw {
 /// pour un bruit de mesure, ni pour l'endroit de l'écran qu'il traverse.
 class MessageListCell: UICollectionViewCell {
 
+    /// Deinit NON isolée, obligatoire (`MainActorDeinitSourceGuardTests`) : la
+    /// cible compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, et la
+    /// deinit synthétisée d'une classe @MainActor double-libère sur iOS 26.1.
+    nonisolated deinit {}
+
     /// **Une rangée du fil n'a pas de zone non sûre** (#7660).
     ///
     /// Le fil s'étend sous la bande de l'îlot et sous l'indicateur d'accueil,
