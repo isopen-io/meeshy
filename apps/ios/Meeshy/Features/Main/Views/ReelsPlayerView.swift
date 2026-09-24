@@ -478,7 +478,10 @@ struct ReelPageView: View {
     /// Réel composé (#6745) — voir `ReelsPlayerView+Scene.swift`.
     @State var scenePaused = false
     @State var sceneSoundMuted = false
-    @StateObject var sceneClock = ReelSceneClock()
+    // `@State`, pas `@StateObject` : la page POSSÈDE l'horloge sans s'y
+    // abonner. `@StateObject` l'abonnait, et chaque image du player (60–120 Hz)
+    // ré-évaluait la page entière ; seule `ReelSceneProgressBar` l'observe.
+    @State var sceneClock = ReelSceneClock()
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -487,8 +490,11 @@ struct ReelPageView: View {
     /// (`ReelAudioControl` → `AudioPlayerView(externalPlayer:)`) and the hero
     /// transcript (`ReelAudioView` → `MediaTranscriptionView`) so the karaoke
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
-    /// page; only the active audio reel ever plays.
-    @StateObject var audioPlayer = AudioPlaybackManager()
+    /// page; only the active audio reel ever plays. Held through a box that
+    /// never publishes: `@StateObject` on the engine itself re-rendered the
+    /// whole page at its 10 Hz `currentTime` tick — its readers observe it.
+    @StateObject private var audioBox = ReelAudioEngineBox()
+    var audioPlayer: AudioPlaybackManager { audioBox.player }
     /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 

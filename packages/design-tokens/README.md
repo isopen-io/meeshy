@@ -1,6 +1,6 @@
 # `@meeshy/design-tokens` — les jetons CSS du web
 
-Le paquet que la v3.1 (`apps/web-v2`) importe pour se peindre.
+Le paquet que `apps/web` (ex `apps/web-v2`, renommée le 2026-09-24, #7668) importe pour se peindre.
 
 ```
 package.json  le manifeste — c'est lui qui rend le paquet ATTEIGNABLE
@@ -12,13 +12,13 @@ light.css     schéma clair  — porté par .light seulement
 
 | feuille | importée par |
 |---|---|
-| `ios.css` | `apps/web-v2/src/styles/ios.css` |
-| `tokens.css` (donc `dark.css` et `light.css`) | `apps/web-v2/src/styles/app.css`, `apps/web-v2/src/styles/institutional.css` |
+| `ios.css` | `apps/web/src/styles/ios.css` |
+| `tokens.css` (donc `dark.css` et `light.css`) | `apps/web/src/styles/app.css`, `apps/web/src/styles/institutional.css` |
 
 Un franchissement de frontière de paquet se **déclare** : `@meeshy/design-tokens`
-est un workspace, la v3.1 le porte en dépendance, et `docker.yml` reconstruit son
+est un workspace, `apps/web` le porte en dépendance, et `docker.yml` reconstruit son
 image quand ce paquet change (`packages/design-tokens/` figure dans la détection
-de `web_v31`). `apps/web-v2/scripts/check-docker-context.mjs` vérifie que
+de `web_v31`). `apps/web/scripts/check-docker-context.mjs` vérifie que
 `.dockerignore` laisse entrer les cinq fichiers.
 
 ## `ios.css` — la palette dérivée
@@ -29,25 +29,25 @@ se régénère.
 
 ```bash
 cd packages/design-tokens && bun run generate:ios   # régénérer
-cd apps/web-v2 && bun run check:tokens              # le CSS généré n'a pas dérivé de Swift — en CI (« Gates web-v2 »)
-cd apps/web-v2 && bun run check:tokens-resolved     # le navigateur PEINT ces valeurs, dans les deux schémas — à la main
+cd apps/web && bun run check:tokens              # le CSS généré n'a pas dérivé de Swift — en CI (« Gates web »)
+cd apps/web && bun run check:tokens-resolved     # le navigateur PEINT ces valeurs, dans les deux schémas — à la main
 ```
 
 ## `tokens.css`, `dark.css`, `light.css` — la table héritée
 
 Ces trois feuilles sont la table de l'ancienne refonte web v3, annulée le
-2026-09-07 puis retirée du dépôt (#5994). La v3.1 les importe encore.
+2026-09-07 puis retirée du dépôt (#5994). `apps/web` les importe encore.
 
 **Ce qui est de nouveau gardé (#6000).** Les contrôles qui tenaient cette table
 vivaient dans les scripts de l'ancienne refonte et sont partis avec elle,
-laissant la table sans gate pendant qu'elle restait importée par `apps/web-v2` —
+laissant la table sans gate pendant qu'elle restait importée par `apps/web` —
 défaut relevé et refermé le même jour. `packages/design-tokens/scripts/check-jetons.mjs`
 porte désormais la moitié TABLE de l'ancien script (rapports de contraste WCAG
 sur la table résolue — 4,5:1 pour ce qui se lit, 3:1 pour un contour ou une
 pastille —, ordre de luminance des quatre plans, parité des clés entre les deux
 schémas, disjonction du couple de focus, valeur SERVIE par la cascade invariante
-sous les deux schémas d'OS), câblé dans `apps/web-v2`'s `check:tokens` (donc dans
-« Gates web-v2 » en CI) :
+sous les deux schémas d'OS), câblé dans le `check:tokens` d'`apps/web` (donc dans
+« Gates web » en CI) :
 
 ```bash
 cd packages/design-tokens && node scripts/check-jetons.mjs   # ou : bun run check:jetons
@@ -57,7 +57,7 @@ cd packages/design-tokens && bun test scripts/                # 15 témoins
 La moitié SOURCES de l'ancien script (`moteursParalleles` — « un seul moteur de
 thème », couleurs écrites en dur dans les composants) n'a pas été portée : elle
 dépendait de la géographie de l'app annulée (`app/theme-script.tsx`), et
-`apps/web-v2` a un bootstrap de thème différent (`src/lib/scheme.ts` +
+`apps/web` a un bootstrap de thème différent (`src/lib/scheme.ts` +
 `src/lib/inline-scheme-bootstrap.js`, scindé à dessein) qui reste à mesurer
 avant d'écrire son gate — suivi : #6020.
 
@@ -67,8 +67,8 @@ un gate :
 - **La table ne bascule pas toute seule.** Aucune feuille ne contient de
   `prefers-color-scheme` (`grep -c prefers-color-scheme packages/design-tokens/*.css`
   rend 0 partout) : le schéma suit la CLASSE, posée par la coquille
-  (`apps/web-v2/index.html`) et corrigée par
-  `apps/web-v2/src/lib/inline-scheme-bootstrap.js`.
+  (`apps/web/index.html`) et corrigée par
+  `apps/web/src/lib/inline-scheme-bootstrap.js`.
 - **Le sombre est porté par `:root`.** Un lecteur sans JavaScript, donc sans
   classe, reçoit un thème complet — le sombre, rendu de référence de la planche
   d'origine. `:root.light` l'emporte par spécificité quel que soit l'ordre des
