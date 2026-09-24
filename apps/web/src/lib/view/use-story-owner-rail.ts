@@ -132,7 +132,7 @@ export function useStoryOwnerRail(params: {
 
   const handlers = useMemo<StoryOwnerRail['handlers']>(() => {
     if (storyId === undefined) return {};
-    /* La feuille « Vues » met la lecture en pause (effet ci-dessous) — iOS :
+    /* La feuille « Vues » met la lecture en pause (effet ci-dessus) — iOS :
        `pauseTimer(); showViewersSheet = true`, `StoryViewerView+Sidebar.swift:683-692`. */
     const views = () => viewers.open(storyId);
     if (exportMedia === null) return { views };

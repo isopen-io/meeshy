@@ -29,7 +29,7 @@ import { Link } from '@/routes/route-table';
  * fichier est chargé À LA DEMANDE (`lazy()`, D-54) et compté à part
  * (`on_demand_chunks.publication_viewers_sheet`).
  *
- * **CINQ ÉTATS DESSINÉS** (revue #7116 — le premier jet en avait trois) :
+ * **SIX ÉTATS DESSINÉS** (revue #7116 — le premier jet en avait quatre) :
  * chargement (cache VIDE seulement), HORS LIGNE (TanStack met la requête en
  * pause : lue comme une liste vide, elle affichait « Aucune vue » à un auteur
  * que huit personnes avaient vu — `coldStateOf`, la loi partagée), REFUS
