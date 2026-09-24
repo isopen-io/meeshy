@@ -36,10 +36,16 @@ nonisolated enum MessageListCellSizingLaw {
 /// un `UICollectionViewCell` qui ne demande jamais une correction self-sizing
 /// pour un bruit de mesure, ni pour l'endroit de l'écran qu'il traverse.
 class MessageListCell: UICollectionViewCell {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    /// **Corps vide, `nonisolated` (SE-0466, #7686).** La cible compile sous
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` : sans cette déclaration,
+    /// Swift synthétise une deinit ISOLÉE qui double-libère le scope
+    /// task-local au démontage hors d'une tâche sur iOS 26.1 — `pointer being
+    /// freed was not allocated` (abrt), reproduit par un test XCTest synchrone
+    /// démontant la vue. Un corps vide n'a aucun état à toucher : rien ne
+    /// dépend du main actor, donc rien ne change de comportement à le
+    /// déclarer `nonisolated`.
+    ///
+    /// Gardes : `MainActorDeinitSourceGuardTests`, `MeeshyUIDeinitSourceGuardTests`.
     nonisolated deinit {}
 
     /// Deinit NON isolée, obligatoire (`MainActorDeinitSourceGuardTests`) : la
@@ -82,4 +88,5 @@ class MessageListCell: UICollectionViewCell {
         fitted.frame.size.height = height
         return fitted
     }
+
 }
