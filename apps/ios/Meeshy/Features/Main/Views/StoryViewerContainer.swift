@@ -12,15 +12,13 @@ import MeeshySDK
 /// - After a short timeout, surfaces a Retry + Close fallback to avoid infinite loading
 struct StoryViewerContainer: View {
     @ObservedObject var viewModel: StoryViewModel
-    /// Threadée EXPLICITEMENT vers la `ConnectionBanner` interne (ligne
-    /// ~117) depuis Task 3 (`ConnectionBanner` n'a plus d'`@EnvironmentObject`
-    /// propre). Lue ici via `@EnvironmentObject` car ce container est TOUJOURS
-    /// un descendant réel de l'injection : chacun de ses 4 points de montage
-    /// (`RootView`, `iPadRootView+Sheets`, `ConversationView`, `BookmarksView`)
-    /// ré-injecte explicitement `.environmentObject(conversationViewModel)`
-    /// sur son `.fullScreenCover` — jamais un `.overlay` racine composé, donc
-    /// hors du risque de crash documenté pour `ConnectionBanner`.
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    /// Threadée EXPLICITEMENT vers la `ConnectionBanner` interne, qui la prend
+    /// optionnelle. Lue par VALEUR d'environnement (#7006), jamais en
+    /// `@EnvironmentObject` : l'objet abonnait la racine du lecteur à chaque
+    /// `typing:start/stop` et à chaque message de n'importe quelle conversation.
+    /// Les `EnvironmentValues` traversent le `.fullScreenCover` de ses quatre
+    /// points de montage ; `nil` ne fait que priver la bannière de la frappe.
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     /// Idem : certains points de montage (`RootView`, `iPadRootView+Sheets`)
     /// ré-injectent `.environment(\.isStoryViewerPresenting, true)` sur ce
     /// même cover précisément pour que la pill interne se masque — threadée

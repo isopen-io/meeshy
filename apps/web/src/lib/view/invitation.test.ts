@@ -4,6 +4,7 @@ import {
   memoriserLienParLecteur,
   partagerInvitation,
   partagerInvitationParrainee,
+  portailDe,
   retourInvitationParrainee,
   TEXTE_INVITATION,
   type PortailPartage,
@@ -225,5 +226,77 @@ describe('memoriserLienParLecteur — le second geste part SANS attendre le rés
     await lienDe(null);
     await lienDe(null);
     expect(appels.n).toBe(2);
+  });
+});
+
+/**
+ * LA COQUE ANDROID (#7710) — la WebView Android n'implémente pas l'API Web
+ * Share : `navigator.share` y est ABSENT, et le portail ne voyait qu'un
+ * presse-papier. Chaque « Partager » copiait donc le lien au lieu d'ouvrir la
+ * feuille du système que le même geste ouvre sur le web mobile et sur iOS.
+ * La coque déclare son pont `MeeshyShare` dans `Capacitor.PluginHeaders` ; le
+ * portail l'emprunte, sans importer `@capacitor/core`.
+ */
+describe('portailDe — la feuille de partage dans la coque Android (#7710)', () => {
+  const copieur = { clipboard: { writeText: async () => {} } };
+
+  function coqueAvec(plugins: ReadonlyArray<string>) {
+    const appels: Array<{ plugin: string; methode: string; options: unknown }> = [];
+    const coque = {
+      PluginHeaders: plugins.map((name) => ({ name })),
+      nativePromise: async (plugin: string, methode: string, options: unknown) => {
+        appels.push({ plugin, methode, options });
+        return {};
+      },
+    };
+    return { coque, appels };
+  }
+
+  test('navigator.share présent : c’est lui qui ouvre la feuille, jamais le pont', async () => {
+    const vues: unknown[] = [];
+    const { coque, appels } = coqueAvec(['MeeshyShare']);
+    const portail = portailDe({ nav: { ...copieur, share: async (d: unknown) => void vues.push(d) }, coque });
+
+    expect(await partagerInvitation(LIEN, portail)).toBe('partage');
+    expect(vues).toHaveLength(1);
+    expect(appels).toEqual([]);
+  });
+
+  test('navigator.share absent, pont déclaré : la feuille Android s’ouvre au lieu de copier', async () => {
+    const { coque, appels } = coqueAvec(['SystemBars', 'MeeshyShare']);
+    const portail = portailDe({ nav: copieur, coque });
+
+    expect(await partagerInvitation(LIEN, portail)).toBe('partage');
+    expect(appels).toEqual([
+      { plugin: 'MeeshyShare', methode: 'share', options: { title: 'Meeshy', text: TEXTE_INVITATION, url: LIEN } },
+    ]);
+  });
+
+  test('coque SANS le pont (build antérieur) : le presse-papier reste le repli', async () => {
+    const { coque, appels } = coqueAvec(['SystemBars']);
+    const copies: string[] = [];
+    const portail = portailDe({ nav: { clipboard: { writeText: async (t: string) => void copies.push(t) } }, coque });
+
+    expect(await partagerInvitation(LIEN, portail)).toBe('copie');
+    expect(copies).toEqual([LIEN]);
+    expect(appels).toEqual([]);
+  });
+
+  test('le pont refuse (aucune application pour partager) : le lien est copié', async () => {
+    const copies: string[] = [];
+    const coque = {
+      PluginHeaders: [{ name: 'MeeshyShare' }],
+      nativePromise: async () => {
+        throw new Error('Aucune application ne sait partager ce lien');
+      },
+    };
+    const portail = portailDe({ nav: { clipboard: { writeText: async (t: string) => void copies.push(t) } }, coque });
+
+    expect(await partagerInvitation(LIEN, portail)).toBe('copie');
+    expect(copies).toEqual([LIEN]);
+  });
+
+  test('hors coque (navigateur sans Web Share) : rien ne change', async () => {
+    expect(portailDe({ nav: copieur, coque: undefined }).share).toBeUndefined();
   });
 });
