@@ -296,6 +296,20 @@ describe('portailDe — la feuille de partage dans la coque Android (#7710)', ()
     expect(copies).toEqual([LIEN]);
   });
 
+  test('la feuille Android fermée sans choix (CANCELED) : annulé, ni copie ni compteur, comme sur le web (#7822)', async () => {
+    const copies: string[] = [];
+    const coque = {
+      PluginHeaders: [{ name: 'MeeshyShare' }],
+      nativePromise: async () => {
+        throw Object.assign(new Error('Partage annule'), { code: 'CANCELED' });
+      },
+    };
+    const portail = portailDe({ nav: { clipboard: { writeText: async (t: string) => void copies.push(t) } }, coque });
+
+    expect(await partagerInvitation(LIEN, portail)).toBe('annule');
+    expect(copies).toEqual([]);
+  });
+
   test('hors coque (navigateur sans Web Share) : rien ne change', async () => {
     expect(portailDe({ nav: copieur, coque: undefined }).share).toBeUndefined();
   });

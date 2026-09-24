@@ -1,10 +1,13 @@
 package me.meeshy.app;
 
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import androidx.activity.result.ActivityResult;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
@@ -15,14 +18,19 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * iOS ouvrent la feuille du systeme.
  *
  * Le cote web appelle `Capacitor.nativePromise('MeeshyShare', 'share', ...)`
- * quand `navigator.share` manque. L'appel se resout des que la feuille est
- * ouverte : le choix de l'application ne revient pas a la WebView, et
- * l'annulation n'y est pas distinguee (elle compte comme un partage, comme une
- * copie compte deja). Un refus (rien a partager, aucune application capable)
- * rejette, et le web retombe sur la copie du lien.
+ * quand `navigator.share` manque. La feuille est lancee POUR RESULTAT (#7822) :
+ * fermee sans choix, elle revient annulee alors que l'activite n'a jamais ete
+ * stoppee, et le pont rejette avec le code `CANCELED` — le web le traduit en
+ * `AbortError`, comme une annulation de `navigator.share` : ni copie, ni
+ * partage compte. Certaines applications rendent aussi « annule » apres un
+ * vrai partage ; elles ont stoppe l'activite en s'ouvrant, d'ou le drapeau
+ * (heuristique de `@capacitor/share`). Un refus (rien a partager, aucune
+ * application capable) rejette sans code, et le web retombe sur la copie.
  */
 @CapacitorPlugin(name = "MeeshyShare")
 public class MeeshySharePlugin extends Plugin {
+
+    private boolean stopped = false;
 
     @PluginMethod
     public void share(PluginCall call) {
@@ -43,10 +51,28 @@ public class MeeshySharePlugin extends Plugin {
         }
 
         try {
-            getActivity().startActivity(Intent.createChooser(send, title.isEmpty() ? null : title));
-            call.resolve();
+            stopped = false;
+            startActivityForResult(call, Intent.createChooser(send, title.isEmpty() ? null : title), "shareResult");
         } catch (ActivityNotFoundException e) {
             call.reject("Aucune application ne sait partager ce lien", e);
         }
+    }
+
+    @ActivityCallback
+    private void shareResult(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+        if (result.getResultCode() == Activity.RESULT_CANCELED && !stopped) {
+            call.reject("Partage annule", "CANCELED");
+            return;
+        }
+        call.resolve();
+    }
+
+    @Override
+    protected void handleOnStop() {
+        super.handleOnStop();
+        stopped = true;
     }
 }
