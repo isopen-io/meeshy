@@ -1,5 +1,112 @@
 # @meeshy/gateway
 
+## 1.68.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un lien Meeshy touché dans un message s'ouvre dans l'app sur iPad aussi (Closes #7808)
+  - dans la coque Android, fermer la feuille de partage n'est plus compté comme un partage (Closes #7822)
+  - un lien Meeshy se lit à un seul endroit — le lancement système traduit le parseur (Closes #7815)
+  - un post préchargé par la NSE entre en .stale — peint puis revalidé (Closes #7809)
+  - les téléversements hors APIClient portent l'identité cliente (Refs #7810)
+  - aucune porte ne reste muette — communauté, widgets Non lus/Récente, lien reçu sans compte (Closes #7811)
+  - un réel ou une story s'ouvre dans le même lecteur par toutes ses portes, iPad compris (Closes #7805, Refs #7806, #7807, #7808)
+  - la NSE précharge un post comme l'app le demande — X-Canvas-Caps compris (Refs #7804)
+  - la barre collée ne porte que l'action primaire ; les champs de l'invité reviennent dans la page (Refs #7796)
+  - le logo du groupe retombe sur ses initiales quand l'image manque ou échoue (Refs #7796)
+  - invitations en RTL, contrastes AA de la carte du lien, budgets mesurés (Refs #7796, #7797)
+  - les invitations parlent les sept langues, tiennent AA et l'arabe ; le gate des liens suit la page du créateur (Refs #7796, #7797)
+  - la page du créateur d'un lien montre ses chiffres et sa configuration, et se modifie (Refs #7797)
+  - le fil redescend sous 1000 lignes, découpé par responsabilité (Closes #7429)
+  - le port des liens lit la politique, les statistiques, modifie et supprime un lien (Refs #7797)
+  - la page d'accueil d'invitation montre qui invite, le groupe, ses chiffres et ses droits (Refs #7796)
+  - l'invitation décodée porte le groupe, son message et ses chiffres sans identité (Refs #7796)
+  - le clavier réduit l'écran au lieu de recouvrir le composeur dans Chrome Android (Closes #7799)
+  - la réhydratation importe Combine — dev recompile, run test (Refs #7787)
+  - l'auteur d'une story voit qui l'a vue, la partage et l'enregistre (Closes #7116)
+  - la liste relue au réveil montre le dernier message reçu en arrière-plan — run test (Closes #7787)
+  - l'activation expirée pendant l'export retape, elle n'échoue pas (Refs #7116)
+  - « Enregistrer » porte le tracé télécharger, pas archiver (Refs #7116)
+  - l'export lit la source de données par l'adaptateur unique (Refs #7116)
+  - la progression de l'export reste lisible au lecteur d'écran (Refs #7116)
+  - l'anneau d'export naît indéterminé et se pose sur le disque du rail (Refs #7116)
+  - le rail auteur du lecteur de stories tient ce qu'il promet (Refs #7116)
+  - l'auteur d'une story voit qui l'a vue, la partage et l'enregistre
+  - l'onboarding réglé ne se redemande plus, attend la fin d'un deep link, et « Plus tard » tient la place principale (Refs #7729) run test
+  - seconde relecture du kit — drapeaux de pays, pastille neutre sans « App Store », Y1 signée sans émoji, X6 sans doublon, S4 signée et épicène, iPad 05 rempli, affiche dégagée, corps de légende unique par vitrine, brouillons déclarés, « 19 h » insécable, Meeshy Global entier (Refs #7727, Refs #7728)
+  - la barre du navigateur suit le thème choisi dans l'app, pas le système (Closes #7776)
+  - la cause d'un envoi refusé se dit dans la langue d'interface, délai du serveur compris (Refs #7740)
+  - la dette any du gateway enregistre la baisse du lot anti-spam (506 → 505) (Refs #7740)
+  - le retour du studio ne crédite la story qu'avec sa preuve de publication (Refs #7729)
+  - la série du récapitulatif dit ses jours, accordés, et un « +7 » ne finit plus seul sa ligne (Refs #7729)
+  - l'onboarding appelle MeEndpoint.onboarding généré, l'adresse écrite à la main disparaît (Refs #7729)
+  - l'aperçu de l'onboarding remplace l'écran de connexion au lieu de s'y superposer (Refs #7729)
+  - les rayons de la médaille reprennent le rayon d'iOS (78 pt) et ne barrent plus le surtitre ni le titre de la révélation (Refs #7728)
+  - l'onboarding se pose au-dessus de la pastille de synchronisation et de l'appel (Refs #7729)
+  - l'accueil relit le serveur à chaque lecture, un parcours clos ailleurs ne se rejoue plus (Refs #7729)
+  - un salut en échec se rejoue au nouveau tap, jamais un second message dans Meeshy Global (Refs #7729)
+  - chaque personnage porte son genre — Min-jun au masculin, l'amie de C1-2 toujours une lectrice (l'italien montrait Lucas sous « Lei ») (Refs #7728)
+  - l'arabe accorde aussi la fenêtre de l'élan, et le deux-points français prend une espace pleine (Refs #7728, Refs #7772)
+  - une illustration réduite sous 60 % disparaît au lieu de devenir un timbre-poste (Refs #7729)
+  - relecture du kit — bidi Y1, couvertures dans la grille 3:4, Min-jun au masculin, arabe accordé, « défi » et « inconnus » hors visuel, Y2 corrigée et signée, capture 8 et appel refaits (Refs #7728, Refs #7727)
+  - la famille /…/new se dérive de la table des routes, et les deux portes qu'elle a trouvées exigent une session (Refs #7462)
+  - la carte des notifications ne s'ouvre que là où un abonnement push peut suivre le « Oui » (Refs #7729)
+  - un salut accusé ou une story publiée ne se rejouent plus à la reprise (Refs #7729)
+  - les catalogues Swift et TS comptent l'entrée /me/onboarding, morte à la naissance
+  - la composition d'humeur exige une session, comme la story et le post (Closes #7462)
+  - la story de l'onboarding ne crédite qu'au succès de l'upload, et les cartes tiennent dans l'écran (Refs #7729)
+  - dev redevient vert — endpoints régénérés, lectures d'onboarding et d'anti-répétition déclarées, témoin des Réels indépendant de l'ordre
+  - kit social — miroir RTL des téléphones et des loupes, éventail agrandi, sous-titre d'appel dans la zone sûre (Refs #7728)
+  - le « +N » se voit en vol et ne compte qu'à l'arrivée, l'arabe n'inverse plus un montant (Refs #7729)
+  - kit social — compositions resserrées, loupes ajustées à leur cible, écran d'enregistrement, globe pointillé, nombres insécables (Refs #7728)
+  - onboarding validé au simulateur — RTL, chiffres arabes, AX5, envolée du +N (Refs #7729) run test
+  - kit réseaux sociaux — 9:16, carrousels, X / Threads, YouTube, stories, vérificateur de débordement (Refs #7728)
+  - les cinq cartes de l'accueil post-inscription et leur récapitulatif (Refs #7729)
+  - captures App Store — rangées non rognées, légendes plus grandes, panorama miroir en arabe, affiche au-dessus du vocal, loupe sur le solde Meesh (Refs #7727)
+  - gabarits App Store — panorama indigo→violet, légende ajustée à sa boîte, surimpressions ancrées, affiche d'App Preview, dépôt fastlane et vérification en navigateur (Refs #7727)
+  - la loi du parcours d'accueil, sa proposition à l'arrivée et son catalogue en sept langues (Refs #7729)
+  - le retour matériel Android ferme la feuille de commentaires, pas le lecteur (Refs #6484)
+  - le port de l'accueil post-inscription lit et écrit /me/onboarding (Refs #7729)
+  - dates grégoriennes en arabe, Progression iPad en colonnes, surimpression dans le cadre (Refs #7727, #7728)
+  - bibliothèque complète d'écrans iPhone et iPad, illustrations maison, typographie (Refs #7727, #7728)
+  - les cinq cartes de l'onboarding post-inscription (Refs #7729)
+  - revue-correction du rail commenter/repartager des Réels (Refs #6484)
+  - un envoi refusé par le mode lent des nouveaux comptes dit pourquoi et le délai réel (Refs #7740)
+  - la ligne d'arrivées regroupées de Meeshy Global se dit dans la langue du lecteur (Refs #7740)
+  - socle du kit — design system dérivé d'ios.css, écrans DM vocal/groupe/Global/Progression/succès, moteur de rendu PNG sans alpha (Refs #7727, #7728)
+  - contrat de l'onboarding post-inscription — modèles et service (Refs #7729)
+  - la fiche App Store promet 76 langues traduisibles et une voix qui ressemble à la tienne, si tu l'actives
+  - le plafond du chunk reels redescend à 7 Ko (Refs #6484)
+  - lancer une vidéo ou ouvrir une story ne reconfigure plus une session audio déjà prête
+  - GET /links/:linkId/stats rend visites, arrivées, langues, pays et arrivées récentes d'un lien (Refs #7797)
+  - une arrivée par lien d'invitation enregistre son pays, dérivé de l'IP sans la garder (Refs #7797)
+  - l'aperçu d'un lien d'invitation sert le logo, la bannière et les types réels, et compte la visite (Refs #7794)
+  - le type-check ne reconstruit plus @meeshy/shared lui-même (Refs #7789)
+  - les registres de surfaces et les témoins suivent l'anti-spam de Global (Refs #7740)
+  - une ligne d'arrivées qui refuse sa mise à jour n'avale plus l'arrivant (Refs #7740)
+  - un refus du mode lent des nouveaux comptes sur un lien répond 429 + Retry-After, jamais 403 (Refs #7740)
+  - POST /translate-blocking traduit un texte sans plus jamais écrire de message (Refs #7740)
+  - le mode lent des nouveaux comptes tient sous une rafale d'envois simultanés (Refs #7740)
+  - la file des arrivées ne laisse aucune promesse détachée (Refs #7740)
+  - les suggestions d'onboarding ne croisent plus un mineur vérifié et un âge inconnu
+  - Meeshy Global regroupe ses arrivées — une ligne par fenêtre de 10 min, mise à jour plutôt que multipliée (Refs #7740)
+  - GET et PATCH /me/onboarding servent l'état du parcours d'accueil
+  - le refus du mode lent voyage jusqu'au client — 429 + Retry-After en REST, ACK et événement error en socket (Refs #7740)
+  - Meeshy Global ralentit les comptes de moins de 24 h — un message toutes les 30 s (Refs #7740)
+  - un texte répété dans Meeshy Global ne rapporte plus de points
+  - un message dans Meeshy Global crédite l'engagement public, plus jamais la conversation privée
+  - contrat de l'aperçu d'un lien d'invitation et de ses statistiques (Refs #7794, #7797)
+  - colonnes des statistiques d'un lien d'invitation — visites et pays d'arrivée (Refs #7794, #7797)
+  - la ligne d'arrivées regroupées — metadata, texte et ligne de liste dans les sept langues (Refs #7740)
+  - le contrat d'onboarding — User.onboardingCompletedAt, onboardingSteps et schémas Zod
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.24.0
+
 ## 1.67.0
 
 ### Minor Changes
