@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isAdult } from '@meeshy/shared/utils/age';
+import { calculateAge } from '@meeshy/shared/utils/age';
 import {
   ONBOARDING_MAX_SUGGESTIONS,
   ONBOARDING_START_AT,
@@ -40,10 +40,24 @@ export function onboardingWindow(params: {
   return 'open';
 }
 
+/**
+ * La classe d'âge, lue UNE fois depuis `birthDate` : adulte VÉRIFIÉ, mineur
+ * VÉRIFIÉ, ou âge INCONNU. Deux classes ne suffisent pas : fondre l'inconnu
+ * avec le mineur rendait la garde fail-closed pour ce qu'on VOIT et fail-open
+ * pour l'APPARIEMENT — un mineur vérifié se voyait proposer la population
+ * d'âge inconnu, c'est-à-dire en pratique les adultes historiques de Global.
+ */
+export type AgeClass = 'adult' | 'minor' | 'unknown';
+
+export function ageClassOf(birthDate: Date | null | undefined, now: Date): AgeClass {
+  if (!birthDate) return 'unknown';
+  return calculateAge(birthDate, now) >= 18 ? 'adult' : 'minor';
+}
+
 export type SuggestionViewer = {
   readonly id: string;
   readonly languages: readonly string[];
-  readonly adult: boolean;
+  readonly ageClass: AgeClass;
   readonly blockedUserIds: readonly string[];
 };
 
@@ -53,16 +67,17 @@ export type SuggestionCandidate = {
   readonly displayName: string | null;
   readonly avatar: string | null;
   readonly languages: readonly string[];
-  readonly adult: boolean;
+  readonly ageClass: AgeClass;
   readonly blockedUserIds: readonly string[];
   readonly active: boolean;
 };
 
 /**
  * Les profils à suggérer, dans l'ordre de récence des candidats. JAMAIS de
- * suggestion croisée : un viewer protégé (mineur ou âge inconnu) ne voit que
- * des profils protégés, un adulte vérifié que des adultes vérifiés. Aucune
- * présence ne voyage : la sortie n'a pas de champ pour elle.
+ * suggestion croisée entre classes d'âge : un adulte vérifié ne voit que des
+ * adultes vérifiés, un mineur vérifié que des mineurs vérifiés, un âge inconnu
+ * que des âges inconnus. Aucune présence ne voyage : la sortie n'a pas de
+ * champ pour elle.
  */
 export function selectOnboardingSuggestions(params: {
   viewer: SuggestionViewer;
@@ -77,7 +92,7 @@ export function selectOnboardingSuggestions(params: {
       (candidate) =>
         candidate.id !== viewer.id &&
         candidate.active &&
-        candidate.adult === viewer.adult &&
+        candidate.ageClass === viewer.ageClass &&
         !excludedIds.has(candidate.id) &&
         !viewerBlocks.has(candidate.id) &&
         !candidate.blockedUserIds.includes(viewer.id) &&
@@ -160,12 +175,13 @@ export class OnboardingService {
   private async stateOf(user: UserStateRow, now: Date): Promise<OnboardingState> {
     const window = onboardingWindow({ createdAt: user.createdAt, completedAt: user.onboardingCompletedAt, now });
     const completedAt = window === 'expired' ? await this.closeExpired(user.id, now) : user.onboardingCompletedAt;
-    const protectedRegime = !isAdult(user.birthDate, now);
+    const ageClass = ageClassOf(user.birthDate, now);
+    const protectedRegime = ageClass !== 'adult';
     const globalConversationId = await this.globalConversationId();
     const [prefilledSteps, suggestions] = await Promise.all([
       this.prefilledSteps(user.id, globalConversationId),
       window === 'open' && globalConversationId
-        ? this.suggestions({ user, adult: !protectedRegime, globalConversationId, now })
+        ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
     ]);
     return {
@@ -225,11 +241,11 @@ export class OnboardingService {
 
   private async suggestions(params: {
     user: UserStateRow;
-    adult: boolean;
+    ageClass: AgeClass;
     globalConversationId: string;
     now: Date;
   }): Promise<OnboardingSuggestion[]> {
-    const { user, adult, globalConversationId, now } = params;
+    const { user, ageClass, globalConversationId, now } = params;
     const recent = await this.prisma.message.findMany({
       where: {
         conversationId: globalConversationId,
@@ -281,7 +297,7 @@ export class OnboardingService {
           displayName: row.displayName,
           avatar: row.avatar,
           languages: languagesOf(row),
-          adult: isAdult(row.birthDate, now),
+          ageClass: ageClassOf(row.birthDate, now),
           blockedUserIds: row.blockedUserIds ?? [],
           active: row.isActive && !row.deletedAt,
         },
@@ -291,7 +307,7 @@ export class OnboardingService {
       requests.map((request) => (request.senderId === user.id ? request.receiverId : request.senderId)),
     );
     return selectOnboardingSuggestions({
-      viewer: { id: user.id, languages: languagesOf(user), adult, blockedUserIds: user.blockedUserIds ?? [] },
+      viewer: { id: user.id, languages: languagesOf(user), ageClass, blockedUserIds: user.blockedUserIds ?? [] },
       candidates,
       excludedIds,
     });

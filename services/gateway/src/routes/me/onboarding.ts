@@ -107,7 +107,7 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
           "État de l'onboarding post-inscription (#7729) de l'utilisateur AUTHENTIFIÉ : éligibilité " +
           '(compte créé depuis le 2026-09-24, non fini, de moins de 7 jours — au-delà, le parcours est clos), ' +
           'étapes vues, étapes déjà faites par l\'engagement, Meeshy Global, régime protégé (âge inconnu ou ' +
-          '< 18 ans) et au plus 6 suggestions sans croisement protégé/adulte ni présence.',
+          '< 18 ans) et au plus 6 suggestions sans croisement de classe d\'âge (adulte, mineur, inconnu) ni présence.',
         tags: ['me', 'onboarding'],
         summary: 'Get onboarding state',
         response: { 200: onboardingResponseSchema, ...errorResponses },

@@ -1,7 +1,7 @@
 /**
  * L'état d'onboarding (#7729) — éligibilité, fenêtre de 7 jours, pré-cochage
- * depuis l'engagement, régime protégé, suggestions sans croisement
- * protégé/adulte et sans présence.
+ * depuis l'engagement, régime protégé, suggestions sans croisement entre
+ * classes d'âge (adulte, mineur, âge inconnu) et sans présence.
  *
  * @jest-environment node
  */
@@ -9,6 +9,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import {
   OnboardingService,
+  ageClassOf,
   onboardingWindow,
   selectOnboardingSuggestions,
 } from '../../../../services/onboarding/OnboardingService';
@@ -132,6 +133,20 @@ describe('onboardingWindow — éligibilité et fenêtre de 7 jours', () => {
     expect(onboardingWindow({ createdAt, completedAt: null, now: new Date('2026-10-01T10:00:01.000Z') })).toBe(
       'expired',
     );
+  });
+});
+
+describe('ageClassOf — trois classes, lues une fois depuis birthDate', () => {
+  it('distingue l\'adulte vérifié, le mineur vérifié et l\'âge inconnu', () => {
+    expect(ageClassOf(ADULT_BIRTH, NOW)).toBe('adult');
+    expect(ageClassOf(MINOR_BIRTH, NOW)).toBe('minor');
+    expect(ageClassOf(null, NOW)).toBe('unknown');
+  });
+
+  it('bascule adulte le jour des 18 ans', () => {
+    const birth = new Date('2008-09-26T00:00:00.000Z');
+    expect(ageClassOf(birth, new Date('2026-09-25T12:00:00.000Z'))).toBe('minor');
+    expect(ageClassOf(birth, NOW)).toBe('adult');
   });
 });
 
@@ -262,6 +277,33 @@ describe('OnboardingService.getState', () => {
       expect(selected.lastActiveAt).toBeUndefined();
     });
 
+    describe('jamais de croisement de classes d\'âge, lues depuis birthDate', () => {
+      const servedIds = async (viewerBirth: Date | null, candidates: UserRow[]) => {
+        const prisma = makePrisma({
+          viewer: makeUser({ birthDate: viewerBirth }),
+          candidates,
+          globalSenders: candidates.map((c) => c.id),
+        });
+        const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+        return state?.suggestions.map((s) => s.id);
+      };
+      const adult = makeCandidate(1, { birthDate: ADULT_BIRTH });
+      const minor = makeCandidate(2, { birthDate: MINOR_BIRTH });
+      const unknown = makeCandidate(3, { birthDate: null });
+
+      it('un adulte vérifié ne voit ni un âge inconnu ni un mineur', async () => {
+        expect(await servedIds(ADULT_BIRTH, [unknown, minor, adult])).toEqual([adult.id]);
+      });
+
+      it('un mineur vérifié ne voit ni un adulte ni un âge inconnu', async () => {
+        expect(await servedIds(MINOR_BIRTH, [adult, unknown, minor])).toEqual([minor.id]);
+      });
+
+      it('un âge inconnu ne voit jamais un mineur vérifié, ni un adulte vérifié', async () => {
+        expect(await servedIds(null, [minor, adult, unknown])).toEqual([unknown.id]);
+      });
+    });
+
     it('n\'est calculé que pour un parcours ouvert', async () => {
       const prisma = makePrisma({
         viewer: makeUser({ onboardingCompletedAt: NOW }),
@@ -276,29 +318,32 @@ describe('OnboardingService.getState', () => {
 });
 
 describe('selectOnboardingSuggestions — la loi pure', () => {
-  const viewer = { id: VIEWER, languages: ['fr', 'es'], adult: true, blockedUserIds: [] as string[] };
+  const viewer = { id: VIEWER, languages: ['fr', 'es'], ageClass: 'adult' as const, blockedUserIds: [] as string[] };
   const candidate = (n: number, overrides: Record<string, unknown> = {}) => ({
     id: `c${n}`,
     username: `u${n}`,
     displayName: null as string | null,
     avatar: null as string | null,
     languages: ['fr'],
-    adult: true,
+    ageClass: 'adult' as const,
     blockedUserIds: [] as string[],
     active: true,
     ...overrides,
   });
 
-  it('jamais de suggestion croisée : un adulte ne voit que des adultes, un protégé que des protégés', () => {
-    const pool = [candidate(1, { adult: true }), candidate(2, { adult: false })];
-    expect(selectOnboardingSuggestions({ viewer, candidates: pool, excludedIds: new Set() }).map((s) => s.id)).toEqual([
-      'c1',
-    ]);
-    expect(
-      selectOnboardingSuggestions({ viewer: { ...viewer, adult: false }, candidates: pool, excludedIds: new Set() }).map(
+  it('jamais de suggestion croisée : chaque classe d\'âge ne voit que la sienne', () => {
+    const pool = [
+      candidate(1, { ageClass: 'adult' }),
+      candidate(2, { ageClass: 'minor' }),
+      candidate(3, { ageClass: 'unknown' }),
+    ];
+    const served = (ageClass: 'adult' | 'minor' | 'unknown') =>
+      selectOnboardingSuggestions({ viewer: { ...viewer, ageClass }, candidates: pool, excludedIds: new Set() }).map(
         (s) => s.id,
-      ),
-    ).toEqual(['c2']);
+      );
+    expect(served('adult')).toEqual(['c1']);
+    expect(served('minor')).toEqual(['c2']);
+    expect(served('unknown')).toEqual(['c3']);
   });
 
   it('écarte soi, les exclus, les comptes inactifs, les blocages dans les deux sens et les langues sans partage', () => {
