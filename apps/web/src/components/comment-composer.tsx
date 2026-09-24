@@ -1,9 +1,12 @@
 import { useCallback, useId, useRef, useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
+import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { MentionSource } from '@/lib/view/mention-source';
+import { useMentionField } from '@/lib/view/use-mention-field';
 
 /**
  * **LE COMPOSEUR DE COMMENTAIRE** — miroir réduit de
@@ -38,14 +41,18 @@ export type CommentComposerProps = {
    * `POST /posts/:postId/comments` exige un `registeredUser` (`comments.ts:184`),
    * donc un champ offert à un visiteur anonyme serait un contrôle qui ment. */
   readonly canWrite: boolean;
+  /** LE CONTEXTE DES MENTIONS (#7846) — la publication commentée
+   * (`useMentionSource`) ; `null` : aucune liste ne s'ouvre. */
+  readonly mentionSource?: MentionSource | null;
 };
 
-export function CommentComposer({ language, onSend, canWrite }: CommentComposerProps) {
+export function CommentComposer({ language, onSend, canWrite, mentionSource = null }: CommentComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
+  const mention = useMentionField({ text, fieldRef, onText: setText, source: mentionSource });
 
   const submit = useCallback(async () => {
     const content = text.trim();
@@ -88,7 +95,8 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
         void submit();
       }}
     >
-      <div className="flex items-end gap-2">
+      <div className="relative flex items-end gap-2">
+      <MentionFieldPanel field={mention} language={language} />
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>
@@ -106,8 +114,17 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
            serait donc resté désactivé pendant toute la frappe, et le texte
            n'aurait atteint l'état qu'après un clic ailleurs : un composeur
            qu'on ne peut pas envoyer sans d'abord en sortir. */
-        onInput={(e) => setText(e.currentTarget.value)}
+        onInput={(e) => {
+          setText(e.currentTarget.value);
+          mention.syncCaret(e.currentTarget);
+        }}
+        onFocus={mention.onFocus}
+        onBlur={mention.onBlur}
+        onClick={(e) => mention.syncCaret(e.currentTarget)}
+        onKeyUp={(e) => mention.syncCaret(e.currentTarget)}
+        {...mention.aria}
         onKeyDown={(e) => {
+          if (mention.onKeyDown(e.nativeEvent)) return;
           /* Entrée ENVOIE, Maj+Entrée saute une ligne — la convention du
              composeur du fil (`composer.tsx`), jamais une seconde. */
           if (e.key !== 'Enter' || e.shiftKey) return;

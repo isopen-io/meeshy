@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
+import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { PersonName } from '@/components/person-name';
 import { GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -15,6 +16,8 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
+import type { MentionSource } from '@/lib/view/mention-source';
+import { useMentionField } from '@/lib/view/use-mention-field';
 import { PrismPastille } from './message-blocks';
 
 /**
@@ -62,6 +65,9 @@ export type CommentGestureHandlers = {
    * s'ANNONCE (`CommentRowView.swift:284`, `.disabled(isInFlight)`), elle ne
    * se contente pas d'avaler le second tap (défaut majeur 7). */
   readonly busyOf: (commentId: string) => boolean;
+  /** LE CONTEXTE DES MENTIONS de la publication (#7846) — le champ de
+   * modification mentionne comme le composeur, par le même mécanisme. */
+  readonly mentionSource?: MentionSource | null;
 };
 
 /** Ce que la rangée a besoin de savoir d'un échec : quoi dire, et si un rejeu
@@ -305,11 +311,13 @@ function GestureFailure({
 function EditForm({
   comment,
   language,
+  mentionSource,
   onSave,
   onCancel,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
+  readonly mentionSource: MentionSource | null;
   readonly onSave: (content: string) => void;
   readonly onCancel: () => void;
 }) {
@@ -317,6 +325,7 @@ function EditForm({
   const trimmed = draft.trim();
   const submittable = trimmed !== '' && trimmed.length <= COMMENT_MAX_LENGTH;
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const mention = useMentionField({ text: draft, fieldRef, onText: setDraft, source: mentionSource });
 
   /**
    * LE FOCUS SUIT LE GESTE — « Modifier » démonte la barre entière, donc le
@@ -339,7 +348,8 @@ function EditForm({
   }, []);
 
   return (
-    <div className="flex flex-col gap-2 pt-1">
+    <div className="relative flex flex-col gap-2 pt-1">
+      <MentionFieldPanel field={mention} language={language} placement="below" />
       <textarea
         ref={fieldRef}
         data-comment-edit-field={comment.id}
@@ -355,7 +365,16 @@ function EditForm({
            (`comment-composer.tsx:93-98`) : sous le runtime Preact (D-2),
            `onChange` est l'événement NATIF `change`, qui ne part qu'à la perte
            du focus. « Enregistrer » serait resté désactivé toute la frappe. */
-        onInput={(event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
+        onInput={(event) => {
+          setDraft(event.currentTarget.value);
+          mention.syncCaret(event.currentTarget);
+        }}
+        onFocus={mention.onFocus}
+        onBlur={mention.onBlur}
+        onClick={(event) => mention.syncCaret(event.currentTarget)}
+        onKeyUp={(event) => mention.syncCaret(event.currentTarget)}
+        onKeyDown={(event) => void mention.onKeyDown(event.nativeEvent)}
+        {...mention.aria}
         /* LA MÊME PEAU QUE LE COMPOSEUR — c'est le même métier (un champ de
            commentaire), donc un seul vocabulaire de forme. */
         className="w-full resize-none rounded-chip px-3 py-2.5 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -521,7 +540,13 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           />
         </div>
         {editing && actionable !== undefined ? (
-          <EditForm comment={comment} language={language} onSave={save} onCancel={() => setEditing(false)} />
+          <EditForm
+            comment={comment}
+            language={language}
+            mentionSource={gestures?.mentionSource ?? null}
+            onSave={save}
+            onCancel={() => setEditing(false)}
+          />
         ) : (
           /* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
              document : poser `lang` partout ferait mentir la voix sur les

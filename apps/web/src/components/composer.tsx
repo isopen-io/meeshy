@@ -1,10 +1,10 @@
-import { Suspense, lazy, memo, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { ComposerTopRow } from './composer-top-row';
 import { Glyph } from './glyph';
-import { MentionSuggestions, mentionOptionId } from './mention-suggestions';
+import { MentionFieldPanel } from './mention-suggestions';
 import type { ComposerNotice } from './composer-tray';
 import {
   acceptPendingFiles,
@@ -32,9 +32,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
-import type { MentionCandidate } from '@/lib/api/mention-suggestions';
-import { insertMention } from '@/lib/view/mention-query';
-import { useMentionSuggestions } from '@/lib/view/use-mention-suggestions';
+import { useMentionField } from '@/lib/view/use-mention-field';
 
 /**
  * LA FEUILLE D'EFFETS, CHARGÉE À LA DEMANDE (#6175) — même discipline que
@@ -205,14 +203,18 @@ export const Composer = memo(function Composer({
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
-  /** LE CURSEUR (#7826) — la mention se lit À SA POSITION, pas en fin de
-   * texte. Relu à chaque frappe, clic et flèche : un état, parce que la liste
-   * doit se rouvrir ou se fermer quand il bouge sans que le texte change. */
-  const [caret, setCaret] = useState(() => draft?.text.length ?? 0);
-  const syncCaret = (el: HTMLTextAreaElement) => setCaret(el.selectionStart ?? el.value.length);
-  const mentions = useMentionSuggestions({ text, caret, enabled: focused });
-  const mentionListId = useId();
-  const mentionListOpen = mentions.open && mentions.items.length > 0;
+  /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
+   * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
+   * insertion. Sans `source`, il lit celle que le fil ouvert publie. */
+  const mention = useMentionField({
+    text,
+    fieldRef: field,
+    onText: (next) => {
+      setText(next);
+      onTextChange?.(next);
+      compose.setText(next);
+    },
+  });
   /* UN LIEU SEUL SUFFIT À ENVOYER — comme une pièce jointe seule. Sans lui
      dans cette somme, partager sa position aurait demandé d'écrire un mot,
      et le bouton d'envoi serait resté invisible sur un composeur qui porte
@@ -390,7 +392,6 @@ export const Composer = memo(function Composer({
 
   const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
     setText('');
-    setCaret(0);
     onTextChange?.('');
     compose.setText(''); // Le vidage réinitialise la détection (miroir `TextAnalyzer` texte vidé).
     setPending([]);
@@ -474,63 +475,12 @@ export const Composer = memo(function Composer({
    * il regarde. `selectionStart`/`selectionEnd` absents (champ jamais
    * focalisé) ⇒ fin du texte, le cas nominal.
    */
-  const writeAt = (next: string, nextCaret: number) => {
-    setText(next);
-    onTextChange?.(next);
-    compose.setText(next);
-    setCaret(nextCaret);
-    /* LE CURSEUR SUIT CE QUI A ÉTÉ INSÉRÉ — sans ce rappel, il retombait au
-       DÉBUT du champ (React réécrit `value`, le navigateur remet la sélection
-       à 0) et le mot suivant s'écrivait avant la phrase. Différé d'un tour :
-       la valeur n'est posée sur le nœud qu'après le rendu. */
-    queueMicrotask(() => {
-      const after = field.current;
-      if (after === null) return;
-      after.focus();
-      after.setSelectionRange(nextCaret, nextCaret);
-    });
-  };
-
   const insertEmoji = (emoji: string) => {
     const el = field.current;
     const start = el?.selectionStart ?? text.length;
     const end = el?.selectionEnd ?? text.length;
     setEmojiSheetOpen(false);
-    writeAt(`${text.slice(0, start)}${emoji}${text.slice(end)}`, start + emoji.length);
-  };
-
-  /**
-   * CHOISIR UNE PERSONNE (#7826) — `@username ` remplace le mot `@…` sous le
-   * curseur (`insertMention`, miroir `replacingTrailingHandle` iOS) ; la
-   * liste se referme d'elle-même, le curseur sortant de la requête.
-   */
-  const pickMention = (candidate: MentionCandidate) => {
-    if (mentions.query === null) return;
-    const inserted = insertMention(text, mentions.query, candidate.username);
-    writeAt(inserted.text, inserted.caret);
-  };
-
-  /** LE CLAVIER DE LA LISTE — ↑/↓ déplacent la rangée active, Entrée et Tab
-   * insèrent, Échap ferme. Liste ouverte, Entrée N'ENVOIE PAS : on choisit
-   * une personne, on ne part pas au milieu d'un nom. Rend `true` quand la
-   * touche a été consommée. Une composition IME en cours garde ses touches. */
-  const handleMentionKey = (e: KeyboardEvent): boolean => {
-    if (!mentions.open || e.isComposing) return false;
-    if (e.key === 'Escape') {
-      mentions.dismiss();
-      return true;
-    }
-    const active = mentions.items[mentions.activeIndex];
-    if (active === undefined) return false;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      mentions.move(e.key === 'ArrowDown' ? 1 : -1);
-      return true;
-    }
-    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-      pickMention(active);
-      return true;
-    }
-    return false;
+    mention.write(`${text.slice(0, start)}${emoji}${text.slice(end)}`, start + emoji.length);
   };
 
   /**
@@ -570,16 +520,7 @@ export const Composer = memo(function Composer({
        composeur en remontant le DOM, et il attrape le lien « Retour » de
        l'en-tête. Une ancre nommée est moins chère qu'un sélecteur fragile. */
     <div data-composer className="relative flex flex-col pb-safe" style={chromeAccentStyle}>
-      {mentions.open ? (
-        <MentionSuggestions
-          listId={mentionListId}
-          items={mentions.items}
-          activeIndex={mentions.activeIndex}
-          language={uiLanguage}
-          onPick={pickMention}
-          onHighlight={mentions.highlight}
-        />
-      ) : null}
+      <MentionFieldPanel field={mention} language={uiLanguage} />
 
       {replyTo ? (
         <div
@@ -770,37 +711,33 @@ export const Composer = memo(function Composer({
               ref={field}
               rows={1}
               value={text}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onFocus={() => {
+                setFocused(true);
+                mention.onFocus();
+              }}
+              onBlur={() => {
+                setFocused(false);
+                mention.onBlur();
+              }}
               onInput={(e) => {
                 const el = e.currentTarget;
                 setText(el.value);
-                syncCaret(el);
+                mention.syncCaret(el);
                 onTextChange?.(el.value);
                 compose.setText(el.value);
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
               }}
-              onClick={(e) => syncCaret(e.currentTarget)}
-              onKeyUp={(e) => syncCaret(e.currentTarget)}
+              onClick={(e) => mention.syncCaret(e.currentTarget)}
+              onKeyUp={(e) => mention.syncCaret(e.currentTarget)}
               /* LE MOTIF « CHAMP + LISTE À DESCENDANT ACTIF » (#7826) — le
                  champ reste un `textbox` multiligne (ARIA in HTML n'admet
                  aucun autre rôle sur `<textarea>`), et annonce sa liste par
                  `aria-autocomplete`/`aria-controls`/`aria-activedescendant`. */
-              aria-autocomplete="list"
-              {...(mentionListOpen
-                ? {
-                    'aria-controls': mentionListId,
-                    'aria-activedescendant': mentionOptionId(mentionListId, mentions.activeIndex),
-                  }
-                : {})}
+              {...mention.aria}
               onKeyDown={(e) => {
-                if (handleMentionKey(e.nativeEvent)) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
+                if (mention.onKeyDown(e.nativeEvent)) return;
                 // La touche Entree ENVOIE (`.submitLabel(.send)`) ; Maj+Entree
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {
