@@ -7,7 +7,7 @@ import { pageÀInstantFigé } from './instant.mjs';
 
 /**
  * LA MISE EN ÉVIDENCE D'UN SAUT SE MESURE PAR CONDITION, JAMAIS AU CHRONOMÈTRE
- * (#6115) — `routes/thread.tsx:444` l'efface au bout de **1600 ms**, à dessein
+ * (#6115) — `useThreadJump` (`src/lib/view/use-thread-jump.ts`, `HIGHLIGHT_MS`) l'efface au bout de **1600 ms**, à dessein
  * (« elle s'efface d'elle-même, jamais un état qui s'accumule sans fin »).
  *
  * Une lecture SYNCHRONE placée derrière un délai fixe plus quelques allers-retours

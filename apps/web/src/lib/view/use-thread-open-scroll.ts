@@ -35,7 +35,7 @@ import type { UnreadBoundarySnapshot } from './unread-boundary';
  * donc sur plusieurs images le temps que les mesures convergent — et on
  * abandonne à la PREMIÈRE intention de l'utilisateur (mêmes écouteurs que
  * `pin-to-bottom.ts`). Le saut vers le séparateur, lui, suit le même
- * patron que `jumpToMessage` (citation, `routes/thread.tsx`) : une seule
+ * patron que `jumpToMessage` (citation, `lib/view/use-thread-jump.ts`) : une seule
  * image suffit pour un index déjà dans la fenêtre virtualisée.
  */
 export function useThreadOpenScroll(input: {

@@ -63,11 +63,8 @@ const HOOK_NAMES = [
   'useOnline',
   'useConversationsSnapshot',
   'useReaderLanguages',
-  'useReplyToPreview',
   'useLiveAnnouncer',
   'useSend',
-  'usePersistedReadingMode',
-  'useThreadDraft',
   'useThreadData',
   'useVirtualizer',
   'useThreadScene',
@@ -81,7 +78,9 @@ const HOOK_NAMES = [
   'useReadTracking',
   'useThreadOpenScroll',
   'useUnreadBoundary',
-  // #7429 — les trois hooks nés du découpage de cet écran.
+  // #7429 — les trois hooks nés du découpage de cet écran ; ceux qu'ils ont
+  // emportés (`usePersistedReadingMode`, `useThreadDraft`, `useReplyToPreview`)
+  // ont quitté la liste avec lui : elle dit ce que l'hôte APPELLE.
   'useThreadReadingMode',
   'useThreadCompose',
   'useThreadJump',

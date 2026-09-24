@@ -82,7 +82,9 @@ import { ThreadModes } from './thread-modes';
  * (`ThreadMessageSheets`) vivent désormais chacun dans leur propre fichier —
  * même doctrine qu'iOS (`ConversationView.swift`, découpé en quatorze
  * extensions PAR SURFACE) : cet écran ne fait plus que CÂBLER ce que chacun
- * lui rend.
+ * lui rend. La prochaine surface s'ajoute dans SA pièce (le saut `?around=`
+ * de #7420 dans `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
+ * rougit dès que cet hôte ou l'une de ses pièces franchit 1000 lignes.
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();

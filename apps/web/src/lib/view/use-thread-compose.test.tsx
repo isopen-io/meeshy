@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { createDraftStore, type StorageLike } from '@/lib/send/draft-store';
+import { message } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 
 import { useThreadCompose, type ThreadComposeState } from './use-thread-compose';
@@ -36,17 +37,14 @@ function fakeStorage(): StorageLike & { readonly data: Map<string, string> } {
 }
 
 function messageOf(overrides: Partial<Message> & { readonly id: string }): Message {
-  return {
-    conversationId: 'c-1',
+  return message({
     senderId: 'u-2',
     content: 'salut',
     originalLanguage: 'fr',
     translations: [],
     createdAt: new Date('2026-09-24T10:00:00.000Z'),
-    updatedAt: new Date('2026-09-24T10:00:00.000Z'),
-    messageType: 'text',
     ...overrides,
-  } as unknown as Message;
+  });
 }
 
 let container: HTMLDivElement;
@@ -88,7 +86,7 @@ function mount(initial: {
       conversationId: 'c-1',
       messages: initial.messages,
       readerLanguages: ['fr'],
-      send: initial.send as never,
+      send: initial.send,
     });
     return null;
   }
@@ -136,7 +134,7 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
     });
 
     expect(calls).toEqual([['réponse', [], m1, 'fr', {}, null]]);
-    expect(state().replyTarget).toBeNull();
+    expect(Object.is(calls[0]?.[2], m1)).toBe(true);
     expect(state().replyTo).toBeUndefined();
   });
 
@@ -154,11 +152,11 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
     act(() => {
       state().setReplyTarget('m1');
     });
-    expect(state().replyTarget).toBe('m1');
+    expect(state().replyTo).toBeDefined();
     act(() => {
       state().onCancelReply();
     });
-    expect(state().replyTarget).toBeNull();
+    expect(state().replyTo).toBeUndefined();
   });
 
   test('onSend garde son identité entre deux rendus sans changement — il est prop de Composer, re-rendu à chaque image', () => {

@@ -1,13 +1,11 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import type { Virtualizer } from '@tanstack/react-virtual';
-
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { message } from '@/lib/api/fixtures-base';
 import type { PlacedMessage } from '@/lib/grouping';
-import type { Message } from '@/lib/api/types';
 
-import { useThreadJump, type ThreadJump } from './use-thread-jump';
+import { HIGHLIGHT_MS, useThreadJump, type ThreadJump } from './use-thread-jump';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -24,11 +22,11 @@ afterAll(async () => {
 
 function placedOf(ids: readonly string[]): readonly PlacedMessage[] {
   return ids.map((id) => ({
-    message: { id } as unknown as Message,
-    opensDay: false,
-    isFirstOfCluster: true,
-    isLastOfCluster: true,
-  })) as unknown as readonly PlacedMessage[];
+    message: message({ id, senderId: 'u-2', content: id, originalLanguage: 'fr', translations: [], createdAt: new Date('2026-09-24T10:00:00.000Z') }),
+    head: true,
+    tail: true,
+    opensDay: null,
+  }));
 }
 
 let container: HTMLDivElement;
@@ -60,7 +58,7 @@ function mount(initial: {
       initial.journal.push('scroll');
       scrollToIndexCalls.push([index, options]);
     },
-  } as unknown as Virtualizer<HTMLElement, Element>;
+  };
   const noteProgrammaticScroll = () => initial.journal.push('note');
 
   let captured!: ThreadJump;
@@ -107,7 +105,7 @@ describe('useThreadJump — le saut de citation et sa mise en évidence (#7429, 
     expect(state().highlightedId).toBe('m3');
   });
 
-  test('le surlignage s’efface de lui-même après 1600 ms, et un second saut réarme le minuteur', () => {
+  test('le surlignage s’efface de lui-même après HIGHLIGHT_MS (1600 ms), et un second saut réarme le minuteur', () => {
     const journal: string[] = [];
     const { state } = mount({ placed: placedOf(['m1', 'm2']), mode: 'focal', journal });
 
@@ -119,9 +117,11 @@ describe('useThreadJump — le saut de citation et sa mise en évidence (#7429, 
     let nextId = 0;
     const realSetTimeout = globalThis.setTimeout;
     const realClearTimeout = globalThis.clearTimeout;
-    globalThis.setTimeout = ((cb: () => void) => {
+    const delays: number[] = [];
+    globalThis.setTimeout = ((cb: () => void, delay: number) => {
       nextId += 1;
       pending.set(nextId, cb);
+      delays.push(delay);
       return nextId;
     }) as unknown as typeof setTimeout;
     globalThis.clearTimeout = ((id?: number) => {
@@ -135,6 +135,8 @@ describe('useThreadJump — le saut de citation et sa mise en évidence (#7429, 
         state().jumpToMessage('m1');
       });
       expect(pending.size).toBe(1);
+      expect(delays).toEqual([HIGHLIGHT_MS]);
+      expect(HIGHLIGHT_MS).toBe(1600);
       const firstEntry = pending.entries().next();
       if (firstEntry.done) throw new Error('aucun minuteur programmé après le premier saut');
       const [firstId] = firstEntry.value;
@@ -172,7 +174,11 @@ describe('useThreadJump — le saut de citation et sa mise en évidence (#7429, 
     rerender({ mode: 'script' });
     expect(journal).toEqual(['note', 'scroll']); // consommée au passage en rangée plate
 
-    rerender({ mode: 'script' }); // troisième rendu, mode inchangé : la demande est déjà consommée
+    /* La demande est CONSOMMÉE, et ça ne se prouve qu'en rejouant l'effet :
+       un rendu au MÊME mode ne le relance pas (dépendances inchangées), donc
+       il ne pourrait pas rougir. Passer à `focal` — autre rangée plate —
+       relance l'effet : une demande restée posée resauterait ici. */
+    rerender({ mode: 'focal' });
     expect(journal).toEqual(['note', 'scroll']);
   });
 

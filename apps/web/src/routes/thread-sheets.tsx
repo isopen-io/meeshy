@@ -6,27 +6,45 @@ import { ReactionSheet } from '@/components/reaction-sheet';
 import type { Message } from '@/lib/api/types';
 import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
-import type { useMessageMenu } from '@/lib/view/use-message-menu';
+import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
-/** Le contrôleur ENTIER de `useMessageMenu` (`lib/view/use-message-menu.ts`)
- * — ce composant ne fait que CÂBLER le JSX sur ce qu'il rend, motif
- * `ThreadModes`/`ThreadHeader` (composant SANS état propre). */
-export type ThreadMessageSheetsController = ReturnType<typeof useMessageMenu>;
+/** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
+ * `Pick`, jamais le contrôleur entier : le contrat de ce composant se lit
+ * d'un coup d'œil, et un bouchon de test le remplit sans `as`. */
+export type ThreadSheetsMenu = Pick<
+  MessageMenuController,
+  | 'menuTarget'
+  | 'menuData'
+  | 'onCloseMenu'
+  | 'onMenuReact'
+  | 'onMenuAction'
+  | 'onPickLanguage'
+  | 'forwardIds'
+  | 'onForwardTo'
+  | 'onCloseForward'
+  | 'reactionSheetFor'
+  | 'setReactionSheetFor'
+  | 'detailFor'
+  | 'setDetailFor'
+  | 'servedOf'
+  | 'starOf'
+>;
 
 /**
  * LES FEUILLES DU MESSAGE (#5814, #5866 ; extrait de `routes/thread.tsx` au
- * lot #7429, découpage sans changer un pixel) — portail conditionnel : le
- * menu du message (appui long / clic droit / `ContextMenu`), la feuille de
- * destinataires, le rail de réactions et la fiche détail. Miroir
- * `ConversationOverlayState` (iOS, `ConversationView.swift:24-80` — menu,
- * sélection, feuilles) : c'est la même partition que `useThreadJump` (le
- * saut) et `useThreadReadingMode` (l'orchestration du mode) reprennent côté
- * état, ici côté FEUILLES.
+ * lot #7429, découpage sans changer un pixel) — le menu du message (appui
+ * long / clic droit / `ContextMenu`), la feuille de destinataires, le rail de
+ * réactions et la fiche détail. Miroir `ConversationOverlayState` (iOS,
+ * `ConversationView.swift:24` — menu, sélection, feuilles) : la même
+ * partition que `useThreadJump` (le saut) et `useThreadReadingMode`
+ * (l'orchestration du mode) reprennent côté état, ici côté FEUILLES.
+ * Composant SANS état propre (motif `ThreadModes`/`ThreadHeader`) : toute la
+ * règle vit dans `useMessageMenu`, ce fichier ne fait que CÂBLER le JSX.
  *
- * Chaque feuille reste montée SEULEMENT quand sa cible existe ET que le
- * message qu'elle vise existe ENCORE dans le fil — un montage inconditionnel
- * ouvrirait un panneau vide sur un message disparu entre-temps (fixture
- * rechargée, suppression).
+ * Chaque feuille ne se monte que quand SA cible est posée ; le menu et la
+ * fiche détail exigent EN PLUS que le message visé soit encore dans le fil
+ * (`menuData` est `undefined` sinon, et la fiche le recherche dans
+ * `messages`) — jamais un panneau ouvert sur un message disparu.
  */
 export function ThreadMessageSheets({
   messageMenu,
@@ -36,7 +54,7 @@ export function ThreadMessageSheets({
   conversationId,
   viewerId,
 }: {
-  readonly messageMenu: ThreadMessageSheetsController;
+  readonly messageMenu: ThreadSheetsMenu;
   readonly messages: readonly Message[];
   readonly readerLanguages: readonly string[];
   readonly readerLocale: string;
