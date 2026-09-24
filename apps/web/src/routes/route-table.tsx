@@ -1,6 +1,7 @@
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -62,6 +63,15 @@ const adminAgentScreen = () =>
 const onboardingScreen = () =>
   Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
+/* LES INVITATIONS (#7796, #7797) — la page d'accueil d'un lien et la page de
+   son créateur attendent leur chunk ET le catalogue `invite.*`/`linkDetail.*`
+   en parallèle, comme l'administration et l'accueil : `translateInvite` lève
+   sur un catalogue non chargé, et aucun autre écran n'en paie les octets. */
+const chatJoinScreen = () =>
+  Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const shareLinkScreen = () =>
+  Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
@@ -81,7 +91,7 @@ export const ROUTES = {
      (`ShareLinkModels.swift`), Android et la v2 (`links.ts § shareLinkUrl`).
      Le legacy la servait (`apps/web/app/chat/[id]`, D-5) et ne la sert plus.
      PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble. */
-  chatJoin: { pattern: '/chat/$link', screen: () => import('@/routes/chat-join') },
+  chatJoin: { pattern: '/chat/$link', screen: chatJoinScreen },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
@@ -287,7 +297,7 @@ export const ROUTES = {
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
   shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
-  shareLink: { pattern: '/links/share/$link', screen: () => import('@/routes/share-link') },
+  shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },

@@ -80,3 +80,24 @@ export function withLinkFirst(data: ShareLinksData | undefined, created: MyShare
     }),
   };
 }
+
+/** Remplace UN lien dans les pages chargées — la mise à jour optimiste de la page du créateur (#7797). */
+export function withLinkReplaced(data: ShareLinksData | undefined, next: MyShareLink): ShareLinksData | undefined {
+  if (data === undefined || findShareLink(data, next.linkId) === undefined) return data;
+  return { ...data, pages: data.pages.map((page) => ({ ...page, links: page.links.map((link) => (link.linkId === next.linkId ? next : link)) })) };
+}
+
+/** Retire UN lien des pages chargées, et du résumé de la première — « Supprimer » (#7797). */
+export function withLinkRemoved(data: ShareLinksData | undefined, linkId: string): ShareLinksData | undefined {
+  const current = findShareLink(data, linkId);
+  if (data === undefined || current === undefined) return data;
+  const delta = { totalLinks: -1, activeLinks: current.isActive ? -1 : 0, totalUses: -current.currentUses };
+  return {
+    ...data,
+    pages: data.pages.map((page, index) => ({
+      ...page,
+      links: page.links.filter((link) => link.linkId !== linkId),
+      summary: index === 0 ? adjust(page.summary, delta) : page.summary,
+    })),
+  };
+}

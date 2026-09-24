@@ -25,11 +25,14 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *   corps ; le corps ne porte que la langue du compte, que la loi
  *   `allowedLanguages` juge (`link-admission.ts:445-450`).
  *
- * **L'invitation décodée est une PROJECTION** de quatre champs — ceux que
- * l'écran affiche. Identifiants, description, compteurs, langues parlées, et
- * tout ce qu'une évolution de la passerelle ajouterait à la charge restent sur
- * le fil : rien de la conversation n'atteint la mémoire du client avant que le
- * visiteur ait choisi de la rejoindre.
+ * **L'invitation décodée est une PROJECTION** — ce que la page d'accueil
+ * affiche, rien de plus. #7796 (directive porteur 2026-09-24) y fait entrer ce
+ * qui décrit le GROUPE sans identifier personne : le message d'invitation, la
+ * description, la date de création, le logo et la bannière, le nombre de
+ * personnes et les langues parlées. Reste sur le fil tout ce qui NOMME ou
+ * DÉSIGNE quelqu'un ou quelque chose au-delà de la porte : identifiants de la
+ * conversation, du lien et du créateur, membres, invités, messages — et tout
+ * ce qu'une évolution de la passerelle ajouterait à la charge.
  */
 
 export type LinkJoinDeps = { readonly source: DataSource; readonly transport: HttpTransport };
@@ -39,7 +42,29 @@ export type LinkJoinDeps = { readonly source: DataSource; readonly transport: Ht
 export const INVITATION_KINDS = ['direct', 'group', 'public', 'global', 'broadcast'] as const satisfies readonly ConversationType[];
 export type InvitationKind = (typeof INVITATION_KINDS)[number];
 
-export type LinkInviter = { readonly name: string; readonly avatar: string | null };
+export type LinkInviter = { readonly name: string; readonly username: string | null; readonly avatar: string | null };
+
+/** Ce qui présente le GROUPE avant d'y entrer (#7796). `avatar` et `banner`
+ * arrivent avec la passerelle de #7794 : absents, la page dessine les
+ * initiales et un dégradé. */
+export type InvitationGroup = {
+  readonly description: string | null;
+  readonly createdAt: string | null;
+  readonly avatar: string | null;
+  readonly banner: string | null;
+};
+
+/** Une langue parlée — `count` n'existe que si la passerelle compte ; sans
+ * compte, la page ne dessine AUCUN pourcentage (une part égale inventée serait
+ * un chiffre faux). */
+export type SpokenLanguage = { readonly code: string; readonly count: number | null };
+
+/** Les chiffres SANS identité (#7796) — `people: null` quand la passerelle ne
+ * les sert pas : inconnu, jamais zéro. */
+export type InvitationStats = { readonly people: number | null; readonly languages: readonly SpokenLanguage[] };
+
+/** La validité et les places du lien, telles que servies. */
+export type InvitationLimits = { readonly expiresAt: string | null; readonly maxUses: number | null; readonly currentUses: number };
 
 /**
  * **CE QUE LE LIEN EXIGE ET CONCÈDE À QUI N'A PAS DE COMPTE** (#5561).
@@ -76,12 +101,24 @@ export type GuestTerms = {
   /** `allowAnonymousMessages` — l'écran le DIT avant d'entrer ; le composeur du
    * fil, lui, le relit sur les droits SERVIS (`entry.rights`). */
   readonly mayWrite: boolean;
+  /** `allowAnonymousImages` / `allowAnonymousFiles` — la carte « En anonyme,
+   * tu pourras » (#7796). Absents : refusés, comme toute permission. */
+  readonly mayImages: boolean;
+  readonly mayFiles: boolean;
 };
 
 export type LinkInvitation = {
+  /** Le `linkId` public (`mshy_…`) — l'adresse qu'on copie et repartage
+   * (`/chat/<linkId>`), jamais l'identifiant interne de la ligne. */
+  readonly linkId: string | null;
   readonly title: string | null;
   readonly kind: InvitationKind | null;
   readonly inviter: LinkInviter | null;
+  /** Le message d'invitation — `ConversationShareLink.description`. */
+  readonly message: string | null;
+  readonly group: InvitationGroup;
+  readonly stats: InvitationStats;
+  readonly limits: InvitationLimits;
   /**
    * `allowViewHistory` — le SEUL droit qui distingue un compte entré par ce
    * lien d'un autre membre. Ses droits d'écriture sont pleins
@@ -124,16 +161,42 @@ const optionalText = z.optional(z.nullable(z.string()));
 
 const optionalFlag = z.optional(z.nullable(z.boolean()));
 
+const optionalCount = z.optional(z.nullable(z.number()));
+
+const WireSpokenLanguage = z.union([z.string(), z.object({ language: z.string(), count: optionalCount })]);
+
 const WireInvitation = z.object({
+  linkId: optionalText,
   name: optionalText,
+  description: optionalText,
+  expiresAt: optionalText,
+  maxUses: optionalCount,
+  currentUses: optionalCount,
   allowViewHistory: optionalFlag,
   requireAccount: optionalFlag,
   requireNickname: optionalFlag,
   requireEmail: optionalFlag,
   requireBirthday: optionalFlag,
   allowAnonymousMessages: optionalFlag,
+  allowAnonymousImages: optionalFlag,
+  allowAnonymousFiles: optionalFlag,
   allowedLanguages: z.optional(z.nullable(z.array(z.string()))),
-  conversation: z.object({ title: optionalText, type: optionalText }),
+  conversation: z.object({
+    title: optionalText,
+    type: optionalText,
+    description: optionalText,
+    createdAt: optionalText,
+    avatar: optionalText,
+    banner: optionalText,
+  }),
+  stats: z.optional(
+    z.nullable(
+      z.object({
+        totalParticipants: optionalCount,
+        spokenLanguages: z.optional(z.nullable(z.array(WireSpokenLanguage))),
+      }),
+    ),
+  ),
   creator: z.optional(
     z.nullable(
       z.object({
@@ -148,6 +211,7 @@ const WireInvitation = z.object({
 });
 
 type WireCreator = z.infer<typeof WireInvitation>['creator'];
+type WireStats = z.infer<typeof WireInvitation>['stats'];
 
 const WireJoined = z.object({
   conversationId: z.string().check(z.minLength(1)),
@@ -171,7 +235,35 @@ function inviterOf(creator: WireCreator): LinkInviter | null {
     .filter((part): part is string => part !== null)
     .join(' ');
   const name = textOrNull(creator.displayName) ?? textOrNull(fullName) ?? textOrNull(creator.username);
-  return name === null ? null : { name, avatar: textOrNull(creator.avatar) };
+  return name === null ? null : { name, username: textOrNull(creator.username), avatar: textOrNull(creator.avatar) };
+}
+
+const countOrNull = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+
+const dateOrNull = (value: string | null | undefined): string | null => {
+  const text = textOrNull(value);
+  return text !== null && !Number.isNaN(Date.parse(text)) ? text : null;
+};
+
+/**
+ * Les langues parlées, telles que la passerelle les sert AUJOURD'HUI (des
+ * codes, `anonymous.ts § spokenLanguages`) ou DEMAIN (des paires langue ×
+ * compte). Dédoublonnées par code normalisé ; comptées, elles se rangent de la
+ * plus parlée à la moins parlée, et un compte illisible retire sa ligne plutôt
+ * que d'inventer une part.
+ */
+function spokenLanguagesOf(stats: WireStats): readonly SpokenLanguage[] {
+  const raw = stats?.spokenLanguages ?? [];
+  const entries = raw.flatMap((entry): SpokenLanguage[] => {
+    const code = (typeof entry === 'string' ? entry : entry.language).trim().toLowerCase();
+    if (code === '') return [];
+    if (typeof entry === 'string') return [{ code, count: null }];
+    const count = countOrNull(entry.count);
+    return count === null || count === 0 ? [] : [{ code, count }];
+  });
+  const unique = entries.filter((entry, index) => entries.findIndex((other) => other.code === entry.code) === index);
+  return unique.every((entry) => entry.count !== null) ? [...unique].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)) : unique;
 }
 
 export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
@@ -179,9 +271,23 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
   if (!parsed.success) return null;
   const wire = parsed.data;
   return {
+    linkId: textOrNull(wire.linkId),
     title: textOrNull(wire.conversation.title) ?? textOrNull(wire.name),
     kind: INVITATION_KINDS.find((kind) => kind === wire.conversation.type) ?? null,
     inviter: inviterOf(wire.creator),
+    message: textOrNull(wire.description),
+    group: {
+      description: textOrNull(wire.conversation.description),
+      createdAt: dateOrNull(wire.conversation.createdAt),
+      avatar: textOrNull(wire.conversation.avatar),
+      banner: textOrNull(wire.conversation.banner),
+    },
+    stats: { people: countOrNull(wire.stats?.totalParticipants), languages: spokenLanguagesOf(wire.stats) },
+    limits: {
+      expiresAt: dateOrNull(wire.expiresAt),
+      maxUses: countOrNull(wire.maxUses) === 0 ? null : countOrNull(wire.maxUses),
+      currentUses: countOrNull(wire.currentUses) ?? 0,
+    },
     readsHistory: wire.allowViewHistory === true,
     guest: {
       allowed: wire.requireAccount === false,
@@ -193,6 +299,8 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
       birthdayRequired: wire.requireBirthday === true,
       languages: (wire.allowedLanguages ?? []).map((code) => code.trim()).filter((code) => code !== ''),
       mayWrite: wire.allowAnonymousMessages === true,
+      mayImages: wire.allowAnonymousImages === true,
+      mayFiles: wire.allowAnonymousFiles === true,
     },
   };
 }
