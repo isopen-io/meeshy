@@ -10,6 +10,7 @@
  * aucune variante `light:`.
  */
 import { SCHEME_KEY } from './inline-scheme-bootstrap.js';
+import { appelNatif, coqueCourante } from './native-shell';
 
 export type ColorScheme = 'light' | 'dark';
 
@@ -26,6 +27,22 @@ function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
+  syncShellSystemBars(scheme);
+}
+
+/**
+ * LA BARRE D'ÉTAT DE LA COQUE (#7731). `SystemBars` (Capacitor 8) règle ses
+ * icônes sur le thème du SYSTÈME ; ce module peint le thème CHOISI. Sombre
+ * dans l'app sur un téléphone clair, les icônes sombres se posaient sur le
+ * fond sombre et l'heure disparaissait. `DARK` = icônes claires, `LIGHT` =
+ * icônes sombres. Hors coque, la barre appartient au navigateur : rien à faire.
+ */
+function syncShellSystemBars(scheme: ColorScheme): void {
+  const systemBars = appelNatif(coqueCourante(), 'SystemBars');
+  if (systemBars === null) return;
+  systemBars('setStyle', { style: scheme === 'light' ? 'LIGHT' : 'DARK' }).catch(() => {
+    /* Barre non réglée : le thème de l'app, lui, est déjà peint. */
+  });
 }
 
 export function setScheme(scheme: ColorScheme): void {
@@ -89,6 +106,7 @@ export function setThemePreference(preference: ThemePreference): void {
  * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
+  syncShellSystemBars(currentScheme());
   const query = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = (e: MediaQueryListEvent) => {
     if (currentThemePreference() === 'system') applyScheme(e.matches ? 'light' : 'dark');
