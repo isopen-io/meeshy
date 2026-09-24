@@ -1,0 +1,1141 @@
+/* L'ACCUEIL POST-INSCRIPTION (#7729) — la peau des cinq cartes, miroir
+   d'`OnboardingVisuals.swift` : fond de marque à deux halos IMMOBILES, carte
+   de verre (le verre vient de `glass.css`, son site unique), capsule en
+   dégradé de marque, jauge qui se remplit dans le sens de lecture, « +N » qui
+   s'envole vers la pastille. Chargée avec le chunk de `/onboarding` seulement.
+
+   Toute animation a son repli sous `prefers-reduced-motion` : un fondu, jamais
+   un mouvement. Les tailles de texte sont en `rem` : elles suivent le réglage
+   de taille du système et le zoom. Aucune couleur écrite ici : des jetons
+   (`--ios-*`) et leurs mélanges. */
+
+.onb {
+  --onb-brand: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-purple-500));
+  --onb-ink: var(--ios-ink);
+  --onb-ink-2: var(--ios-ink-2);
+  --onb-soft: color-mix(in srgb, var(--ios-indigo-400) 14%, transparent);
+  --onb-hairline: color-mix(in srgb, var(--ios-indigo-300) 26%, transparent);
+  --onb-spring: cubic-bezier(0.2, 1.18, 0.32, 1);
+  --onb-bounce: linear(0, 0.157 4.2%, 0.582 10.8%, 1.012 17.9%, 1.157 22.4%, 1.2 26.3%, 1.16 31%, 1.034 38.9%, 0.978 45.4%, 0.968 51.3%, 0.996 66.4%, 1.004 78%, 1);
+  --onb-enter: 32px;
+  --onb-rounded: ui-rounded, 'SF Pro Rounded', var(--font-native);
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--ios-surface);
+  color: var(--onb-ink);
+}
+
+.onb[dir='rtl'] {
+  --onb-enter: -32px;
+}
+
+.onb-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(26rem 26rem at 8% -4%, color-mix(in srgb, var(--ios-indigo-500) 40%, transparent), transparent 70%),
+    radial-gradient(24rem 24rem at 104% 96%, color-mix(in srgb, var(--ios-purple-500) 30%, transparent), transparent 70%),
+    radial-gradient(30rem 18rem at 50% 108%, color-mix(in srgb, var(--ios-indigo-700) 30%, transparent), transparent 75%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ios-indigo-950) 75%, black), color-mix(in srgb, var(--ios-indigo-950) 45%, black));
+}
+
+:root.light .onb-backdrop {
+  background:
+    radial-gradient(26rem 26rem at 8% -4%, color-mix(in srgb, var(--ios-indigo-300) 55%, transparent), transparent 70%),
+    radial-gradient(24rem 24rem at 104% 96%, color-mix(in srgb, var(--ios-purple-500) 20%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--ios-indigo-50), white);
+}
+
+/* ---- La barre du haut : pastille, « Passer tout », progression ---------- */
+
+.onb-top {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 35rem;
+  margin: 0 auto;
+  padding: 8px 20px 0;
+}
+
+.onb-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.onb-pill-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.onb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--onb-brand);
+  color: white;
+  font-family: var(--onb-rounded);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ios-indigo-500) 45%, transparent);
+}
+
+.onb-pill-bump {
+  animation: onb-bump 520ms var(--onb-bounce);
+}
+
+.onb-flight {
+  position: absolute;
+  inset-inline-start: 50%;
+  top: 50%;
+  z-index: 2;
+  pointer-events: none;
+  font-family: var(--onb-rounded);
+  font-size: 2.5rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ios-warning);
+  -webkit-text-stroke: 2px white;
+  paint-order: stroke fill;
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ios-indigo-700) 55%, transparent));
+  animation: onb-fly 1200ms cubic-bezier(0.3, 0.7, 0.25, 1) forwards;
+}
+
+.onb-skip {
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 12px;
+  color: var(--onb-ink-2);
+  font-family: var(--onb-rounded);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.onb-progress {
+  display: flex;
+  gap: 6px;
+}
+
+.onb-progress-seg {
+  flex: 0 0 44px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ios-indigo-300) 20%, transparent);
+  transition: flex-grow 500ms var(--onb-spring), background-color 300ms ease;
+}
+
+.onb-progress-seg-on {
+  background: var(--onb-brand);
+}
+
+.onb-progress-seg[data-current='true'] {
+  flex: 1 1 auto;
+}
+
+/* ---- La scène et la carte ----------------------------------------------- */
+
+.onb-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  animation: onb-enter 560ms var(--onb-spring) both;
+}
+
+.onb-card-frame {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  max-width: 35rem;
+  margin: 0 auto;
+}
+
+.onb-card-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+  scrollbar-width: none;
+  /* Le contenu qui défile sous les boutons s'efface au lieu d'être coupé net
+     (le `bottomFade` d'`OnboardingCardLayout`). */
+  mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
+}
+
+.onb-card {
+  display: grid;
+  gap: 20px;
+  padding: 24px 20px;
+  border-radius: 30px;
+  border: 1px solid var(--onb-hairline);
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--ios-indigo-700) 36%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+:root.light .onb-card {
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--ios-indigo-700) 14%, transparent),
+    inset 0 1px 0 white;
+}
+
+.onb-card-text {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.onb-title {
+  margin: 0;
+  font-family: var(--onb-rounded);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--onb-ink);
+}
+
+.onb-body {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  color: var(--onb-ink-2);
+}
+
+.onb-actions {
+  display: grid;
+  gap: 4px;
+  padding: 12px 20px 16px;
+}
+
+/* ---- Les boutons --------------------------------------------------------- */
+
+.onb-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--onb-brand);
+  color: white;
+  font-family: var(--onb-rounded);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ios-indigo-500) 42%, transparent);
+  transition: transform 180ms var(--onb-spring), box-shadow 200ms ease, opacity 200ms ease;
+}
+
+.onb-primary:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.onb-primary:disabled {
+  background: var(--ios-indigo-900);
+  color: color-mix(in srgb, white 78%, transparent);
+  box-shadow: none;
+}
+
+:root.light .onb-primary:disabled {
+  background: var(--ios-indigo-200);
+  color: var(--ios-indigo-800);
+}
+
+.onb-primary[aria-busy='true'] {
+  background: var(--onb-brand);
+  color: white;
+}
+
+.onb-secondary {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 14px;
+  color: var(--onb-ink-2);
+  font-family: var(--onb-rounded);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.onb-link {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--ios-indigo-400);
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+:root.light .onb-link {
+  color: var(--ios-indigo-600);
+}
+
+.onb-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, white 35%, transparent);
+  border-top-color: white;
+  animation: onb-spin 800ms linear infinite;
+}
+
+/* ---- Champs, puces, jauge ----------------------------------------------- */
+
+.onb-field {
+  display: grid;
+  gap: 8px;
+}
+
+.onb-field-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--onb-ink-2);
+}
+
+.onb-language-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 8px 0 16px;
+  border-radius: 18px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+}
+
+.onb[dir='rtl'] .onb-language-row {
+  padding: 0 16px 0 8px;
+}
+
+.onb-language-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--onb-ink);
+}
+
+.onb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.onb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+  color: var(--onb-ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: transform 200ms var(--onb-spring), background-color 200ms ease;
+}
+
+.onb-chip:active {
+  transform: scale(0.95);
+}
+
+.onb-chip[aria-pressed='true'] {
+  background: var(--onb-brand);
+  border-color: transparent;
+  color: white;
+  animation: onb-bump 420ms var(--onb-bounce);
+}
+
+.onb-gauge {
+  display: grid;
+  gap: 8px;
+  justify-self: stretch;
+  width: 100%;
+}
+
+.onb-gauge-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--onb-rounded);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--onb-ink-2);
+}
+
+.onb-gauge-star {
+  color: var(--ios-indigo-400);
+}
+
+.onb-gauge-star-on {
+  color: var(--ios-warning);
+  animation: onb-bump 520ms var(--onb-bounce);
+}
+
+.onb-gauge-track {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ios-indigo-300) 18%, transparent);
+}
+
+.onb-gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--onb-brand);
+  transform-origin: left center;
+  transition: transform 900ms var(--onb-spring);
+}
+
+.onb[dir='rtl'] .onb-gauge-fill {
+  transform-origin: right center;
+}
+
+.onb-gauge-fill[data-empty='true'] {
+  opacity: 0.4;
+}
+
+.onb-textarea {
+  width: 100%;
+  min-height: 104px;
+  padding: 14px 16px;
+  resize: none;
+  border-radius: 22px;
+  border: 1px solid var(--onb-hairline);
+  background: var(--onb-soft);
+  color: var(--onb-ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.onb-textarea:focus {
+  border-color: var(--ios-indigo-400);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ios-indigo-500) 30%, transparent);
+}
+
+.onb-composer {
+  display: grid;
+  gap: 8px;
+}
+
+.onb-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.onb-reward-hint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ios-warning) 16%, transparent);
+  color: var(--ios-warning);
+  font-family: var(--onb-rounded);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+:root.light .onb-reward-hint {
+  color: color-mix(in srgb, var(--ios-warning) 45%, var(--ios-indigo-950));
+}
+
+.onb-reward-hint-center {
+  justify-self: center;
+}
+
+.onb-note {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--onb-ink-2);
+}
+
+.onb-error {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ios-error);
+}
+
+:root.light .onb-error {
+  color: var(--ios-error-strong);
+}
+
+/* ---- Salut envoyé, audience --------------------------------------------- */
+
+.onb-sent {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+
+.onb-sent-bubble {
+  justify-self: end;
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--ios-bubble-mine);
+  color: white;
+  font-size: 1rem;
+  line-height: 1.4;
+  animation: onb-pop 520ms var(--onb-bounce) both;
+}
+
+.onb[dir='rtl'] .onb-sent-bubble {
+  border-radius: 18px 18px 18px 4px;
+}
+
+.onb-sent-title {
+  margin: 0;
+  font-family: var(--onb-rounded);
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--onb-ink);
+}
+
+.onb-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.onb-reward-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--onb-ink);
+  animation: onb-pop 520ms var(--onb-bounce) 160ms both;
+}
+
+.onb-reward-chip-warm {
+  background: color-mix(in srgb, var(--ios-warning) 16%, transparent);
+  border-color: color-mix(in srgb, var(--ios-warning) 35%, transparent);
+  animation-delay: 280ms;
+}
+
+.onb-audience {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+  color: var(--onb-ink);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.onb-audience svg {
+  flex: none;
+  color: var(--ios-indigo-400);
+}
+
+/* ---- La bande ------------------------------------------------------------ */
+
+.onb-friends-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onb-friends-count {
+  font-family: var(--onb-rounded);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--onb-ink);
+}
+
+.onb-people {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 20px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+}
+
+.onb[dir='rtl'] .onb-person {
+  padding: 10px 12px 10px 10px;
+}
+
+.onb-person-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.onb-person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--onb-ink);
+}
+
+.onb-person-flags {
+  margin-inline-start: 8px;
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+}
+
+.onb-person-langs {
+  font-size: 0.8125rem;
+  color: var(--onb-ink-2);
+}
+
+.onb-person-error {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ios-error);
+}
+
+.onb-add {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--onb-brand);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: transform 200ms var(--onb-spring), background-color 250ms ease;
+}
+
+.onb-add:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.onb-add:disabled:not(.onb-add-sent) {
+  opacity: 0.55;
+}
+
+.onb-add-sent {
+  background: color-mix(in srgb, var(--ios-success) 18%, transparent);
+  color: var(--ios-success);
+  animation: onb-bump 460ms var(--onb-bounce);
+}
+
+:root.light .onb-add-sent {
+  color: color-mix(in srgb, var(--ios-success-deep) 70%, black);
+}
+
+/* ---- Les illustrations -------------------------------------------------- */
+
+.onb-illu {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 132px;
+}
+
+/* 1 — le Prisme */
+.onb-prism {
+  perspective: 700px;
+}
+
+.onb-prism-flip {
+  position: relative;
+  width: min(15rem, 80%);
+  height: 64px;
+  transform-style: preserve-3d;
+  animation: onb-flip 900ms var(--onb-spring) 900ms both;
+}
+
+.onb-prism-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-radius: 22px 22px 22px 6px;
+  backface-visibility: hidden;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.onb-prism-from {
+  background: color-mix(in srgb, var(--ios-indigo-300) 22%, transparent);
+  border: 1px solid var(--onb-hairline);
+  color: var(--onb-ink);
+}
+
+.onb-prism-to {
+  background: var(--onb-brand);
+  color: white;
+  transform: rotateY(180deg);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--ios-indigo-500) 45%, transparent);
+}
+
+.onb-prism-flag {
+  font-size: 1.25rem;
+}
+
+.onb-prism-badge {
+  position: absolute;
+  top: 18px;
+  inset-inline-end: calc(50% - min(7.5rem, 40%) - 10px);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ios-surface-card);
+  border: 1px solid var(--onb-hairline);
+  color: var(--ios-indigo-400);
+  animation: onb-pop 520ms var(--onb-bounce) 1500ms both;
+}
+
+/* 2 — le salon */
+.onb-global {
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  justify-content: center;
+  width: min(17rem, 100%);
+  margin: 0 auto;
+}
+
+.onb-global-orb {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--onb-brand);
+  color: white;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ios-indigo-500) 45%, transparent);
+  animation: onb-float 4s ease-in-out infinite;
+}
+
+.onb-global-bubbles {
+  display: grid;
+  gap: 8px;
+}
+
+.onb-global-bubble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: onb-pop 520ms var(--onb-bounce) both;
+}
+
+.onb-global-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.onb-global-text {
+  padding: 6px 12px;
+  border-radius: 16px 16px 16px 4px;
+  background: color-mix(in srgb, var(--ios-indigo-300) 22%, transparent);
+  border: 1px solid var(--onb-hairline);
+  font-size: 1rem;
+}
+
+/* 3 — l'anneau de story */
+@property --onb-ring {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
+}
+
+.onb-story-ring {
+  --onb-ring: 360deg;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--ios-indigo-500), var(--ios-purple-500), var(--ios-warning) var(--onb-ring), color-mix(in srgb, var(--ios-indigo-300) 18%, transparent) var(--onb-ring));
+  animation: onb-ring 1600ms cubic-bezier(0.3, 0.8, 0.3, 1) 300ms both;
+}
+
+.onb-story-core {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--ios-surface);
+}
+
+.onb-story-plus {
+  position: absolute;
+  bottom: 16px;
+  inset-inline-start: calc(50% + 26px);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--onb-brand);
+  color: white;
+  border: 3px solid var(--ios-surface);
+  animation: onb-pop 520ms var(--onb-bounce) 1700ms both;
+}
+
+.onb-story-plus-done {
+  background: var(--ios-success-deep);
+}
+
+/* 4 — la bande */
+.onb-friends {
+  display: flex;
+  justify-content: center;
+}
+
+.onb-friends-face {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-inline-start: -14px;
+  border-radius: 50%;
+  border: 3px solid var(--ios-surface);
+  color: white;
+  font-weight: 800;
+  box-shadow: 0 8px 20px color-mix(in srgb, black 25%, transparent);
+  animation: onb-pop 560ms var(--onb-bounce) both;
+}
+
+.onb-friends-face:first-child {
+  margin-inline-start: 0;
+}
+
+.onb-friends-add {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: 10px;
+  border-radius: 50%;
+  background: var(--onb-brand);
+  color: white;
+  animation: onb-pop 560ms var(--onb-bounce) 520ms both;
+}
+
+/* 5 — la cloche */
+.onb-bell-disc {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, var(--ios-indigo-400), var(--ios-indigo-700));
+  color: white;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--ios-indigo-500) 45%, transparent);
+}
+
+.onb-bell-disc svg {
+  transform-origin: 50% 8%;
+  animation: onb-ring-bell 1400ms ease-in-out 500ms 2 both;
+}
+
+.onb-bell-dot {
+  position: absolute;
+  top: 18px;
+  inset-inline-start: calc(50% + 30px);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ios-error-strong);
+  border: 3px solid var(--ios-surface);
+  animation: onb-pop 520ms var(--onb-bounce) 900ms both;
+}
+
+/* Récapitulatif */
+.onb-trophy-disc {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--ios-warning) 85%, white), color-mix(in srgb, var(--ios-warning) 70%, var(--ios-state-ephemeral)));
+  color: color-mix(in srgb, var(--ios-warning) 25%, var(--ios-indigo-950));
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--ios-warning) 40%, transparent);
+  animation: onb-pop 640ms var(--onb-bounce) both;
+}
+
+.onb-spark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--onb-brand);
+  transform: rotate(45deg);
+  animation: onb-twinkle 1600ms ease-in-out infinite;
+}
+
+.onb-spark-0 { top: 16px; inset-inline-start: calc(50% - 76px); }
+.onb-spark-1 { top: 34px; inset-inline-start: calc(50% + 70px); animation-delay: 300ms; }
+.onb-spark-2 { bottom: 18px; inset-inline-start: calc(50% - 64px); animation-delay: 600ms; }
+.onb-spark-3 { bottom: 26px; inset-inline-start: calc(50% + 62px); animation-delay: 900ms; }
+
+.onb-recap-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb-recap-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--onb-soft);
+  border: 1px solid var(--onb-hairline);
+  animation: onb-pop 520ms var(--onb-bounce) both;
+}
+
+.onb-recap-glyph {
+  flex: none;
+  color: var(--ios-indigo-400);
+}
+
+.onb-recap-tile[data-tone='warm'] .onb-recap-glyph {
+  color: var(--ios-warning);
+}
+
+.onb-recap-text {
+  font-family: var(--onb-rounded);
+  font-size: 0.9375rem;
+  text-wrap: balance;
+  font-weight: 800;
+  color: var(--onb-ink);
+}
+
+/* Le squelette — jamais un spinner (cache vide seulement). */
+.onb-card-skeleton {
+  justify-items: center;
+}
+
+.onb-skeleton-disc,
+.onb-skeleton-line {
+  display: block;
+  background: color-mix(in srgb, var(--ios-indigo-300) 16%, transparent);
+}
+
+.onb-skeleton-disc {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+}
+
+.onb-skeleton-line {
+  width: 80%;
+  height: 18px;
+  border-radius: 9px;
+}
+
+.onb-skeleton-line-short {
+  width: 55%;
+}
+
+/* ---- Le mouvement -------------------------------------------------------- */
+
+@keyframes onb-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--onb-enter)) scale(0.98);
+  }
+}
+
+@keyframes onb-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes onb-bump {
+  40% {
+    transform: scale(1.18);
+  }
+}
+
+@keyframes onb-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 20rem) scale(1.2);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 17rem) scale(1.7);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+}
+
+@keyframes onb-flip {
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+@keyframes onb-ring {
+  from {
+    --onb-ring: 0deg;
+  }
+}
+
+@keyframes onb-float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes onb-ring-bell {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(16deg); }
+  30% { transform: rotate(-14deg); }
+  45% { transform: rotate(10deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(2deg); }
+}
+
+@keyframes onb-twinkle {
+  50% {
+    opacity: 0.25;
+    transform: rotate(45deg) scale(0.6);
+  }
+}
+
+@keyframes onb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes onb-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes onb-fade-out {
+  0% { opacity: 0; transform: translate(-50%, 2.5rem); }
+  25%, 70% { opacity: 1; transform: translate(-50%, 2.5rem); }
+  100% { opacity: 0; transform: translate(-50%, 2.5rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-stage {
+    animation: onb-fade 240ms ease both;
+  }
+
+  .onb-flight {
+    animation: onb-fade-out 1400ms ease forwards;
+  }
+
+  .onb-pill-bump,
+  .onb-chip[aria-pressed='true'],
+  .onb-gauge-star-on,
+  .onb-add-sent,
+  .onb-global-orb,
+  .onb-bell-disc svg,
+  .onb-spark {
+    animation: none;
+  }
+
+  .onb-prism-flip {
+    animation: none;
+    transform: rotateY(180deg);
+  }
+
+  .onb-story-ring {
+    animation: none;
+  }
+
+  .onb-sent-bubble,
+  .onb-reward-chip,
+  .onb-global-bubble,
+  .onb-friends-face,
+  .onb-friends-add,
+  .onb-prism-badge,
+  .onb-story-plus,
+  .onb-bell-dot,
+  .onb-trophy-disc,
+  .onb-recap-tile {
+    animation: onb-fade 240ms ease both;
+  }
+
+  .onb-gauge-fill,
+  .onb-progress-seg,
+  .onb-primary,
+  .onb-chip,
+  .onb-add {
+    transition: none;
+  }
+}

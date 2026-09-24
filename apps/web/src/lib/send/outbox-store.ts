@@ -74,6 +74,28 @@ export type OutboxState = {
   /** LE GESTE DE LA CONFIRMATION — appelé par `perform-send.ts` sur un 2xx,
    * et de nulle part ailleurs : il incrémente `confirmed`. */
   remove(conversationId: string, clientMessageId: string): void;
+  /**
+   * L'ABANDON D'UNE ENTRÉE (#7729) — la retirer SANS la compter confirmée.
+   * Le salut de l'accueil réécrit après un échec (`onboarding/greeting-send.ts`)
+   * retire son ancien texte avant d'envoyer le nouveau : sans ce geste, la
+   * bulle en échec resterait dans le fil avec son « Réessayer », et la rejouer
+   * publierait le salut deux fois.
+   */
+  discard(conversationId: string, clientMessageId: string): void;
+};
+
+const withoutEntry = (
+  entries: OutboxState['entries'],
+  conversationId: string,
+  clientMessageId: string,
+): OutboxState['entries'] | null => {
+  const current = entries[conversationId];
+  if (current === undefined) return null;
+  const next = current.filter((entry) => entry.message.clientMessageId !== clientMessageId);
+  if (next.length === current.length) return null;
+  if (next.length > 0) return { ...entries, [conversationId]: next };
+  const { [conversationId]: _removed, ...rest } = entries;
+  return rest;
 };
 
 const replaceEntry = (
@@ -146,21 +168,20 @@ export function createOutboxStore(): StoreApi<OutboxState> {
       }),
     remove: (conversationId, clientMessageId) =>
       set((state) => {
-        const current = state.entries[conversationId];
-        if (current === undefined) return state;
-        const next = current.filter((entry) => entry.message.clientMessageId !== clientMessageId);
+        const entries = withoutEntry(state.entries, conversationId, clientMessageId);
         // Rien retiré ⇒ rien confirmé : le compteur ne bouge pas, et l'état
         // reste `toBe`-identique.
-        if (next.length === current.length) return state;
+        if (entries === null) return state;
         const confirmed = {
           ...state.confirmed,
           [conversationId]: (state.confirmed[conversationId] ?? 0) + 1,
         };
-        if (next.length === 0) {
-          const { [conversationId]: _removed, ...rest } = state.entries;
-          return { entries: rest, confirmed };
-        }
-        return { entries: { ...state.entries, [conversationId]: next }, confirmed };
+        return { entries, confirmed };
+      }),
+    discard: (conversationId, clientMessageId) =>
+      set((state) => {
+        const entries = withoutEntry(state.entries, conversationId, clientMessageId);
+        return entries === null ? state : { entries };
       }),
   }));
 }
