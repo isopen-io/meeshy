@@ -89,7 +89,7 @@ public struct InviteLandingView: View {
             Spacer()
             Text(InviteLandingCopy.headerTitle)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                .kerning(1)
+                .scriptSafeTracking(1)
                 .textCase(.uppercase)
                 .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo500)
                 .accessibilityAddTraits(.isHeader)

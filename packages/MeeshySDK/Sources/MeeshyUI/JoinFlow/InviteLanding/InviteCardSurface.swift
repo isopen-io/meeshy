@@ -21,7 +21,23 @@ public struct InviteCardSurface: ViewModifier {
     }
 }
 
+/// L'espacement des titres en capitales — sauf dans une écriture LIÉE.
+/// Espacer l'arabe coupe ses ligatures : « لغات ا لمنضمّين » au lieu de
+/// « لغات المنضمّين » (relevé au simulateur, #7797).
+public struct ScriptSafeTracking: ViewModifier {
+    let amount: CGFloat
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    public func body(content: Content) -> some View {
+        content.kerning(layoutDirection == .rightToLeft ? 0 : amount)
+    }
+}
+
 public extension View {
+    func scriptSafeTracking(_ amount: CGFloat) -> some View {
+        modifier(ScriptSafeTracking(amount: amount))
+    }
+
     func inviteCardSurface(isDark: Bool, cornerRadius: CGFloat = MeeshyRadius.xl) -> some View {
         modifier(InviteCardSurface(isDark: isDark, cornerRadius: cornerRadius))
     }
@@ -35,7 +51,7 @@ struct InviteSectionTitle: View {
     var body: some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
-            .kerning(1.1)
+            .scriptSafeTracking(1.1)
             .textCase(.uppercase)
             .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .accessibilityAddTraits(.isHeader)

@@ -85,7 +85,7 @@ struct ShareLinkArrivalsSection: View {
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
-            .kerning(1.1)
+            .scriptSafeTracking(1.1)
             .textCase(.uppercase)
             .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .accessibilityAddTraits(.isHeader)
