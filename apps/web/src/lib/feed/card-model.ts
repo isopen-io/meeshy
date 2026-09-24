@@ -1,4 +1,6 @@
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { FeedPost } from '@/lib/api/feed-pages';
@@ -125,6 +127,12 @@ export type FeedCardText = {
    */
   readonly original: string;
   readonly originalLanguage: string;
+  /**
+   * LES URL BRUTES DU TEXTE QUI PASSENT PAR `/l/<token>` (#7827) — absentes
+   * quand le post n'en porte aucune. Elles voyagent AVEC le texte parce que
+   * c'est lui, et lui seul, que `RichText` découpe.
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
 };
 
 export type FeedCardStats = {
@@ -321,6 +329,7 @@ export function resolveFeedCardModel(
   const authorName =
     textOrUndefined(post.author?.displayName) ?? textOrUndefined(post.author?.username) ?? FALLBACK_AUTHOR_NAME;
   const content = post.content ?? '';
+  const trackingLinks = trackingLinksOf(post);
   const text =
     content.trim() === ''
       ? undefined
@@ -337,6 +346,7 @@ export function resolveFeedCardModel(
             translated: resolved.translated,
             original: content,
             originalLanguage: post.originalLanguage ?? '',
+            ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
           };
         })();
 

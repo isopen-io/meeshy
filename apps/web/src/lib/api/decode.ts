@@ -1,3 +1,5 @@
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
+
 import type { Attachment, Conversation, Message } from './types';
 
 /**
@@ -187,6 +189,7 @@ export function decodeMessage(raw: Message): Message {
     forwardedFromConversationId: rawForwardedFromConversationId,
     storyReplyToId: rawStoryReplyToId,
     attachments: rawAttachments,
+    trackingLinks: _rawTrackingLinks,
     ...rest
   } = raw as Message & {
     readonly sender?: Message['sender'] | null;
@@ -249,7 +252,17 @@ export function decodeMessage(raw: Message): Message {
     ...(rawAttachments === undefined || rawAttachments === null
       ? {}
       : { attachments: rawAttachments.map(decodeAttachment) }),
+    /* LES LIENS SUIVIS (#7827) — hissés par le socket, rangés dans
+       `metadata` par REST : `trackingLinksOf` lit les deux et écarte toute
+       entrée mal formée. Jamais recopiés BRUTS par `...rest` : le token
+       finit dans une adresse (`/l/<token>`). */
+    ...trackingLinksFieldOf(raw),
   };
+}
+
+function trackingLinksFieldOf(raw: Message): Pick<Message, 'trackingLinks'> {
+  const links = trackingLinksOf(raw);
+  return links.length > 0 ? { trackingLinks: links } : {};
 }
 
 export function decodeMessages(raw: readonly Message[]): readonly Message[] {

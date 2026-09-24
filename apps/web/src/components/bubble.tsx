@@ -394,6 +394,7 @@ export function Bubble({
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
+          trackingLinks={message.trackingLinks}
           linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
           plainTextHidden
         />

@@ -152,6 +152,9 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(raw.location === undefined || raw.location === null ? {} : { location: raw.location }),
     ...(raw.sticker === undefined || raw.sticker === null ? {} : { sticker: raw.sticker }),
     ...(rawPostReplyTo === undefined || rawPostReplyTo === null ? {} : { postReplyTo: rawPostReplyTo }),
+    /* Le quatrième hissé (#7827) — même règle : porté BRUT, validé au seul
+       décodage (`decodeMessage` → `trackingLinksOf`). */
+    ...(raw.trackingLinks === undefined || raw.trackingLinks === null ? {} : { trackingLinks: raw.trackingLinks }),
   } as unknown as Message & { readonly clientMessageId?: string };
 }
 

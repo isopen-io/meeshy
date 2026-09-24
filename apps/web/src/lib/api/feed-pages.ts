@@ -138,6 +138,14 @@ export type FeedPost = {
    * inutile.
    */
   readonly mentions?: readonly { readonly username: string }[] | null;
+  /**
+   * LES LIENS SUIVIS (#7827) — `metadata.trackingLinks` en REST, hissé en
+   * `trackingLinks` sur le socket (`routes/posts/publication.ts`). `unknown` :
+   * seul `trackingLinksOf` (`@meeshy/shared/utils/text-segments`) les lit, et
+   * il écarte ce qui n'a pas la forme d'un `{ url, token }`.
+   */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;
   readonly repostCount?: number | null;
