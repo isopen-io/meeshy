@@ -208,13 +208,9 @@ post-*
 # (likely a stray root-level artifact) is undocumented.
 !packages/shared/types/post-reference.ts
 !services/gateway/src/__tests__/unit/post-service-mocks.ts
-!apps/web/__tests__/hooks/post-translation-map-single-source.test.ts
 !services/gateway/src/__tests__/unit/post-service-geo-discoverability.test.ts
 !packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
 !packages/shared/fixtures/canvas-v3/post-sound-original.json
-!apps/web/__tests__/components/post-card-repost-attribution.test.tsx
-!apps/web/__tests__/components/post-detail-repost-attribution.test.tsx
-!apps/web/__tests__/components/post-detail-background-sound.test.tsx
 !apps/web-v2/src/lib/api/post-media-upload.ts
 !apps/web-v2/src/lib/api/post-media-upload.test.ts
 !services/gateway/src/services/notifications/post-media-thumbnail.ts
@@ -352,9 +348,6 @@ TEST_NOTIFICATION_SYSTEM.md
 # Anciens fichiers de service (backups)
 services/gateway/src/routes/notifications.old.ts
 services/gateway/src/services/notifications/NotificationServiceExtensions.ts.old
-
-# Dossier de debug temporaire
-apps/web/components/debug/
 
 # Local coverage reports from test-coverage-routine
 services/gateway/coverage-p2/

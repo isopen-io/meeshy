@@ -262,11 +262,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Pas d'entrée `web` : l'image `meeshy-web` était celle du legacy
+        # Next.js, qui a quitté le dépôt (#7668). L'application web est
+        # construite et publiée par `docker.yml` seul (image `meeshy-web-v31`,
+        # avec son `VITE_API_BASE`) ; la construire ICI sans ce paramètre
+        # publierait sous un nom de production une image qui appelle la
+        # mauvaise API. Le nom de l'image est l'affaire de #7709.
         include:
-          - service: web
-            context: .
-            dockerfile: ./apps/web/Dockerfile
-            image: meeshy-web
           - service: gateway
             context: .
             dockerfile: ./services/gateway/Dockerfile
@@ -293,9 +295,7 @@ jobs:
           FALLBACK_VERSION: ${{ needs.version.outputs.version }}
         run: |
           # Lire la version depuis le fichier VERSION créé par sync-versions.js
-          if [[ "$SERVICE_NAME" == "web" ]]; then
-            VERSION_FILE="apps/web/VERSION"
-          elif [[ "$SERVICE_NAME" == "gateway" ]]; then
+          if [[ "$SERVICE_NAME" == "gateway" ]]; then
             VERSION_FILE="services/gateway/VERSION"
           elif [[ "$SERVICE_NAME" == "translator" ]]; then
             VERSION_FILE="services/translator/VERSION"
@@ -454,7 +454,6 @@ jobs:
             echo "### 📦 Docker Images" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "docker pull isopen/meeshy-web:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
             echo "docker pull isopen/meeshy-gateway:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
             echo "docker pull isopen/meeshy-translator:$RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
