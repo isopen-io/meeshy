@@ -1,0 +1,144 @@
+/* Kit réseaux sociaux (#7728) — scène, téléphones, loupes, titres, sous-titres.
+   Couleurs : jetons --ios-* (ios.css, généré depuis MeeshyColors.swift) et leurs mélanges. */
+
+.canvas.social { color: #fff; isolation: isolate; font-family: var(--kit-font); }
+.canvas.social.fond-vif { background: var(--kit-grad-hero); }
+.canvas.social.fond-nuit { background: var(--kit-grad-night); }
+.canvas.social.fond-aube { background: linear-gradient(160deg, var(--ios-indigo-50) 0%, #ffffff 48%, color-mix(in srgb, var(--ios-purple-500) 10%, white) 100%); color: var(--ios-indigo-950); }
+.fond-aube .gab-bg .o1 { width: 520px; height: 520px; top: -220px; right: -220px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-indigo-300) 45%, transparent), transparent 70%); }
+.fond-aube .gab-bg .o2 { width: 560px; height: 560px; bottom: -280px; left: -240px; background: radial-gradient(circle, color-mix(in srgb, var(--ios-purple-500) 22%, transparent), transparent 70%); }
+.fond-aube .gab-bg .grain { opacity: 0; }
+
+/* ─── Titres (réemploient .gab-caption du socle : même voix que l'App Store) ─── */
+.canvas.social .gab-caption.titre { z-index: 8; line-height: 1.07; padding-bottom: 0.08em; letter-spacing: -0.03em; justify-content: flex-start; }
+.canvas.social .gab-caption.titre.centre { text-align: center; align-items: center; justify-content: center; }
+.canvas.social .gab-caption .l1,
+.canvas.social .gab-caption .l2 { padding-bottom: 0.04em; }
+.fond-aube .gab-caption .l1 { color: var(--ios-indigo-950); }
+.canvas.social.fond-aube .gab-caption .l2 { background-image: linear-gradient(90deg, var(--ios-indigo-600), var(--ios-purple-600)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+[dir='rtl'].canvas.social.fond-aube .gab-caption .l2 { background-image: linear-gradient(270deg, var(--ios-indigo-600), var(--ios-purple-600)); }
+[lang='ar'].canvas.social .gab-caption.titre { line-height: 1.3; letter-spacing: 0; }
+
+.autofit { overflow: hidden; }
+
+.bloc { position: absolute; margin: 0; z-index: 8; font-weight: 750; line-height: 1.2; letter-spacing: -0.01em; }
+.bloc.centre { text-align: center; }
+.bloc.fort { font-weight: 850; }
+.bloc.doux { color: color-mix(in srgb, white 80%, transparent); font-weight: 600; }
+.bloc.hashtag { font-weight: 900; letter-spacing: -0.02em; white-space: nowrap; }
+.bloc.surtitre { text-transform: uppercase; letter-spacing: 0.14em; font-weight: 800; color: var(--ios-indigo-100); }
+[lang='ar'] .bloc.surtitre { letter-spacing: 0; }
+.bloc.story-ligne { font-weight: 850; text-align: center; text-shadow: 0 4px 24px color-mix(in srgb, var(--ios-indigo-950) 70%, transparent); }
+
+/* ─── Téléphone et loupe ─── */
+.tel { position: absolute; transform: rotate(var(--rot, 0deg)); transform-origin: 50% 0; direction: ltr; }
+.tel-cadre { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.tel.estompe { opacity: 0.4; filter: blur(2px) saturate(0.8); }
+
+.loupe {
+  position: absolute;
+  overflow: hidden;
+  direction: ltr;
+  border-radius: 22px;
+  transform: rotate(var(--rot, 0deg));
+  box-shadow: 0 0 0 3px #fff, 0 26px 60px color-mix(in srgb, var(--ios-indigo-950) 55%, transparent), 0 6px 18px color-mix(in srgb, black 25%, transparent);
+  background: #0f0c29;
+}
+.loupe-vue { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+.puce { position: absolute; transform: rotate(var(--rot, 0deg)); }
+
+/* ─── Pastille 🇫🇷 → 🇰🇷 (même objet que la surimpression App Store) ─── */
+.pastille-langues {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  color: var(--ios-indigo-600);
+  background: #fff;
+  transform: rotate(var(--rot, -4deg));
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--ios-indigo-950) 45%, transparent), 0 0 0 6px color-mix(in srgb, white 25%, transparent);
+}
+[dir='rtl'] .pastille-langues { transform: rotate(calc(-1 * var(--rot, -4deg))); }
+
+/* ─── Storyboard : marque de plan et sous-titres incrustés ─── */
+.plan-pos { position: absolute; top: 28px; inset-inline-start: 24px; z-index: 30; }
+.plan-pos.bas { top: auto; bottom: 22px; }
+.plan-chip {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ios-indigo-100);
+  background: color-mix(in srgb, #0f0c29 60%, transparent);
+  backdrop-filter: blur(10px);
+  border: 0.5px solid color-mix(in srgb, white 18%, transparent);
+}
+.plan-chip b { color: #fff; }
+
+.st-zone { position: absolute; z-index: 25; display: flex; justify-content: center; align-items: flex-start; text-align: center; }
+.st { margin: 0; line-height: 1.52; font-weight: 800; letter-spacing: -0.01em; }
+.st span { color: #fff; background: color-mix(in srgb, #0f0c29 84%, transparent); padding: 4px 12px; border-radius: 10px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+[lang='ar'] .st { line-height: 1.75; }
+
+/* ─── Signature de fin ─── */
+.signature { position: absolute; z-index: 8; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.sig-marque { display: flex; align-items: center; gap: 12px; font-weight: 850; letter-spacing: -0.02em; }
+.sig-marque svg { border-radius: 14px; box-shadow: 0 10px 28px color-mix(in srgb, var(--ios-indigo-950) 45%, transparent); }
+.sig-langues { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; background: color-mix(in srgb, white 18%, transparent); border: 0.5px solid color-mix(in srgb, white 30%, transparent); }
+
+.marque-discrete { position: absolute; z-index: 9; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.marque-discrete svg { border-radius: 6px; box-shadow: 0 4px 12px color-mix(in srgb, black 22%, transparent); }
+.fond-aube .marque-discrete { color: var(--ios-indigo-950); }
+.marque-coin { position: absolute; top: 28px; inset-inline-end: 34px; z-index: 9; }
+.marque-bas { position: absolute; bottom: 30px; inset-inline-start: 44px; z-index: 9; }
+.marque-coin .marque-discrete,
+.marque-bas .marque-discrete { position: static; }
+
+/* ─── Vidéos : objets de mise en scène ─── */
+.puce.bonjour span { display: inline-block; padding: 8px 16px; border-radius: 999px; font-size: 21px; font-weight: 850; color: var(--ios-indigo-700); background: color-mix(in srgb, white 96%, transparent); box-shadow: 0 12px 32px color-mix(in srgb, var(--ios-indigo-950) 40%, transparent); }
+.puce.bonjour { z-index: 6; }
+
+.micro-rec { position: relative; width: 160px; height: 160px; display: grid; place-items: center; }
+.micro-rec span { position: relative; z-index: 2; width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--kit-grad-brand); box-shadow: 0 16px 50px color-mix(in srgb, var(--ios-indigo-500) 70%, transparent); }
+.micro-rec i { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--ios-indigo-300) 80%, transparent); }
+.micro-rec i:nth-child(2) { inset: -26px; opacity: 0.55; }
+.micro-rec i:nth-child(3) { inset: -54px; opacity: 0.28; }
+
+.flamme-bloc { display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 6; }
+.flamme-embleme { position: relative; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--ios-warning) 55%, transparent) 0%, transparent 68%); }
+.flamme-embleme .fl-ico { color: var(--ios-warning); filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--ios-warning) 70%, transparent)); display: grid; place-items: center; }
+.flamme-embleme b { position: absolute; top: 58%; left: 50%; transform: translate(-50%, -50%); font-size: 66px; font-weight: 900; color: #fff; letter-spacing: -0.04em; text-shadow: 0 4px 18px color-mix(in srgb, #7c2d12 70%, transparent); }
+.flamme-legende { font-size: 28px; font-weight: 850; white-space: nowrap; letter-spacing: -0.02em; }
+
+.bande-drapeaux { position: absolute; top: 760px; inset-inline: 0; display: flex; justify-content: center; gap: 10px; font-size: 32px; z-index: 5; }
+
+.mosaique-jours { position: absolute; top: 92px; inset-inline-start: 44px; width: 452px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; z-index: 4; }
+.jour { height: 84px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: color-mix(in srgb, white 8%, transparent); border: 0.5px solid color-mix(in srgb, white 16%, transparent); }
+.jour em { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--ios-indigo-200); white-space: nowrap; }
+.jour span { font-size: 34px; line-height: 1; }
+.jour.fin { background: color-mix(in srgb, var(--ios-warning) 26%, transparent); border-color: var(--ios-warning); box-shadow: 0 0 30px color-mix(in srgb, var(--ios-warning) 45%, transparent); }
+
+.eventail { position: absolute; top: 420px; inset-inline: 0; height: 540px; }
+.ev-tel { position: absolute; width: 180px; height: 540px; inset-inline-start: calc(6px + var(--i) * 118px); top: calc(24px + (var(--i) - 1.5) * (var(--i) - 1.5) * 12px); transform: rotate(calc((var(--i) - 1.5) * 5deg)); }
+.ev-tel .puce.ev-drapeau { inset-inline-start: 66px !important; top: -6px !important; font-size: 40px; z-index: 6; filter: drop-shadow(0 6px 14px color-mix(in srgb, black 35%, transparent)); }
+
+.grille-4 { position: absolute; top: 152px; inset-inline-start: 22px; display: grid; grid-template-columns: 240px 240px; gap: 16px; z-index: 4; }
+.g4-cell { position: relative; width: 240px; height: 360px; border-radius: 26px; overflow: hidden; box-shadow: 0 18px 44px color-mix(in srgb, black 40%, transparent); }
+.g4-lang { position: absolute; top: 44px; inset-inline-start: 50%; transform: translateX(-50%); z-index: 6; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 750; white-space: nowrap; color: #fff; background: color-mix(in srgb, #0f0c29 80%, transparent); }
+[dir='rtl'] .g4-lang { transform: translateX(50%); }
+
+.emoji-geant { font-size: 86px; line-height: 1; z-index: 7; filter: drop-shadow(0 12px 26px color-mix(in srgb, black 35%, transparent)); }
+.emoji-moyen { font-size: 56px; line-height: 1; z-index: 7; }
+
+.com-puce { z-index: 7; }
+.com-flottant { display: flex; align-items: flex-start; gap: 10px; width: 300px; padding: 12px 14px; border-radius: 20px; color: #111827; background: color-mix(in srgb, white 97%, transparent); box-shadow: 0 16px 40px color-mix(in srgb, var(--ios-indigo-950) 40%, transparent); }
+.com-flottant > div:not(.avatar) { flex: 1; min-width: 0; }
+.com-flottant b { display: block; font-size: 13px; font-weight: 800; color: var(--ios-indigo-900); }
+.com-flottant span { display: block; font-size: 15px; font-weight: 550; line-height: 1.3; }
+.com-flottant em { color: var(--ios-indigo-500); font-style: normal; }
