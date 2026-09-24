@@ -50,6 +50,9 @@ extension ConversationView {
                 if let conv = conversation, let profileUser = ProfileSheetUser.from(conversation: conv) {
                     router.deepLinkProfileUser = profileUser
                 }
+            },
+            onViewMemberProfile: { user in
+                router.openProfile(user, inConversation: conversation?.id)
             }
         ))
     }
@@ -420,6 +423,7 @@ private struct ConversationHeaderAvatarView: View {
     let headerPresenceState: PresenceState
     var onNavigateToDM: (String, String) -> Void
     var onViewProfile: (() -> Void)?
+    var onViewMemberProfile: (ProfileSheetUser) -> Void
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -429,6 +433,51 @@ private struct ConversationHeaderAvatarView: View {
     private func memberStoryState(for userId: String) -> StoryRingState {
         storyViewModel.storyRingState(forUserId: userId)
     }
+
+    private func openStory(of userId: String) {
+        headerState.storyUserIdForHeader = userId
+        headerState.showStoryViewerFromHeader = true
+    }
+
+    // MARK: Participant actif (#7831)
+
+    // La pile est une MISE EN AVANT des personnes : le toucher et l'appui long
+    // se décident ici, sans `onViewStory`/`onViewProfile` passés à
+    // `MeeshyAvatar`, dont le menu automatique placerait le profil AVANT la
+    // story. Les libellés sont ceux de l'avatar des bulles (`BubbleFooter`).
+    private func openMember(_ member: ConversationActiveMember, storyState: StoryRingState) {
+        switch ConversationHeaderMemberTap.resolve(storyState: storyState) {
+        case .story: openStory(of: member.id)
+        case .profile: onViewMemberProfile(member.profile)
+        }
+    }
+
+    private func memberContextMenu(for member: ConversationActiveMember, storyState: StoryRingState) -> [AvatarContextMenuItem] {
+        ConversationHeaderMemberMenuEntry.entries(storyState: storyState).map { entry in
+            switch entry {
+            case .viewStory:
+                return AvatarContextMenuItem(
+                    label: String(localized: "bubble.avatar.viewStory", defaultValue: "Voir la story", bundle: .main),
+                    icon: "play.circle.fill"
+                ) { openStory(of: member.id) }
+            case .viewProfile:
+                return AvatarContextMenuItem(
+                    label: String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                    icon: "person.circle.fill"
+                ) { onViewMemberProfile(member.profile) }
+            case .conversationDetails:
+                return AvatarContextMenuItem(label: String(localized: "Conversation", bundle: .main), icon: "info.circle.fill") {
+                    composerState.showConversationInfo = true
+                }
+            case .sendMessage:
+                return AvatarContextMenuItem(label: String(localized: "Envoyer un message", bundle: .main), icon: "bubble.left.fill") {
+                    onNavigateToDM(member.id, member.name)
+                }
+            }
+        }
+    }
+
+    // MARK: Pair d'une conversation directe
 
     private func avatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
         // NB : l'entrée « Voir la story » est ajoutée automatiquement par
@@ -504,26 +553,18 @@ private struct ConversationHeaderAvatarView: View {
                     if !topActiveMembers.isEmpty {
                         HStack(spacing: -6) {
                             ForEach(topActiveMembers) { member in
+                                let storyState = memberStoryState(for: member.id)
                                 MeeshyAvatar(
                                     name: member.name,
                                     context: .conversationHeaderStacked,
                                     accentColor: member.color,
                                     avatarURL: member.avatarURL,
-                                    storyState: memberStoryState(for: member.id),
+                                    storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                                     presenceState: PresenceManager.shared.presenceState(for: member.id),
-                                    onTap: {
-                                        HapticFeedback.light()
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                            composerState.showOptions = false
-                                        }
-                                    },
-                                    onViewStory: {
-                                        headerState.storyUserIdForHeader = member.id
-                                        headerState.showStoryViewerFromHeader = true
-                                    },
+                                    onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),
-                                    contextMenuItems: avatarContextMenu(for: member.id, name: member.name)
+                                    contextMenuItems: memberContextMenu(for: member, storyState: storyState)
                                 )
                             }
                         }

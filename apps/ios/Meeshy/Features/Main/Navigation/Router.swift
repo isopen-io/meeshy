@@ -418,6 +418,26 @@ final class Router: ObservableObject {
         path = [route]
     }
 
+    // MARK: - Profile
+
+    /// La fiche d'une personne vue dans une conversation — avatar d'une bulle,
+    /// participant actif de l'en-tête, pastille de frappe : un seul chemin.
+    ///
+    /// Le discriminant est l'existence d'un COMPTE. `deepLinkProfileUser`
+    /// présente un compte (bio, bannière, voix, langues), demandé par
+    /// `User.id` ; un visiteur entré par lien n'en a aucun, et son identité
+    /// vit dans la conversation, demandée par `(conversationId, participantId)`.
+    func openProfile(_ user: ProfileSheetUser, inConversation conversationId: String?) {
+        if user.isAnonymous, let participantId = user.participantId, let conversationId {
+            participantProfileTarget = ParticipantProfileTarget(
+                conversationId: conversationId,
+                participantId: participantId
+            )
+            return
+        }
+        deepLinkProfileUser = user
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ url: URL) {

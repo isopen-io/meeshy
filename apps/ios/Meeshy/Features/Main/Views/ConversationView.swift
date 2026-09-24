@@ -13,14 +13,6 @@ import MeeshyUI
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
-// MARK: - Active Member (for conversation detail header)
-struct ConversationActiveMember: Identifiable { // internal for cross-file extension access
-    let id: String
-    let name: String
-    let color: String
-    let avatarURL: String?
-}
-
 struct ConversationOverlayState {
     @Indirect var overlayMessage: Message? = nil
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
@@ -1816,14 +1808,7 @@ struct ConversationView: View {
                         message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
                     },
                     onOpenProfile: { user in
-                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
-                            router.participantProfileTarget = ParticipantProfileTarget(
-                                conversationId: conversationId,
-                                participantId: participantId
-                            )
-                        } else {
-                            router.deepLinkProfileUser = user
-                        }
+                        router.openProfile(user, inConversation: conversation?.id)
                     },
                     onViewStory: { userId in
                         overlayState.storyViewerUserId = userId
