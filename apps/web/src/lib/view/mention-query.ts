@@ -1,5 +1,7 @@
+import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import type { Message } from '@/lib/api/types';
+import { friendsOf } from '@/lib/conversation-new/candidates';
 
 import { participantAvatarOf } from './conversation';
 
@@ -41,9 +43,11 @@ const HANDLE_AFTER_CARET = /^[\p{L}\p{N}_.-]*/u;
  * expéditeurs locaux sont la réponse complète. */
 export const MIN_REMOTE_QUERY_LENGTH = 2;
 
-/** Le plus grand nombre de rangées montrées : au-delà, la liste masquerait
- * le fil qu'on est en train de lire. */
-export const MENTION_SUGGESTION_LIMIT = 8;
+/** Le plus grand nombre de rangées rendues. La liste est BORNÉE en hauteur
+ * (`mention-suggestions.tsx`) et défile : elle ne masque pas le fil, mais
+ * les contacts passant en tête (#7846), une borne à huit aurait caché tous
+ * les participants d'un fil derrière le carnet d'adresses. */
+export const MENTION_SUGGESTION_LIMIT = 24;
 
 export function activeMentionQuery(text: string, caret: number): MentionQuery | null {
   if (caret < 0 || caret > text.length) return null;
@@ -121,19 +125,118 @@ export function filterMentionCandidates(
 }
 
 /**
- * LA FUSION — les locaux EN TÊTE (une personne qui parle dans ce fil passe
- * avant une homonyme qu'on ne connaît pas), puis les distants qui n'y sont
- * pas déjà, par identifiant OU par pseudo (sans casse). Soi-même n'est
- * jamais proposé, quelle que soit la source.
+ * LE RANG D'UNE CORRESPONDANCE (#7846) — dès la première lettre, la liste
+ * locale se TRIE autant qu'elle se filtre : `@a` met Anna (le pseudo commence
+ * par `a`) devant Bernard Alain (un mot du nom commence par `a`), et l'un et
+ * l'autre devant Malik (le `a` est au milieu). `null` : aucune
+ * correspondance.
+ */
+function matchRank(candidate: MentionCandidate, needle: string): number | null {
+  const handle = folded(candidate.username);
+  const name = folded(candidate.displayName);
+  if (handle.startsWith(needle)) return 0;
+  if (name.split(/\s+/u).some((word) => word.startsWith(needle))) return 1;
+  if (handle.includes(needle) || name.includes(needle)) return 2;
+  return null;
+}
+
+export function rankMentionCandidates(
+  candidates: readonly MentionCandidate[],
+  query: string,
+): readonly MentionCandidate[] {
+  const needle = folded(query.trim());
+  if (needle === '') return candidates;
+  return candidates
+    .flatMap((candidate, index) => {
+      const rank = matchRank(candidate, needle);
+      return rank === null ? [] : [{ candidate, rank, index }];
+    })
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ candidate }) => candidate);
+}
+
+/**
+ * LA FUSION — les groupes dans l'ordre reçu, chacun privé de ce que les
+ * précédents ont déjà rendu, par identifiant OU par pseudo (sans casse).
+ * Soi-même n'est jamais proposé, quelle que soit la source.
  */
 export function mergeMentionCandidates(input: {
-  readonly locals: readonly MentionCandidate[];
-  readonly remote: readonly MentionCandidate[];
+  readonly groups: readonly (readonly MentionCandidate[])[];
   readonly selfId: string | null;
 }): readonly MentionCandidate[] {
-  return [...input.locals, ...input.remote].reduce<readonly MentionCandidate[]>((acc, candidate) => {
+  return input.groups.flat().reduce<readonly MentionCandidate[]>((acc, candidate) => {
     const handle = candidate.username.toLocaleLowerCase();
     const duplicate = acc.some((known) => known.id === candidate.id || known.username.toLocaleLowerCase() === handle);
     return candidate.id === input.selfId || duplicate ? acc : [...acc, candidate];
   }, []);
+}
+
+/**
+ * LA LISTE DE MENTIONS, COMPOSÉE (#7846 — règle du porteur) : les CONTACTS
+ * d'abord (on mentionne d'abord qui l'on connaît), puis les PARTICIPANTS du
+ * contexte (conversation, publication), puis les AUTRES que la recherche
+ * distante a trouvés. Les deux groupes locaux sont filtrés ET triés sous le
+ * doigt (`rankMentionCandidates`) ; les distants gardent l'ordre de la
+ * passerelle, qui trouve aussi sur des champs que le client ne voit pas.
+ */
+export function composeMentionList(input: {
+  readonly contacts: readonly MentionCandidate[];
+  readonly participants: readonly MentionCandidate[];
+  readonly remote: readonly MentionCandidate[];
+  readonly query: string;
+  readonly selfId: string | null;
+}): readonly MentionCandidate[] {
+  const groups = [rankMentionCandidates(input.contacts, input.query), rankMentionCandidates(input.participants, input.query), input.remote];
+  return mergeMentionCandidates({ groups, selfId: input.selfId }).slice(0, MENTION_SUGGESTION_LIMIT);
+}
+
+type MentionablePerson = {
+  readonly id: string;
+  readonly username?: string | null;
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
+};
+
+function candidateOfPerson(person: MentionablePerson): MentionCandidate | null {
+  const username = nonBlank(person.username);
+  if (username === undefined) return null;
+  const avatar = nonBlank(person.avatar);
+  return {
+    id: person.id,
+    username,
+    displayName: nonBlank(person.displayName) ?? username,
+    ...(avatar === undefined ? {} : { avatar }),
+  };
+}
+
+/**
+ * DES PERSONNES EN CANDIDATS (#7846) — l'auteur d'une publication et ses
+ * commentateurs, dans l'ordre reçu : distincts, sans soi, et sans qui n'a
+ * pas de pseudo (on ne peut pas insérer `@` + rien).
+ */
+export function peopleMentionCandidates(
+  people: readonly MentionablePerson[],
+  selfId: string | null,
+): readonly MentionCandidate[] {
+  return people.reduce<readonly MentionCandidate[]>((acc, person) => {
+    const candidate = candidateOfPerson(person);
+    if (candidate === null || candidate.id === selfId || acc.some((known) => known.id === candidate.id)) return acc;
+    return [...acc, candidate];
+  }, []);
+}
+
+/**
+ * LES CONTACTS EN CANDIDATS (#7846) — l'autre partie de chaque amitié
+ * acceptée, par `friendsOf` (le site UNIQUE qui la résout, celui de
+ * « Nouvelle conversation »), marquée `friend` : la rangée porte la même
+ * pastille « Ami » que celle que la passerelle aurait servie.
+ */
+export function contactMentionCandidates(
+  accepted: readonly FriendRequestRecord[],
+  viewerId: string | null,
+): readonly MentionCandidate[] {
+  return friendsOf({ accepted, viewerId }).flatMap((person) => {
+    const candidate = candidateOfPerson(person);
+    return candidate === null ? [] : [{ ...candidate, badge: 'friend' as const }];
+  });
 }
