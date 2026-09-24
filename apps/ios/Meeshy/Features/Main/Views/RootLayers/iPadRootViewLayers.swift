@@ -9,7 +9,8 @@ import MeeshyUI
 // re-nichait intégralement dans celui de la racine — découper des fonctions ne
 // découpe pas le type. Ici, l'iPad ne voit plus que des noms.
 
-/// Environnement de la fenêtre iPad : les cinq objets partagés, le chrome
+/// Environnement de la fenêtre iPad : la politique des liens in-app, les cinq
+/// objets partagés, le chrome
 /// social, le namespace de la transition zoom et le drapeau « un viewer de
 /// story est présenté ».
 struct iPadEnvironmentLayer: ViewModifier {
@@ -22,6 +23,11 @@ struct iPadEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Un lien Meeshy touché dans un message s'ouvre dans l'app, comme
+            // sur iPhone — sans cette action, iOS le rendait à Safari (#7808).
+            // Posée ici plutôt que sur la racine : un modificateur de plus
+            // sur `iPadRootView.body` franchit le plafond de profondeur (24).
+            .inAppLinks(router: router)
             .environmentObject(router)
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)

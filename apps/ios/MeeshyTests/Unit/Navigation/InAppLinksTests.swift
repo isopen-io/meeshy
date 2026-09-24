@@ -36,7 +36,7 @@ final class InAppLinksTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views")
-        for file in ["RootView.swift", "iPadRootView.swift"] {
+        for file in ["RootView.swift", "RootLayers/iPadRootViewLayers.swift"] {
             let source = try String(contentsOf: views.appendingPathComponent(file), encoding: .utf8)
             XCTAssertTrue(source.contains(".inAppLinks(router: router)"), "\(file) doit poser .inAppLinks(router:)")
         }
