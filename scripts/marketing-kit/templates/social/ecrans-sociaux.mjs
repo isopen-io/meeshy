@@ -5,7 +5,7 @@
 import { html, raw } from '../../lib/html.mjs'
 import { icon, logo } from '../../lib/icons.mjs'
 import { illustration } from '../../lib/illustrations.mjs'
-import { avatar, homeIndicator, nomComplet, roundButton, statusBar, typo } from '../../lib/composants.mjs'
+import { avatar, homeIndicator, nomComplet, revealRays, roundButton, statusBar, typo } from '../../lib/composants.mjs'
 import { contexte, ecran } from '../../lib/gabarits.mjs'
 import { formatNumber } from '../../lib/locales.mjs'
 import { ACCENTS } from '../../screens/conversations.mjs'
@@ -222,7 +222,7 @@ export const ecranRevelation = (ctx, { type, valeur }) => {
   const r = REVELATIONS[type](ctx.ui, valeur)
   return html`<div class="ecran iphone reveal ${ctx.theme}" dir="${ctx.dir}" lang="${ctx.lang}" style="--t:${r.teinte}">
     <div class="reveal-glow"></div>
-    <div class="reveal-rays">${Array.from({ length: 12 }, (_, i) => html`<i style="transform:rotate(${i * 30}deg) translateY(-118px)"></i>`)}</div>
+    ${revealRays()}
     ${statusBar()}
     <div class="reveal-top">${meeshEntry(DEMO.progression.meesh)}</div>
     <div class="reveal-center">

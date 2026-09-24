@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { chromium } from '@playwright/test'
+import { pageCapture } from '../templates/appstore/composition.mjs'
+import { pageSociale } from '../templates/social/page.mjs'
 import { typo } from '../lib/composants.mjs'
 import { coupeLegende, page } from '../lib/gabarits.mjs'
 import { SEQUENCES } from '../lib/sequences.mjs'
@@ -41,5 +44,51 @@ describe('pages rendues', () => {
 
   test('l’arabe est rendu de droite à gauche', () => {
     expect(page({ format: 'iphone-6.9', lang: 'ar', gabarit: '03-global' })).toMatch(/<html lang="ar" dir="rtl">/)
+  })
+})
+
+describe('révélation d’un badge (AchievementRevealView)', () => {
+  let browser
+  let navigateur
+
+  beforeAll(async () => {
+    browser = await chromium.launch()
+    navigateur = await browser.newPage({ viewport: { width: 540, height: 960 } })
+  })
+
+  afterAll(async () => {
+    await browser?.close()
+  })
+
+  const croisements = () =>
+    navigateur.evaluate(() => {
+      const redresser = (el) => {
+        if (!el) return
+        el.style.transform = 'none'
+        el.style.rotate = 'none'
+        redresser(el.parentElement)
+      }
+      redresser(document.querySelector('.reveal')?.parentElement)
+      const boite = (el) => el.getBoundingClientRect()
+      const croise = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+      const textes = [...document.querySelectorAll('.reveal-eyebrow, .reveal-title')]
+      const rayons = [...document.querySelectorAll('.reveal-rays i')]
+      if (rayons.length !== 12 || textes.length !== 2) return [`structure inattendue : ${rayons.length} rayons, ${textes.length} textes`]
+      return rayons.flatMap((r, i) =>
+        textes.filter((t) => croise(boite(r), boite(t))).map((t) => `rayon ${i} × ${t.className} « ${t.textContent.trim()} »`),
+      )
+    })
+
+  test('aucun rayon ne barre le surtitre ni le titre, dans la capture App Store 8 et les visuels sociaux, en sept langues', async () => {
+    const fautes = []
+    for (const lang of KIT_LANGS) {
+      await navigateur.setContent(pageCapture({ appareil: 'iphone', lang, rang: 8 }))
+      ;(await croisements()).forEach((f) => fautes.push(`${lang}/iphone69_08 — ${f}`))
+      for (const id of ['V3-3', 'V8-3', 'C2-4', 'C4-4']) {
+        await navigateur.setContent(pageSociale({ id, lang }))
+        ;(await croisements()).forEach((f) => fautes.push(`${lang}/${id} — ${f}`))
+      }
+    }
+    expect(fautes).toEqual([])
   })
 })

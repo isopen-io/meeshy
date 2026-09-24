@@ -31,6 +31,10 @@ export const statusBar = ({ onMedia = false } = {}) =>
     </span>
   </div>`
 
+// Les douze rayons d'AchievementRevealView : 3 × 18 pt, offset(y: -78) autour de la médaille de 128 pt.
+export const revealRays = () =>
+  html`<div class="reveal-rays">${Array.from({ length: 12 }, (_, i) => html`<i style="transform:rotate(${i * 30}deg) translateY(-78px)"></i>`)}</div>`
+
 export const homeIndicator = ({ onMedia = false } = {}) =>
   html`<div class="home-indicator${onMedia ? ' on-media' : ''}"></div>`
 

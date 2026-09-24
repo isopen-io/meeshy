@@ -1,6 +1,6 @@
 import { html } from '../lib/html.mjs'
 import { icon, meeshCoin } from '../lib/icons.mjs'
-import { homeIndicator, roundButton, statusBar } from '../lib/composants.mjs'
+import { homeIndicator, revealRays, roundButton, statusBar } from '../lib/composants.mjs'
 import { formatDate } from '../lib/locales.mjs'
 import { DEMO } from '../textes/demo.mjs'
 
@@ -113,7 +113,7 @@ export const ecranSucces = (ctx) => {
   const titre = `${P.revelation.seuil} ${lang === 'de' ? axe : axe.toLocaleLowerCase(lang)}`
   return html`<div class="ecran iphone reveal ${ctx.theme}" dir="${ctx.dir}" lang="${lang}">
     <div class="reveal-glow"></div>
-    <div class="reveal-rays">${Array.from({ length: 12 }, (_, i) => html`<i style="transform:rotate(${i * 30}deg) translateY(-118px)"></i>`)}</div>
+    ${revealRays()}
     ${statusBar()}
     <div class="reveal-top">${meeshEntry(P.meesh)}</div>
     <div class="reveal-center">
