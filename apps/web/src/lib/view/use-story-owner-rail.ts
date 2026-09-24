@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { StoryActionRailHandlers } from '@/components/story-action-rail';
 import { currentCredential } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { storyDownloadableMedia, storyExportUrl } from '@/lib/api/story-export';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -152,7 +153,7 @@ export function useStoryOwnerRail(params: {
         }
         const job = storySaveStore.start(storyId);
         if (job === null) return;
-        const url = storyExportUrl({ source: apiConfig.source, base: apiConfig.base, postId: storyId, media: exportMedia });
+        const url = storyExportUrl({ source: apiDeps.source, base: apiConfig.base, postId: storyId, media: exportMedia });
         void runStoryExport({ job, url, mediaId: exportMedia.id, host }).then((key) => announce(translate(language, key)));
       },
     };
