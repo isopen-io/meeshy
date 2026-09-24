@@ -2827,3 +2827,16 @@ relit sur ces deux sites.
 **Sites** : `services/gateway/src/config/read-exactness-config.ts`, `infrastructure/docker/compose/docker-compose.{staging,prod}.yml`, `infrastructure/docker/compose/.env.staging.template`.
 
 **Tests** : `exact-read-tracking-armed-on-deploy.test.ts` — rejoue ce que `docker compose config` remet au conteneur (13 assertions), gardé contre une régression qui retirerait la ligne des compositions ou reviendrait à la forme `:-` (qui empêcherait le désarmement sans nouvelle image).
+
+## Meeshy Global tient une vague d'arrivées : mode lent des nouveaux comptes et arrivées regroupées (2026-09-24, #7740)
+
+**Contexte.** Tout nouveau compte entre dans le salon global, et la campagne l'y invite à saluer. Aucun plafond n'existait par compte (seulement 300 req/min par IP), et chaque inscription postait sa propre ligne « X a rejoint la conversation ».
+
+**Décisions.**
+- **Le mode lent des nouveaux comptes est la RÈGLE 4 de `conversationWriteAdmission`**, pas un garde de route : REST, `message:send` et `message:send-with-attachments` convergent sur `MessagingService.handleMessage`, qui la traverse une fois. Dans une conversation `global`, un compte de moins de 24 h (`User.createdAt`) n'écrit qu'un message toutes les 30 s ; le staff plateforme et les modérateurs du salon en sont dispensés (même barre que la règle 3). La fenêtre se lit dans la table `Message` (index `[senderId, conversationId]`, `messageSource: 'user'`), aucun compteur dénormalisé. Coût : une lecture `Participant` (+ `user.role`, `user.createdAt`) par message du salon global.
+- **Le refus a son CODE (`NEWCOMER_SLOW_MODE`) et son décompte (`retryAfter`, secondes).** REST : 429 + en-tête `Retry-After` + `retryAfter` à la racine (déclaré au schéma de la route). Socket : l'ACK d'échec porte désormais `code` et `retryAfter` (il ne gardait que `error`), et un événement `error` cohérent part pour les SEULS refus temporaires — les autres refus n'en émettaient pas et continuent.
+- **Une ligne d'arrivées par fenêtre de 10 min, mise à jour plutôt que multipliée** (`services/conversations/globalArrivalsNotice.ts`, `metadata.kind = 'members-arrived'`, `@meeshy/shared/utils/arrivals-notice`). La ligne ouverte est relue parmi les messages système des 10 dernières minutes ; une arrivée l'étend (noms des derniers arrivés en tête, compte jamais borné) et la rediffuse en `message:edited` à la ROOM seulement — pas de file hors ligne sur un salon qui compte tous les inscrits : un absent relit la ligne à jour. Une file par conversation sérialise les arrivées simultanées sur une instance ; entre instances, le pire est une seconde ligne dans la fenêtre, jamais une arrivée perdue.
+- **Le sens voyage dans `metadata`, `content` n'est qu'un repli français** : les clients qui ne connaissent pas ce `kind` (iOS à ce jour, #7759) affichent le repli tel quel, sans rien casser ; la ligne de liste reçoit la clé `system.members-arrived`.
+- Le troisième volet de #7740 (aucun point pour un texte répété) vit dans `messagePostSaveEffects` et appartient à un autre lot.
+
+**Ce qui n'est pas fait ici.** Le rendu localisé iOS (#7759), l'application en direct de `message:edited` sur le web (#7760). Le miroir Kotlin n'a rien reçu (gel Android du 2026-09-16).
