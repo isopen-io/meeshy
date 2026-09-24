@@ -47,12 +47,14 @@ describe('segmentText — les mentions', () => {
     expect(mention).toEqual({ kind: 'mention', text: '@marie-claire', username: 'marie-claire' });
   });
 
-  it('une adresse e-mail n’est pas une mention — frontière gauche de mention-parser', () => {
-    expect(texts('écris à contact@marie.com')).toEqual(['text']);
+  it('une adresse e-mail n’est pas une mention — elle devient un lien mailto (#7849)', () => {
+    expect(segmentText('écris à contact@marie.com').filter((s) => s.kind !== 'text')).toEqual([
+      { kind: 'url', text: 'contact@marie.com', href: 'mailto:contact@marie.com' },
+    ]);
   });
 
   it('un @ précédé d’une lettre ACCENTUÉE n’est pas une mention non plus', () => {
-    expect(texts('éric@marie.com')).toEqual(['text']);
+    expect(texts('éric@marie.com')).toEqual(['url']);
   });
 
   it('le username SERVI est en minuscules, le texte AFFICHÉ garde sa casse', () => {
@@ -115,7 +117,7 @@ describe('segmentText — les liens', () => {
     }
   });
 
-  it('AUCUN segment produit ne porte un href hors http(s), quel que soit l’entrant', () => {
+  it('AUCUN segment produit ne porte un href hors http(s) et mailto, quel que soit l’entrant', () => {
     const hrefs = segmentText('a javascript:x https://ok.fr data:x', { hashtags: true })
       .flatMap((s) => (s.kind === 'url' ? [s.href] : []));
     expect(hrefs).toEqual(['https://ok.fr']);
