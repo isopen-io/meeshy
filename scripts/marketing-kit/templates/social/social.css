@@ -31,20 +31,21 @@
 .bloc.story-ligne { font-weight: 850; text-align: center; text-shadow: 0 4px 24px color-mix(in srgb, var(--ios-indigo-950) 70%, transparent); }
 
 /* ─── Téléphone et loupe ─── */
-.tel { position: absolute; transform: rotate(var(--rot, 0deg)); transform-origin: 50% 0; direction: ltr; }
-.tel-cadre { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.tel { position: absolute; transform: rotate(var(--rot, 0deg)); transform-origin: 50% 0; }
+.tel-cadre { position: absolute; left: 0; top: 0; transform-origin: 0 0; direction: ltr; }
+[dir='rtl'] .tel { transform: rotate(calc(-1 * var(--rot, 0deg))); }
 .tel.estompe { opacity: 0.4; filter: blur(2px) saturate(0.8); }
 
 .loupe {
   position: absolute;
   overflow: hidden;
-  direction: ltr;
   border-radius: 22px;
   transform: rotate(var(--rot, 0deg));
   box-shadow: 0 0 0 3px #fff, 0 26px 60px color-mix(in srgb, var(--ios-indigo-950) 55%, transparent), 0 6px 18px color-mix(in srgb, black 25%, transparent);
   background: #0f0c29;
 }
-.loupe-vue { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.loupe-vue { position: absolute; left: 0; top: 0; transform-origin: 0 0; direction: ltr; }
+[dir='rtl'] .loupe { transform: rotate(calc(-1 * var(--rot, 0deg))); }
 
 .puce { position: absolute; transform: rotate(var(--rot, 0deg)); }
 
@@ -124,9 +125,9 @@
 .jour span { font-size: 34px; line-height: 1; }
 .jour.fin { background: color-mix(in srgb, var(--ios-warning) 26%, transparent); border-color: var(--ios-warning); box-shadow: 0 0 30px color-mix(in srgb, var(--ios-warning) 45%, transparent); }
 
-.eventail { position: absolute; top: 360px; inset-inline: 0; height: 540px; }
-.ev-tel { position: absolute; width: 180px; height: 540px; inset-inline-start: calc(6px + var(--i) * 118px); top: calc(24px + (var(--i) - 1.5) * (var(--i) - 1.5) * 12px); transform: rotate(calc((var(--i) - 1.5) * 5deg)); }
-.ev-tel .puce.ev-drapeau { inset-inline-start: 66px !important; top: -6px !important; font-size: 40px; z-index: 6; filter: drop-shadow(0 6px 14px color-mix(in srgb, black 35%, transparent)); }
+.eventail { position: absolute; top: 372px; inset-inline: 0; height: 540px; }
+.ev-tel { position: absolute; width: 200px; height: 540px; inset-inline-start: calc(4px + var(--i) * 111px); top: calc(24px + (var(--i) - 1.5) * (var(--i) - 1.5) * 12px); transform: rotate(calc((var(--i) - 1.5) * 5deg)); }
+.ev-tel .puce.ev-drapeau { inset-inline-start: 76px !important; top: -6px !important; font-size: 40px; z-index: 6; filter: drop-shadow(0 6px 14px color-mix(in srgb, black 35%, transparent)); }
 
 .grille-4 { position: absolute; top: 176px; inset-inline-start: 22px; display: grid; grid-template-columns: 240px 240px; gap: 16px; z-index: 4; }
 .g4-cell { position: relative; width: 240px; height: 344px; border-radius: 26px; overflow: hidden; box-shadow: 0 18px 44px color-mix(in srgb, black 40%, transparent); }

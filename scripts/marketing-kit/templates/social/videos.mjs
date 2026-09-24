@@ -113,7 +113,7 @@ export const VIDEOS_9x16 = {
   V4: [
     (ctx) => couverture({
       ctx, code: 'V4',
-      visuel: html`<div class="eventail">${langsQuatre(ctx.lang).map((l, i) => html`<div class="ev-tel" style="--i:${i}">${puce(html`${langue(l).drapeau}`, { x: 0, y: 0, classe: 'ev-drapeau' })}${telephone(ecran('groupe', contexte({ lang: l, theme: 'light' })), { largeur: 180, x: 0, y: 40 })}</div>`)}</div>`,
+      visuel: html`<div class="eventail">${langsQuatre(ctx.lang).map((l, i) => html`<div class="ev-tel" style="--i:${i}">${puce(html`${langue(l).drapeau}`, { x: 0, y: 0, classe: 'ev-drapeau' })}${telephone(ecran('groupe', contexte({ lang: l, theme: 'light' })), { largeur: 200, x: 0, y: 40 })}</div>`)}</div>`,
     }),
     (ctx) => plan({ ctx, code: 'V4', n: 2, visuel: telPlan(ecran('groupe', sc(ctx, 'light'))), sous: sous('V4', 0, ctx) }),
     (ctx) => plan({
@@ -137,7 +137,7 @@ export const VIDEOS_9x16 = {
     (ctx) => carteFin({ ctx, code: 'V5', visuel: telFin(ecran('decouverte', sc(ctx, 'dark'))) }),
   ],
   V6: [
-    (ctx) => couverture({ ctx, code: 'V6', hauteur: 300, taille: 42, visuel: html`${telCouv(ecran('appel', sc(ctx, 'dark')), { y: 380, rotation: 3 })}${puce('😂', { x: 30, y: 500, classe: 'emoji-geant', rotation: -10 })}${loupe(ecran('appel', sc(ctx, 'dark')), { cible: '.call-captions', x: 36, y: 690, largeur: 468, hauteur: 200, rotation: -2 })}` }),
+    (ctx) => couverture({ ctx, code: 'V6', hauteur: 300, taille: 42, visuel: html`${telCouv(ecran('appel', sc(ctx, 'dark')), { y: 380, rotation: 3 })}${puce('😂', { x: 30, y: 500, classe: 'emoji-geant', rotation: -10 })}${loupe(ecran('appel', sc(ctx, 'dark')), { cible: '.call-captions', x: 36, y: 650, largeur: 468, hauteur: 190, rotation: -2 })}` }),
     (ctx) => plan({ ctx, code: 'V6', n: 2, visuel: telPlan(ecran('appel', sc(ctx, 'dark'))), sous: sous('V6', 0, ctx) }),
     (ctx) => plan({
       ctx, code: 'V6', n: 3,
