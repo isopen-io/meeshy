@@ -1,5 +1,7 @@
 import { credentialHeaders, type Credential } from '@/lib/api/http';
 
+import { EXPORT_EXTENSION_BY_MIME } from './export-extensions';
+
 /**
  * **LE TÉLÉCHARGEMENT D'UN FICHIER PROTÉGÉ, AVEC PROGRESSION** (#7116) —
  * miroir web des DEUX passes d'AVFoundation d'iOS (`StoryPhotoSaveService`,
@@ -10,22 +12,10 @@ import { credentialHeaders, type Credential } from '@/lib/api/http';
  * `protected-media.ts` (#7015) : le téléchargement passe par `fetch` +
  * `credentialHeaders(credential)`, jamais par une URL nue.
  *
- * `EXTENSION_BY_MIME` est le miroir EXACT de la carte serveur
- * (`services/gateway/src/routes/posts/media-export.ts:39-46`), plus UNE
- * entrée : le stand-in SVG des fixtures (`STORY_PHOTO_STAND_IN`,
- * `fixtures-stories.ts`), que la passerelle réelle ne sert jamais — sans
- * elle, la recette sur fixtures n'aurait aucun nom de repli à vérifier.
+ * Le nom de repli lit `EXPORT_EXTENSION_BY_MIME` (`export-extensions.ts`),
+ * le miroir de la carte serveur — la MÊME que celle qui décide d'offrir le
+ * geste, jamais une seconde copie.
  */
-export const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/webp': '.webp',
-  'video/mp4': '.mp4',
-  'video/quicktime': '.mov',
-  'video/webm': '.webm',
-  'image/svg+xml': '.svg',
-};
-
 const CONTENT_DISPOSITION_FILENAME = /filename="([^"]+)"/i;
 
 /** Le nom de fichier — celui que la passerelle a nommé
@@ -38,7 +28,8 @@ export function fileNameOf(params: {
 }): string {
   const match = params.contentDisposition === null ? null : CONTENT_DISPOSITION_FILENAME.exec(params.contentDisposition);
   if (match?.[1] !== undefined) return match[1];
-  const ext = params.mimeType === null ? undefined : EXTENSION_BY_MIME[params.mimeType];
+  const essence = params.mimeType?.split(';')[0]?.trim().toLowerCase();
+  const ext = essence === undefined ? undefined : EXPORT_EXTENSION_BY_MIME[essence];
   return `meeshy-${params.fallbackMediaId}${ext ?? ''}`;
 }
 

@@ -43,6 +43,18 @@
  *     elle réclame la touche » (`screenGestureYields`, même module).
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
+ *  9. LE RAIL AUTEUR COMPLET (#7116) — sur MA story (`/story/st-mienne`,
+ *     session semée) : le rail porte EXACTEMENT Vues, Partager, Enregistrer,
+ *     Commentaires, dans cet ordre, sans rien de ce qu'un lecteur ferait à la
+ *     story d'autrui ; « Vues » ouvre la feuille (en-tête « 8 vues », trois
+ *     lecteurs, story EN PAUSE, rail hors d'atteinte), Échap ferme LA FEUILLE
+ *     — pas le lecteur, défaut mesuré sur le premier jet — et rend le focus
+ *     à « Vues » ; « Partager » appelle la feuille du système SYNCHRONEMENT
+ *     au clic (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec
+ *     l'adresse canonique ; « Enregistrer » pose l'anneau à SA place pendant
+ *     que « Partager » reste un bouton, puis LIVRE `meeshy-m4.svg` et le dit
+ *     — premier jet mesuré : aucun téléchargement, aucun anneau, aucun mot.
+ *     Aucun de ces gestes ne fait avancer la story.
  *
  * Les valeurs attendues (textes, couleurs) sont RECOPIÉES ici à dessein : un
  * attendu relu dans le code serait vert sur un code faux.
@@ -595,6 +607,206 @@ async function runScheme(colorScheme) {
   return measures;
 }
 
+/** La session SEMÉE — le plan AUTEUR n'existe que pour un lecteur IDENTIFIÉ
+ * comme l'auteur (`VIEWER_ID` = `u-viewer`, `fixtures-base.ts`) ; même forme
+ * que `check-story-self-rail.mjs`. Sans elle, ce gate serait vert par
+ * ABSENCE du rail qu'il mesure. */
+const SEEDED_SESSION = JSON.stringify({
+  token: 'gate-token',
+  sessionToken: 'gate-session',
+  user: { id: 'u-viewer', username: 'viewer-gate' },
+  expiresAt: Date.now() + 3_600_000,
+});
+
+/**
+ * ── 9. LE RAIL AUTEUR COMPLET (#7116) ─────────────────────────────────────
+ *
+ * DEUX RETENUES, posées par script d'initialisation parce que `page.route`
+ * n'intercepte pas une adresse `data:` (le média de fixtures) :
+ *  - `navigator.share` est REMPLACÉ par un enregistreur SYNCHRONE — le
+ *    Chromium de CI n'a pas l'API, et c'est l'INSTANT de l'appel qui se mesure
+ *    (dans le clic, avant tout `await`) ; `canShare` reste absent, donc la
+ *    livraison du fichier passe par l'ancre de téléchargement, comme sur un
+ *    navigateur de bureau ;
+ *  - la lecture du média est RETARDÉE de 700 ms : sans elle, le
+ *    téléchargement d'une image de fixtures finit avant qu'on puisse voir
+ *    l'anneau, et la moitié « l'anneau REMPLACE Enregistrer, Partager reste »
+ *    ne pourrait pas se mesurer.
+ */
+async function runAuthorRail(colorScheme) {
+  const tag = `[${colorScheme} rail auteur]`;
+  const context = await browser.newContext({
+    colorScheme,
+    locale: 'fr-FR',
+    viewport: { width: 390, height: 844 },
+    serviceWorkers: 'block',
+    acceptDownloads: true,
+  });
+  await context.addInitScript((session) => {
+    localStorage.setItem('meeshy.session', session);
+    window.__shareCalls = [];
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: (data) => {
+        window.__shareCalls.push(data.url);
+        return Promise.resolve();
+      },
+    });
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (input, init) =>
+      String(input).startsWith('data:image/svg')
+        ? new Promise((resolve) => setTimeout(resolve, 700)).then(() => realFetch(input, init))
+        : realFetch(input, init);
+  }, SEEDED_SESSION);
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await page.goto(`${BASE}/story/st-mienne`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-story-action-rail] [data-story-action]', { timeout: 8000 });
+  const lecture = () =>
+    page.evaluate(() => ({
+      path: location.pathname,
+      scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      paused: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') === 'true',
+    }));
+  /* La story tourne sur six secondes : chaque étape repart d'une lecture EN
+     PAUSE (Espace, focus rendu au document), sans quoi un gate un peu lent
+     verrait la story suivante et accuserait le mauvais défaut. */
+  const figer = async () => {
+    await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+    if (!(await lecture()).paused) await page.keyboard.press(' ');
+  };
+  await figer();
+
+  const rail = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) => els.map((e) => e.getAttribute('data-story-action')));
+  check(
+    JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires — reçu ${JSON.stringify(rail)}`,
+  );
+  const vuesCompte = await page.$eval('[data-story-action="views"]', (el) => el.textContent?.trim() ?? '');
+  check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
+  const cibles = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return Math.min(r.width, r.height);
+    }),
+  );
+  check(cibles.every((c) => c >= 44), `${tag} : chaque bouton du rail doit se toucher sur 44 px — ${JSON.stringify(cibles)}`);
+
+  /* ── « Vues » : la feuille, la pause, le rail hors d'atteinte ── */
+  await page.click('[data-story-action="views"]');
+  await page.waitForSelector('dialog[open] [data-story-viewer]', { timeout: 8000 }).catch(() => {});
+  const feuille = await page.evaluate(() => {
+    const dialog = document.querySelector('dialog[open]');
+    const views = document.querySelector('[data-story-action="views"]');
+    document.body.focus();
+    views?.focus();
+    return {
+      titre: dialog?.querySelector('h2')?.textContent ?? null,
+      lignes: dialog?.querySelectorAll('[data-story-viewer]').length ?? 0,
+      liens: [...(dialog?.querySelectorAll('[data-story-viewer] a') ?? [])].map((a) => a.getAttribute('href')),
+      railAtteignable: document.activeElement === views,
+    };
+  });
+  const pendantFeuille = await lecture();
+  check(feuille.titre === '8 vues', `${tag} : l'en-tête de la feuille lit le compte AUTORITATIF — « ${feuille.titre} »`);
+  check(feuille.lignes === 3, `${tag} : la feuille doit lister les trois lecteurs servis — ${feuille.lignes}`);
+  check(
+    JSON.stringify(feuille.liens) === JSON.stringify(['/u/noor.haddad', '/u/elan.roy', '/u/mika.sorel']),
+    `${tag} : chaque lecteur mène à son profil — ${JSON.stringify(feuille.liens)}`,
+  );
+  check(pendantFeuille.paused, `${tag} : la story doit être EN PAUSE sous la feuille — ${JSON.stringify(pendantFeuille)}`);
+  check(!feuille.railAtteignable, `${tag} : feuille ouverte, le rail ne doit plus être atteignable`);
+
+  await page.keyboard.press('Escape');
+  /* Un FAIT attendu, jamais un délai (`lib/fixed-delay-ratchet.test.ts`) : la
+     feuille fermée ET la lecture repartie — ou le lecteur parti, le défaut
+     que ce témoin existe pour attraper. */
+  await page
+    .waitForFunction(
+      () =>
+        document.querySelector('dialog[open]') === null &&
+        (location.pathname !== '/story/st-mienne' || document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') !== 'true'),
+      undefined,
+      { timeout: 3000 },
+    )
+    .catch(() => {});
+  const apresEchap = await lecture();
+  const focusRendu = await page.evaluate(() => document.activeElement?.getAttribute('data-story-action') ?? document.activeElement?.tagName ?? null);
+  check(
+    apresEchap.path === '/story/st-mienne' && apresEchap.scene === 'st-mienne',
+    `${tag} : Échap ferme la FEUILLE, jamais le lecteur — ${JSON.stringify(apresEchap)}`,
+  );
+  check(!apresEchap.paused, `${tag} : la feuille fermée, la lecture doit REPRENDRE — ${JSON.stringify(apresEchap)}`);
+  check(focusRendu === 'views', `${tag} : la feuille fermée rend le focus à « Vues » — reçu ${JSON.stringify(focusRendu)}`);
+
+  /* MÊME DISCIPLINE QU'AU § 7 : si Échap a emporté le lecteur, les témoins
+     SUIVANTS mourraient d'un `page.click` en attente — un rouge qui accuse la
+     mauvaise chose. Le verdict est rendu ci-dessus ; on rouvre MA story. */
+  if (apresEchap.path !== '/story/st-mienne') {
+    await page.goto(`${BASE}/story/st-mienne`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-story-action-rail] [data-story-action]', { timeout: 8000 });
+  }
+
+  /* ── « Partager » : la feuille du système, DANS le geste ── */
+  await figer();
+  const partage = await page.evaluate(() => {
+    document.querySelector('[data-story-action="share"]')?.click();
+    return window.__shareCalls.slice();
+  });
+  check(
+    JSON.stringify(partage) === JSON.stringify(['https://meeshy.me/feeds/post/st-mienne']),
+    `${tag} : « Partager » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
+  );
+
+  /* ── « Enregistrer » : l'anneau à SA place, puis le fichier livré et dit ── */
+  await figer();
+  const telechargement = page.waitForEvent('download', { timeout: 8000 }).catch(() => null);
+  /* Un `click()` par la page, jamais `page.click` : un bouton ABSENT doit
+     rendre son verdict ci-dessous (« l'anneau… », « livrer… »), pas trente
+     secondes d'attente puis une exception qui tait ce qui manquait. */
+  const offert = await page.evaluate(() => {
+    const bouton = document.querySelector('[data-story-action="save"]');
+    bouton?.click();
+    return bouton !== null;
+  });
+  check(offert, `${tag} : « Enregistrer » doit être offert sur MA story, qui porte un média exportable`);
+  await page.waitForSelector('[data-story-save-ring]', { timeout: 2000 }).catch(() => {});
+  const pendantExport = await page.evaluate(() => ({
+    anneau: document.querySelector('[data-story-save-ring]') !== null,
+    enregistrer: document.querySelector('[data-story-action="save"]') !== null,
+    partager: document.querySelector('[data-story-action="share"]')?.tagName ?? null,
+  }));
+  const annuler = await readBox(page, '[data-story-save-cancel]');
+  check(
+    pendantExport.anneau && !pendantExport.enregistrer && pendantExport.partager === 'BUTTON',
+    `${tag} : pendant l'export, l'anneau REMPLACE « Enregistrer » et « Partager » reste un bouton — ${JSON.stringify(pendantExport)}`,
+  );
+  check(
+    annuler !== null && annuler.width >= 44 && annuler.height >= 44,
+    `${tag} : l'anneau annulable se touche sur 44 px — ${JSON.stringify(annuler)}`,
+  );
+  const fichier = await telechargement;
+  const nom = fichier === null ? null : fichier.suggestedFilename();
+  check(nom === 'meeshy-m4.svg', `${tag} : « Enregistrer » doit LIVRER le média de la story — reçu ${JSON.stringify(nom)}`);
+  await page.waitForFunction(() => document.querySelector('[data-story-save-ring]') === null, undefined, { timeout: 3000 }).catch(() => {});
+  const apresExport = await page.evaluate(() => ({
+    enregistrer: document.querySelector('[data-story-action="save"]') !== null,
+    annonce: document.querySelector('p[role="status"]')?.textContent ?? '',
+  }));
+  check(
+    apresExport.enregistrer && apresExport.annonce === 'Story enregistrée',
+    `${tag} : l'export fini, « Enregistrer » revient et l'issue est DITE — ${JSON.stringify(apresExport)}`,
+  );
+
+  const fin = await lecture();
+  check(fin.scene === 'st-mienne', `${tag} : aucun geste du rail ne doit faire avancer la story — ${JSON.stringify(fin)}`);
+  check(pageErrors.length === 0, `${tag} erreurs de page : ${pageErrors.join(' | ')}`);
+  await context.close();
+  return { rail, vuesCompte, titre: feuille.titre, lignes: feuille.lignes, partage, nom };
+}
+
 /**
  * #7040 — LA SEULE PORTE DE SORTIE DES ÉTATS D'ATTENTE LIT L'ENCOCHE.
  *
@@ -630,6 +842,12 @@ check(
   JSON.stringify(clair) === JSON.stringify(sombre),
   `clair et sombre ne rendent pas la même géométrie — clair ${JSON.stringify(clair)} / sombre ${JSON.stringify(sombre)}`,
 );
+const auteurClair = await runAuthorRail('light');
+const auteurSombre = await runAuthorRail('dark');
+check(
+  JSON.stringify(auteurClair) === JSON.stringify(auteurSombre),
+  `rail auteur : clair et sombre ne rendent pas la même chose — clair ${JSON.stringify(auteurClair)} / sombre ${JSON.stringify(auteurSombre)}`,
+);
 
 await browser.close();
 served.close();
@@ -643,5 +861,6 @@ console.log(
   `check-story-scene : vert — ${invariants} invariants : le lecteur rend la scène v3 par le moteur partagé (texte au Prisme, ` +
     'carte 9:16 centrée dans le plateau aux deux tailles, bandes habillées), peint son placeholder AVANT « prêt », ' +
     'joue son son de fond au geste et le gèle à l\'appui, lit un texte posé dans une image seule, présente l\'image seule ' +
-    'sans moteur, épingle sa durée sur la timeline, et laisse le chemin v1 intact — clair et sombre identiques.',
+    'sans moteur, épingle sa durée sur la timeline, laisse le chemin v1 intact, et porte le rail AUTEUR complet (Vues en ' +
+    'pause, Échap qui ne ferme que la feuille, Partager dans le geste, Enregistrer qui livre) — clair et sombre identiques.',
 );

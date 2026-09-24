@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { deliveryDone, downloadShare, percent, ringAppearance } from './save-progress';
+import { downloadShare, percent, ringAppearance } from './save-progress';
 
 describe('downloadShare — la part du TÉLÉCHARGEMENT dans l’anneau (0…0,9)', () => {
   test('une moitié de téléchargement vaut 0,45 de l’anneau', () => {
@@ -10,12 +10,6 @@ describe('downloadShare — la part du TÉLÉCHARGEMENT dans l’anneau (0…0,9
   test('borné à [0, 1] — un ratio hors bornes ne déborde pas l’anneau', () => {
     expect(downloadShare(-1)).toBe(0);
     expect(downloadShare(2)).toBeCloseTo(0.9);
-  });
-});
-
-describe('deliveryDone — la LIVRAISON n’a pas de callback, elle est pleine dès qu’on l’atteint', () => {
-  test('vaut toujours 1', () => {
-    expect(deliveryDone()).toBe(1);
   });
 });
 
@@ -29,18 +23,16 @@ describe('percent — LE CHIFFRE DÉRIVE DE `downloadShare`, jamais un second ca
   });
 });
 
-describe('ringAppearance — accent tant qu’annulable, inerte + balayage sinon (sauf reduceMotion)', () => {
-  test('annulable ⇒ accent, sans balayage', () => {
-    expect(ringAppearance({ cancellable: true, reduceMotion: false })).toEqual({ tone: 'accent', sweeps: false });
-    /* Même un mouvement réduit ne fait pas balayer un anneau encore annulable. */
-    expect(ringAppearance({ cancellable: true, reduceMotion: true })).toEqual({ tone: 'accent', sweeps: false });
+describe('ringAppearance — accent tant qu’annulable ; le balayage dit qu’AUCUNE progression ne se publie', () => {
+  test('annulable, progression connue ⇒ accent, sans balayage', () => {
+    expect(ringAppearance({ cancellable: true, indeterminate: false })).toEqual({ tone: 'accent', sweeps: false });
   });
 
-  test('non annulable ⇒ inerte + balayage — la seule chose qui bouge pendant la livraison muette', () => {
-    expect(ringAppearance({ cancellable: false, reduceMotion: false })).toEqual({ tone: 'inert', sweeps: true });
+  test('annulable, flux SANS longueur (le cas nominal de la passerelle) ⇒ accent + balayage — un anneau figé à 0 % dirait « rien ne se passe »', () => {
+    expect(ringAppearance({ cancellable: true, indeterminate: true })).toEqual({ tone: 'accent', sweeps: true });
   });
 
-  test('non annulable ET mouvement réduit ⇒ inerte SANS balayage', () => {
-    expect(ringAppearance({ cancellable: false, reduceMotion: true })).toEqual({ tone: 'inert', sweeps: false });
+  test('livraison entamée ⇒ inerte + balayage — la seule chose qui bouge pendant une passe qui ne publie rien', () => {
+    expect(ringAppearance({ cancellable: false, indeterminate: false })).toEqual({ tone: 'inert', sweeps: true });
   });
 });

@@ -27,11 +27,15 @@ export function useStoryKeyboardShortcuts(params: {
   const { advance, paused, pause, resume, closeViewer, showsSound, onToggleMute, layerOpen } = params;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      /* ÉCHAP D'ABORD, ET SANS CONDITION : fermer depuis un champ reste juste,
-         et la feuille de commentaires, qui veut le garder pour elle,
-         l'intercepte en phase de CAPTURE (`story-comments-sheet.tsx`). */
+      /* ÉCHAP D'ABORD : fermer depuis un champ reste juste. MAIS UNE COUCHE
+         OUVERTE LE GARDE POUR ELLE (revue #7116) — mesuré au navigateur sur
+         le premier jet : Échap dans la feuille « Vues » (un `<dialog>` modal,
+         qui se ferme lui-même) remontait jusqu'ici et fermait le lecteur
+         ENTIER. La feuille de commentaires n'y échappait que par sa capture
+         maison (`publication-comments-sheet.tsx`) ; la loi vit désormais ici,
+         pour toute couche. */
       if (e.key === 'Escape') {
-        closeViewer();
+        if (!layerOpen) closeViewer();
         return;
       }
       /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, TOUCHE PAR TOUCHE

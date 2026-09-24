@@ -23,13 +23,6 @@ export function downloadShare(rawProgress: number): number {
   return clamp01(rawProgress) * 0.9;
 }
 
-/** La LIVRAISON n'a pas de callback de progression (ni `<a download>` ni
- * `navigator.share` n'en publient un) : elle est réputée pleine dès qu'on
- * l'atteint, comme l'écriture Photos d'iOS. */
-export function deliveryDone(): number {
-  return 1;
-}
-
 /** Le CHIFFRE affiché au centre de l'anneau — dérivé de `downloadShare`,
  * jamais recalculé à côté : c'est ce qui garantit que le chiffre et l'arc ne
  * peuvent pas se contredire. */
@@ -42,12 +35,15 @@ export type RingAppearance = {
    * la livraison entamée (`StorySaveProgressRing.swift` : `.secondary`). */
   readonly tone: 'accent' | 'inert';
   /** Le balayage indéterminé — « la seule chose qui bouge encore pendant
-   * deux passes qui ne publient AUCUNE progression ». Jamais si le lecteur a
-   * demandé moins de mouvement (`prefers-reduced-motion`). */
+   * deux passes qui ne publient AUCUNE progression ». Sur le web, deux
+   * passes muettes aussi : un flux SANS `Content-Length` (le cas NOMINAL de
+   * la route d'export, `createReadStream`) et la livraison. Un mouvement
+   * réduit (`prefers-reduced-motion`) le fige par la règle générale de
+   * `styles/app.css` (`@layer base`) — jamais par une branche ici : le
+   * SIGNAL (`aria-busy`, le ton) ne dépend d'aucune animation. */
   readonly sweeps: boolean;
 };
 
-export function ringAppearance(params: { readonly cancellable: boolean; readonly reduceMotion: boolean }): RingAppearance {
-  if (params.cancellable) return { tone: 'accent', sweeps: false };
-  return { tone: 'inert', sweeps: !params.reduceMotion };
+export function ringAppearance(params: { readonly cancellable: boolean; readonly indeterminate: boolean }): RingAppearance {
+  return { tone: params.cancellable ? 'accent' : 'inert', sweeps: params.indeterminate || !params.cancellable };
 }

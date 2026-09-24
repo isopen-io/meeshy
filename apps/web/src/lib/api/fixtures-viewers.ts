@@ -1,5 +1,5 @@
 import { VIEWER_ID, minutesAgo } from './fixtures-base';
-import type { PostViewerRow } from './story-viewers';
+import type { PostViewerRow } from './publication-viewers';
 
 /**
  * **LE BOUCHON DE `GET /posts/:postId/interactions`** (#7116) — mime
@@ -39,8 +39,6 @@ const VIEWERS_OF_ST_MIENNE: readonly PostViewerRow[] = [
     reaction: null,
   },
 ];
-
-export type FixtureInteractionsPostId = 'st-mienne' | (string & {});
 
 /**
  * `authorId` d'une story de fixtures — pour décider REFUSED vs NOT_FOUND

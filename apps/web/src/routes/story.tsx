@@ -302,6 +302,7 @@ export default function StoryScreen() {
    * qui autorise le son. */
   const [storySoundMuted, setStorySoundMuted] = useState(false);
   const muteBlockedPlayback = useCallback(() => setStorySoundMuted(true), []);
+  const toggleSound = useCallback(() => setStorySoundMuted((m) => !m), []);
 
   const [paused, setPaused] = useState(false);
   /* Le chrome se MASQUE pendant la pause par APPUI LONG et revient à la
@@ -538,19 +539,13 @@ export default function StoryScreen() {
    * téléchargement + livraison de l'export, idempotence du job) : ce lecteur
    * ne fait que la BRANCHER sur SA région d'annonce et SA pause, exactement
    * comme `commentsHost` deux blocs plus haut. Déclaré ICI, AVANT le clavier,
-   * pour que `ownerRail.viewersOpen` puisse rejoindre la cession `layerOpen`.
+   * pour que `viewersOpen` puisse rejoindre la cession `layerOpen`.
    */
-  const ownerRail = useStoryOwnerRail({
-    storyId: currentStory?.id,
-    exportMediaId: media?.id,
-    pause,
-    resume,
-    announce: (message) => announce(message),
-    language: interfaceLanguage,
-  });
+  const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
+  const viewersOpen = ownerRail.viewers.postId !== null;
 
   /* EXTRAIT dans `use-story-keyboard-shortcuts.ts` (§ budget, #7116) —
-     comportement INCHANGÉ, sauf `layerOpen` qui gagne `ownerRail.viewersOpen` :
+     comportement INCHANGÉ, sauf `layerOpen` qui gagne `viewersOpen` :
      une flèche tapée pendant que « Vues » est ouverte ne doit pas faire
      avancer la story recouverte (D-91, même loi que la feuille de
      commentaires). */
@@ -561,8 +556,8 @@ export default function StoryScreen() {
     resume,
     closeViewer,
     showsSound,
-    onToggleMute: () => setStorySoundMuted((m) => !m),
-    layerOpen: commentsOpen || ownerRail.viewersOpen,
+    onToggleMute: toggleSound,
+    layerOpen: commentsOpen || viewersOpen,
   });
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
@@ -613,7 +608,7 @@ export default function StoryScreen() {
     if (currentStory === undefined) return {};
     const storyId = currentStory.id;
     return {
-      ...(showsSound ? { sound: () => setStorySoundMuted((m) => !m) } : {}),
+      ...(showsSound ? { sound: toggleSound } : {}),
       react: () => {
         void storyReactionAction(storyId).then((result) => {
           const key = storyReactionAnnouncement(result);
@@ -626,13 +621,12 @@ export default function StoryScreen() {
       reply: openComments,
       comments: openComments,
       /* Le plan AUTEUR (`showsViews`/`showsExport`) filtre déjà ces trois sur
-         MA story SEULE (loi 4) — les remettre inconditionnellement ici ne
-         fait apparaître aucun bouton sur la story d'autrui. */
-      views: ownerRail.openViewers,
-      share: ownerRail.onShare,
-      save: ownerRail.onSave,
+         MA story SEULE — les remettre ici ne fait apparaître aucun bouton sur
+         la story d'autrui ; `share`/`save` n'y sont que si la story porte un
+         média exportable (`useStoryOwnerRail`, loi 4). */
+      ...ownerRail.handlers,
     };
-  }, [currentStory, showsSound, announce, interfaceLanguage, openComments, ownerRail.openViewers, ownerRail.onShare, ownerRail.onSave]);
+  }, [currentStory, showsSound, toggleSound, announce, interfaceLanguage, openComments, ownerRail.handlers]);
 
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */
@@ -953,7 +947,7 @@ export default function StoryScreen() {
                 react: hasReactedToStory(currentStory, STORY_DEFAULT_REACTION),
               }}
               saving={ownerRail.saving}
-              onCancelSave={ownerRail.onCancelSave}
+              onCancelSave={ownerRail.cancelSave}
               /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :
                  les trois boutons se peignaient PAR-DESSUS la liste de
                  commentaires, et « Commentaires » recouvrait le bouton
@@ -971,19 +965,12 @@ export default function StoryScreen() {
                  contrôles superposés ne sont qu'un seul contrôle pour le
                  doigt : c'est la géométrie du web qui impose le retrait, pas
                  un choix d'iOS qu'on recopierait. */
-              hidden={chromeHidden || commentsOpen || ownerRail.viewersOpen}
+              hidden={chromeHidden || commentsOpen || viewersOpen}
             />
           ) : null}
 
           <CommentsSheetPortal host={commentsHost} />
-          {currentStory !== undefined ? (
-            <PublicationViewersSheetPortal
-              open={ownerRail.viewersOpen}
-              postId={currentStory.id}
-              viewCount={currentStory.viewCount ?? 0}
-              onClose={ownerRail.closeViewers}
-            />
-          ) : null}
+          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
         </div>
       ) : null}
     </div>

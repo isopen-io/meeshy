@@ -2,16 +2,15 @@ import { useCallback, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
-import { deletePostAction, pinPostAction, postGestureAction, recordShareAction, repostAction, reportPostAction } from '@/lib/api/query';
+import { deletePostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import type { PostToggleKind } from '@/lib/feed/interactions';
-import { publicationShareUrl, RETOUR_PARTAGE_PUBLICATION } from '@/lib/feed/share-url';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { href, navigate } from '@/routes/route-table';
 
 import { withCommentsAnchor } from './comments-anchor';
-import { partagerLien } from './invitation';
+import { sharePublicationLink } from './publication-share';
 import { useLiveAnnouncer } from './use-live-announcer';
 
 /**
@@ -80,17 +79,10 @@ export function usePostGesture(): {
     [announce],
   );
 
+  /* Le geste vit dans `publication-share.ts` (site UNIQUE depuis la revue de
+     #7116) : le rail auteur du lecteur de stories le partage avec SA région. */
   const onShare = useCallback(
-    (postId: string) => {
-      const language = currentInterfaceLanguage();
-      void partagerLien({ title: 'Meeshy', text: translate(language, 'feed.share.text'), url: publicationShareUrl(postId) }).then(
-        (result) => {
-          if (result === 'partage' || result === 'copie') void recordShareAction(postId);
-          const retourKey = RETOUR_PARTAGE_PUBLICATION[result];
-          if (retourKey !== null) announce(translate(currentInterfaceLanguage(), retourKey));
-        },
-      );
-    },
+    (postId: string) => void sharePublicationLink({ postId, language: currentInterfaceLanguage(), announce }),
     [announce],
   );
 

@@ -1011,6 +1011,12 @@ const fr = {
   'story.save.success': 'Story enregistrée',
   'story.save.failed': 'Échec de l’enregistrement',
   'story.save.cancelled': 'Export annulé',
+  'story.views.loading': 'Chargement des vues…',
+  'story.views.offline': 'Hors ligne — la liste s’affichera au retour du réseau.',
+  'story.views.forbidden': 'Seul l’auteur peut voir qui a regardé cette story.',
+  'story.save.offline': 'Hors ligne — réessayez au retour du réseau.',
+  'story.save.refused': 'Connectez-vous pour enregistrer cette story.',
+  'story.save.missing': 'Ce média n’est plus disponible.',
   /* LA PASTILLE DU PRISME (#7141) — trois SUJETS, parce que « Afficher le
      message… » sur un commentaire serait traduit et faux. Neuf clés plates
      plutôt que trois à paramètre : l'accord (« traduit » / « traduite ») ne

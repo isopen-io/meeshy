@@ -260,7 +260,7 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
       plan: plan(),
       language: 'fr',
       handlers: TOUS,
-      saving: { progress: 0.4, cancellable: true, reduceMotion: false },
+      saving: { progress: 0.4, cancellable: true },
       onCancelSave: () => cancels.push('cancel'),
     });
     expect(host.querySelector('[data-story-action="save"]')).toBeNull();
@@ -272,11 +272,31 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
     // 0,4 × 0,9 × 100 = 36 — le même calcul que `percent()`.
     expect(ring?.getAttribute('aria-valuenow')).toBe('36');
 
-    const cancelButton = ring?.closest('button');
-    expect(cancelButton).not.toBeNull();
+    const cancelButton = host.querySelector<HTMLButtonElement>('button[data-story-save-cancel]');
     expect(cancelButton?.getAttribute('aria-label')).toBe('Annuler l’enregistrement');
     await act(async () => cancelButton?.click());
     expect(cancels).toEqual(['cancel']);
+  });
+
+  test('LA VALEUR RESTE LISIBLE : l’anneau n’est PAS dans le bouton d’annulation (revue #7116)', async () => {
+    /* Les enfants d'un `button` sont PRÉSENTATIONNELS (ARIA, « Children
+       Presentational: True ») : un `progressbar` posé DEDANS perd son rôle et
+       sa valeur, et le lecteur d'écran n'entendait que « Annuler
+       l'enregistrement, bouton ». iOS dit les deux — `accessibilityLabel`
+       « Annuler l'enregistrement », `accessibilityValue` « Enregistrement
+       N % » (`StoryViewerView+Sidebar.swift:758-787`). */
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: 0.4, cancellable: true },
+      onCancelSave: () => undefined,
+    });
+    /* Des BOOLÉENS, pas des nœuds : un nœud happy-dom rendu dans le message
+       d'échec fait boucler le formateur de `bun test` sur ses références
+       circulaires (mesuré : le témoin rouge ne rendait jamais la main). */
+    expect(host.querySelector('[data-story-save-ring]')?.closest('button') === null).toBe(true);
+    expect(host.querySelector('button[data-story-save-cancel] [role="progressbar"]') === null).toBe(true);
   });
 
   test('`cancellable: false` ⇒ l’anneau n’est PAS dans un bouton — aucun contrôle inerte (D-88)', async () => {
@@ -284,10 +304,57 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
       plan: plan(),
       language: 'fr',
       handlers: TOUS,
-      saving: { progress: 0.95, cancellable: false, reduceMotion: false },
+      saving: { progress: 1, cancellable: false },
     });
     const ring = host.querySelector('[data-story-save-ring]');
-    expect(ring).not.toBeNull();
-    expect(ring?.closest('button')).toBeNull();
+    expect(ring !== null).toBe(true);
+    expect(host.querySelector('button[data-story-save-cancel]') === null).toBe(true);
+    /* La livraison ne publie rien : le ton passe à INERTE et le balayage dit
+       « en cours » — l'arc de valeur, lui, reste à 90 % (`downloadShare(1)`). */
+    expect(ring?.getAttribute('data-story-save-tone')).toBe('inert');
+    expect(ring?.getAttribute('aria-valuenow')).toBe('90');
+    expect(ring?.querySelector('[data-story-save-sweep]')).not.toBeNull();
+  });
+
+  test('flux SANS longueur (`progress: null`, le cas nominal de la route d’export) ⇒ `aria-busy`, aucun faux « 0 % », un balayage', async () => {
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: null, cancellable: true },
+      onCancelSave: () => undefined,
+    });
+    const ring = host.querySelector('[data-story-save-ring]');
+    expect(ring?.getAttribute('aria-busy')).toBe('true');
+    expect(ring?.hasAttribute('aria-valuenow')).toBe(false);
+    expect(ring?.textContent).toBe('');
+    expect(ring?.querySelector('[data-story-save-sweep]')).not.toBeNull();
+    expect(ring?.getAttribute('data-story-save-tone')).toBe('accent');
+  });
+
+  test('LE CHIFFRE NE TOURNE PAS : seul le calque du balayage porte la rotation (revue #7116)', async () => {
+    const host = await monter({ plan: plan(), language: 'fr', handlers: TOUS, saving: { progress: 1, cancellable: false } });
+    const ring = host.querySelector('[data-story-save-ring]');
+    const spinning = [...(ring?.querySelectorAll('.animate-spin') ?? [])];
+    expect(spinning.length).toBe(1);
+    expect(spinning[0]?.hasAttribute('data-story-save-sweep')).toBe(true);
+    expect(ring?.classList.contains('animate-spin')).toBe(false);
+  });
+
+  test('la valeur S’ANNONCE en mots (`aria-valuetext`), pas seulement en nombre', async () => {
+    const host = await monter({
+      plan: plan(),
+      language: 'fr',
+      handlers: TOUS,
+      saving: { progress: 0.4, cancellable: true },
+      onCancelSave: () => undefined,
+    });
+    expect(host.querySelector('[data-story-save-ring]')?.getAttribute('aria-valuetext')).toBe('Enregistrement 36 %');
+  });
+
+  test('annulable mais SANS gestionnaire d’annulation ⇒ aucun `<button>` sans effet (loi 4)', async () => {
+    const host = await monter({ plan: plan(), language: 'fr', handlers: TOUS, saving: { progress: 0.4, cancellable: true } });
+    expect(host.querySelector('[data-story-save-ring]') !== null).toBe(true);
+    expect(host.querySelector('button[data-story-save-cancel]') === null).toBe(true);
   });
 });

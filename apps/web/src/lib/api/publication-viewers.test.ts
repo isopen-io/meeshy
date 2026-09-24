@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 
-import { fetchStoryViewers } from './story-viewers';
+import { fetchStoryViewers } from './publication-viewers';
 
 function stubTransport(handler: (request: HttpRequest) => ApiResult<unknown>): HttpTransport {
   return {
