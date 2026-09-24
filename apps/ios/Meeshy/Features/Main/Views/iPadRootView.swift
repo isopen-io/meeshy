@@ -151,6 +151,9 @@ struct iPadRootView: View {
             onContinueWithAccount: joinViaShareLink(identifier:),
             onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
         ))
+        // Un lien Meeshy touché dans un message s'ouvre dans l'app, comme sur
+        // iPhone — sans cette action, iOS le rendait à Safari (#7808).
+        .inAppLinks(router: router)
         .modifier(iPadEnvironmentLayer(
             router: router,
             storyViewModel: storyViewModel,

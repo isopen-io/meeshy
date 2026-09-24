@@ -335,16 +335,7 @@ struct RootView: View {
             onContinueWithAccount: joinViaShareLink(identifier:),
             onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
         ))
-        .environment(\.openURL, OpenURLAction { url in
-            let destination = DeepLinkParser.parse(url)
-            switch destination {
-            case .external:
-                return .systemAction
-            default:
-                router.handleDeepLink(url)
-                return .handled
-            }
-        })
+        .inAppLinks(router: router)
         .modifier(RootEnvironmentLayer(
             router: router,
             storyViewModel: storyViewModel,
