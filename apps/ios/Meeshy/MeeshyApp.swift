@@ -129,6 +129,10 @@ struct MeeshyApp: App {
                             AdaptiveRootView()
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
                             LoginView()
+                                .safeAreaInset(edge: .top, spacing: 0) {
+                                    PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
+                                }
+                                .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)

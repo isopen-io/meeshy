@@ -380,6 +380,10 @@ targets:
       # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
       # déjà lié au bundle de tests) + UserNotifications (data-only en test).
       - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
+      # NSEAPIRequest importe MeeshySDK (ClientInfoProvider.identityHeaders) :
+      # c'est la requête que la NSE envoie, et ce qu'elle dépose est ce que
+      # l'app peint au tap (#7804).
+      - path: MeeshyNotificationExtension/NSEAPIRequest.swift
       # Helpers purs de l'extension de partage, compilés DANS le bundle de tests
       # pour la même raison que les helpers NSE ci-dessus : ils vivent dans une
       # cible app-extension, donc `@testable import Meeshy` ne les atteint pas.

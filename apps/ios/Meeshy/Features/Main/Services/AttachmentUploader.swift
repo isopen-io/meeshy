@@ -48,6 +48,10 @@ final class AttachmentUploader: AttachmentUploading {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // Hors `APIClient`, la requête porte l'identité de l'app de la MÊME source (#7810).
+        for (name, value) in await ClientInfoProvider.shared.buildHeaders() {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         request.setValue("multipart/form-data; boundary=\(boundary)",
                          forHTTPHeaderField: "Content-Type")
         if let token = apiClient.authToken {

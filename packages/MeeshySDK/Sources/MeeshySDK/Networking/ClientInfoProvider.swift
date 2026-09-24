@@ -26,26 +26,43 @@ public actor ClientInfoProvider {
     // MARK: - Public API
 
     public func buildHeaders() async -> [String: String] {
-        var headers = staticHeaders()
+        var headers = staticHeaders().merging(Self.localeHeaders()) { _, locale in locale }
+        await enrichWithLocation(&headers)
 
-        // Locale appareil — diffusée via deux headers distincts par convention :
-        //   - `X-Meeshy-Locale` : signal d'enrichissement client (telemetry, geo)
-        //   - `X-Device-Locale` : signal Prisme Linguistique 4e priorité,
-        //                        lu par le middleware gateway pour persister
-        //                        `User.deviceLocale`. Spec :
-        //                        docs/superpowers/specs/2026-05-26-device-locale-fourth-priority-design.md
-        // Format RFC 5646 (underscore → dash) car `Locale.current.identifier`
-        // retourne `"fr_FR"` (POSIX) tandis que le serveur attend `"fr-FR"`.
+        return headers
+    }
+
+    /// **L'identité du client, sans géolocalisation, lisible sans l'acteur.**
+    ///
+    /// C'est ce qu'une EXTENSION (NSE) doit envoyer pour être servie comme
+    /// l'app : elle ne peut ni attendre cet acteur ni toucher CoreLocation.
+    /// Tant qu'elle recopiait ses en-têtes à la main, elle omettait
+    /// `X-Canvas-Caps` — la passerelle lui servait la sentinelle « Mets à jour
+    /// Meeshy » à la place du canvas, et l'app la peignait au tap de la
+    /// notification (#7804). `buildHeaders()` compose les MÊMES deux moitiés :
+    /// il n'existe qu'une orthographe de l'identité cliente.
+    public nonisolated static func identityHeaders() -> [String: String] {
+        makeStaticHeaders().merging(localeHeaders()) { _, locale in locale }
+    }
+
+    /// Locale appareil — diffusée via deux headers distincts par convention :
+    ///   - `X-Meeshy-Locale` : signal d'enrichissement client (telemetry, geo)
+    ///   - `X-Device-Locale` : signal Prisme Linguistique 4e priorité,
+    ///                        lu par le middleware gateway pour persister
+    ///                        `User.deviceLocale`. Spec :
+    ///                        docs/superpowers/specs/2026-05-26-device-locale-fourth-priority-design.md
+    /// Format RFC 5646 (underscore → dash) car `Locale.current.identifier`
+    /// retourne `"fr_FR"` (POSIX) tandis que le serveur attend `"fr-FR"`.
+    private nonisolated static func localeHeaders() -> [String: String] {
         let localeRFC5646 = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
-        headers["X-Meeshy-Locale"]   = localeRFC5646
-        headers["X-Device-Locale"]   = localeRFC5646
-        headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
+        var headers = [
+            "X-Meeshy-Locale": localeRFC5646,
+            "X-Device-Locale": localeRFC5646,
+            "X-Meeshy-Timezone": TimeZone.current.identifier
+        ]
         if let country = Locale.current.region?.identifier {
             headers["X-Meeshy-Country"] = country
         }
-
-        await enrichWithLocation(&headers)
-
         return headers
     }
 
@@ -55,8 +72,13 @@ public actor ClientInfoProvider {
         if let cached = cachedStaticHeaders {
             return cached
         }
+        let headers = Self.makeStaticHeaders()
+        cachedStaticHeaders = headers
+        return headers
+    }
 
-        let headers: [String: String] = [
+    private nonisolated static func makeStaticHeaders() -> [String: String] {
+        [
             "X-Meeshy-Version": appVersion(),
             "X-Meeshy-Build": appBuild(),
             "X-Meeshy-Platform": "ios",
@@ -91,8 +113,6 @@ public actor ClientInfoProvider {
             AppVersionHeader.versionHeaderName: AppVersionHeader.value(),
             AppVersionHeader.platformHeaderName: AppVersionHeader.platformValue
         ]
-        cachedStaticHeaders = headers
-        return headers
     }
 
     // MARK: - Private helpers
@@ -100,20 +120,20 @@ public actor ClientInfoProvider {
     /// Un SEUL lecteur de `CFBundleShortVersionString` dans le SDK : la porte
     /// de version et la télémétrie doivent parler de la même version, sans quoi
     /// un jour l'une dirait « 1.2.0 » quand l'autre dit « 1.2 ».
-    private func appVersion() -> String {
+    private nonisolated static func appVersion() -> String {
         AppVersionHeader.value()
     }
 
-    private func appBuild() -> String {
+    private nonisolated static func appBuild() -> String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
     }
 
-    private func osVersion() -> String {
+    private nonisolated static func osVersion() -> String {
         let v = ProcessInfo.processInfo.operatingSystemVersion
         return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
-    private func deviceModel() -> String {
+    private nonisolated static func deviceModel() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
         let machineMirror = Mirror(reflecting: systemInfo.machine)

@@ -339,4 +339,40 @@ final class UserServiceTests: XCTestCase {
         let request4 = UpdateProfileRequest(customDestinationLanguage: "")
         XCTAssertEqual(request4.customDestinationLanguage, "")
     }
+
+    // MARK: - uploadImage — l'identité cliente (#7810)
+
+    func test_uploadImage_porteLIdentiteCliente_valeurPourValeur() async throws {
+        mock.authToken = "JWT.sonde"
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [UploadIdentityStubProtocol.self]
+        let serviceTeste = UserService(api: mock, urlSession: URLSession(configuration: config))
+
+        _ = try await serviceTeste.uploadImage(Data([0xFF, 0xD8]), filename: "avatar.jpg")
+
+        let requete = try XCTUnwrap(UploadIdentityStubProtocol.derniereRequete)
+        XCTAssertEqual(requete.value(forHTTPHeaderField: "X-Canvas-Caps"), "3")
+        for (nom, valeur) in ClientInfoProvider.identityHeaders() {
+            XCTAssertEqual(requete.value(forHTTPHeaderField: nom), valeur, "en-tête \(nom)")
+        }
+        XCTAssertEqual(requete.value(forHTTPHeaderField: "Authorization"), "Bearer JWT.sonde")
+    }
+}
+
+private final class UploadIdentityStubProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var derniereRequete: URLRequest?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.derniereRequete = request
+        let url = request.url ?? URL(string: "https://mock.api")!
+        let reponse = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: reponse, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"success":true,"data":{"attachments":[{"fileUrl":"https://mock.api/u.jpg"}]}}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

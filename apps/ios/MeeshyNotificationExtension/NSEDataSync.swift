@@ -11,7 +11,9 @@ import os
 /// Constraints:
 /// - 30 second execution budget (iOS kills the extension after that)
 /// - 24 MB memory limit
-/// - No MeeshySDK import (too heavy — Socket.IO, WebRTC, GRDB)
+/// - No MeeshySDK import here (too heavy — Socket.IO, WebRTC, GRDB); the
+///   request identity comes from `NSEAPIRequest`, the one NSE file that reads
+///   `ClientInfoProvider` so every request is served like the app's (#7804)
 /// - Auth token read from shared Keychain (same access group)
 nonisolated enum NSEDataSync {
 
@@ -109,9 +111,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token)
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             guard let data,
@@ -172,9 +172,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token)
 
         let task = URLSession.shared.dataTask(with: request) { data, response, _ in
             guard let data,
@@ -437,11 +435,7 @@ nonisolated enum NSEDataSync {
         let apiBaseURL = resolveApiBaseURL()
         guard let url = URL(string: "\(apiBaseURL)\(path)") else { return }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let request = NSEAPIRequest.make(url: url, token: token, method: "POST", timeout: 60)
 
         // Background upload tasks must read their body from a file.
         guard let bodyFileURL = writeBackgroundBodyFile(body) else { return }

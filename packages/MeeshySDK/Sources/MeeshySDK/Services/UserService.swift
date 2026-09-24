@@ -26,9 +26,11 @@ public protocol UserServiceProviding: Sendable {
 public final class UserService: UserServiceProviding, @unchecked Sendable {
     public static let shared = UserService()
     private let api: APIClientProviding
+    private let urlSession: URLSession
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, urlSession: URLSession = .shared) {
         self.api = api
+        self.urlSession = urlSession
     }
 
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> OffsetPaginatedAPIResponse<[UserSearchResult]> {
@@ -85,6 +87,10 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // Hors `APIClient`, la requête porte l'identité de l'app de la MÊME source (#7810).
+        for (name, value) in await ClientInfoProvider.shared.buildHeaders() {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         if let token = api.authToken {
@@ -93,7 +99,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
 
         request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.serverError(

@@ -335,16 +335,7 @@ struct RootView: View {
             onContinueWithAccount: joinViaShareLink(identifier:),
             onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
         ))
-        .environment(\.openURL, OpenURLAction { url in
-            let destination = DeepLinkParser.parse(url)
-            switch destination {
-            case .external:
-                return .systemAction
-            default:
-                router.handleDeepLink(url)
-                return .handled
-            }
-        })
+        .inAppLinks(router: router)
         .modifier(RootEnvironmentLayer(
             router: router,
             storyViewModel: storyViewModel,
@@ -614,45 +605,17 @@ struct RootView: View {
             // exists for in-app feed taps; the deep link just reuses it.
             router.push(.postDetail(postId))
 
+        case .reel(let postId):
+            // Un réel nommé : même porte que sa notification (#7805).
+            openReelFromNotification(postId: postId)
+
         case .storyDetail(let postId):
-            // Stories share the post identifier namespace. Prefer the
-            // dedicated viewer when the story is in the local tray, fall
-            // back to PostDetailView otherwise — matches the existing
-            // `storyDetail:` push-notification dispatch (line ~472 above)
-            // so cold-launch deep links and warm-launch push taps land on
-            // the same screen for the same id.
-            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                // Le `postId` VOYAGE : il a servi à trouver le groupe, il doit
-                // encore désigner la story. Sans lui — et avec
-                // `startAtFirstUnviewed: true` — le lecteur s'ouvrait sur le bon
-                // groupe à une AUTRE story, ce qui fait mentir tout lien partagé
-                // (#4903, mesuré au simulateur). L'aval savait déjà s'en servir.
-                storyViewerCoordinator.present(
-                    .targetingStory(postId: postId,
-                                    inGroup: storyViewModel.storyGroups[groupIdx].id))
-            } else {
-                // **Absent du TRAY ne veut pas dire absent.** `groupIndex`
-                // interroge un cache local ; un lien reçu de quelqu'un d'autre
-                // — le cas NOMINAL du partage — désigne presque toujours une
-                // story que ce cache ignore. Conclure « indisponible » de ce
-                // silence, c'est répondre à la question « l'ai-je déjà ? »
-                // quand celle posée est « existe-t-elle ? » (#4903).
-                //
-                // `ensureStoryLoaded` sait déjà répondre à la seconde : il est
-                // cache-first, ne va au réseau que si nécessaire, et écarte les
-                // stories mortes pour qu'un lien périmé n'insère pas de groupe
-                // fantôme. Le détail du post reste le repli — pour une story
-                // réellement expirée ou supprimée, il dit la bonne chose.
-                Task { @MainActor in
-                    if await storyViewModel.ensureStoryLoaded(postId: postId),
-                       let loadedIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                        storyViewerCoordinator.present(
-                            .targetingStory(postId: postId,
-                                            inGroup: storyViewModel.storyGroups[loadedIdx].id))
-                    } else {
-                        router.push(.postDetail(postId))
-                    }
-                }
+            // La porte partagée avec l'iPad et le lien tapé dans l'app : le
+            // `postId` voyage, une story absente du tray est chargée, le détail
+            // du post n'est que le repli d'une story morte (#4903, #7807).
+            Task { @MainActor in
+                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
+                    .open(postId: postId) { router.push(.postDetail(postId)) }
             }
 
         case .userProfile(let username):
@@ -682,6 +645,18 @@ struct RootView: View {
 
         case .hashtag(let tag):
             router.push(.hashtagResults(tag: tag))
+
+        case .community(let id):
+            router.push(.communityDetail(id))
+
+        case .recentConversation, .unreadConversations:
+            // Widgets et App Shortcut (#7811) : élections de `ConversationListEntry`.
+            router.popToRoot()
+            if deepLink == .unreadConversations {
+                conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
+            } else if let id = ConversationListEntry.recentConversationId(in: conversationViewModel.conversations) {
+                navigateToConversationById(id)
+            }
 
         case .externalLink(let url):
             // `/l/<token>` de cible EXTERNAL (façade d'une URL postée dans un
@@ -1227,17 +1202,13 @@ struct RootView: View {
     }
 
     private func revealReelFromNotification(postId: String, commentId: String?, parentCommentId: String?) async {
-        switch await ReelNotificationOpener.live.destination(for: postId) {
-        case .reel(let post):
-            reelsPresenter.present(posts: [post], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
-        case .postDetail(let post):
-            // Trouvé mais NON réel (le pager filtre sur `isReel`) : la surface
-            // post universelle le rend, semée du post déjà chargé, en
-            // CONSERVANT la cible commentaire.
+        // La même porte que le lien `/reel/<id>` et que l'iPad (#7805, #7806).
+        // Trouvé mais NON réel (le pager filtre sur `isReel`) : la surface
+        // post universelle le rend, semée du post déjà chargé, en CONSERVANT
+        // la cible commentaire.
+        await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
             router.push(.postDetail(postId, post, showComments: commentId != nil,
                                     commentId: commentId, parentCommentId: parentCommentId))
-        case .failure(let failure):
-            reelsPresenter.presentFailure(failure, postId: postId, commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 
