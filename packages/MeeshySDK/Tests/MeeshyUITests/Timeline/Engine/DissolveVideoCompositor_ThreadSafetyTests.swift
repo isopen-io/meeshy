@@ -42,7 +42,7 @@ final class DissolveVideoCompositor_ThreadSafetyTests: XCTestCase {
         return buffer
     }
 
-    nonisolated(unsafe) private static let sharedContext: CIContext = {
+    private static let sharedContext: CIContext = {
         if let device = MTLCreateSystemDefaultDevice() {
             return CIContext(mtlDevice: device)
         }
