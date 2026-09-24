@@ -66,3 +66,15 @@ final class MockOnboardingNotificationPermission: OnboardingNotificationPermitti
         requestCallCount = 0
     }
 }
+
+final class MockOnboardingSettledStore: OnboardingSettledStoring, @unchecked Sendable {
+    private(set) var settledUserIds: Set<String> = []
+
+    func isSettled(userId: String) -> Bool {
+        settledUserIds.contains(userId)
+    }
+
+    func markSettled(userId: String) {
+        settledUserIds.insert(userId)
+    }
+}

@@ -54,6 +54,7 @@ final class OnboardingViewModel: ObservableObject {
     private let permission: any OnboardingNotificationPermitting
     private let pickTemplate: (Int) -> Int
     private let applyUser: (MeeshyUser) -> Void
+    private let settled: any OnboardingSettledStoring
 
     private var queue: [OnboardingStepId] = []
     private var producedSomething = false
@@ -63,6 +64,8 @@ final class OnboardingViewModel: ObservableObject {
     private var initialLanguages: (primary: String, secondary: String?) = ("fr", nil)
     private var rewardSequence = 0
     private var storyUploadIdsAtOpen: Set<String>?
+    private var isRoutingElsewhere = false
+    private var awaitsRoute = false
 
     init(
         service: any OnboardingServiceProviding = OnboardingService.shared,
@@ -72,7 +75,8 @@ final class OnboardingViewModel: ObservableObject {
         progress: any EngagementProgressProviding = EngagementProgressService.shared,
         permission: (any OnboardingNotificationPermitting)? = nil,
         pickTemplate: ((Int) -> Int)? = nil,
-        applyUser: ((MeeshyUser) -> Void)? = nil
+        applyUser: ((MeeshyUser) -> Void)? = nil,
+        settled: any OnboardingSettledStoring = UserDefaultsOnboardingSettledStore()
     ) {
         self.service = service
         self.messages = messages
@@ -82,6 +86,7 @@ final class OnboardingViewModel: ObservableObject {
         self.permission = permission ?? SystemOnboardingNotificationPermission()
         self.pickTemplate = pickTemplate ?? { Int.random(in: 0..<$0) }
         self.applyUser = applyUser ?? { AuthManager.shared.currentUser = $0 }
+        self.settled = settled
     }
 
     // MARK: - Lecture
@@ -109,7 +114,11 @@ final class OnboardingViewModel: ObservableObject {
 
     // MARK: - Démarrage
 
+    /// Un parcours RÉGLÉ — fini, passé, ou déclaré non éligible par le serveur —
+    /// ne se redemande plus : aucun `GET` à chaque lancement, pour toujours.
+    /// Une panne réseau ne règle rien : la lecture sera retentée.
     func start(user: MeeshyUser) async {
+        guard !settled.isSettled(userId: user.id) else { return }
         prepare(for: user)
 
         let state: APIOnboardingState
@@ -119,8 +128,21 @@ final class OnboardingViewModel: ObservableObject {
             Self.logger.info("onboarding state unavailable: \(error.localizedDescription, privacy: .public)")
             return
         }
-        guard state.eligible else { return }
+        guard state.eligible, state.completedAt == nil else {
+            settled.markSettled(userId: user.id)
+            return
+        }
         await present(state)
+    }
+
+    /// Un deep link ou un push a mené AILLEURS que la racine : le calque attend
+    /// le retour, au lieu de recouvrir la destination. Une fois montré, il ne
+    /// se retire jamais pour une navigation.
+    func routingChanged(isElsewhere: Bool) {
+        isRoutingElsewhere = isElsewhere
+        guard !isElsewhere, awaitsRoute else { return }
+        awaitsRoute = false
+        isPresented = true
     }
 
     #if DEBUG
@@ -168,7 +190,11 @@ final class OnboardingViewModel: ObservableObject {
         let notificationsUnseen = !state.seenSteps.contains(.notifications)
         notificationsPending = notificationsUnseen ? await permission.currentStatus() == .notDetermined : false
         plannedSteps = queue + (notificationsPending ? [.notifications] : [])
-        isPresented = true
+        if isRoutingElsewhere {
+            awaitsRoute = true
+        } else {
+            isPresented = true
+        }
         await showNext()
     }
 
@@ -222,7 +248,9 @@ final class OnboardingViewModel: ObservableObject {
 
     private func close() async {
         isPresented = false
+        awaitsRoute = false
         card = nil
+        if let userId = user?.id { settled.markSettled(userId: userId) }
         do {
             _ = try await service.finish()
         } catch {

@@ -135,6 +135,45 @@ enum OnboardingCardFit {
     static func hiddenSuggestionCount(_ all: [APIOnboardingSuggestion], expanded: Bool) -> Int {
         all.count - visibleSuggestions(all, expanded: expanded).count
     }
+
+    /// Carte « trouve ta bande » : tant qu'aucune demande n'est partie, la
+    /// seule sortie réelle est « Plus tard », et c'est elle qui tient la place
+    /// principale — jamais un « Continuer » inerte au premier plan.
+    enum FriendsActions: Equatable {
+        case laterOnly
+        case continueOnly
+    }
+
+    static func friendsActions(hasRequests: Bool) -> FriendsActions {
+        hasRequests ? .continueOnly : .laterOnly
+    }
+}
+
+// MARK: - Un parcours réglé
+
+/// Retient, par compte, qu'un parcours est RÉGLÉ (fini, passé, non éligible) :
+/// le lancement suivant n'interroge plus le serveur.
+protocol OnboardingSettledStoring: Sendable {
+    func isSettled(userId: String) -> Bool
+    func markSettled(userId: String)
+}
+
+struct UserDefaultsOnboardingSettledStore: OnboardingSettledStoring, @unchecked Sendable {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    private static func key(_ userId: String) -> String { "onboarding.settled.\(userId)" }
+
+    func isSettled(userId: String) -> Bool {
+        defaults.bool(forKey: Self.key(userId))
+    }
+
+    func markSettled(userId: String) {
+        defaults.set(true, forKey: Self.key(userId))
+    }
 }
 
 // MARK: - La permission de notification

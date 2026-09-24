@@ -52,6 +52,7 @@ struct OnboardingOverlay: View {
             guard let reward else { return }
             celebrate(reward)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("onboarding.overlay")
     }
@@ -146,6 +147,9 @@ struct OnboardingHost: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Sous le calque, la racine sort de l'arbre VoiceOver : le trait
+            // `isModal` posé sur un conteneur n'isole rien à lui seul.
+            .accessibilityHidden(model.isPresented)
             .overlay {
                 if model.isPresented {
                     OnboardingOverlay(model: model, onOpenStory: openStoryComposer,
@@ -154,6 +158,14 @@ struct OnboardingHost: ViewModifier {
                 }
             }
             .meeshyAnimation(.easeInOut(duration: 0.35), value: model.isPresented)
+            // Un deep link ou un push qui a mené ailleurs que la racine passe
+            // d'abord : lu AVANT l'état serveur, publié dès l'abonnement.
+            .onReceive(Publishers.CombineLatest(router.$path, router.$deepLinkProfileUser)
+                .map { path, profile in !path.isEmpty || profile != nil }
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)) { isElsewhere in
+                model.routingChanged(isElsewhere: isElsewhere)
+            }
             .onReceive(AuthManager.shared.$currentUser.receive(on: DispatchQueue.main)) { user in
                 guard let user, startedForUserId != user.id else { return }
                 startedForUserId = user.id

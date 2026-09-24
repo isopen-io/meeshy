@@ -48,6 +48,7 @@ final class OnboardingViewModelTests: XCTestCase {
         let progress: MockEngagementProgressService
         let permission: MockOnboardingNotificationPermission
         let appliedUsers: AppliedUsers
+        let settled: MockOnboardingSettledStore
     }
 
     final class AppliedUsers {
@@ -56,7 +57,8 @@ final class OnboardingViewModelTests: XCTestCase {
 
     private func makeSUT(
         state: APIOnboardingState? = nil,
-        permission: OnboardingNotificationStatus = .notDetermined
+        permission: OnboardingNotificationStatus = .notDetermined,
+        settled: MockOnboardingSettledStore = MockOnboardingSettledStore()
     ) -> SUT {
         let service = MockOnboardingService()
         service.fetchStateResult = .success(state ?? makeState())
@@ -76,10 +78,12 @@ final class OnboardingViewModelTests: XCTestCase {
             progress: progress,
             permission: notif,
             pickTemplate: { _ in 0 },
-            applyUser: { applied.users.append($0) }
+            applyUser: { applied.users.append($0) },
+            settled: settled
         )
         return SUT(model: model, service: service, messages: messages, friends: friends,
-                   users: users, progress: progress, permission: notif, appliedUsers: applied)
+                   users: users, progress: progress, permission: notif, appliedUsers: applied,
+                   settled: settled)
     }
 
     // MARK: - Présentation
@@ -134,6 +138,88 @@ final class OnboardingViewModelTests: XCTestCase {
         await sut.model.start(user: makeUser())
 
         XCTAssertNotEqual(sut.model.card, .step(.friends))
+    }
+
+    // MARK: - Un parcours réglé ne se redemande plus
+
+    func test_start_notEligible_isRememberedAndNeverFetchedAgain() async {
+        let store = MockOnboardingSettledStore()
+        let first = makeSUT(state: makeState(eligible: false), settled: store)
+        await first.model.start(user: makeUser())
+
+        let second = makeSUT(settled: store)
+        await second.model.start(user: makeUser())
+
+        XCTAssertEqual(second.service.fetchStateCallCount, 0)
+        XCTAssertFalse(second.model.isPresented)
+    }
+
+    func test_skipAll_isRememberedAndNeverFetchedAgain() async {
+        let store = MockOnboardingSettledStore()
+        let first = makeSUT(settled: store)
+        await first.model.start(user: makeUser())
+        await first.model.skipAll()
+
+        let second = makeSUT(settled: store)
+        await second.model.start(user: makeUser())
+
+        XCTAssertEqual(second.service.fetchStateCallCount, 0)
+    }
+
+    func test_networkFailure_isNotRememberedAsSettled() async {
+        let store = MockOnboardingSettledStore()
+        let first = makeSUT(settled: store)
+        first.service.fetchStateResult = .failure(URLError(.notConnectedToInternet))
+        await first.model.start(user: makeUser())
+
+        let second = makeSUT(settled: store)
+        await second.model.start(user: makeUser())
+
+        XCTAssertEqual(second.service.fetchStateCallCount, 1)
+        XCTAssertTrue(second.model.isPresented)
+    }
+
+    func test_settled_isPerUser_anotherAccountStillFetches() async {
+        let store = MockOnboardingSettledStore()
+        let first = makeSUT(state: makeState(eligible: false), settled: store)
+        await first.model.start(user: makeUser())
+
+        let other = makeSUT(settled: store)
+        await other.model.start(user: MeeshyUser(id: "someone-else", username: "tom", displayName: "Tom", systemLanguage: "en"))
+
+        XCTAssertEqual(other.service.fetchStateCallCount, 1)
+        XCTAssertTrue(other.model.isPresented)
+    }
+
+    // MARK: - Un deep link ou un push en cours passe d'abord
+
+    func test_start_whileRoutingElsewhere_defersThePresentation() async {
+        let sut = makeSUT()
+        sut.model.routingChanged(isElsewhere: true)
+
+        await sut.model.start(user: makeUser())
+
+        XCTAssertFalse(sut.model.isPresented)
+    }
+
+    func test_routingBackHome_presentsTheDeferredCard() async {
+        let sut = makeSUT()
+        sut.model.routingChanged(isElsewhere: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.routingChanged(isElsewhere: false)
+
+        XCTAssertTrue(sut.model.isPresented)
+        XCTAssertEqual(sut.model.card, .step(.languages))
+    }
+
+    func test_routingElsewhere_onceShown_neverHidesTheOnboarding() async {
+        let sut = makeSUT()
+        await sut.model.start(user: makeUser())
+
+        sut.model.routingChanged(isElsewhere: true)
+
+        XCTAssertTrue(sut.model.isPresented)
     }
 
     // MARK: - Carte 1 — langues
@@ -581,5 +667,10 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertEqual(OnboardingCardFit.visibleSuggestions(six, expanded: true).count, 6)
         XCTAssertEqual(OnboardingCardFit.hiddenSuggestionCount(six, expanded: false), 3)
         XCTAssertEqual(OnboardingCardFit.hiddenSuggestionCount(Array(six.prefix(2)), expanded: false), 0)
+    }
+
+    func test_friendsActions_beforeAnyRequest_laterIsTheOnlyAction() {
+        XCTAssertEqual(OnboardingCardFit.friendsActions(hasRequests: false), .laterOnly)
+        XCTAssertEqual(OnboardingCardFit.friendsActions(hasRequests: true), .continueOnly)
     }
 }

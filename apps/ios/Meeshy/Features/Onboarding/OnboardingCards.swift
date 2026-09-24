@@ -13,6 +13,10 @@ struct OnboardingCardView: View {
     let onExplore: () -> Void
 
     @State private var showsAllSuggestions = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) }
 
     var body: some View {
         switch model.card {
@@ -254,15 +258,8 @@ struct OnboardingCardView: View {
             title: String(localized: "onboarding.friends.title", bundle: .main),
             message: String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main), OnboardingRewards.friendship),
             isDark: isDark,
-            primary: OnboardingAction(
-                title: String(localized: "onboarding.continue", bundle: .main),
-                identifier: "onboarding.friends.continue",
-                isEnabled: !model.requestedProfileIds.isEmpty
-            ) { Task { await model.continueFromFriends() } },
-            secondary: model.requestedProfileIds.isEmpty
-                ? OnboardingAction(title: String(localized: "onboarding.later", bundle: .main),
-                                   identifier: "onboarding.later") { Task { await model.continueFromFriends() } }
-                : nil,
+            primary: friendsPrimary,
+            secondary: nil,
             illustration: { OnboardingFriendsIllustration(names: model.suggestions.map(\.displayName), isDark: isDark) },
             content: {
                 VStack(spacing: MeeshySpacing.sm) {
@@ -277,7 +274,7 @@ struct OnboardingCardView: View {
                     let hidden = OnboardingCardFit.hiddenSuggestionCount(model.suggestions, expanded: showsAllSuggestions)
                     if hidden > 0 {
                         Button {
-                            withAnimation(.easeOut(duration: 0.25)) { showsAllSuggestions = true }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showsAllSuggestions = true }
                         } label: {
                             Label(String(localized: "onboarding.friends.more", bundle: .main), systemImage: "chevron.down")
                                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
@@ -295,6 +292,19 @@ struct OnboardingCardView: View {
                 }
             }
         )
+    }
+
+    /// Avant tout ajout, « Plus tard » est la sortie réelle : elle tient la
+    /// place principale. « Continuer » ne la remplace qu'au premier ajout.
+    private var friendsPrimary: OnboardingAction {
+        switch OnboardingCardFit.friendsActions(hasRequests: !model.requestedProfileIds.isEmpty) {
+        case .laterOnly:
+            return OnboardingAction(title: String(localized: "onboarding.later", bundle: .main),
+                                    identifier: "onboarding.later") { Task { await model.continueFromFriends() } }
+        case .continueOnly:
+            return OnboardingAction(title: String(localized: "onboarding.continue", bundle: .main),
+                                    identifier: "onboarding.friends.continue") { Task { await model.continueFromFriends() } }
+        }
     }
 
     // MARK: 5 — notifications
@@ -395,7 +405,7 @@ struct OnboardingCardView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text(reward)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(MeeshyColors.indigo500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -436,7 +446,10 @@ struct OnboardingSuggestionRow: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilitySummary)
             Spacer(minLength: MeeshySpacing.sm)
-            Button(action: onAdd) {
+            Button {
+                guard !isRequested else { return }
+                onAdd()
+            } label: {
                 Label(
                     isRequested
                         ? String(localized: "onboarding.friends.added", bundle: .main)
@@ -445,16 +458,18 @@ struct OnboardingSuggestionRow: View {
                 )
                 .labelStyle(.titleAndIcon)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(isRequested ? MeeshyColors.success : Color.white)
+                .foregroundStyle(isRequested ? MeeshyColors.textPrimary(isDark: isDark) : Color.white)
                 .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
                 .background(Capsule().fill(isRequested
-                                           ? AnyShapeStyle(MeeshyColors.success.opacity(0.14))
+                                           ? AnyShapeStyle(MeeshyColors.success.opacity(isDark ? 0.22 : 0.16))
                                            : AnyShapeStyle(MeeshyColors.brandGradient)))
+                .overlay(Capsule().stroke(isRequested ? MeeshyColors.success : .clear, lineWidth: 1))
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(isRequested)
+            // « Envoyée » reste pleinement lisible : un bouton `.disabled` est
+            // atténué par le système, sous 3:1. Le geste y est sans effet.
             .accessibilityLabel(String.localizedStringWithFormat(
                 isRequested
                     ? String(localized: "onboarding.friends.added.a11y", bundle: .main)
