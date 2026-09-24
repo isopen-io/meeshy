@@ -2,7 +2,7 @@ import type { PostVisibility } from '@meeshy/shared/types/post';
 
 import type { StorageLike } from '@/lib/send/draft-store';
 
-import { isRememberableAudience, STUDIO_AUDIENCES } from './publication-audience';
+import { isRememberableAudience, STUDIO_AUDIENCES, type ChoosableAudience } from './publication-audience';
 import type { StudioMediaKind } from './story-document';
 
 /**
@@ -156,11 +156,11 @@ export type StudioDraftStore = {
    * modes est une liste que le studio ne reproduit pas, la proposer à nouveau
    * élargirait l'audience en silence.
    */
-  readonly rememberAudience: (viewerId: string, visibility: PostVisibility) => void;
+  readonly rememberAudience: (viewerId: string, visibility: ChoosableAudience) => void;
   /** **LIRE LE SOUVENIR** — `null` si rien n'est mémorisé, ou si la valeur
    * stockée n'est plus mémorisable (donnée écrite par une version antérieure,
    * ou corrompue). */
-  readonly lastAudience: (viewerId: string) => PostVisibility | null;
+  readonly lastAudience: (viewerId: string) => ChoosableAudience | null;
 };
 
 /** Fabrique testable — même dispositif que `createDraftStore` : un backend
@@ -168,7 +168,7 @@ export type StudioDraftStore = {
  * session, portée par le cache mémoire. */
 export function createStudioDraftStore(backend: StorageLike | null | undefined = resolveBrowserStorage()): StudioDraftStore {
   const memory = new Map<string, StudioDraftSnapshot | null>();
-  const audienceMemory = new Map<string, PostVisibility | null>();
+  const audienceMemory = new Map<string, ChoosableAudience | null>();
 
   const get = (viewerId: string): StudioDraftSnapshot | null => {
     const key = keyOf(viewerId);
@@ -207,7 +207,7 @@ export function createStudioDraftStore(backend: StorageLike | null | undefined =
     }
   };
 
-  const rememberAudience = (viewerId: string, visibility: PostVisibility): void => {
+  const rememberAudience = (viewerId: string, visibility: ChoosableAudience): void => {
     if (!isRememberableAudience(visibility)) return;
     const key = audienceKeyOf(viewerId);
     audienceMemory.set(key, visibility);
@@ -218,7 +218,7 @@ export function createStudioDraftStore(backend: StorageLike | null | undefined =
     }
   };
 
-  const lastAudience = (viewerId: string): PostVisibility | null => {
+  const lastAudience = (viewerId: string): ChoosableAudience | null => {
     const key = audienceKeyOf(viewerId);
     if (audienceMemory.has(key)) return audienceMemory.get(key) ?? null;
     try {

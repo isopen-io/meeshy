@@ -861,7 +861,7 @@ const it = {
 
   /* IL FOGLIO DI DESTINATARI DELLO STUDIO (#7683) — i sei PostVisibility,
      specchio di PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Destinatari',
+  'story.studio.audience.chip.label': 'Destinatari',
   'story.studio.audience.title': 'Destinatari',
   'story.studio.audience.public': 'Pubblico',
   'story.studio.audience.community': 'Community',
@@ -872,11 +872,10 @@ const it = {
   'story.studio.audience.subtitle.public': 'Tutti, compresi i non follower',
   'story.studio.audience.subtitle.community': 'I membri delle tue community',
   'story.studio.audience.subtitle.friends': 'I tuoi contatti accettati',
-  'story.studio.audience.subtitle.except': 'Tutti tranne un elenco',
-  'story.studio.audience.subtitle.only': 'Scegli persone',
   'story.studio.audience.subtitle.private': 'Solo tu — non viene pubblicato nulla',
   'story.studio.audience.refusal.people': 'La scelta delle persone non è ancora disponibile sul web.',
-  'story.studio.audience.scope': 'I destinatari appartengono alla pubblicazione, mai a un formato: cambiare formato li conserva.',
+  'story.studio.audience.scope': 'I destinatari scelti appartengono alla pubblicazione, mai a un formato: cambiare formato li conserva.',
+  'story.studio.audience.defaultMark': 'predefinito',
 
   'appUpdate.available': 'È disponibile una nuova versione di Meeshy!',
   'appUpdate.hint': 'Ricarica per avere le ultime novità.',

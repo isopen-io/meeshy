@@ -470,6 +470,12 @@ describe('l’audience du brouillon (#7683) — voyage, jamais un défaut recopi
     expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: '' }] }, (u) => u, 'fr').visibility).toBeNull();
   });
 
+  test('un snapshot NOMINATIF (ONLY/EXCEPT, sans leur liste) se relit SANS audience — jamais un état que la passerelle refuserait', () => {
+    for (const visibility of ['ONLY', 'EXCEPT'] as const) {
+      expect(studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: 'x' }], visibility }, (u) => u, 'fr').visibility).toBeNull();
+    }
+  });
+
   test('une audience seule ne tient pas un brouillon en vie (la mémoire s’en charge)', () => {
     expect(isStudioDraftEmpty(withAudience(emptyStudioDraft('fr'), 'FRIENDS'))).toBe(true);
   });

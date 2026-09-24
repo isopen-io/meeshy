@@ -37,9 +37,15 @@ beforeAll(async () => {
   // français, un libellé en dur et un libellé du catalogue rendent le même
   // texte — leçon 261.
   await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('de')]);
-  // Un budget de tours ne peut pas attendre un `import()` : les deux chunks
-  // à la demande de l'écran sont réchauffés avant tout montage.
-  await Promise.all([import('@/components/scene-player'), import('@/lib/api/post-media-upload')]);
+  // Un budget de tours ne peut pas attendre un `import()` : les chunks à la
+  // demande de l'écran (moteur, montée, feuille d'audience, éditeur d'objet)
+  // sont réchauffés avant tout montage.
+  await Promise.all([
+    import('@/components/scene-player'),
+    import('@/lib/api/post-media-upload'),
+    import('./story-compose-audience-sheet'),
+    import('./story-compose-editor'),
+  ]);
 });
 
 afterAll(async () => {
@@ -592,17 +598,22 @@ describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#74
 
 describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (#7683)', () => {
   const pastille = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-audience]');
-  const openSheet = (host: ParentNode) => act(() => pastille(host)!.click());
   const choice = (visibility: string) => document.querySelector<HTMLButtonElement>(`[data-audience-choice="${visibility}"]`);
   const dialogOpen = () => document.querySelector('dialog[open]');
   const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
   const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+  /** La feuille se charge À LA DEMANDE (`lazy`, comme `LanguageSheet`) : son
+   * premier rendu attend le module, le témoin attend la feuille OUVERTE. */
+  async function openSheet(host: ParentNode): Promise<void> {
+    act(() => pastille(host)!.click());
+    await flush(() => choice('PUBLIC') !== null);
+  }
 
   test('choisir « Amis » puis publier ⇒ le corps porte `visibility: FRIENDS`', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Pour mes contacts');
-    openSheet(el);
+    await openSheet(el);
     act(() => choice('FRIENDS')!.click());
     act(() => publishButton(el)!.click());
     await flush(() => bench.posts.length > 0);
@@ -623,7 +634,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     const bench = harness({ drafts });
     const el = mount(bench.deps);
     typeText(el, 'Une story pour mes amis');
-    openSheet(el);
+    await openSheet(el);
     act(() => choice('FRIENDS')!.click());
     act(() => publishButton(el)!.click());
     await flush(() => drafts.get(VIEWER_ID) === null);
@@ -659,21 +670,35 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
   });
 
+  test('un brouillon NOMINATIF (version antérieure, donnée altérée) ne part jamais : la mémoire prend le relais, le corps ne porte pas ONLY', async () => {
+    const drafts = createStudioDraftStore(null);
+    drafts.set(VIEWER_ID, { texts: [{ id: 't1', text: 'Brouillon ancien' }], visibility: 'ONLY' });
+    drafts.rememberAudience(VIEWER_ID, 'COMMUNITY');
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('COMMUNITY');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('COMMUNITY');
+  });
+
   test('la feuille offre les six, dans l’ordre iOS ; ONLY/EXCEPT sont grisés AVEC leur raison, sans effet', async () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Un texte');
-    openSheet(el);
+    await openSheet(el);
 
     expect(dialogOpen()).not.toBeNull();
     const rows = Array.from(document.querySelectorAll<HTMLElement>('dialog[open] [data-audience-choice]'));
     expect(rows.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC', 'COMMUNITY', 'FRIENDS', 'EXCEPT', 'ONLY', 'PRIVATE']);
 
-    const only = choice('ONLY')!;
-    expect(only.getAttribute('aria-disabled')).toBe('true');
-    expect(only.textContent?.trim().length).toBeGreaterThan(0);
+    for (const refused of ['ONLY', 'EXCEPT']) {
+      const row = choice(refused)!;
+      expect(row.getAttribute('aria-disabled')).toBe('true');
+      expect(row.querySelector('[data-audience-caption]')?.textContent).toBe('Le choix de personnes n’est pas encore disponible sur le web.');
+    }
 
-    act(() => only.click());
+    act(() => choice('ONLY')!.click());
     expect(dialogOpen()).not.toBeNull();
     expect(pastille(el)?.getAttribute('data-audience-source')).toBe('default');
 
@@ -682,17 +707,51 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(Object.hasOwn(bench.posts[0]!, 'visibility')).toBe(false);
   });
 
-  test('choisir une audience CHOISISSABLE applique ET ferme la feuille', () => {
+  test('chaque rangée porte SON glyphe — six tracés distincts (PostVisibility.icon)', async () => {
     const el = mount(harness({}).deps);
-    openSheet(el);
-    act(() => choice('FRIENDS')!.click());
-    expect(dialogOpen()).toBeNull();
-    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('FRIENDS');
+    await openSheet(el);
+    const traces = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice]')).map((row) => row.querySelector('svg')?.innerHTML);
+    expect(traces).toHaveLength(6);
+    expect(new Set(traces).size).toBe(6);
   });
 
-  test('la note de portée est présente ; aucun titre Mentions ni Hashtags', () => {
+  test('rien choisi : la feuille désigne le DÉFAUT comme rangée courante, « par défaut » — la même chose que la pastille', async () => {
+    const el = mount(harness({}).deps, 'POST');
+    await openSheet(el);
+    const current = Array.from(document.querySelectorAll('dialog[open] [data-audience-choice][aria-current="true"]'));
+    expect(current.map((row) => row.getAttribute('data-audience-choice'))).toEqual(['PUBLIC']);
+    expect(choice('PUBLIC')?.querySelector('[data-audience-caption]')?.textContent).toBe('Tout le monde, y compris hors abonnés · par défaut');
+    expect(choice('FRIENDS')?.querySelector('[data-audience-caption]')?.textContent).toBe('Vos contacts acceptés');
+  });
+
+  test('toucher la rangée du défaut en fait un CHOIX : il part dans le corps et se mémorise', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ drafts });
+    const el = mount(bench.deps);
+    typeText(el, 'Un défaut assumé');
+    await openSheet(el);
+    act(() => choice('FRIENDS')!.click());
+    expect(pastille(el)?.getAttribute('data-audience-source')).toBe('chosen');
+    expect(drafts.lastAudience(VIEWER_ID)).toBe('FRIENDS');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('FRIENDS');
+  });
+
+  test('choisir une audience CHOISISSABLE applique ET ferme la feuille ; la coche la suit', async () => {
     const el = mount(harness({}).deps);
-    openSheet(el);
+    await openSheet(el);
+    act(() => choice('PRIVATE')!.click());
+    expect(dialogOpen()).toBeNull();
+    expect(pastille(el)?.getAttribute('data-audience-value')).toBe('PRIVATE');
+    await openSheet(el);
+    expect(choice('PRIVATE')?.getAttribute('aria-current')).toBe('true');
+    expect(choice('PRIVATE')?.querySelector('[data-audience-caption]')?.textContent).toBe('Vous seul — rien n’est publié');
+  });
+
+  test('la note de portée est présente ; aucun titre Mentions ni Hashtags', async () => {
+    const el = mount(harness({}).deps);
+    await openSheet(el);
     expect(document.querySelector('dialog[open] [data-audience-scope]')).not.toBeNull();
     const heading = Array.from(document.querySelectorAll('dialog[open] h2, dialog[open] h3')).find((n) =>
       /mentions|hashtags/i.test(n.textContent ?? ''),
@@ -711,7 +770,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(pastille(post)?.getAttribute('data-audience-source')).toBe('default');
   });
 
-  test('rien choisi : le menu « Publier comme » dit l’audience de CHAQUE format ; un choix explicite s’applique aux trois', () => {
+  test('rien choisi : le menu « Publier comme » dit l’audience de CHAQUE format ; un choix explicite s’applique aux trois', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Un texte, pour que le menu soit atteignable');
     act(() => kindToggle(el)!.click());
@@ -719,7 +778,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(kindChoice('POST')?.querySelector('[data-publish-kind-audience]')?.textContent).toBe('Public');
     act(() => kindToggle(el)!.click());
 
-    openSheet(el);
+    await openSheet(el);
     act(() => choice('FRIENDS')!.click());
     act(() => kindToggle(el)!.click());
     for (const kind of ['STORY', 'POST', 'REEL'] as const) {
@@ -727,7 +786,7 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     }
   });
 
-  test('la pastille annonce « Audience » comme nom, et la valeur comme description', () => {
+  test('la pastille annonce « Audience » comme nom, la valeur — et « par défaut » tant que rien n’est choisi — comme description', async () => {
     const el = mount(harness({}).deps);
     const button = pastille(el)!;
     expect(button.getAttribute('aria-label')).toBe('Audience');
@@ -735,18 +794,54 @@ describe('StoryComposeScreen — l’audience se choisit, voyage et se retient (
     expect(button.getAttribute('aria-expanded')).toBe('false');
     const describedBy = button.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
-    // Le défaut d'une STORY est FRIENDS (« Contacts ») — c'est ce que le
-    // nœud désigné par `aria-describedby` doit porter comme VALEUR.
-    expect(document.getElementById(describedBy!)?.textContent).toBe('Contacts');
+    expect(document.getElementById(describedBy!)?.textContent).toBe('Contacts · par défaut');
 
-    openSheet(el);
+    await openSheet(el);
     expect(pastille(el)!.getAttribute('aria-expanded')).toBe('true');
+    act(() => choice('COMMUNITY')!.click());
+    expect(document.getElementById(pastille(el)!.getAttribute('aria-describedby')!)?.textContent).toBe('Communautés');
   });
 
-  test('en ALLEMAND, la pastille lit le catalogue — jamais un libellé français en dur', () => {
+  test('hors ligne : l’audience choisie VOYAGE avec l’intention armée, et part au retour du réseau', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Écrit hors ligne, pour mes communautés');
+    await openSheet(el);
+    act(() => choice('COMMUNITY')!.click());
+    act(() => publishButton(el)!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+
+    act(() => {
+      Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+      window.dispatchEvent(new Event('online'));
+    });
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.visibility).toBe('COMMUNITY');
+  });
+
+  test('un INVITÉ ne voit aucune pastille : rien du studio ne se peint sans session', () => {
+    act(() => {
+      sessionStore.getState().establishGuest({
+        sessionToken: 'anon',
+        guest: { participantId: null, nickname: 'Invité', conversationId: 'c1', link: 'l1', mayWrite: true },
+      });
+    });
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-story-studio-refusal]')).not.toBeNull();
+    expect(pastille(el)).toBeNull();
+  });
+
+  test('en ALLEMAND, la pastille et la feuille lisent le catalogue — jamais un libellé français en dur', async () => {
     document.documentElement.lang = 'de';
-    const el = mount(harness({}).deps, 'POST');
-    expect(pastille(el)?.textContent).toContain('Öffentlich');
-    document.documentElement.lang = 'fr';
+    try {
+      const el = mount(harness({}).deps, 'POST');
+      expect(pastille(el)?.textContent).toBe('Öffentlich · Standard');
+      await openSheet(el);
+      expect(choice('ONLY')?.querySelector('[data-audience-caption]')?.textContent).toBe('Die Personenauswahl ist im Web noch nicht verfügbar.');
+    } finally {
+      document.documentElement.lang = 'fr';
+    }
   });
 });

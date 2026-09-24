@@ -2,9 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   audienceAvailability,
-  audienceGlyph,
   audienceLabelKey,
-  audienceSubtitleKey,
   defaultAudienceOf,
   isRememberableAudience,
   offeredAudiences,
@@ -35,9 +33,9 @@ describe('audienceAvailability — grisé AVEC sa raison, jamais absent (loi 4)'
     expect(audienceAvailability('EXCEPT')).toEqual({ choosable: false, reasonKey: 'story.studio.audience.refusal.people' });
   });
 
-  test('les quatre autres sont choisissables', () => {
+  test('les quatre autres sont choisissables, et le verdict porte l’audience rétrécie', () => {
     for (const visibility of ['PUBLIC', 'COMMUNITY', 'FRIENDS', 'PRIVATE'] as const) {
-      expect(audienceAvailability(visibility)).toEqual({ choosable: true });
+      expect(audienceAvailability(visibility)).toEqual({ choosable: true, audience: visibility });
     }
   });
 });
@@ -82,26 +80,23 @@ describe('seededAudience — le brouillon prime, la mémoire ensuite, jamais un 
   test('une mémoire NOMINATIVE ne sert jamais de graine', () => {
     expect(seededAudience({ draftVisibility: null, memoryVisibility: 'ONLY' })).toBeNull();
   });
+
+  /** Revue-correction #7683 : un brouillon qui porte un mode NOMINATIF (écrit
+   * par une version antérieure, ou altéré) partirait sans `visibilityUserIds`
+   * — 400 `VALIDATION_ERROR` à la passerelle (`types.ts:319-323`). Le rang 1
+   * se tait alors, et le rang 2 sert. */
+  test('un brouillon NOMINATIF ne sert jamais de graine — la mémoire (rang 2) prend le relais', () => {
+    expect(seededAudience({ draftVisibility: 'EXCEPT', memoryVisibility: 'COMMUNITY' })).toBe('COMMUNITY');
+    expect(seededAudience({ draftVisibility: 'ONLY', memoryVisibility: null })).toBeNull();
+  });
 });
 
-describe('audienceGlyph / audienceLabelKey / audienceSubtitleKey — une entrée par audience, toutes distinctes', () => {
-  test('chaque audience a un glyphe, un libellé et un sous-titre définis', () => {
-    for (const visibility of STUDIO_AUDIENCES) {
-      expect(audienceGlyph(visibility)).toBeTruthy();
-      expect(audienceLabelKey(visibility)).toBeTruthy();
-      expect(audienceSubtitleKey(visibility)).toBeTruthy();
-    }
-  });
-
-  test('les six glyphes sont distincts', () => {
-    expect(new Set(STUDIO_AUDIENCES.map(audienceGlyph)).size).toBe(STUDIO_AUDIENCES.length);
+describe('audienceLabelKey — une entrée par audience, toutes distinctes', () => {
+  test('chaque audience a un libellé défini', () => {
+    for (const visibility of STUDIO_AUDIENCES) expect(audienceLabelKey(visibility)).toBeTruthy();
   });
 
   test('les six libellés sont distincts', () => {
     expect(new Set(STUDIO_AUDIENCES.map(audienceLabelKey)).size).toBe(STUDIO_AUDIENCES.length);
-  });
-
-  test('les six sous-titres sont distincts', () => {
-    expect(new Set(STUDIO_AUDIENCES.map(audienceSubtitleKey)).size).toBe(STUDIO_AUDIENCES.length);
   });
 });

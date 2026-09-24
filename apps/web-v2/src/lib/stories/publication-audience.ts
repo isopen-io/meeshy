@@ -3,8 +3,6 @@ import { repostVisibilityInheritsAudienceList } from '@meeshy/shared/utils/repos
 
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 
-import type { StoryAudienceGlyphName } from '@/components/glyphs-story-audience';
-
 /**
  * Des unions ÉTROITES, jamais `InterfaceCatalogKey` (le catalogue ENTIER) :
  * `translate()` calcule ses paramètres nommés en distribuant sur TOUTE la
@@ -20,14 +18,6 @@ export type AudienceLabelKey =
   | 'story.studio.audience.except'
   | 'story.studio.audience.only'
   | 'story.studio.audience.private';
-
-export type AudienceSubtitleKey =
-  | 'story.studio.audience.subtitle.public'
-  | 'story.studio.audience.subtitle.community'
-  | 'story.studio.audience.subtitle.friends'
-  | 'story.studio.audience.subtitle.except'
-  | 'story.studio.audience.subtitle.only'
-  | 'story.studio.audience.subtitle.private';
 
 export type AudienceRefusalKey = 'story.studio.audience.refusal.people';
 
@@ -58,7 +48,15 @@ export function offeredAudiences(params: { readonly repostOfId: string | null })
   return STUDIO_AUDIENCES.filter((visibility) => !repostVisibilityInheritsAudienceList(visibility));
 }
 
-export type AudienceAvailability = { readonly choosable: true } | { readonly choosable: false; readonly reasonKey: AudienceRefusalKey };
+/** Les audiences que le studio sait CHOISIR aujourd'hui — toutes sauf les
+ * deux modes NOMINATIFS, faute de sélecteur de personnes. */
+export type ChoosableAudience = Exclude<PostVisibility, 'EXCEPT' | 'ONLY'>;
+
+/** Un type SOMME : choisissable (et alors l'audience est RÉTRÉCIE au type
+ * qui le prouve), ou refusée AVEC la clé de sa raison. */
+export type AudienceAvailability =
+  | { readonly choosable: true; readonly audience: ChoosableAudience }
+  | { readonly choosable: false; readonly reasonKey: AudienceRefusalKey };
 
 /**
  * **GRISÉ AVEC SA RAISON, JAMAIS ABSENT** (loi 4 + `ComposerFormatAvailability`,
@@ -69,7 +67,7 @@ export type AudienceAvailability = { readonly choosable: true } | { readonly cho
  */
 export function audienceAvailability(visibility: PostVisibility): AudienceAvailability {
   if (visibility === 'EXCEPT' || visibility === 'ONLY') return { choosable: false, reasonKey: 'story.studio.audience.refusal.people' };
-  return { choosable: true };
+  return { choosable: true, audience: visibility };
 }
 
 /**
@@ -80,7 +78,7 @@ export function audienceAvailability(visibility: PostVisibility): AudienceAvaila
  * écran, et les proposer à nouveau élargirait silencieusement l'audience.
  * `false` sur toute valeur qui n'est pas l'une des six (donnée corrompue).
  */
-export function isRememberableAudience(value: unknown): value is PostVisibility {
+export function isRememberableAudience(value: unknown): value is ChoosableAudience {
   return typeof value === 'string' && STUDIO_AUDIENCES.includes(value as PostVisibility) && value !== 'EXCEPT' && value !== 'ONLY';
 }
 
@@ -91,9 +89,11 @@ export function isRememberableAudience(value: unknown): value is PostVisibility 
  * quand le corps ne porte pas `visibility` (D-111, § 0). Ce n'est PAS ce que
  * le studio ENVOIE — le corps reste sans le champ tant que rien n'est choisi
  * (loi 1) — c'est ce que la PASTILLE affiche pour dire à l'auteur ce qui
- * PARTIRA par défaut.
+ * PARTIRA par défaut. Il contredit `DEFAULT_PUBLICATION_VISIBILITY`
+ * (`packages/shared/types/post.ts:28`, « PUBLIC, stories confondues ») : le
+ * web suit la passerelle qui TOURNE, et l'unification est l'issue #7695.
  */
-export function defaultAudienceOf(kind: PublicationKind): PostVisibility {
+export function defaultAudienceOf(kind: PublicationKind): ChoosableAudience {
   return kind === 'STORY' ? 'FRIENDS' : 'PUBLIC';
 }
 
@@ -102,28 +102,19 @@ export function defaultAudienceOf(kind: PublicationKind): PostVisibility {
  * fait pour CETTE publication), rang 2 la mémoire du dernier choix
  * (`StudioDraftStore.lastAudience`), sinon `null` : rien n'est choisi, la
  * pastille affichera le défaut de la passerelle (`defaultAudienceOf`).
- * Jamais un mode NOMINATIF depuis la mémoire — {@link isRememberableAudience}
- * l'a déjà exclu à l'écriture, cette fonction le revérifie à la lecture pour
- * une mémoire écrite par une version antérieure ou corrompue.
+ * Jamais un mode NOMINATIF, À AUCUN DES DEUX RANGS : le studio ne sait pas
+ * les choisir, donc un brouillon qui en porte un (écrit par une version
+ * antérieure, ou altéré) partirait sans `visibilityUserIds` et la passerelle
+ * le refuserait (`types.ts:319-323`, 400 `VALIDATION_ERROR`) — le rang
+ * suivant sert alors, comme si le brouillon n'avait rien dit.
  */
 export function seededAudience(params: {
   readonly draftVisibility: PostVisibility | null;
   readonly memoryVisibility: PostVisibility | null;
-}): PostVisibility | null {
-  if (params.draftVisibility !== null) return params.draftVisibility;
+}): ChoosableAudience | null {
+  if (isRememberableAudience(params.draftVisibility)) return params.draftVisibility;
   return isRememberableAudience(params.memoryVisibility) ? params.memoryVisibility : null;
 }
-
-const AUDIENCE_GLYPH: Readonly<Record<PostVisibility, StoryAudienceGlyphName>> = {
-  PUBLIC: 'globe',
-  COMMUNITY: 'usersThree',
-  FRIENDS: 'users',
-  EXCEPT: 'userMinus',
-  ONLY: 'userCheck',
-  PRIVATE: 'lock',
-};
-
-export const audienceGlyph = (visibility: PostVisibility): StoryAudienceGlyphName => AUDIENCE_GLYPH[visibility];
 
 const AUDIENCE_LABEL_KEY: Readonly<Record<PostVisibility, AudienceLabelKey>> = {
   PUBLIC: 'story.studio.audience.public',
@@ -135,14 +126,3 @@ const AUDIENCE_LABEL_KEY: Readonly<Record<PostVisibility, AudienceLabelKey>> = {
 };
 
 export const audienceLabelKey = (visibility: PostVisibility): AudienceLabelKey => AUDIENCE_LABEL_KEY[visibility];
-
-const AUDIENCE_SUBTITLE_KEY: Readonly<Record<PostVisibility, AudienceSubtitleKey>> = {
-  PUBLIC: 'story.studio.audience.subtitle.public',
-  COMMUNITY: 'story.studio.audience.subtitle.community',
-  FRIENDS: 'story.studio.audience.subtitle.friends',
-  EXCEPT: 'story.studio.audience.subtitle.except',
-  ONLY: 'story.studio.audience.subtitle.only',
-  PRIVATE: 'story.studio.audience.subtitle.private',
-};
-
-export const audienceSubtitleKey = (visibility: PostVisibility): AudienceSubtitleKey => AUDIENCE_SUBTITLE_KEY[visibility];

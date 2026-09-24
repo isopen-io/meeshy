@@ -1,8 +1,7 @@
-import type { PostVisibility } from '@meeshy/shared/types/post';
-
 import type { ApiFailure } from '@/lib/api/http';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
+import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import type { StudioMediaKind, StudioPlane } from './story-document';
 import type { StudioDraftSnapshot, StudioTextLayerSnapshot } from './studio-draft-store';
 import { IDENTITY_POSE, clampPose, type StudioPose } from './studio-pose';
@@ -106,8 +105,14 @@ export type StudioDraft = {
    * `FRIENDS` pendant que les posts naissaient publics — voir
    * `publication-audience.ts` § `defaultAudienceOf`, qui ne sert QUE
    * l'affichage de la pastille, jamais le corps envoyé.
+   *
+   * `ChoosableAudience`, jamais `PostVisibility` : un brouillon ne PEUT pas
+   * tenir `ONLY`/`EXCEPT` sans leur liste de personnes — la passerelle le
+   * refuserait (`types.ts:319-323`). L'état illégal n'est pas représentable ;
+   * le jour du sélecteur de personnes (#7463), ce champ deviendra un type
+   * SOMME qui porte la liste avec le mode.
    */
-  readonly visibility: PostVisibility | null;
+  readonly visibility: ChoosableAudience | null;
 };
 
 /** Les trois PORTES du couloir gauche — le fond, le calque, le son. Le
@@ -153,7 +158,7 @@ export function withSelected(draft: StudioDraft, id: string | null): StudioDraft
  * (`story-compose.tsx`, `deps.drafts.set`) porte au brouillon comme le reste
  * — même dispositif que `commitPose` pour la pose d'un objet.
  */
-export function withAudience(draft: StudioDraft, visibility: PostVisibility): StudioDraft {
+export function withAudience(draft: StudioDraft, visibility: ChoosableAudience): StudioDraft {
   return { ...draft, visibility };
 }
 
@@ -419,7 +424,7 @@ export function studioDraftFromSnapshot(
     ...(snapshot.language !== undefined ? { language: snapshot.language } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
-    visibility: snapshot.visibility ?? null,
+    visibility: isRememberableAudience(snapshot.visibility) ? snapshot.visibility : null,
     sound:
       snapshot.sound === undefined
         ? null

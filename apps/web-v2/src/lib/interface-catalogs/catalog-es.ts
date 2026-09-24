@@ -861,7 +861,7 @@ const es = {
 
   /* LA HOJA DE AUDIENCIA DEL ESTUDIO (#7683) — los seis PostVisibility,
      reflejo de PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Audiencia',
+  'story.studio.audience.chip.label': 'Audiencia',
   'story.studio.audience.title': 'Audiencia',
   'story.studio.audience.public': 'Público',
   'story.studio.audience.community': 'Comunidades',
@@ -872,11 +872,10 @@ const es = {
   'story.studio.audience.subtitle.public': 'Todo el mundo, incluidos quienes no te siguen',
   'story.studio.audience.subtitle.community': 'Los miembros de tus comunidades',
   'story.studio.audience.subtitle.friends': 'Tus contactos aceptados',
-  'story.studio.audience.subtitle.except': 'Todo el mundo excepto una lista',
-  'story.studio.audience.subtitle.only': 'Elegir personas',
   'story.studio.audience.subtitle.private': 'Solo tú — no se publica nada',
   'story.studio.audience.refusal.people': 'Elegir personas aún no está disponible en la web.',
-  'story.studio.audience.scope': 'La audiencia pertenece a la publicación, nunca a un formato: cambiar de formato la conserva.',
+  'story.studio.audience.scope': 'La audiencia elegida pertenece a la publicación, nunca a un formato: cambiar de formato la conserva.',
+  'story.studio.audience.defaultMark': 'predeterminada',
 
   'appUpdate.available': '¡Hay una nueva versión de Meeshy disponible!',
   'appUpdate.hint': 'Recarga para tener las últimas novedades.',

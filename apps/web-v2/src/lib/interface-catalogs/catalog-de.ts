@@ -861,7 +861,7 @@ const de = {
 
   /* DIE ZIELGRUPPEN-AUSWAHL DES STUDIOS (#7683) — die sechs PostVisibility,
      Spiegel von PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Zielgruppe',
+  'story.studio.audience.chip.label': 'Zielgruppe',
   'story.studio.audience.title': 'Zielgruppe',
   'story.studio.audience.public': 'Öffentlich',
   'story.studio.audience.community': 'Communitys',
@@ -872,11 +872,10 @@ const de = {
   'story.studio.audience.subtitle.public': 'Alle, auch Nicht-Follower',
   'story.studio.audience.subtitle.community': 'Mitglieder deiner Communitys',
   'story.studio.audience.subtitle.friends': 'Deine akzeptierten Kontakte',
-  'story.studio.audience.subtitle.except': 'Alle außer einer Liste',
-  'story.studio.audience.subtitle.only': 'Personen auswählen',
   'story.studio.audience.subtitle.private': 'Nur du — nichts wird veröffentlicht',
   'story.studio.audience.refusal.people': 'Die Personenauswahl ist im Web noch nicht verfügbar.',
-  'story.studio.audience.scope': 'Die Zielgruppe gehört zur Veröffentlichung, nie zu einem Format: ein Formatwechsel behält sie bei.',
+  'story.studio.audience.scope': 'Die gewählte Zielgruppe gehört zur Veröffentlichung, nie zu einem Format: ein Formatwechsel behält sie bei.',
+  'story.studio.audience.defaultMark': 'Standard',
 
   'appUpdate.available': 'Eine neue Version von Meeshy ist verfügbar!',
   'appUpdate.hint': 'Neu laden, um die neuesten Funktionen zu erhalten.',

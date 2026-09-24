@@ -1,8 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
-import type { PostVisibility } from '@meeshy/shared/types/post';
-
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
@@ -24,7 +22,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { storyMediaCaptionPayload } from '@/lib/stories/media-caption';
-import { audienceLabelKey, defaultAudienceOf, seededAudience } from '@/lib/stories/publication-audience';
+import { audienceLabelKey, defaultAudienceOf, seededAudience, type ChoosableAudience } from '@/lib/stories/publication-audience';
 import { studioPublishRefusal, type PublicationKind } from '@/lib/stories/publication-kind';
 import {
   buildPreviewCanvasDocument,
@@ -74,8 +72,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { Link, href, navigate } from '@/routes/route-table';
-import { AudiencePastille, AudienceSheet } from '@/routes/story-compose-audience';
-import { StudioObjectEditor } from '@/routes/story-compose-editor';
+import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import { LayerMark, SlidersMark, StudioAssetRow, StudioChip, StudioDoorButton, StudioRefusal, StudioSoundPlaneToggle } from '@/routes/story-compose-parts';
 import { StudioObjectHandles } from '@/routes/story-compose-stage';
@@ -107,6 +104,13 @@ import { measureSceneText, sameSceneTextBox, type SceneTextBox } from '@/routes/
  */
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
+
+/** LA FEUILLE D'AUDIENCE, CHARGÉE À LA DEMANDE (#7683) — même discipline que
+ * `LanguageSheet`/`EffectsSheet` du composeur du fil : elle ne pèse sur le
+ * chunk du studio que si l'auteur touche la pastille. */
+const StudioObjectEditor = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioObjectEditor })));
+
+const AudienceSheet = lazy(() => import('@/routes/story-compose-audience-sheet').then((m) => ({ default: m.AudienceSheet })));
 
 export type StoryStudioDeps = {
   readonly api: ConversationsDeps;
@@ -238,6 +242,7 @@ function StoryStudio({
   /** LA FEUILLE D'AUDIENCE (#7683) — fermée par défaut, comme les
    * contrôleurs de l'outil ouvert (§ « les contrôleurs de l'outil »). */
   const [audienceOpen, setAudienceOpen] = useState(false);
+  const openAudience = useCallback(() => setAudienceOpen(true), []);
   const { language, setText: reportComposeText } = useComposeLanguage({
     preferred: reader.languages,
     ...(draft.language !== undefined ? { initialLanguage: draft.language } : {}),
@@ -373,7 +378,7 @@ function StoryStudio({
    * brouillon (persisté par l'effet existant) ET la mémoire, dans le MÊME
    * geste, puis ferme la feuille — choisir applique et ferme (§ 1.6).
    */
-  function chooseAudience(visibility: PostVisibility) {
+  function chooseAudience(visibility: ChoosableAudience) {
     setDraft((current) => withAudience(current, visibility));
     if (viewerId !== null) deps.drafts.rememberAudience(viewerId, visibility);
     setAudienceOpen(false);
@@ -642,7 +647,7 @@ function StoryStudio({
    * passerelle pour le format en cours (`defaultAudienceOf`) : la pastille
    * dit toujours ce qui part, même quand rien n'a été choisi. */
   const audienceValue = draft.visibility ?? defaultAudienceOf(kind);
-  const audienceSource: 'chosen' | 'default' = draft.visibility === null ? 'default' : 'chosen';
+  const audienceSource: AudienceSource = draft.visibility === null ? 'default' : 'chosen';
   /** Ce que CHAQUE format du menu partirait (§ 1.6) — un choix explicite
    * s'applique aux trois formats identiquement ; sans choix, chacun a son
    * propre défaut serveur. */
@@ -857,13 +862,15 @@ function StoryStudio({
           className="shrink-0 overflow-y-auto border-t px-4 py-2"
           style={{ maxHeight: 200, borderColor: 'var(--color-edge)' }}
         >
-          <StudioObjectEditor
-            lang={lang}
-            layer={selectedLayer}
-            onChange={changeLayer}
-            onPose={commitPose}
-            onRemove={() => setDraft((current) => (current.selected === null ? current : withoutText(current, current.selected)))}
-          />
+          <Suspense fallback={null}>
+            <StudioObjectEditor
+              lang={lang}
+              layer={selectedLayer}
+              onChange={changeLayer}
+              onPose={commitPose}
+              onRemove={() => setDraft((current) => (current.selected === null ? current : withoutText(current, current.selected)))}
+            />
+          </Suspense>
         </div>
       ) : null}
 
@@ -910,31 +917,38 @@ function StoryStudio({
             ) : null}
           </ul>
         ) : null}
+        {/* LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine
+            largeur : partagée avec la pastille et la capsule Publier, elle ne
+            gardait que quelques pixels à 320 px — l'échec d'une publication et
+            la raison d'un réel refusé se réduisaient à une lettre. */}
+        <div className="text-caption">
+          {doorRefusal !== null ? (
+            <p role="alert" style={{ color: 'var(--color-error)' }}>
+              {translate(lang, doorRefusal === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
+            </p>
+          ) : kindRefusal !== null ? (
+            <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translate(lang, 'story.studio.refusal.reel')}
+            </p>
+          ) : publishFailure !== null ? (
+            <p role="alert" style={{ color: 'var(--color-error)' }}>
+              {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
+            </p>
+          ) : (
+            <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
+          )}
+        </div>
+        {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
+            l'audience en TÊTE, un espace, la capsule Publier. */}
         <div className="flex items-center gap-3 pb-3">
-          <AudiencePastille
+          <AudienceChip
             lang={lang}
             value={audienceValue}
             source={audienceSource}
             open={audienceOpen}
-            onOpen={() => setAudienceOpen(true)}
+            onOpen={openAudience}
           />
-          <div className="min-w-0 flex-1 text-caption">
-            {doorRefusal !== null ? (
-              <p role="alert" className="truncate" style={{ color: 'var(--color-error)' }}>
-                {translate(lang, doorRefusal === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
-              </p>
-            ) : kindRefusal !== null ? (
-              <p data-publish-refusal={kindRefusal} className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {translate(lang, 'story.studio.refusal.reel')}
-              </p>
-            ) : publishFailure !== null ? (
-              <p role="alert" className="truncate" style={{ color: 'var(--color-error)' }}>
-                {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
-              </p>
-            ) : (
-              <p className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
-            )}
-          </div>
+          <span aria-hidden="true" className="flex-1" />
           <PublishSplitButton
             language={lang}
             kind={kind}
@@ -952,7 +966,16 @@ function StoryStudio({
       </footer>
 
       {audienceOpen ? (
-        <AudienceSheet lang={lang} repostOfId={null} selected={draft.visibility} onChoose={chooseAudience} onClose={() => setAudienceOpen(false)} />
+        <Suspense fallback={null}>
+          <AudienceSheet
+            lang={lang}
+            repostOfId={null}
+            value={audienceValue}
+            source={audienceSource}
+            onChoose={chooseAudience}
+            onClose={() => setAudienceOpen(false)}
+          />
+        </Suspense>
       ) : null}
     </StudioShell>
   );

@@ -1,30 +1,63 @@
-import { useId } from 'react';
+import { memo, useId } from 'react';
 
-import type { PostVisibility } from '@meeshy/shared/types/post';
-
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import { Sheet } from '@/components/sheet';
+import { GlyphSvg, type GlyphShape } from '@/components/glyph';
+import { GLYPHS } from '@/components/glyphs';
 import { STORY_AUDIENCE_GLYPHS } from '@/components/glyphs-story-audience';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { audienceAvailability, audienceGlyph, audienceLabelKey, audienceSubtitleKey, offeredAudiences } from '@/lib/stories/publication-audience';
+import { audienceLabelKey, type ChoosableAudience } from '@/lib/stories/publication-audience';
 
 /**
- * **LA PASTILLE ET LA FEUILLE D'AUDIENCE DU STUDIO** (#7683, première tranche
- * du registre #7463 — ligne « audience »). Présentation PURE, sans état ni
- * réseau : l'orchestration (la valeur choisie, la mémoire, l'ouverture de la
- * feuille) vit dans `story-compose.tsx`, comme le reste des pièces du studio
- * (`story-compose-parts.tsx`).
+ * **LA PASTILLE D'AUDIENCE DU STUDIO** (#7683, première tranche du registre
+ * #7463 — ligne « audience »). Présentation PURE, sans état ni réseau :
+ * l'orchestration (la valeur choisie, la mémoire, l'ouverture de la feuille)
+ * vit dans `story-compose.tsx`, comme le reste des pièces du studio
+ * (`story-compose-parts.tsx`). Sa FEUILLE vit à part
+ * (`story-compose-audience-sheet.tsx`) et se charge À LA DEMANDE, comme
+ * `LanguageSheet` et `EffectsSheet` du composeur du fil : elle ne pèse sur le
+ * chunk du studio que si l'auteur touche la pastille.
  *
- * Miroir iOS : la pastille du socle (`MeeshyComposerHost+Socle.swift:196-229`)
- * et la feuille `ComposerAudienceSheet.swift`. La FORME diffère par endroits —
- * voir le tableau § 1.6 de la spécification — mais la disposition, la
- * hiérarchie et les gestes viennent de là.
+ * Miroir iOS : `MeeshyComposerHost+Socle.swift:196-229` — une icône et un mot
+ * côte à côte (`HStack(spacing: 4)`, `lineLimit(1)`), cible 44 × 44, le nom
+ * accessible reste « Audience » et la valeur s'annonce comme valeur.
  */
+
+/**
+ * **LE GLYPHE DE CHAQUE AUDIENCE CHOISISSABLE** — miroir de
+ * `PostVisibility.icon` (`PostVisibility.swift:22-31`). `users` et `lock`
+ * viennent du SOCLE, déjà payé avant le premier pixel ; `globe` et
+ * `usersThree` du jeu de la pastille (`scripts/extract-glyphs.mjs`). La
+ * feuille l'ÉTEND des deux modes nominatifs, qu'elle seule peint
+ * (`story-compose-audience-sheet.tsx`) — jamais une seconde table.
+ */
+export const CHOOSABLE_AUDIENCE_GLYPH: Readonly<Record<ChoosableAudience, GlyphShape>> = {
+  PUBLIC: STORY_AUDIENCE_GLYPHS.globe,
+  COMMUNITY: STORY_AUDIENCE_GLYPHS.usersThree,
+  FRIENDS: GLYPHS.users,
+  PRIVATE: GLYPHS.lock,
+};
+
+/** D'où vient la valeur que la pastille affiche : l'auteur l'a CHOISIE, ou
+ * c'est le défaut que la passerelle posera pour le format en cours. */
+export type AudienceSource = 'chosen' | 'default';
 
 const TARGET = 44;
 
-export function AudiencePastille({
+/**
+ * `memo` : le studio se re-rend à chaque frappe (le brouillon change) ; la
+ * pastille ne reçoit que des primitives et un rappel STABLE, elle ne se
+ * repeint que si l'audience ou l'ouverture changent (Zero Unnecessary
+ * Re-render).
+ *
+ * Le mot visible est la VALEUR seule : « Contacts · par défaut » ne tient pas
+ * à côté de la capsule Publier. La mention « par défaut » part dans la
+ * DESCRIPTION accessible, et se lit en clair dans la feuille, sur la rangée du
+ * défaut (`story-compose-audience-sheet.tsx`). Sous 360 px, le mot s'efface et
+ * l'icône reste — comme iOS aux paliers d'accessibilité (#4057,
+ * `socleShowsLabels`) : un « C… » tronqué ne dit rien, l'icône dit l'audience,
+ * et le nom accessible ne bouge pas (`aria-describedby` lit un nœud masqué).
+ */
+export const AudienceChip = memo(function AudienceChip({
   lang,
   value,
   source,
@@ -34,12 +67,13 @@ export function AudiencePastille({
   readonly lang: InterfaceLanguage;
   /** Ce qui PARTIRA — l'audience CHOISIE, ou le défaut de la passerelle pour
    * le format en cours (`defaultAudienceOf`) quand `source === 'default'`. */
-  readonly value: PostVisibility;
-  readonly source: 'chosen' | 'default';
+  readonly value: ChoosableAudience;
+  readonly source: AudienceSource;
   readonly open: boolean;
   readonly onOpen: () => void;
 }) {
   const valueId = useId();
+  const label = translate(lang, audienceLabelKey(value));
   return (
     <button
       type="button"
@@ -49,74 +83,22 @@ export function AudiencePastille({
       onClick={onOpen}
       aria-haspopup="dialog"
       aria-expanded={open}
-      aria-label={translate(lang, 'story.studio.audience.pastille.label')}
+      aria-label={translate(lang, 'story.studio.audience.chip.label')}
       aria-describedby={valueId}
-      className="grid shrink-0 place-items-center gap-0.5 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="inline-flex min-w-0 items-center gap-1 rounded-chip px-3 focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{
         minWidth: TARGET,
         minHeight: TARGET,
-        color: 'var(--color-ios-ink)',
+        color: 'var(--color-ios-ink-2)',
         backgroundColor: 'var(--color-ios-card)',
         outlineColor: 'var(--color-ios-brand)',
       }}
     >
-      <GlyphSvg glyph={STORY_AUDIENCE_GLYPHS[audienceGlyph(value)]} size={18} />
-      <span id={valueId} className="text-mini font-medium" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(lang, audienceLabelKey(value))}
+      <GlyphSvg glyph={CHOOSABLE_AUDIENCE_GLYPH[value]} size={16} className="shrink-0" />
+      <span id={valueId} className="hidden min-w-0 truncate text-caption font-semibold min-[360px]:block">
+        {label}
+        {source === 'default' ? <span className="sr-only">{` · ${translate(lang, 'story.studio.audience.defaultMark')}`}</span> : null}
       </span>
     </button>
   );
-}
-
-export function AudienceSheet({
-  lang,
-  repostOfId,
-  selected,
-  onChoose,
-  onClose,
-}: {
-  readonly lang: InterfaceLanguage;
-  /** `null` hors republication — le studio n'a pas encore de flux de
-   * republication (#7463, seconde tranche) : toujours `null` en pratique
-   * aujourd'hui, la loi D-100 étant déjà branchée pour le jour où il en a un. */
-  readonly repostOfId: string | null;
-  readonly selected: PostVisibility | null;
-  readonly onChoose: (visibility: PostVisibility) => void;
-  readonly onClose: () => void;
-}) {
-  return (
-    <Sheet title={translate(lang, 'story.studio.audience.title')} onClose={onClose}>
-      {offeredAudiences({ repostOfId }).map((visibility) => {
-        const availability = audienceAvailability(visibility);
-        const isSelected = visibility === selected;
-        return (
-          <li key={visibility}>
-            <button
-              type="button"
-              data-audience-choice={visibility}
-              aria-disabled={!availability.choosable}
-              aria-current={isSelected ? 'true' : undefined}
-              onClick={() => {
-                if (availability.choosable) onChoose(visibility);
-              }}
-              className="flex w-full items-center gap-3 px-4 text-left"
-              style={{ minHeight: 60, color: availability.choosable ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-3)' }}
-            >
-              <GlyphSvg glyph={STORY_AUDIENCE_GLYPHS[audienceGlyph(visibility)]} size={22} />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-body font-medium">{translate(lang, audienceLabelKey(visibility))}</span>
-                <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
-                  {availability.choosable ? translate(lang, audienceSubtitleKey(visibility)) : translate(lang, availability.reasonKey)}
-                </span>
-              </span>
-              {isSelected ? <Glyph name="check" size={16} style={{ color: 'var(--accent)' }} /> : null}
-            </button>
-          </li>
-        );
-      })}
-      <li data-audience-scope className="px-4 py-3 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
-        {translate(lang, 'story.studio.audience.scope')}
-      </li>
-    </Sheet>
-  );
-}
+});

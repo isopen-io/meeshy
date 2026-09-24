@@ -926,7 +926,7 @@ const fr = {
 
   /* LA FEUILLE D'AUDIENCE DU STUDIO (#7683) — les six PostVisibility,
      miroir de PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Audience',
+  'story.studio.audience.chip.label': 'Audience',
   'story.studio.audience.title': 'Audience',
   'story.studio.audience.public': 'Public',
   'story.studio.audience.community': 'Communautés',
@@ -937,11 +937,10 @@ const fr = {
   'story.studio.audience.subtitle.public': 'Tout le monde, y compris hors abonnés',
   'story.studio.audience.subtitle.community': 'Les membres de vos communautés',
   'story.studio.audience.subtitle.friends': 'Vos contacts acceptés',
-  'story.studio.audience.subtitle.except': 'Tout le monde, sauf une liste',
-  'story.studio.audience.subtitle.only': 'Choisir des personnes',
   'story.studio.audience.subtitle.private': 'Vous seul — rien n’est publié',
   'story.studio.audience.refusal.people': 'Le choix de personnes n’est pas encore disponible sur le web.',
-  'story.studio.audience.scope': 'L’audience appartient à la publication, jamais à un format : changer de format la conserve.',
+  'story.studio.audience.scope': 'L’audience choisie appartient à la publication, jamais à un format : changer de format la conserve.',
+  'story.studio.audience.defaultMark': 'par défaut',
 
   /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
      (`updateAvailable`, `updateNow`, `wait`, dans les catalogues

@@ -861,7 +861,7 @@ const en = {
 
   /* THE STUDIO'S AUDIENCE SHEET (#7683) — the six PostVisibility values,
      mirroring PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Audience',
+  'story.studio.audience.chip.label': 'Audience',
   'story.studio.audience.title': 'Audience',
   'story.studio.audience.public': 'Public',
   'story.studio.audience.community': 'Communities',
@@ -872,11 +872,10 @@ const en = {
   'story.studio.audience.subtitle.public': 'Everyone, including non-followers',
   'story.studio.audience.subtitle.community': 'Members of your communities',
   'story.studio.audience.subtitle.friends': 'Your accepted contacts',
-  'story.studio.audience.subtitle.except': 'Everyone except a list',
-  'story.studio.audience.subtitle.only': 'Choose people',
   'story.studio.audience.subtitle.private': 'Only you — nothing is published',
   'story.studio.audience.refusal.people': 'Choosing people isn’t available on the web yet.',
-  'story.studio.audience.scope': 'Audience belongs to the publication, never to a format: switching formats keeps it.',
+  'story.studio.audience.scope': 'A chosen audience belongs to the publication, never to a format: switching formats keeps it.',
+  'story.studio.audience.defaultMark': 'default',
 
   'appUpdate.available': 'A new version of Meeshy is available!',
   'appUpdate.hint': 'Reload to get the latest features.',

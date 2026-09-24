@@ -129,6 +129,7 @@ describe('createStudioDraftStore — l’audience voyage dans le brouillon ET se
   test('ONLY/EXCEPT ne se mémorisent jamais, à l’écriture ET à la lecture', () => {
     const store = createStudioDraftStore(fakeStorage());
     store.rememberAudience(VIEWER, 'FRIENDS');
+    // @ts-expect-error — le TYPE refuse déjà un mode nominatif (`ChoosableAudience`) ; le témoin prouve que le magasin le refuse AUSSI à l'exécution, pour un appelant non typé.
     store.rememberAudience(VIEWER, 'ONLY');
     expect(store.lastAudience(VIEWER)).toBe('FRIENDS');
 

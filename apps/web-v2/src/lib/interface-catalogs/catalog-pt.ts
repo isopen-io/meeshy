@@ -865,7 +865,7 @@ const pt = {
 
   /* A FOLHA DE AUDIÊNCIA DO ESTÚDIO (#7683) — os seis PostVisibility,
      espelho de PostVisibility.swift (packages/MeeshySDK). */
-  'story.studio.audience.pastille.label': 'Audiência',
+  'story.studio.audience.chip.label': 'Audiência',
   'story.studio.audience.title': 'Audiência',
   'story.studio.audience.public': 'Público',
   'story.studio.audience.community': 'Comunidades',
@@ -876,11 +876,10 @@ const pt = {
   'story.studio.audience.subtitle.public': 'Todos, incluindo quem não segue',
   'story.studio.audience.subtitle.community': 'Os membros das suas comunidades',
   'story.studio.audience.subtitle.friends': 'Seus contatos aceitos',
-  'story.studio.audience.subtitle.except': 'Todos, exceto uma lista',
-  'story.studio.audience.subtitle.only': 'Escolher pessoas',
   'story.studio.audience.subtitle.private': 'Só você — nada é publicado',
   'story.studio.audience.refusal.people': 'Escolher pessoas ainda não está disponível na web.',
-  'story.studio.audience.scope': 'A audiência pertence à publicação, nunca a um formato: mudar de formato a mantém.',
+  'story.studio.audience.scope': 'A audiência escolhida pertence à publicação, nunca a um formato: mudar de formato a mantém.',
+  'story.studio.audience.defaultMark': 'padrão',
 
   'appUpdate.available': 'Uma nova versão do Meeshy está disponível!',
   'appUpdate.hint': 'Recarregue para ter as novidades mais recentes.',
