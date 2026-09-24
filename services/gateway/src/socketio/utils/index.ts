@@ -25,6 +25,8 @@ export {
 
 export {
   buildMessageAckData,
+  buildMessageFailureAck,
+  messageRefusalEvent,
   stripClientMessageId,
   type MessageAckSource,
   type MessageAckData
