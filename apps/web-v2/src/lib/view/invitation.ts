@@ -27,6 +27,55 @@ export type PortailPartage = {
 
 export const TEXTE_INVITATION = 'Rejoins-moi sur Meeshy — on s’y écrit dans nos langues.';
 
+type DonneesPartage = { title: string; text: string; url: string };
+
+type NavigateurPartage = {
+  readonly share?: (donnees: DonneesPartage) => Promise<void>;
+  readonly clipboard?: { readonly writeText: (texte: string) => Promise<void> };
+};
+
+/**
+ * Ce que la coque Capacitor pose sur `window.Capacitor` AVANT le premier
+ * script (`native-bridge.js`, `JSExport`) : la liste des plugins natifs
+ * enregistrés et l'appel brut. Lu tel quel — importer `@capacitor/core` pour
+ * deux champs pèserait sur le bundle web qui n'en a pas l'usage.
+ */
+type CoqueNative = {
+  readonly PluginHeaders?: ReadonlyArray<{ readonly name: string }>;
+  readonly nativePromise?: (plugin: string, methode: string, options: DonneesPartage) => Promise<unknown>;
+};
+
+/**
+ * Le pont de partage de la coque Android (#7710) — `MeeshySharePlugin.java`.
+ * La WebView Android n'implémente pas l'API Web Share (`navigator.share`
+ * absent, crbug 765923) : sans ce pont, « Partager » y copiait le lien là où
+ * le web mobile et iOS ouvrent la feuille du système.
+ */
+const PONT_PARTAGE = 'MeeshyShare';
+
+/**
+ * Le portail se COMPOSE de ce que l'hôte offre : `navigator.share` d'abord,
+ * le pont de la coque quand la WebView n'a pas l'API, le presse-papier
+ * toujours en repli. Un refus du pont (aucune application pour partager) n'est
+ * pas un `AbortError` : `partagerLien` retombe donc sur la copie.
+ */
+export function portailDe(hote: { readonly nav: NavigateurPartage; readonly coque: CoqueNative | undefined }): PortailPartage {
+  const { nav, coque } = hote;
+  const nativePromise = coque?.nativePromise;
+  const pontDeclare = coque?.PluginHeaders?.some((plugin) => plugin.name === PONT_PARTAGE) === true;
+  // `exactOptionalPropertyTypes` : une clé optionnelle s'OMET, elle ne se pose
+  // pas à `undefined` — d'où la composition par épandage conditionnel.
+  const partage = typeof nav.share === 'function'
+    ? { share: (d: DonneesPartage) => nav.share!(d) }
+    : pontDeclare && typeof nativePromise === 'function'
+      ? { share: async (d: DonneesPartage) => void (await nativePromise(PONT_PARTAGE, 'share', d)) }
+      : {};
+  const copie = nav.clipboard && typeof nav.clipboard.writeText === 'function'
+    ? { copier: (t: string) => nav.clipboard!.writeText(t) }
+    : {};
+  return { ...partage, ...copie };
+}
+
 /**
  * Le portail est INJECTÉ plutôt que lu depuis `navigator` : c'est ce qui rend
  * les quatre issues mesurables sans navigateur, et ce qui empêche le témoin de
@@ -34,19 +83,8 @@ export const TEXTE_INVITATION = 'Rejoins-moi sur Meeshy — on s’y écrit dans
  */
 export function portailDuNavigateur(): PortailPartage {
   if (typeof navigator === 'undefined') return {};
-  const nav = navigator as Navigator & {
-    share?: (donnees: ShareData) => Promise<void>;
-    clipboard?: { writeText: (texte: string) => Promise<void> };
-  };
-  // `exactOptionalPropertyTypes` : une clé optionnelle s'OMET, elle ne se pose
-  // pas à `undefined` — d'où la composition par épandage conditionnel.
-  const partage = typeof nav.share === 'function'
-    ? { share: (d: { title: string; text: string; url: string }) => nav.share!(d) }
-    : {};
-  const copie = nav.clipboard && typeof nav.clipboard.writeText === 'function'
-    ? { copier: (t: string) => nav.clipboard!.writeText(t) }
-    : {};
-  return { ...partage, ...copie };
+  const coque = (globalThis as { Capacitor?: CoqueNative }).Capacitor;
+  return portailDe({ nav: navigator as NavigateurPartage, coque });
 }
 
 export function partagerInvitation(
