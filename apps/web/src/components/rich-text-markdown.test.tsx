@@ -121,8 +121,8 @@ describe('internalPathOf — la règle des liens internes', () => {
 
 describe('RichText — les blocs', () => {
   test('un texte sans bloc garde son <p> unique', () => {
-    const html = renderToStaticMarkup(<RichText text={'a\nb'} className="x" />);
-    expect(html.startsWith('<p data-rich-text="" class="x">')).toBe(true);
+    const html = renderToStaticMarkup(<RichText text={'a\nb'} className="text-bubble" />);
+    expect(html.startsWith('<p data-rich-text="" class="text-bubble">')).toBe(true);
   });
 
   test('titres, listes, citation et bloc de code rendent leurs balises', () => {

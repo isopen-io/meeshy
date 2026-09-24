@@ -250,13 +250,32 @@ describe('segmentText — le gras et l’italique', () => {
     ]);
   });
 
-  it('une emphase ne s’imbrique pas dans une emphase — un seul niveau, pas de récursion sans fin', () => {
+  it('les emphases se COMBINENT (#7849) — un italique dans un gras', () => {
     const [segment] = segmentText('**a *b* c**');
     expect(segment).toEqual({
       kind: 'emphasis',
       style: 'bold',
-      children: [{ kind: 'text', text: 'a *b* c' }],
+      children: [
+        { kind: 'text', text: 'a ' },
+        { kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'b' }] },
+        { kind: 'text', text: ' c' },
+      ],
     });
+  });
+
+  it('***mot*** est un italique dans un gras, sans étoile orpheline', () => {
+    expect(segmentText('***mot***')).toEqual([
+      {
+        kind: 'emphasis',
+        style: 'bold',
+        children: [{ kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'mot' }] }],
+      },
+    ]);
+  });
+
+  it('un style déjà ouvert n’est plus cherché dedans — la récursion est bornée', () => {
+    const [segment] = segmentText('~~a ~b~ c~~');
+    expect(segment).toEqual({ kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'text', text: 'a ~b~ c' }] });
   });
 });
 

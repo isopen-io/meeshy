@@ -196,7 +196,7 @@ function segmentNodes(segments: readonly TextSegment[], hosts: InlineHosts): rea
   return segments.map((segment, index) => {
     if (segment.kind !== 'emphasis') return inlineNodes([segment], hosts, `s${index}`)[0];
     const Tag = EMPHASIS_TAG[segment.style];
-    return <Tag key={`e${index}`}>{inlineNodes(segment.children, hosts, `e${index}`)}</Tag>;
+    return <Tag key={`e${index}`}>{segmentNodes(segment.children, hosts)}</Tag>;
   });
 }
 

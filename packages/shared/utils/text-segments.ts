@@ -82,20 +82,23 @@ export type InlineSegment =
  * LES QUATRE EMPHASES, et quatre seulement (directive porteur) : gras,
  * italique, souligné, barré. La liste est FERMÉE — c'est ce qui permet au
  * rendu d'être exhaustif sans repli silencieux, et ce qui distingue ce module
- * d'un moteur Markdown (ni titre, ni liste, ni citation, ni code).
+ * d'un moteur Markdown. Les blocs (titres, listes, citations, code) vivent
+ * dans `text-blocks.ts`, le code inline est un segment (`code`), pas une emphase.
  */
 export type EmphasisStyle = 'bold' | 'italic' | 'underline' | 'strikethrough';
 
 /**
  * Une emphase porte ses PROPRES segments (`children`), jamais une chaîne :
- * `**vois https://meeshy.me**` doit rester un lien une fois en gras. Elle ne
- * s'imbrique pas dans une emphase — un seul niveau, donc aucune récursion sans
- * fin à borner, et `*b*` à l'intérieur d'un `**…**` reste ce que l'auteur a
- * tapé.
+ * `**vois https://meeshy.me**` doit rester un lien une fois en gras.
+ *
+ * Les emphases se COMBINENT (#7849, parité iOS `MessageTextRenderer`) :
+ * `**a ~~b~~**` est un barré dans un gras, `***mot***` un italique dans un
+ * gras. La récursion est BORNÉE par construction — un style déjà ouvert n'est
+ * plus cherché à l'intérieur, donc quatre niveaux au plus.
  */
 export type TextSegment =
   | InlineSegment
-  | { readonly kind: 'emphasis'; readonly style: EmphasisStyle; readonly children: readonly InlineSegment[] };
+  | { readonly kind: 'emphasis'; readonly style: EmphasisStyle; readonly children: readonly TextSegment[] };
 
 export type SegmentOptions = {
   /** `true` en PUBLICATION seulement — voir le doc-comment de tête. */
@@ -292,9 +295,9 @@ const trackedTokenFor = (
  * Trois refus communs aux quatre : une emphase qui s'ouvre sur un blanc
  * (`3 * 4`), une emphase qui se ferme sur un blanc, une emphase VIDE
  * (`****`, `____`, `~~~~`). Et le corps d'un marqueur DOUBLE accepte le
- * caractère seul (`**a *b* c**`) mais jamais la paire : c'est ce qui donne à
- * une emphase interne son statut de texte littéral — un seul niveau, donc
- * aucune récursion à borner.
+ * caractère seul (`**a *b* c**`) mais jamais la paire : le gras se ferme au
+ * premier `**`, et l'italique interne est découpé ENSUITE, dans le contenu,
+ * par une passe qui ne cherche plus le gras (voir `emphasisRegexFor`).
  *
  * ## Pourquoi le souligné porte une FRONTIÈRE DE MOT que le gras n'a pas
  *
@@ -313,13 +316,34 @@ const trackedTokenFor = (
  * en silence.
  */
 const EMPHASIS_RULES = [
+  /* `***mot***` — un gras dont le contenu est EXACTEMENT un italique. Sans
+     cette forme, le gras ci-dessous s'arrêterait à la deuxième étoile de
+     fermeture et laisserait une étoile orpheline. */
+  { style: 'bold', source: String.raw`\*\*(\*(?![\s*])[^*]+?(?<![\s*])\*)\*\*` },
   { style: 'bold', source: String.raw`\*\*(?!\s)((?:[^*]|\*(?!\*))+?)(?<!\s)\*\*` },
   { style: 'underline', source: String.raw`(?<![\p{L}\p{N}_])__(?!\s)((?:[^_]|_(?!_))+?)(?<!\s)__(?![\p{L}\p{N}_])` },
   { style: 'strikethrough', source: String.raw`~~(?!\s)((?:[^~]|~(?!~))+?)(?<!\s)~~` },
   { style: 'italic', source: String.raw`\*(?!\s)([^*\s][^*]*?)(?<!\s)\*` },
 ] as const satisfies readonly { readonly style: EmphasisStyle; readonly source: string }[];
 
-const EMPHASIS_REGEX = new RegExp(EMPHASIS_RULES.map((rule) => rule.source).join('|'), 'gu');
+/**
+ * UNE ALTERNATION PAR JEU DE STYLES ENCORE PERMIS — la règle d'indice `i`
+ * reste au groupe `i + 1` : une règle exclue devient `(?!)` (un motif qui ne
+ * matche jamais) PORTANT toujours son groupe, pour que l'invariant tienne.
+ * Seize jeux au plus, compilés à la demande.
+ */
+const emphasisRegexCache = new Map<string, RegExp>();
+const emphasisRegexFor = (excluded: ReadonlySet<EmphasisStyle>): RegExp => {
+  const key = [...excluded].sort().join(',');
+  const cached = emphasisRegexCache.get(key);
+  if (cached !== undefined) return cached;
+  const regex = new RegExp(
+    EMPHASIS_RULES.map((rule) => (excluded.has(rule.style) ? '(?!)()' : rule.source)).join('|'),
+    'gu',
+  );
+  emphasisRegexCache.set(key, regex);
+  return regex;
+};
 
 type RawMatch = { readonly start: number; readonly end: number; readonly segment: InlineSegment };
 
@@ -466,11 +490,19 @@ function maskProtectedSpans(content: string): string {
  * propos.
  */
 export function segmentText(content: string, options: SegmentOptions = {}): readonly TextSegment[] {
+  return emphasisSegments(content, options, new Set());
+}
+
+function emphasisSegments(
+  content: string,
+  options: SegmentOptions,
+  excluded: ReadonlySet<EmphasisStyle>,
+): readonly TextSegment[] {
   if (content === '') return [];
 
   const segments: TextSegment[] = [];
   let cursor = 0;
-  for (const match of maskProtectedSpans(content).matchAll(EMPHASIS_REGEX)) {
+  for (const match of maskProtectedSpans(content).matchAll(emphasisRegexFor(excluded))) {
     const start = match.index;
     if (start === undefined) continue;
     // La règle qui a matché est celle dont le groupe est défini — un seul
@@ -484,7 +516,8 @@ export function segmentText(content: string, options: SegmentOptions = {}): read
     )!;
     const inner = content.slice(start + (match[0].length - hit.inner.length) / 2, start + (match[0].length + hit.inner.length) / 2);
     if (start > cursor) segments.push(...inlineSegments(content.slice(cursor, start), options));
-    segments.push({ kind: 'emphasis', style: hit.style, children: inlineSegments(inner, options) });
+    const children = emphasisSegments(inner, options, new Set([...excluded, hit.style]));
+    segments.push({ kind: 'emphasis', style: hit.style, children });
     cursor = start + match[0].length;
   }
   if (cursor < content.length) segments.push(...inlineSegments(content.slice(cursor), options));
