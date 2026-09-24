@@ -53,4 +53,16 @@ describe('sendFailureReason', () => {
       'envoi refusé pour cette conversation',
     );
   });
+
+  /* #7740 — le mode lent des nouveaux comptes dans Meeshy Global : un refus
+     TEMPORAIRE, qui dit pourquoi et combien de temps, jamais « trop de
+     messages » (le nouveau venu n'a rien fait de trop). */
+  test('le mode lent des nouveaux comptes dit pourquoi et le délai réel', () => {
+    expect(sendFailureReason(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }))).toBe(
+      'bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez dans 18 s',
+    );
+    expect(sendFailureReason(failure(429, { code: 'NEWCOMER_SLOW_MODE' }))).toBe(
+      'bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez dans un instant',
+    );
+  });
 });

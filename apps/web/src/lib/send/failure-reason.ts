@@ -47,6 +47,12 @@ export function sendFailureReason(failure: ApiFailure | undefined): string | und
    * refusée (`send/attachments.ts § acceptPendingFiles`). Une issue compagnon
    * de passerelle (servir le `code`) est proposée à la clôture.
    */
+  /* #7740 — le mode lent des nouveaux comptes (Meeshy Global) : temporaire,
+     et le délai est celui du serveur (`retryAfter`), jamais une constante. */
+  if (failure.code === 'NEWCOMER_SLOW_MODE') {
+    const wait = failure.retryAfter !== undefined ? `dans ${failure.retryAfter} s` : 'dans un instant';
+    return `bienvenue ! un message toutes les 30 s pour les nouveaux comptes — réessayez ${wait}`;
+  }
   if (failure.status === 401) return 'session expirée — reconnectez-vous';
   if (failure.status === 403) return 'envoi refusé pour cette conversation';
   if (failure.status === 429) return 'trop de messages d’un coup — réessayez dans un instant';

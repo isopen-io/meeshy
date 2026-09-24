@@ -15,7 +15,8 @@ const notice = ['Tom', 'Aïcha'].reduce(
 );
 
 describe('SystemNotice — arrivées regroupées de Meeshy Global (#7740)', () => {
-  test.each(['row', 'bubble'] as const)('peau %s : jalon étiqueté, glyphe et phrase entière', (surface) => {
+  for (const surface of ['row', 'bubble'] as const) {
+  test(`peau ${surface} : jalon étiqueté, glyphe et phrase entière`, () => {
     const html = renderToStaticMarkup(<SystemNotice row={{ kind: 'arrivals', notice }} timeString="10:04" surface={surface} />);
 
     expect(html).toContain('data-system="arrivals"');
@@ -23,4 +24,5 @@ describe('SystemNotice — arrivées regroupées de Meeshy Global (#7740)', () =
     expect(html).toContain('Aïcha, Tom et Léa viennent d’arriver — dis-leur salut');
     expect(html).toContain('aria-label="Aïcha, Tom et Léa viennent d’arriver — dis-leur salut"');
   });
+  }
 });
