@@ -342,7 +342,12 @@ readonly SHARED_BASELINE=0
 # ne persiste plus de message (il contournait `MessagingService.handleMessage`,
 # donc le mode lent des nouveaux comptes, la clôture et l'appartenance) — le
 # `const messageData: any` de la branche « nouveau message » part avec elle.
-readonly GATEWAY_BASELINE=505
+#
+# 505 → 504 (#7845, fiche d'un membre) : `GET /admin/users/:userId/conversations`
+# quitte `routes/admin/users.ts` pour `routes/admin/user-conversations.ts`, et
+# son `const where: any` devient un `Prisma.ConversationWhereInput` composé
+# depuis les filtres validés (tri, ordre, recherche, rôle, état).
+readonly GATEWAY_BASELINE=504
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
