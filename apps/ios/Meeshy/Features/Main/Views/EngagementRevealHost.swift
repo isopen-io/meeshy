@@ -76,6 +76,13 @@ struct EngagementRevealHost: ViewModifier {
                       palier.celebratesUnprompted else { return }
                 file.enfile(palier)
             }
+            // #7914 — l'onboarding passe d'abord : les célébrations tombées
+            // pendant le parcours attendent en file et se jouent une fois le
+            // calque parti. `@Published` livre sa valeur courante à
+            // l'abonnement : un calque déjà présenté suspend dès le montage.
+            .onReceive(OnboardingPresenceSignal.shared.$isPresented.removeDuplicates()) { présent in
+                file.suspends(présent)
+            }
             .fullScreenCover(item: lien) { courant in
                 AchievementRevealView(
                     reveal: courant.reveal,

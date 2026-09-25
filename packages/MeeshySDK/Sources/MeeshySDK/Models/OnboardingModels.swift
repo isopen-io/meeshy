@@ -62,6 +62,21 @@ public struct APIOnboardingSuggestion: Codable, Sendable, Equatable, Identifiabl
     }
 }
 
+/// Ce que chaque geste créditera MAINTENANT (#7908) — barème × élan COURANT,
+/// calculé par la passerelle avec la loi du crédit. `friendship` est la part
+/// du LECTEUR : l'autre personne est créditée à son propre élan.
+public struct APIOnboardingStepRewards: Codable, Sendable, Equatable {
+    public let global: Int
+    public let story: Int
+    public let friendship: Int
+
+    public init(global: Int, story: Int, friendship: Int) {
+        self.global = global
+        self.story = story
+        self.friendship = friendship
+    }
+}
+
 /// L'état servi par `GET /me/onboarding` et rendu par chaque `PATCH`.
 public struct APIOnboardingState: Codable, Sendable, Equatable {
     /// Le plafond de la carte « Trouve ta bande » — le contrat en sert au plus six.
@@ -84,6 +99,8 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
     /// vérifiée ET que l'exception « première story » est déjà consommée.
     /// `nil` : non servi — la carte publie comme avant.
     public let canPublishStory: Bool?
+    /// `nil` : passerelle antérieure à #7908.
+    public let stepRewards: APIOnboardingStepRewards?
 
     public init(
         eligible: Bool,
@@ -95,7 +112,8 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         storyDefaultVisibility: OnboardingStoryVisibility,
         suggestions: [APIOnboardingSuggestion],
         emailVerified: Bool? = nil,
-        canPublishStory: Bool? = nil
+        canPublishStory: Bool? = nil,
+        stepRewards: APIOnboardingStepRewards? = nil
     ) {
         self.eligible = eligible
         self.completedAt = completedAt
@@ -107,12 +125,13 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         self.suggestions = Array(suggestions.prefix(Self.maxSuggestions))
         self.emailVerified = emailVerified
         self.canPublishStory = canPublishStory
+        self.stepRewards = stepRewards
     }
 
     private enum CodingKeys: String, CodingKey {
         case eligible, completedAt, seenSteps, prefilledSteps, globalConversationId
         case protectedRegime, storyDefaultVisibility, suggestions
-        case emailVerified, canPublishStory
+        case emailVerified, canPublishStory, stepRewards
     }
 
     public init(from decoder: Decoder) throws {
@@ -130,7 +149,8 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
             storyDefaultVisibility: servedVisibility,
             suggestions: try container.decodeIfPresent([APIOnboardingSuggestion].self, forKey: .suggestions) ?? [],
             emailVerified: try container.decodeIfPresent(Bool.self, forKey: .emailVerified),
-            canPublishStory: try container.decodeIfPresent(Bool.self, forKey: .canPublishStory)
+            canPublishStory: try container.decodeIfPresent(Bool.self, forKey: .canPublishStory),
+            stepRewards: try? container.decodeIfPresent(APIOnboardingStepRewards.self, forKey: .stepRewards)
         )
     }
 
