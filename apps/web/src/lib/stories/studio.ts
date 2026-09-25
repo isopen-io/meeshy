@@ -125,9 +125,8 @@ export function isStudioDraftEmpty(draft: StudioDraft): boolean {
 
 /** Les pages qui PARTIRONT — une page sans matière ne produit aucune scène
  * (`composeStoryCanvasPages`). Le SITE UNIQUE de « combien de scènes ? » pour
- * le sous-menu de disposition (`layoutIsServed`) et le refus d'une story de
- * plusieurs pages (`studioPublishRefusal`) : compter `pages.length` offrait
- * une disposition qu'une page vide rendait sans effet. */
+ * le sous-menu de disposition (`layoutIsServed`) : compter `pages.length`
+ * offrait une disposition qu'une page vide rendait sans effet. */
 export function studioPublishablePageCount(draft: StudioDraft): number {
   return draft.pages.filter((page) => !isStudioPageEmpty(page)).length;
 }
@@ -190,9 +189,9 @@ export function withCurrentPage(draft: StudioDraft, id: string): StudioDraft {
 export function withoutPages(draft: StudioDraft, ids: readonly string[]): StudioDraft {
   const removed = new Set(ids);
   const pages = draft.pages.filter((page) => !removed.has(page.id));
-  if (pages.length === 0 || pages.length === draft.pages.length) return draft;
-  const currentPage = removed.has(draft.currentPage) ? pages[0]!.id : draft.currentPage;
-  return { ...draft, pages, currentPage };
+  const first = pages[0];
+  if (first === undefined || pages.length === draft.pages.length) return draft;
+  return { ...draft, pages, currentPage: removed.has(draft.currentPage) ? first.id : draft.currentPage };
 }
 
 /** Le nombre de médias (fond/calque/son) que le DOCUMENT ENTIER porte, prêts

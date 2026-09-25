@@ -46,10 +46,10 @@
  *     grande, les autres à côté » publie.
  *  10. UNE STORY DE PLUSIEURS PAGES PART EN AUTANT DE STORIES (#7707) :
  *      `/stories/new` n'affiche plus AUCUN refus à trois pages ; publier
- *      ENVOIE trois `POST /api/v1/posts` de type `STORY` (canal `.scene`,
- *      jamais `story-with-several-pages`) et ELLES ENTRENT dans « Mes
- *      stories » (`/stories/mine`) — la preuve qu'elles sont bien PARTIES,
- *      pas seulement émises.
+ *      produit trois publications `STORY` (canal `scene`, par la branche
+ *      fixtures de `publishStory`) qui ENTRENT dans « Mes stories »
+ *      (`/stories/mine`) dans l'ordre des pages — la preuve qu'elles sont bien
+ *      PARTIES, pas seulement composées. Clair et sombre.
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -620,10 +620,10 @@ check(
  * publications sont bien PARTIES, pas seulement que trois requêtes ont été
  * émises.
  */
-{
-  const tag = '[stories #7707]';
+for (const colorScheme of ['light', 'dark']) {
+  const tag = `[stories #7707 ${colorScheme}]`;
   const storiesViewerId = 'd'.repeat(24);
-  const context = await browser.newContext({ colorScheme: 'light', locale: 'fr-FR', viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  const context = await browser.newContext({ colorScheme, locale: 'fr-FR', viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   await context.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession(storiesViewerId));
   const page = await context.newPage();
   const pageErrors = [];
@@ -634,7 +634,8 @@ check(
   // plus tard viderait le registre d'onglet (`recordFixtureStory`).
   await page.goto(`${BASE}/stories/mine`, { waitUntil: 'load' });
   await page.waitForSelector('[data-my-stories-list], [data-my-stories-empty]', { timeout: 8000 });
-  const baseline = await page.evaluate(() => document.querySelectorAll('[data-my-stories-list] li[data-my-story]').length);
+  const myStoryIds = () => page.evaluate(() => [...document.querySelectorAll('[data-my-stories-list] li[data-my-story]')].map((li) => li.getAttribute('data-my-story')));
+  const baseline = await myStoryIds();
 
   await page.click('header a');
   await page.waitForURL((url) => url.pathname === '/', { timeout: 8000 });
@@ -669,10 +670,19 @@ check(
   await page.click('[data-story-self-open]');
   await page.waitForURL((url) => url.pathname === '/stories/mine', { timeout: 8000 });
   await page.waitForSelector('[data-my-stories-list] li[data-my-story]', { timeout: 8000 });
-  const mine = await page.evaluate(() => document.querySelectorAll('[data-my-stories-list] li[data-my-story]').length);
+  const mine = await myStoryIds();
+  // Trois RANGÉES de plus, et ce sont les trois publications de CE geste, la
+  // plus récente d'abord (`myActiveStories`, `createdAt desc`) — jamais une
+  // story d'un autre corpus comptée à leur place. Que la k-ième publication
+  // porte la k-ième page se prouve sur le corps des requêtes
+  // (`story-compose-pages.test.tsx`), que les fixtures ne transportent pas.
   check(
-    mine === baseline + 3,
-    `${tag} : trois pages publiées doivent AJOUTER trois stories à « Mes stories » — vu ${baseline} puis ${mine}`,
+    mine.length === baseline.length + 3,
+    `${tag} : trois pages publiées doivent AJOUTER trois stories à « Mes stories » — vu ${baseline.length} puis ${mine.length}`,
+  );
+  check(
+    JSON.stringify(mine.slice(0, 3)) === JSON.stringify(['fx-story-3', 'fx-story-2', 'fx-story-1']),
+    `${tag} : les trois rangées de tête doivent être les trois publications de ce geste, la dernière d'abord — vu ${JSON.stringify(mine.slice(0, 3))}`,
   );
 
   check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);

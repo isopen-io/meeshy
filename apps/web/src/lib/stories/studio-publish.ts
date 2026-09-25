@@ -5,9 +5,10 @@ import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
 import { storyMediaCaptionPayload } from './media-caption';
+import { PUBLICATION_CHANNEL } from './publication-kind';
 import type { PublishChoice } from './publication-layout';
 import { buildStoryCanvasEffectsPages, studioMediaIds, type StudioReadyAsset } from './story-document';
-import { isStudioPageEmpty, studioFailureKey, type StudioDoor, type StudioPage, type StudioUploadState } from './studio-page';
+import { studioFailureKey, type StudioDoor, type StudioPage, type StudioUploadState } from './studio-page';
 
 /**
  * **CE QU'UN ENVOI PORTE, CALCULÉ HORS DE L'ÉCRAN** (#7684, revue-correction) —
@@ -27,16 +28,6 @@ export type SettledAsset =
 
 /** Le règlement d'UNE page — fond, calque, son, dans cet ordre. */
 export type SettledPage = readonly [background: SettledAsset, overlay: SettledAsset, sound: SettledAsset];
-
-export type StudioPublishPayload =
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'empty' }
-  | {
-      readonly kind: 'ready';
-      readonly storyEffects: CanvasV3;
-      readonly mediaIds: readonly string[];
-      readonly mediaCaption?: Record<string, string>;
-    };
 
 /** Une montée EN VOL — l'accusé que la publication attend plutôt que de
  * renvoyer le fichier. */
@@ -103,8 +94,7 @@ const readyOf = (settled: SettledAsset, present: boolean): StudioReadyAsset | un
   present && settled.kind === 'ready' ? settled.ready : undefined;
 
 /** Une page RÉGLÉE — ses trois assets tels que `settle()` les a rendus,
- * appariés à la page qui les porte. Partagé par `studioPublishPayload` (un
- * document) et `studioPublishPlan` (#7707, un document PAR page). */
+ * appariés à la page qui les porte. */
 type ResolvedPage = {
   readonly page: StudioPage;
   readonly background: StudioReadyAsset | undefined;
@@ -113,9 +103,9 @@ type ResolvedPage = {
 };
 
 /** `null` ⇒ au moins un média posé n'a pas d'identité serveur (échec, ou page
- * ajoutée pendant le règlement) — le SITE UNIQUE de ce calcul, partagé par les
- * deux appelants ci-dessous : deux copies auraient divergé au premier
- * ajustement de la garde. */
+ * ajoutée pendant le règlement). Calculé sur TOUTES les pages, AVANT la
+ * première requête : jamais une story partie puis une story qui manque son
+ * média. */
 function resolvePages(pages: readonly StudioPage[], settled: ReadonlyMap<string, SettledPage>): readonly ResolvedPage[] | null {
   const resolved = pages.map((page) => {
     const [background, overlay, sound] = settled.get(page.id) ?? UNSETTLED;
@@ -164,42 +154,16 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
   };
 }
 
-/** `PostMedia.caption` de CETTE page (ou de ces pages) — PAGE PAR PAGE : deux
- * fonds portent deux légendes, chacune adressée par SON `postMediaId` (#6944). */
-const pageMediaCaption = (entries: readonly ResolvedPage[]): Record<string, string> | undefined =>
-  storyMediaCaptionPayload(
-    entries.flatMap(({ page, background, overlay }) => [
-      { postMediaId: background?.postMediaId, caption: page.background?.caption },
-      { postMediaId: overlay?.postMediaId, caption: page.overlay?.caption },
-    ]),
-  );
-
-export function studioPublishPayload(params: {
-  readonly pages: readonly StudioPage[];
-  readonly settled: ReadonlyMap<string, SettledPage>;
-  readonly layout: MosaicLayoutMode | null;
-}): StudioPublishPayload {
-  const resolved = resolvePages(params.pages, params.settled);
-  if (resolved === null) return { kind: 'unresolved' };
-
-  const storyEffects = buildStoryCanvasEffectsPages(resolved.map(pageCompositionInput), params.layout);
-  if (storyEffects === null) return { kind: 'empty' };
-
-  const mediaCaption = pageMediaCaption(resolved);
-  return {
-    kind: 'ready',
-    storyEffects,
-    mediaIds: studioMediaIds(resolved.map(({ background, overlay, sound }) => ({ background, overlay, sound }))),
-    ...(mediaCaption !== undefined ? { mediaCaption } : {}),
-  };
-}
-
 /**
- * **CE QU'UNE PUBLICATION PORTE** (#7707) — le canal `.scene` en émet
- * PLUSIEURS pour une story (une par page publiable), le canal `.document` une
+ * **CE QU'UNE PUBLICATION PORTE** (#7707) — le canal `scene` en émet
+ * PLUSIEURS pour une story (une par page publiable), le canal `document` une
  * SEULE (post, réel). `hasText` dit si CETTE publication porte du texte —
- * l'orchestrateur (`studio-publish-flow.ts`) en tire `originalLanguage`,
- * jamais un défaut recopié.
+ * l'envoi (`studio-publish-flow.ts`) en tire `originalLanguage`, jamais un
+ * défaut recopié. **AUCUN `content`** (défaut 4, revue-correction #6900) : le
+ * texte vit dans `storyEffects` — l'envoyer en `content` le ferait rendre
+ * DEUX FOIS chez le lecteur, miroir du `content: nil` iOS
+ * (`StoryViewModel+PublicationUpload.swift:378-391`). `mediaCaption`, LUI,
+ * part (#6944) : `PostMedia.caption` est le contenu du MÉDIA.
  */
 export type StudioPublication = {
   readonly pageIds: readonly string[];
@@ -209,76 +173,62 @@ export type StudioPublication = {
   readonly mediaCaption?: Record<string, string>;
 };
 
+/** `unresolved` ⇒ un média posé n'a pas d'identité serveur : rien ne part,
+ * jamais un document qui adresserait une URL locale. `empty` ⇒ aucune page n'a
+ * de matière. */
 export type StudioPublishPlan =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'empty' }
   | { readonly kind: 'ready'; readonly publications: readonly StudioPublication[] };
 
-const hasTextIn = (entries: readonly ResolvedPage[]): boolean =>
-  entries.some(({ page }) => page.texts.some((layer) => layer.text.trim() !== ''));
+/** LA PROJECTION UNIQUE d'un groupe de pages réglées en UNE publication —
+ * les deux canaux la partagent, seul le GROUPEMENT diffère. `[]` ⇒ le groupe
+ * n'a aucune matière (même loi que `composeStoryCanvasPages` : une page sans
+ * matière ne produit aucune scène). Les légendes partent PAGE PAR PAGE, chacune
+ * adressée par SON `postMediaId` (#6944). */
+function publicationOf(group: readonly ResolvedPage[], layout: MosaicLayoutMode | null): readonly StudioPublication[] {
+  const storyEffects = buildStoryCanvasEffectsPages(group.map(pageCompositionInput), layout);
+  if (storyEffects === null) return [];
+  const mediaCaption = storyMediaCaptionPayload(
+    group.flatMap(({ page, background, overlay }) => [
+      { postMediaId: background?.postMediaId, caption: page.background?.caption },
+      { postMediaId: overlay?.postMediaId, caption: page.overlay?.caption },
+    ]),
+  );
+  return [
+    {
+      pageIds: group.map(({ page }) => page.id),
+      hasText: group.some(({ page }) => page.texts.some((layer) => layer.text.trim() !== '')),
+      storyEffects,
+      mediaIds: studioMediaIds(group),
+      ...(mediaCaption !== undefined ? { mediaCaption } : {}),
+    },
+  ];
+}
 
 /**
- * **LE CANAL DE PUBLICATION** (#7707, miroir `ComposerPublishChannel.swift:
- * 79-104`) — la STORY publie UNE FOIS PAR PAGE publiable (canal `.scene`,
- * « UN POST PAR SLIDE ») ; POST et RÉEL publient UN document portant toutes
- * les pages (canal `.document`), inchangé depuis #7684. Décidé par DONNÉE
- * (`choice.kind`), jamais un `if (kind === 'STORY')` recopié par consommateur
- * (directive porteur 2026-09-10 § 3.a) — `story-compose.tsx` et le gate lisent
- * tous deux CE plan, jamais une seconde règle.
+ * **CE QUI PART, ET EN COMBIEN D'ENVOIS** (#7684, canal par format #7707) —
+ * une loi PURE : les pages telles qu'elles sont au moment de l'envoi, ce que
+ * chaque montée a RENDU, et le geste choisi (`PublishChoice`). Le NOMBRE de
+ * publications se lit dans `PUBLICATION_CHANNEL` (miroir
+ * `ComposerPublishChannel.swift:79-104`) : `scene` groupe les pages une par
+ * une (une story par page publiable), `document` les groupe toutes (un post,
+ * un réel) — une DONNÉE par format, jamais un `if (kind === 'STORY')` recopié
+ * par consommateur (directive porteur 2026-09-10 § 3.a).
  *
- * Une page SANS matière ne produit aucune publication (même loi que
- * `composeStoryCanvasPages` pour une scène vide) ; si TOUTES les pages sont
- * ainsi, le plan ENTIER est `empty`.
+ * Le sous-menu n'offre une disposition QUE pour Post (`layoutIsServed`) : un
+ * autre format part sans `layout`, même choisi plus tôt sur un Post — et une
+ * page seule n'en porte jamais (`canvas-v3.ts:212-214`).
  */
 export function studioPublishPlan(params: {
   readonly pages: readonly StudioPage[];
   readonly settled: ReadonlyMap<string, SettledPage>;
   readonly choice: PublishChoice;
 }): StudioPublishPlan {
-  if (params.choice.kind !== 'STORY') {
-    const payload = studioPublishPayload({
-      pages: params.pages,
-      settled: params.settled,
-      layout: params.choice.kind === 'POST' ? params.choice.layout : null,
-    });
-    if (payload.kind !== 'ready') return payload;
-    const resolved = resolvePages(params.pages, params.settled) ?? [];
-    return {
-      kind: 'ready',
-      publications: [
-        {
-          pageIds: params.pages.map((page) => page.id),
-          hasText: hasTextIn(resolved),
-          storyEffects: payload.storyEffects,
-          mediaIds: payload.mediaIds,
-          ...(payload.mediaCaption !== undefined ? { mediaCaption: payload.mediaCaption } : {}),
-        },
-      ],
-    };
-  }
-
   const resolved = resolvePages(params.pages, params.settled);
   if (resolved === null) return { kind: 'unresolved' };
-
-  const publications = resolved
-    .filter(({ page }) => !isStudioPageEmpty(page))
-    .flatMap((entry): StudioPublication[] => {
-      const storyEffects = buildStoryCanvasEffectsPages([pageCompositionInput(entry)], null);
-      // Une page NON vide (filtrée ci-dessus) porte toujours au moins un
-      // objet — un texte non blanc, ou un média : `composeStoryCanvasPages`
-      // ne peut donc pas rendre `null` ici. Le `flatMap` reste la garde
-      // défensive, jamais une assertion de type.
-      if (storyEffects === null) return [];
-      const mediaCaption = pageMediaCaption([entry]);
-      return [
-        {
-          pageIds: [entry.page.id],
-          hasText: hasTextIn([entry]),
-          storyEffects,
-          mediaIds: studioMediaIds([{ background: entry.background, overlay: entry.overlay, sound: entry.sound }]),
-          ...(mediaCaption !== undefined ? { mediaCaption } : {}),
-        },
-      ];
-    });
+  const layout = params.choice.kind === 'POST' ? params.choice.layout : null;
+  const groups = PUBLICATION_CHANNEL[params.choice.kind] === 'scene' ? resolved.map((entry) => [entry]) : [resolved];
+  const publications = groups.flatMap((group) => publicationOf(group, layout));
   return publications.length === 0 ? { kind: 'empty' } : { kind: 'ready', publications };
 }

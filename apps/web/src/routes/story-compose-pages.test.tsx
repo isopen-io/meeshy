@@ -24,7 +24,8 @@ import {
  * `canvas.layout`, une page ⇒ aucun sous-menu, deux images ⇒ réel, le
  * brouillon survit avec ses pages) ET les défauts relevés en revue-correction
  * (corbeille qui abandonne la montée, page vide qui ne compte pas, story de
- * plusieurs pages refusée, média échoué dit sur sa tuile, clavier).
+ * plusieurs pages publiée en autant de stories — #7707 —, média échoué dit sur
+ * sa tuile, clavier).
  */
 
 registerStudioBench();
@@ -285,6 +286,8 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(outcome).not.toBeNull();
     expect(outcome?.getAttribute('data-published')).toBe('1');
     expect(outcome?.getAttribute('data-total')).toBe('3');
+    expect(outcome?.textContent).toContain('1 sur 3 publiées');
+    expect(outcome?.textContent).toContain('La passerelle est indisponible.');
     expect(publishButton(el)?.disabled).toBe(false);
 
     act(() => publishButton(el)!.click());
@@ -311,6 +314,95 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(el.querySelector('[data-publish-outcome]')).toBeNull();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('La story n’a pas pu être publiée.');
     expect(publishButton(el)?.disabled).toBe(false);
+  });
+
+  test('pendant l’envoi, la capsule dit « Publication k/N… » et chaque page PARTIE quitte le rail et le brouillon aussitôt', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ postsHold: () => true, drafts });
+    const el = await threeTypedPages(bench, 'STORY');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length === 1);
+    expect(publishButton(el)?.textContent).toBe('Publication 1/3…');
+    expect(pageTiles(el)).toHaveLength(3);
+
+    bench.releasePost();
+    await flush(() => bench.posts.length === 2);
+    expect(publishButton(el)?.textContent).toBe('Publication 2/3…');
+    expect(Array.from(pageTiles(el)).map((tile) => tile.getAttribute('data-story-studio-page'))).toEqual(['page-2', 'page-3']);
+    expect(drafts.get(VIEWER_ID)?.pages.map((p) => p.id)).toEqual(['page-2', 'page-3']);
+
+    bench.releasePost();
+    await flush(() => bench.posts.length === 3);
+    expect(publishButton(el)?.textContent).toBe('Publication 3/3…');
+    bench.releasePost();
+    await flush(() => drafts.get(VIEWER_ID) === null);
+    expect(drafts.get(VIEWER_ID)).toBeNull();
+  });
+
+  test('une story d’UNE page garde « Publication… » — une fraction 1/1 ne dirait rien', async () => {
+    const bench = harness({ postsHold: () => true });
+    const el = mount(bench.deps, 'STORY');
+    typeText(el, 'Seule');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length === 1);
+    expect(publishButton(el)?.textContent).toBe('Publication…');
+    bench.releasePost();
+    await flush();
+  });
+
+  test('quitter le studio PENDANT l’envoi arrête la séquence entre deux requêtes — le brouillon rouvert ne porte que ce qui n’est pas parti', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ postsHold: () => true, drafts });
+    const el = await threeTypedPages(bench, 'STORY');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length === 1);
+
+    unmountAll();
+    bench.releasePost();
+    await flush();
+    await flush();
+
+    expect(bench.posts).toHaveLength(1);
+    expect(drafts.get(VIEWER_ID)?.pages.map((p) => p.id)).toEqual(['page-2', 'page-3']);
+
+    const retry = harness({ drafts });
+    const reopened = mount(retry.deps, 'STORY');
+    await flush(() => pageTiles(reopened).length === 2);
+    act(() => publishButton(reopened)!.click());
+    await flush(() => retry.posts.length >= 2);
+    const sceneOf = (post: Record<string, unknown>) => (post.storyEffects as { readonly scenes: readonly { readonly id: string }[] }).scenes[0]?.id;
+    expect(retry.posts.map(sceneOf)).toEqual(['page-2', 'page-3']);
+  });
+
+  test('quitter le studio pendant la DERNIÈRE requête : la story part, le brouillon est purgé, et l’auteur n’est pas ramené de force', async () => {
+    const happyDom: unknown = Reflect.get(window, 'happyDOM');
+    const setUrl: unknown = typeof happyDom === 'object' && happyDom !== null ? Reflect.get(happyDom, 'setURL') : undefined;
+    const goTo = (url: string) => {
+      if (typeof setUrl === 'function') Reflect.apply(setUrl, happyDom, [url]);
+    };
+    const before = window.location.href;
+    goTo('http://localhost/stories/new');
+    try {
+      const drafts = createStudioDraftStore(null);
+      const bench = harness({ postsHold: () => true, drafts });
+      const el = mount(bench.deps, 'STORY');
+      typeText(el, 'Partie quand même');
+      act(() => publishButton(el)!.click());
+      await flush(() => bench.posts.length === 1);
+
+      unmountAll();
+      goTo('http://localhost/');
+      bench.releasePost();
+      await flush(() => drafts.get(VIEWER_ID) === null);
+      await flush();
+
+      expect(drafts.get(VIEWER_ID)).toBeNull();
+      expect(window.location.pathname).toBe('/');
+    } finally {
+      goTo(before);
+    }
   });
 
   test('DEUX IMAGES, une par page, qualifient le RÉEL — et son corps ne porte PAS `layout`', async () => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -38,7 +38,6 @@ import {
   pageWithVisualAspectRatio,
   pageWithVisualUpload,
   type StudioDoor,
-  type StudioFailureKey,
   type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
@@ -79,9 +78,10 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
-import { Link, href, navigate } from '@/routes/route-table';
+import { href, navigate } from '@/routes/route-table';
+import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
-import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishOutcomeNotice } from '@/routes/story-compose-footer';
+import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import {
   LayerMark,
@@ -178,8 +178,6 @@ function revokePageMedia(page: StudioPage): void {
   revokeIfLocal(page.sound?.previewUrl);
 }
 
-const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
-
 /**
  * LE COMPOSER UNIQUE de la story, du post et du réel (#7497) — `initialKind`
  * est le format du POINT D'ENTRÉE (`/stories/new` ⇒ story, `/posts/new` ⇒
@@ -211,43 +209,6 @@ export default function StoryComposeScreen({
       requestedAudience={requestedAudience}
       origin={origin}
     />
-  );
-}
-
-/** La barre haute d'iOS (`ComposerTopBar.swift:49-71`) : ✕ · rail · ⋯. Le
- * rail des scènes (#7684) prend la place du titre dès la deuxième page — le
- * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
- * quand le rail apparaît. */
-function StudioShell({
-  kind,
-  origin,
-  rail,
-  children,
-}: {
-  readonly kind: PublicationKind;
-  readonly origin: StudioOrigin | null;
-  readonly rail?: ReactNode;
-  readonly children: ReactNode;
-}) {
-  const lang = currentInterfaceLanguage();
-  return (
-    <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
-      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
-        <Link
-          to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
-          aria-label={translate(lang, 'story.studio.cancel')}
-          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
-        >
-          <Glyph name="x" size={18} />
-        </Link>
-        {rail}
-        <h1 className={rail === undefined ? 'flex-1 text-body font-semibold' : 'offscreen'} style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(lang, TITLE_KEY[kind])}
-        </h1>
-      </header>
-      {children}
-    </main>
   );
 }
 
@@ -293,11 +254,10 @@ function StoryStudio({
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
-  const [publishFailure, setPublishFailure] = useState<StudioFailureKey | null>(null);
-  /** **L'ISSUE D'UN ENVOI PARTIEL** (#7707, canal `.scene`) — les pages déjà
-   * parties le restent (`withoutPages`) ; un échec TOTAL (rien de parti)
-   * reste porté par `publishFailure`. */
-  const [publishOutcome, setPublishOutcome] = useState<StudioPublishOutcomeNotice | null>(null);
+  const [publishFailure, setPublishFailure] = useState<StudioPublishFailureNotice | null>(null);
+  /** Où en est la séquence (#7707) — la capsule dit « Publication k/N… » dès
+   * que le plan porte deux publications ou plus. */
+  const [publishProgress, setPublishProgress] = useState<{ readonly published: number; readonly total: number } | null>(null);
   const [placeRefusal, setPlaceRefusal] = useState<StudioPlaceRefusalNotice | null>(null);
   /** Les contrôleurs de l'outil ouvert (zone BASSE d'iOS) — FERMÉS par défaut :
    * la scène garde toute sa hauteur tant que l'auteur ne règle rien. */
@@ -311,16 +271,25 @@ function StoryStudio({
 
   const pendingRef = useRef<Record<string, PendingUpload | null>>({});
   const abortRef = useRef<Record<string, AbortController | null>>({});
+  /** L'envoi EN COURS — abandonné au démontage : la séquence s'arrête entre
+   * deux requêtes, jamais au milieu d'une (`runStudioPublish`). */
+  const sendRef = useRef<AbortController | null>(null);
+  /** Vrai dès que la publication a TOUT emporté : le brouillon est purgé, et
+   * un rendu tardif (une page retirée en cours de séquence, rendue APRÈS la
+   * purge) ne le réécrit plus — sans quoi le brouillon rouvert reposterait la
+   * dernière page retirée. */
+  const purgedRef = useRef(false);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
 
   useEffect(() => {
-    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
+    if (viewerId !== null && !purgedRef.current) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
   }, [draft, language, viewerId, deps.drafts]);
 
   useEffect(
     () => () => {
       Object.values(abortRef.current).forEach((controller) => controller?.abort());
+      sendRef.current?.abort();
       latestDraft.current.pages.forEach(revokePageMedia);
     },
     [],
@@ -481,6 +450,24 @@ function StoryStudio({
     [],
   );
 
+  /** **UNE PAGE PARTIE NE REPART JAMAIS** (#7707, miroir `publishedPostIds`,
+   * `StoryViewModel+Publication.swift:240-245` : « otherwise a partial-failure
+   * retry creates duplicate slides ») — retirée du brouillon DÈS que sa story
+   * est commise, pas à la fin de la séquence : le rail la perd sous les yeux
+   * de l'auteur, et le magasin est écrit ICI, en plus de l'effet de
+   * persistance, parce qu'un studio quitté pendant l'envoi ne rend plus rien
+   * — sans cette écriture, le brouillon rouvert republierait la page 1. */
+  function dropPublishedPages(pageIds: readonly string[]) {
+    latestDraft.current.pages.filter((p) => pageIds.includes(p.id)).forEach((p) => {
+      ALL_DOORS.forEach((door) => forgetUpload(p.id, door));
+      revokePageMedia(p);
+    });
+    const reduced = withoutPages(latestDraft.current, pageIds);
+    latestDraft.current = reduced;
+    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(reduced, language));
+    setDraft((c) => withoutPages(c, pageIds));
+  }
+
   /**
    * **PLUSIEURS PAGES, PLUSIEURS PUBLICATIONS** (#7684, canal `.scene` #7707)
    * — `settlePages` règle les montées, `studioPublishPlan` décide du NOMBRE
@@ -500,44 +487,35 @@ function StoryStudio({
     setAwaitingNetwork(false);
     setPublishing(true);
     setPublishFailure(null);
-    setPublishOutcome(null);
 
     const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
     const current = latestDraft.current;
     const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
     if (plan.kind !== 'ready') {
       setPublishing(false);
-      setPublishFailure(null);
       return;
     }
 
-    const publishedPageIds: string[] = [];
+    const send = new AbortController();
+    sendRef.current = send;
+    setPublishProgress({ published: 0, total: plan.publications.length });
     const outcome = await publishStudioPlan({
       plan,
       api: deps.api,
       kind: chosen.kind,
       visibility: current.visibility,
       language,
-      onPublished: (event) => publishedPageIds.push(...event.pageIds),
+      signal: send.signal,
+      onPublished: ({ pageIds, published, total }) => {
+        dropPublishedPages(pageIds);
+        setPublishProgress({ published, total });
+      },
     });
 
     if (outcome.kind !== 'published') {
-      const { published } = outcome;
-      // **LES PAGES PARTIES RESTENT PARTIES** (#7707) — retirées du brouillon
-      // (`withoutPages`) et de leurs aperçus locaux : un retry ne les renvoie
-      // JAMAIS, miroir `publishedPostIds`
-      // (`StoryViewModel+Publication.swift:240-245`, « retry skips them —
-      // otherwise a partial-failure retry creates duplicate slides »).
-      if (published > 0) {
-        setDraft((draftBefore) => withoutPages(draftBefore, publishedPageIds));
-        current.pages.filter((p) => publishedPageIds.includes(p.id)).forEach(revokePageMedia);
-      }
+      setPublishProgress(null);
       setPublishing(false);
-      if (published === 0) {
-        setPublishFailure(outcome.kind === 'failed' ? outcome.failure : 'story.studio.failure.network');
-        return;
-      }
-      if (outcome.kind === 'failed') setPublishOutcome({ published: outcome.published, total: outcome.total, failure: outcome.failure });
+      if (outcome.kind === 'failed') setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total });
       return;
     }
 
@@ -545,6 +523,7 @@ function StoryStudio({
     // Publier le temps de l'invalidation, et un second geste publiait la même
     // story deux fois.
 
+    purgedRef.current = true;
     if (viewerId !== null) deps.drafts.clear(viewerId);
     current.pages.forEach(revokePageMedia);
     if (chosen.kind === 'STORY') {
@@ -552,6 +531,9 @@ function StoryStudio({
       // La PREMIÈRE story de la séquence — celle par laquelle le lecteur
       // commence — porte le retour de l'accueil post-inscription.
       const firstPostId = outcome.postIds[0];
+      // L'auteur a QUITTÉ le studio pendant la dernière requête : la story est
+      // partie et le brouillon purgé, mais l'écran ne le ramène pas de force.
+      if (send.signal.aborted) return;
       if (origin === 'onboarding' && firstPostId !== undefined) {
         storyReturn.note(firstPostId);
         navigate(href('onboarding', undefined, { story: firstPostId }), true);
@@ -563,7 +545,7 @@ function StoryStudio({
     // Le rafraîchissement du fil ne retient pas la navigation, et son
     // annulation (le cache vidé en route) n'est pas un échec de publication.
     void refreshFeedAction().catch(() => undefined);
-    navigate(href('feed'), true);
+    if (!send.signal.aborted) navigate(href('feed'), true);
   }
 
   const publishRef = useRef(publish);
@@ -705,7 +687,12 @@ function StoryStudio({
    * propre défaut serveur. */
   const audienceOf = (candidate: PublicationKind) => draft.visibility ?? defaultAudienceOf(candidate);
   const publishLabel = publishing
-    ? translate(lang, 'story.studio.publishing')
+    ? publishProgress !== null && publishProgress.total > 1
+      ? translate(lang, 'story.studio.publishing.progress', {
+          current: String(Math.min(publishProgress.published + 1, publishProgress.total)),
+          total: String(publishProgress.total),
+        })
+      : translate(lang, 'story.studio.publishing')
     : awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
       : translate(lang, publishTitleKey(kind));
@@ -943,13 +930,7 @@ function StoryStudio({
           onCaption={(door, value) => setDraft((current) => withVisualCaption(current, door, value))}
           onSoundPlane={(plane) => setDraft((current) => withSoundPlane(current, plane))}
         />
-        <StudioFooterMessage
-          lang={lang}
-          placeRefusal={placeRefusal}
-          kindRefusal={kindRefusal}
-          publishFailure={publishFailure}
-          publishOutcome={publishOutcome}
-        />
+        <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
         {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
             l'audience en TÊTE, un espace, la capsule Publier. */}
         <div className="flex items-center gap-3 pb-3">

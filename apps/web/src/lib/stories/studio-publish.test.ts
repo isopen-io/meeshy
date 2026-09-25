@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 
-import { settle, studioPublishPayload, studioPublishPlan, uploadStateOf, type SettledPage } from './studio-publish';
+import { settle, studioPublishPlan, uploadStateOf, type SettledPage, type StudioPublication, type StudioPublishPlan } from './studio-publish';
 import { emptyStudioPage, pageWithText, pageWithVisual, type StudioPage, type StudioVisualAsset } from './studio-page';
 import { IDENTITY_POSE } from './studio-pose';
 
@@ -20,20 +20,31 @@ const visual = (caption = ''): StudioVisualAsset => ({
 const pageWithBackground = (id: string, textId: string, caption = ''): StudioPage =>
   pageWithVisual(emptyStudioPage(id, textId, 'fr'), 'visual', visual(caption));
 
-describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (#7684)', () => {
-  test('deux pages avec fond ⇒ deux scènes, `mediaIds` dans l’ORDRE des pages, `layout` posé', () => {
+/** Le canal `.document` (POST) — UNE publication pour tout le document :
+ * les témoins de #7684, migrés sur l'API UNIQUE `studioPublishPlan` (#7707,
+ * revue-correction) quand `studioPublishPayload` n'avait plus d'autre
+ * consommateur qu'eux. */
+const documentPlan = (pages: readonly StudioPage[], settled: ReadonlyMap<string, SettledPage>, layout: 'hero' | null = null) =>
+  studioPublishPlan({ pages, settled, choice: { kind: 'POST', layout } });
+
+const onlyPublication = (plan: StudioPublishPlan): StudioPublication | null =>
+  plan.kind === 'ready' && plan.publications.length === 1 ? plan.publications[0]! : null;
+
+describe('studioPublishPlan — canal `.document` : la loi PURE d’un envoi à plusieurs pages (#7684)', () => {
+  test('deux pages avec fond ⇒ UNE publication, deux scènes, `mediaIds` dans l’ORDRE des pages, `layout` posé', () => {
     const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
     const settled = new Map<string, SettledPage>([
       ['page-1', [ready('pm-1'), NONE, NONE]],
       ['page-2', [ready('pm-2'), NONE, NONE]],
     ]);
-    const payload = studioPublishPayload({ pages, settled, layout: 'hero' });
-    expect(payload.kind).toBe('ready');
-    if (payload.kind !== 'ready') return;
-    expect(payload.storyEffects.scenes).toHaveLength(2);
-    expect(payload.storyEffects.layout).toBe('hero');
-    expect(payload.mediaIds).toEqual(['pm-1', 'pm-2']);
-    expect(CanvasV3Schema.safeParse(payload.storyEffects).success).toBe(true);
+    const publication = onlyPublication(documentPlan(pages, settled, 'hero'));
+    expect(publication).not.toBeNull();
+    if (publication === null) return;
+    expect(publication.pageIds).toEqual(['page-1', 'page-2']);
+    expect(publication.storyEffects.scenes).toHaveLength(2);
+    expect(publication.storyEffects.layout).toBe('hero');
+    expect(publication.mediaIds).toEqual(['pm-1', 'pm-2']);
+    expect(CanvasV3Schema.safeParse(publication.storyEffects).success).toBe(true);
   });
 
   test('sans disposition choisie, la clé `layout` est ABSENTE du document', () => {
@@ -42,8 +53,8 @@ describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (
       ['page-1', [ready('pm-1'), NONE, NONE]],
       ['page-2', [ready('pm-2'), NONE, NONE]],
     ]);
-    const payload = studioPublishPayload({ pages, settled, layout: null });
-    expect(payload.kind === 'ready' && 'layout' in payload.storyEffects).toBe(false);
+    const publication = onlyPublication(documentPlan(pages, settled));
+    expect(publication !== null && 'layout' in publication.storyEffects).toBe(false);
   });
 
   test('un média d’une page NON courante qui n’est pas prêt ⇒ `unresolved`, rien ne part', () => {
@@ -52,18 +63,18 @@ describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (
       ['page-1', [ready('pm-1'), NONE, NONE]],
       ['page-2', [{ kind: 'failed' }, NONE, NONE]],
     ]);
-    expect(studioPublishPayload({ pages, settled, layout: null }).kind).toBe('unresolved');
+    expect(documentPlan(pages, settled).kind).toBe('unresolved');
   });
 
   test('une page ajoutée APRÈS le règlement (absente de la carte) et portant un média ⇒ `unresolved`', () => {
     const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackground('page-2', 'text-2')];
     const settled = new Map<string, SettledPage>([['page-1', [ready('pm-1'), NONE, NONE]]]);
-    expect(studioPublishPayload({ pages, settled, layout: null }).kind).toBe('unresolved');
+    expect(documentPlan(pages, settled).kind).toBe('unresolved');
   });
 
   test('toutes les pages vides ⇒ `empty`', () => {
     const pages = [emptyStudioPage('page-1', 'text-1', 'fr'), emptyStudioPage('page-2', 'text-2', 'fr')];
-    expect(studioPublishPayload({ pages, settled: new Map(), layout: 'hero' }).kind).toBe('empty');
+    expect(documentPlan(pages, new Map(), 'hero').kind).toBe('empty');
   });
 
   test('les légendes partent PAGE PAR PAGE, adressées par le `postMediaId` de CHAQUE fond', () => {
@@ -72,8 +83,7 @@ describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (
       ['page-1', [ready('pm-1'), NONE, NONE]],
       ['page-2', [ready('pm-2'), NONE, NONE]],
     ]);
-    const payload = studioPublishPayload({ pages, settled, layout: null });
-    expect(payload.kind === 'ready' ? payload.mediaCaption : undefined).toEqual({ 'pm-1': 'Première', 'pm-2': 'Seconde' });
+    expect(onlyPublication(documentPlan(pages, settled))?.mediaCaption).toEqual({ 'pm-1': 'Première', 'pm-2': 'Seconde' });
   });
 
   test('un texte seul sur la page 2 ne réclame aucun média, et part comme scène', () => {
@@ -82,9 +92,10 @@ describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (
       ['page-1', [ready('pm-1'), NONE, NONE]],
       ['page-2', [NONE, NONE, NONE]],
     ]);
-    const payload = studioPublishPayload({ pages, settled, layout: null });
-    expect(payload.kind === 'ready' ? payload.mediaIds : null).toEqual(['pm-1']);
-    expect(payload.kind === 'ready' ? payload.storyEffects.scenes?.map((scene) => scene.id) : null).toEqual(['page-1', 'page-2']);
+    const publication = onlyPublication(documentPlan(pages, settled));
+    expect(publication?.mediaIds).toEqual(['pm-1']);
+    expect(publication?.storyEffects.scenes?.map((scene) => scene.id)).toEqual(['page-1', 'page-2']);
+    expect(publication?.hasText).toBe(true);
   });
 });
 
@@ -147,6 +158,27 @@ describe('studioPublishPlan — le canal de la STORY publie UNE fois PAR PAGE (#
   test('toutes les pages vides ⇒ `empty`', () => {
     const pages = [emptyStudioPage('page-1', 'text-1', 'fr'), emptyStudioPage('page-2', 'text-2', 'fr')];
     expect(studioPublishPlan({ pages, settled: new Map(), choice: { kind: 'STORY', layout: null } }).kind).toBe('empty');
+  });
+
+  test('chaque story porte la légende de SA page, et rien d’autre', () => {
+    const pages = [pageWithBackground('page-1', 'text-1', 'Première'), pageWithBackground('page-2', 'text-2', 'Seconde')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind === 'ready' ? plan.publications.map((p) => p.mediaCaption) : null).toEqual([{ 'pm-1': 'Première' }, { 'pm-2': 'Seconde' }]);
+  });
+
+  test('`hasText` suit CHAQUE page : une page d’image seule ne porte pas de texte, même si sa voisine en porte', () => {
+    const pages = [pageWithBackground('page-1', 'text-1'), pageWithBackgroundAndText('page-2', 'text-2', 'Deux')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: 'hero' } });
+    expect(plan.kind === 'ready' ? plan.publications.map((p) => p.hasText) : null).toEqual([false, true]);
+    expect(plan.kind === 'ready' && plan.publications.some((p) => 'layout' in p.storyEffects)).toBe(false);
   });
 
   test('un média non réglé (échoué) sur UNE page ⇒ `unresolved` pour le PLAN ENTIER, rien ne part — pas même la page 1', () => {

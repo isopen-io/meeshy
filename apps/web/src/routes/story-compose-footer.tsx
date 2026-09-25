@@ -77,27 +77,26 @@ export function StudioPageAssets({
   );
 }
 
+/** **L'ÉCHEC D'UN ENVOI** — UN seul état, jamais deux à tenir d'accord :
+ * `published === 0` ⇒ rien n'est parti (« La story n'a pas pu être
+ * publiée. ») ; sinon une panne EN COURS DE SÉQUENCE (#7707, canal `scene`) —
+ * les pages parties le sont, l'écran le dit (« k sur N publiées ») plutôt que
+ * de taire ce qui a réussi. */
+export type StudioPublishFailureNotice = { readonly failure: StudioFailureKey; readonly published: number; readonly total: number };
+
 /** LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine largeur :
  * partagée avec la pastille et la capsule Publier, elle ne gardait que
  * quelques pixels à 320 px. */
-/** **L'ISSUE D'UN ENVOI PARTIEL** (#7707) — la STORY publie une page à la
- * fois ; une panne EN COURS DE ROUTE laisse les pages déjà parties PARTIES et
- * le dit : « k sur N publiées » + la cause, jamais un silence sur ce qui a
- * réussi. */
-export type StudioPublishOutcomeNotice = { readonly published: number; readonly total: number; readonly failure: StudioFailureKey };
-
 export function StudioFooterMessage({
   lang,
   placeRefusal,
   kindRefusal,
   publishFailure,
-  publishOutcome,
 }: {
   readonly lang: InterfaceLanguage;
   readonly placeRefusal: StudioPlaceRefusalNotice | null;
   readonly kindRefusal: PublicationRefusal | null;
-  readonly publishFailure: StudioFailureKey | null;
-  readonly publishOutcome?: StudioPublishOutcomeNotice | null;
+  readonly publishFailure: StudioPublishFailureNotice | null;
 }) {
   return (
     <div className="text-caption">
@@ -111,20 +110,20 @@ export function StudioFooterMessage({
         <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
           {publicationRefusalText(lang, kindRefusal)}
         </p>
-      ) : publishOutcome != null ? (
+      ) : publishFailure !== null && publishFailure.published > 0 ? (
         <p
           role="alert"
           data-publish-outcome="partial"
-          data-published={publishOutcome.published}
-          data-total={publishOutcome.total}
+          data-published={publishFailure.published}
+          data-total={publishFailure.total}
           style={{ color: 'var(--color-error)' }}
         >
-          {translate(lang, 'story.studio.outcome.partial', { published: String(publishOutcome.published), total: String(publishOutcome.total) })}{' '}
-          {translate(lang, publishOutcome.failure)}
+          {translate(lang, 'story.studio.outcome.partial', { published: String(publishFailure.published), total: String(publishFailure.total) })}{' '}
+          {translate(lang, publishFailure.failure)}
         </p>
       ) : publishFailure !== null ? (
         <p role="alert" style={{ color: 'var(--color-error)' }}>
-          {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
+          {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure.failure)}
         </p>
       ) : (
         <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>

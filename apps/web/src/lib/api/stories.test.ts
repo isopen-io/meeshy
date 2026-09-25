@@ -105,7 +105,7 @@ describe('loadStoryTray', () => {
  */
 describe('loadStoryTray — fixtures — une story publiée dans cet onglet ENTRE dans le rail (#7707)', () => {
   test('elle apparaît EN TÊTE du corpus, avec son auteur', async () => {
-    recordFixtureStory({ id: 'fx-story-du-temoin', authorId: 'u-viewer' });
+    recordFixtureStory({ id: 'fx-story-du-temoin', authorId: 'u-viewer', createdAt: '2026-09-24T10:00:00.000Z' });
     const { impl, calls } = fakeFetch({ status: 200 });
     const result = await loadStoryTray({ source: 'fixtures', transport: createHttpTransport({ base: '', fetchImpl: impl }) });
     expect(calls).toHaveLength(0);
@@ -115,6 +115,7 @@ describe('loadStoryTray — fixtures — une story publiée dans cet onglet ENTR
     expect(result.data[0]?.type).toBe('STORY');
     expect(result.data[0]?.author?.id).toBe('u-viewer');
     expect(result.data[0]?.isViewedByMe).toBe(true);
+    expect(result.data[0]?.createdAt).toBe('2026-09-24T10:00:00.000Z');
   });
 });
 

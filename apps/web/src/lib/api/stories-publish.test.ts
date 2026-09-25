@@ -208,11 +208,15 @@ describe('recordFixtureStory / fixtureStories — le registre des stories publi�
     const { impl } = fakeFetch({ status: 500 });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     const before = fixtureStories().length;
+    const startedAt = Date.now();
 
     const story = await publishStory({ source: 'fixtures', transport, storyEffects: effects, mediaIds: [] });
     expect(story.ok).toBe(true);
     expect(fixtureStories()).toHaveLength(before + 1);
     if (story.ok) expect(fixtureStories()[0]?.id).toBe(story.data.id);
+    // L'instant de la PUBLICATION, comme la passerelle le pose — jamais celui
+    // d'une lecture ultérieure du plateau.
+    expect(Date.parse(fixtureStories()[0]?.createdAt ?? '')).toBeGreaterThanOrEqual(startedAt);
 
     await publishStory({ source: 'fixtures', transport, type: 'POST', storyEffects: effects, mediaIds: [] });
     expect(fixtureStories()).toHaveLength(before + 1);
@@ -220,8 +224,8 @@ describe('recordFixtureStory / fixtureStories — le registre des stories publi�
 
   test('`recordFixtureStory` place la nouvelle entrée EN TÊTE — même ordre que le corpus servi (`createdAt desc`)', () => {
     const before = fixtureStories().length;
-    recordFixtureStory({ id: 'fx-story-manuelle', authorId: 'u-viewer' });
+    recordFixtureStory({ id: 'fx-story-manuelle', authorId: 'u-viewer', createdAt: '2026-09-24T10:00:00.000Z' });
     expect(fixtureStories()).toHaveLength(before + 1);
-    expect(fixtureStories()[0]).toEqual({ id: 'fx-story-manuelle', authorId: 'u-viewer' });
+    expect(fixtureStories()[0]).toEqual({ id: 'fx-story-manuelle', authorId: 'u-viewer', createdAt: '2026-09-24T10:00:00.000Z' });
   });
 });

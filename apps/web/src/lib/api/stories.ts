@@ -115,7 +115,7 @@ export async function loadStoryTray(
     const posted: readonly StoryTrayPost[] = fixtureStories().map((s) => ({
       id: s.id,
       type: 'STORY',
-      createdAt: new Date().toISOString(),
+      createdAt: s.createdAt,
       isViewedByMe: true,
       author: { id: s.authorId, username: 'vous', displayName: 'Moi' },
     }));

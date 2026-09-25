@@ -97,15 +97,19 @@ let fixturePublications = 0;
  * première invalidation. Ne vit que le temps de l'onglet (jamais
  * `localStorage`) : les fixtures sont un corpus de démonstration.
  */
-const fixturePosts: { readonly id: string; readonly authorId: string }[] = [];
+export type FixtureStory = { readonly id: string; readonly authorId: string; readonly createdAt: string };
 
-export function recordFixtureStory(entry: { readonly id: string; readonly authorId: string }): void {
+const fixturePosts: FixtureStory[] = [];
+
+export function recordFixtureStory(entry: FixtureStory): void {
   fixturePosts.unshift(entry);
 }
 
 /** Les stories publiées dans cet onglet, la plus récente d'abord — même
- * ordre que le corpus servi (`createdAt desc`). */
-export function fixtureStories(): readonly { readonly id: string; readonly authorId: string }[] {
+ * ordre que le corpus servi (`createdAt desc`), et `createdAt` est l'instant de
+ * la PUBLICATION, comme le pose la passerelle — jamais celui de la lecture du
+ * plateau, qui rajeunirait la story à chaque invalidation. */
+export function fixtureStories(): readonly FixtureStory[] {
   return fixturePosts;
 }
 
@@ -118,7 +122,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
   if (__FIXTURES__ && params.source === 'fixtures') {
     fixturePublications += 1;
     const id = `fx-story-${fixturePublications}`;
-    if ((params.type ?? 'STORY') === 'STORY') recordFixtureStory({ id, authorId: FIXTURE_VIEWER_ID });
+    if ((params.type ?? 'STORY') === 'STORY') recordFixtureStory({ id, authorId: FIXTURE_VIEWER_ID, createdAt: new Date().toISOString() });
     return { ok: true, data: { id } };
   }
 

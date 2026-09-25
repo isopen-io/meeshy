@@ -18,6 +18,19 @@ export type PublicationKind = 'STORY' | 'POST' | 'REEL';
 /** L'ordre du menu — celui d'iOS pour une porte de story : story, post, réel. */
 export const PUBLICATION_KINDS: readonly PublicationKind[] = ['STORY', 'POST', 'REEL'];
 
+/**
+ * **PAR OÙ CHAQUE FORMAT PART** (#7707) — miroir de
+ * `ComposerPublishChannel.channel(for:)` (`ComposerPublishChannel.swift:79-104`) :
+ * `scene` publie UN post PAR page (une story, dont chaque page EST une
+ * publication), `document` UN post portant toutes les pages (post, réel).
+ * Une DONNÉE typée par format, lue par `studioPublishPlan` : un quatrième
+ * format ne compile pas tant qu'on n'a pas décidé par où il part, comme le
+ * `switch` exhaustif de Swift (:75-78).
+ */
+export type PublicationChannel = 'scene' | 'document';
+
+export const PUBLICATION_CHANNEL: Readonly<Record<PublicationKind, PublicationChannel>> = { STORY: 'scene', POST: 'document', REEL: 'document' };
+
 const SEARCH_VALUES: Readonly<Record<PublicationKind, string>> = { STORY: 'story', POST: 'post', REEL: 'reel' };
 
 export const publicationSearchValue = (kind: PublicationKind): string => SEARCH_VALUES[kind];

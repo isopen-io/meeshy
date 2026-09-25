@@ -56,6 +56,12 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
     const outcome = await outcomePromise;
     expect(outcome).toEqual({ kind: 'published', postIds: ['p-page-1', 'p-page-2', 'p-page-3'] });
     expect(published.map((event) => event.pageIds)).toEqual([['page-1'], ['page-2'], ['page-3']]);
+    // L'événement dit OÙ en est la séquence — la capsule en tire « Publication k/N… ».
+    expect(published.map((event) => [event.published, event.total])).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
   });
 
   test('la 2ᵉ requête échoue (500) ⇒ la 3ᵉ n’est JAMAIS émise, `onPublished` appelé UNE fois', async () => {
@@ -72,6 +78,25 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
     expect(calls).toEqual(['page-1', 'page-2']);
     expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.unavailable', published: 1, total: 3 });
     expect(published).toHaveLength(1);
+  });
+
+  test('le seau `social:write:create` plein (429) à la 3ᵉ ⇒ deux parties sur trois, la cause est le débit', async () => {
+    const plan = readyPlan(['page-1', 'page-2', 'page-3']);
+    const publish = async (input: StudioPublication): Promise<ApiResult<{ readonly id: string }>> =>
+      input.pageIds[0] === 'page-3' ? { ok: false, status: 429, error: 'Trop de créations sociales coûteuses' } : ok(`p-${input.pageIds[0]}`);
+
+    const outcome = await runStudioPublish({ plan, publish });
+
+    expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.rateLimited', published: 2, total: 3 });
+  });
+
+  test('une requête ANNULÉE (sans cause propre) se dit « réseau indisponible » — jamais un échec muet', async () => {
+    const plan = readyPlan(['page-1']);
+    const publish = async (): Promise<ApiResult<{ readonly id: string }>> => ({ ok: false, status: 0, error: 'annulée', code: 'ABORTED' });
+
+    const outcome = await runStudioPublish({ plan, publish });
+
+    expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.network', published: 0, total: 1 });
   });
 
   test('un signal abandonné ENTRE la 1ʳᵉ et la 2ᵉ ⇒ exactement une requête émise', async () => {
