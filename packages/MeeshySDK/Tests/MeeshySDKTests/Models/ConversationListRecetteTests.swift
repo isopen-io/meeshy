@@ -109,6 +109,70 @@ final class ConversationListRecetteTests: XCTestCase {
         XCTAssertNil(metadata.messageSenderUserId)
     }
 
+    // MARK: - #7952 — la traduction du MÊME message ne reprend pas « Vous »
+
+    /// Mesuré sur staging le 2026-09-25 : après le `conversation:updated` de
+    /// l'envoi (`updatedBy` = mon id UTILISATEUR ⇒ « Vous »), chaque traduction
+    /// qui aboutit ré-émet le MÊME message en `previewRecalculated`, avec
+    /// `updatedBy` et `senderId` = mon id de PARTICIPANT et
+    /// `lastMessageSenderName` = mon nom. Rien n'y prouve « moi », et le nom
+    /// servi remplaçait « Vous » — pour toujours, la relecture `/sync` ne
+    /// retouchant pas le dernier message d'une ligne dont l'identité n'a pas bougé.
+    private func myMessageRow() -> MeeshyConversation {
+        var conversation = row()
+        conversation.lastMessageId = "m-mine"
+        conversation.lastMessageSenderName = ConversationListAuthor.readerLabel
+        return conversation
+    }
+
+    private let translationOfMyMessage: [String: Any] = [
+        "updatedBy": ["id": "p-me"],
+        "senderId": "p-me",
+        "previewRecalculated": true,
+        "lastMessageId": "m-mine",
+        "lastMessagePreview": "Bonjour à tous",
+        "lastMessageTranslations": ["en": "Hello everyone"],
+        "lastMessageOriginalLanguage": "fr",
+        "lastMessageSenderName": "Demo",
+    ]
+
+    func test_merging_translationOfMyOwnMessage_keepsTheReaderLabel() throws {
+        var body = translationOfMyMessage
+        body["lastMessageAt"] = WireDate.string(from: t0)
+        let storeEvent = ConversationStoreSocketBridge.mapConversationUpdated(try event(body), readerId: "u-me")
+
+        let conversation = try XCTUnwrap(ConversationStore.merging(myMessageRow(), with: storeEvent))
+
+        XCTAssertEqual(conversation.lastMessageSenderName, ConversationListAuthor.readerLabel)
+        XCTAssertEqual(conversation.lastMessageTranslations, ["en": "Hello everyone"],
+                       "le reste du payload s'applique : seul l'auteur est tenu")
+    }
+
+    func test_resolveForARow_translationOfMyOwnMessage_affirmsNothing() throws {
+        let incoming = try event(translationOfMyMessage)
+
+        let resolution = ConversationListAuthor.resolve(
+            incoming, readerId: "u-me", row: myMessageRow(), youLabel: ConversationListAuthor.readerLabel
+        )
+
+        XCTAssertEqual(resolution, .unchanged)
+    }
+
+    func test_resolveForARow_anotherMessage_isNotHeldByTheReaderLabel() throws {
+        var body = translationOfMyMessage
+        body["lastMessageId"] = "m-bob"
+        body["lastMessageSenderName"] = "Bob"
+        body["updatedBy"] = ["id": "p-bob"]
+        body["senderId"] = "p-bob"
+        let incoming = try event(body)
+
+        let resolution = ConversationListAuthor.resolve(
+            incoming, readerId: "u-me", row: myMessageRow(), youLabel: ConversationListAuthor.readerLabel
+        )
+
+        XCTAssertEqual(resolution, .display("Bob"))
+    }
+
     func test_resolveForARow_myMessageNamedByParticipantId_saysYou() throws {
         let incoming = try event([
             "updatedBy": ["id": "u-me"], "senderId": "p-me", "lastMessageId": "m-new", "lastMessageSenderName": "Demo",
