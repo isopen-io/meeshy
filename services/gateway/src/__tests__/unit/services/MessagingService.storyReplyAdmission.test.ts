@@ -204,6 +204,17 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
+  it('#7951 — refuse, sans rien écrire, une réponse dans un GROUPE dont l’auteur est membre actif', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: conversationId, type: 'group' });
+    authorMembership({ id: '507f1f77bcf86cd799439017', bannedAt: null });
+
+    const response = await service.handleMessage(storyReply, senderParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(response.error).toBe('Une réponse à une story ne vit que dans la conversation directe de son auteur');
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
   it('refuse la citation d’une story supprimée, sans rien écrire', async () => {
     mockPrisma.post.findUnique.mockResolvedValue({ ...story, deletedAt: new Date() });
     authorMembership({ id: '507f1f77bcf86cd799439017', bannedAt: null });

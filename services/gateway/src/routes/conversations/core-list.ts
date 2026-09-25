@@ -49,6 +49,7 @@ import {
 } from './read-cursor-projection';
 import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import {
   conversationListQuerySelect,
@@ -704,6 +705,10 @@ export function registerConversationListRoute(
         }
       }
 
+      // #7950 — le dernier message qui cite une story RETIRÉE sert sa
+      // `metadata.postReplyTo` expurgée : UNE requête pour la page.
+      const withdrawnCitations = await loadWithdrawnCitations(prisma, conversations.map((c) => c.messages[0]));
+
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
@@ -835,12 +840,12 @@ export function registerConversationListRoute(
               : undefined;
             const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
             return {
-              ...projectListLastMessageBody(msg, {
+              ...servePostReplyCitation(projectListLastMessageBody(msg, {
                 withheld: lastMessageProtected,
                 servedExpiresAt,
                 viewOnceConsumed: readerParticipantId !== undefined
                   && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
-              }),
+              }), withdrawnCitations),
               sender: sender && senderVis ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
