@@ -35,25 +35,21 @@ export const AVATAR_FRAME = 34;
 export const TEXT_INDENT = 41;
 
 /**
- * LE CONTENU SOUS L'AVATAR (#7929, règle porteur du 2026-09-25, jumelle iOS
- * #7928) — en Script et en Focal, le contenu PROPRE d'un message (texte,
- * drapeaux, médias, lieu, sticker, tuile protégée, réactions, heure, marques)
- * part du bord GAUCHE de la pastille, pas de la colonne du nom. La pastille
- * est centrée dans sa colonne de `TEXT_INDENT` : son bord gauche y est à
- * `(TEXT_INDENT − AVATAR_SIZE) / 2`, et le contenu remonte de la colonne du
- * nom jusque-là. DÉRIVÉES, jamais saisies : elles suivent les deux cotes que
+ * LE BORD GAUCHE DE LA PASTILLE dans sa colonne de `TEXT_INDENT` (elle y est
+ * centrée) : c'est là que part la bande de tête (épinglé, transféré, chrome de
+ * protection), au-dessus de l'avatar. DÉRIVÉE des deux cotes que
  * `check-curve.mjs` garde.
+ *
+ * L'ORIGINE DU CONTENU (#7995, directive porteur du 2026-09-26) — en Script et
+ * en Focal, l'avatar occupe SEUL sa marge gauche ; « auteur · heure », le
+ * contenu propre (texte, médias, réactions, méta, pastilles) ET toutes les
+ * citations partent de la MÊME origine : la colonne du nom (`TEXT_INDENT`).
+ * Aucune cote ne les en déplace : une citation se distingue par sa barre et
+ * son fond teinté, jamais par un retrait. Cette règle supplante celle du
+ * 2026-09-25 (#7929 : « contenu sous l'avatar, seules les citations
+ * décalées »), dont `CONTENT_PULL` et `QUOTE_INDENT` ont quitté ce fichier.
  */
 export const AVATAR_INSET = (TEXT_INDENT - AVATAR_SIZE) / 2;
-export const CONTENT_PULL = TEXT_INDENT - AVATAR_INSET;
-
-/**
- * LE RETRAIT DE CITATION (#7929) — SEULES les citations (message, pièce,
- * humeur, story) sont décalées, toutes du MÊME retrait, compté depuis
- * l'origine du contenu : elles retrouvent la colonne du nom, avec le filet de
- * la citation texte pour tous les types.
- */
-export const QUOTE_INDENT = CONTENT_PULL;
 
 /**
  * LA LARGEUR D'UNE CITATION VISUELLE (#7929, complément porteur du

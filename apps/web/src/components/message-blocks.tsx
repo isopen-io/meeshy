@@ -6,7 +6,7 @@ import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { META_TEXT_OPACITY, QUOTE_INDENT } from '@/lib/reading-mode/metrics';
+import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
@@ -570,7 +570,7 @@ const QUOTE_THUMBNAIL_PX = 36;
 
 /**
  * LE FILET DE CITATION — celui de la citation texte (« Vous : … »), SITE
- * UNIQUE : `Quote` et `MoodQuote` le portent dans leur fond, `QuoteIndent` le
+ * UNIQUE : `Quote` et `MoodQuote` le portent dans leur fond, `RowQuote` le
  * pose devant une carte de story qui n'en a pas (#7929). La peau « mine »
  * (blanc) n'existe que pour le fond indigo de la bulle.
  */
@@ -586,31 +586,18 @@ export function QuoteRail({ isMine = false, className = '' }: { readonly isMine?
 }
 
 /**
- * LE RETRAIT DE CITATION DE LA RANGÉE PLATE (#7929, règle porteur du
- * 2026-09-25) — en Script et en Focal, le contenu propre part sous l'avatar et
- * SEULES les citations sont décalées, toutes du même retrait
- * (`QUOTE_INDENT`) et du même filet. `railed` pose ce filet devant une
- * citation qui n'en dessine pas elle-même (la carte de story) ; `Quote` et
- * `MoodQuote` portent déjà le leur. `indented` tombe quand le contenu n'est
- * pas ramené sous l'avatar (mode sélection) : la citation reste alors à
- * l'origine du contenu, dans la colonne du nom. La bulle ne monte pas ce
- * cadre : Bulles garde sa propre mise en page.
+ * LA CITATION DE LA RANGÉE PLATE (#7995, directive porteur du 2026-09-26) —
+ * en Script et en Focal, toute citation part de l'ORIGINE DU CONTENU, la
+ * colonne du nom, comme le texte qu'elle introduit : « la citation est déjà
+ * identifiable avec la barre puis le fond teinté ». Aucun retrait. `railed`
+ * pose le filet devant une citation qui n'en dessine pas elle-même (la carte
+ * de story) ; `Quote` et `MoodQuote` portent déjà le leur. Supplante le
+ * retrait de citation du 2026-09-25 (#7929). La bulle ne monte pas ce cadre :
+ * Bulles garde sa propre mise en page.
  */
-export function QuoteIndent({
-  railed = false,
-  indented = true,
-  children,
-}: {
-  readonly railed?: boolean;
-  readonly indented?: boolean;
-  readonly children: ReactNode;
-}) {
+export function RowQuote({ railed = false, children }: { readonly railed?: boolean; readonly children: ReactNode }) {
   return (
-    <div
-      data-quote-indent
-      className={railed ? 'flex gap-1.5' : undefined}
-      style={indented ? { marginInlineStart: QUOTE_INDENT } : undefined}
-    >
+    <div data-row-quote className={railed ? 'flex gap-1.5' : undefined}>
       {railed ? <QuoteRail className="mb-1.5" /> : null}
       {children}
     </div>

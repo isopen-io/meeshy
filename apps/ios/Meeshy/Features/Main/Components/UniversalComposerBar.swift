@@ -311,6 +311,9 @@ struct UniversalComposerBar: View {
     /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
     /// (#7931).
     @State var showQuickEmojiPicker = false
+    /// L'instant où la rangée des emojis rapides est revenue — la garde
+    /// d'arrivée (`QuickEmojiArrivalGuard`) s'y mesure (#7985).
+    @State var quickEmojiArrivedAt: Date?
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false

@@ -192,6 +192,7 @@ extension UniversalComposerBar {
         HStack(spacing: QuickEmojiGrid.spacing) {
             ForEach(QuickEmojiGrid.row(quickSendEmojis), id: \.self) { emoji in
                 Button {
+                    guard QuickEmojiArrivalGuard.acceptsTap(arrivedAt: quickEmojiArrivedAt, now: Date()) else { return }
                     sendQuickEmoji(emoji)
                 } label: {
                     Text(emoji)
@@ -222,6 +223,9 @@ extension UniversalComposerBar {
         }
         .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight)
         .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // La rangée revient à l'emplacement même du bouton d'envoi : le second
+        // appui d'un double appui sur « Envoyer » tombe sur elle (#7985).
+        .onAppear { quickEmojiArrivedAt = Date() }
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —

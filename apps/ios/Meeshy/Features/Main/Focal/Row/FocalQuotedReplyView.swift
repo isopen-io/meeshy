@@ -2,8 +2,9 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Bloc citation NU de la rangée plate — retrait de citation (`Quote.indent`)
-/// — au-dessus du texte du message qui répond.
+/// Bloc citation NU de la rangée plate — à l'origine du contenu, la colonne
+/// du nom (`Row.contentIndent`, #7995), au-dessus du texte qui répond : son
+/// filet et son fond la distinguent, aucun retrait.
 ///
 /// **Rendu NATIF** (arbitrage F-083bis — remplace la réutilisation verbatim
 /// de `BubbleQuotedReply` livrée par F-082) : le filet est dessiné ICI, à
@@ -276,7 +277,7 @@ struct FocalQuotedReplyView: View, Equatable {
                 }
             }
         }
-        .padding(.leading, FocalMetrics.Quote.indent)
+        .padding(.leading, FocalMetrics.Row.contentIndent)
         .contentShape(Rectangle())
         .onTapGesture {
             jumpToOriginal()

@@ -27,8 +27,8 @@ struct FocalQuoteRail: View {
     }
 }
 
-/// La carte d'une story citée, AVEC le filet de citation — au retrait de
-/// citation, à sa taille de 132 pt inchangée.
+/// La carte d'une story citée, AVEC le filet de citation — à l'origine du
+/// contenu (la colonne du nom, #7995), à sa taille de 132 pt inchangée.
 struct FocalStoryCitationQuote: View {
     let reply: ReplyReference
     let isDark: Bool
@@ -42,6 +42,6 @@ struct FocalStoryCitationQuote: View {
                 .equatable()
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.leading, FocalMetrics.Quote.indent)
+        .padding(.leading, FocalMetrics.Row.contentIndent)
     }
 }

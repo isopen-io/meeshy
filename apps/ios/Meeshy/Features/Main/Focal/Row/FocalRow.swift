@@ -4,7 +4,7 @@ import MeeshyUI
 
 /// La rangée plate du Fil (Focal) — contrat §WS-4. Pastille `22`,
 /// « Pseudo · HH:mm » en tête de groupe, texte `15` pleine largeur au
-/// contenu sous l'avatar, citations en retrait, méta discrète, AUCUNE bulle.
+/// contenu et citations sur la colonne du nom, méta discrète, AUCUNE bulle.
 ///
 /// **Densité uniforme** : `input.density` n'est PAS lu par ce fichier —
 /// « même rangée, densité uniforme, zéro perspective ». RETRAIT FOCAL iOS
@@ -30,8 +30,8 @@ struct FocalRow: View {
 
     private var content: BubbleContent { input.content }
 
-    /// Retrait CONSTANT du contenu propre — le bord gauche de l'AVATAR
-    /// (#7928). Seules les citations se décalent (`FocalMetrics.Quote.indent`).
+    /// Retrait CONSTANT du contenu propre ET des citations — la colonne du
+    /// nom (#7995) : l'avatar seul dans sa marge, une seule origine ensuite.
     ///
     /// Constant pour la même raison que `textSize` : le retrait fixe la
     /// largeur disponible, donc le retour à la ligne, donc la hauteur ; le

@@ -86,7 +86,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // never completes and the call gets stuck on "connecting" + leaves a
             // phantom. Keep the socket alive; Socket.IO auto-reconnect still covers
             // a genuine transport drop.
-            if CallManager.shared.isCallActiveForAudioGuard {
+            if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket suspend — call active (keep signaling channel)")
             } else {
                 MessageSocketManager.shared.prepareForBackground()
@@ -162,7 +162,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // enterBackground guard), do NOT force-reconnect on resume: that would
             // tear down and rebuild the very socket carrying the live call's
             // signaling. Only reconnect when no call is active.
-            if CallManager.shared.isCallActiveForAudioGuard {
+            if CallManagerHost.shared.isCallActiveForAudioGuard {
                 logger.info("Skipping socket resume reconnect — call active (socket kept alive)")
             } else {
                 MessageSocketManager.shared.resumeFromBackground()

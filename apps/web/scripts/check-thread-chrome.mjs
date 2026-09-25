@@ -658,27 +658,19 @@ for (const scheme of ['light', 'dark']) {
         return { width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
       }, sel);
 
-    /* DEUX ÉTATS DE LA BARRE (#7980). Champ vide hors focus, le cadre des
-       emojis rapides lui prend sa droite : sous 400 px, les bascules y
-       tiennent 36×44 (plancher AA 24 px, WCAG 2.5.8 ; iOS 30 pt). Au focus,
-       le cadre se replie et la barre retrouve ses 44×44. */
-    for (const [sel, name] of TOGGLES) {
-      const box = await boxOf(sel);
-      if (expect(box !== null, `${scheme} · la bascule « ${name} » existe dans la rangée haute`)) {
+    /* LA BARRE GARDE TOUTE SA LARGEUR (#7985, après #7980) — le cadre des
+       emojis rapides vit dans la ligne de saisie, focus ou non : chaque
+       bascule tient sa cible 44×44 dans les DEUX états, et plus rien ne se
+       replie à côté d'un cadre qui ne monte plus sur la barre. */
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      for (const [sel, name] of TOGGLES) {
+        const box = await boxOf(sel);
         expect(
-          box.width >= 36 && box.height >= 44,
-          `${scheme} · « ${name} » tient 36×44 à côté du cadre des emojis (${box.width}×${box.height})`,
+          box !== null && box.width >= 44 && box.height >= 44,
+          `${scheme} · ${state}, « ${name} » tient la cible 44×44 (${box?.width}×${box?.height})`,
         );
       }
-    }
-    await page.locator('[aria-label="Écrire un message"]').focus();
-    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="false"]');
-    for (const [sel, name] of TOGGLES) {
-      const box = await boxOf(sel);
-      expect(
-        box !== null && box.width >= 44 && box.height >= 44,
-        `${scheme} · champ focalisé, « ${name} » tient la cible 44×44 (${box?.width}×${box?.height})`,
-      );
     }
     await page.locator('[aria-label="Écrire un message"]').blur();
 
@@ -783,16 +775,23 @@ for (const scheme of ['light', 'dark']) {
 
   // ---------------------------------------------------------------------- 8
   /**
-   * LE CADRE DES EMOJIS RAPIDES (#7980, jumelle de #7961/#7966) — champ vide
-   * hors focus : cinq emojis en 3 + 2 dans un cadre qui couvre TOUT le côté
-   * droit, du haut de la barre d'outils au bas de la ligne de saisie, sans
-   * que la barre ne glisse dessous. Au focus : une rangée de trois, à la
-   * hauteur du champ, et la barre retrouve sa largeur.
+   * LE CADRE DES EMOJIS RAPIDES (#7985, directive porteur 2026-09-25, après
+   * #7980) — TROIS emojis EN PERMANENCE, sur une rangée, à la hauteur de la
+   * ligne de saisie, focus ou non ; la barre d'outils garde toute sa largeur
+   * (sa tonalité comprise) et aucun de ses contrôles ne glisse sous le cadre.
+   * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
+   * « cinq sur tout le côté droit » débordait (#7984).
+   *
+   * Puis EN SÉRIE : deux taps sur le même emoji font DEUX bulles (plus de
+   * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
+   * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
+   * aucun envoi ne quitte le navigateur.
    */
-  {
+  for (const width of [390, 320]) {
     const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
+      viewport: { width, height: 844 },
       colorScheme: scheme === 'light' ? 'light' : 'dark',
+      reducedMotion: 'reduce',
     });
     await context.addInitScript((s) => {
       try {
@@ -803,7 +802,8 @@ for (const scheme of ['light', 'dark']) {
     }, scheme);
     const page = await context.newPage();
     await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
-    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="true"]');
+    await page.waitForSelector('[data-composer-quick-emoji]');
+    await page.waitForSelector('[data-message]');
 
     const measure = () =>
       page.evaluate(() => {
@@ -817,10 +817,9 @@ for (const scheme of ['light', 'dark']) {
         const field = document.querySelector('[aria-label="Écrire un message"]')?.parentElement ?? null;
         const toolbarControls = [...(toolbar?.children ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
         const rightmost = Math.max(...toolbarControls.map((c) => c.getBoundingClientRect().right));
-        const rows = [...document.querySelectorAll('[data-composer-quick-emoji] [data-quick-emoji-row]')].map((r) => r.querySelectorAll('button').length);
         const buttons = [...document.querySelectorAll('[data-composer-quick-emoji] button')].map((b) => {
           const r = b.getBoundingClientRect();
-          return { w: Math.round(r.width), h: Math.round(r.height) };
+          return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
         });
         return {
           frame: box(frame),
@@ -828,38 +827,50 @@ for (const scheme of ['light', 'dark']) {
           field: box(field),
           toolbarRight: rightmost,
           toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
-          rows,
+          tone: toolbar?.querySelector('[role="img"][aria-label^="Tonalité"]') !== null,
+          pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
           buttons,
         };
       });
 
-    const rest = await measure();
-    expect(JSON.stringify(rest.rows) === '[3,2]', `${scheme} · hors focus, cinq emojis en 3 + 2 (${JSON.stringify(rest.rows)})`);
-    if (expect(rest.frame !== null && rest.toolbar !== null && rest.field !== null, `${scheme} · cadre, barre et champ sont rendus`)) {
-      expect(
-        Math.abs(rest.frame.top - (rest.toolbar.top + 6)) <= 1 && Math.abs(rest.frame.bottom - rest.field.bottom) <= 1,
-        `${scheme} · le cadre va du haut de la barre d'outils au bas de la ligne de saisie (cadre ${Math.round(rest.frame.top)}→${Math.round(rest.frame.bottom)}, barre ${Math.round(rest.toolbar.top)}, champ ↓${Math.round(rest.field.bottom)})`,
-      );
-      expect(
-        rest.toolbarRight <= rest.frame.left && !rest.toolbarScrolls,
-        `${scheme} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(rest.toolbarRight)}, cadre ←${Math.round(rest.frame.left)})`,
-      );
+    for (const state of ['repos', 'focus']) {
+      if (state === 'focus') await page.locator('[aria-label="Écrire un message"]').focus();
+      const m = await measure();
+      const tag = `${scheme} · ${width} px · ${state}`;
+      expect(m.buttons.length === 3 && new Set(m.buttons.map((b) => b.top)).size === 1, `${tag} · trois emojis sur UNE rangée (${JSON.stringify(m.buttons)})`);
+      if (expect(m.frame !== null && m.toolbar !== null && m.field !== null, `${tag} · cadre, barre et champ sont rendus`)) {
+        expect(
+          Math.round(m.frame.height) === 44 && m.frame.top >= m.toolbar.bottom - 1 && Math.abs(m.frame.bottom - m.field.bottom) <= 1,
+          `${tag} · le cadre tient la ligne de saisie, 44 px, sous la barre (cadre ${Math.round(m.frame.top)}→${Math.round(m.frame.bottom)}, barre ↓${Math.round(m.toolbar.bottom)}, champ ↓${Math.round(m.field.bottom)})`,
+        );
+        expect(
+          m.toolbarRight <= m.frame.left || m.frame.top >= m.toolbar.bottom - 1,
+          `${tag} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(m.toolbarRight)}, cadre ←${Math.round(m.frame.left)})`,
+        );
+      }
+      expect(m.tone, `${tag} · la barre garde sa tonalité`);
+      expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
+      const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
+      expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
+      await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.${width}.${state}.${scheme}.png`) });
     }
-    const tiny = rest.buttons.filter((b) => b.w < 24 || b.h < 24);
-    expect(tiny.length === 0, `${scheme} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(rest.buttons)})`);
-    await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.rest.${scheme}.png`) });
 
-    await page.locator('[aria-label="Écrire un message"]').focus();
-    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="false"]');
-    const focusedState = await measure();
-    expect(JSON.stringify(focusedState.rows) === '[3]', `${scheme} · au focus, trois emojis sur une rangée (${JSON.stringify(focusedState.rows)})`);
-    if (focusedState.frame !== null && focusedState.field !== null && focusedState.toolbar !== null) {
-      expect(
-        Math.round(focusedState.frame.height) === 44 && focusedState.frame.top >= focusedState.toolbar.bottom,
-        `${scheme} · au focus, le cadre se replie à la hauteur de la ligne (${Math.round(focusedState.frame.height)} px)`,
-      );
+    if (width === 390) {
+      const bubbles = () => page.locator('[data-message]').count();
+      const emoji = page.locator('[data-composer-quick-emoji] button').first();
+      const before = await bubbles();
+      await emoji.click();
+      await emoji.click();
+      await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 2, before, { timeout: 3000 }).catch(() => {});
+      const afterSeries = await bubbles();
+      expect(afterSeries === before + 2, `${scheme} · deux taps sur le même emoji ⇒ DEUX bulles (${before} → ${afterSeries})`);
+
+      await page.locator('[aria-label="Écrire un message"]').fill('double clic');
+      await page.locator('[aria-label="Envoyer"]').dblclick();
+      await page.waitForTimeout(600);
+      const afterDouble = await bubbles();
+      expect(afterDouble === afterSeries + 1, `${scheme} · double clic sur « Envoyer » ⇒ UNE bulle (${afterSeries} → ${afterDouble})`);
     }
-    await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.focused.${scheme}.png`) });
 
     await context.close();
   }
