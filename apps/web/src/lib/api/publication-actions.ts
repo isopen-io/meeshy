@@ -1,7 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { POST_CONTENT_MAX_LENGTH } from '@/lib/feed/publication-edit';
+
 import type { DataSource } from './config';
-import { removeCardPost } from './card-caches';
+import { findCardPost, findLiveCardPost, mergeServedPost, removeCardPost, replaceCardContent } from './card-caches';
+import type { FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { FEED_QUERY_KEY } from './feed';
@@ -20,6 +23,18 @@ import { STORIES_QUERY_PREFIX } from './stories';
  */
 export type PostActionOutcome = 'done' | 'offline' | 'failed';
 
+/**
+ * L'ISSUE D'UNE MODIFICATION DE TEXTE (#7534, revue-correction) — `'busy'`
+ * EN PLUS de `PostActionOutcome` : un second appel pendant que le PUT du
+ * premier vole encore. Distincte de `'done'` (le défaut majeur qu'elle
+ * corrige : un second appel rendait `'done'` SANS RIEN ENVOYER, et l'hôte
+ * annonçait « Publication modifiée » pour un texte parti nulle part) et de
+ * `'failed'` (ce n'est pas un refus SERVI, rejouer une fois le premier
+ * revenu peut réussir — jamais un rejeu automatique en tâche de fond, même
+ * garde que `'offline'`, § doc-comment d'`editPost`).
+ */
+export type EditPostOutcome = PostActionOutcome | 'busy';
+
 export type PostActionDeps = {
   readonly source: DataSource;
   readonly transport: HttpTransport;
@@ -32,9 +47,14 @@ const outcome = (result: ApiResult<unknown> | null): PostActionOutcome => {
   return outcomeOf(result) === 'permanent' ? 'failed' : 'offline';
 };
 
-const send = (deps: PostActionDeps, method: 'POST' | 'DELETE', path: string): Promise<ApiResult<unknown> | null> => {
-  if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve({ ok: true, data: null });
-  return deps.transport.request<unknown>({ method, path }).catch(() => null);
+const send = (
+  deps: PostActionDeps,
+  method: 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  options?: { readonly body?: Readonly<Record<string, unknown>>; readonly fixture?: unknown },
+): Promise<ApiResult<unknown> | null> => {
+  if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve({ ok: true, data: options?.fixture ?? null });
+  return deps.transport.request<unknown>({ method, path, ...(options?.body === undefined ? {} : { body: options.body }) }).catch(() => null);
 };
 
 /**
@@ -80,4 +100,107 @@ export async function deletePost(params: { readonly postId: string; readonly dep
  * carte ne porte pas l'état épinglé), le web fait de même. */
 export async function pinPost(params: { readonly postId: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
   return outcome(await send(params.deps, 'POST', `/api/v1/posts/${encodeURIComponent(params.postId)}/pin`));
+}
+
+/** Le TEXTE de `source` (et ses traductions) posé sur `post`, qui garde tout
+ * le reste. Spreads CONDITIONNELS : sous `exactOptionalPropertyTypes`, un
+ * champ ABSENT de `source` redevient absent, jamais `undefined`. */
+const withTextOf = (post: FeedPost, source: FeedPost): FeedPost => {
+  const { content: _content, translations: _translations, ...rest } = post;
+  return {
+    ...rest,
+    ...(source.content === undefined ? {} : { content: source.content }),
+    ...(source.translations === undefined ? {} : { translations: source.translations }),
+  };
+};
+
+/** UN SEUL VOL D'ÉDITION À LA FOIS, PAR PUBLICATION — miroir `isHeartInFlight`
+ * (`FeedPostCard.swift:974`), même garde que `performCommentEdit`
+ * (`comment-gestures.ts`) : un second appel pendant le premier croiserait
+ * deux `PUT` sur la même publication. */
+const editInFlight = new Set<string>();
+
+/**
+ * MODIFIER LE TEXTE — OPTIMISTE, retour en arrière EXACT sur refus (#7534),
+ * miroir `FeedViewModel.updatePost` (`:1325-1370`) et la route réelle
+ * `PUT /api/v1/posts/:postId` (`core.ts:513-661`, corps `UpdatePostSchema`
+ * — `{ content }` SEUL, cette tranche ne portant que le texte). Aucun
+ * `X-Client-Mutation-Id` : cette route ne passe pas par `withMutationLog`
+ * (`core.ts:401` ne l'applique qu'à `POST /posts`).
+ *
+ * `translations: {}` — LE TEXTE A CHANGÉ, les traductions décrivaient
+ * l'ANCIEN contenu (miroir serveur, `PostService.ts` : « Text changed → the
+ * existing translations describe the OLD content » — et
+ * `FeedViewModel.updatePost:1343-1344`, `optimistic.translations = nil`).
+ *
+ * **AUCUNE FILE HORS LIGNE** (contrairement à un envoi de message,
+ * `send/outbox-store.ts`) : une modification perdue au retour du réseau doit
+ * rester VISIBLE et RETENTABLE par l'auteur — la feuille d'édition
+ * (`publication-edit-sheet.tsx`) reste ouverte sur `'offline'` et rejoue le
+ * MÊME texte via « Réessayer », plutôt qu'une reprise silencieuse en tâche de
+ * fond sur un contenu qu'on n'a peut-être plus envie de publier ainsi.
+ *
+ * SEUL LE FIL GELÉ DES RÉELS (D-66) ÉCHAPPE À L'ÉCRITURE — `replaceCardContent`
+ * (le registre, `card-caches.ts`), jamais `updateCardPost` : même périmètre
+ * qu'`applyPostUpdated` (`feed-realtime.ts`), qu'iOS ne câble pas non plus sur
+ * `postUpdated` pour son pager de Réels.
+ */
+export async function editPost(params: { readonly postId: string; readonly content: string; readonly deps: PostActionDeps }): Promise<EditPostOutcome> {
+  const { postId, deps } = params;
+  const content = params.content.trim();
+  if (content === '' || content.length > POST_CONTENT_MAX_LENGTH) return 'failed';
+
+  /* L'« AVANT » se lit d'abord dans une caisse VIVANTE (`findLiveCardPost`) :
+     le fil gelé des Réels peut tenir un texte périmé (revue-correction
+     #7534). Il ne sert que s'il est SEUL à tenir la carte — c'est alors le
+     seul texte que l'auteur ait sous les yeux. */
+  const held = findLiveCardPost(deps.queryClient, postId) ?? findCardPost(deps.queryClient, postId);
+  if (held === undefined) return 'failed';
+  /* `UpdatePostSchema` refuse un corps qui ne change RIEN (« Nothing to
+     update », miroir `UpdateCommentSchema`) — et un aller-retour qui ne
+     change rien n'a de toute façon aucune raison de partir. Ce test précède
+     la garde de vol : `held` porte déjà l'optimiste du PUT en cours (posé
+     SYNCHRONE ci-dessous), donc un texte qui l'égale est un rejeu du MÊME
+     appel — `'done'` est alors juste, sans en envoyer un second. */
+  if (content === (held.content ?? '').trim()) return 'done';
+
+  /* UN SECOND texte pendant le vol du premier (revue-correction #7534,
+     défaut majeur 1) — la ligne au-dessus vient d'écarter le cas où il
+     s'agirait du MÊME texte, donc atteindre cette garde prouve que le texte
+     DIFFÈRE de celui déjà en vol. Ce n'était PAS le cas avant ce correctif :
+     `'done'` s'y rendait quel que soit le texte, et l'hôte annonçait un
+     succès pour un contenu parti nulle part. `'busy'` ne touche ni la caisse
+     ni le réseau — le brouillon en vol reste seul jusqu'à son issue. */
+  if (editInFlight.has(postId)) return 'busy';
+  editInFlight.add(postId);
+
+  try {
+    replaceCardContent(deps.queryClient, postId, (post) => ({ ...post, content, translations: {} }));
+
+    const result = await send(deps, 'PUT', `/api/v1/posts/${encodeURIComponent(postId)}`, {
+      body: { content },
+      fixture: { ...held, content, translations: {} },
+    });
+
+    if (result !== null && result.ok) {
+      /* Une passerelle qui rend autre chose qu'une publication ne doit pas
+         effacer ce qu'on vient d'écrire — même garde que `performCommentEdit`. */
+      const served = result.data;
+      if (served !== null && typeof served === 'object' && typeof (served as { readonly id?: unknown }).id === 'string') {
+        replaceCardContent(deps.queryClient, postId, (post) => mergeServedPost(served as FeedPost, post));
+      }
+      return 'done';
+    }
+
+    /* LE RETOUR EXACT DE CE QUE LE GESTE A FAIT, ET DE RIEN D'AUTRE
+       (revue-correction #7534) — `content` et `translations` reprennent leur
+       valeur LUE au départ ; tout le reste de chaque caisse reste tel
+       qu'elle le tient. Entre le tap et le refus, un cœur, un signet ou un
+       compte servi ont pu bouger la carte : reposer l'instantané ENTIER les
+       défaisait, et recopiait sur la fiche l'objet d'une AUTRE caisse. */
+    replaceCardContent(deps.queryClient, postId, (post) => withTextOf(post, held));
+    return outcome(result);
+  } finally {
+    editInFlight.delete(postId);
+  }
 }

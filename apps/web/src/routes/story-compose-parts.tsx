@@ -68,29 +68,38 @@ export function StudioDoorButton({
   accept,
   door,
   onSelect,
+  disabled = false,
 }: {
   readonly label: string;
   readonly glyph: GlyphName | 'layer';
   readonly accept: string;
   readonly door: StudioDoor;
   readonly onSelect: (file: File) => void;
+  /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan est figé
+   * au premier clic sur Publier ; poser un média après n'atteindrait jamais
+   * la publication en cours, et laisserait croire à l'auteur qu'il compte. */
+  readonly disabled?: boolean;
 }) {
   return (
     <label
       title={label}
-      className="grid cursor-pointer place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
+      aria-disabled={disabled}
+      className="grid place-items-center rounded-full focus-within:outline-2 focus-within:outline-offset-2"
       style={{
         width: TARGET,
         height: TARGET,
         color: 'var(--color-ios-ink)',
         backgroundColor: 'var(--color-ios-card)',
         outlineColor: 'var(--color-ios-brand)',
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       <input
         type="file"
         accept={accept}
         data-door={door}
+        disabled={disabled}
         className="sr-only"
         aria-label={label}
         onChange={(event) => {
@@ -114,6 +123,7 @@ export function StudioChip({
   children,
   style,
   probe,
+  disabled = false,
 }: {
   readonly label: string;
   readonly pressed: boolean;
@@ -125,6 +135,11 @@ export function StudioChip({
    * réglage-ci sans passer par son libellé traduit, qui romprait au premier
    * changement de catalogue. */
   readonly probe?: string;
+  /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — le plan publié
+   * est figé au premier clic sur Publier ; un geste après coup ne change
+   * plus rien à ce qui part, et laisser le contrôle actif fait croire le
+   * contraire à l'auteur. */
+  readonly disabled?: boolean;
 }) {
   return (
     <button
@@ -133,6 +148,7 @@ export function StudioChip({
       aria-pressed={pressed}
       aria-label={label}
       title={label}
+      disabled={disabled}
       onClick={onPress}
       className="grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{
@@ -141,6 +157,7 @@ export function StudioChip({
         outlineColor: 'var(--color-ios-brand)',
         color: pressed ? '#fff' : 'var(--color-ios-ink)',
         backgroundColor: pressed ? 'var(--color-ios-brand)' : 'var(--color-ios-card)',
+        opacity: disabled ? 0.4 : 1,
         ...style,
       }}
     >
@@ -169,6 +186,7 @@ export function StudioAssetRow({
   onRemove,
   caption,
   children,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly glyph: GlyphName | 'layer';
@@ -182,6 +200,10 @@ export function StudioAssetRow({
    * rendre — l'annoncer serait un contrôle sans effet (loi 4). */
   readonly caption?: { readonly value: string; readonly inputId: string; readonly onChange: (value: string) => void };
   readonly children?: ReactNode;
+  /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — retirer ou
+   * réessayer un média que le plan a déjà réglé ne changerait rien à ce qui
+   * part, et légender un média EN VOL de publication en tromperait l'auteur. */
+  readonly locked?: boolean;
 }) {
   return (
     <li className="flex flex-col gap-1" data-asset-phase={upload.phase}>
@@ -212,8 +234,9 @@ export function StudioAssetRow({
           <button
             type="button"
             onClick={onRetry}
+            disabled={locked}
             className="rounded-chip px-3 font-semibold"
-            style={{ minHeight: TARGET, color: 'var(--color-ios-brand)' }}
+            style={{ minHeight: TARGET, color: 'var(--color-ios-brand)', opacity: locked ? 0.4 : 1 }}
           >
             {translate(lang, 'story.studio.upload.retry')}
           </button>
@@ -221,10 +244,11 @@ export function StudioAssetRow({
         <button
           type="button"
           onClick={onRemove}
+          disabled={locked}
           aria-label={removeLabel}
           title={removeLabel}
           className="grid shrink-0 place-items-center rounded-full"
-          style={{ width: TARGET, height: TARGET, color: 'var(--color-ios-ink-2)' }}
+          style={{ width: TARGET, height: TARGET, color: 'var(--color-ios-ink-2)', opacity: locked ? 0.4 : 1 }}
         >
           <Glyph name="x" size={16} />
         </button>
@@ -239,6 +263,7 @@ export function StudioAssetRow({
             data-story-caption={caption.inputId}
             type="text"
             dir="auto"
+            disabled={locked}
             maxLength={MEDIA_CAPTION_MAX}
             value={caption.value}
             onInput={(event) => caption.onChange(event.currentTarget.value)}
@@ -249,6 +274,7 @@ export function StudioAssetRow({
               color: 'var(--color-ios-ink)',
               backgroundColor: 'var(--color-ios-card)',
               outlineColor: 'var(--color-ios-brand)',
+              opacity: locked ? 0.4 : 1,
             }}
           />
         </>
@@ -263,10 +289,12 @@ export function StudioSoundPlaneToggle({
   lang,
   plane,
   onChange,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly plane: StudioPlane;
   readonly onChange: (plane: StudioPlane) => void;
+  readonly locked?: boolean;
 }) {
   return (
     <span className="flex shrink-0 items-center gap-1" role="group" aria-label={translate(lang, 'story.studio.sound.plane.label')}>
@@ -276,6 +304,7 @@ export function StudioSoundPlaneToggle({
           label={translate(lang, value === 'background' ? 'story.studio.sound.plane.background' : 'story.studio.sound.plane.foreground')}
           pressed={plane === value}
           onPress={() => onChange(value)}
+          disabled={locked}
           style={{ paddingInline: 10 }}
           probe={`sound-plane:${value}`}
         />

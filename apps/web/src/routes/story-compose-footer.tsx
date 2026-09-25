@@ -14,9 +14,8 @@ import { StudioAssetRow, StudioSoundPlaneToggle } from '@/routes/story-compose-p
 
 const VISUAL_DOORS = ['visual', 'overlay'] as const;
 
-const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.reel' | 'story.studio.refusal.story-pages'>> = {
+const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.reel'>> = {
   'reel-without-qualifying-media': 'story.studio.refusal.reel',
-  'story-with-several-pages': 'story.studio.refusal.story-pages',
 };
 
 /** La raison d'un format refusé, dans la langue de l'interface — UNE raison
@@ -33,6 +32,7 @@ export function StudioPageAssets({
   onRemove,
   onCaption,
   onSoundPlane,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly page: StudioPage;
@@ -40,6 +40,10 @@ export function StudioPageAssets({
   readonly onRemove: (door: StudioDoor) => void;
   readonly onCaption: (door: 'visual' | 'overlay', value: string) => void;
   readonly onSoundPlane: (plane: StudioPlane) => void;
+  /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — le plan que la
+   * séquence publie est figé au premier clic sur Publier ; retirer, réessayer
+   * ou légender un média après coup ne change plus rien à ce qui part. */
+  readonly locked?: boolean;
 }) {
   if (page.background === null && page.overlay === null && page.sound === null) return null;
   return (
@@ -58,6 +62,7 @@ export function StudioPageAssets({
             onRetry={asset.file !== undefined ? () => onRetry(door) : undefined}
             onRemove={() => onRemove(door)}
             caption={{ value: asset.caption, inputId: `story-studio-caption-${door}`, onChange: (value) => onCaption(door, value) }}
+            locked={locked}
           />
         );
       })}
@@ -70,13 +75,21 @@ export function StudioPageAssets({
           upload={page.sound.upload}
           onRetry={page.sound.file !== undefined ? () => onRetry('sound') : undefined}
           onRemove={() => onRemove('sound')}
+          locked={locked}
         >
-          <StudioSoundPlaneToggle lang={lang} plane={page.sound.plane} onChange={onSoundPlane} />
+          <StudioSoundPlaneToggle lang={lang} plane={page.sound.plane} onChange={onSoundPlane} locked={locked} />
         </StudioAssetRow>
       ) : null}
     </ul>
   );
 }
+
+/** **L'ÉCHEC D'UN ENVOI** — UN seul état, jamais deux à tenir d'accord :
+ * `published === 0` ⇒ rien n'est parti (« La story n'a pas pu être
+ * publiée. ») ; sinon une panne EN COURS DE SÉQUENCE (#7707, canal `scene`) —
+ * les pages parties le sont, l'écran le dit (« k sur N publiées ») plutôt que
+ * de taire ce qui a réussi. */
+export type StudioPublishFailureNotice = { readonly failure: StudioFailureKey; readonly published: number; readonly total: number };
 
 /** LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine largeur :
  * partagée avec la pastille et la capsule Publier, elle ne gardait que
@@ -90,7 +103,7 @@ export function StudioFooterMessage({
   readonly lang: InterfaceLanguage;
   readonly placeRefusal: StudioPlaceRefusalNotice | null;
   readonly kindRefusal: PublicationRefusal | null;
-  readonly publishFailure: StudioFailureKey | null;
+  readonly publishFailure: StudioPublishFailureNotice | null;
 }) {
   return (
     <div className="text-caption">
@@ -104,9 +117,20 @@ export function StudioFooterMessage({
         <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
           {publicationRefusalText(lang, kindRefusal)}
         </p>
+      ) : publishFailure !== null && publishFailure.published > 0 ? (
+        <p
+          role="alert"
+          data-publish-outcome="partial"
+          data-published={publishFailure.published}
+          data-total={publishFailure.total}
+          style={{ color: 'var(--color-error)' }}
+        >
+          {translate(lang, 'story.studio.outcome.partial', { published: String(publishFailure.published), total: String(publishFailure.total) })}{' '}
+          {translate(lang, publishFailure.failure)}
+        </p>
       ) : publishFailure !== null ? (
         <p role="alert" style={{ color: 'var(--color-error)' }}>
-          {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
+          {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure.failure)}
         </p>
       ) : (
         <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>

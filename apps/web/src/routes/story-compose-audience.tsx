@@ -63,6 +63,7 @@ export const AudienceChip = memo(function AudienceChip({
   source,
   open,
   onOpen,
+  disabled = false,
 }: {
   readonly lang: InterfaceLanguage;
   /** Ce qui PARTIRA — l'audience CHOISIE, ou le défaut de la passerelle pour
@@ -71,6 +72,10 @@ export const AudienceChip = memo(function AudienceChip({
   readonly source: AudienceSource;
   readonly open: boolean;
   readonly onOpen: () => void;
+  /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan publié
+   * porte l'audience du geste ; en changer après coup serait ignoré en
+   * silence par la séquence déjà partie. */
+  readonly disabled?: boolean;
 }) {
   const valueId = useId();
   const label = translate(lang, audienceLabelKey(value));
@@ -81,6 +86,7 @@ export const AudienceChip = memo(function AudienceChip({
       data-audience-value={value}
       data-audience-source={source}
       onClick={onOpen}
+      disabled={disabled}
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-label={translate(lang, 'story.studio.audience.chip.label')}
@@ -92,6 +98,7 @@ export const AudienceChip = memo(function AudienceChip({
         color: 'var(--color-ios-ink-2)',
         backgroundColor: 'var(--color-ios-card)',
         outlineColor: 'var(--color-ios-brand)',
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <GlyphSvg glyph={CHOOSABLE_AUDIENCE_GLYPH[value]} size={16} className="shrink-0" />

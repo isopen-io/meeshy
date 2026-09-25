@@ -108,7 +108,18 @@ export async function loadStoryTray(
 ): Promise<ApiResult<readonly StoryTrayPost[]>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const { STORY_TRAY } = await import('./fixtures-stories');
-    return { ok: true, data: STORY_TRAY };
+    /* CE QUI EST PARTI DANS CET ONGLET PASSE DEVANT (#7707, même motif que
+       `loadStatusMoods` § « CE QUE J'AI POSÉ… ») — une story de plusieurs
+       pages publiée sous fixtures ENTRE dans le rail, une entrée par page. */
+    const { fixtureStories } = await import('./stories-publish');
+    const posted: readonly StoryTrayPost[] = fixtureStories().map((s) => ({
+      id: s.id,
+      type: 'STORY',
+      createdAt: s.createdAt,
+      isViewedByMe: true,
+      author: { id: s.authorId, username: 'vous', displayName: 'Moi' },
+    }));
+    return { ok: true, data: [...posted, ...STORY_TRAY] };
   }
   return params.transport.request<readonly StoryTrayPost[]>({
     method: 'GET',
