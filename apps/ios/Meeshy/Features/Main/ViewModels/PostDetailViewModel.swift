@@ -28,7 +28,10 @@ class PostDetailViewModel: ObservableObject {
     @Published var repliesHasMore: [String: Bool] = [:]
     @Published var repliesNextCursor: [String: String] = [:]
 
-    @Published private(set) var _topLevelComments: [FeedComment] = []
+    /// Dérivé de `comments`, écrit UNIQUEMENT par son `didSet` : le `willSet`
+    /// de `comments` a déjà émis `objectWillChange`, une seconde publication ici
+    /// ne faisait que doubler chaque ré-évaluation de `PostDetailView`.
+    private var _topLevelComments: [FeedComment] = []
     var topLevelComments: [FeedComment] { _topLevelComments }
 
     // Comment-like optimistic state — socket-reaction driven, miroir exact de
