@@ -427,7 +427,7 @@
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #7534, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-25 (`bun run build` puis gzip -9 du fichier bati) : 1,14 Ko gzip -9 -- la FEUILLE d'edition du texte d'une publication (`components/publication-edit-sheet.tsx` : le champ, le compteur de caracteres, Annuler/Publier, l'erreur avec Reessayer), chargee A LA DEMANDE depuis `publication-menu-panel.tsx` au tap de « Modifier » -- le fil ne paie l'editeur qu'a ce moment (motif D-54, meme discipline que `publication_comments_sheet` et `publication_viewers_sheet`, ses deux voisines directes). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "source": "Mesure de measure-weight.mjs le 2026-09-25 (`bun run build` puis gzip -9 du fichier bati) : 1,14 Ko gzip -9 -- la FEUILLE d'edition du texte d'une publication (`components/publication-edit-sheet.tsx` : le champ, le compteur de caracteres, Annuler/Publier, l'erreur avec Reessayer), chargee A LA DEMANDE depuis `publication-menu-panel.tsx` au tap de « Modifier » -- le fil ne paie l'editeur qu'a ce moment (motif D-54, meme discipline que `publication_comments_sheet` et `publication_viewers_sheet`, ses deux voisines directes). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins. REMESURE le 2026-09-25 par la revue-correction de #7534 (fermeture pendant le vol, `lang` du champ, cible de « Reessayer ») : 1,18 Ko -- le plafond ne bouge pas."
       }
     },
     "interface_catalogs_onboarding": {

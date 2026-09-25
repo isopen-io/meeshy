@@ -28,15 +28,35 @@ import { Sheet } from './sheet';
  *   `feed.retry`, réutilisé plutôt qu'une clé de plus) — `'failed'` est un
  *   refus SERVI (403, texte invalide côté passerelle) qu'un rejeu IDENTIQUE
  *   ne changerait pas.
+ *
+ * **FERMER PENDANT LE VOL FERME** (revue-correction #7534, § Q5 de la
+ * spécification). La croix de `Sheet`, Échap et le retour matériel ferment le
+ * `<dialog>` NATIVEMENT avant d'appeler `onClose` : l'ignorer pendant le vol
+ * laissait une feuille fermée pour le navigateur mais montée pour React —
+ * l'invariant que `Sheet` documente —, l'erreur s'y peignait invisible et
+ * « Modifier » ne la rouvrait plus. La requête continue donc sans la feuille ;
+ * l'HÔTE (`usePostGesture`) annonce l'issue dans sa région `status`, et le
+ * cache est déjà juste (optimiste, hydraté ou restauré). Une issue arrivée
+ * APRÈS le démontage n'écrit rien ici — ni état, ni `onClose`, qui rendrait le
+ * focus au « ⋯ » alors que l'auteur est passé ailleurs. « Annuler » et
+ * « Publier » restent éteints pendant le vol, comme iOS
+ * (`EditPostSheet.swift:298-320`) : ils couvrent le geste au doigt.
+ *
+ * Le champ porte `lang` = la langue de l'ORIGINAL : c'est dans cette langue
+ * qu'il est écrit, pas dans celle de l'interface (lecteur d'écran, correcteur).
  */
 export function PublicationEditSheet({
   postId,
   original,
+  originalLanguage,
   onSave,
   onClose,
 }: {
   readonly postId: string;
   readonly original: string;
+  /** La langue d'`original` (`FeedCardText.originalLanguage`) — vide quand la
+   * passerelle n'en sert pas : aucun `lang` n'est alors inventé. */
+  readonly originalLanguage: string;
   readonly onSave: (postId: string, content: string) => Promise<PostActionOutcome>;
   readonly onClose: () => void;
 }) {
@@ -45,6 +65,13 @@ export function PublicationEditSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<'offline' | 'failed' | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const { submittable, remaining, warning } = publicationEditState({ original, draft });
 
@@ -63,6 +90,7 @@ export function PublicationEditSheet({
     setBusy(true);
     setError(null);
     void onSave(postId, draft).then((outcome) => {
+      if (!mounted.current) return;
       setBusy(false);
       if (outcome === 'done') {
         onClose();
@@ -76,15 +104,13 @@ export function PublicationEditSheet({
     <Sheet
       title={translate(language, 'feed.post.edit.title')}
       bodyAs="div"
-      onClose={() => {
-        if (busy) return;
-        onClose();
-      }}
+      onClose={onClose}
     >
       <div data-publication-edit-sheet className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
         <textarea
           ref={fieldRef}
           data-publication-edit-field
+          {...(originalLanguage === '' ? {} : { lang: originalLanguage })}
           aria-label={translate(language, 'feed.post.edit.body.a11y')}
           value={draft}
           readOnly={busy}
@@ -122,8 +148,8 @@ export function PublicationEditSheet({
                 type="button"
                 data-publication-edit-retry
                 onClick={save}
-                className="ml-2 font-semibold underline"
-                style={{ color: 'var(--color-ios-brand)' }}
+                className="ml-2 inline-flex items-center px-1 font-semibold underline"
+                style={{ minHeight: 44, color: 'var(--color-ios-brand)' }}
               >
                 {translate(language, 'feed.retry')}
               </button>

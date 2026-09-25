@@ -3,7 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { POST_CONTENT_MAX_LENGTH } from '@/lib/feed/publication-edit';
 
 import type { DataSource } from './config';
-import { findCardPost, mergeServedPost, removeCardPost, replaceCardContent } from './card-caches';
+import { findCardPost, findLiveCardPost, mergeServedPost, removeCardPost, replaceCardContent } from './card-caches';
 import type { FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
@@ -90,6 +90,18 @@ export async function pinPost(params: { readonly postId: string; readonly deps: 
   return outcome(await send(params.deps, 'POST', `/api/v1/posts/${encodeURIComponent(params.postId)}/pin`));
 }
 
+/** Le TEXTE de `source` (et ses traductions) posé sur `post`, qui garde tout
+ * le reste. Spreads CONDITIONNELS : sous `exactOptionalPropertyTypes`, un
+ * champ ABSENT de `source` redevient absent, jamais `undefined`. */
+const withTextOf = (post: FeedPost, source: FeedPost): FeedPost => {
+  const { content: _content, translations: _translations, ...rest } = post;
+  return {
+    ...rest,
+    ...(source.content === undefined ? {} : { content: source.content }),
+    ...(source.translations === undefined ? {} : { translations: source.translations }),
+  };
+};
+
 /** UN SEUL VOL D'ÉDITION À LA FOIS, PAR PUBLICATION — miroir `isHeartInFlight`
  * (`FeedPostCard.swift:974`), même garde que `performCommentEdit`
  * (`comment-gestures.ts`) : un second appel pendant le premier croiserait
@@ -126,7 +138,11 @@ export async function editPost(params: { readonly postId: string; readonly conte
   const content = params.content.trim();
   if (content === '' || content.length > POST_CONTENT_MAX_LENGTH) return 'failed';
 
-  const held = findCardPost(deps.queryClient, postId);
+  /* L'« AVANT » se lit d'abord dans une caisse VIVANTE (`findLiveCardPost`) :
+     le fil gelé des Réels peut tenir un texte périmé (revue-correction
+     #7534). Il ne sert que s'il est SEUL à tenir la carte — c'est alors le
+     seul texte que l'auteur ait sous les yeux. */
+  const held = findLiveCardPost(deps.queryClient, postId) ?? findCardPost(deps.queryClient, postId);
   if (held === undefined) return 'failed';
   /* `UpdatePostSchema` refuse un corps qui ne change RIEN (« Nothing to
      update », miroir `UpdateCommentSchema`) — et un aller-retour qui ne
@@ -154,11 +170,13 @@ export async function editPost(params: { readonly postId: string; readonly conte
       return 'done';
     }
 
-    /* LE RETOUR EXACT — la carte LUE au départ, jamais une modification
-       partielle : entre le tap et le refus, un écho a pu bouger la carte,
-       et poser autre chose que l'instantané ferait mentir sur un champ que
-       ce geste n'a jamais touché. */
-    replaceCardContent(deps.queryClient, postId, () => held);
+    /* LE RETOUR EXACT DE CE QUE LE GESTE A FAIT, ET DE RIEN D'AUTRE
+       (revue-correction #7534) — `content` et `translations` reprennent leur
+       valeur LUE au départ ; tout le reste de chaque caisse reste tel
+       qu'elle le tient. Entre le tap et le refus, un cœur, un signet ou un
+       compte servi ont pu bouger la carte : reposer l'instantané ENTIER les
+       défaisait, et recopiait sur la fiche l'objet d'une AUTRE caisse. */
+    replaceCardContent(deps.queryClient, postId, (post) => withTextOf(post, held));
     return outcome(result);
   } finally {
     editInFlight.delete(postId);

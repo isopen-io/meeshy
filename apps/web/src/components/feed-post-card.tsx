@@ -435,6 +435,7 @@ function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardMo
       authorName={model.author.name}
       text={model.text?.full}
       originalText={model.text?.original}
+      originalLanguage={model.text?.originalLanguage}
       bookmarked={model.viewer.bookmarked}
       isDetail={isDetail}
       tone={tone}

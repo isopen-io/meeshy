@@ -6,7 +6,8 @@
  *   jamais le brut : un espace de tête ou de fin ne rend pas « Publier »
  *   actif, exactement comme `performCommentEdit` (`comment-gestures.ts`)
  *   refuse un aller-retour qui « ne change rien ».
- * - `isValid` (`:233-243`) — RÉDUITE au texte : la clause « média restant »
+ * - `isValid` (`:233-243`) — bornée sur le texte ROGNÉ (`:234`), celui que
+ *   `editPost` envoie ; RÉDUITE au texte : la clause « média restant »
  *   d'iOS ne s'applique pas ici, cette tranche ne porte que `content`
  *   (§ Périmètre de la spécification #7534 — médias hors tranche, issue
  *   compagnon). Non soumissible à vide/blanc, ou au-delà de
@@ -34,7 +35,7 @@ export function publicationEditState(params: { readonly original: string; readon
   const { original, draft } = params;
   const trimmed = draft.trim();
   const changed = trimmed !== original.trim();
-  const isValid = trimmed !== '' && draft.length <= POST_CONTENT_MAX_LENGTH;
+  const isValid = trimmed !== '' && trimmed.length <= POST_CONTENT_MAX_LENGTH;
   const remaining = Math.max(0, POST_CONTENT_MAX_LENGTH - draft.length);
 
   return {

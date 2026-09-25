@@ -5,6 +5,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 
+import { FEED_QUERY_KEY } from '@/lib/api/feed';
+import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
+import { appQueryClient } from '@/lib/api/query-client';
+
 import { usePostGesture } from './use-post-gesture';
 
 /**
@@ -243,6 +247,79 @@ describe('usePostGesture — modifier le texte annonce dans la langue d’interf
     });
     await laisserPasser();
     expect(issue).toBe('failed');
+  });
+});
+
+/**
+ * **« PUBLICATION MODIFIÉE » — LA MOITIÉ `done`** (revue-correction #7534) :
+ * le témoin ci-dessus ne jouait que l'échec. Le cache PARTAGÉ (`appQueryClient`)
+ * est semé de la carte, et le port sous fixtures rend alors `done`.
+ */
+describe('usePostGesture — une modification CONFIRMÉE s’annonce (#7534)', () => {
+  function EditHarness({ postId }: { readonly postId: string }) {
+    const { announcement, menu } = usePostGesture();
+    return (
+      <div>
+        <span data-live>{announcement}</span>
+        <button type="button" data-edit onClick={() => void menu.onEdit(postId, 'Texte corrigé')} />
+      </div>
+    );
+  }
+
+  test('fr : « Publication modifiée », et la carte porte le texte neuf', async () => {
+    document.documentElement.lang = 'fr';
+    const post: FeedPost = { id: 'p-edit-done', type: 'POST', createdAt: '2026-09-24T10:00:00.000Z', content: 'Texte original' };
+    appQueryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, {
+      pages: [{ posts: [post], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<EditHarness postId="p-edit-done" />);
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-edit]')!.click();
+    });
+    await laisserPasser();
+
+    expect(liveOf(container)).toBe(translate('fr', 'feed.post.edited'));
+    const held = appQueryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
+    expect(held?.content).toBe('Texte corrigé');
+    appQueryClient.removeQueries({ queryKey: FEED_QUERY_KEY });
+  });
+});
+
+/**
+ * **SUPPRIMER DEPUIS LA FICHE QUITTE LA FICHE** (revue-correction #7534) —
+ * miroir `PostDetailView.swift` (`if await viewModel.deletePost(postId) {
+ * router.pop() }`). La fiche reçoit le menu depuis #7534 ; sans ce rappel, la
+ * requête partait, la carte restait PEINTE (l'observateur de `usePost` garde
+ * son dernier résultat quand sa requête est retirée du cache) et seule une
+ * annonce invisible disait qu'il s'était passé quelque chose.
+ */
+describe('usePostGesture — une suppression CONFIRMÉE prévient l’hôte (#7534)', () => {
+  test('`onDeleted` reçoit l’identifiant après la confirmation', async () => {
+    const deleted: string[] = [];
+    function DeleteHarness() {
+      const { menu } = usePostGesture({ onDeleted: (postId) => deleted.push(postId) });
+      return <button type="button" data-delete onClick={() => menu.onDelete('p-gone')} />;
+    }
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<DeleteHarness />);
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-delete]')!.click();
+    });
+    expect(deleted).toEqual([]);
+    await laisserPasser();
+    expect(deleted).toEqual(['p-gone']);
   });
 });
 

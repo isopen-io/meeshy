@@ -198,8 +198,10 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       const sheet = await ouvreEdition();
       expect(sheet).not.toBeNull();
       const champ = sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]');
-      /* …le CHAMP, lui, ouvre sur l'espagnol — l'original. */
+      /* …le CHAMP, lui, ouvre sur l'espagnol — l'original — et le DIT
+         (`lang`) : la page est en français, le texte ne l'est pas. */
       expect(champ?.value).toBe('La reunión se traslada');
+      expect(champ?.getAttribute('lang')).toBe('es');
     });
 
     test('« Publier » est désactivé à l’ouverture, s’active au changement, se redésactive au retour au texte d’origine', async () => {
@@ -256,6 +258,8 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       expect(erreur).not.toBeNull();
       const retry = erreur?.querySelector<HTMLButtonElement>('[data-publication-edit-retry]');
       expect(retry).not.toBeNull();
+      /* Une cible de doigt, pas un mot souligné de 16 px (dimension 5). */
+      expect(retry?.style.minHeight).toBe('44px');
       expect(champ.value).toBe('Texte corrigé');
 
       act(() => retry?.click());
@@ -320,6 +324,69 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
         resolveOutcome('done');
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
+    });
+
+    /**
+     * **FERMER PENDANT LE VOL FERME VRAIMENT** (revue-correction #7534, § Q5
+     * de la spécification). La croix de `Sheet`, Échap et le retour matériel
+     * ferment le `<dialog>` NATIVEMENT puis passent par son événement `close` :
+     * une feuille qui IGNORE ce `onClose` pendant le vol reste montée pour
+     * React, fermée pour le navigateur — l'erreur s'affiche alors dans une
+     * feuille invisible, et « Modifier » (`setEditing(true)` sur un état déjà
+     * vrai) ne la rouvre plus jamais : le contrôle inerte de la loi 4.
+     */
+    const enVol = async () => {
+      let resolveOutcome: (value: PostActionOutcome) => void = () => {};
+      const pending = new Promise<PostActionOutcome>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      const { menu, journal } = host('u-other', () => pending);
+      monte(post({ content: 'Texte original' }), menu);
+      const sheet = await ouvreEdition();
+      tape(sheet!.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')!, 'Texte corrigé');
+      act(() => sheet!.querySelector<HTMLButtonElement>('[data-publication-edit-save]')!.click());
+      return { resolve: (value: PostActionOutcome) => resolveOutcome(value), journal };
+    };
+
+    const fermeParLaCroix = async () => {
+      const croix = document.querySelector<HTMLButtonElement>('dialog [aria-label="Fermer"]');
+      expect(croix === null).toBe(false);
+      await act(async () => {
+        croix!.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+
+    test('la croix PENDANT le vol démonte la feuille — jamais un dialogue fermé mais monté', async () => {
+      const vol = await enVol();
+
+      await fermeParLaCroix();
+      expect(document.querySelector('[data-publication-edit-sheet]') === null).toBe(true);
+
+      await act(async () => {
+        vol.resolve('offline');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      /* L'issue arrive APRÈS la fermeture : « Modifier » rouvre une feuille
+         VISIBLE, sur le texte d'origine. */
+      const reouverte = await ouvreEdition();
+      expect(reouverte?.closest('dialog')?.open).toBe(true);
+    });
+
+    test('une issue arrivée APRÈS la fermeture ne vole pas le focus que l’auteur a posé ailleurs', async () => {
+      const vol = await enVol();
+      await fermeParLaCroix();
+
+      const ailleurs = document.createElement('button');
+      document.body.appendChild(ailleurs);
+      ailleurs.focus();
+
+      await act(async () => {
+        vol.resolve('done');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(document.activeElement === ailleurs).toBe(true);
+      ailleurs.remove();
     });
   });
 });

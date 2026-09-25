@@ -3,6 +3,8 @@ import { QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { scriptedTransport } from '@/test-support/scripted-transport';
 
+import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { updateCardPost } from './card-caches';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { HttpTransport } from './http';
@@ -254,6 +256,72 @@ describe('editPost', () => {
        caisses gelées. */
     expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
     expect(cardIn(queryClient, reelsQueryKey('graine'))?.content).toBe('Texte original');
+  });
+
+  /**
+   * **LE RETOUR EN ARRIÈRE NE DÉFAIT QUE CE QUE LE GESTE A FAIT** (revue-
+   * correction #7534). Le geste touche `content` et `translations` ; poser un
+   * INSTANTANÉ ENTIER sur chaque caisse défaisait en plus tout ce qu'un autre
+   * geste ou un écho avait posé PENDANT le vol — un cœur donné pendant que
+   * la modification partait se dé-remplissait au refus.
+   */
+  test('un cœur posé PENDANT le vol survit au retour en arrière', async () => {
+    const queryClient = feedWithPost(post({ isLikedByMe: false, likeCount: 0 }));
+    let answer: (value: unknown) => void = () => {};
+    const transport = {
+      request: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    } as unknown as HttpTransport;
+
+    const pending = editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } });
+    updateCardPost(queryClient, 'p1', (held) => ({ ...held, isLikedByMe: true, likeCount: 1 }));
+    answer({ ok: false, status: 500, error: 'INTERNAL_ERROR' });
+
+    expect(await pending).toBe('offline');
+    expect(cardIn(queryClient)?.content).toBe('Texte original');
+    expect(cardIn(queryClient)?.translations).toEqual({ en: { text: 'Original text' } });
+    expect(cardIn(queryClient)?.isLikedByMe).toBe(true);
+    expect(cardIn(queryClient)?.likeCount).toBe(1);
+  });
+
+  /**
+   * **LE FIL GELÉ DES RÉELS N'EST JAMAIS LA RÉFÉRENCE DU TEXTE** (revue-
+   * correction #7534). Il ne reçoit pas les modifications (D-66) : il peut
+   * tenir un texte PÉRIMÉ que les caisses vivantes ont déjà remplacé. L'y
+   * lire comme « l'état d'avant » faisait deux mensonges — un texte retapé à
+   * l'identique du périmé rendait `done` SANS appel, et un refus recopiait le
+   * périmé dans toutes les caisses vivantes.
+   */
+  const reelsAndBookmarks = (stale: FeedPost, live: FeedPost): QueryClient => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(reelsQueryKey('graine'), {
+      pages: [{ posts: [stale], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    queryClient.setQueryData(BOOKMARKS_QUERY_KEY, {
+      pages: [{ posts: [live], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    return queryClient;
+  };
+
+  test('le texte PÉRIMÉ du fil gelé, retapé, part quand même — la référence est la caisse vivante', async () => {
+    const queryClient = reelsAndBookmarks(post({ content: 'Ancien texte' }), post({ content: 'Texte actuel' }));
+    const { transport, calls } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Ancien texte' }) } });
+
+    expect(await editPost({ postId: 'p1', content: 'Ancien texte', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
+    expect(calls()).toHaveLength(1);
+  });
+
+  test('un refus remet le texte de la caisse VIVANTE, jamais celui du fil gelé', async () => {
+    const queryClient = reelsAndBookmarks(post({ content: 'Ancien texte' }), post({ content: 'Texte actuel' }));
+    const { transport } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: false, status: 500, error: 'INTERNAL_ERROR' } });
+
+    expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('offline');
+    expect(cardIn(queryClient, BOOKMARKS_QUERY_KEY)?.content).toBe('Texte actuel');
+    expect(cardIn(queryClient, reelsQueryKey('graine'))?.content).toBe('Ancien texte');
   });
 });
 

@@ -19,7 +19,7 @@ import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { Link } from '@/routes/route-table';
+import { Link, href, navigate } from '@/routes/route-table';
 
 import { FeedSkeleton } from './feed';
 
@@ -141,7 +141,11 @@ export default function PostDetailScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare, menu } = usePostGesture();
+  /* SUPPRIMÉE, LA FICHE SE QUITTE (revue-correction #7534) — miroir
+     `PostDetailView.swift` (`router.pop()` après `deletePost`) ; vers le FIL,
+     comme le retour de l'en-tête, et en REMPLAÇANT l'adresse : un retour
+     arrière ne doit pas rouvrir une publication qui n'existe plus. */
+  const { announcement, onGesture, onShare, menu } = usePostGesture({ onDeleted: () => navigate(href('feed'), true) });
   const frame = useRef<HTMLElement | null>(null);
   // MÊME élection que le fil (#6898 § 5.3) — un `IntersectionObserver`
   // dédié à ce scrollport.

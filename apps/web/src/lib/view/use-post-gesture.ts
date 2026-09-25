@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
@@ -61,7 +61,16 @@ type MenuNotice =
   | 'report.throttled'
   | 'report.failed';
 
-export function usePostGesture(): {
+export function usePostGesture(options?: {
+  /**
+   * APRÈS UNE SUPPRESSION CONFIRMÉE (revue-correction #7534) — l'écran qui
+   * N'EXISTE que par cette publication (la fiche `/post/$post`) la quitte,
+   * miroir `PostDetailView.swift` (`if await viewModel.deletePost(postId) {
+   * router.pop() }`). Les listes n'en ont pas besoin : la carte les quitte
+   * déjà par le registre des caisses.
+   */
+  readonly onDeleted?: (postId: string) => void;
+}): {
   readonly announcement: string;
   readonly onGesture: (postId: string, kind: PostToggleKind) => void;
   readonly onShare: (postId: string) => void;
@@ -70,6 +79,12 @@ export function usePostGesture(): {
   readonly menu: PostMenuHost;
 } {
   const { text: announcement, announce } = useLiveAnnouncer();
+  /* Une RÉFÉRENCE, pas une dépendance du `menu` mémoïsé : un hôte qui passe
+     une flèche en ligne ne doit pas refabriquer le menu à chaque rendu. */
+  const onDeletedRef = useRef(options?.onDeleted);
+  useEffect(() => {
+    onDeletedRef.current = options?.onDeleted;
+  });
   const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
 
   const onGesture = useCallback(
@@ -134,7 +149,10 @@ export function usePostGesture(): {
           return outcome;
         }),
       onDelete: (postId: string) => {
-        void deletePostAction(postId).then((outcome) => say(outcome === 'done' ? 'feed.post.deleted' : 'feed.post.delete_failed'));
+        void deletePostAction(postId).then((outcome) => {
+          say(outcome === 'done' ? 'feed.post.deleted' : 'feed.post.delete_failed');
+          if (outcome === 'done') onDeletedRef.current?.(postId);
+        });
       },
       onReport: (postId, reason) => {
         void reportPostAction(postId, reason).then((outcome) =>

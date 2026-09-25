@@ -126,15 +126,31 @@ const datedIn = (queryClient: QueryClient, queryKey: QueryKey, post: FeedPost | 
  * amorce la déclare comme la sienne (`initialDataUpdatedAt`), et sa règle de
  * fraîcheur juge alors l'âge réel de la donnée, pas l'instant de l'ouverture.
  */
-export function findCachedCard(queryClient: QueryClient, postId: string): CachedCard | undefined {
+const findIn = (queryClient: QueryClient, lists: readonly CardList[], postId: string): CachedCard | undefined => {
   const detailKey = postQueryKey(postId);
-  const [listed] = cardsOf(queryClient, CARD_LISTS).flatMap(([queryKey, data]) => datedIn(queryClient, queryKey, cardIn(data, postId)));
+  const [listed] = cardsOf(queryClient, lists).flatMap(([queryKey, data]) => datedIn(queryClient, queryKey, cardIn(data, postId)));
   return listed ?? datedIn(queryClient, detailKey, queryClient.getQueryData<FeedPost>(detailKey))[0];
+};
+
+export function findCachedCard(queryClient: QueryClient, postId: string): CachedCard | undefined {
+  return findIn(queryClient, CARD_LISTS, postId);
 }
 
 /** L'état « AVANT » d'un geste — la carte seule, sans sa date. */
 export function findCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
   return findCachedCard(queryClient, postId)?.post;
+}
+
+/**
+ * **LE TEXTE TEL QUE L'AUTEUR L'A ÉCRIT EN DERNIER** (revue-correction #7534)
+ * — la carte d'une caisse VIVANTE, celles que `replaceCardContent` écrit,
+ * jamais le fil GELÉ des Réels : il ne reçoit pas les modifications (D-66,
+ * `frozen`) et peut tenir un texte que toutes les autres caisses ont déjà
+ * remplacé. Un geste sur le CONTENU qui y lirait son « avant » comparerait à
+ * un texte périmé et, sur un refus, le recopierait partout.
+ */
+export function findLiveCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
+  return findIn(queryClient, UNFROZEN_LISTS, postId)?.post;
 }
 
 /**

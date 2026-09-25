@@ -33,6 +33,11 @@ describe('publicationEditState', () => {
     expect(publicationEditState({ original: 'a', draft: overLimit }).submittable).toBe(false);
   });
 
+  test('la borne compte le texte ROGNÉ — celui qui part (`editPost`) et celui qu’iOS mesure (`EditPostSheet.swift:234`)', () => {
+    const atLimitWithTrailingBlank = `${'x'.repeat(POST_CONTENT_MAX_LENGTH)}  `;
+    expect(publicationEditState({ original: 'a', draft: atLimitWithTrailingBlank }).submittable).toBe(true);
+  });
+
   test('`remaining` compte le texte BRUT, jamais négatif', () => {
     expect(publicationEditState({ original: '', draft: 'abc' }).remaining).toBe(POST_CONTENT_MAX_LENGTH - 3);
     const over = 'x'.repeat(POST_CONTENT_MAX_LENGTH + 50);

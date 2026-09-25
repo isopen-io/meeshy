@@ -39,6 +39,7 @@ export type PostMenuPanelProps = {
   readonly authorName: string;
   readonly text: string | undefined;
   readonly originalText: string | undefined;
+  readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
   readonly menu: PostMenuHost;
   readonly onShare?: ((postId: string) => void) | undefined;
@@ -64,6 +65,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     authorName,
     text,
     originalText,
+    originalLanguage,
     bookmarked,
     menu,
     onShare,
@@ -179,7 +181,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
         <Suspense fallback={null}>
           <PublicationEditSheet
             postId={postId}
-            original={originalText ?? text ?? ''}
+            original={originalText ?? ''}
+            originalLanguage={originalLanguage ?? ''}
             onSave={menu.onEdit}
             /* LE FOCUS REVIENT AU « ⋯ » — la feuille a démonté le bouton qui
                vient de l'ouvrir (`closeAndFocusButton`, déjà appelé à

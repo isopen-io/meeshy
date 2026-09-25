@@ -61,6 +61,7 @@ export function FeedPostMenu({
   authorName,
   text,
   originalText,
+  originalLanguage,
   bookmarked,
   isDetail,
   tone,
@@ -77,6 +78,8 @@ export function FeedPostMenu({
    * par le Prisme) : `EditPostSheet.swift` hydrate depuis `post.content`,
    * l'original, pas l'affiché. */
   readonly originalText: string | undefined;
+  /** La langue de `originalText` — le `lang` du champ d'édition. */
+  readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
@@ -166,6 +169,7 @@ export function FeedPostMenu({
             authorName={authorName}
             text={text}
             originalText={originalText}
+            originalLanguage={originalLanguage}
             bookmarked={bookmarked}
             menu={menu}
             onShare={onShare}
