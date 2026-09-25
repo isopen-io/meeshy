@@ -36,6 +36,18 @@ export type SceneClockParams = {
 
 export type SceneClockHandle = {
   readonly subscribe: (listener: (t: number) => void) => () => void;
+  /** LE PARCOURS AU DOIGT (#7879) — pose le temps (borné à `[0, durée]`),
+   * redessine SUR-LE-CHAMP chaque abonné et `onTime`, même en pause : c'est
+   * « l'actualisation des frames en temps réel » du glissé, sans rendu
+   * React. Réarme la fin d'une scène qui ne boucle pas, et relance la
+   * boucle d'images si la lecture court encore. */
+  readonly seek: (t: number) => void;
+  /** Entendu à CHAQUE `seek`, jamais à chaque trame — les `<video>` et
+   * `<audio>` de la scène, qui courent sur leur propre horloge, s'y recalent
+   * (`useMediaSeek`, `scene-media-seek.ts`). */
+  readonly subscribeSeek: (listener: (t: number) => void) => () => void;
+  /** Le temps courant, en secondes — le point de départ d'un pas clavier. */
+  readonly now: () => number;
 };
 
 const ON_TIME_INTERVAL_MS = 100;
@@ -54,6 +66,12 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
   const rafId = useRef<number | null>(null);
   const lastOnTimeAt = useRef(0);
   const ended = useRef(false);
+  const seekListeners = useRef<Set<(t: number) => void>>(new Set());
+  /** La boucle d'images du rendu `enabled && playing` en cours, `null` hors
+   * lecture — `seek` la relance quand une scène TERMINÉE repart en arrière. */
+  const loop = useRef<((now: number) => void) | null>(null);
+  const duration = useRef(durationSeconds);
+  duration.current = durationSeconds;
   const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded, onLoop: params.onLoop });
 
   useEffect(() => {
@@ -63,6 +81,7 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
     }
     ended.current = false;
     const tick = (now: number) => {
+      rafId.current = null;
       if (lastFrame.current === null) lastFrame.current = now;
       const deltaSeconds = (now - lastFrame.current) / 1000;
       lastFrame.current = now;
@@ -90,11 +109,13 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
       }
       if (!stop) rafId.current = requestAnimationFrame(tick);
     };
+    loop.current = tick;
     rafId.current = requestAnimationFrame(tick);
     return () => {
       if (rafId.current !== null) cancelAnimationFrame(rafId.current);
       rafId.current = null;
       lastFrame.current = null;
+      loop.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, playing, loops, durationSeconds]);
@@ -115,7 +136,30 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
           listeners.current.delete(listener);
         };
       },
+      subscribeSeek(listener: (t: number) => void) {
+        seekListeners.current.add(listener);
+        return () => {
+          seekListeners.current.delete(listener);
+        };
+      },
+      seek(target: number) {
+        const cap = duration.current;
+        const floor = Math.max(0, Number.isFinite(target) ? target : 0);
+        const t = cap !== null && cap > 0 ? Math.min(cap, floor) : floor;
+        elapsed.current = t;
+        // La trame suivante repart d'ICI : le temps écoulé AVANT le seek ne
+        // compte pas, sinon un seek en lecture sauterait d'un delta.
+        lastFrame.current = null;
+        if (cap === null || t < cap) ended.current = false;
+        for (const listener of listeners.current) listener(t);
+        for (const listener of seekListeners.current) listener(t);
+        callbacks.current.onTime?.(t);
+        const tick = loop.current;
+        if (tick !== null && rafId.current === null && !ended.current) rafId.current = requestAnimationFrame(tick);
+      },
+      now: () => elapsed.current,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 }
