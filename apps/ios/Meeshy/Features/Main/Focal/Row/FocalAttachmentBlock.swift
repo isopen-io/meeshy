@@ -389,7 +389,7 @@ struct FocalGridCell: View {
 
 // MARK: - FocalAttachmentBlock (WS-3)
 
-/// Bloc média NU de la rangée plate — sous l'avatar (`Row.contentIndent`)
+/// Bloc média NU de la rangée plate — à la colonne du nom (`Row.contentIndent`)
 /// — grille 1/2/3/4+ via `FocalMediaGridLayout`,
 /// radius `16` (`FocalMetrics.Media.radius`). Aucune bulle, aucun fond.
 ///
