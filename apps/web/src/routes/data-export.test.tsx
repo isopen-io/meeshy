@@ -139,6 +139,20 @@ describe('/settings/data-export — le fichier est livré, pas seulement annonc�
     expect(host.textContent).toContain('Le fichier a été téléchargé sur cet appareil.');
   });
 
+  test('une activation expirée pendant la requête : le tap suivant livre le même export', async () => {
+    const script = scripted({ ok: true, data: SERVED }, ['expired', 'delivered']);
+    const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
+
+    await click(buttonNamed(host, 'Exporter mes données'));
+    expect(host.querySelector('h1')?.textContent).toBe('Export prêt');
+    expect(host.textContent).not.toContain('Cet appareil n’a pas pu recevoir le fichier.');
+
+    await click(buttonNamed(host, 'Enregistrer le fichier'));
+
+    expect(script.requested).toEqual([0]);
+    expect(host.querySelector('h1')?.textContent).toBe('Export terminé');
+  });
+
   test('un appareil qui ne peut rien recevoir le dit, au lieu d’annoncer un export terminé', async () => {
     const script = scripted({ ok: true, data: SERVED }, ['unavailable']);
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);

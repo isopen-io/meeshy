@@ -373,6 +373,10 @@ const fr = {
   'dataExport.action.again': 'Exporter à nouveau',
   'dataExport.done.title': 'Export terminé',
   'dataExport.done.body': 'Le fichier a été téléchargé sur cet appareil.',
+  'dataExport.ready.title': 'Export prêt',
+  'dataExport.ready.body': 'Le fichier est prêt. Appuyez pour l’enregistrer sur cet appareil.',
+  'dataExport.action.deliver': 'Enregistrer le fichier',
+  'dataExport.undelivered.body': 'Cet appareil n’a pas pu recevoir le fichier.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',

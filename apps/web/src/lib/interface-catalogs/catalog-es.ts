@@ -327,6 +327,10 @@ const es = {
   'dataExport.action.again': 'Exportar de nuevo',
   'dataExport.done.title': 'Exportación completada',
   'dataExport.done.body': 'El archivo se ha descargado en este dispositivo.',
+  'dataExport.ready.title': 'Exportación lista',
+  'dataExport.ready.body': 'El archivo está listo. Toca para guardarlo en este dispositivo.',
+  'dataExport.action.deliver': 'Guardar el archivo',
+  'dataExport.undelivered.body': 'Este dispositivo no pudo recibir el archivo.',
 
   'profile.title': 'Perfil',
   'profile.edit': 'Editar',
