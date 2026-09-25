@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { isAppPath } from '@/routes/app-paths';
 
@@ -14,7 +15,7 @@ import { cheminDuLienEntrant } from './shell-deep-links';
  * navigateur une fois le lien vérifié. Ce témoin lit le manifeste LIVRÉ et
  * exige, pour chaque chemin réclamé, que le routeur le serve.
  */
-const MANIFEST = readFileSync(join(import.meta.dir, '../../../android/app/src/main/AndroidManifest.xml'), 'utf8').replace(
+const MANIFEST = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/AndroidManifest.xml'), 'utf8').replace(
   /<!--[\s\S]*?-->/g,
   '',
 );
