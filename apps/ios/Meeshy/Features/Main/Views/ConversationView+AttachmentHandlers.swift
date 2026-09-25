@@ -162,12 +162,10 @@ extension ConversationView {
             return
         }
 
-        let pendingRef = composerState.pendingReplyReference
-        let isStory = pendingRef?.isStoryReply == true
-        let refId = pendingRef?.messageId.isEmpty == false ? pendingRef?.messageId : nil
-        let replyId = isStory ? nil : refId
-        let storyReplyId = isStory ? refId : nil
-        let storyRef = isStory ? pendingRef : nil
+        let route = outgoingReplyRoute
+        let replyId = route.replyToId
+        let storyReplyId = route.storyReplyToId
+        let storyRef = route.storyReference
 
         let attachments = composerState.pendingAttachments
         let mediaFiles = composerState.pendingMediaFiles
@@ -176,7 +174,7 @@ extension ConversationView {
         let plan = MultiAttachmentSendPlanner.plan(
             attachments: attachments,
             text: text,
-            hasReply: refId != nil
+            hasReply: route.hasReply
         )
 
         // Popup consentement vocal (2026-07-08) : un envoi contenant de
