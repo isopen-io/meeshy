@@ -49,6 +49,8 @@ public struct MeeshyScenePlayer: View {
     /// fenêtre équilibrée qu'une garde de couture relit.
     private let startAt: Double
     private let servesLetterboxFill: Bool
+    /// Le pont du parcours au doigt (#7878) — descend tel quel à l'hôte canvas.
+    private let scrubber: ScenePlaybackScrubber?
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -77,6 +79,7 @@ public struct MeeshyScenePlayer: View {
                 isOutgoing: Bool = false,
                 startAt: Double = 0,
                 servesLetterboxFill: Bool = true,
+                scrubber: ScenePlaybackScrubber? = nil,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -94,6 +97,7 @@ public struct MeeshyScenePlayer: View {
         self.isOutgoing = isOutgoing
         self.startAt = startAt
         self.servesLetterboxFill = servesLetterboxFill
+        self.scrubber = scrubber
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -255,6 +259,7 @@ public struct MeeshyScenePlayer: View {
                                  // boucle, qui leur est propre.
                                  positionKey: ScenePlaybackPositions.key(
                                     carrierId: carrier?.id, sceneIndex: sceneIndex),
+                                 scrubber: scrubber,
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,

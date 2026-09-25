@@ -457,7 +457,10 @@ export default defineConfig({
               start_url: '/',
               scope: '/',
               display: 'standalone',
-              orientation: 'portrait',
+              /* #7877 — la PWA installée tourne comme les coques Android
+                 (aucun `screenOrientation`) et iOS (paysage déclaré, comme
+                 l'app iOS) : `portrait` y verrouillait vidéos, reels et appels. */
+              orientation: 'any',
               background_color: '#0b0c14',
               theme_color: '#0b0c14',
               icons: [

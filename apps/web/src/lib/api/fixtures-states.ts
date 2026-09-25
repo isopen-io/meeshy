@@ -280,8 +280,13 @@ const stStory = statesMessage({
 });
 
 /**
- * st-story-gone — la story a expiré (ou n'a plus de route) : `id: ''`, la
- * carte se rend quand même, INERTE (T12-vi, T13, loi 4).
+ * st-story-gone — la story a DISPARU sans instantané : la forme que la
+ * passerelle sert VRAIMENT dans ce cas (#7881) — `storyReplyToId` seul, AUCUN
+ * `postReplyTo` (« post supprimé sans snapshot → citation absente »,
+ * `enrichPostReplyMessagesForList`, `messages-list-query.ts`). L'ancienne
+ * forme (`postReplyTo.id: ''`) n'est produite par aucun chemin serveur :
+ * `normalizePostReplyTo` rejette un id vide. La carte se rend COMPACTE,
+ * INERTE, et dit « Story indisponible ».
  */
 const stStoryGoneCreatedAt = dayAt(0, 9, 16);
 const stStoryGone = statesMessage({
@@ -293,21 +298,6 @@ const stStoryGone = statesMessage({
   translations: [],
   createdAt: stStoryGoneCreatedAt,
   storyReplyToId: 'p-story-2',
-  metadata: {
-    postReplyTo: {
-      id: '',
-      type: 'STORY',
-      moodEmoji: null,
-      previewText: '',
-      thumbnailUrl: null,
-      reactionCount: 0,
-      commentCount: 0,
-      shareCount: 0,
-      createdAt: '',
-      authorId: null,
-      authorName: '',
-    },
-  },
 });
 
 /**

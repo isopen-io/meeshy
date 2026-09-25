@@ -2,9 +2,10 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { MediaUnavailable } from '@/components/media-unavailable';
+import { SceneScrubBar, type SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryPlaybackGroup } from '@/lib/stories/playback';
 
 /**
@@ -313,64 +314,81 @@ export function CloseButton({ onClose }: { readonly onClose: () => void }) {
  * progression devenait invisible, et le passé ne se distinguait plus du
  * présent (mesuré sur `story-light.png`, deux barres grises identiques).
  *
- * **LA FRACTION NE PASSE PAS PAR L'ÉTAT** — `fillRef` reçoit un
- * `transform: scaleX()` écrit à même le DOM à chaque image. Poser la
- * progression en `useState` re-rendait l'écran ENTIER soixante fois par
- * seconde (l'image, l'en-tête, la légende, la scène), pour animer trois
+ * **LA FRACTION NE PASSE PAS PAR L'ÉTAT** — le rempli reçoit un
+ * `transform: scaleX()` écrit à même le DOM à chaque image (`painterRef`).
+ * Poser la progression en `useState` re-rendait l'écran ENTIER soixante fois
+ * par seconde (l'image, l'en-tête, la légende, la scène), pour animer trois
  * pixels de haut ; iOS évite exactement cela (« évite de committer le
  * `@State` `progress` », granularité 1/300). `scaleX` plutôt que `width` :
  * la propriété n'apparaît dans AUCUN objet `style` rendu, donc aucun rendu
  * ne peut l'écraser, et l'animation reste sur le compositeur.
+ *
+ * **LE SEGMENT ACTIF SE PARCOURT AU DOIGT** (#7879) : il est un slider
+ * (`SceneScrubBar`, le même que la barre du réel à scène), qui s'agrandit
+ * sous le doigt et rend chaque temps pointé à l'hôte. Le conteneur n'est plus
+ * une `progressbar` — ses enfants y seraient présentationnels, et le slider
+ * disparaîtrait des lecteurs d'écran : c'est un `group` qui dit la position
+ * de la story dans la série.
  */
 export function ProgressBars({
   group,
   index,
   slideKey,
-  barRef,
-  fillRef,
+  durationSeconds,
+  language,
+  painterRef,
+  onScrubStart,
+  onScrub,
+  onScrubEnd,
 }: {
   readonly group: StoryPlaybackGroup;
   readonly index: number;
   readonly slideKey: string;
-  readonly barRef: { current: HTMLDivElement | null };
-  readonly fillRef: { current: HTMLSpanElement | null };
+  /** La durée de la diapositive — celle qui gouverne aussi son avance. */
+  readonly durationSeconds: number;
+  readonly language: InterfaceLanguage;
+  readonly painterRef: { current: SceneScrubPainter | null };
+  readonly onScrubStart: () => void;
+  readonly onScrub: (seconds: number) => void;
+  readonly onScrubEnd: (seconds: number) => void;
 }) {
   return (
-    <div
-      ref={barRef}
-      role="progressbar"
-      aria-label={`Story ${index + 1} sur ${group.stories.length}`}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={0}
-      className="flex"
-      style={{ gap: 3, height: 3 }}
-    >
-      {group.stories.map((story, i) => (
-        <span
-          key={story.id}
-          aria-hidden="true"
-          className="flex-1 overflow-hidden rounded-full"
-          style={{ background: 'rgba(255,255,255,0.2)' }}
-        >
-          {i === index ? (
-            <span
+    <div role="group" aria-label={`Story ${index + 1} sur ${group.stories.length}`} className="flex" style={{ gap: 3, height: 3 }}>
+      {group.stories.map((story, i) =>
+        i === index ? (
+          <span key={story.id} className="relative flex-1">
+            <SceneScrubBar
               key={slideKey}
-              ref={fillRef}
-              className="block size-full rounded-full"
-              style={{
-                transform: 'scaleX(0)',
-                transformOrigin: 'left center',
-                willChange: 'transform',
-                background:
-                  'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))',
-              }}
+              durationSeconds={durationSeconds}
+              language={language}
+              align="center"
+              fill={ACTIVE_SEGMENT_FILL}
+              rail={SEGMENT_RAIL}
+              painterRef={painterRef}
+              onScrubStart={onScrubStart}
+              onScrub={onScrub}
+              onScrubEnd={onScrubEnd}
+              className="inset-x-0"
+              style={{ top: '50%', marginTop: -22 }}
             />
-          ) : (
+          </span>
+        ) : (
+          <span
+            key={story.id}
+            aria-hidden="true"
+            className="flex-1 overflow-hidden rounded-full"
+            style={{ background: SEGMENT_RAIL }}
+          >
             <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
-          )}
-        </span>
-      ))}
+          </span>
+        ),
+      )}
     </div>
   );
 }
+
+/** La piste d'un segment — blanc 20 %, la même pour le segment courant. */
+const SEGMENT_RAIL = 'rgba(255,255,255,0.2)';
+
+/** Le dégradé du segment COURANT (`indigo500 → error → indigo400`). */
+const ACTIVE_SEGMENT_FILL = 'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))';

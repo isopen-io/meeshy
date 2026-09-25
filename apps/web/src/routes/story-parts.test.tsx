@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { StoryMediaLayer } from './story-parts';
+import type { StoryPlaybackGroup } from '@/lib/stories/playback';
+
+import { ProgressBars, StoryMediaLayer } from './story-parts';
 
 /**
  * `StoryMediaLayer` — UNE STORY VIDÉO SE JOUE (#6801, découpe de #6276).
@@ -113,5 +115,48 @@ describe('StoryMediaLayer — le type du média élit l’élément', () => {
 
     expect(html).toContain('Bonjour');
     expect(html).toContain('lang="fr"');
+  });
+});
+
+/**
+ * LE SEGMENT ACTIF SE PARCOURT AU DOIGT (#7879) — il devient un slider, et
+ * lui SEUL : les segments passés et à venir restent des capsules de lecture.
+ */
+describe('ProgressBars — le segment actif est un slider (#7879)', () => {
+  const group: StoryPlaybackGroup = {
+    authorId: 'u-1',
+    author: undefined,
+    stories: [
+      { id: 'a', createdAt: '2026-09-25T10:00:00Z' },
+      { id: 'b', createdAt: '2026-09-25T10:01:00Z' },
+      { id: 'c', createdAt: '2026-09-25T10:02:00Z' },
+    ],
+    isMine: false,
+    hasUnseen: true,
+    latestAt: 0,
+  };
+  const html = renderToStaticMarkup(
+    <ProgressBars
+      group={group}
+      index={1}
+      slideKey="b"
+      durationSeconds={6}
+      language="fr"
+      painterRef={{ current: null }}
+      onScrubStart={() => undefined}
+      onScrub={() => undefined}
+      onScrubEnd={() => undefined}
+    />,
+  );
+
+  test('UN seul slider, centré dans sa zone, et plus aucune progressbar qui l’avalerait', () => {
+    expect(html.match(/role="slider"/g) ?? []).toHaveLength(1);
+    expect(html).toContain('data-align="center"');
+    expect(html).not.toContain('role="progressbar"');
+  });
+
+  test('le groupe garde son nom — la position de la story dans la série', () => {
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="Story 2 sur 3"');
   });
 });

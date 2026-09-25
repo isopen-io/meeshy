@@ -7,6 +7,7 @@ import type { BackgroundTrack } from '@/lib/canvas/background-sound';
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 
 import { BackgroundTrackAudio, defaultMediaDeps } from './background-track-audio';
+import type { SceneClockHandle } from './scene-clock';
 
 /**
  * T5 (#6903) — `BackgroundTrackAudio`, SITE UNIQUE du son de fond d'une
@@ -396,5 +397,57 @@ describe('BackgroundTrackAudio — la piste PROTÉGÉE (#7015)', () => {
     // balise du tout.
     expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
     expect(playCalls).toBe(0);
+  });
+});
+
+/** Une horloge de scène RÉDUITE à ce que la piste écoute : les seeks (#7879). */
+function seekOnlyClock(): { readonly clock: SceneClockHandle; readonly seek: (t: number) => void } {
+  const listeners = new Set<(t: number) => void>();
+  const seek = (t: number) => act(() => listeners.forEach((listener) => listener(t)));
+  const clock: SceneClockHandle = {
+    subscribe: () => () => undefined,
+    subscribeSeek: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    seek,
+    now: () => 0,
+    isDriving: () => false,
+  };
+  return { clock, seek };
+}
+
+describe('BackgroundTrackAudio — le parcours au doigt (#7879)', () => {
+  test('un seek cale la piste dans sa fenêtre, depuis son départ différé', () => {
+    const { clock, seek } = seekOnlyClock();
+    const track = trackOf({ startOffsetMs: 1000, loop: true, bounds: { startMs: 2000, endMs: 6000 } });
+    const el = mount(<BackgroundTrackAudio track={track} playing={false} muted={false} clock={clock} onDurationKnown={() => {}} onPlaybackBlocked={() => {}} />);
+    const audio = audioOf(el);
+    Object.defineProperty(audio, 'duration', { value: 10, configurable: true });
+    seek(3);
+    expect(audio.currentTime).toBeCloseTo(4, 5);
+  });
+
+  test('pointer AVANT le départ différé ramène la piste au début de sa fenêtre', () => {
+    const { clock, seek } = seekOnlyClock();
+    const track = trackOf({ startOffsetMs: 2000, loop: true, bounds: { startMs: 2000, endMs: 6000 } });
+    const el = mount(<BackgroundTrackAudio track={track} playing={false} muted={false} clock={clock} onDurationKnown={() => {}} onPlaybackBlocked={() => {}} />);
+    const audio = audioOf(el);
+    Object.defineProperty(audio, 'duration', { value: 10, configurable: true });
+    audio.currentTime = 5;
+    seek(1);
+    expect(audio.currentTime).toBeCloseTo(2, 5);
+  });
+
+  test('pointer APRÈS le départ différé : la reprise joue TOUT DE SUITE, sans rejouer le délai', () => {
+    const { clock, seek } = seekOnlyClock();
+    const track = trackOf({ startOffsetMs: 2000, loop: true, bounds: { startMs: 2000, endMs: 6000 } });
+    const el = mount(<BackgroundTrackAudio track={track} playing={false} muted={false} clock={clock} onDurationKnown={() => {}} onPlaybackBlocked={() => {}} />);
+    Object.defineProperty(audioOf(el), 'duration', { value: 10, configurable: true });
+    seek(3);
+    act(() => {
+      root.render(<BackgroundTrackAudio track={track} playing muted={false} clock={clock} onDurationKnown={() => {}} onPlaybackBlocked={() => {}} />);
+    });
+    expect(playCalls).toBe(1);
   });
 });

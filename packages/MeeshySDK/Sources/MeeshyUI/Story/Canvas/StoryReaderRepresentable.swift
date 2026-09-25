@@ -123,6 +123,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// reste le fil d'une CHROME (le mode `.card` continue de ne pas le payer).
     let positionKey: String?
 
+    /// **Le pont du parcours au doigt** (#7878), `nil` pour les surfaces qui ne
+    /// se parcourent pas. Le canvas monté s'y attache ; la barre de l'hôte le
+    /// pilote sans passer par une ré-évaluation SwiftUI.
+    public internal(set) var scrubber: ScenePlaybackScrubber?
+
     /// **Le seuil au-delà duquel une position REÇUE recale la lecture.**
     ///
     /// Une valeur DÉCLARÉE, pas un hasard : la position d'ouverture arrive de
@@ -180,6 +185,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 startAt: Double = 0,
                 servesLetterboxFill: Bool = true,
                 positionKey: String? = nil,
+                scrubber: ScenePlaybackScrubber? = nil,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
@@ -201,6 +207,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.startAt = startAt
         self.servesLetterboxFill = servesLetterboxFill
         self.positionKey = positionKey
+        self.scrubber = scrubber
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -313,6 +320,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // début de sa fenêtre — c'est le retour à zéro que #6580 corrige.
         view.seedPlayhead(startAt)
         context.coordinator.seededStartAt = startAt
+        scrubber?.attach(view)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -370,6 +378,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // `setPaused` est idempotent côté canvas. Pour outgoing, le canvas est
         // en `.edit` donc `setPaused` est no-op (gate `guard mode == .play`)
         // — mais on l'appelle quand même pour préserver le contrat idempotent.
+        // Un glissé en cours tient la scène en pause : un rendu de l'hôte
+        // pendant le geste ne doit pas la relancer sous le doigt (#7878).
+        scrubber?.hostPaused = isPaused || isOutgoing
+        guard scrubber?.isScrubbing != true else {
+            view.setPaused(true)
+            return
+        }
         view.setPaused(isPaused || isOutgoing)
     }
 }
