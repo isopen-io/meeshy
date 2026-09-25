@@ -21,7 +21,7 @@ nonisolated enum FocalNonMediaGate {
 // MARK: - FocalNonMediaBlock (LOT 3.2, rendu réel — 2026-08-18)
 
 /// Bloc « lieu / fichier » NU de la rangée plate — retrait
-/// sous l'avatar (`FocalMetrics.Row.contentIndent`), aucune bulle, aucune capsule.
+/// à la colonne du nom (`FocalMetrics.Row.contentIndent`), aucune bulle, aucune capsule.
 ///
 /// **LOT 3.2 (matrice §5 « Focal Grandeur Nature »)** : remplace le repli
 /// texte inerte du correctif « rangée vide » (2026-08-17) par le rendu RÉEL,

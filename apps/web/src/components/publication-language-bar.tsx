@@ -85,7 +85,7 @@ export function PublicationLanguageBar({ languages, active, language, onSelect, 
       }}
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
-      className="pointer-events-auto flex items-center gap-2 rounded-pill px-2 py-1.5"
+      className="pointer-events-auto flex items-center gap-2 rounded-full px-2 py-1.5"
       style={{
         background: QUICK_STRIP_CHROME,
         border: '1px solid rgba(255,255,255,0.12)',

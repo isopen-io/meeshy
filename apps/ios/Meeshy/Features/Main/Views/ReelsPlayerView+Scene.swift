@@ -193,7 +193,7 @@ struct ReelSceneView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
             .onReceive(
-                CallManager.shared.$callState
+                CallManagerHost.shared.callStatePublisher
                     .map(\.isActive)
                     .removeDuplicates()
                     .receive(on: DispatchQueue.main)

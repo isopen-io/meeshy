@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// **Les emojis rapides de l'emplacement d'action** (#7931, #7985).
 ///
@@ -46,4 +47,20 @@ nonisolated enum ComposerSlotMotion {
     static let response: Double = 0.3
     static let damping: Double = 0.86
     static let sendBounceScale: CGFloat = 1.08
+}
+
+/// **La rangée qui ARRIVE ignore les appuis pendant une demi-seconde** (#7985).
+///
+/// Elle revient à l'emplacement même du bouton d'envoi, 0,2 s après son appui :
+/// le second appui d'un double appui sur « Envoyer » tombait sur l'emoji revenu
+/// sous le doigt et l'envoyait. Même fenêtre que le web (`composer.tsx`). Ce
+/// n'est pas un dédoublonnage : des appuis en série sur une rangée déjà là
+/// partent tous.
+nonisolated enum QuickEmojiArrivalGuard {
+    static let window: TimeInterval = 0.5
+
+    static func acceptsTap(arrivedAt: Date?, now: Date) -> Bool {
+        guard let arrivedAt else { return true }
+        return now.timeIntervalSince(arrivedAt) >= window
+    }
 }

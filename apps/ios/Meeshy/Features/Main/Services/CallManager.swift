@@ -129,7 +129,7 @@ final class CallManager: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    static let shared = CallManager()
+    static let shared = CallManagerHost.shared.adopt(CallManager())
 
     // MARK: - Published State
 
@@ -424,7 +424,17 @@ final class CallManager: ObservableObject {
 
     // MARK: - Internal
 
-    private let webRTCService: WebRTCService
+    /// Construit au premier appel, jamais avec `CallManager` (#7955) : le client
+    /// WebRTC et sa chaîne de filtres (Vision + Metal) n'ont rien à faire en
+    /// mémoire tant qu'aucun appel n'a commencé.
+    private var builtWebRTCService: WebRTCService?
+    private var webRTCService: WebRTCService {
+        if let builtWebRTCService { return builtWebRTCService }
+        let service = WebRTCService()
+        service.delegate = self
+        builtWebRTCService = service
+        return service
+    }
     /// Drives the graceful audio-only survival layer from quality samples.
     private let videoSurvivalController: VideoSurvivalController
     private let ringbackPlayer = RingbackTonePlayer()
@@ -741,8 +751,7 @@ final class CallManager: ObservableObject {
     // before mutating shared state — see the action.callUUID guards in that class.
     fileprivate var activeCallUUID: UUID?
 
-    private init(webRTCService: WebRTCService? = nil) {
-        self.webRTCService = webRTCService ?? WebRTCService()
+    private init() {
         // Survival controller is created with no actuator yet; `attach(self)` wires
         // it below once `self` is fully initialized (avoids a self-before-init use).
         self.videoSurvivalController = VideoSurvivalController()
@@ -791,8 +800,6 @@ final class CallManager: ObservableObject {
         callProvider.setDelegate(delegateProxy, queue: nil)
         self.callKitDelegate = delegateProxy
 
-        self.webRTCService.delegate = self
-
         // Wire the survival controller now that `self` exists. The controller holds
         // the actuator weakly, so no retain cycle (CallManager owns the controller).
         self.videoSurvivalController.attach(actuator: self)
@@ -809,7 +816,7 @@ final class CallManager: ObservableObject {
                 // d'appel) épingle l'encodeur au plancher pour tout le reste de
                 // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
                 // en amont ne laisse donc passer que les vraies transitions.
-                if !suspended { self.webRTCService.unfreezeVideoAfterSurvival() }
+                if !suspended { self.builtWebRTCService?.unfreezeVideoAfterSurvival() }
             }
             .store(in: &cancellables)
 
@@ -2422,7 +2429,8 @@ final class CallManager: ObservableObject {
     // MARK: - System Picture-in-Picture
 
     #if canImport(WebRTC)
-    private let pip: PiPCallProviding = PiPCallController.shared
+    /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
+    private lazy var pip: PiPCallProviding = PiPCallController.shared
     #else
     private let pip: PiPCallProviding = NoOpPiPController()
     #endif
@@ -4658,36 +4666,7 @@ final class CallManager: ObservableObject {
 
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                let myUserId = AuthManager.shared.currentUser?.id
-                guard event.initiator.userId != myUserId else { return }
-                guard self.currentCallId != event.callId else { return }
-                // `mode` est l'architecture WebRTC ('p2p' | 'sfu'), PAS le
-                // type média. Le type média est dans `type` ('audio' | 'video').
-                // Avant le fix gateway, `mode` était lu et valait toujours 'p2p'
-                // → isVideo == false même pour les appels vidéo.
-                // On lit maintenant `type`. Si absent (anciens builds gateway),
-                // on retombe sur `mode == "video"` pour compat ascendante.
-                let isVideo: Bool
-                if let typeValue = event.type {
-                    isVideo = typeValue == "video"
-                } else {
-                    isVideo = event.mode == "video"
-                }
-                let callerName = event.initiator.displayName ?? event.initiator.username
-                let dynamicIceServers = event.iceServers?.map { server in
-                    IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
-                }
-                self.handleIncomingCallNotification(
-                    callId: event.callId,
-                    fromUserId: event.initiator.userId,
-                    fromUsername: callerName,
-                    isVideo: isVideo,
-                    iceServers: dynamicIceServers,
-                    conversationId: event.conversationId
-                )
-            }
+            .sink { [weak self] event in self?.handleCallOffer(event) }
             .store(in: &cancellables)
 
         socket.callTranslatedSegmentReceived

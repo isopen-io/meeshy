@@ -3,28 +3,31 @@ import SwiftUI
 import MeeshySDK
 @testable import Meeshy
 
-/// **En Script et en Focal, le CONTENU PROPRE d'un message s'aligne sous
-/// l'AVATAR ; seules les CITATIONS se décalent, toutes du même retrait**
-/// (directive porteur 2026-09-25, #7928).
+/// **En Script et en Focal, l'avatar occupe SEUL sa marge gauche ; le nom, le
+/// CONTENU PROPRE et TOUTES les citations partent de la MÊME origine : la
+/// colonne du nom** (directive porteur 2026-09-26, #7995 : « texte aligné au
+/// niveau des citations toujours, permettant de distinguer avatar et auteur
+/// puis son contenu ; la citation est déjà identifiable avec la barre puis le
+/// fond teinté »).
 ///
-/// La capture iPhone montrait l'inverse : la carte d'une story citée collée au
-/// bord de l'avatar, et le texte qu'elle introduit parti 41 pt plus loin.
-/// Chaque section de `FocalRow` posait son propre retrait — 0 pour la carte,
-/// 29 pour la citation de message, 29 pour les médias, 41 pour le texte — et
-/// aucune garde de source ne pouvait le voir : chaque section était MONTÉE,
-/// au bon endroit de la pile.
+/// Supplante la règle du 2026-09-25 (#7928 : « le contenu part sous l'avatar,
+/// seules les citations sont décalées »), que ce témoin gardait jusque-là :
+/// texte au bord de l'avatar, citations 29 pt plus loin. Le porteur a vu les
+/// deux côte à côte et retenu celle du web : une seule colonne de lecture,
+/// l'avatar hors d'elle.
 ///
 /// ## Pourquoi un rendu, et pas une relecture
 ///
 /// Le témoin MESURE : il rend la rangée réelle en image et cherche la
 /// première colonne de pixels encrée. Une rangée HORS tête de groupe
 /// (`isFirstInGroup: false`) n'a ni avatar ni nom : la seule chose qui encre
-/// sa gauche est la section qu'on veut mesurer. Deux lois, deux mesures :
+/// sa gauche est la section qu'on veut mesurer. Trois lois, trois mesures :
 ///
-/// - le texte seul commence au bord de l'avatar (`Row.contentIndent`) ;
+/// - le texte seul et le média seul commencent à la colonne du nom ;
 /// - une citation seule — message, humeur, vocal, image, story, story
-///   disparue — commence au retrait de citation (`Quote.indent`), le MÊME
-///   pour tous les types.
+///   disparue — commence à la MÊME colonne, sans retrait propre ;
+/// - en tête de groupe, rien n'encre la gouttière entre l'avatar et le nom,
+///   et sous l'avatar tout commence à la colonne du nom.
 @MainActor
 final class FocalRowColumnAlignmentTests: XCTestCase {
 
@@ -60,13 +63,17 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
         )
     }
 
-    private func row(_ content: BubbleContent, density: FocalRowInput.Density) -> some View {
+    /// La colonne du nom, en points depuis le bord de la rangée : la marge,
+    /// la pastille, la gouttière de l'en-tête (`Text.indent` = 22 + 7).
+    private static let nameColumn = FocalMetrics.Row.paddingHorizontal + FocalMetrics.Text.indent
+
+    private func row(_ content: BubbleContent, density: FocalRowInput.Density, isFirstInGroup: Bool = false) -> some View {
         FocalRow(
             input: FocalRowInput(
                 localId: "m1", serverId: "s1", content: content, density: density,
-                isFirstInGroup: false, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
+                isFirstInGroup: isFirstInGroup, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
                 senderAvatarURL: nil, senderThumbHash: nil, senderColorHex: "#31B6BA",
-                senderPresence: .online, senderStoryRing: .none, senderMoodEmoji: nil,
+                senderPresence: .offline, senderStoryRing: .none, senderMoodEmoji: nil,
                 accentHex: "#31B6BA", isDark: false, isDirect: true, isRightToLeft: false,
                 isOptimistic: false, isAgentAuthored: false, showsAgentGrammar: false,
                 highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: (nil, nil),
@@ -150,14 +157,13 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
         return Ink(pixels: pixels, width: width, height: height)
     }
 
-    // MARK: - Le contenu propre, sous l'avatar
+    // MARK: - Le contenu propre, sur la colonne du nom
 
-    func test_theMessageText_startsOnTheAvatarEdge() throws {
-        let avatarEdge = FocalMetrics.Row.paddingHorizontal + FocalMetrics.Row.contentIndent
+    func test_theMessageText_startsOnTheNameColumn() throws {
         for density in [FocalRowInput.Density.script, .focal] {
             let x = try leftmostInk(of: row(content(text: "Le texte du message"), density: density))
-            XCTAssertEqual(x, avatarEdge, accuracy: 2,
-                           "le texte (\(density)) doit commencer au bord de l'avatar, pas à x=\(x)")
+            XCTAssertEqual(x, Self.nameColumn, accuracy: 2,
+                           "le texte (\(density)) doit commencer à la colonne du nom (\(Self.nameColumn)), pas à x=\(x)")
         }
     }
 
@@ -165,16 +171,39 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
     /// partaient 11 pt à GAUCHE de l'avatar. La grille gardait sa largeur fixe
     /// de 300 pt alors que la colonne de contenu, amputée de la colonne de
     /// l'heure, n'en offre que 278 : la rangée débordait et SwiftUI la
-    /// recentrait.
-    func test_aMediaGrid_startsOnTheAvatarEdge_withinTheRealRowWidth() throws {
-        let avatarEdge = FocalMetrics.Row.paddingHorizontal + FocalMetrics.Row.contentIndent
+    /// recentrait. La grille se borne à la colonne de contenu RÉELLE, qui part
+    /// désormais de la colonne du nom (#7995).
+    func test_aMediaGrid_startsOnTheNameColumn_withinTheRealRowWidth() throws {
         for count in [1, 2] {
             let items = (0..<count).map { image(id: "i\($0)") }
             for density in [FocalRowInput.Density.script, .focal] {
                 let x = try leftmostInk(of: row(content(text: nil, attachments: .visualGrid(items)), density: density))
-                XCTAssertEqual(x, avatarEdge, accuracy: 2,
-                               "\(count) média(s) (\(density)) commence(nt) à x=\(x) — le média part sous l'avatar, comme le texte.")
+                XCTAssertEqual(x, Self.nameColumn, accuracy: 2,
+                               "\(count) média(s) (\(density)) commence(nt) à x=\(x) — le média part de la colonne du nom, comme le texte.")
             }
+        }
+    }
+
+    // MARK: - L'avatar, seul dans sa marge
+
+    /// En tête de groupe : la pastille encre sa marge, puis la GOUTTIÈRE qui
+    /// la sépare du nom reste blanche sur toute la hauteur de la rangée — ni
+    /// le texte, ni la citation ne s'y glissent sous l'avatar — et, sous
+    /// l'avatar, tout commence à la colonne du nom.
+    func test_theAvatarAloneOccupiesItsMargin_andEverythingElseStartsOnTheNameColumn() throws {
+        let avatarStart = Int(FocalMetrics.Row.paddingHorizontal)
+        let avatarEnd = avatarStart + Int(FocalMetrics.Avatar.size)
+        let gutter = (avatarEnd + 1)..<(Int(Self.nameColumn) - 1)
+        let message = content(text: "Le texte du message", reply: Self.quotedMessage)
+        for density in [FocalRowInput.Density.script, .focal] {
+            let ink = try render(row(message, density: density, isFirstInGroup: true))
+            let avatarRows = (0..<ink.height).filter { y in (avatarStart..<avatarEnd).contains { ink.isInked(x: $0, y: y) } }
+            let avatarBottom = try XCTUnwrap(avatarRows.last, "(\(density)) aucune pastille rendue en tête de groupe")
+            XCTAssertFalse(ink.hasInk(columns: gutter),
+                           "(\(density)) la gouttière entre l'avatar et le nom est encrée : le contenu passe sous l'avatar.")
+            let below = try XCTUnwrap(ink.leftmostColumn(in: (avatarBottom + 1)..<ink.height), "(\(density)) rien sous l'avatar")
+            XCTAssertEqual(CGFloat(below), Self.nameColumn, accuracy: 1,
+                           "(\(density)) sous l'avatar, la citation et le texte commencent à x=\(below), pas à la colonne du nom.")
         }
     }
 
@@ -256,15 +285,14 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
             .max() ?? 0
     }
 
-    // MARK: - Les citations, toutes au même retrait
+    // MARK: - Les citations, à l'origine du contenu
 
-    func test_everyCitation_startsOnTheCitationIndent_inScriptAndFocal() throws {
-        let citationEdge = FocalMetrics.Row.paddingHorizontal + FocalMetrics.Quote.indent
+    func test_everyCitation_startsOnTheNameColumn_inScriptAndFocal() throws {
         for density in [FocalRowInput.Density.script, .focal] {
             for (label, reference) in Self.citations {
                 let x = try leftmostInk(of: row(content(text: nil, reply: reference), density: density))
-                XCTAssertEqual(x, citationEdge, accuracy: 1,
-                               "\(label) (\(density)) commence à x=\(x) — toute citation prend le retrait de citation.")
+                XCTAssertEqual(x, Self.nameColumn, accuracy: 1,
+                               "\(label) (\(density)) commence à x=\(x) — une citation part de la colonne du nom, comme le texte : aucun retrait propre.")
             }
         }
     }
@@ -274,18 +302,19 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
     /// mais SANS filet : collée au retrait, elle encrait les colonnes où la
     /// citation de message laisse le blanc entre son filet et son texte.
     ///
-    /// Mesure : un filet encré sur `Quote.railWidth` colonnes au retrait de
-    /// citation, puis une bande BLANCHE sur la hauteur de la citation, puis la
-    /// carte, qui garde sa largeur de 132 pt.
+    /// Mesure : un filet encré sur `Quote.railWidth` colonnes à la colonne du
+    /// nom, puis une bande BLANCHE sur la hauteur de la citation, puis la
+    /// carte, qui garde sa largeur de 132 pt. C'est ce filet — et le fond
+    /// teinté — qui distingue une citation depuis #7995, plus aucun retrait.
     func test_everyCitation_carriesTheSameRail_inScriptAndFocal() throws {
-        let edge = Int(FocalMetrics.Row.paddingHorizontal + FocalMetrics.Quote.indent)
+        let edge = Int(Self.nameColumn)
         let rail = edge..<(edge + Int(FocalMetrics.Quote.railWidth.rounded(.down)))
         let gap = (edge + Int(FocalMetrics.Quote.railWidth.rounded(.up)) + 1)..<(edge + Int(FocalMetrics.Quote.railWidth) + Int(FocalQuoteRail.spacing) - 1)
         let quotes = [Self.citations[0], Self.citations[5], Self.citations[6]]
         for density in [FocalRowInput.Density.script, .focal] {
             for (label, reference) in quotes {
                 let ink = try render(row(content(text: nil, reply: reference), density: density))
-                XCTAssertTrue(ink.hasInk(columns: rail), "\(label) (\(density)) n'a pas de filet au retrait de citation.")
+                XCTAssertTrue(ink.hasInk(columns: rail), "\(label) (\(density)) n'a pas de filet à la colonne du nom.")
                 XCTAssertFalse(ink.hasInk(columns: gap),
                                "\(label) (\(density)) encre l'écart entre le filet et son contenu : la barre manque ou n'est pas celle de « Vous : … ».")
             }
@@ -324,23 +353,24 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
     }
 
     /// Mesuré sur le rendu : la PREMIÈRE chose encrée de la rangée est la
-    /// citation, posée au retrait de citation, au-dessus du média.
-    func test_aMediaOnlyReply_drawsItsQuoteAboveTheMedia_onTheCitationIndent() throws {
-        let citationEdge = Int(FocalMetrics.Row.paddingHorizontal + FocalMetrics.Quote.indent)
+    /// citation, posée à la colonne du nom, au-dessus du média.
+    func test_aMediaOnlyReply_drawsItsQuoteAboveTheMedia_onTheNameColumn() throws {
         let media = content(text: nil, reply: Self.quotedMessage, attachments: .visualGrid([image()]))
         for density in [FocalRowInput.Density.script, .focal] {
             let ink = try render(row(media, density: density))
             let top = try XCTUnwrap(ink.firstInkedRow, "la rangée n'a rien rendu")
             let x = try XCTUnwrap(ink.leftmostColumn(in: top..<min(top + 4, ink.height)))
-            XCTAssertEqual(x, citationEdge, accuracy: 1,
-                           "(\(density)) le haut de la rangée commence à x=\(x) : la citation doit coiffer le média, au retrait de citation.")
+            XCTAssertEqual(CGFloat(x), Self.nameColumn, accuracy: 1,
+                           "(\(density)) le haut de la rangée commence à x=\(x) : la citation doit coiffer le média, à la colonne du nom.")
         }
     }
 
-    /// Le fusible : les deux lois ne se confondent pas. Si les deux cotes
-    /// étaient égales, le témoin des citations ne distinguerait plus une
-    /// citation d'un contenu propre.
-    func test_theCitationIndent_isDistinctFromTheContentIndent() {
-        XCTAssertGreaterThan(FocalMetrics.Quote.indent, FocalMetrics.Row.contentIndent)
+    /// UNE origine, pas deux cotes qui coïncident : le contenu et la citation
+    /// lisent la même, et c'est la colonne du nom — la pastille plus la
+    /// gouttière de l'en-tête. Si une cote de citation revenait, elle
+    /// rouvrirait la porte au retrait que #7995 a retiré.
+    func test_theContentOrigin_isTheNameColumn() {
+        XCTAssertEqual(FocalMetrics.Row.contentIndent, FocalMetrics.Text.indent)
+        XCTAssertGreaterThan(FocalMetrics.Row.contentIndent, FocalMetrics.Avatar.size)
     }
 }

@@ -285,6 +285,35 @@ final class StarredMessagesStoreTests: XCTestCase {
         XCTAssertFalse(sut.isStarred(messageId: "m-del"))
     }
 
+    /// #7960 — un éphémère échu conversation FERMÉE quitte les favoris : son
+    /// instantané gardait le texte que l'expiration vient de détruire.
+    @MainActor
+    func test_follow_starredMessageExpiredWhileClosed_leavesTheFavorites() async throws {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "m-exp"))
+
+        await StarredMessagesStore.follow(
+            .expired(messageId: "m-exp", expiredAt: Date()), persistence: try makePersistence(), store: sut,
+            conversationLookup: Self.noConversation
+        )
+
+        XCTAssertFalse(sut.isStarred(messageId: "m-exp"))
+    }
+
+    /// #7969 — le retrait d'une story citée ne touche aucun favori.
+    @MainActor
+    func test_follow_citedPostWithdrawn_keepsTheFavorites() async throws {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "m-cite"))
+
+        await StarredMessagesStore.follow(
+            .citedPostWithdrawn(postId: "post-1", conversationId: "conv", deletedAt: Date()),
+            persistence: try makePersistence(), store: sut, conversationLookup: Self.noConversation
+        )
+
+        XCTAssertTrue(sut.isStarred(messageId: "m-cite"))
+    }
+
     @MainActor
     func test_follow_starredMessageEditedWhileClosed_updatesThePreview() async throws {
         let sut = makeSUT()
