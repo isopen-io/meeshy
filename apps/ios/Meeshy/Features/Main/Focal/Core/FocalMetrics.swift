@@ -295,6 +295,26 @@ nonisolated public enum FocalMetrics {
         /// entièrement au-dessus le 2026-08-24 ; l'utilisateur l'a voulue de
         /// nouveau EN BORDURE le même jour.
         public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
+
+        /// **Ce dont le contenu d'une SUITE de groupe magnifiée descend sous sa
+        /// pastille d'identité** (#7953) — en RENDU seulement (`offset`), jamais
+        /// en hauteur : la rangée garde sa taille au basculement d'élection.
+        ///
+        /// Une tête de groupe loge la moitié basse de la pastille dans son
+        /// en-tête, effacé en focus mais toujours réservé ; une suite n'a rien
+        /// sous la ligne haute de sa carte, et la pastille y mangeait la
+        /// première ligne du message. Son contenu descend donc de ce que la
+        /// pastille mord sous la ligne, plus la marge d'une rangée.
+        public static func contentLift(isFirstInGroup: Bool) -> CGFloat {
+            guard !isFirstInGroup else { return 0 }
+            return identityChipHeight - identityOverhang + FocalMetrics.Row.paddingVertical
+        }
+
+        /// **Ce dont la carte magnifiée s'allonge sous son contenu** (#7953),
+        /// pour que la bande basse, centrée sur la ligne basse de la carte, ne
+        /// morde pas la dernière ligne du message. Rendu seul, comme
+        /// `contentLift`.
+        public static let stripDrop: CGFloat = chipHeight - overhang + FocalMetrics.Row.paddingVertical
     }
 
     nonisolated public enum HiddenChrome {

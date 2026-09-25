@@ -149,9 +149,13 @@ final class FocalRichBlockEquatableTests: XCTestCase {
     /// abandonné par cet arbitrage).
     func test_focalQuotedReplyView_railWidth_comesFromFocalMetricsQuote_neverALiteral() throws {
         let stripped = AppSourceGuard.stripComments(try source("FocalQuotedReplyView.swift"))
+        // #7881 : le filet est LE filet de toutes les citations de la rangée
+        // plate (`FocalQuoteRail`), que la carte de story porte aussi.
+        let rail = AppSourceGuard.stripComments(try source("FocalQuoteRail.swift"))
+        XCTAssertTrue(stripped.contains("FocalQuoteRail("), "FocalQuotedReplyView.swift doit monter le filet partagé")
         XCTAssertTrue(
-            stripped.contains("FocalMetrics.Quote.railWidth"),
-            "FocalQuotedReplyView.swift doit poser son filet via FocalMetrics.Quote.railWidth"
+            rail.contains("FocalMetrics.Quote.railWidth"),
+            "FocalQuoteRail.swift doit poser son filet via FocalMetrics.Quote.railWidth"
         )
         XCTAssertFalse(stripped.contains("frame(width: 4)"), "l'ancien filet 4pt de BubbleQuotedReply ne doit plus apparaître")
         XCTAssertFalse(stripped.contains("BubbleQuotedReply("), "FocalQuotedReplyView ne doit plus INSTANCIER BubbleQuotedReply (chrome natif désormais)")

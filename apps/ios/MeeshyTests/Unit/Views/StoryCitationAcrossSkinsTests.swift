@@ -102,15 +102,19 @@ final class StoryCitationAcrossSkinsTests: XCTestCase {
     /// **Le témoin qui portait le défaut.** Avant #5059, seule la bulle
     /// apparaissait dans cette liste ; les deux autres rendaient l'aperçu plat.
     func test_lesTroisPeaux_montentLaCarteDeScene() throws {
+        // La rangée plate monte la carte AVEC son filet de citation (#7881) :
+        // `FocalStoryCitationQuote` enveloppe `BubbleStoryCitationCard`.
         let peaux = [
-            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalRow.swift",
-            "Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift"
+            ("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift", "BubbleStoryCitationCard("),
+            ("Meeshy/Features/Main/Focal/Row/FocalRow.swift", "FocalStoryCitationQuote("),
+            ("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift", "BubbleStoryCitationCard(")
         ]
-        for peau in peaux {
+        let enveloppe = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Focal/Row/FocalQuoteRail.swift"))
+        XCTAssertTrue(enveloppe.contains("BubbleStoryCitationCard("), "l'enveloppe de la rangée plate doit monter la carte de scène")
+        for (peau, montage) in peaux {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
             XCTAssertTrue(
-                code.contains("BubbleStoryCitationCard("),
+                code.contains(montage),
                 "\(peau) doit monter la carte de scène : sans elle, une story citée s'y rend "
                     + "APLATIE — le mot exact de la doctrine de la vue `3h`."
             )
