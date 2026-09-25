@@ -11,7 +11,7 @@ import { adminUserMediaQueryOptions } from '@/lib/api/admin-user-media';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useSnapCarousel } from '@/lib/view/use-snap-carousel';
 
 import { AdminAbsence, AdminSkeleton } from './admin-parts';
@@ -83,6 +83,8 @@ export function AdminUserImageCarousel({
   const { current: courante, trackRef: bande, step, trackHandlers } = useSnapCarousel<HTMLUListElement>(images.length);
   const titre = translateAdmin(language, 'admin.carousel.title');
 
+  const photo = participantAvatarOf(membre);
+
   return (
     <section aria-labelledby="admin-carousel-title" className="grid gap-2" data-admin-carousel>
       <h2 id="admin-carousel-title" className="ps-1 text-caption font-semibold" style={{ color: INK2 }}>
@@ -99,7 +101,13 @@ export function AdminUserImageCarousel({
           style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
           data-admin-carousel-empty
         >
-          <Avatar initials={initialsOf(membre.displayName)} color={BRAND} size={44} name={membre.displayName} />
+          <Avatar
+            initials={initialsOf(membre.displayName)}
+            color={BRAND}
+            size={44}
+            name={membre.displayName}
+            {...(photo === undefined ? {} : { src: photo })}
+          />
           <p className="text-caption" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.carousel.empty')}
           </p>

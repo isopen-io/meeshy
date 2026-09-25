@@ -358,8 +358,13 @@ async function main() {
          et le clavier passe de l'un à l'autre par les flèches d'un tablist. */
       await ouvrirOnglet(page, 'conversations');
       await attendre(() => present(page, '[data-admin-section="conversations"]'));
+      /* La section se monte AVANT que sa page de conversations ne réponde :
+         constater la ligne à l'instant où le panneau apparaît mesurait la
+         course entre le montage et la requête, pas la présence des lignes
+         (rouge en CI sur 0a29096f, vert en local). On ATTEND donc la ligne,
+         avec le même délai que tout le reste du script. */
       check(
-        await present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`),
+        await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`)),
         'l’onglet Conversations porte ses lignes',
       );
       check(new URL(page.url()).searchParams.get('tab') === 'conversations', 'l’onglet choisi s’écrit dans l’adresse (?tab=conversations)');
