@@ -262,7 +262,7 @@ struct StoryViewerView: View {
     // must capture them here and re-inject onto SharePickerView (see line
     // ~257) to avoid the `EnvironmentObject error` crash that previously
     // happened the moment a user tapped the share button on a story.
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -869,7 +869,7 @@ struct StoryViewerView: View {
                 onShareToConversation: nil
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
@@ -915,7 +915,7 @@ struct StoryViewerView: View {
                 opening: .post
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
         }
         // **Republication en STORY — par le MEUBLE** (#5053).
@@ -942,7 +942,7 @@ struct StoryViewerView: View {
             // porte les redéclare en `@EnvironmentObject` ; c'est ici qu'ils
             // lui sont remis.
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
         }
     }

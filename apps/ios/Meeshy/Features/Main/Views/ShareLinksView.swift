@@ -8,7 +8,7 @@ import MeeshyUI
 struct ShareLinksView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = ShareLinksViewModel()
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @State private var showCreate = false
 
     @Environment(\.dismiss) private var dismiss
@@ -52,7 +52,7 @@ struct ShareLinksView: View {
             CreateShareLinkView { _ in
                 Task { await viewModel.load() }
             }
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
         }
     }
 

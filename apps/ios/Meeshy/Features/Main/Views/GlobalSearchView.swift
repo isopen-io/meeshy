@@ -8,7 +8,7 @@ import MeeshyUI
 struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     @EnvironmentObject var router: Router
     // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
     // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
@@ -798,7 +798,7 @@ struct GlobalSearchView: View {
         dismiss()
 
         // Find the conversation in the list or create a minimal one for navigation
-        if let conv = conversationListViewModel.conversations.first(where: { $0.id == result.conversationId }) {
+        if let conv = conversationListViewModel?.conversations.first(where: { $0.id == result.conversationId }) {
             router.push(.conversation(conv))
         }
     }

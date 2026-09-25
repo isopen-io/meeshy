@@ -29,7 +29,7 @@ struct BookmarksView: View {
     }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
     /// Avatar d'auteur tappé → story de cet auteur (singleGroup, 1re non-vue).
     @State private var storyAuthorUserId: String?
@@ -91,7 +91,7 @@ struct BookmarksView: View {
             // requis par StoryViewerView (SharePickerView interne).
             .environmentObject(router)
             .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
         }
     }
 
