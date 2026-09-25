@@ -62,6 +62,32 @@ export function pressReducer(state: PressState, event: PressEvent): PressState {
 export type LongPressAnchor = { readonly element: HTMLElement; readonly rect: DOMRect };
 
 /**
+ * **UN GESTE D'OUVERTURE N'OUVRE QU'UN MENU** (#7828) — le plus PROCHE.
+ *
+ * L'avatar d'un auteur porte son propre menu, et il vit DANS la rangée qui
+ * porte celui du message : sans arbitrage, l'appui long qui remonte ouvrait
+ * les deux, ou pire, seulement celui du message. Le premier hôte qui voit
+ * l'événement (le plus profond, la propagation montant) le RÉCLAME ; les
+ * hôtes qui le voient ensuite l'ignorent.
+ *
+ * Une réclamation plutôt qu'un `stopPropagation` : l'appui doit continuer de
+ * monter jusqu'au `document`, où `useRovingMenu` referme un menu ouvert sur
+ * tout appui qui tombe hors de lui. Arrêter l'événement aurait laissé un menu
+ * ouvert survivre à un appui sur un avatar.
+ *
+ * Seuls les trois gestes qui OUVRENT se réclament (appui, clic droit, touche
+ * menu) : un relâcher sur l'avatar après un appui commencé sur le texte doit
+ * encore annuler le minuteur de la rangée.
+ */
+const CLAIMED = new WeakSet<Event>();
+
+function claims(event: { readonly nativeEvent: Event }): boolean {
+  if (CLAIMED.has(event.nativeEvent)) return false;
+  CLAIMED.add(event.nativeEvent);
+  return true;
+}
+
+/**
  * LES DEUX DÉCLENCHEURS CLAVIER DE L'APPUI LONG — la touche `ContextMenu` et
  * `Maj+F10`. Écrits UNE fois : le menu d'un message et le disque du Flux
  * (#6456) répondent au même geste, et deux écritures du même prédicat finissent
@@ -114,7 +140,7 @@ export function useLongPress(options: {
   );
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !claims(event)) return;
     const target = event.currentTarget;
     stateRef.current = { phase: 'pressing', x: event.clientX, y: event.clientY, at: Date.now() };
     clearTimer();
@@ -139,12 +165,13 @@ export function useLongPress(options: {
   }, [clearTimer]);
 
   const onContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (!claims(event)) return;
     event.preventDefault();
     open(event.currentTarget);
   }, [open]);
 
   const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
-    if (!isContextMenuKey(event)) return;
+    if (!isContextMenuKey(event) || !claims(event)) return;
     event.preventDefault();
     open(event.currentTarget);
   }, [open]);

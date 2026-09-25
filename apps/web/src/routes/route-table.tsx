@@ -54,6 +54,10 @@ const adminConversationScreen = () =>
    `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
    route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
    jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
+const adminAnonymousScreen = () =>
+  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminAnonymousOneScreen = () =>
+  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
@@ -133,6 +137,14 @@ export const ROUTES = {
      voir » et « voir les siennes », parce que c'est le même écran avec un
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
+  /* **« MES STORIES »** (#6149) — le listing que la pastille « moi » du rail
+     ouvre désormais, TOUJOURS, dès que j'ai publié au moins une story (active
+     ou dans sa fenêtre d'archive) : miroir `MyStoriesView.swift`,
+     `ConversationListView.swift:1394-1397` (« Tap sur MON avatar du rail ⇒
+     TOUJOURS le listing »). Une ADRESSE, pas une feuille (D-83 § « une
+     ADRESSE, pas un mode ») : le retour matériel Android et le partage
+     d'adresse le demandent, comme `/status/new`. */
+  storiesMine: { pattern: '/stories/mine', screen: () => import('@/routes/stories-mine') },
   /* LE COMPOSER UNIQUE (#7497) — `/stories/new` et `/posts/new` montent le
      MÊME studio ; le format d'entrée est celui que la capsule
      `[Publier … | ▾]` publie si l'auteur ne touche pas au chevron. */
@@ -375,6 +387,13 @@ export const ROUTES = {
      devrait rester AVANT elle, comme `communityNew` avant `community`. */
   adminAgent: { pattern: '/admin/agent', screen: adminAgentScreen },
   admAgent: { pattern: '/adm/agent', screen: adminAgentScreen },
+  /* LES ANONYMES (#7873) — la liste, puis la fiche d'un participant sans
+     compte, trois segments comme `adminUser`. Déclarées AUSSI dans
+     `session-guard.ts`. */
+  adminAnonymous: { pattern: '/admin/anonymous', screen: adminAnonymousScreen },
+  admAnonymous: { pattern: '/adm/anonymous', screen: adminAnonymousScreen },
+  adminAnonymousOne: { pattern: '/admin/anonymous/$participant', screen: adminAnonymousOneScreen },
+  admAnonymousOne: { pattern: '/adm/anonymous/$participant', screen: adminAnonymousOneScreen },
 } as const;
 
 /**

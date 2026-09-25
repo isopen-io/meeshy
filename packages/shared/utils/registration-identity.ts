@@ -175,6 +175,9 @@ export function slugDAdresse(email: string | undefined): string {
  * ici et un nom découpé là doivent se capitaliser pareil), et le résultat est
  * la SEULE chaîne que `derivedNames` recevra ensuite.
  *
+ * Les CHIFFRES séparent comme `.`, `-` et `_` (#7912) : le nom part au serveur,
+ * dont `personNamePatternSource` refuse tout chiffre — `jean42@…` rend `Jean`.
+ *
  * Rend `''` — jamais un nom inventé — quand rien ne se tire de l'adresse.
  * L'appelant DEMANDE alors, il ne fabrique pas.
  */
@@ -183,7 +186,7 @@ export function displayNameDepuisEmail(email: string | undefined): string {
   if (slug.length < PSEUDO_MIN) return '';
 
   return slug
-    .split(/[-_]+/)
+    .split(/[^a-z]+/)
     .filter((mot) => mot !== '')
     .map((mot) => capitalizeName(mot))
     .join(' ');

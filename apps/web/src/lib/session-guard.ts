@@ -62,6 +62,9 @@ export type RouteKey =
    */
   | 'onboarding'
   | 'stories'
+  /** « MES STORIES » (#6149) — même port que `stories` (`?scope=stories`,
+   * requiredAuth) : un visiteur sans compte n'a de toute façon rien à gérer. */
+  | 'storiesMine'
   | 'storyCompose'
   | 'story'
   | 'feed'
@@ -173,6 +176,14 @@ export type RouteKey =
    */
   | 'adminAgent'
   | 'admAgent'
+  /**
+   * LES ANONYMES (#7873) — la liste et la fiche d'un participant sans compte.
+   * Privées comme le reste de l'administration.
+   */
+  | 'adminAnonymous'
+  | 'admAnonymous'
+  | 'adminAnonymousOne'
+  | 'admAnonymousOne'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -265,6 +276,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
   'onboarding',
   'stories',
+  /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
+  'storiesMine',
   'storyCompose',
   'story',
   'feed',
@@ -299,6 +312,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
      un message dans une vraie conversation. */
   'adminAgent',
   'admAgent',
+  'adminAnonymous',
+  'admAnonymous',
+  'adminAnonymousOne',
+  'admAnonymousOne',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

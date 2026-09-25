@@ -41,7 +41,11 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 const MARKERS = {
   discover: { 'data-discover-announce': '' },
   profile: { 'data-profile-announce': '' },
+  profilePeek: { 'data-profile-peek-announce': '' },
   invite: { 'data-invite-announce': '' },
+  /* « Mes stories » (#6149) — l'issue d'une suppression : réussie, ou refusée
+     et la rangée revenue. */
+  myStories: { 'data-my-stories-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;
@@ -49,12 +53,30 @@ export type AnnouncementMarker = keyof typeof MARKERS;
 const VISIBLE_CLASS =
   'pointer-events-none absolute inset-x-0 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold';
 
-/** L'ENCRE DIT LA NATURE : un refus ne se lit pas comme une réussite. Le fond
- * d'erreur porte `#fff`, la seule encre qui tienne AA sur `--color-error` dans
- * les DEUX schémas — même choix que les boutons PLEINS du profil. */
+/**
+ * **L'ENCRE DIT LA NATURE : un refus ne se lit pas comme une réussite** — et
+ * ELLE-MÊME doit rester lisible dans les DEUX schémas (revue-correction de
+ * #6149, défaut majeur 1, issue #7859).
+ *
+ * `#fff` codé en dur ici tenait AA en CLAIR (`--color-danger` `#c81e1e`,
+ * blanc à 5,74:1) mais PAS en SOMBRE : `--color-danger` y vaut `#f45b5b`
+ * (`packages/design-tokens/dark.css`), luminance relative 0,275, sur lequel
+ * du blanc ne contraste qu'à **3,23:1** — sous le 4,5:1 qu'exige
+ * `text-caption font-semibold` (WCAG 1.4.3, texte normal). Chaque échec
+ * qu'affiche cette pastille (profil, découvrir, invitation, et désormais
+ * « Mes stories ») était donc illisible pour un contraste réduit en sombre.
+ *
+ * `--color-on-status` PORTE DÉJÀ cette loi ailleurs dans le dépôt
+ * (`share-link-detail-parts.tsx`, une puce pleine `--color-success`) : blanc
+ * en clair, `--color-bg` (quasi noir) en sombre — un jeton par schéma,
+ * jamais une constante unique, parce qu'aucune encre fixe ne peut tenir AA
+ * sur les DEUX rouges (`#c81e1e` en clair, `#f45b5b` en sombre, l'un presque
+ * deux fois plus clair que l'autre). Mesuré ici : 5,74:1 en clair, 5,97:1 en
+ * sombre — les deux dérivés de jetons déjà générés (D-4), sans valeur
+ * nouvelle écrite à la main. */
 const TONE_STYLE: Readonly<Record<AnnouncementTone, { readonly color: string; readonly backgroundColor: string }>> = {
   neutral: { color: 'var(--color-ios-card)', backgroundColor: 'var(--color-ios-ink)' },
-  error: { color: '#fff', backgroundColor: 'var(--color-error)' },
+  error: { color: 'var(--color-on-status)', backgroundColor: 'var(--color-error)' },
 };
 
 export function LiveAnnouncement({

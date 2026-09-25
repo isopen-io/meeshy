@@ -1055,9 +1055,9 @@ final class MessageListViewController: UIViewController {
             // la date de l'élu retrouve au passage sa pleine largeur).
             section.contentInsets = NSDirectionalEdgeInsets(
                 top: 8,
-                leading: 12,
+                leading: Self.sectionHorizontalInset,
                 bottom: 8,
-                trailing: 12
+                trailing: Self.sectionHorizontalInset
             )
             return section
         }
@@ -1360,15 +1360,7 @@ final class MessageListViewController: UIViewController {
             }
 
             let openProfileHandler: ((ProfileSheetUser) -> Void) = { [weak self] user in
-                guard let self else { return }
-                if user.isAnonymous, let participantId = user.participantId {
-                    self.router.participantProfileTarget = ParticipantProfileTarget(
-                        conversationId: message.conversationId,
-                        participantId: participantId
-                    )
-                } else {
-                    self.router.deepLinkProfileUser = user
-                }
+                self?.router.openProfile(user, inConversation: message.conversationId)
             }
             let user = AuthManager.shared.currentUser
             let userLanguages: (regional: String?, custom: String?) = (
@@ -1726,7 +1718,8 @@ final class MessageListViewController: UIViewController {
                     isFocused: self.focalDetailedLocalId == localId,
                     sentAt: message.createdAt,
                     // Pré-calculée ici, jamais dans un body (directive 2026-08-22).
-                    focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil
+                    focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
+                    availableWidth: self.rowAvailableWidth
                 )
                 var focalActions = FocalRowActions()
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }

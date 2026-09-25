@@ -297,19 +297,116 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         ))
 
         let added = await waitUntil { await collector.mutations.contains {
-            if case let .reactionAdded(messageId, _, emoji, participantId, _) = $0 {
+            if case let .reactionAdded(messageId, _, emoji, participantId, _, _) = $0 {
                 return messageId == "m-rx" && emoji == "🔥" && participantId == "p1"
             }
             return false
         } }
         let removed = await waitUntil { await collector.mutations.contains {
-            if case let .reactionRemoved(messageId, emoji, participantId) = $0 {
+            if case let .reactionRemoved(messageId, emoji, participantId, _, _, _) = $0 {
                 return messageId == "m-rx" && emoji == "🔥" && participantId == "p1"
             }
             return false
         } }
         XCTAssertTrue(added)
         XCTAssertTrue(removed)
+    }
+
+    /// #7927 — le relais d'une conversation FERMÉE transporte l'auteur
+    /// (`userId`) et l'agrégat servi : sans eux, ma réaction posée d'un autre
+    /// appareil n'était pas « mienne » ici, et le retrait d'un tiers sur des
+    /// lignes rechargées sans auteur ne changeait rien.
+    func test_reactionRelay_carriesAuthorAndAggregate() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+
+        socket.reactionAdded.send(ReactionUpdateEvent(
+            messageId: "m-own", conversationId: "c-closed", participantId: "p-me", userId: "u-me",
+            emoji: "🔥", action: "added",
+            aggregation: ReactionAggregationEvent(emoji: "🔥", count: 2, participantIds: nil, hasCurrentUser: nil),
+            timestamp: nil
+        ))
+        socket.reactionRemoved.send(ReactionUpdateEvent(
+            messageId: "m-own", conversationId: "c-closed", participantId: "p-bob", userId: "u-bob",
+            emoji: "🔥", action: "removed",
+            aggregation: ReactionAggregationEvent(emoji: "🔥", count: 1, participantIds: ["p-eve"], hasCurrentUser: nil),
+            timestamp: nil
+        ))
+
+        let added = await waitUntil { await collector.mutations.contains {
+            if case let .reactionAdded(_, _, _, _, maxCount, ownerUserId) = $0 {
+                return ownerUserId == "u-me" && maxCount == 2
+            }
+            return false
+        } }
+        let removed = await waitUntil { await collector.mutations.contains {
+            if case let .reactionRemoved(_, _, _, ownerUserId, count, ids) = $0 {
+                return ownerUserId == "u-bob" && count == 1 && ids == ["p-eve"]
+            }
+            return false
+        } }
+        XCTAssertTrue(added)
+        XCTAssertTrue(removed)
+    }
+
+    /// #7939 — `message:starred` (room `user:<id>`) reçu conversation FERMÉE :
+    /// le relais porte l'étoile posée (avec l'instant SERVEUR) et l'étoile
+    /// retirée jusqu'à l'hôte, qui tient `StarredMessagesStore`.
+    func test_starRelay_carriesStarAndUnstar() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+        let starredAt = Date(timeIntervalSince1970: 1_790_000_000)
+
+        socket.messageStarred.send(MessageStarredEvent(
+            messageId: "m-star", conversationId: "c-closed", starred: true, starredAt: starredAt
+        ))
+        socket.messageStarred.send(MessageStarredEvent(
+            messageId: "m-gone", conversationId: "c-closed", starred: false, starredAt: nil
+        ))
+
+        let starred = await waitUntil { await collector.mutations.contains {
+            $0 == .starred(messageId: "m-star", conversationId: "c-closed", starredAt: starredAt)
+        } }
+        let unstarred = await waitUntil { await collector.mutations.contains {
+            $0 == .unstarred(messageId: "m-gone")
+        } }
+        XCTAssertTrue(starred)
+        XCTAssertTrue(unstarred)
+    }
+
+    /// Une étoile posée sans date (charge dégradée) ne se perd pas : l'instant
+    /// de réception la date, jamais `nil`.
+    func test_starMutation_withoutServerDate_isDatedAtReception() {
+        let now = Date(timeIntervalSince1970: 42)
+        let mutation = ConversationSyncEngine.starMutation(
+            for: MessageStarredEvent(messageId: "m", conversationId: "c", starred: true, starredAt: nil),
+            now: now
+        )
+        XCTAssertEqual(mutation, .starred(messageId: "m", conversationId: "c", starredAt: now))
+    }
+
+    /// #7927 — `message:edited` ne porte que le texte : remplacer le message
+    /// en cache mémoire par la charge perdait ses réactions.
+    func test_messageEditedRelay_keepsReactionsOfTheCachedMessage() async throws {
+        let (engine, socket, cache) = try makeEngine()
+        var cached = TestFactories.makeMessage(id: "m-keep", conversationId: "c-keep", content: "avant")
+        cached.reactions = [MeeshyReaction(messageId: "m-keep", participantId: "p1", emoji: "🔥")]
+        try await cache.messages.save([cached], for: "c-keep")
+        await engine.startSocketRelay()
+
+        socket.messageEdited.send(TestFactories.makeAPIMessage(
+            id: "m-keep", conversationId: "c-keep", content: "après"
+        ))
+
+        let kept = await waitUntil {
+            let message = await cache.messages.load(for: "c-keep").snapshot()?.first { $0.id == "m-keep" }
+            return message?.content == "après" && message?.reactions.map(\.emoji) == ["🔥"]
+        }
+        XCTAssertTrue(kept)
     }
 
     // MARK: - La ligne de liste après une édition

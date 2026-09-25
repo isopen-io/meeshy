@@ -110,11 +110,15 @@ struct ConversationPreviewLine: View {
         return spokenText(preview, strings: strings)
     }
 
-    nonisolated static func spokenText(
+    /// Sans la notation (#7871) : VoiceOver dit « un mot », jamais
+    /// « astérisque astérisque un mot », comme `plainTextOf` sur le web.
+    static func spokenText(
         _ preview: ConversationPreview, strings: ConversationPreviewStrings, locale: Locale = .current
     ) -> String {
         let spoken = preview.segments.map { segment -> String in
-            guard case .label(let text) = segment, let seconds = clockSeconds(text) else { return segment.text }
+            guard case .label(let text) = segment, let seconds = clockSeconds(text) else {
+                return MessageTextRenderer.plainText(segment.text)
+            }
             return LocalizedNumber.spokenDuration(seconds: seconds, locale: locale)
         }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }
@@ -187,7 +191,9 @@ struct ConversationPreviewLine: View {
             let separator = entry.offset == 0 ? Text("") : Text(" · ")
             guard case .countdown(_, let deadline) = entry.element,
                   ConversationPreviewCountdown.showsSeconds(at: now, deadline: deadline)
-            else { return text + separator + Text(entry.element.text) }
+            // Sans la notation (#7849) : `**gras**` se lit « gras » dans la
+            // liste, comme sur le web (`plainTextOf`).
+            else { return text + separator + Text(MessageTextRenderer.plainText(entry.element.text)) }
             return text + separator + Text(timerInterval: now...deadline, countsDown: true)
         }
     }

@@ -33,7 +33,7 @@ export type AdminDeps = { readonly source: DataSource; readonly transport: HttpT
 
 export const ADMIN_PERMISSIONS_QUERY_KEY = ['admin', 'permissions'] as const;
 export const ADMIN_DASHBOARD_QUERY_KEY = ['admin', 'dashboard'] as const;
-export const adminUsersQueryKey = (offset: number, search: string) => ['admin', 'users', offset, search] as const;
+export const adminUsersQueryKey = (adresse: string) => ['admin', 'users', adresse] as const;
 
 export const ADMIN_USERS_PAGE_SIZE = 20;
 
@@ -61,6 +61,11 @@ export type AdminUserRow = {
   readonly isActive: boolean;
   readonly isOnline: boolean;
   readonly createdAt: string | null;
+  readonly avatar: string;
+  /** Masquée par la passerelle sous `canViewPresence` — `null` n'y veut pas dire « jamais ». */
+  readonly lastActiveAt: string | null;
+  readonly emailVerified: boolean;
+  readonly twoFactorEnabled: boolean;
 };
 
 export type AdminUsersPage = {
@@ -275,6 +280,10 @@ export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
         isActive: ligne.isActive !== false,
         isOnline: ligne.isOnline === true,
         createdAt: typeof ligne.createdAt === 'string' ? ligne.createdAt : null,
+        avatar: asText(ligne.avatar),
+        lastActiveAt: typeof ligne.lastActiveAt === 'string' ? ligne.lastActiveAt : null,
+        emailVerified: typeof ligne.emailVerifiedAt === 'string' || ligne.emailVerified === true,
+        twoFactorEnabled: typeof ligne.twoFactorEnabledAt === 'string' || ligne.twoFactorEnabled === true,
       };
     })
     .filter((ligne): ligne is AdminUserRow => ligne !== null);
@@ -290,12 +299,24 @@ export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
 }
 
 export async function loadAdminUsers(
-  params: AdminDeps & { readonly offset: number; readonly search: string; readonly signal?: AbortSignal },
+  params: AdminDeps & {
+    readonly offset: number;
+    readonly search: string;
+    readonly limit?: number;
+    /** Le tri et les filtres d'une liste d'administration (#7873), déjà passés par la liste blanche de l'écran. */
+    readonly sortBy?: string;
+    readonly sortOrder?: 'asc' | 'desc';
+    readonly filters?: Readonly<Record<string, string>>;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<ApiResult<AdminUsersPage>> {
   const query = new URLSearchParams({
     offset: String(params.offset),
-    limit: String(ADMIN_USERS_PAGE_SIZE),
+    limit: String(params.limit ?? ADMIN_USERS_PAGE_SIZE),
     ...(params.search.trim() === '' ? {} : { search: params.search.trim() }),
+    ...(params.sortBy === undefined ? {} : { sortBy: params.sortBy }),
+    ...(params.sortOrder === undefined ? {} : { sortOrder: params.sortOrder }),
+    ...params.filters,
   });
   const result = await params.transport.request<unknown>({
     method: 'GET',

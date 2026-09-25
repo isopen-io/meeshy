@@ -244,4 +244,15 @@ describe('GET /admin/conversations — la composition du `where`', () => {
     const { espion } = await lister('/api/v1/admin/conversations?sort=createdAt', 'BIGBOSS');
     expect(espion.findManyArgs?.orderBy).toEqual({ createdAt: 'desc' });
   });
+
+  it('honore l\'ordre croissant demandé (#7873), décroissant par défaut', async () => {
+    const { espion } = await lister('/api/v1/admin/conversations?sort=createdAt&order=asc', 'BIGBOSS');
+    expect(espion.findManyArgs?.orderBy).toEqual({ createdAt: 'asc' });
+  });
+
+  it('REFUSE au schéma un ordre qui n\'existe pas', async () => {
+    const { res, espion } = await lister('/api/v1/admin/conversations?order=sideways', 'BIGBOSS');
+    expect(res.statusCode).toBe(400);
+    expect(espion.findManyArgs).toBeNull();
+  });
 });

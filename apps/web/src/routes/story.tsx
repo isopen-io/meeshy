@@ -13,6 +13,7 @@ import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
 import { PersonName } from '@/components/person-name';
+import type { SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { Glyph } from '@/components/glyph';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
@@ -48,6 +49,7 @@ import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
 import { CloseButton, ProgressBars, StoryMediaLayer } from './story-parts';
+import { useStoryScrub } from './use-story-scrub';
 import {
   currentStoryAt,
   groupForPlayback,
@@ -55,6 +57,7 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  scopeToSingleGroup,
   slideDurationForScene,
   slideDurationMs,
   stableGroupOrder,
@@ -65,14 +68,16 @@ import {
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
+import { useProfilePeekOpen } from '@/lib/view/profile-peek';
 import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
+import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { screenGestureYields } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { useParams } from '@/lib/router';
+import { useParams, useSearch } from '@/lib/router';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
@@ -166,6 +171,15 @@ function authorLabel(group: StoryPlaybackGroup): string {
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
   const [currentId, setCurrentId] = useState(post);
+  /**
+   * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
+   * `?scope=mine`, posé par les deux liens de `MyStoryCard`
+   * (`routes/stories-mine.tsx`) : le lecteur ouvert depuis « Mes stories » ne
+   * doit jamais passer à un AUTRE auteur, miroir
+   * `StoryViewerRequest(singleGroup: true)` (`StoryTrayView.swift:75`).
+   */
+  const [search] = useSearch();
+  const singleGroupScope = search.get('scope') === 'mine';
 
   /* Une NOUVELLE adresse sur la MÊME route (une notification ouverte pendant
      la lecture, un lien collé) change `post` sans remonter l'écran : sans
@@ -218,10 +232,18 @@ export default function StoryScreen() {
     return stableGroupOrder(fresh, frozenOrder.current);
   }, [primaryGroups, fallback.data, feed.data, viewer.id]);
 
-  const rawPosition = useMemo(() => resolvePosition(groups, currentId), [groups, currentId]);
+  /* `scopeToSingleGroup` NARROWS le tableau AVANT toute navigation : c'est ce
+     qui fait fermer `nextPosition` en fin de mon groupe au lieu de passer à
+     l'auteur suivant, sans ajouter de branche à cette loi pure. */
+  const scopedGroups = useMemo(
+    () => (singleGroupScope ? scopeToSingleGroup(groups, currentId) : groups),
+    [groups, singleGroupScope, currentId],
+  );
+
+  const rawPosition = useMemo(() => resolvePosition(scopedGroups, currentId), [scopedGroups, currentId]);
   const playablePosition = useMemo(
-    () => (rawPosition === null ? null : resolvePlayablePosition(groups, rawPosition, Date.now())),
-    [groups, rawPosition],
+    () => (rawPosition === null ? null : resolvePlayablePosition(scopedGroups, rawPosition, Date.now())),
+    [scopedGroups, rawPosition],
   );
 
   const closeViewer = useCallback(() => {
@@ -239,33 +261,33 @@ export default function StoryScreen() {
     }
     if (playablePosition === null || rawPosition === null) return;
     if (playablePosition.groupIndex === rawPosition.groupIndex && playablePosition.storyIndex === rawPosition.storyIndex) return;
-    const skippedTo = currentStoryAt(groups, playablePosition);
+    const skippedTo = currentStoryAt(scopedGroups, playablePosition);
     if (skippedTo !== undefined) setCurrentId(skippedTo.id);
-  }, [playablePosition, rawPosition, groups, closeViewer]);
+  }, [playablePosition, rawPosition, scopedGroups, closeViewer]);
 
-  const group = playablePosition !== null && playablePosition !== 'close' ? groups[playablePosition.groupIndex] : undefined;
+  const group = playablePosition !== null && playablePosition !== 'close' ? scopedGroups[playablePosition.groupIndex] : undefined;
   /* LA PHOTO DE L'AUTEUR, DÉRIVÉE UNE FOIS (#6975) — `participantAvatarOf`
      accepte un auteur ABSENT, donc pas de garde à écrire ici. */
   const authorPhoto = participantAvatarOf(group?.author);
   const currentStory: StoryPlaybackStory | undefined =
-    playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(groups, playablePosition) : undefined;
+    playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(scopedGroups, playablePosition) : undefined;
 
   const advance = useCallback(
     (direction: 'previous' | 'next') => {
       if (playablePosition === null || playablePosition === 'close') return;
       const target =
         direction === 'next'
-          ? nextPosition(groups, playablePosition, Date.now())
-          : previousPosition(groups, playablePosition);
+          ? nextPosition(scopedGroups, playablePosition, Date.now())
+          : previousPosition(scopedGroups, playablePosition);
       if (target === 'close') {
         closeViewer();
         return;
       }
       if (target === null) return;
-      const story = currentStoryAt(groups, target);
+      const story = currentStoryAt(scopedGroups, target);
       if (story !== undefined) setCurrentId(story.id);
     },
-    [groups, playablePosition, closeViewer],
+    [scopedGroups, playablePosition, closeViewer],
   );
 
   const media = currentStory?.media?.[0];
@@ -363,18 +385,12 @@ export default function StoryScreen() {
   const elapsedRef = useRef(0);
   const startTsRef = useRef(0);
   const markedRef = useRef<Set<string>>(new Set());
-  const barRef = useRef<HTMLDivElement | null>(null);
-  const fillRef = useRef<HTMLSpanElement | null>(null);
+  const painterRef = useRef<SceneScrubPainter | null>(null);
+  /** Le segment actif se parcourt au doigt (#7879) — loi d'hôte extraite. */
+  const scrub = useStoryScrub({ storyId: currentStory?.id, elapsedRef, startTsRef });
 
   /** L'UNIQUE écriture de la progression — hors de React, à chaque image. */
-  const paintProgress = useCallback((ratio: number) => {
-    const fill = fillRef.current;
-    if (fill !== null) fill.style.transform = `scaleX(${ratio})`;
-    const bar = barRef.current;
-    if (bar === null) return;
-    const percent = String(Math.round(ratio * 100));
-    if (bar.getAttribute('aria-valuenow') !== percent) bar.setAttribute('aria-valuenow', percent);
-  }, []);
+  const paintProgress = useCallback((ratio: number) => painterRef.current?.(ratio), []);
 
   useEffect(() => {
     elapsedRef.current = 0;
@@ -407,19 +423,17 @@ export default function StoryScreen() {
     setChromeHidden(false);
   }, []);
 
+  /* UNE SEULE VALEUR POUR LA BARRE ET POUR L'AVANCE (#6836) — iOS l'exige
+     explicitement (« Garantit que progress bar et auto-advance utilisent la
+     MÊME valeur », `StoryViewerView+Content.swift`) : deux sources donneraient
+     une barre qui ment sur ce qui reste. Ici c'est structurel — `ratio`
+     gouverne les deux, et le slider du segment (#7879) parcourt CETTE durée. */
+  const dureeMs =
+    sceneDocument !== null ? slideDurationForScene({ scene: firstScene ?? {}, mediaDurationMs }) : slideDurationMs({ mediaDurationMs });
+
   useEffect(() => {
-    if (currentStory === undefined || paused || !contentReady) return;
+    if (currentStory === undefined || paused || scrub.scrubbing || !contentReady) return;
     let raf = 0;
-    /* UNE SEULE VALEUR POUR LA BARRE ET POUR L'AVANCE (#6836) — calculée une
-       fois par diapositive, hors de la boucle. iOS l'exige explicitement
-       (« Garantit que progress bar et auto-advance utilisent la MÊME valeur »,
-       `StoryViewerView+Content.swift`) : deux sources donneraient une barre qui
-       ment sur ce qui reste. Ici c'est structurel — `ratio` gouverne les deux,
-       donc mesurer la barre mesure aussi le moment où la story avance. */
-    const dureeMs =
-      sceneDocument !== null
-        ? slideDurationForScene({ scene: firstScene ?? {}, mediaDurationMs })
-        : slideDurationMs({ mediaDurationMs });
     const tick = () => {
       const elapsed = elapsedRef.current + (performance.now() - startTsRef.current);
       const ratio = Math.min(1, elapsed / dureeMs);
@@ -432,7 +446,7 @@ export default function StoryScreen() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [currentStory, paused, contentReady, mediaDurationMs, sceneDocument, firstScene, advance, paintProgress]);
+  }, [currentStory, paused, scrub.scrubbing, contentReady, dureeMs, advance, paintProgress]);
 
   /* LES GESTES (§ 1.3) — trois bandes, appui posé = pause, le relâchement ne
      reprend pas, le tap suivant reprend sans naviguer. */
@@ -543,6 +557,7 @@ export default function StoryScreen() {
    */
   const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
   const viewersOpen = ownerRail.viewers.postId !== null;
+  const profilePeekOpen = useProfilePeekOpen();
 
   /* EXTRAIT dans `use-story-keyboard-shortcuts.ts` (§ budget, #7116) —
      comportement INCHANGÉ, sauf `layerOpen` qui gagne `viewersOpen` :
@@ -557,7 +572,7 @@ export default function StoryScreen() {
     closeViewer,
     showsSound,
     onToggleMute: toggleSound,
-    layerOpen: commentsOpen || viewersOpen,
+    layerOpen: commentsOpen || viewersOpen || profilePeekOpen,
   });
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
@@ -597,12 +612,11 @@ export default function StoryScreen() {
   /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
      le fil qu'on lit, et le composeur changerait de publication à mi-phrase.
      Le focus et la fermeture au changement de story sont la loi PARTAGÉE de
-     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. */
-  useEffect(() => {
-    if (!commentsOpen) return;
-    pause();
-    return () => resume();
-  }, [commentsOpen, pause, resume]);
+     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. Le profil de
+     l'auteur (ou d'un commentateur, d'un spectateur) ouvert par-dessus
+     attend de même, et UNE seule condition les réunit : fermer le profil
+     ouvert depuis une feuille ne doit pas relancer la story sous elle. */
+  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen, pause, resume);
 
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};
@@ -774,8 +788,10 @@ export default function StoryScreen() {
                   safeTop: safeTopSize.height,
                   presentation: chromeHidden ? 'free' : 'carded',
                 })}
-                playing={!paused}
+                playing={!paused && !scrub.scrubbing}
                 muted={storySoundMuted}
+                onClock={scrub.onClock}
+                durationSeconds={dureeMs / 1000}
                 onReady={() => setReadyStoryId(currentStory.id)}
                 onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
                 onPlaybackBlocked={muteBlockedPlayback}
@@ -833,8 +849,12 @@ export default function StoryScreen() {
               group={group}
               index={playablePosition.storyIndex}
               slideKey={currentStory.id}
-              barRef={barRef}
-              fillRef={fillRef}
+              durationSeconds={dureeMs / 1000}
+              language={interfaceLanguage}
+              painterRef={painterRef}
+              onScrubStart={scrub.onScrubStart}
+              onScrub={scrub.onScrub}
+              onScrubEnd={scrub.onScrubEnd}
             />
             {/* L'HEURE QUALIFIE L'AUTEUR, donc elle vit SUR SA LIGNE
                 (`StoryViewerView+Header.swift:156-256`) — jamais sur une

@@ -200,6 +200,10 @@ extension UniversalComposerBar {
                 // Hidden during recording for a clean, iMessage-like full-width bar
                 if !effectiveIsRecording {
                     topToolbar
+                        // La droite de la barre appartient au cadre des emojis
+                        // rapides tant qu'il est là : rien ne glisse dessous.
+                        .padding(.trailing, actionSlot == .quickEmoji ? Self.quickEmojiSlotWidth + 4 : 0)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topToolbarHeight = $0 }
                         .padding(.horizontal, 8)
                         .padding(.top, 6)
                         .padding(.bottom, 2)
@@ -221,6 +225,14 @@ extension UniversalComposerBar {
                                 )
                         )
                 } else {
+                    // Gras, italique, souligné, barré — dès qu'un mot est
+                    // sélectionné (#7849, iOS 18+).
+                    if showsFormatBar {
+                        ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                     HStack(alignment: .bottom, spacing: 12) {
                         // Left: (+) attach / keyboard toggle button
                         if resolvedShowAttachment {
@@ -260,7 +272,9 @@ extension UniversalComposerBar {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .background(composerBackground)
+            .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
@@ -400,22 +414,6 @@ extension UniversalComposerBar {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
-        // **LA PASTILLE TOURNE** (#6537, directive porteur : « il faut que le
-        // sticker tourne et change régulièrement »).
-        //
-        // Un `TimelineView` aurait redessiné la barre ENTIÈRE à chaque battement,
-        // frappe comprise — le § « Zero Unnecessary Re-render » l'interdit. Le
-        // minuteur ne touche qu'un entier, et seule la pastille en dépend.
-        //
-        // `reduceMotion` ne le ralentit pas : il l'ARRÊTE. Une rotation est un
-        // mouvement qu'on subit, pas une information qu'on perd — le cadre de
-        // tête reste celui que l'auteur emploie, donc rien ne manque.
-        .onReceive(stickerRotationTimer) { _ in
-            // La barre entière se ré-évalue à chaque pas : on ne tourne que
-            // quand la pastille est À L'ÉCRAN.
-            guard !reduceMotion, actionSlot == .textSticker else { return }
-            withAnimation(.easeInOut(duration: 0.28)) { stickerRotationStep += 1 }
-        }
         // **Les dix cadres à mots, ouverts par un appui long sur la pastille**
         // (#5326). La feuille est montée ICI, sur la barre, et pas chez l'hôte :
         // le texte qu'elle rend est celui du champ, qui vit dans la barre.
@@ -441,14 +439,19 @@ extension UniversalComposerBar {
     }
 
     // ========================================================================
-    // MARK: - Background
+    // MARK: - Panneau de verre
     // ========================================================================
 
-    /// Transparent sans protection — l'hôte fournit son verre. Une protection
-    /// armée y pose un voile de SA teinte (#7667) : toute la barre dit l'état,
-    /// pas seulement la pastille qui l'a allumé.
-    private var composerBackground: some View {
-        (dominantProtection?.tint ?? Color.clear)
-            .opacity(isDark ? 0.10 : 0.06)
+    /// **Toute la barre repose sur UN panneau de verre** (#7884, directive
+    /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
+    /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
+    /// enregistrement, pastille de langue) sont du verre aussi.
+    static let panelShape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+    static let fieldShape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+
+    /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
+    /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
+    var panelGlassTint: Color? {
+        dominantProtection.map { $0.tint.opacity(isDark ? 0.30 : 0.22) }
     }
 }

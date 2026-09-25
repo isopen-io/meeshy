@@ -68,7 +68,7 @@ const group = (authorId: string, displayName: string, isMine = false): StoryTray
 const self = (over: Partial<StoryRailSelfEntry> = {}): StoryRailSelfEntry => ({
   viewerId: 'u-moi',
   hasActiveStory: false,
-  entryStoryId: undefined,
+  hasAnyStory: false,
   moodEmoji: undefined,
   avatar: undefined,
   ...over,
@@ -138,7 +138,7 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     const el = mount({
       variant: 'grande',
       groups: [group('u-moi', 'moi', true), group('u-ines', 'Inès')],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     expect(el.querySelectorAll('li[data-story-self]').length).toBe(1);
     expect(el.querySelectorAll('[data-story-author="u-moi"]').length).toBe(0);
@@ -154,10 +154,30 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
     const el = mount({
       variant: 'pinned',
       groups: [group('u-moi', 'moi', true)],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     expect(el.querySelector('li[data-story-self]')).toBeNull();
     expect(el.querySelector('[data-story-author="u-moi"]')).not.toBeNull();
+  });
+
+  /**
+   * **LA BANDE ÉPINGLÉE ROUTE « MOI » PAR LA MÊME RÈGLE** (revue-correction
+   * #6149) — `PinnedStoryTrailBand.selfAvatarCell`
+   * (`StoryTrayView.swift:887-915`) appelle le MÊME résolveur que la grande
+   * trail (`StoryTrayActionResolver.avatarTap`) : mon anneau épinglé ouvre
+   * le listing, jamais ma story. Sans ce témoin, la bande repliée gardait
+   * l'ancien comportement que #6149 retirait du grand plateau.
+   */
+  test('dans la bande épinglée, MON anneau ouvre le listing « Mes stories », et le dit', () => {
+    const el = mount({
+      variant: 'pinned',
+      groups: [group('u-moi', 'moi', true), group('u-ines', 'Inès')],
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
+    });
+    const mien = el.querySelector('[data-story-author="u-moi"]');
+    expect(mien?.getAttribute('href')).toBe('/stories/mine');
+    expect(mien?.getAttribute('aria-label')).toBe('Gérer mes stories');
+    expect(el.querySelector('[data-story-author="u-ines"]')?.getAttribute('href')).toBe('/story/st-u-ines');
   });
 });
 
@@ -277,7 +297,7 @@ describe('deux pastilles sur un avatar — le piège d\'accessibilité', () => {
     const el = mount({
       variant: 'grande',
       groups: [],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
     for (const prise of ['[data-self-create]', '[data-self-mood]']) {
       const n = el.querySelector(prise);
@@ -297,19 +317,75 @@ describe('où mènent les deux portes', () => {
     expect(el.querySelector('[data-self-mood]')?.getAttribute('href')).toBe('/status/new');
   });
 
-  /** Sans story, la cellule n'est pas un lien : un anneau qui promet un contenu
-   * que rien n'ouvre est un contrôle qui ment (loi 4). */
-  test('sans story, ma pastille centrale n\'est pas un lien', () => {
+  /**
+   * **SANS AUCUNE STORY, LA PASTILLE CENTRALE OUVRE LE STUDIO** (revue de
+   * #6149, défaut majeur 4) — un anneau qui ne mène nulle part est un
+   * contrôle qui ment (loi 4) : après suppression de ma dernière story, un
+   * relevé au navigateur montrait la cible centrale (94 px) totalement
+   * INERTE, alors qu'iOS ouvre le studio dans ce même cas
+   * (`StoryTrayActionResolver.avatarTap` ⇒ `.createStory` quand ni
+   * `hasMyStory` ni `hasAnyStory`). Elle n'ouvre jamais `/stories/mine` — il
+   * n'y a rien à y gérer — et reste distincte du (+) haut-gauche.
+   */
+  test('sans aucune story, ma pastille centrale ouvre le studio de création', () => {
     const el = mount({ variant: 'grande', groups: [], self: self() });
     expect(el.querySelector('[data-story-self-open]')).toBeNull();
+    expect(el.querySelector('[data-story-self-create]')?.getAttribute('href')).toBe('/stories/new');
   });
 
-  test('avec une story, ma pastille centrale ouvre MA story', () => {
+  /** Le libellé DÉCRIT la destination réelle (miroir
+   * `avatarAccessibilityLabel` : `.createStory` ⇒ « Créer une story »),
+   * jamais celui du listing qu'elle ne sert pas dans ce cas. */
+  test('sans aucune story, le lien de ma pastille centrale s\'annonce « Créer une story »', () => {
+    const el = mount({ variant: 'grande', groups: [], self: self() });
+    expect(el.querySelector('[data-story-self-create]')?.getAttribute('aria-label')).toBe('Créer une story');
+  });
+
+  /**
+   * **LE LISTING, JAMAIS LE LECTEUR DIRECT** (#6149, amendement de D-83) —
+   * miroir `ConversationListView.swift:1394-1397` : le tap sur MON avatar
+   * ouvre TOUJOURS « Mes stories », jamais ma story elle-même. C'est le
+   * changement que cette issue demandait : avant lui, ma pastille se
+   * comportait comme celle d'un autre auteur.
+   */
+  test('avec une story active, ma pastille centrale ouvre LE LISTING de mes stories', () => {
     const el = mount({
       variant: 'grande',
       groups: [],
-      self: self({ hasActiveStory: true, entryStoryId: 'st-u-moi' }),
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
     });
-    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/story/st-u-moi');
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
+  });
+
+  /**
+   * **L'ANNONCE DIT LA DESTINATION** (revue-correction #6149) — miroir
+   * `StoryTrayActionResolver.avatarAccessibilityLabel` (« le libellé
+   * VoiceOver DÉCRIT la destination réelle ») : « Votre story » annonçait un
+   * contenu, le lien ouvre une GESTION.
+   */
+  test('le lien de ma pastille centrale s\'annonce « Gérer mes stories »', () => {
+    const el = mount({
+      variant: 'grande',
+      groups: [],
+      self: self({ hasActiveStory: true, hasAnyStory: true }),
+    });
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('aria-label')).toBe('Gérer mes stories');
+  });
+
+  /**
+   * **LA PORTE RESTE OUVERTE SUR UNE ARCHIVE MORTE** — miroir
+   * `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`
+   * (`StoryTrayActions.swift:71-75` : `.manageStories` même quand seules des
+   * stories EXPIRÉES existent, « aucun chemin ne menait plus vers ses
+   * stories passées »). L'anneau n'est plus accentué (`hasActiveStory` faux),
+   * mais le lien vers le listing demeure.
+   */
+  test('avec seulement des stories expirées, ma pastille mène quand même au listing', () => {
+    const el = mount({
+      variant: 'grande',
+      groups: [],
+      self: self({ hasActiveStory: false, hasAnyStory: true }),
+    });
+    expect(el.querySelector('[data-story-self-open]')?.getAttribute('href')).toBe('/stories/mine');
   });
 });

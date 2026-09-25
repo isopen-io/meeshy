@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 
-import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
-import { Glyph } from '@/components/glyph';
 import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -18,49 +16,11 @@ import { Link } from '@/routes/route-table';
  * sait plus ce qu'il garde.
  */
 
-export const ADMIN_HEADER_HEIGHT = 64;
+export { ADMIN_HEADER_HEIGHT, AdminHeader, AdminScreenFrame } from './admin-shell';
 
 const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
-
-export function AdminHeader({
-  language,
-  title,
-  back,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly title: string;
-  /**
-   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
-   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
-   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
-   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
-   * l'administrateur d'une administration à l'autre au premier retour, alors
-   * que D-76 les tient séparées à dessein.
-   */
-  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
-}) {
-  return (
-    <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: ADMIN_HEADER_HEIGHT }} lang={language}>
-      <Link
-        to={back}
-        aria-label={translate(language, 'pending.back')}
-        data-admin-back
-        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
-        style={{ color: BRAND, outlineColor: BRAND }}
-      >
-        <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
-        </ChromeActionDisc>
-      </Link>
-      <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold" style={{ color: INK }}>
-        {title}
-      </h1>
-      <span aria-hidden="true" className="block shrink-0" style={{ width: 44 }} />
-    </header>
-  );
-}
 
 /**
  * LE REFUS — un seul écran pour les trois façons de ne pas entrer : la matrice
@@ -173,69 +133,6 @@ export function AdminSkeleton({ rows }: { readonly rows: number }) {
   );
 }
 
-export function AdminScreenFrame({
-  language,
-  title,
-  back,
-  fills = false,
-  width = 'default',
-  children,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly title: string;
-  /**
-   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
-   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
-   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
-   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
-   * l'administrateur d'une administration à l'autre au premier retour, alors
-   * que D-76 les tient séparées à dessein.
-   */
-  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
-  /**
-   * L'ÉCRAN PORTE-T-IL SON PROPRE DÉFILEMENT ? (#6862, lot C)
-   *
-   * `false` (défaut) — le cadre défile, et son contenu grandit librement :
-   * c'est ce que font une fiche, une liste paginée, un tableau de bord.
-   *
-   * `true` — le contenu REMPLIT la hauteur et défile lui-même. La lecture
-   * souveraine d'une conversation monte un fil VIRTUALISÉ, qui a besoin de
-   * désigner son conteneur de défilement et que celui-ci ait une hauteur
-   * BORNÉE. Sous le cadre défilant, ce conteneur n'en a aucune : le
-   * virtualiseur mesure alors une fenêtre infinie et monte toutes les rangées
-   * — c'est-à-dire exactement ce que la virtualisation existe pour éviter, et
-   * sans qu'aucune erreur ne le signale.
-   */
-  readonly fills?: boolean;
-  /**
-   * LA LARGEUR DU CONTENU (#7845). `default` borne à `max-w-3xl` — une liste,
-   * un tableau de bord se lisent mieux sur une colonne étroite. `wide` ouvre à
-   * `max-w-6xl` pour la fiche d'un membre, seule à poser DEUX colonnes sur un
-   * grand écran : sous `max-w-3xl`, la colonne d'identité et celle des onglets
-   * se partageraient 768 px, et chacune serait trop étroite pour ce qu'elle
-   * porte. Un paramètre, et non une classe passée par l'appelant : les autres
-   * écrans gardent leur borne sans avoir à la redire.
-   */
-  readonly width?: 'default' | 'wide';
-  readonly children: ReactNode;
-}) {
-  const borne = width === 'wide' ? 'max-w-6xl' : 'max-w-3xl';
-  return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <AdminHeader language={language} title={title} back={back} />
-      {fills ? (
-        <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe">
-          <div className={`mx-auto flex min-h-0 w-full ${borne} flex-1 flex-col`}>{children}</div>
-        </main>
-      ) : (
-        <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
-          <div className={`mx-auto w-full ${borne} pb-24`} data-admin-frame-width={width}>{children}</div>
-        </main>
-      )}
-    </div>
-  );
-}
-
 /**
  * CE QU'UN GESTE D'ADMINISTRATION A FAIT, DIT À VOIX HAUTE (#6819).
  *
@@ -319,6 +216,36 @@ export function AdminPagination({
       <button type="button" data-admin-page="next" disabled={!hasMore} onClick={() => onOffset(offset + size)} className={bouton} style={fond}>
         {translateAdmin(language, 'admin.users.next')}
       </button>
+    </div>
+  );
+}
+
+/** Un bloc titré d'une fiche d'administration — membre ou anonyme. */
+export function AdminSection({ titre, children }: { readonly titre: string; readonly children: ReactNode }) {
+  return (
+    <section className="grid gap-2">
+      <h2 className="text-caption font-medium" style={{ color: INK2 }}>
+        {titre}
+      </h2>
+      <dl
+        className="grid gap-1 rounded-card px-4 py-3"
+        style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+      >
+        {children}
+      </dl>
+    </section>
+  );
+}
+
+export function AdminLine({ label, valeur }: { readonly label: string; readonly valeur: string }) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
+        {label}
+      </dt>
+      <dd className="min-w-0 flex-1 truncate text-right text-body" style={{ color: INK }}>
+        {valeur}
+      </dd>
     </div>
   );
 }

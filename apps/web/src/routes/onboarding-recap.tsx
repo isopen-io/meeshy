@@ -8,7 +8,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { JourneyRecap } from '@/lib/onboarding/journey';
 
 import { CardFrame, type CardHost } from './onboarding-cards';
-import { PrimaryButton, RecapTiles, SecondaryButton, TrophyIllustration, type RecapTile } from './onboarding-visuals';
+import { PrimaryButton, RecapPlaceholder, RecapTiles, SecondaryButton, TrophyIllustration, type RecapTile } from './onboarding-visuals';
 
 /**
  * **LE RÉCAPITULATIF** (#7729) — « +N pts · niveau · série · badges », puis
@@ -17,9 +17,12 @@ import { PrimaryButton, RecapTiles, SecondaryButton, TrophyIllustration, type Re
  *
  * **Les chiffres sont RELUS du serveur** (`GET /me/engagement`), comme
  * `OnboardingViewModel.loadRecap` sur iOS : la pastille de session ne
- * contredit jamais la progression. Sans réponse, le récapitulatif retombe sur
- * ce que CE client a vu se confirmer : les points, la série et les badges que
- * les règles du serveur ont crédités à ces accusés (`journey.ts § recapOf`).
+ * contredit jamais la progression. Tant que la relecture n'a pas répondu, un
+ * emplacement STABLE tient la place des tuiles — aucun chiffre qui sauterait
+ * ensuite (#7909). Si elle échoue, le récapitulatif ne montre que les points
+ * de la session (eux-mêmes relus, `journey.ts § pointsOf`) : jamais une série,
+ * un niveau ou des badges déduits ici. Les demandes « en route » sont celles
+ * que le serveur dit EN ATTENTE (#7910).
  */
 
 export type RecapNumbers = {
@@ -62,8 +65,7 @@ export function RecapCard({
   readonly onDone: () => void;
 }) {
   const lang = host.lang;
-  const fallback: RecapNumbers = { points: session.points, level: session.levelReached ? 1 : 0, streakDays: session.streakDays, badges: session.badges };
-  const [served, setServed] = useState<RecapNumbers | null>(null);
+  const [served, setServed] = useState<RecapNumbers | null | 'loading'>('loading');
 
   useEffect(() => {
     let alive = true;
@@ -75,11 +77,10 @@ export function RecapCard({
     };
   }, [load]);
 
-  const numbers = served ?? fallback;
-  const calm = numbers.points === 0;
-  const body = calm
-    ? translateOnboarding(lang, 'onboarding.recap.calm')
-    : numbers.streakDays > 0
+  const numbers: RecapNumbers | null =
+    served === 'loading' ? null : (served ?? { points: session.points, level: 0, streakDays: 0, badges: 0 });
+  const body =
+    numbers !== null && numbers.points > 0 && numbers.streakDays > 0
       ? translateOnboarding(lang, 'onboarding.recap.tomorrow', { next: String(numbers.streakDays + 1) })
       : translateOnboarding(lang, 'onboarding.recap.calm');
 
@@ -100,7 +101,11 @@ export function RecapCard({
         </>
       }
     >
-      <RecapTiles tiles={recapTiles(host, numbers, session.pendingFriends)} />
+      {numbers === null ? (
+        <RecapPlaceholder label={translateOnboarding(lang, 'onboarding.recap.loading')} />
+      ) : (
+        <RecapTiles tiles={recapTiles(host, numbers, session.pendingFriends)} />
+      )}
     </CardFrame>
   );
 }

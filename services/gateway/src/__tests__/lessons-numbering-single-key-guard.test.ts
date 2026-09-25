@@ -51,11 +51,17 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 const REPO_ROOT = join(__dirname, '../../../..');
-const LESSONS_PATH = join(REPO_ROOT, 'tasks/lessons.md');
+/**
+ * Une leçon = un fichier depuis #7711 : le titre lu est la première ligne
+ * de chaque fichier, et le « lieu » d'un doublon est son nom de fichier.
+ * Une leçon neuve (`<AAAA-MM-JJ>-<slug>.md`) ne porte plus de numéro, donc
+ * ne peut plus en disputer un : l'inventaire figé ne peut que décroître.
+ */
+const LESSONS_DIR = join(REPO_ROOT, 'tasks/lessons');
 
 type FrozenDuplicate = {
   readonly identifier: string;
@@ -94,7 +100,7 @@ const HEADING_LINE = /^##\s*Le[cç]on\b(.*)$/;
 const IDENTIFIER = /^\s*([0-9]+)(i)?(?:\s+(bis|ter|quater|quinquies)\b)?/;
 
 type LessonHeading = {
-  readonly line: number;
+  readonly file: string;
   readonly identifier: string | null;
 };
 
@@ -106,25 +112,26 @@ const toIdentifier = (rest: string): string | null => {
 };
 
 const readLessonHeadings = (): readonly LessonHeading[] =>
-  readFileSync(LESSONS_PATH, 'utf8')
-    .split('\n')
-    .flatMap((raw, index): readonly LessonHeading[] => {
-      const heading = HEADING_LINE.exec(raw);
+  readdirSync(LESSONS_DIR)
+    .filter((file) => file.endsWith('.md'))
+    .flatMap((file): readonly LessonHeading[] => {
+      const firstLine = readFileSync(join(LESSONS_DIR, file), 'utf8').split('\n', 1)[0] ?? '';
+      const heading = HEADING_LINE.exec(firstLine);
       if (!heading) return [];
-      return [{ line: index + 1, identifier: toIdentifier(heading[1]) }];
+      return [{ file, identifier: toIdentifier(heading[1]) }];
     });
 
 const groupByIdentifier = (
   headings: readonly LessonHeading[],
-): ReadonlyMap<string, readonly number[]> => {
-  const grouped = new Map<string, number[]>();
+): ReadonlyMap<string, readonly string[]> => {
+  const grouped = new Map<string, string[]>();
   for (const heading of headings) {
     if (heading.identifier === null) continue;
-    const lines = grouped.get(heading.identifier);
-    if (lines) {
-      lines.push(heading.line);
+    const files = grouped.get(heading.identifier);
+    if (files) {
+      files.push(heading.file);
     } else {
-      grouped.set(heading.identifier, [heading.line]);
+      grouped.set(heading.identifier, [heading.file]);
     }
   }
   return grouped;
@@ -134,8 +141,8 @@ const groupByIdentifier = (
 const MINIMUM_EXPECTED_HEADINGS = 300;
 const MINIMUM_EXPECTED_NUMBERED_HEADINGS = 300;
 
-describe("le numéro d'une leçon de tasks/lessons.md identifie un texte UNIQUE, hors inventaire figé décroissant (#4432)", () => {
-  it('voit bien des titres dans tasks/lessons.md — sinon un chemin cassé passerait au vert', () => {
+describe("le numéro d'une leçon de tasks/lessons/ identifie un texte UNIQUE, hors inventaire figé décroissant (#4432)", () => {
+  it('voit bien des titres dans tasks/lessons/ — sinon un chemin cassé passerait au vert', () => {
     expect(readLessonHeadings().length).toBeGreaterThanOrEqual(MINIMUM_EXPECTED_HEADINGS);
   });
 
@@ -149,7 +156,7 @@ describe("le numéro d'une leçon de tasks/lessons.md identifie un texte UNIQUE,
     const grouped = groupByIdentifier(readLessonHeadings());
     const newCollisions = [...grouped.entries()]
       .filter(([identifier, lines]) => lines.length > 1 && !frozenIdentifiers.has(identifier))
-      .map(([identifier, lines]) => `« ${identifier} » : lignes ${lines.join(', ')}`);
+      .map(([identifier, files]) => `« ${identifier} » : ${files.join(', ')}`);
     expect(newCollisions).toEqual([]);
   });
 

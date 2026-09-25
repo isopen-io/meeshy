@@ -76,6 +76,11 @@ const SCREENS = [
       aucune image, et la porte `isOwnStory` serait tenue pour acquise sur la
       seule foi d'un témoin. */
   { name: 'story-mienne', path: '/story/st-mienne' },
+  /** « MES STORIES » (#6149) — le listing que la pastille « moi » du rail
+      ouvre désormais : `st-mienne` (fixtures-stories.ts, active 12 h) rend
+      une seule rangée, sa vignette, sa date relative et sa bande d'actions
+      (Ouvrir, Vues, Supprimer). */
+  { name: 'stories-mine', path: '/stories/mine' },
   /** LE LECTEUR DE SCÈNE (#6899) — un document canvas v:3 rendu par le MÊME
       moteur que le fil (`ScenePlayer`, D-79), carte 9:16 sur le plateau :
       verdict `canvas` (texte sur la bande, bandes au ThumbHash), image seule
@@ -477,6 +482,45 @@ for (const scheme of ['dark', 'light']) {
     await closeThread(page);
   }
 
+}
+
+/**
+ * LA FEUILLE « MODIFIER » D'UNE PUBLICATION (#7534) — ouverte depuis le menu
+ * « ⋯ » de `post-mine`, la SEULE publication du corpus dont l'auteur est le
+ * lecteur (`POST_MINE`, `fixtures-feed.ts`). Le menu ne propose « Modifier »
+ * qu'à l'AUTEUR : la session est donc posée sur `u-viewer` (`VIEWER_ID`,
+ * `fixtures-base.ts`), comme `check-gateway-build.mjs` la pose. Deux états :
+ * à l'ouverture (champ sur l'ORIGINAL, compteur, « Publier » éteint) et
+ * après une frappe (« Publier » allumé).
+ */
+const VIEWER_SESSION = JSON.stringify({
+  token: 'capture-token',
+  sessionToken: 'capture-session',
+  user: { id: 'u-viewer', username: 'vous' },
+  expiresAt: INSTANT.getTime() + 3_600_000,
+});
+for (const scheme of ['dark', 'light']) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    colorScheme: scheme === 'light' ? 'light' : 'dark',
+  });
+  await context.addInitScript((session) => window.localStorage.setItem('meeshy.session', session), VIEWER_SESSION);
+  const page = await context.newPage();
+  await page.clock.setFixedTime(INSTANT);
+  await page.goto(`${BASE}/post/post-mine`, { waitUntil: 'networkidle' });
+  await page.locator('[data-feed-post-menu]').click();
+  await page.locator('[data-feed-post-action="edit"]').click();
+  await page.waitForSelector('[data-publication-edit-sheet]');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUTPUT}publication-edit-sheet.${scheme}.png` });
+  console.log(`  publication-edit-sheet · ${scheme}`);
+  await page.locator('[data-publication-edit-field]').press('End');
+  await page.keyboard.type(' Corrigée.');
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${OUTPUT}publication-edit-sheet-changed.${scheme}.png` });
+  console.log(`  publication-edit-sheet-changed · ${scheme}`);
+  await context.close();
 }
 
 await browser.close();

@@ -54,19 +54,58 @@ enum StickerNearbyPlaces {
             log.info("nearby: aucune position, onglet vide")
             return []
         }
+        // La position EXACTE passe en tête quand elle vient du GPS (#7922) :
+        // un centre CHOISI sur la carte est déjà un lieu, il n'a pas à se
+        // doubler d'une adresse.
+        let exacte = choisi == nil ? await exactPlace(at: position) : nil
         let requête = MKLocalPointsOfInterestRequest(center: position, radius: radiusMeters)
         do {
             let réponse = try await MKLocalSearch(request: requête).start()
             let origine = CLLocation(latitude: position.latitude, longitude: position.longitude)
-            return réponse.mapItems
+            let proches = réponse.mapItems
                 .compactMap { place(from: $0) }
                 .sorted { distance($0, from: origine) < distance($1, from: origine) }
                 .prefix(maxPlaces)
                 .map { $0 }
+            return merged(exact: exacte, nearby: proches)
         } catch {
             log.error("nearby: recherche échouée \(error.localizedDescription, privacy: .public)")
-            return []
+            return merged(exact: exacte, nearby: [])
         }
+    }
+
+    // MARK: - La position exacte (#7922)
+
+    /// Le lieu « ici », sans arrondi : nommé par son numéro et sa rue, situé
+    /// par sa ville. Sans rue connue (champ, mer, bâtiment sans adresse), il
+    /// s'appelle « Ma position ».
+    static func exactPlace(latitude: Double, longitude: Double,
+                           number: String?, street: String?, locality: String?) -> SharedPlace {
+        let rue = [number, street].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+        let nom = street?.isEmpty == false
+            ? rue
+            : String(localized: "sticker.place.exact", defaultValue: "Ma position", bundle: .main)
+        return SharedPlace(latitude: latitude,
+                           longitude: longitude,
+                           name: nom,
+                           address: locality?.isEmpty == false ? locality : nil,
+                           category: nil)
+    }
+
+    /// « Ici » d'abord, puis ce qui est autour.
+    static func merged(exact: SharedPlace?, nearby: [SharedPlace]) -> [SharedPlace] {
+        (exact.map { [$0] } ?? []) + nearby
+    }
+
+    private static func exactPlace(at position: CLLocationCoordinate2D) async -> SharedPlace {
+        let repère = try? await CLGeocoder()
+            .reverseGeocodeLocation(CLLocation(latitude: position.latitude, longitude: position.longitude))
+            .first
+        return exactPlace(latitude: position.latitude,
+                          longitude: position.longitude,
+                          number: repère?.subThoroughfare,
+                          street: repère?.thoroughfare,
+                          locality: repère?.locality)
     }
 
     private static func distance(_ lieu: SharedPlace, from origine: CLLocation) -> CLLocationDistance {

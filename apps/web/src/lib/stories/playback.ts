@@ -381,6 +381,34 @@ export function previousPosition(
   return { groupIndex: position.groupIndex - 1, storyIndex: previousGroup.stories.length - 1 };
 }
 
+/**
+ * `StoryViewerScope.resolve(all:resolvedIndex:singleGroup:)`
+ * (`StoryViewerScope.swift:29-42`) — LA PORTÉE « UN SEUL GROUPE » (revue de
+ * #6149, défaut majeur 3) : ouvrir une story depuis « Mes stories » laissait
+ * {@link nextPosition} continuer sur les auteurs SUIVANTS une fois mon
+ * propre groupe épuisé — mesuré au navigateur (`18-after-playback.png`),
+ * la lecture continuait sur « Inès Baraka » après « Votre story ». iOS
+ * n'appelle jamais {@link nextPosition} sur le corpus entier dans ce cas : il
+ * le RESTREINT d'abord à `[all[resolvedIndex]]`, si bien que
+ * {@link nextPosition} ferme le lecteur (aucun groupe suivant) au lieu de
+ * changer d'auteur. Cette fonction porte la MÊME restriction, en amont de la
+ * navigation plutôt que dans une branche de plus à l'intérieur d'elle :
+ * {@link nextPosition} et {@link previousPosition} restent des lois PURES du
+ * tableau qu'on leur donne, ignorantes de la notion de « portée ».
+ *
+ * `postId` introuvable ⇒ le tableau REVIENT INCHANGÉ (même repli qu'iOS,
+ * `guard singleGroup, all.indices.contains(resolvedIndex) else { … all … }`) :
+ * un lecteur qui s'ouvrirait VIDE serait pire que la navigation large qu'on
+ * corrige ici.
+ */
+export function scopeToSingleGroup(
+  groups: readonly StoryPlaybackGroup[],
+  postId: string,
+): readonly StoryPlaybackGroup[] {
+  const position = resolvePosition(groups, postId);
+  return position === null ? groups : [groups[position.groupIndex]!];
+}
+
 function isPlayable(story: StoryPlaybackStory, now: number): boolean {
   return !isStoryExpired(story, now) && hasRenderableStoryContent(story);
 }

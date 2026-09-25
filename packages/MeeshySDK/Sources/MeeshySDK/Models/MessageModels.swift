@@ -912,12 +912,9 @@ extension APIMessage {
                 )
             }
             if let storyId = storyReplyToId, !storyId.isEmpty {
-                // Repli le plus pauvre : seul l'identifiant de la story est
-                // connu. Ni auteur reel, ni avatar — aucune porte vers un profil.
-                return ReplyReference(
-                    messageId: storyId, authorName: "Story",
-                    previewText: "\u{1F4F7} Story", isStoryReply: true
-                )
+                // Aucun instantané servi : la story a disparu (#7895). La
+                // citation subsiste, compacte et sans porte.
+                return .unavailableStory(storyId: storyId)
             }
             return nil
         }()

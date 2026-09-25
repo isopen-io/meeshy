@@ -344,18 +344,20 @@ try {
       check(amina === 'friend', `${label} : la personne acceptée est « Contact » dans la recherche (${amina})`);
 
       // ------------------------------------------------ 6. « Bloqués »
+      // Prise UNIQUE (revue-correction #6149, issue #7858) : `ConfirmDialog`,
+      // partagée avec Réglages › Déconnexion et Mes liens › Supprimer.
       await page.click('[data-discover-tab="blocked"]');
       await page.waitForSelector('[data-blocked="u-yann"]');
       const unblockInk = await contrastOf(page, '[data-blocked="u-yann"] [data-unblock] span');
       await page.click('[data-blocked="u-yann"] [data-unblock]');
-      const dialogOpen = await page.waitForSelector('dialog[data-unblock-confirm][open]', { timeout: 2000 }).then(() => true, () => false);
+      const dialogOpen = await page.waitForSelector('dialog[data-confirm-dialog="unblock"][open]', { timeout: 2000 }).then(() => true, () => false);
       check(dialogOpen, `${label} : « Débloquer » ouvre une confirmation modale`);
       await capture(page, `decouvrir-debloquer-${slug}`);
-      await page.click('[data-unblock-cancel]');
-      await page.waitForSelector('dialog[data-unblock-confirm]', { state: 'detached', timeout: 2000 }).catch(() => null);
+      await page.click('[data-confirm-dialog="unblock"] [data-confirm="cancel"]');
+      await page.waitForSelector('dialog[data-confirm-dialog="unblock"]', { state: 'detached', timeout: 2000 }).catch(() => null);
       check((await page.$('[data-blocked="u-yann"]')) !== null, `${label} : « Annuler » ferme la confirmation sans débloquer`);
       await page.click('[data-blocked="u-yann"] [data-unblock]');
-      await page.click('[data-unblock-confirm-action]');
+      await page.click('[data-confirm-dialog="unblock"] [data-confirm="confirm"]');
       check(await within(page, () => document.querySelector('[data-blocked="u-yann"]') === null, null, INSTANT_MS), `${label} : confirmer retire la personne au geste`);
       check((await page.waitForSelector('[data-discover-empty="blocked"]', { timeout: 2000 }).then(() => true, () => false)), `${label} : la liste vide se dessine`);
       const emptyInk = await contrastOf(page, '[data-discover-empty="blocked"] p');

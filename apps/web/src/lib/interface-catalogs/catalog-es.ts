@@ -1,4 +1,8 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import esIdentity from './catalog-es-identity';
+
+import esMentions from './catalog-es-mentions';
+import esStoriesMine from './catalog-es-stories-mine';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -98,11 +102,19 @@ const es = {
   'feed.post.menu.unsave': 'Quitar de guardados',
   'feed.post.menu.pin': 'Fijar',
   'feed.post.menu.delete': 'Eliminar',
+  'feed.post.edit': 'Editar',
+  'feed.post.edit.title': 'Editar publicación',
+  'feed.post.edit.body.a11y': 'Contenido de la publicación',
+  'feed.post.edit.remaining.a11y': '{count} caracteres restantes',
+  'feed.post.edit.publish': 'Publicar',
   'report.post.title': 'Denunciar esta publicación',
   'feed.post.copied': 'Texto copiado',
   'feed.post.copy_failed': 'No se pudo copiar el texto',
   'feed.post.pinned': 'Publicación fijada',
   'feed.post.pin_failed': 'No se pudo fijar la publicación',
+  'feed.post.edited': 'Publicación actualizada',
+  'feed.post.edit_failed': 'No se pudo actualizar la publicación',
+  'feed.post.edit_busy': 'Ya hay una edición en curso',
   'feed.post.deleted': 'Publicación eliminada',
   'feed.post.delete_failed': 'Error al eliminar',
   'feed.post.repost.success': 'Republicado',
@@ -168,8 +180,7 @@ const es = {
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
-  'a11y.avatar.profile': 'Ver el perfil de {name}',
-  'a11y.avatar.story': 'Ver la historia de {name}',
+  ...esIdentity,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
   'report.body': 'Elija el motivo de su denuncia. Nuestro equipo de moderación la recibirá.',
@@ -316,6 +327,10 @@ const es = {
   'dataExport.action.again': 'Exportar de nuevo',
   'dataExport.done.title': 'Exportación completada',
   'dataExport.done.body': 'El archivo se ha descargado en este dispositivo.',
+  'dataExport.ready.title': 'Exportación lista',
+  'dataExport.ready.body': 'El archivo está listo. Toca para guardarlo en este dispositivo.',
+  'dataExport.action.deliver': 'Guardar el archivo',
+  'dataExport.undelivered.body': 'Este dispositivo no pudo recibir el archivo.',
 
   'profile.title': 'Perfil',
   'profile.edit': 'Editar',
@@ -756,6 +771,8 @@ const es = {
   'story.studio.publish': 'Publicar',
   'story.studio.publishing': 'Publicando…',
   'story.studio.publish.waiting': 'Esperando la red…',
+  'story.studio.publishing.progress': 'Publicando {current}/{total}…',
+  'story.studio.outcome.partial': '{published} de {total} publicadas — las demás siguen aquí.',
   'story.studio.title.post': 'Nueva publicación',
   'story.studio.title.reel': 'Nuevo reel',
   'story.studio.publish.as.story': 'Publicar historia',
@@ -766,7 +783,6 @@ const es = {
   'story.studio.kind.post': 'Publicación',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel necesita un vídeo o un sonido de al menos 3 segundos, o al menos dos imágenes.',
-  'story.studio.refusal.story-pages': 'Una story lleva una sola escena: publícala como post o quita las demás escenas.',
   'story.studio.offline': 'Sin conexión — la historia se publicará cuando vuelva la red.',
   'story.studio.stage': 'Vista previa de la historia',
   'story.studio.background.add': 'Añadir una foto o un vídeo',
@@ -898,6 +914,7 @@ const es = {
 
   'appUpdate.available': '¡Hay una nueva versión de Meeshy disponible!',
   'appUpdate.hint': 'Recarga para tener las últimas novedades.',
+  'appUpdate.storeHint': 'Instálala desde la tienda de aplicaciones.',
   'appUpdate.action': 'Actualizar',
   'appUpdate.dismiss': 'Esperar',
   'appUpdate.applying': 'Actualizando…',
@@ -1060,6 +1077,10 @@ const es = {
   'send.failure.gatewayUnavailable': 'el servidor no está disponible',
   'message.deleted': 'Mensaje eliminado',
   'message.expired.a11y': 'Mensaje efímero caducado',
+  'message.story.reply': 'respuesta a su historia',
+  'message.story.label': 'Historia',
+  'message.story.unavailable': 'Historia no disponible',
+  'message.mood.label': 'Estado de ánimo',
   'message.withheld': 'Contenido retenido',
   'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
   'message.veiled': 'Contenido oculto',
@@ -1077,6 +1098,8 @@ const es = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Audio protegido',
   'attachment.protected.file': 'Archivo protegido',
+  'media.reactions.badge.a11y': 'Reacciones',
+  'media.reactions.badge.mine.a11y': 'incluida la suya',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Audio',
@@ -1099,6 +1122,8 @@ const es = {
   'message.detail.sent': 'Enviado',
   'message.detail.language.original': '{language} (original)',
 
+  ...esMentions,
+  ...esStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default es;

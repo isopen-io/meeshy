@@ -153,6 +153,9 @@ export type Harness = {
   /** Les montées ABANDONNÉES en vol — le signal de l'appelant a coupé le
    * transport (`uploadsHold`). */
   readonly uploadAborts: () => number;
+  /** Rend la PLUS ANCIENNE réponse `POST /posts` retenue (`postsHold`) — les
+   * témoins d'une séquence (#7707) avancent ainsi requête par requête. */
+  readonly releasePost: () => void;
 };
 
 /** Un seul banc : `POST /posts` répond `postsStatus`, la montée TUS rend
@@ -162,17 +165,22 @@ export function harness(options: {
   readonly uploadsFail?: () => boolean;
   /** Tant que vrai, le transfert d'octets RESTE en vol jusqu'à son abandon. */
   readonly uploadsHold?: () => boolean;
+  /** Tant que vrai, chaque `POST /posts` RESTE en vol jusqu'à `releasePost()`
+   * — la requête est ENREGISTRÉE (`posts`) dès son émission. */
+  readonly postsHold?: () => boolean;
   readonly drafts?: StudioDraftStore;
 }): Harness {
   const posts: Array<Record<string, unknown>> = [];
+  const heldPosts: Array<() => void> = [];
   let creations = 0;
   let aborts = 0;
   const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (!url.endsWith('/api/v1/posts') || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
     posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    if (options.postsHold?.() === true) await new Promise<void>((resolve) => heldPosts.push(resolve));
     const status = options.postsStatus?.() ?? 201;
-    const body = status === 201 ? { success: true, data: { id: 'post-1' } } : { success: false, error: 'boom' };
+    const body = status === 201 ? { success: true, data: { id: `post-${posts.length}` } } : { success: false, error: 'boom' };
     return new Response(JSON.stringify(body), { status });
   }) as typeof fetch;
   const uploadsFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -198,6 +206,7 @@ export function harness(options: {
     posts,
     uploadCreations: () => creations,
     uploadAborts: () => aborts,
+    releasePost: () => heldPosts.shift()?.(),
     deps: {
       api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
       upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },

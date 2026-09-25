@@ -4,6 +4,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -87,7 +88,11 @@ export function PersonName({
   }
 
   return (
-    <Link to="userProfile" params={{ username: cible.username }} className={className} style={style} {...accessibilite}>
+    <Link
+      to="userProfile"
+      params={{ username: cible.username }}
+      onClick={peekProfileOnClick(cible.username)}
+      className={className} style={style} {...accessibilite}>
       {contenu}
     </Link>
   );

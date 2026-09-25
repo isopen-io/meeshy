@@ -1,5 +1,3 @@
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-
 import { served } from '@/lib/api/prism';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
@@ -8,6 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { kindOf } from './message';
+import { quotedIsProtected } from './quoted-protection';
 import { attachmentSegments } from './message-a11y-label';
 import { attachmentDurationLabel } from './media-transport';
 
@@ -55,37 +54,7 @@ export const QUOTED_KIND_KEY = {
   file: 'attachment.kind.file',
 } as const satisfies Readonly<Record<QuotedMediaKind, InterfaceCatalogKey>>;
 
-const MASKING_FLAGS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
-
-type QuotedProtectionFields = {
-  readonly isViewOnce?: boolean;
-  readonly isBlurred?: boolean;
-  readonly isEncrypted?: boolean;
-  readonly effectFlags?: number;
-};
-
-/**
- * LA MOITIÉ CLIENTE DE `quotedMessageIsProtected`
- * (`services/gateway/src/services/messaging/servedQuotedMessage.ts`) — MÊME
- * prédicat, MÊME lecture du bitfield canonique.
- *
- * DISTINCT de `protectionOf` (`lib/reading-mode/protection.ts`), et ce n'est
- * pas une jumelle : celle-là répond « quel tombstone cette RANGÉE peint-elle,
- * à cet instant ? » et compte donc l'éphémère échu ; celle-ci répond « cette
- * CITATION a-t-elle le droit de décrire ce qu'elle cite ? », question à
- * laquelle la passerelle a déjà répondu dans la charge — et pour laquelle
- * l'éphémère n'est PAS une protection (son texte est lisible dans le fil
- * jusqu'à l'expiration, et la citation vit dans ce même fil). Poser ici la
- * loi de la rangée masquerait un texte que le serveur sert, et le client
- * dirait alors autre chose que les deux autres.
- */
-export const quotedIsProtected = (quoted: QuotedProtectionFields): boolean =>
-  Boolean(
-    quoted.isViewOnce ||
-      quoted.isBlurred ||
-      quoted.isEncrypted ||
-      ((quoted.effectFlags ?? 0) & MASKING_FLAGS) !== 0,
-  );
+export { quotedIsProtected };
 
 export type QuotedMedia = {
   readonly kind: QuotedMediaKind;
@@ -99,6 +68,30 @@ export type QuotedMedia = {
   readonly durationLabel: string | null;
   /** Piste temporelle (vidéo, vocal) : le badge de lecture se pose sur la vignette. */
   readonly timebased: boolean;
+  /**
+   * LE CADRE DE LA MINIATURE (#7929) — non nul quand la citation vise UNE
+   * image ou UNE vidéo (pièce seule, ou pièce NOMMÉE d'un carrousel) : la
+   * citation la montre alors en grand, à la largeur de la carte de story et au
+   * rapport d'aspect du média. `null` sur un média protégé : ses dimensions
+   * décrivent ce que le lecteur n'a pas le droit de voir.
+   */
+  readonly frame: QuotedFrame | null;
+};
+
+/**
+ * `aspectRatio` = largeur / hauteur du média cité, BORNÉ : jamais plus haut
+ * que la scène de story (9:16), jamais plus plat que 3:1. `measured` est faux
+ * quand la pièce ne porte pas ses dimensions — repli CARRÉ, jamais inventé.
+ */
+export type QuotedFrame = { readonly aspectRatio: number; readonly measured: boolean };
+
+const FRAME_TALLEST = 9 / 16;
+const FRAME_FLATTEST = 3;
+
+const frameOf = (attachment: Attachment): QuotedFrame => {
+  const { width, height } = attachment;
+  if (width === undefined || height === undefined || width <= 0 || height <= 0) return { aspectRatio: 1, measured: false };
+  return { aspectRatio: Math.min(FRAME_FLATTEST, Math.max(FRAME_TALLEST, width / height)), measured: true };
 };
 
 export type QuotedPreview = {
@@ -125,13 +118,30 @@ export type QuotedPreview = {
  * (`message-body.ts`) — la première pièce EST donc la règle, et non une
  * simplification de celle d'iOS.
  *
- * La pièce NOMMÉE (`metadata.attachmentReplyTo`, #6164 — répondre à la
- * troisième photo d'un carrousel) n'est portée par AUCUN décodeur de web-v2
- * aujourd'hui : elle n'a donc rien à élire ici. Le jour où elle arrive, c'est
- * ICI qu'elle prime, comme `citing` prime sur le représentatif côté iOS.
+ * LA PIÈCE NOMMÉE PRIME (#6164, #7881) — répondre à la troisième photo
+ * d'un carrousel : la passerelle sert `replyTo.attachmentReplyTo =
+ * { attachmentId, kind }` (`servedQuotedMessage.ts`), que `decode.ts` laisse
+ * passer tel quel sur la citation. Elle prime ici comme `citing` prime sur le
+ * représentatif côté iOS ; une pièce nommée que la citation ne porte plus
+ * (retirée, masquée pièce par pièce) retombe sur la première.
  */
-const representativeOf = (attachments: readonly Attachment[] | undefined): Attachment | undefined =>
-  attachments?.[0];
+const namedPieceIdOf = (quoted: object): string | undefined => {
+  const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
+  if (named === null || typeof named !== 'object') return undefined;
+  const id: unknown = (named as { readonly attachmentId?: unknown }).attachmentId;
+  return typeof id === 'string' && id !== '' ? id : undefined;
+};
+
+/** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
+const representativeOf = (
+  quoted: Pick<Message, 'attachments'>,
+): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
+  const namedId = namedPieceIdOf(quoted);
+  const named = namedId === undefined ? undefined : quoted.attachments?.find((a) => a.id === namedId);
+  if (named !== undefined) return { attachment: named, single: true };
+  const first = quoted.attachments?.[0];
+  return first === undefined ? undefined : { attachment: first, single: quoted.attachments?.length === 1 };
+};
 
 /**
  * `quotedThumbnailUrl` (`ConversationViewModel+ReplyReference.swift:171-173`) :
@@ -164,12 +174,14 @@ const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | nu
  */
 const mediaOf = (params: {
   readonly attachment: Attachment;
+  readonly single: boolean;
   readonly messageIsProtected: boolean;
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedMedia => {
-  const { attachment, messageIsProtected, interfaceLanguage } = params;
+  const { attachment, single, messageIsProtected, interfaceLanguage } = params;
   const kind = kindOf(attachment);
   const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
+  const framed = mayTravel && single && (kind === 'image' || kind === 'video');
   return {
     kind,
     label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
@@ -177,6 +189,7 @@ const mediaOf = (params: {
     placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
     durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,
     timebased: kind === 'video' || kind === 'audio',
+    frame: framed ? frameOf(attachment) : null,
   };
 };
 
@@ -195,15 +208,22 @@ export function quotedPreviewOf(params: {
   readonly quoted: Pick<
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
-  >;
+  > &
+    Partial<Pick<Message, 'deletedAt'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedPreview {
   const { quoted, readerLanguages, interfaceLanguage } = params;
+  /* UN MESSAGE CITÉ SUPPRIMÉ NE DIT PLUS RIEN DE LUI (#7926) — le libellé du
+     catalogue, celui de la bulle supprimée (`ProtectionNotice`), jamais
+     l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
+     encore une trace. Aucune langue de CONTENU : c'est de l'interface. */
+  if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) {
+    return { text: translate(interfaceLanguage, 'message.deleted'), language: '', media: null, inventory: [], isProtected: true };
+  }
   const messageIsProtected = quotedIsProtected(quoted);
-  const attachment = representativeOf(quoted.attachments);
-  const media =
-    attachment === undefined ? null : mediaOf({ attachment, messageIsProtected, interfaceLanguage });
+  const piece = representativeOf(quoted);
+  const media = piece === undefined ? null : mediaOf({ ...piece, messageIsProtected, interfaceLanguage });
 
   /* UN PLACEHOLDER NE SE TRADUIT PAS. La passerelle retire déjà les
      traductions d'une citation protégée (`servedQuotedMessage`), mais ce

@@ -1,4 +1,8 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import enIdentity from './catalog-en-identity';
+
+import enMentions from './catalog-en-mentions';
+import enStoriesMine from './catalog-en-stories-mine';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -98,11 +102,19 @@ const en = {
   'feed.post.menu.unsave': 'Remove from saved',
   'feed.post.menu.pin': 'Pin',
   'feed.post.menu.delete': 'Delete',
+  'feed.post.edit': 'Edit',
+  'feed.post.edit.title': 'Edit post',
+  'feed.post.edit.body.a11y': 'Post content',
+  'feed.post.edit.remaining.a11y': '{count} characters remaining',
+  'feed.post.edit.publish': 'Publish',
   'report.post.title': 'Report this post',
   'feed.post.copied': 'Text copied',
   'feed.post.copy_failed': 'Couldn’t copy the text',
   'feed.post.pinned': 'Post pinned',
   'feed.post.pin_failed': 'Couldn’t pin the post',
+  'feed.post.edited': 'Post updated',
+  'feed.post.edit_failed': 'Couldn’t update the post',
+  'feed.post.edit_busy': 'An edit is already in progress',
   'feed.post.deleted': 'Post deleted',
   'feed.post.delete_failed': 'Couldn’t delete the post',
   'feed.post.repost.success': 'Reposted',
@@ -168,8 +180,7 @@ const en = {
   'feed.allLoaded': 'All posts are loaded',
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
-  'a11y.avatar.profile': 'View {name}’s profile',
-  'a11y.avatar.story': 'View {name}’s story',
+  ...enIdentity,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
   'report.body': 'Choose what prompts your report. Our moderation team will receive it.',
@@ -316,6 +327,10 @@ const en = {
   'dataExport.action.again': 'Export again',
   'dataExport.done.title': 'Export complete',
   'dataExport.done.body': 'The file was downloaded to this device.',
+  'dataExport.ready.title': 'Export ready',
+  'dataExport.ready.body': 'The file is ready. Tap to save it to this device.',
+  'dataExport.action.deliver': 'Save the file',
+  'dataExport.undelivered.body': 'This device could not receive the file.',
 
   'profile.title': 'Profile',
   'profile.edit': 'Edit',
@@ -756,6 +771,8 @@ const en = {
   'story.studio.publish': 'Publish',
   'story.studio.publishing': 'Publishing…',
   'story.studio.publish.waiting': 'Waiting for network…',
+  'story.studio.publishing.progress': 'Publishing {current}/{total}…',
+  'story.studio.outcome.partial': '{published} of {total} published — the others stay here.',
   'story.studio.title.post': 'New post',
   'story.studio.title.reel': 'New reel',
   'story.studio.publish.as.story': 'Publish story',
@@ -766,7 +783,6 @@ const en = {
   'story.studio.kind.post': 'Post',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'A reel needs a video or a sound of at least 3 seconds, or at least two images.',
-  'story.studio.refusal.story-pages': 'A story carries a single scene: publish it as a post, or remove the other scenes.',
   'story.studio.offline': 'Offline — the story will publish when the network is back.',
   'story.studio.stage': 'Story preview',
   'story.studio.background.add': 'Add a photo or video',
@@ -898,6 +914,7 @@ const en = {
 
   'appUpdate.available': 'A new version of Meeshy is available!',
   'appUpdate.hint': 'Reload to get the latest features.',
+  'appUpdate.storeHint': 'Install it from the app store.',
   'appUpdate.action': 'Update',
   'appUpdate.dismiss': 'Wait',
   'appUpdate.applying': 'Updating…',
@@ -1060,6 +1077,10 @@ const en = {
   'send.failure.gatewayUnavailable': 'the server is unavailable',
   'message.deleted': 'Message deleted',
   'message.expired.a11y': 'Ephemeral message expired',
+  'message.story.reply': 'reply to their story',
+  'message.story.label': 'Story',
+  'message.story.unavailable': 'Story unavailable',
+  'message.mood.label': 'Mood',
   'message.withheld': 'Content withheld',
   'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
   'message.veiled': 'Hidden content',
@@ -1077,6 +1098,8 @@ const en = {
   'attachment.protected.video': 'Protected video',
   'attachment.protected.audio': 'Protected voice message',
   'attachment.protected.file': 'Protected attachment',
+  'media.reactions.badge.a11y': 'Reactions',
+  'media.reactions.badge.mine.a11y': 'including yours',
   'attachment.kind.image': 'Photo',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',
@@ -1099,6 +1122,8 @@ const en = {
   'message.detail.sent': 'Sent',
   'message.detail.language.original': '{language} (original)',
 
+  ...enMentions,
+  ...enStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default en;

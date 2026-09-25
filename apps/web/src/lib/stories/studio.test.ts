@@ -22,6 +22,7 @@ import {
   withVisual,
   withVisualUpload,
   withoutPage,
+  withoutPages,
   type StudioDraft,
 } from './studio';
 import { IDENTITY_POSE } from './studio-pose';
@@ -190,6 +191,34 @@ describe('withoutPage — inerte sous DEUX pages, reporte la page courante (#768
     const onFirst = withCurrentPage(threePages, 'page-1');
     const removed = withoutPage(onFirst, 'page-2');
     expect(removed.currentPage).toBe('page-1');
+  });
+});
+
+describe('withoutPages — retirer les pages PUBLIÉES d’un coup (#7707)', () => {
+  test('retire plusieurs pages en un geste ; les pages restantes gardent leur IDENTITÉ', () => {
+    const threePages = withAddedPage(withAddedPage(typed('Une'), 'fr'), 'fr');
+    const secondPageObject = threePages.pages.find((p) => p.id === 'page-2')!;
+    const removed = withoutPages(threePages, ['page-1', 'page-3']);
+    expect(removed.pages.map((p) => p.id)).toEqual(['page-2']);
+    expect(removed.pages[0]).toBe(secondPageObject);
+  });
+
+  test('la page COURANTE retirée ⇒ la PREMIÈRE restante devient courante', () => {
+    const threePages = withAddedPage(withAddedPage(typed('Une'), 'fr'), 'fr');
+    expect(threePages.currentPage).toBe('page-3');
+    const removed = withoutPages(threePages, ['page-1', 'page-3']);
+    expect(removed.currentPage).toBe('page-2');
+  });
+
+  test('des `id` inconnus sont ignorés', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    const removed = withoutPages(twoPages, ['page-9']);
+    expect(removed).toBe(twoPages);
+  });
+
+  test('retirer TOUTES les pages laisse le brouillon INCHANGÉ — le succès complet passe par `clear`', () => {
+    const twoPages = withAddedPage(typed('Une'), 'fr');
+    expect(withoutPages(twoPages, twoPages.pages.map((p) => p.id))).toBe(twoPages);
   });
 });
 

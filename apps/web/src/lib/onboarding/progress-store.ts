@@ -1,7 +1,7 @@
 import { ONBOARDING_STEPS } from '@/lib/api/onboarding';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
-import { EMPTY_PROGRESS, type JourneyProgress } from './journey';
+import { EMPTY_PROGRESS, type JourneyProgress, type ScoreMark } from './journey';
 
 /**
  * **CE QUI S'EST CONFIRMÉ PENDANT LE PARCOURS, PAR COMPTE** (#7729) — le salut
@@ -19,6 +19,16 @@ const PREFIX = 'meeshy.onboarding.';
 const isStep = (value: unknown): value is JourneyProgress['done'][number] =>
   typeof value === 'string' && (ONBOARDING_STEPS as readonly string[]).includes(value);
 
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/** Un repère de score altéré se lit ABSENT : la session repartira de la prochaine lecture. */
+function decodeScore(raw: unknown): ScoreMark | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const baseline: unknown = Reflect.get(raw, 'baseline');
+  const last: unknown = Reflect.get(raw, 'last');
+  return isCount(baseline) && isCount(last) ? { baseline, last } : undefined;
+}
+
 function decode(raw: string | null): JourneyProgress {
   if (raw === null) return EMPTY_PROGRESS;
   try {
@@ -28,7 +38,8 @@ function decode(raw: string | null): JourneyProgress {
     const friendRequests: unknown = Reflect.get(parsed, 'friendRequests');
     if (!Array.isArray(done) || !done.every(isStep)) return EMPTY_PROGRESS;
     if (!Array.isArray(friendRequests) || !friendRequests.every((id) => typeof id === 'string')) return EMPTY_PROGRESS;
-    return { done, friendRequests };
+    const score = decodeScore(Reflect.get(parsed, 'score'));
+    return score === undefined ? { done, friendRequests } : { done, friendRequests, score };
   } catch {
     return EMPTY_PROGRESS;
   }

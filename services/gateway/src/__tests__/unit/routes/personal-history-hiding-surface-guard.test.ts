@@ -216,6 +216,9 @@ const SURFACES: Record<string, Classification> = {
   // de l'utilisateur pour construire son filtre. Deux lectures, exemptées au
   // même titre que leur fichier d'origine.
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #7845 — deux lectures de COMPTE (`count` des messages envoyés, `findMany`
+  // des seuls identifiants pour compter les signalements reçus) : aucune ne
+  // sert un message, la fiche d'un membre ne rend que des nombres.
   'admin/conversation-messages-sovereign.ts': {
     kind: 'exempt',
     reads: 2,

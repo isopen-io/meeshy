@@ -121,6 +121,7 @@ export interface FullUser {
   email: string;
   phoneNumber: string | null;
   avatar: string | null;
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
@@ -158,7 +159,6 @@ export interface FullUser {
    * (`getUserById`) : elles y sont toujours, mais les fabriques de témoins qui
    * bâtissent un `FullUser` à la main n'ont pas à les connaître toutes.
    */
-  banner?: string | null;
   deviceLocale?: string | null;
   deviceCountry?: string | null;
   birthDate?: Date | null;
@@ -491,7 +491,9 @@ export enum UserAuditAction {
    * (#7845). Distincte d'`UPDATE_PROFILE` : la ligne d'audit doit dire QUEL
    * réglage a changé et dans quelle catégorie, pas seulement qu'un profil a
    * bougé. Les consentements n'y passent jamais — ils ont leur geste
-   * (`UPDATE_CONSENT`) et son motif obligatoire.
+   * (`UPDATE_CONSENT`) et son motif obligatoire. La ligne porte la catégorie
+   * et les clés changées ; la valeur avant/après de chaque clé voyage dans
+   * `changes`.
    */
   UPDATE_PREFERENCES = 'UPDATE_PREFERENCES'
 }

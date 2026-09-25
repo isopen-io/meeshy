@@ -172,7 +172,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
 6. ${REPO}/CLAUDE.md   TDD non negociable, TypeScript strict sans 'any', immuabilite, budget
    1000-1200 lignes par fichier, UNE source de verite, Instant App Principles, Prisme
    Linguistique, treize dimensions.
-7. ${REPO}/tasks/lessons.md   les 40 dernieres lecons (tail -400) — le depot a deja paye ces erreurs.
+7. ${REPO}/tasks/lessons/   les lecons de ton domaine (\`ls tasks/lessons | grep <mot>\`) — le depot a deja paye ces erreurs.
 8. Le code EXISTANT de ${V3} : src/routes/ (conversations, thread, route-table), src/components/
    (shell, bubble, composer, avatar, glyph, lens-row), src/lib/ (router, reader, scheme, accent,
    grouping, api/prism, api/fixtures, lens/law, view/*), src/institutional/, scripts/ (gate
@@ -1492,9 +1492,9 @@ EST — jamais un tableau de bord (aucune case cochee, aucun « fait » : l'etat
    ajoute ou retire des routes.
 3. ${V3}/README.md : chaque MESURE nouvelle avec la commande qui la rejoue (poids, courbe,
    requetes) — prise dans les sorties des gates, JAMAIS inventee.
-4. ${REPO}/tasks/lessons.md : une lecon NUMEROTEE (numero suivant, verifie \`grep -n '^## Leçon'
-   | tail -3\`) par correction de FOND faite en revue ou aux gates ce tour, au format des lecons
-   existantes. Rien si aucune correction de fond.
+4. ${REPO}/tasks/lessons/<AAAA-MM-JJ>-<slug>.md : UN fichier par lecon (premiere ligne
+   \`## <AAAA-MM-JJ> — <titre>\`, aucun numero, #7711) par correction de FOND faite en revue ou
+   aux gates ce tour. Jamais dans tasks/lessons.md, qui n'est que la carte. Rien si aucune correction de fond.
 
 ${SANS_COMMIT}
 

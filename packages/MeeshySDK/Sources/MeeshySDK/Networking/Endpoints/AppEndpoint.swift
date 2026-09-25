@@ -13,10 +13,12 @@ import Foundation
 
 public enum AppEndpoint: MeeshyEndpoint, Sendable {
     case minVersion
+    case shellVersion
 
     public var path: String {
         switch self {
         case .minVersion: return "/api/v1/app/min-version"
+        case .shellVersion: return "/api/v1/app/shell-version"
         }
     }
 }

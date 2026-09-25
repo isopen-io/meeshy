@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { plainTextOf } from '@meeshy/shared/utils/text-plain';
 
 import {
   renderConversationPreviewText,
@@ -116,7 +117,7 @@ export function LensPreviewLine({
   const ink = TONE_INK[preview.tone];
   const italic = preview.kind === 'typing' || preview.kind === 'system' || preview.kind === 'empty';
   const authorColor = preview.author?.kind === 'draft' ? accent : undefined;
-  const flat = renderConversationPreviewText(preview, interfaceLanguage);
+  const flat = plainTextOf(renderConversationPreviewText(preview, interfaceLanguage));
   const authorOnly = preview.author === null ? '' : renderConversationPreviewText({ ...preview, icon: null, segments: [] }, interfaceLanguage);
 
   return (
@@ -139,7 +140,7 @@ export function LensPreviewLine({
         {preview.segments.map((segment, index) => (
           <span key={index} {...langOf(segment, preview, originalLanguage)}>
             {index === 0 ? '' : ' · '}
-            {segment.text}
+            {plainTextOf(segment.text)}
           </span>
         ))}
         {preview.kind === 'typing' ? <TypingDots color={accent} className="ml-1" /> : null}

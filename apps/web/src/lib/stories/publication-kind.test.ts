@@ -8,6 +8,7 @@ import {
   studioPublishRefusal,
   studioReelMedia,
   type PublicationKind,
+  type PublicationRefusal,
 } from './publication-kind';
 import {
   currentStudioPage,
@@ -101,24 +102,29 @@ describe('studioReelMedia / studioPublishRefusal — le réel se REFUSE, il ne s
   });
 });
 
-describe('studioPublishRefusal — une STORY de plusieurs pages se REFUSE en le disant (#7684, question 9.4)', () => {
+describe('studioPublishRefusal — une STORY de plusieurs pages n’est PLUS refusée (#7707)', () => {
   const twoPublishablePages = (): StudioDraft => {
     const second = withAddedPage(textOnly(), 'fr');
     return withText(second, currentStudioPage(second).texts[0]!.id, 'Deuxième');
   };
 
-  test('deux pages AVEC matière ⇒ la story est refusée ; le post et le réel qualifiant ne le sont pas', () => {
-    expect(studioPublishRefusal(twoPublishablePages(), 'STORY')).toBe('story-with-several-pages');
+  test('deux pages AVEC matière : ni la story, ni le post ne sont refusés — le canal `.scene` les publie', () => {
+    expect(studioPublishRefusal(twoPublishablePages(), 'STORY')).toBeNull();
     expect(studioPublishRefusal(twoPublishablePages(), 'POST')).toBeNull();
   });
 
-  test('une seconde page VIDE ne compte pas — ce qui est compté est ce qui PARTIRA', () => {
-    expect(studioPublishRefusal(withAddedPage(textOnly(), 'fr'), 'STORY')).toBeNull();
+  test('le réel sans média qualifiant reste refusé, inchangé', () => {
+    expect(studioPublishRefusal(textOnly(), 'REEL')).toBe('reel-without-qualifying-media');
   });
 
-  test('retirer la seconde page lève le refus', () => {
+  test('retirer une page ne change toujours rien pour la story', () => {
     const draft = twoPublishablePages();
     expect(studioPublishRefusal(withoutPage(draft, draft.currentPage), 'STORY')).toBeNull();
+  });
+
+  test('`PublicationRefusal` ne porte plus que le réel — vérifié au COMPILATEUR', () => {
+    const onlyReel: PublicationRefusal = 'reel-without-qualifying-media';
+    expect(onlyReel).toBe('reel-without-qualifying-media');
   });
 });
 

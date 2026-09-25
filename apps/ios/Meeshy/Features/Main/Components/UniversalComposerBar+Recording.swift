@@ -20,14 +20,11 @@ extension UniversalComposerBar {
         // comme au focus, et dans le style sombre aussi : c'est l'état qu'on
         // doit lire d'un coup d'œil avant d'envoyer.
         let protection = dominantProtection
-        let bgFill: Color = protection.map { $0.tint.opacity(isDark ? 0.16 : 0.08) }
-            ?? (style == .dark ? Color.white.opacity(0.08) : accent.opacity(0.06))
+        let fieldTint: Color? = protection.map { $0.tint.opacity(isDark ? 0.35 : 0.25) }
         let borderDefault: [Color] = protection.map { [$0.tint.opacity(0.55), $0.tint.opacity(0.4)] }
-            ?? (style == .dark
-                ? [Color.white.opacity(0.15), Color.white.opacity(0.1)]
-                : [accent.opacity(0.2), accent.opacity(0.15)])
+            ?? [Color.clear, Color.clear]
         let borderFocused: [Color] = protection.map { [$0.tint.opacity(0.8), $0.tint.opacity(0.6)] }
-            ?? [MeeshyColors.indigo400.opacity(0.5), MeeshyColors.indigo600.opacity(0.5)]
+            ?? [accent.opacity(0.55), MeeshyColors.indigo600.opacity(0.45)]
 
         return HStack(spacing: 0) {
             // Mic button inside field (left) — hidden when focused
@@ -55,7 +52,9 @@ extension UniversalComposerBar {
                         .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
                 }
 
-                TextField("", text: $text, axis: .vertical)
+                // La sélection est lue à partir d'iOS 18 pour la barre de
+                // format (#7849, `UniversalComposerBar+Format.swift`).
+                composerTextFieldBase
                     .focused($isFocused)
                     .foregroundColor(textColor)
                     .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
@@ -135,19 +134,16 @@ extension UniversalComposerBar {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
         .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(bgFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(
-                            focusBounce ?
-                            LinearGradient(colors: borderFocused, startPoint: .leading, endPoint: .trailing) :
-                                LinearGradient(colors: borderDefault, startPoint: .leading, endPoint: .trailing),
-                            lineWidth: focusBounce ? 1.5 : 1
-                        )
+        .adaptiveLiquidGlass(in: Self.fieldShape, tint: fieldTint)
+        .overlay(
+            Self.fieldShape
+                .stroke(
+                    focusBounce ?
+                    LinearGradient(colors: borderFocused, startPoint: .leading, endPoint: .trailing) :
+                        LinearGradient(colors: borderDefault, startPoint: .leading, endPoint: .trailing),
+                    lineWidth: focusBounce ? 1.5 : 1
                 )
-                .shadow(color: focusBounce ? (protection?.tint ?? MeeshyColors.indigo400).opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
+                .allowsHitTesting(false)
         )
         .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
@@ -164,12 +160,6 @@ extension UniversalComposerBar {
 
     var recordingBar: some View {
         let isDark = style == .dark
-        let bgFill = isDark
-            ? Color.white.opacity(0.08)
-            : servedAccent.opacity(0.06)
-        let borderColor: Color = isDark
-            ? Color.white.opacity(0.15)
-            : servedAccent.opacity(0.2)
         let timerColor = isDark ? Color.white : theme.textPrimary
         let waveformColor = isDark ? "FFFFFF" : servedAccentHex
         let canSend = effectiveDuration >= Self.minimumSendableDuration
@@ -302,14 +292,7 @@ extension UniversalComposerBar {
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
         .frame(minHeight: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(bgFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-        )
+        .adaptiveLiquidGlass(in: Self.fieldShape, tint: MeeshyColors.error.opacity(0.12))
     }
 
     // MARK: - Waveform strip used inside the recording bar

@@ -1,4 +1,6 @@
 import XCTest
+import GRDB
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -170,5 +172,129 @@ final class StarredMessagesStoreTests: XCTestCase {
         XCTAssertEqual(store2.snapshots.count, 1)
         XCTAssertEqual(store2.snapshots[0].contentPreview, "Persisted")
         store2.clearAll()
+    }
+
+    // MARK: - Relais de conversation fermée (#7939)
+
+    private func makePersistence() throws -> MessagePersistenceActor {
+        let db = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: db)
+        return MessagePersistenceActor(dbWriter: db)
+    }
+
+    private func cachedRecord(id: String, content: String?, deletedAt: Date? = nil) -> MessageRecord {
+        MessageRecord(
+            localId: id, serverId: id,
+            conversationId: "conv-closed", senderId: "participant-bob",
+            content: content, originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: deletedAt,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Bob", senderUsername: "bob",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(timeIntervalSince1970: 1_000), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil,
+            reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+    }
+
+    private static let noConversation: @Sendable (String) async -> MeeshyConversation? = { _ in nil }
+
+    @MainActor
+    func test_follow_starredFromAnotherDevice_composesTheSnapshotFromGRDB() async throws {
+        let sut = makeSUT()
+        let persistence = try makePersistence()
+        try await persistence.insertOptimistic(cachedRecord(id: "m-remote", content: "Hello"))
+        let starredAt = Date(timeIntervalSince1970: 2_000)
+
+        await StarredMessagesStore.follow(
+            .starred(messageId: "m-remote", conversationId: "conv-closed", starredAt: starredAt),
+            persistence: persistence, store: sut, conversationLookup: Self.noConversation
+        )
+
+        let snapshot = try XCTUnwrap(sut.snapshot(for: "m-remote"))
+        XCTAssertEqual(snapshot.conversationId, "conv-closed")
+        XCTAssertEqual(snapshot.senderName, "Bob")
+        XCTAssertEqual(snapshot.contentPreview, "Hello")
+        XCTAssertEqual(snapshot.starredAt, starredAt)
+    }
+
+    @MainActor
+    func test_follow_starredTwice_neverTogglesItOff() async throws {
+        let sut = makeSUT()
+        let persistence = try makePersistence()
+        try await persistence.insertOptimistic(cachedRecord(id: "m-twice", content: "Hello"))
+        let mutation = RealtimeMessageMutation.starred(messageId: "m-twice", conversationId: "conv-closed", starredAt: Date())
+
+        await StarredMessagesStore.follow(mutation, persistence: persistence, store: sut, conversationLookup: Self.noConversation)
+        await StarredMessagesStore.follow(mutation, persistence: persistence, store: sut, conversationLookup: Self.noConversation)
+
+        XCTAssertTrue(sut.isStarred(messageId: "m-twice"))
+        XCTAssertEqual(sut.snapshots.count, 1)
+    }
+
+    @MainActor
+    func test_follow_starredMessageNotCached_composesNothing() async throws {
+        let sut = makeSUT()
+        await StarredMessagesStore.follow(
+            .starred(messageId: "ghost", conversationId: "conv-closed", starredAt: Date()),
+            persistence: try makePersistence(), store: sut, conversationLookup: Self.noConversation
+        )
+        XCTAssertFalse(sut.isStarred(messageId: "ghost"))
+    }
+
+    @MainActor
+    func test_follow_unstarredFromAnotherDevice_removesTheSnapshot() async throws {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "m-off"))
+
+        await StarredMessagesStore.follow(
+            .unstarred(messageId: "m-off"), persistence: try makePersistence(), store: sut,
+            conversationLookup: Self.noConversation
+        )
+
+        XCTAssertFalse(sut.isStarred(messageId: "m-off"))
+    }
+
+    @MainActor
+    func test_follow_starredMessageDeletedWhileClosed_leavesTheFavorites() async throws {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "m-del"))
+
+        await StarredMessagesStore.follow(
+            .deleted(messageId: "m-del", deletedAt: Date()), persistence: try makePersistence(), store: sut,
+            conversationLookup: Self.noConversation
+        )
+
+        XCTAssertFalse(sut.isStarred(messageId: "m-del"))
+    }
+
+    @MainActor
+    func test_follow_starredMessageEditedWhileClosed_updatesThePreview() async throws {
+        let sut = makeSUT()
+        sut.toggle(makeSnapshot(id: "m-edit", content: "avant"))
+
+        await StarredMessagesStore.follow(
+            .edited(messageId: "m-edit", content: "après", editedAt: Date()), persistence: try makePersistence(),
+            store: sut, conversationLookup: Self.noConversation
+        )
+
+        XCTAssertEqual(sut.snapshot(for: "m-edit")?.contentPreview, "après")
     }
 }

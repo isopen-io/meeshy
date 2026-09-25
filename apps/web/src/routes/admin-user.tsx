@@ -95,7 +95,7 @@ export default function AdminUserScreen() {
 
   const titre = translateAdmin(language, 'admin.user.title');
   const cadre = (contenu: ReactNode) => (
-    <AdminScreenFrame language={language} title={titre} back={retour} width="wide">
+    <AdminScreenFrame language={language} title={titre} back={retour}>
       {contenu}
     </AdminScreenFrame>
   );

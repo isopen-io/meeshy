@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { fileDeliveryPortal } from './deliver-file';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from './file-delivery-host';
 
 /**
@@ -46,5 +47,61 @@ describe('browserFileDeliveryHost — les portes que l’hôte offre VRAIMENT', 
 
   test('aucun document (rendu hors navigateur) ⇒ aucune porte', () => {
     expect(hasFileDeliveryDoor(browserFileDeliveryHost({ document: undefined, navigator: undefined, urls, shell: undefined }))).toBe(false);
+  });
+});
+
+/**
+ * LA COQUE ANDROID LIVRE UN FICHIER PAR SON PONT (#7863). Sans porte, le
+ * geste « Enregistrer » d'une story à soi n'y était pas offert, là où le web
+ * (ancre) et iOS (partage de fichier) l'offrent. `MeeshyShare.shareFile`
+ * ouvre la feuille du système avec le FICHIER ; une coque construite avant ce
+ * pont ne déclare pas la méthode et reste sans porte.
+ */
+type AppelPont = { readonly plugin: string; readonly methode: string; readonly options: Record<string, unknown> };
+
+function coqueAndroid(options: { readonly methodes: readonly string[]; readonly rejet?: unknown }) {
+  const appels: AppelPont[] = [];
+  const shell = {
+    PluginHeaders: [{ name: 'MeeshyShare', methods: options.methodes.map((name) => ({ name })) }],
+    nativePromise: async (plugin: string, methode: string, opts: object) => {
+      appels.push({ plugin, methode, options: opts as Record<string, unknown> });
+      if (options.rejet !== undefined) throw options.rejet;
+      return undefined;
+    },
+  };
+  return { shell, appels };
+}
+
+describe('browserFileDeliveryHost — la coque Android partage le FICHIER par son pont (#7863)', () => {
+  test('une coque qui déclare `MeeshyShare.shareFile` ⇒ une porte de partage, jamais l’ancre muette', () => {
+    const { shell } = coqueAndroid({ methodes: ['share', 'shareFile'] });
+    const host = browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell });
+    expect(hasFileDeliveryDoor(host)).toBe(true);
+    expect(host.document).toBeUndefined();
+  });
+
+  test('une coque construite AVANT ce pont (`share` seul) ⇒ toujours aucune porte', () => {
+    const { shell } = coqueAndroid({ methodes: ['share'] });
+    const host = browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell });
+    expect(hasFileDeliveryDoor(host)).toBe(false);
+  });
+
+  test('livrer remet au pont le nom, le type et le contenu en base64', async () => {
+    const { shell, appels } = coqueAndroid({ methodes: ['share', 'shareFile'] });
+    const portal = fileDeliveryPortal(browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell }));
+    const outcome = await portal?.deliver(new Blob(['Meeshy!'], { type: 'image/jpeg' }), 'story.jpg', 'image/jpeg');
+    expect(outcome).toBe('delivered');
+    expect(appels).toEqual([
+      { plugin: 'MeeshyShare', methode: 'shareFile', options: { fileName: 'story.jpg', mimeType: 'image/jpeg', data: btoa('Meeshy!') } },
+    ]);
+  });
+
+  test('la feuille fermée sans choix (CANCELED) ⇒ annulé, comme sur le web', async () => {
+    const { shell } = coqueAndroid({
+      methodes: ['share', 'shareFile'],
+      rejet: Object.assign(new Error('Partage annule'), { code: 'CANCELED' }),
+    });
+    const portal = fileDeliveryPortal(browserFileDeliveryHost({ document: documentLike(), navigator: {}, urls, shell }));
+    expect(await portal?.deliver(new Blob(['x'], { type: 'image/jpeg' }), 'story.jpg', 'image/jpeg')).toBe('cancelled');
   });
 });

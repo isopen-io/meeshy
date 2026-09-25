@@ -6,77 +6,24 @@
  */
 
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
-import { getCacheStore, type CacheStore } from './CacheStore';
+import { getCacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
-import { z } from 'zod';
+import { MentionSuggestionFinder, type MentionSuggestion } from './mentions/mentionSuggestions';
+import { mentionableScope } from './mentions/mentionableScope';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
 
-
-export interface MentionSuggestion {
-  id: string;
-  username: string;
-  displayName: string | null;
-  avatar: string | null;
-  badge: 'conversation' | 'friend' | 'other';
-  inConversation: boolean;
-  isFriend: boolean;
-}
+export type { MentionSuggestion } from './mentions/mentionSuggestions';
 
 export interface MentionValidationResult {
   isValid: boolean;
   validUserIds: string[];
   invalidUsernames: string[];
   errors: string[];
-}
-
-/**
- * Le rang d'un membre dans les suggestions est son ACTIVITÉ DANS LA
- * CONVERSATION (dernier message écrit ici, cf. `participantStats` de
- * `ConversationMessageStats`, clé `statsAuthorKey` = User.id d'un inscrit),
- * jamais sa présence globale (`lastActiveAt` / `isOnline`) : un ordre ou une
- * troncature qui en dépendrait révélerait la présence d'un co-participant à
- * qui la porte la masque, même sans servir le champ. Seul `lastMessageAt` est
- * lu ; le reste de l'entrée est ignoré tel quel.
- */
-const participantActivityStatsSchema = z.record(
-  z.string(),
-  z.object({ lastMessageAt: z.string().nullable().optional() }).loose()
-);
-
-type ConversationActivity = ReadonlyMap<string, number>;
-
-type RankableMember = {
-  user: { id: string; username: string; displayName: string | null } | null;
-};
-
-function lastMessageEpochByAuthor(rawParticipantStats: unknown): ConversationActivity {
-  const parsed = participantActivityStatsSchema.safeParse(
-    typeof rawParticipantStats === 'string' ? JSON.parse(rawParticipantStats) : rawParticipantStats
-  );
-  if (!parsed.success) return new Map();
-  return new Map(
-    Object.entries(parsed.data)
-      .map(([authorKey, stat]) => [authorKey, Date.parse(stat.lastMessageAt ?? '')] as const)
-      .filter(([, epoch]) => Number.isFinite(epoch))
-  );
-}
-
-function memberLabel(member: RankableMember): string {
-  return (member.user?.displayName || member.user?.username || '').toLowerCase();
-}
-
-function byConversationActivity(activity: ConversationActivity) {
-  const lastMessageEpoch = (member: RankableMember): number =>
-    member.user ? (activity.get(member.user.id) ?? 0) : 0;
-  return <T extends RankableMember>(a: T, b: T): number =>
-    lastMessageEpoch(b) - lastMessageEpoch(a) ||
-    memberLabel(a).localeCompare(memberLabel(b)) ||
-    (a.user?.username ?? '').localeCompare(b.user?.username ?? '');
 }
 
 export class MentionService {
@@ -92,9 +39,6 @@ export class MentionService {
   // appliquée après lowercase — parité avec le charset username.
   private readonly USERNAME_VALIDATION_REGEX = /^[a-z0-9_-]{1,30}$/;
 
-  // Limite de suggestions pour l'autocomplete
-  private readonly MAX_SUGGESTIONS = 10;
-
   // Le plafond de mentions par message vivait ici, en champ privé. Il vit
   // désormais dans `validation/mention-list.ts` (importé ci-dessus) : il borne
   // AUSSI la liste EXPLICITE du compositeur, l'autre source de la même donnée,
@@ -103,89 +47,22 @@ export class MentionService {
   // Limite maximale de longueur de contenu à traiter (10KB)
   private readonly MAX_CONTENT_LENGTH = 10000;
 
-  // Cache Redis pour l'autocomplete (TTL: 5 minutes)
-  private readonly CACHE_TTL = 300; // 5 minutes en secondes
-  private cache: CacheStore;
+  private readonly suggestions: MentionSuggestionFinder;
 
   constructor(
     private readonly prisma: PrismaClient,
   ) {
-    this.cache = getCacheStore();
+    const cache = getCacheStore();
+    this.suggestions = new MentionSuggestionFinder(prisma, cache);
 
-    logger.info(`[MentionService] Cache initialized (available: ${this.cache.isAvailable()})`);
-  }
-
-  /**
-   * Génère une clé de cache pour l'autocomplete
-   */
-  private generateCacheKey(conversationId: string, currentUserId: string, query: string): string {
-    const normalizedQuery = query.toLowerCase().trim();
-    return `mentions:suggestions:${conversationId}:${currentUserId}:${normalizedQuery}`;
-  }
-
-  /**
-   * Récupère les suggestions depuis le cache
-   */
-  private async getCachedSuggestions(
-    conversationId: string,
-    currentUserId: string,
-    query: string
-  ): Promise<MentionSuggestion[] | null> {
-    try {
-      const cacheKey = this.generateCacheKey(conversationId, currentUserId, query);
-      const cached = await this.cache.get(cacheKey);
-
-      if (cached) {
-        const suggestions: MentionSuggestion[] = JSON.parse(cached);
-        logger.info(`[MentionService] Cache HIT for ${cacheKey} (${suggestions.length} suggestions)`);
-        return suggestions;
-      }
-
-      logger.info(`[MentionService] Cache MISS for ${cacheKey}`);
-      return null;
-    } catch (error) {
-      logger.error('[MentionService] Error reading cache', error);
-      return null;
-    }
-  }
-
-  /**
-   * Met en cache les suggestions
-   */
-  private async cacheSuggestions(
-    conversationId: string,
-    currentUserId: string,
-    query: string,
-    suggestions: MentionSuggestion[]
-  ): Promise<void> {
-    try {
-      const cacheKey = this.generateCacheKey(conversationId, currentUserId, query);
-      await this.cache.set(cacheKey, JSON.stringify(suggestions), this.CACHE_TTL);
-      logger.info(`[MentionService] Cached ${suggestions.length} suggestions for ${cacheKey} (TTL: ${this.CACHE_TTL}s)`);
-    } catch (error) {
-      logger.error('[MentionService] Error writing cache', error);
-    }
+    logger.info(`[MentionService] Cache initialized (available: ${cache.isAvailable()})`);
   }
 
   /**
    * Invalide le cache pour une conversation (appelé quand les membres changent)
    */
   async invalidateCacheForConversation(conversationId: string): Promise<void> {
-
-    try {
-      const pattern = `mentions:suggestions:${conversationId}:*`;
-      const keys = await this.cache.keys(pattern);
-
-      if (keys.length > 0) {
-        // Supprimer les clés une par une
-        for (const key of keys) {
-          await this.cache.del(key);
-        }
-        logger.info(`[MentionService] Invalidated ${keys.length} cache entries for conversation ${conversationId}`);
-      }
-    } catch (error) {
-      logger.error('[MentionService] Error invalidating cache', error);
-    }
+    await this.suggestions.invalidateConversation(conversationId);
   }
 
   /**
@@ -335,268 +212,21 @@ export class MentionService {
   }
 
   /**
-   * Dernier message écrit dans la conversation, par auteur (User.id) — le seul
-   * signal autorisé pour classer et tronquer les co-participants. Une
-   * conversation sans compteurs rend une carte vide : tout le monde à égalité,
-   * l'ordre alphabétique tranche. Pas de `recompute()` ici — ce n'est qu'un
-   * rang d'autocomplete, pas une lecture de statistiques.
-   */
-  private async loadConversationActivity(conversationId: string): Promise<ConversationActivity> {
-    const statsRow = await this.prisma.conversationMessageStats.findUnique({
-      where: { conversationId },
-      select: { participantStats: true }
-    });
-    if (!statsRow) return new Map();
-    return lastMessageEpochByAuthor(statsRow.participantStats);
-  }
-
-  /**
-   * Obtient des suggestions d'utilisateurs pour l'autocomplete
-   * avec priorité aux membres de la conversation et aux amis
-   * PERFORMANCE: Utilise Redis cache (TTL: 5 minutes)
-   *
-   * @param conversationId - ID de la conversation
-   * @param currentUserId - ID de l'utilisateur qui fait la recherche
-   * @param query - Texte de recherche (optionnel)
-   * @returns Liste de suggestions triées par pertinence
+   * Suggestions d'autocomplete dans une conversation — la portée est celle de
+   * `mentionableScope`, partagée avec `validateMentionPermissions` (#7852).
    */
   async getUserSuggestionsForConversation(
     conversationId: string,
     currentUserId: string,
     query: string = ''
   ): Promise<MentionSuggestion[]> {
-    logger.info('[MentionService] getUserSuggestionsForConversation called', {
-      conversationId,
-      currentUserId,
-      query
-    });
-
-    // PERFORMANCE: Vérifier le cache d'abord
-    const cachedSuggestions = await this.getCachedSuggestions(conversationId, currentUserId, query);
-    if (cachedSuggestions) {
-      return cachedSuggestions;
-    }
-
-    const normalizedQuery = query.toLowerCase().trim();
-
-    // 1. Récupérer les membres de la conversation
-    logger.info('[MentionService] Fetching conversation members...');
-    let conversationMembers;
-    try {
-      conversationMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId,
-          isActive: true,
-          userId: { not: currentUserId } // Exclure l'utilisateur actuel
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-        // Note: MongoDB/Prisma ne supporte pas orderBy sur les relations
-        // Le tri sera fait après en mémoire
-      });
-      logger.info(`[MentionService] Found ${conversationMembers.length} conversation members`);
-    } catch (err) {
-      logger.error('[MentionService] Error fetching conversation members', err);
-      throw err;
-    }
-
-    const rankedMembers = [...conversationMembers].sort(
-      byConversationActivity(await this.loadConversationActivity(conversationId))
-    );
-
-    // 2. Récupérer les amis de l'utilisateur (via les demandes acceptées)
-    logger.info('[MentionService] Fetching friendships...');
-    let friendships;
-    try {
-      friendships = await this.prisma.friendRequest.findMany({
-        where: {
-          OR: [
-            { senderId: currentUserId, status: 'accepted' },
-            { receiverId: currentUserId, status: 'accepted' }
-          ]
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-      });
-      logger.info(`[MentionService] Found ${friendships.length} friendships`);
-    } catch (err) {
-      logger.error('[MentionService] Error fetching friendships', err);
-      throw err;
-    }
-
-    // Construire la liste des amis (exclure l'utilisateur actuel)
-    const friends = new Set<string>();
-    const friendsMap = new Map<string, User>();
-
-    friendships.forEach(friendship => {
-      if (friendship.senderId === currentUserId && friendship.receiver) {
-        friends.add(friendship.receiverId);
-        friendsMap.set(friendship.receiverId, friendship.receiver as User);
-      } else if (friendship.receiverId === currentUserId && friendship.sender) {
-        friends.add(friendship.senderId);
-        friendsMap.set(friendship.senderId, friendship.sender as User);
-      }
-    });
-
-    // 3. Construire les suggestions
-    const suggestions: MentionSuggestion[] = [];
-    const addedUserIds = new Set<string>();
-
-    // Fonction helper pour filtrer les utilisateurs selon la query
-    const matchesQuery = (user: User): boolean => {
-      if (!normalizedQuery) return true;
-
-      const username = user.username.toLowerCase();
-      const displayName = (user.displayName || '').toLowerCase();
-      const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
-
-      return username.includes(normalizedQuery) ||
-             displayName.includes(normalizedQuery) ||
-             fullName.includes(normalizedQuery);
-    };
-
-    // Priorité 1: Membres de la conversation
-    for (const member of rankedMembers) {
-      if (!member.user) continue;
-      if (addedUserIds.has(member.user.id)) continue;
-      if (!matchesQuery(member.user as User)) continue;
-
-      const isFriend = friends.has(member.user.id);
-
-      suggestions.push({
-        id: member.user.id,
-        username: member.user.username,
-        displayName: member.user.displayName,
-        avatar: member.user.avatar,
-        badge: 'conversation',
-        inConversation: true,
-        isFriend
-      });
-
-      addedUserIds.add(member.user.id);
-
-      if (suggestions.length >= this.MAX_SUGGESTIONS) {
-        // PERFORMANCE: Mettre en cache avant de retourner
-        await this.cacheSuggestions(conversationId, currentUserId, query, suggestions);
-        return suggestions;
-      }
-    }
-
-    // Priorité 2: Amis (qui ne sont pas déjà dans la conversation)
-    for (const [friendId, friend] of friendsMap) {
-      if (addedUserIds.has(friendId)) continue;
-      if (!matchesQuery(friend)) continue;
-
-      suggestions.push({
-        id: friend.id,
-        username: friend.username,
-        displayName: friend.displayName,
-        avatar: friend.avatar,
-        badge: 'friend',
-        inConversation: false,
-        isFriend: true
-      });
-
-      addedUserIds.add(friendId);
-
-      if (suggestions.length >= this.MAX_SUGGESTIONS) {
-        // PERFORMANCE: Mettre en cache avant de retourner
-        await this.cacheSuggestions(conversationId, currentUserId, query, suggestions);
-        return suggestions;
-      }
-    }
-
-    // Priorité 3: Recherche globale (si query fournie et pas encore assez de résultats)
-    if (normalizedQuery && suggestions.length < this.MAX_SUGGESTIONS) {
-      const otherUsers = await this.prisma.user.findMany({
-        where: {
-          AND: [
-            {
-              OR: [
-                { username: { contains: normalizedQuery, mode: 'insensitive' } },
-                { displayName: { contains: normalizedQuery, mode: 'insensitive' } },
-                { firstName: { contains: normalizedQuery, mode: 'insensitive' } },
-                { lastName: { contains: normalizedQuery, mode: 'insensitive' } }
-              ]
-            },
-            { id: { notIn: Array.from(addedUserIds).concat(currentUserId) } },
-            { isActive: true },
-            { deletedAt: null }
-          ]
-        },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true
-        },
-        take: this.MAX_SUGGESTIONS - suggestions.length,
-        orderBy: {
-          username: 'asc'
-        }
-      });
-
-      otherUsers.forEach(user => {
-        suggestions.push({
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          avatar: user.avatar,
-          badge: 'other',
-          inConversation: false,
-          isFriend: false
-        });
-      });
-    }
-
-    // PERFORMANCE: Mettre en cache avant de retourner
-    await this.cacheSuggestions(conversationId, currentUserId, query, suggestions);
-    return suggestions;
+    return this.suggestions.forConversation(conversationId, currentUserId, query);
   }
 
   /**
-   * Obtient des suggestions d'utilisateurs pour l'autocomplete dans le contexte d'un post/story.
-   * Audience résolue par priorité :
-   *   1. Auteur du post (badge: 'conversation')
-   *   2. Commentateurs précédents non-supprimés (badge: 'conversation')
-   *   3. Amis de l'utilisateur courant (badge: 'friend')
-   * Résultats limités à MAX_SUGGESTIONS (10).
+   * Suggestions d'autocomplete sous un post : auteur, commentateurs, amis,
+   * puis l'annuaire.
    *
-   * @param postId - ID du post
-   * @param currentUserId - ID de l'utilisateur qui fait la recherche
-   * @param query - Texte de recherche (optionnel)
    * @throws Error('Post non trouvé ou accès refusé') si le post n'existe pas ou est supprimé
    */
   async getUserSuggestionsForPost(
@@ -604,180 +234,7 @@ export class MentionService {
     currentUserId: string,
     query: string = ''
   ): Promise<MentionSuggestion[]> {
-    logger.info('[MentionService] getUserSuggestionsForPost called', {
-      postId,
-      currentUserId,
-      query
-    });
-
-    // Verify post exists and is not deleted
-    const post = await this.prisma.post.findUnique({
-      where: { id: postId },
-      select: {
-        id: true,
-        authorId: true,
-        deletedAt: true,
-        author: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true
-          }
-        }
-      }
-    });
-
-    if (!post || post.deletedAt) {
-      throw new Error('Post non trouvé ou accès refusé');
-    }
-
-    const normalizedQuery = query.toLowerCase().trim();
-
-    // Helper: filter users by query against username, displayName, fullName
-    const matchesQuery = (user: {
-      username: string;
-      displayName: string | null;
-      firstName: string | null;
-      lastName: string | null;
-    }): boolean => {
-      if (!normalizedQuery) return true;
-      const username = user.username.toLowerCase();
-      const displayName = (user.displayName ?? '').toLowerCase();
-      const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.toLowerCase();
-      return (
-        username.includes(normalizedQuery) ||
-        displayName.includes(normalizedQuery) ||
-        fullName.includes(normalizedQuery)
-      );
-    };
-
-    const suggestions: MentionSuggestion[] = [];
-    const addedUserIds = new Set<string>();
-
-    // Priority 1: Post author (excluded if it's the current user)
-    if (post.author && post.author.id !== currentUserId && matchesQuery(post.author)) {
-      suggestions.push({
-        id: post.author.id,
-        username: post.author.username,
-        displayName: post.author.displayName,
-        avatar: post.author.avatar,
-        badge: 'conversation',
-        inConversation: true,
-        isFriend: false
-      });
-      addedUserIds.add(post.author.id);
-    }
-
-    if (suggestions.length >= this.MAX_SUGGESTIONS) {
-      return suggestions;
-    }
-
-    // Priority 2: Previous commenters (non-deleted, excluding current user)
-    const comments = await this.prisma.postComment.findMany({
-      where: {
-        postId,
-        deletedAt: null,
-        authorId: { not: currentUserId }
-      },
-      select: {
-        authorId: true,
-        author: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'asc' }
-    });
-
-    for (const comment of comments) {
-      if (!comment.author) continue;
-      if (addedUserIds.has(comment.author.id)) continue;
-      if (!matchesQuery(comment.author)) continue;
-
-      suggestions.push({
-        id: comment.author.id,
-        username: comment.author.username,
-        displayName: comment.author.displayName,
-        avatar: comment.author.avatar,
-        badge: 'conversation',
-        inConversation: true,
-        isFriend: false
-      });
-      addedUserIds.add(comment.author.id);
-
-      if (suggestions.length >= this.MAX_SUGGESTIONS) {
-        return suggestions;
-      }
-    }
-
-    // Priority 3: Friends of current user (not already in the thread)
-    const friendships = await this.prisma.friendRequest.findMany({
-      where: {
-        OR: [
-          { senderId: currentUserId, status: 'accepted' },
-          { receiverId: currentUserId, status: 'accepted' }
-        ]
-      },
-      select: {
-        senderId: true,
-        receiverId: true,
-        sender: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true
-          }
-        },
-        receiver: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true
-          }
-        }
-      }
-    });
-
-    for (const friendship of friendships) {
-      const friend =
-        friendship.senderId === currentUserId ? friendship.receiver : friendship.sender;
-      if (!friend) continue;
-      if (addedUserIds.has(friend.id)) continue;
-      if (friend.id === currentUserId) continue;
-      if (!matchesQuery(friend)) continue;
-
-      suggestions.push({
-        id: friend.id,
-        username: friend.username,
-        displayName: friend.displayName,
-        avatar: friend.avatar,
-        badge: 'friend',
-        inConversation: false,
-        isFriend: true
-      });
-      addedUserIds.add(friend.id);
-
-      if (suggestions.length >= this.MAX_SUGGESTIONS) {
-        return suggestions;
-      }
-    }
-
-    return suggestions;
+    return this.suggestions.forPost(postId, currentUserId, query);
   }
 
   /**
@@ -830,10 +287,10 @@ export class MentionService {
     const invalidUserIds: string[] = [];
     const errors: string[] = [];
 
-    // Règles de validation selon le type de conversation
-    switch (conversation.type) {
-      case 'direct':
-        // Conversations directes: seulement l'autre participant
+    // Même portée que la recherche (`mentionableScope`) : une suggestion n'est
+    // jamais refusée à l'envoi (#7852).
+    switch (mentionableScope(conversation.type)) {
+      case 'interlocutor':
         for (const userId of mentionedUserIds) {
           if (memberIds.includes(userId) && userId !== senderId) {
             validUserIds.push(userId);
@@ -846,8 +303,7 @@ export class MentionService {
         }
         break;
 
-      case 'group':
-        // Conversations de groupe: seulement les membres actuels
+      case 'members':
         for (const userId of mentionedUserIds) {
           if (memberIds.includes(userId)) {
             validUserIds.push(userId);
@@ -860,15 +316,11 @@ export class MentionService {
         }
         break;
 
-      case 'public':
-      case 'global':
-        // Conversations publiques/globales: tous les utilisateurs enregistrés
-        // Ne pas filtrer sur isActive pour cohérence avec l'autocomplete
+      case 'directory': {
+        // Tout compte existant. Pas de filtre isActive/deletedAt : la
+        // validation reste plus large que la recherche, jamais plus étroite.
         const users = await this.prisma.user.findMany({
-          where: {
-            id: { in: mentionedUserIds }
-            // Pas de filtre isActive/deletedAt pour cohérence avec autocomplete
-          },
+          where: { id: { in: mentionedUserIds } },
           select: { id: true }
         });
 
@@ -886,6 +338,7 @@ export class MentionService {
           errors.push('Certains utilisateurs mentionnés n\'existent pas');
         }
         break;
+      }
 
       default:
         errors.push('Type de conversation non reconnu');
@@ -1123,8 +576,7 @@ export class MentionService {
 
     if (!conversation) return false;
 
-    // Pour les conversations publiques/globales, tous les utilisateurs peuvent être mentionnés
-    if (conversation.type === 'public' || conversation.type === 'global') {
+    if (mentionableScope(conversation.type) === 'directory') {
       const user = await this.prisma.user.findUnique({
         where: { id: userId, isActive: true, deletedAt: null },
         select: { id: true }

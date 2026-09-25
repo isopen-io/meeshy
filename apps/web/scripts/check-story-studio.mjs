@@ -44,6 +44,12 @@
  *     menu dans l'écran et hors de sa capsule, le réel choisissable ; rechargé,
  *     le brouillon rend ses trois pages et sa page courante ; Post › « Une
  *     grande, les autres à côté » publie.
+ *  10. UNE STORY DE PLUSIEURS PAGES PART EN AUTANT DE STORIES (#7707) :
+ *      `/stories/new` n'affiche plus AUCUN refus à trois pages ; publier
+ *      produit trois publications `STORY` (canal `scene`, par la branche
+ *      fixtures de `publishStory`) qui ENTRENT dans « Mes stories »
+ *      (`/stories/mine`) dans l'ordre des pages — la preuve qu'elles sont bien
+ *      PARTIES, pas seulement composées. Clair et sombre.
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -602,6 +608,87 @@ check(
   `clair et sombre ne rendent pas la même géométrie — clair ${JSON.stringify(clair)} / sombre ${JSON.stringify(sombre)}`,
 );
 
+/**
+ * ── 10. UNE STORY DE PLUSIEURS PAGES PART EN AUTANT DE STORIES (#7707) ──
+ *
+ * Le canal `.scene` (`studioPublishPlan`, miroir `ComposerPublishChannel.
+ * swift:79-104`) : trois pages ⇒ trois `POST /api/v1/posts`, jamais un refus
+ * (`story-with-several-pages`, retiré). Sous fixtures, chaque publication
+ * s'enregistre dans le registre d'onglet (`recordFixtureStory`,
+ * `stories-publish.ts`) que `loadStoryTray` sert devant le corpus littéral —
+ * « Mes stories » (`/stories/mine`) est donc le témoin OBSERVABLE que trois
+ * publications sont bien PARTIES, pas seulement que trois requêtes ont été
+ * émises.
+ */
+for (const colorScheme of ['light', 'dark']) {
+  const tag = `[stories #7707 ${colorScheme}]`;
+  const storiesViewerId = 'd'.repeat(24);
+  const context = await browser.newContext({ colorScheme, locale: 'fr-FR', viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await context.addInitScript((session) => localStorage.setItem('meeshy.session', session), seedSession(storiesViewerId));
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  // Le baseline (le corpus fixtures porte déjà `st-mienne`, une story de
+  // VIEWER_ID) se mesure AVANT de publier, sur CETTE page — un `page.goto`
+  // plus tard viderait le registre d'onglet (`recordFixtureStory`).
+  await page.goto(`${BASE}/stories/mine`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-my-stories-list], [data-my-stories-empty]', { timeout: 8000 });
+  const myStoryIds = () => page.evaluate(() => [...document.querySelectorAll('[data-my-stories-list] li[data-my-story]')].map((li) => li.getAttribute('data-my-story')));
+  const baseline = await myStoryIds();
+
+  await page.click('header a');
+  await page.waitForURL((url) => url.pathname === '/', { timeout: 8000 });
+  await page.waitForSelector('[data-self-create]', { timeout: 8000 });
+  await page.click('[data-self-create]');
+  await page.waitForURL((url) => url.pathname === '/stories/new', { timeout: 8000 });
+  await page.waitForSelector('[data-story-studio]', { timeout: 8000 });
+  await page.fill('#story-studio-text', 'Une');
+  for (const [text, count] of [
+    ['Deux', 2],
+    ['Trois', 3],
+  ]) {
+    await page.click('[data-story-option="add-page"]');
+    await page.waitForFunction((n) => document.querySelectorAll('[data-story-studio-page]').length === n, count, { timeout: 8000 });
+    await page.fill('#story-studio-text', text);
+  }
+  check(
+    await page.evaluate(() => document.querySelector('[data-publish-refusal]') === null),
+    `${tag} : une story de plusieurs pages ne doit plus être refusée (#7707)`,
+  );
+  await page.waitForSelector('[data-story-publish]:not([disabled])', { timeout: 8000 });
+
+  await page.click('[data-story-publish]');
+  await page.waitForURL((url) => url.pathname === '/stories', { timeout: 8000 });
+
+  // Retour à la Lentille PUIS « Mes stories », en navigation CLIENT — jamais
+  // un `page.goto` (rechargement), qui viderait le registre fixtures de
+  // l'onglet (`recordFixtureStory`, doc-comment `stories-publish.ts`).
+  await page.click('header a');
+  await page.waitForURL((url) => url.pathname === '/', { timeout: 8000 });
+  await page.waitForSelector('[data-story-self-open]', { timeout: 8000 });
+  await page.click('[data-story-self-open]');
+  await page.waitForURL((url) => url.pathname === '/stories/mine', { timeout: 8000 });
+  await page.waitForSelector('[data-my-stories-list] li[data-my-story]', { timeout: 8000 });
+  const mine = await myStoryIds();
+  // Trois RANGÉES de plus, et ce sont les trois publications de CE geste, la
+  // plus récente d'abord (`myActiveStories`, `createdAt desc`) — jamais une
+  // story d'un autre corpus comptée à leur place. Que la k-ième publication
+  // porte la k-ième page se prouve sur le corps des requêtes
+  // (`story-compose-pages.test.tsx`), que les fixtures ne transportent pas.
+  check(
+    mine.length === baseline.length + 3,
+    `${tag} : trois pages publiées doivent AJOUTER trois stories à « Mes stories » — vu ${baseline.length} puis ${mine.length}`,
+  );
+  check(
+    JSON.stringify(mine.slice(0, 3)) === JSON.stringify(['fx-story-3', 'fx-story-2', 'fx-story-1']),
+    `${tag} : les trois rangées de tête doivent être les trois publications de ce geste, la dernière d'abord — vu ${JSON.stringify(mine.slice(0, 3))}`,
+  );
+
+  check(pageErrors.length === 0, `${tag} : erreurs de page — ${pageErrors.join(' | ')}`);
+  await context.close();
+}
+
 await browser.close();
 served.close();
 
@@ -619,5 +706,6 @@ console.log(
     'choix relu après rechargement ET après publication), et PLUSIEURS PAGES DE MÉDIAS (#7684) : aucun rail ni sous-menu à ' +
     'une page, trois images ⇒ trois tuiles 44×44 dans la barre haute, corbeille 44×44 hors des tuiles, le tap change la ' +
     'scène courante, Post déplie ses cinq agencements (ordre iOS, lignes ≥ 44 px, menu dans l’écran hors de sa capsule), ' +
-    'le réel choisissable, le brouillon relu avec ses pages, publication — clair et sombre identiques.',
+    'le réel choisissable, le brouillon relu avec ses pages, publication — clair et sombre identiques, et une story de ' +
+    'plusieurs pages part en autant de stories (#7707), retrouvées dans « Mes stories ».',
 );

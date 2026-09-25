@@ -345,13 +345,11 @@ async function main() {
       await ouvrirOnglet(page, 'conversations');
       await attendre(() => present(page, '[data-admin-section="conversations"]'));
       await page.waitForTimeout(500);
-      await cliche(page, 'fiche-membre-depliee', { fullPage: true });
+      await cliche(page, 'fiche-membre-profil', { fullPage: true });
 
-      /* LA FICHE NE PEINT PAS D'HORODATAGE BRUT — constat ajouté par CETTE
-         recette : « Inscrit le 2026-01-12T08:30:00.000Z » est ce qu'un écran
-         affiche quand il rend la charge au lieu de la LIRE, et aucun témoin
-         unitaire ne le voit (le champ est juste, c'est son rendu qui ne l'est
-         pas). L'écran de l'agent formate déjà les siens. */
+      /* LA FICHE NE PEINT PAS D'HORODATAGE BRUT — « Inscrit le
+         2026-01-12T08:30:00.000Z » est ce qu'un écran affiche quand il rend la
+         charge au lieu de la LIRE, et aucun témoin unitaire ne le voit. */
       const fiche = await texteDe(page, `[data-admin-user="${MEMBRE_ID}"]`);
       check(!ISO_NU.test(fiche), `la fiche ne peint aucun horodatage ISO brut${ISO_NU.test(fiche) ? ` — « ${(fiche.match(ISO_NU) ?? [''])[0]} »` : ''}`);
       check(

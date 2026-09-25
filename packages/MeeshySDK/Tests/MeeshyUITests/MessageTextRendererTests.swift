@@ -158,6 +158,7 @@ final class MessageTextRendererTests: XCTestCase {
             case .hashtagLink(let d, _, _): return "hashtag(\(d))"
             case .meeshyTokenLink(let d, _, _): return "token(\(d))"
             case .urlLink(let d, _): return "url(\(d))"
+            case .code(let s, _): return "code(\(s))"
             }
         }
     }

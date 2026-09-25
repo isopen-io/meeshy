@@ -2,6 +2,10 @@ export function getAppVersionFloor(): string {
   return process.env.MIN_APP_VERSION ?? '';
 }
 
+export function getShellLatestVersion(): string {
+  return process.env.SHELL_LATEST_VERSION ?? '';
+}
+
 export function getAppStoreUrl(platform?: string): string {
   if (typeof platform === 'string' && platform.trim().toLowerCase() === 'android') {
     return process.env.PLAY_STORE_URL ?? 'https://play.google.com/store/apps/details?id=me.meeshy.app';

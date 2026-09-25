@@ -222,8 +222,20 @@ try {
   check(await page.$eval('main', (el) => el.querySelectorAll('script').length === 0), 'aucun <script> n’est entré dans le document par un message');
 
   // ------------------------------------------------ 6. le CLIC mène quelque part
+  /* LE PROFIL S'OUVRE PAR-DESSUS LE FIL (#7946, parité `UserProfileSheet`) :
+     le toucher ne quitte plus la conversation — la feuille peint la personne,
+     l'adresse ne bouge pas, et « Ouvrir le profil complet » mène à la page. */
+  const avant = new URL(page.url()).pathname;
   await page.click(`[data-message="rt-2"] [data-rich-text] a`);
+  const feuille = await page
+    .waitForFunction(() => (document.querySelector('[data-profile-peek]')?.textContent ?? '').includes('Kwame'), null, { timeout: 8000 })
+    .then(() => true, () => false);
+  check(feuille, 'TOUCHER une mention ouvre le profil de la personne PAR-DESSUS le fil');
+  check(new URL(page.url()).pathname === avant, `et le fil reste l'écran courant — l'adresse ne bouge pas (${new URL(page.url()).pathname})`);
+  await capture(page, 'profil-feuille');
+  await page.click('[data-profile-peek-open-page]');
   await page.waitForURL(`**/u/${HANDLE}`);
+  check(await page.$('[data-profile-peek]') === null, 'la page complète ouverte, la feuille s’est refermée');
   /* ATTENDRE LA PERSONNE, PAS L'ÉCRAN. `[data-user-profile]` est posé par les
      TROIS états de la route — squelette, refus, profil servi : l'attendre ne
      prouve donc rien, et le témoin suivant lisait « Profil » (le titre du

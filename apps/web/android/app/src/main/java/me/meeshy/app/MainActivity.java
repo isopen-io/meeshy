@@ -24,8 +24,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Un plugin local s'enregistre AVANT `super.onCreate` : c'est la que
-        // `BridgeActivity` construit le pont et publie `PluginHeaders` (#7710).
+        // `BridgeActivity` construit le pont et publie `PluginHeaders` (#7710,
+        // #5819).
         registerPlugin(MeeshySharePlugin.class);
+        registerPlugin(MeeshyLinksPlugin.class);
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher()
             .addCallback(

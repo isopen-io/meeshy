@@ -74,6 +74,17 @@ function maillonsDeLaCI(): Set<string> {
   return new Set(cites.filter((n) => existsSync(join(V3, 'scripts', n))));
 }
 
+/**
+ * Les scripts que `ci.yml` lance SANS qu'ils soient des maillons du composite,
+ * chacun avec sa raison. Un ajout ici est une exception NOMMÉE, jamais une
+ * soupape : le sens inverse ci-dessous reste la règle.
+ */
+const CI_SEULE: Readonly<Record<string, string>> = {
+  'build-shells.mjs':
+    'construit l’APK de la coque (gradle, SDK Android) dans le job `shell-android` (#6217) — ' +
+    'une construction native, pas un garde : `bun run gate` ne la porte pas, par décision de l’issue',
+};
+
 describe('les gardes du composite tournent en CI — sinon ils sont verts par omission', () => {
   /**
    * LA PRÉCONDITION DU FILTRE CI-DESSUS. `maillonsDeLaCI()` distingue un garde
@@ -111,7 +122,7 @@ describe('les gardes du composite tournent en CI — sinon ils sont verts par om
   test('aucune étape de ci.yml ne lance un garde absent du composite', () => {
     const composite = maillonsDuComposite();
     const ci = maillonsDeLaCI();
-    const morts = [...ci].filter((m) => !composite.has(m)).sort();
+    const morts = [...ci].filter((m) => !composite.has(m) && !(m in CI_SEULE)).sort();
     expect(morts).toEqual([]);
   });
 });

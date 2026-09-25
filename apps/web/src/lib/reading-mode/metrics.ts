@@ -34,6 +34,37 @@ export const AVATAR_FRAME = 34;
 /** Littéral (et non `AVATAR_FRAME + 7`) : `scripts/check-curve.mjs` lit une VALEUR, pas une formule. */
 export const TEXT_INDENT = 41;
 
+/**
+ * LE CONTENU SOUS L'AVATAR (#7929, règle porteur du 2026-09-25, jumelle iOS
+ * #7928) — en Script et en Focal, le contenu PROPRE d'un message (texte,
+ * drapeaux, médias, lieu, sticker, tuile protégée, réactions, heure, marques)
+ * part du bord GAUCHE de la pastille, pas de la colonne du nom. La pastille
+ * est centrée dans sa colonne de `TEXT_INDENT` : son bord gauche y est à
+ * `(TEXT_INDENT − AVATAR_SIZE) / 2`, et le contenu remonte de la colonne du
+ * nom jusque-là. DÉRIVÉES, jamais saisies : elles suivent les deux cotes que
+ * `check-curve.mjs` garde.
+ */
+export const AVATAR_INSET = (TEXT_INDENT - AVATAR_SIZE) / 2;
+export const CONTENT_PULL = TEXT_INDENT - AVATAR_INSET;
+
+/**
+ * LE RETRAIT DE CITATION (#7929) — SEULES les citations (message, pièce,
+ * humeur, story) sont décalées, toutes du MÊME retrait, compté depuis
+ * l'origine du contenu : elles retrouvent la colonne du nom, avec le filet de
+ * la citation texte pour tous les types.
+ */
+export const QUOTE_INDENT = CONTENT_PULL;
+
+/**
+ * LA LARGEUR D'UNE CITATION VISUELLE (#7929, complément porteur du
+ * 2026-09-25) — `BubbleStoryCitationCard.cardWidth` (iOS, 132) : la carte de
+ * story, dans les proportions de la liste « Mes stories », jamais compactée ;
+ * et la miniature d'une réponse à une image ou une vidéo UNIQUE, aussi large
+ * qu'elle. UNE constante pour les deux : la carte et la miniature ne peuvent
+ * pas diverger.
+ */
+export const QUOTED_CARD_WIDTH = 132;
+
 /** `FocalMetrics.Quote.railWidth` — le filet de citation. */
 export const QUOTE_RAIL_WIDTH = 2.5;
 

@@ -72,6 +72,7 @@ import {
   parseLanguageFilterParam
 } from './messages-list-query';
 import type { RawMessageRow } from './messages-list-query-types';
+import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
@@ -549,7 +550,8 @@ export function registerMessagesListRoute(
       // `any` répété à chaque site d'usage.
       const messages = rawMessages as unknown as RawMessageRow[];
 
-      // #4177 — travail mort retiré : ce bloc calculait `currentUserReactions`
+      // #4177 — travail mort retiré (`currentUserReactions` revient au #7936,
+      // DÉCLARÉ cette fois — plus bas) : ce bloc calculait `currentUserReactions`
       // (message-level, via `reaction.findMany`) ET `currentUserConsumption`
       // (par pièce jointe, via `attachmentStatusEntry.findMany`) — deux
       // requêtes Prisma PAR PAGE — puis les deux valeurs étaient
@@ -687,6 +689,12 @@ export function registerMessagesListRoute(
         currentParticipantId
       );
 
+      // #7936 — MES réactions, par message, en UNE requête pour la page.
+      const readerReactions = await loadReaderReactionsByMessage(prisma, {
+        messageIds: messages.map((message) => message.id),
+        readerParticipantIds: currentParticipantId ? [currentParticipantId] : [],
+      });
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       // `mappedMessages` reste non annoté (any[], hérité du retour `any` DÉLIBÉRÉ
       // de `mapMessageRowForList` — voir son doc-comment) : `firstMsg`/`lastMsg`
@@ -704,6 +712,7 @@ export function registerMessagesListRoute(
         listMissingEntry,
         consumptionMap,
         ephemeralDeadlines,
+        readerReactions,
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

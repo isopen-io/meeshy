@@ -38,6 +38,10 @@ nonisolated struct EngagementRevealQueue: Equatable {
     private(set) var enAttente: [EngagementReveal] = []
     /// Les derniers paliers montrés, du plus ancien au plus récent.
     private var déjàMontrés: [EngagementReveal] = []
+    /// Vrai tant que le calque d'onboarding est présenté (#7914) : une
+    /// célébration plein écran le recouvrirait, lui et l'envolée « +N » qui
+    /// explique le gain. Les paliers attendent — rien n'est perdu.
+    private(set) var estSuspendue = false
 
     var estVide: Bool { enCours == nil && enAttente.isEmpty }
 
@@ -60,7 +64,7 @@ nonisolated struct EngagementRevealQueue: Equatable {
         guard palier != enCours, !enAttente.contains(palier), !déjàMontrés.contains(palier) else { return }
         guard (enCours == nil ? 0 : 1) + enAttente.count < Self.capacité else { return }
 
-        if enCours == nil {
+        if enCours == nil && !estSuspendue {
             enCours = palier
         } else {
             enAttente.append(palier)
@@ -77,6 +81,14 @@ nonisolated struct EngagementRevealQueue: Equatable {
             déjàMontrés.append(montré)
             if déjàMontrés.count > Self.mémoire { déjàMontrés.removeFirst() }
         }
-        enCours = enAttente.isEmpty ? nil : enAttente.removeFirst()
+        enCours = estSuspendue || enAttente.isEmpty ? nil : enAttente.removeFirst()
+    }
+
+    /// Suspend ou reprend la présentation. Suspendre ne retire JAMAIS une
+    /// célébration déjà à l'écran ; reprendre joue la première en attente.
+    mutating func suspends(_ suspendue: Bool) {
+        estSuspendue = suspendue
+        guard !suspendue, enCours == nil, !enAttente.isEmpty else { return }
+        enCours = enAttente.removeFirst()
     }
 }

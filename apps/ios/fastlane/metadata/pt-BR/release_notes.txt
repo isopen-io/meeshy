@@ -1,44 +1,9 @@
-A maior atualização do Meeshy até hoje. Criar, assistir e falar: tudo foi repensado.
+Meeshy 1.1.1
 
-CRIAR — UM ÚNICO ESTÚDIO
-• Story, Reel ou Publicação: troque de formato por dentro, sem perder o que já escreveu ou adicionou
-• Componha com o polegar — um toque longo abre a câmera dentro da cena, ferramentas à esquerda, histórico à direita, desfazer e refazer quando quiser
-• Várias cenas, vários arquivos, cada um com sua legenda e seu idioma: carrossel, mosaico ou slides, você decide
-• Recorte, gire e ajuste sem perder qualidade. Comece por uma mensagem recebida, por algo compartilhado de outro app, ou pelo que você acabou de colar
-
-DECORAR — 200 FIGURINHAS, 14 EFEITOS DE TEXTO
-• Cerca de vinte famílias — alegria, humor, saudações, festa, natureza, viagem, música, esporte — e muitas são animadas
-• Recorte um objeto de uma foto e ele entra na sua biblioteca pessoal
-• O texto passa de 4 para 14 efeitos (brilho, sombra, relevo, neon), com 18 estilos e suas fontes
-• Uma decoração pode carregar dados vivos: lugar, hora, clima, suas próprias palavras
-
-SEUS ÁUDIOS, NO IDIOMA DELES
-• Sua mensagem de voz é transcrita no aparelho assim que você solta: o texto está ali na hora, sem esperar o servidor
-• O áudio de uma publicação, de um reel ou de um comentário agora toca no idioma de quem escuta
-• Uma única tela para gravar, cortar e posicionar um som: fundo de cena, trilha sonora ou conteúdo para ouvir sob o texto
-• As legendas de foto e de vídeo são lidas no seu idioma, traduzidas ao vivo
-
-ASSISTIR
-• A tela cheia abre nítida na imagem real, nunca numa miniatura borrada
-• Uma cena se apresenta igual em todo lugar — num story como numa publicação: mesmo quadro, mesmo chão, mesmos cantos nítidos em tela cheia
-• Percorra os arquivos de uma publicação e depois os dos seus comentários, como um rolo de filme
-• Reaja, responda ou crie um story sem sair da tela cheia
-• Toque duplo nas laterais de um vídeo: dez segundos para trás ou para frente
-
-CONVERSAS
-• Seleção múltipla de até 100 mensagens para encaminhar ou apagar de uma vez
-• Toque duplo para reagir, toque longo para o menu — que agora só oferece ações com efeito real
-• As citações mostram a miniatura, a duração e o tamanho do arquivo que indicam
-• Modos de leitura renovados, e "Rio" — o tempo como eixo vertical — estreia em beta
-
-SUA CONTA
-• Cadastro numa única tela: e-mail ou telefone, senha opcional, link mágico
-• Seu status "online" só aparece para amigos aceitos — nem uma conversa compartilhada, nem uma comunidade, nem um link de story o revelam
-• Progresso, sequências e quase 120 conquistas; o Meesh, nossa moeda rara, agora tem sua peça
-
-AO SEU REDOR
-• "Por perto" passa a ter dois níveis, vizinhança e descoberta, em densidade, pontos ou lista
-• Uma etiqueta de lugar carrega sua janela de horário — e ser descoberto continua sendo uma escolha explícita, na precisão que você ajusta
-
-POR BAIXO DO CAPÔ
-Início a frio com um punhado de requisições: suas conversas aparecem sem esperar a rede. Nove travamentos corrigidos na raiz. Cerca de vinte melhorias de acessibilidade — VoiceOver, Dynamic Type, contraste WCAG, alvos de 44 pt, interface invertida para o árabe. Sete idiomas de interface servidos sem aproximações.
+• Nova página de convite: antes de entrar, veja quem convidou você, o grupo, seus idiomas e o que você poderá fazer, mesmo sem conta
+• Seus links de convite ganharam uma página própria: detalhes, edição e chegadas (visitas, idiomas, países)
+• Toque em um participante ativo no topo de uma conversa: o story não visto dele abre, senão o perfil
+• Um link do Meeshy recebido abre direto no app, inclusive no iPad; reels e stories abrem no mesmo player, venha de onde vier
+• Ao voltar para o app, a lista mostra na hora a última mensagem recebida em segundo plano
+• O árabe mantém suas ligaduras, e as datas seguem o calendário gregoriano em todos os idiomas
+• Correções e mais fluidez

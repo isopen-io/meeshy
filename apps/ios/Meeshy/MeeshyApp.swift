@@ -127,6 +127,10 @@ struct MeeshyApp: App {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
+                                // #7847 — les listes `@` du SDK servent les
+                                // mêmes contacts que celles de l'app, réchauffés
+                                // de la même façon.
+                                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -866,9 +870,11 @@ struct MeeshyApp: App {
     // MARK: - Push Notifications
 
     /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
-    /// seconde copie : le fil d'envoi la déclenche aussi (#5218).
+    /// seconde copie : le fil d'envoi la déclenche aussi (#5218). Au démarrage
+    /// à froid, le report de l'inscription et la carte 5 de l'onboarding
+    /// passent d'abord (#7915).
     private func requestPushPermissionIfNeeded() async {
-        await PushPermissionPrompt.requestIfNeeded(using: pushManager)
+        await PushPermissionPrompt.onColdStart(request: { await PushPermissionPrompt.requestIfNeeded(using: pushManager) })
     }
 
     /// VoIP registration must run unconditionally, before the notification-

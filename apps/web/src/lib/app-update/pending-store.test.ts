@@ -14,7 +14,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
-  appUpdateStore.setState({ pending: null, dismissed: false, applying: false });
+  appUpdateStore.setState({ pending: null, store: null, dismissed: false, applying: false });
 });
 
 const registration = (): RegistrationLike => ({

@@ -1,4 +1,5 @@
 import type { StatusMoodPost } from '@/lib/api/stories';
+import { isStoryExpired } from '@/lib/stories/playback';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
@@ -23,12 +24,24 @@ import type { StoryTrayGroup } from '@/lib/view/story-tray';
  */
 export type StoryRailSelfEntry = {
   readonly viewerId: string;
-  /** L'anneau accentué — au moins une de MES stories est active. */
+  /** L'ANNEAU accentué — au moins une de MES stories est ACTIVE (non
+   * expirée). Distincte de {@link hasAnyStory} depuis #6149 : le corpus du
+   * plateau (`?scope=stories`) garde mes stories expirées pendant
+   * `AUTHOR_ARCHIVE_WINDOW_MS` (`PostFeedService.ts:283-312`), et un anneau
+   * accentué sur une story MORTE mentirait. */
   readonly hasActiveStory: boolean;
-  /** L'adresse de ma story (`/story/$post`), `undefined` tant que je n'ai rien
-   * publié : la cellule n'est alors pas un lien, seulement le support de ses
-   * deux pastilles. */
-  readonly entryStoryId: string | undefined;
+  /**
+   * **LA PORTE DU LISTING** (#6149) — vrai dès que j'ai au moins une story
+   * dans le corpus du plateau, active OU dans sa fenêtre d'archive. Miroir de
+   * `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`
+   * (`StoryTrayActions.swift:71-75`) : iOS ouvre le listing « Mes stories »
+   * même quand toutes mes stories sont expirées — « aucun chemin ne menait
+   * plus vers ses stories passées ». La cellule n'est un LIEN que si ce champ
+   * est vrai ; sans lui c'est un simple support pour mes deux portes (le (+)
+   * et l'humeur), un anneau qui promet un contenu que rien n'ouvre étant un
+   * contrôle qui ment (loi 4).
+   */
+  readonly hasAnyStory: boolean;
   /** Mon humeur COURANTE — `undefined` ⇒ la pastille rend 💭. */
   readonly moodEmoji: string | undefined;
   /**
@@ -77,15 +90,19 @@ export function selfRailEntry(options: {
   readonly avatar?: string | undefined;
   readonly groups: readonly StoryTrayGroup[];
   readonly moods: readonly StatusMoodPost[];
+  /** L'INSTANT auquel juger l'expiration (#6149) — injecté, jamais lu ici
+   * (même discipline que `isStoryExpired`/`relative-time.ts`) : cette loi
+   * reste pure et éprouvable sans horloge système. */
+  readonly now: number;
 }): StoryRailSelfEntry | undefined {
-  const { viewerId } = options;
+  const { viewerId, now } = options;
   if (viewerId === undefined || viewerId === '') return undefined;
 
   const mien = options.groups.find((g) => g.isMine);
   return {
     viewerId,
-    hasActiveStory: mien !== undefined,
-    entryStoryId: mien?.entryStoryId,
+    hasAnyStory: mien !== undefined,
+    hasActiveStory: mien?.stories.some((story) => !isStoryExpired(story, now)) ?? false,
     moodEmoji: currentMoodOf(options.moods, viewerId),
     /* LA MÊME loi partagée que partout ailleurs (`participantAvatarOf` →
        `resolveParticipantAvatar`) : les deux rangs sont donnés dans l'ordre,

@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { ApiResult } from '@/lib/api/http';
 import type { DataExportResult } from '@/lib/api/data-export';
+import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -32,7 +33,10 @@ afterEach(unmountAll);
 
 const SERVED: DataExportResult = { raw: { exportDate: '2026-09-16T08:00:00.000Z' }, exportDate: '2026-09-16T08:00:00.000Z' };
 
-function scripted(result: ApiResult<DataExportResult> = { ok: true, data: SERVED }) {
+function scripted(
+  result: ApiResult<DataExportResult> = { ok: true, data: SERVED },
+  outcomes: readonly DeliverFileOutcome[] = ['delivered'],
+) {
   const requested: number[] = [];
   const downloaded: Array<{ fileName: string; jsonText: string }> = [];
   const deps: DataExportPageDeps = {
@@ -40,8 +44,9 @@ function scripted(result: ApiResult<DataExportResult> = { ok: true, data: SERVED
       requested.push(requested.length);
       return result;
     },
-    download: (fileName, jsonText) => {
+    download: async (fileName, jsonText) => {
       downloaded.push({ fileName, jsonText });
+      return outcomes[downloaded.length - 1] ?? 'delivered';
     },
   };
   return { deps, requested, downloaded };
@@ -80,7 +85,7 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
     let resolve: ((value: ApiResult<DataExportResult>) => void) | undefined;
     const deps: DataExportPageDeps = {
       request: () => new Promise((r) => { resolve = r; }),
-      download: () => undefined,
+      download: async () => 'delivered',
     };
     const host = await mount(<DataExportPage signedIn online language="fr" deps={deps} />);
 
@@ -109,5 +114,52 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
 
     expect(host.textContent).toContain('Reconnectez-vous à Internet');
     expect(buttonNamed(host, 'Exporter mes données')?.hasAttribute('disabled')).toBe(true);
+  });
+});
+
+/**
+ * LE FICHIER DOIT ARRIVER QUELQUE PART (#7864). Aucune coque ne branche le
+ * téléchargement de sa WebView : l'export passe par le portail de livraison,
+ * et la page ne dit « téléchargé » que si le fichier est parti. Un partage
+ * annulé ou une activation expirée gardent l'export EN MAIN : le tap suivant
+ * le livre sans le redemander au serveur.
+ */
+describe('/settings/data-export — le fichier est livré, pas seulement annoncé (#7864)', () => {
+  test('une feuille fermée sans choix garde l’export prêt, sans le redemander', async () => {
+    const script = scripted({ ok: true, data: SERVED }, ['cancelled', 'delivered']);
+    const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
+
+    await click(buttonNamed(host, 'Exporter mes données'));
+    expect(host.textContent).not.toContain('Le fichier a été téléchargé sur cet appareil.');
+
+    await click(buttonNamed(host, 'Enregistrer le fichier'));
+
+    expect(script.requested).toEqual([0]);
+    expect(script.downloaded.map((entry) => entry.fileName)).toEqual(['meeshy-export-2026-09-16.json', 'meeshy-export-2026-09-16.json']);
+    expect(host.textContent).toContain('Le fichier a été téléchargé sur cet appareil.');
+  });
+
+  test('une activation expirée pendant la requête : le tap suivant livre le même export', async () => {
+    const script = scripted({ ok: true, data: SERVED }, ['expired', 'delivered']);
+    const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
+
+    await click(buttonNamed(host, 'Exporter mes données'));
+    expect(host.querySelector('h1')?.textContent).toBe('Export prêt');
+    expect(host.textContent).not.toContain('Cet appareil n’a pas pu recevoir le fichier.');
+
+    await click(buttonNamed(host, 'Enregistrer le fichier'));
+
+    expect(script.requested).toEqual([0]);
+    expect(host.querySelector('h1')?.textContent).toBe('Export terminé');
+  });
+
+  test('un appareil qui ne peut rien recevoir le dit, au lieu d’annoncer un export terminé', async () => {
+    const script = scripted({ ok: true, data: SERVED }, ['unavailable']);
+    const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
+
+    await click(buttonNamed(host, 'Exporter mes données'));
+
+    expect(host.textContent).not.toContain('Export terminé');
+    expect(host.textContent).toContain('Cet appareil n’a pas pu recevoir le fichier.');
   });
 });

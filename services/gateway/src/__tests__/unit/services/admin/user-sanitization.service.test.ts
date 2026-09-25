@@ -34,6 +34,7 @@ function makeFullUser(overrides: Partial<FullUser> = {}): FullUser {
     email: 'john.doe@example.com',
     phoneNumber: '+33612345678',
     avatar: null,
+    banner: null,
     role: 'USER',
     isActive: true,
     isOnline: false,

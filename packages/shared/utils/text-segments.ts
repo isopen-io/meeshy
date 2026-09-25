@@ -53,7 +53,17 @@ export type InlineSegment =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'mention'; readonly text: string; readonly username: string }
   | { readonly kind: 'hashtag'; readonly text: string; readonly tag: string }
+  /**
+   * UN LIEN SORTANT — `href` est TOUJOURS `https?://…` ou `mailto:…` (#7849).
+   * `text` est ce qu'on LIT : l'adresse elle-même, ou le libellé d'un lien
+   * markdown `[texte](url)`, qui peut donc différer de `href`.
+   */
   | { readonly kind: 'url'; readonly text: string; readonly href: string }
+  /**
+   * DU CODE INLINE (#7849) — `text` est le contenu entre les accents graves,
+   * LITTÉRAL : aucune emphase, mention ni lien n'y naît.
+   */
+  | { readonly kind: 'code'; readonly text: string }
   /**
    * UN LIEN DE SUIVI (#7827) — il s'ouvre par `/l/<token>`, la route qui
    * compte le clic puis redirige. Deux origines, une seule forme :
@@ -72,20 +82,23 @@ export type InlineSegment =
  * LES QUATRE EMPHASES, et quatre seulement (directive porteur) : gras,
  * italique, souligné, barré. La liste est FERMÉE — c'est ce qui permet au
  * rendu d'être exhaustif sans repli silencieux, et ce qui distingue ce module
- * d'un moteur Markdown (ni titre, ni liste, ni citation, ni code).
+ * d'un moteur Markdown. Les blocs (titres, listes, citations, code) vivent
+ * dans `text-blocks.ts`, le code inline est un segment (`code`), pas une emphase.
  */
 export type EmphasisStyle = 'bold' | 'italic' | 'underline' | 'strikethrough';
 
 /**
  * Une emphase porte ses PROPRES segments (`children`), jamais une chaîne :
- * `**vois https://meeshy.me**` doit rester un lien une fois en gras. Elle ne
- * s'imbrique pas dans une emphase — un seul niveau, donc aucune récursion sans
- * fin à borner, et `*b*` à l'intérieur d'un `**…**` reste ce que l'auteur a
- * tapé.
+ * `**vois https://meeshy.me**` doit rester un lien une fois en gras.
+ *
+ * Les emphases se COMBINENT (#7849, parité iOS `MessageTextRenderer`) :
+ * `**a ~~b~~**` est un barré dans un gras, `***mot***` un italique dans un
+ * gras. La récursion est BORNÉE par construction — un style déjà ouvert n'est
+ * plus cherché à l'intérieur, donc quatre niveaux au plus.
  */
 export type TextSegment =
   | InlineSegment
-  | { readonly kind: 'emphasis'; readonly style: EmphasisStyle; readonly children: readonly InlineSegment[] };
+  | { readonly kind: 'emphasis'; readonly style: EmphasisStyle; readonly children: readonly TextSegment[] };
 
 export type SegmentOptions = {
   /** `true` en PUBLICATION seulement — voir le doc-comment de tête. */
@@ -186,6 +199,34 @@ const HASHTAG_REGEX = /(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})/gu;
 const URL_REGEX = /(?<![@\w])https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/g;
 
 /**
+ * UNE ADRESSE SANS SCHÉMA (#7849) — `www.` puis au moins un domaine pointé.
+ * Le lien SUIVI est `https://` + ce qu'on lit : le schéma est posé ICI, jamais
+ * repris de l'entrant. La frontière gauche écarte un `www.` qui continue une
+ * adresse déjà lancée (`https://www.…`, `a.www.…`).
+ */
+const WWW_REGEX =
+  /(?<![\p{L}\p{N}_./@-])www\.[\w-]+(?:\.[\w-]+)+(?:[/?#][\w\-._~:/?#[\]@!$&'()*+,;=%]*)?/gu;
+
+/**
+ * UNE ADRESSE E-MAIL (#7849) — un lien `mailto:`. La partie locale accepte
+ * les lettres accentuées (`éric@…`), la frontière gauche empêche de démarrer
+ * au milieu d'un mot.
+ */
+const EMAIL_REGEX = /(?<![\p{L}\p{N}_.+-])[\p{L}\p{N}_.+-]+@[\w-]+(?:\.[\w-]+)+/gu;
+
+/**
+ * `[texte](url)` (#7849) — l'adresse est ANCRÉE sur `https?://` ou `mailto:`,
+ * exactement comme `URL_REGEX` : `[x](javascript:…)` ne matche pas et reste du
+ * texte. Une paire de parenthèses équilibrée est admise dans l'adresse
+ * (`…/Prisme_(optique)`).
+ */
+const MARKDOWN_LINK_REGEX =
+  /\[([^[\]\n]+)\]\(((?:https?:\/\/|mailto:)[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)/g;
+
+/** `` `code` `` (#7849) — une seule ligne, jamais vide. */
+const INLINE_CODE_REGEX = /`([^`\n]+)`/g;
+
+/**
  * **CE QUI FERME LA PHRASE N'APPARTIENT PAS À L'ADRESSE.** Tous ces caractères
  * sont des caractères d'URL VALIDES — la classe ci-dessus les accepte donc, et
  * les avalait : « regarde https://meeshy.me/notes. » produisait un lien vers
@@ -254,9 +295,9 @@ const trackedTokenFor = (
  * Trois refus communs aux quatre : une emphase qui s'ouvre sur un blanc
  * (`3 * 4`), une emphase qui se ferme sur un blanc, une emphase VIDE
  * (`****`, `____`, `~~~~`). Et le corps d'un marqueur DOUBLE accepte le
- * caractère seul (`**a *b* c**`) mais jamais la paire : c'est ce qui donne à
- * une emphase interne son statut de texte littéral — un seul niveau, donc
- * aucune récursion à borner.
+ * caractère seul (`**a *b* c**`) mais jamais la paire : le gras se ferme au
+ * premier `**`, et l'italique interne est découpé ENSUITE, dans le contenu,
+ * par une passe qui ne cherche plus le gras (voir `emphasisRegexFor`).
  *
  * ## Pourquoi le souligné porte une FRONTIÈRE DE MOT que le gras n'a pas
  *
@@ -275,15 +316,54 @@ const trackedTokenFor = (
  * en silence.
  */
 const EMPHASIS_RULES = [
+  /* `***mot***` — un gras dont le contenu est EXACTEMENT un italique. Sans
+     cette forme, le gras ci-dessous s'arrêterait à la deuxième étoile de
+     fermeture et laisserait une étoile orpheline. */
+  { style: 'bold', source: String.raw`\*\*(\*(?![\s*])[^*]+?(?<![\s*])\*)\*\*` },
   { style: 'bold', source: String.raw`\*\*(?!\s)((?:[^*]|\*(?!\*))+?)(?<!\s)\*\*` },
   { style: 'underline', source: String.raw`(?<![\p{L}\p{N}_])__(?!\s)((?:[^_]|_(?!_))+?)(?<!\s)__(?![\p{L}\p{N}_])` },
   { style: 'strikethrough', source: String.raw`~~(?!\s)((?:[^~]|~(?!~))+?)(?<!\s)~~` },
   { style: 'italic', source: String.raw`\*(?!\s)([^*\s][^*]*?)(?<!\s)\*` },
 ] as const satisfies readonly { readonly style: EmphasisStyle; readonly source: string }[];
 
-const EMPHASIS_REGEX = new RegExp(EMPHASIS_RULES.map((rule) => rule.source).join('|'), 'gu');
+/**
+ * UNE ALTERNATION PAR JEU DE STYLES ENCORE PERMIS — la règle d'indice `i`
+ * reste au groupe `i + 1` : une règle exclue devient `(?!)` (un motif qui ne
+ * matche jamais) PORTANT toujours son groupe, pour que l'invariant tienne.
+ * Seize jeux au plus, compilés à la demande.
+ */
+const emphasisRegexCache = new Map<string, RegExp>();
+const emphasisRegexFor = (excluded: ReadonlySet<EmphasisStyle>): RegExp => {
+  const key = [...excluded].sort().join(',');
+  const cached = emphasisRegexCache.get(key);
+  if (cached !== undefined) return cached;
+  const regex = new RegExp(
+    EMPHASIS_RULES.map((rule) => (excluded.has(rule.style) ? '(?!)()' : rule.source)).join('|'),
+    'gu',
+  );
+  emphasisRegexCache.set(key, regex);
+  return regex;
+};
 
 type RawMatch = { readonly start: number; readonly end: number; readonly segment: InlineSegment };
+
+/**
+ * UNE FORME QUI NE LIT PAS CE QU'ELLE CONSOMME (#7849) — le code et le lien
+ * markdown rendent un `text` plus court que leur match (les accents graves,
+ * les crochets et l'adresse ne sont pas lus). Leur fin est donc celle du
+ * MATCH, jamais celle du segment.
+ */
+const collectWhole = (
+  content: string,
+  regex: RegExp,
+  build: (match: RegExpMatchArray) => InlineSegment | null,
+): readonly RawMatch[] =>
+  [...content.matchAll(regex)].flatMap((match) => {
+    const segment = build(match);
+    const start = match.index;
+    if (segment === null || start === undefined) return [];
+    return [{ start, end: start + match[0].length, segment }];
+  });
 
 const collect = (
   content: string,
@@ -314,6 +394,13 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
   );
 
   const matches = [
+    ...collectWhole(content, INLINE_CODE_REGEX, (match) =>
+      match[1] === undefined ? null : { kind: 'code', text: match[1] },
+    ),
+    ...collectWhole(content, MARKDOWN_LINK_REGEX, (match) => {
+      const [, label, href] = match;
+      return label === undefined || href === undefined ? null : { kind: 'url', text: label, href };
+    }),
     ...collect(content, MENTION_REGEX, (match) => {
       const handle = match[1];
       if (handle === undefined) return null;
@@ -338,11 +425,19 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
         ? { kind: 'url', text: url, href: url }
         : { kind: 'tracked-link', text: url, token, url };
     }),
+    ...collect(content, WWW_REGEX, (match) => {
+      const shown = trimUrlTail(match[0]);
+      return { kind: 'url', text: shown, href: `https://${shown}` };
+    }),
+    ...collect(content, EMAIL_REGEX, (match) => {
+      const address = trimUrlTail(match[0]);
+      return { kind: 'url', text: address, href: `mailto:${address}` };
+    }),
     ...collect(content, SHORT_LINK_REGEX, (match) => {
       const token = match[1];
       return token === undefined ? null : { kind: 'tracked-link', text: match[0], token, url: null };
     }),
-  ].sort((a, b) => a.start - b.start);
+  ].sort((a, b) => a.start - b.start || b.end - a.end);
 
   const segments: InlineSegment[] = [];
   let cursor = 0;
@@ -359,16 +454,55 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
 }
 
 /**
+ * LES ADRESSES ET LE CODE SONT OPAQUES À L'EMPHASE (#7849). Un `__` dans
+ * `https://x.fr/__init__`, une étoile dans `` `a*b*c` `` ne sont pas de la
+ * notation : l'emphase s'analyse sur une COPIE où ces zones sont remplacées,
+ * caractère pour caractère, par un caractère neutre (ni blanc, ni mot, ni
+ * marqueur). Les positions restent celles du texte d'origine, dont on relit
+ * ensuite les tranches.
+ */
+const PROTECTED_SPAN_REGEXES = [INLINE_CODE_REGEX, MARKDOWN_LINK_REGEX, URL_REGEX, WWW_REGEX, EMAIL_REGEX] as const;
+const MASK_CHAR = '\u0001';
+
+/**
+ * Une adresse brute peut AVALER le marqueur qui la ferme (`**https://x.fr**` :
+ * `*` et `~` sont des caractères d'URL valides). Ce qui termine une adresse
+ * par une suite de marqueurs ou de ponctuation n'est pas masqué — c'est la
+ * fermeture de l'emphase, que l'analyseur doit voir.
+ */
+const EMPHASIS_OR_PUNCTUATION_TAIL = /[*_~.,;:!?'"]+$/;
+
+function maskProtectedSpans(content: string): string {
+  return PROTECTED_SPAN_REGEXES.reduce(
+    (masked, regex) =>
+      masked.replace(regex, (found: string) => {
+        if (found.includes(MASK_CHAR)) return found;
+        const kept = found.startsWith('`') || found.startsWith('[') ? found : found.replace(EMPHASIS_OR_PUNCTUATION_TAIL, '');
+        return MASK_CHAR.repeat(kept.length) + found.slice(kept.length);
+      }),
+    content,
+  );
+}
+
+/**
  * Découpe `content`. Le résultat COUVRE le texte d'origine — seules les
  * étoiles d'emphase disparaissent, parce qu'elles sont la notation et non le
  * propos.
  */
 export function segmentText(content: string, options: SegmentOptions = {}): readonly TextSegment[] {
+  return emphasisSegments(content, options, new Set());
+}
+
+function emphasisSegments(
+  content: string,
+  options: SegmentOptions,
+  excluded: ReadonlySet<EmphasisStyle>,
+): readonly TextSegment[] {
   if (content === '') return [];
 
   const segments: TextSegment[] = [];
   let cursor = 0;
-  for (const match of content.matchAll(EMPHASIS_REGEX)) {
+  for (const match of maskProtectedSpans(content).matchAll(emphasisRegexFor(excluded))) {
     const start = match.index;
     if (start === undefined) continue;
     // La règle qui a matché est celle dont le groupe est défini — un seul
@@ -380,8 +514,10 @@ export function segmentText(content: string, options: SegmentOptions = {}): read
       (candidate): candidate is { readonly style: EmphasisStyle; readonly inner: string } =>
         candidate.inner !== undefined,
     )!;
+    const inner = content.slice(start + (match[0].length - hit.inner.length) / 2, start + (match[0].length + hit.inner.length) / 2);
     if (start > cursor) segments.push(...inlineSegments(content.slice(cursor, start), options));
-    segments.push({ kind: 'emphasis', style: hit.style, children: inlineSegments(hit.inner, options) });
+    const children = emphasisSegments(inner, options, new Set([...excluded, hit.style]));
+    segments.push({ kind: 'emphasis', style: hit.style, children });
     cursor = start + match[0].length;
   }
   if (cursor < content.length) segments.push(...inlineSegments(content.slice(cursor), options));

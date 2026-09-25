@@ -22,6 +22,7 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'bookmarks',
   'starredMessages',
   'stories',
+  'storiesMine',
   'storyCompose',
   'story',
   'feed',
@@ -76,6 +77,10 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admConversation',
   'adminAgent',
   'admAgent',
+  'adminAnonymous',
+  'admAnonymous',
+  'adminAnonymousOne',
+  'admAnonymousOne',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 

@@ -13,14 +13,6 @@ import MeeshyUI
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
-// MARK: - Active Member (for conversation detail header)
-struct ConversationActiveMember: Identifiable { // internal for cross-file extension access
-    let id: String
-    let name: String
-    let color: String
-    let avatarURL: String?
-}
-
 struct ConversationOverlayState {
     @Indirect var overlayMessage: Message? = nil
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
@@ -338,12 +330,9 @@ struct ConversationView: View {
         // brouillon persisté.
         let refs = attachmentRefs
             ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
-        let draft = MessageDraft(
+        let draft = MessageDraft.composing(
             text: text,
-            replyToId: ref?.messageId,
-            replyAuthorName: ref?.authorName,
-            replyPreviewText: ref?.previewText,
-            replyIsMe: ref?.isMe ?? false,
+            reply: ref,
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
@@ -1189,24 +1178,11 @@ struct ConversationView: View {
                 }
                 if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     composerText.text = draft.text
-                    // Restore inline reply context from the draft so the user
-                    // sees the same compose chip they left — no hidden state
-                    // transitions on app reopen.
-                    if let replyId = draft.replyToId,
-                       let authorName = draft.replyAuthorName {
-                        // `authorAvatarUrl` reste nil, et c'est SANS
-                        // CONSEQUENCE : `MessageDraft` aplatit la citation en
-                        // quatre champs, et cette reference n'alimente que la
-                        // BANNIERE du composeur, qui ne dessine aucun avatar.
-                        // A l'envoi, seul `messageId` survit — la citation
-                        // rendue est reconstruite par `makeReplyReference`
-                        // depuis le message cite en memoire, avatar compris.
-                        composerState.pendingReplyReference = ReplyReference(
-                            messageId: replyId,
-                            authorName: authorName,
-                            previewText: draft.replyPreviewText ?? "",
-                            isMe: draft.replyIsMe
-                        )
+                    // La citation du brouillon revient telle qu'on l'a laissée —
+                    // sans écraser une réponse à une story qui vient d'ouvrir la
+                    // conversation, et jamais une story hors du DM de son auteur (#7883).
+                    if composerState.pendingReplyReference == nil {
+                        composerState.pendingReplyReference = draft.restoredReply(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
                     }
                     if let lang = draft.selectedLanguage {
                         composerState.selectedLanguage = lang
@@ -1242,12 +1218,10 @@ struct ConversationView: View {
             }
             .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
                 // Réponse à un mood affiché dans la barre directe courante : la vue
-                // est déjà à l'écran, `onAppear` ne se redéclenche pas. On applique
-                // le contexte au composer ssi il cible CETTE conversation directe.
-                guard isDirect,
-                      let ctx = router.pendingReplyContext,
-                      ctx.authorId == conversation?.participantUserId else { return }
-                applyReplyContext(ctx, openingConversation: false)
+                // est déjà à l'écran, `onAppear` ne se redéclenche pas. Un contexte
+                // refusé ici (autre conversation) reste en attente pour SON DM.
+                guard let ctx = router.pendingReplyContext,
+                      applyReplyContext(ctx, openingConversation: false) else { return }
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
@@ -1816,14 +1790,7 @@ struct ConversationView: View {
                         message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
                     },
                     onOpenProfile: { user in
-                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
-                            router.participantProfileTarget = ParticipantProfileTarget(
-                                conversationId: conversationId,
-                                participantId: participantId
-                            )
-                        } else {
-                            router.deepLinkProfileUser = user
-                        }
+                        router.openProfile(user, inConversation: conversation?.id)
                     },
                     onViewStory: { userId in
                         overlayState.storyViewerUserId = userId
@@ -2041,9 +2008,9 @@ struct ConversationView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    if viewModel.activeMentionQuery != nil {
-                        mentionSuggestionPanel
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    MentionSuggestionOverlay(controller: viewModel.mentionController,
+                                             accentColor: accentColor) { candidate in
+                        composerText.text = viewModel.insertMention(candidate, into: composerText.text)
                     }
                     if overlayState.isSelectionModeActive {
                         // #4005 — remplace le composer, jamais un
@@ -2077,7 +2044,7 @@ struct ConversationView: View {
                 }
                 // Composer transparent, sans fond (#3920, directive porteur
                 // 2026-08-26) : le seul état qui dépendait de ce matériau
-                // PARTAGÉ était le composer nu — `mentionSuggestionPanel`,
+                // PARTAGÉ était le composer nu — `MentionSuggestionOverlay`,
                 // `EmojiKeyboardPanel`, `closedConversationBanner` et
                 // `blockedComposerZone` se dotent CHACUN de leur propre fond
                 // (`.ultraThinMaterial`/`.regularMaterial`), donc aucun n'en
@@ -2123,48 +2090,6 @@ struct ConversationView: View {
             viewModel.markCaughtUpFromSummaryOrRiver()
         }
         )
-    }
-
-    // MARK: - Mention Suggestion Panel
-
-    @ViewBuilder
-    private var mentionSuggestionPanel: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                ForEach(viewModel.mentionSuggestions) { candidate in
-                    Button {
-                        composerText.text = viewModel.insertMention(candidate, into: composerText.text)
-                    } label: {
-                        HStack(spacing: MeeshySpacing.sm + 2) {
-                            MeeshyAvatar(
-                                name: candidate.displayName,
-                                context: .userListItem,
-                                accentColor: accentColor,
-                                avatarURL: candidate.avatarURL
-                            )
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(candidate.displayName)
-                                    .font(MeeshyFont.relative(14, weight: .semibold))
-                                    .foregroundColor(theme.textPrimary)
-                                Text("@\(candidate.username)")
-                                    .font(MeeshyFont.relative(12))
-                                    .foregroundColor(theme.textSecondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.vertical, MeeshySpacing.sm)
-                    }
-                    .accessibilityLabel(String(localized: "conversation.view.mention", bundle: .main))
-                    if candidate.id != viewModel.mentionSuggestions.last?.id {
-                        Divider()
-                            .padding(.leading, 58) // Aligned with avatar center
-                    }
-                }
-            }
-        }
-        .frame(maxHeight: 200)
-        .background(.ultraThinMaterial)
     }
 
 

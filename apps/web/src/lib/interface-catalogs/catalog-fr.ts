@@ -9,7 +9,10 @@
  * Un paramètre s'écrit `{nom}` et se place là où la LANGUE le veut, jamais là
  * où un site d'appel le concatène.
  */
+import frMentions from './catalog-fr-mentions';
 import frThreadStates from './catalog-fr-thread-states';
+import frIdentity from './catalog-fr-identity';
+import frStoriesMine from './catalog-fr-stories-mine';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -133,11 +136,22 @@ const fr = {
   'feed.post.menu.unsave': 'Retirer des enregistrements',
   'feed.post.menu.pin': 'Épingler',
   'feed.post.menu.delete': 'Supprimer',
+  /* MODIFIER LE TEXTE (#7534) — miroir `FeedPostCard+Header.swift:213`
+     (`feed.post.edit` = « Modifier ») et `EditPostSheet.swift` pour les cinq
+     clés de la feuille. */
+  'feed.post.edit': 'Modifier',
+  'feed.post.edit.title': 'Modifier le post',
+  'feed.post.edit.body.a11y': 'Contenu de la publication',
+  'feed.post.edit.remaining.a11y': '{count} caractères restants',
+  'feed.post.edit.publish': 'Publier',
   'report.post.title': 'Signaler cette publication',
   'feed.post.copied': 'Texte copié',
   'feed.post.copy_failed': 'Impossible de copier le texte',
   'feed.post.pinned': 'Publication épinglée',
   'feed.post.pin_failed': 'Impossible d’épingler la publication',
+  'feed.post.edited': 'Publication modifiée',
+  'feed.post.edit_failed': 'La publication n’a pas pu être modifiée',
+  'feed.post.edit_busy': 'Une modification est déjà en cours',
   'feed.post.deleted': 'Publication supprimée',
   'feed.post.delete_failed': 'Erreur lors de la suppression',
   /* REPARTAGER DEPUIS LE RAIL DES RÉELS (#6484) — miroir `ReelsViewModel.repost`
@@ -209,8 +223,7 @@ const fr = {
   'feed.allLoaded': 'Toutes les publications sont chargées',
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
-  'a11y.avatar.profile': 'Voir le profil de {name}',
-  'a11y.avatar.story': 'Voir la story de {name}',
+  ...frIdentity,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
@@ -360,6 +373,10 @@ const fr = {
   'dataExport.action.again': 'Exporter à nouveau',
   'dataExport.done.title': 'Export terminé',
   'dataExport.done.body': 'Le fichier a été téléchargé sur cet appareil.',
+  'dataExport.ready.title': 'Export prêt',
+  'dataExport.ready.body': 'Le fichier est prêt. Appuyez pour l’enregistrer sur cet appareil.',
+  'dataExport.action.deliver': 'Enregistrer le fichier',
+  'dataExport.undelivered.body': 'Cet appareil n’a pas pu recevoir le fichier.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
@@ -825,6 +842,8 @@ const fr = {
   'story.studio.publish': 'Publier',
   'story.studio.publishing': 'Publication…',
   'story.studio.publish.waiting': 'En attente du réseau…',
+  'story.studio.publishing.progress': 'Publication {current}/{total}…',
+  'story.studio.outcome.partial': '{published} sur {total} publiées — les autres restent ici.',
   'story.studio.title.post': 'Nouvelle publication',
   'story.studio.title.reel': 'Nouveau réel',
   'story.studio.publish.as.story': 'Publier la story',
@@ -835,7 +854,6 @@ const fr = {
   'story.studio.kind.post': 'Publication',
   'story.studio.kind.reel': 'Réel',
   'story.studio.refusal.reel': 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.',
-  'story.studio.refusal.story-pages': 'Une story ne porte qu’une scène : publiez en post, ou retirez les autres scènes.',
   'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
   'story.studio.stage': 'Aperçu de la story',
   'story.studio.background.add': 'Ajouter une photo ou une vidéo',
@@ -974,6 +992,7 @@ const fr = {
      que le legacy n'avait pas. */
   'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
   'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',
+  'appUpdate.storeHint': 'Installez-la depuis le magasin d’applications.',
   'appUpdate.action': 'Mettre à jour',
   'appUpdate.dismiss': 'Attendre',
   'appUpdate.applying': 'Mise à jour…',
@@ -1154,6 +1173,7 @@ const fr = {
   'message.location.a11y': 'Position : {place}',
 
   ...frThreadStates,
+  ...frMentions,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
@@ -1184,6 +1204,7 @@ const fr = {
   'message.detail.sent': 'Envoyé',
   'message.detail.language.original': '{language} (original)',
 
+  ...frStoriesMine,
 } as const;
 
 export default fr;

@@ -56,6 +56,14 @@ const frThreadStates = {
   'attachment.kind.video': 'Vidéo',
   'attachment.kind.audio': 'Audio',
   'attachment.kind.file': 'Fichier',
+  /* LA STORY CITÉE (#7881) — `bubble.reply.story.answer`, `bubble.reply.story`
+     et `feed.post.detail.story_unavailable` du catalogue iOS. Le bandeau de
+     `StoryCitationCard` et le libellé accessible de la rangée étaient EN DUR,
+     en français. */
+  'message.story.reply': 'réponse à sa story',
+  'message.story.label': 'Story',
+  'message.story.unavailable': 'Story indisponible',
+  'message.mood.label': 'Humeur',
 
   /* LA CAUSE D'UN ENVOI QUI N'EST PAS PARTI (#7740) — `send/failure-reason.ts`.
      Minuscule initiale : la phrase s'embarque après un tiret, dans
@@ -71,6 +79,11 @@ const frThreadStates = {
   'send.failure.tooMany': 'trop de messages d’un coup — réessayez dans un instant',
   'send.failure.rejected': 'message refusé',
   'send.failure.gatewayUnavailable': 'la passerelle est indisponible',
+
+  /* LA PASTILLE DES RÉACTIONS D'UNE PIÈCE (#7894) — valeurs du catalogue iOS
+     (`media.reactions.badge.a11y`, `media.reactions.badge.mine.a11y`). */
+  'media.reactions.badge.a11y': 'Réactions',
+  'media.reactions.badge.mine.a11y': 'dont la vôtre',
 } as const;
 
 export default frThreadStates;

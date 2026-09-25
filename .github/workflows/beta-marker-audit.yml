@@ -23,9 +23,13 @@ name: Beta marker conflict audit
 # aurait duré jusqu'à la prochaine relecture manuelle — exactement ce qui
 # s'est produit pour 1.0.9, découvert par la mission #6348 après coup.
 
+# Cadence HORAIRE depuis #7711 (quart d'heure auparavant) : `main` ne bouge
+# qu'aux releases, et le balayage couvre les 100 derniers commits, donc une
+# heure de latence ne laisse échapper aucun commit — elle ne fait que retarder
+# l'alerte. 24 runs par jour au lieu de 96.
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch: {}
 
 permissions:

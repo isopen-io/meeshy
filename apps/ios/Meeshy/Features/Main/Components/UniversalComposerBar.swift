@@ -303,18 +303,19 @@ struct UniversalComposerBar: View {
     // MARK: - State (internal for cross-file extension access)
 
     @State var text = ""
-    /// La feuille des dix cadres à mots, ouverte par un appui long sur la
-    /// pastille (#5326).
+    /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
+    /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
+    @State var formatSelectionStorage: Any? = nil
+    /// La feuille des dix cadres à mots, ouverte par un appui long sur le
+    /// bouton d'envoi (#5326, directive porteur 2026-09-25).
     @State var showTextStickerSheet = false
+    /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
+    /// (#7931).
+    @State var showQuickEmojiPicker = false
+    /// La hauteur de la barre d'outils, que le cadre des emojis rapides
+    /// recouvre à droite pour prendre tout le côté droit du composeur.
+    @State var topToolbarHeight: CGFloat = 0
 
-    /// **Le cran de la rotation des cadres à mots** (#6537).
-    ///
-    /// Un entier qui MONTE, jamais un index borné : le modulo se prend au
-    /// moment de lire le tour, dont la longueur change quand l'auteur épingle
-    /// ou pose un cadre. Un index borné par l'ancienne longueur aurait pointé
-    /// hors du nouveau tour.
-    @State var stickerRotationStep = 0
-    @State var stickerRotationTimer = Timer.publish(every: UniversalComposerBar.stickerRotationPeriod, on: .main, in: .common).autoconnect()
     @FocusState var isFocused: Bool
     @State var sendBounce = false
     @State var focusBounce = false

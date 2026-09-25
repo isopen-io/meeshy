@@ -19,7 +19,7 @@ final class SignupFormTests: XCTestCase {
     // MARK: - Fabriques
 
     private func makeForm(
-        displayName: String = "Awa N’Diaye",
+        displayName: String? = "Awa N’Diaye",
         email: String = "awa@example.com",
         phoneDigits: String = "",
         password: String = "motdepasse",
@@ -271,10 +271,39 @@ final class SignupFormTests: XCTestCase {
     /// passerelle lit, et un `Optional` nil encodé par erreur en `null` serait
     /// une clé PRÉSENTE à valeur nulle, que `AuthSchemas.register` refuserait.
     func test_registerRequest_carriesUsername_butNeverFirstOrLastName() throws {
-        let payload = try encodedPayload(makeForm())
+        let payload = try encodedPayload(makeForm(email: "awa.ndiaye@example.com"))
         XCTAssertEqual(payload["username"] as? String, "awa-ndiaye")
         XCTAssertNil(payload["firstName"])
         XCTAssertNil(payload["lastName"])
+    }
+
+    // MARK: - Identité en direct (#7897)
+
+    func test_effectiveIdentity_followsTheAddress_untilTouched() {
+        var form = makeForm(displayName: nil, email: "jean.dupont@example.com")
+        XCTAssertEqual(form.effectiveDisplayName, "Jean Dupont")
+        XCTAssertEqual(form.effectiveUsername, "jean-dupont")
+
+        form.displayName = "Johnny"
+        XCTAssertEqual(form.effectiveDisplayName, "Johnny")
+        XCTAssertEqual(form.effectiveUsername, "jean-dupont", "le pseudo vient de l'ADRESSE")
+
+        form.email = "jean.martin@example.com"
+        XCTAssertEqual(form.effectiveDisplayName, "Johnny")
+        XCTAssertEqual(form.effectiveUsername, "jean-martin")
+
+        form.displayName = "  "
+        XCTAssertEqual(form.effectiveDisplayName, "Jean Martin")
+    }
+
+    func test_isIdentityDefined_waitsForAPseudoAndAName() {
+        var form = makeForm(displayName: nil, email: "a@b.co")
+        XCTAssertFalse(form.isIdentityDefined)
+        form.username = "awa"
+        XCTAssertFalse(form.isIdentityDefined)
+        form.displayName = "Awa"
+        XCTAssertTrue(form.isIdentityDefined)
+        XCTAssertTrue(makeForm(displayName: nil, email: "jean.dupont@example.com").isIdentityDefined)
     }
 
     func test_registerRequest_carriesTheIdentityAsDisplayName() throws {

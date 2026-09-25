@@ -1,0 +1,13 @@
+## Leçon 648 — un double PARTIEL ne fait pas rougir une ASSERTION : il fait échouer l'APPEL, et le symptôme ne nomme jamais sa cause
+
+2026-09-20, #7153 (`services/gateway/src/__tests__/helpers/notification-service-doubles.ts`, cinq suites de `services/gateway/src/__tests__/`). Cinq suites de notification — 3 366 lignes, 90 témoins dont 25 de sécurité — étaient retirées de jest. En les réveillant, la moitié des rouges ne venait pas d'un désaccord sur le comportement, mais d'un faux `prisma` resté à une forme ancienne : deux modèles déclarés quand le domaine en touche QUATORZE.
+
+**Ce que ça produit n'est pas un échec d'assertion.** `this.prisma.user` vaut `undefined`, le déréférencement lève, et `createNotification` — qui enveloppe tout dans un `try/catch` — rend `null` en journalisant dans un logger lui aussi doublé, donc muet. Le témoin échoue alors des dizaines de lignes plus loin, sur `result?.userId` indéfini ou sur `calls[0]` vide. **Le symptôme n'a aucun rapport visible avec la cause**, et il ressemble trait pour trait à un refus légitime du service — au point que deux témoins en ont conclu que « Ne Pas Déranger » et les préférences par type n'étaient plus respectés. Ils le sont.
+
+**La carte d'un double se MESURE, et la mesure doit inclure la fermeture.** Un `grep -rhoE "prisma\.[a-zA-Z]+\.[a-zA-Z]+"` sur le répertoire du domaine rendait treize modèles — et ratait `userEventSeq`, parce que `NotificationService` construit lui-même un `SequenceService` (`:182`) qui est seul à le toucher. Le symptôme de CE manque était le pire de tous : `emitBestEffort` avale l'échec de `emitWithSeq`, donc la notification s'écrivait **sans jamais partir sur le socket**, en silence, sans un seul rouge.
+
+**Et le piège se rejoue à l'envers quand on ENRICHIT l'utilitaire doublé.** Ajouter `sanitizeURLOrPath` à `SecuritySanitizer` a fait tomber 36 témoins vivants dans trois suites : 65 suites du gateway doublent cette classe à la main, et un double partiel rend `undefined` sur la méthode neuve. Même forme, même silence, sens opposé.
+
+> **Devant un témoin qui échoue sur une valeur absente plutôt que sur une valeur fausse, soupçonner le DOUBLE avant le code.** Un double se construit depuis une carte mesurée sur la production — fermeture transitive comprise, car un service qui en CONSTRUIT un autre hérite de ses tables — et cette carte se remesure quand le domaine gagne une table **ou un collaborateur**. Un service qui avale ses erreurs transforme toute lacune de montage en refus plausible.
+
+Cf. [[reference_a_defect_between_two_injected_collaborators_is_invisible_to_unit_tests]], [[reference_a_fake_prisma_accepts_any_shape_only_tsc_validates_a_query]], [[reference_a_swallowed_error_looks_exactly_like_a_legitimate_empty]].

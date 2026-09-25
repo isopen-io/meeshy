@@ -1,4 +1,8 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import itIdentity from './catalog-it-identity';
+
+import itMentions from './catalog-it-mentions';
+import itStoriesMine from './catalog-it-stories-mine';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -98,11 +102,19 @@ const it = {
   'feed.post.menu.unsave': 'Rimuovi dai salvati',
   'feed.post.menu.pin': 'Fissa',
   'feed.post.menu.delete': 'Elimina',
+  'feed.post.edit': 'Modifica',
+  'feed.post.edit.title': 'Modifica post',
+  'feed.post.edit.body.a11y': 'Contenuto del post',
+  'feed.post.edit.remaining.a11y': '{count} caratteri rimanenti',
+  'feed.post.edit.publish': 'Pubblica',
   'report.post.title': 'Segnala questo post',
   'feed.post.copied': 'Testo copiato',
   'feed.post.copy_failed': 'Impossibile copiare il testo',
   'feed.post.pinned': 'Post fissato',
   'feed.post.pin_failed': 'Impossibile fissare il post',
+  'feed.post.edited': 'Post aggiornato',
+  'feed.post.edit_failed': 'Impossibile aggiornare il post',
+  'feed.post.edit_busy': 'È già in corso una modifica',
   'feed.post.deleted': 'Post eliminato',
   'feed.post.delete_failed': 'Errore durante l’eliminazione',
   'feed.post.repost.success': 'Ripubblicato',
@@ -168,8 +180,7 @@ const it = {
   'feed.allLoaded': 'Tutte le pubblicazioni sono state caricate',
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
-  'a11y.avatar.profile': 'Vedi il profilo di {name}',
-  'a11y.avatar.story': 'Vedi la storia di {name}',
+  ...itIdentity,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
   'report.body': 'Scegli il motivo della segnalazione. Il nostro team di moderazione la riceverà.',
@@ -316,6 +327,10 @@ const it = {
   'dataExport.action.again': 'Esporta di nuovo',
   'dataExport.done.title': 'Esportazione completata',
   'dataExport.done.body': 'Il file è stato scaricato su questo dispositivo.',
+  'dataExport.ready.title': 'Esportazione pronta',
+  'dataExport.ready.body': 'Il file è pronto. Tocca per salvarlo su questo dispositivo.',
+  'dataExport.action.deliver': 'Salva il file',
+  'dataExport.undelivered.body': 'Questo dispositivo non ha potuto ricevere il file.',
 
   'profile.title': 'Profilo',
   'profile.edit': 'Modifica',
@@ -756,6 +771,8 @@ const it = {
   'story.studio.publish': 'Pubblica',
   'story.studio.publishing': 'Pubblicazione…',
   'story.studio.publish.waiting': 'In attesa della rete…',
+  'story.studio.publishing.progress': 'Pubblicazione {current}/{total}…',
+  'story.studio.outcome.partial': '{published} su {total} pubblicate — le altre restano qui.',
   'story.studio.title.post': 'Nuovo post',
   'story.studio.title.reel': 'Nuovo reel',
   'story.studio.publish.as.story': 'Pubblica storia',
@@ -766,7 +783,6 @@ const it = {
   'story.studio.kind.post': 'Post',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel richiede un video o un suono di almeno 3 secondi, o almeno due immagini.',
-  'story.studio.refusal.story-pages': 'Una storia contiene una sola scena: pubblicala come post o rimuovi le altre scene.',
   'story.studio.offline': 'Offline — la story verrà pubblicata al ritorno della rete.',
   'story.studio.stage': 'Anteprima della story',
   'story.studio.background.add': 'Aggiungi una foto o un video',
@@ -898,6 +914,7 @@ const it = {
 
   'appUpdate.available': 'È disponibile una nuova versione di Meeshy!',
   'appUpdate.hint': 'Ricarica per avere le ultime novità.',
+  'appUpdate.storeHint': 'Installala dallo store delle app.',
   'appUpdate.action': 'Aggiorna',
   'appUpdate.dismiss': 'Attendi',
   'appUpdate.applying': 'Aggiornamento…',
@@ -1060,6 +1077,10 @@ const it = {
   'send.failure.gatewayUnavailable': 'il server non è disponibile',
   'message.deleted': 'Messaggio eliminato',
   'message.expired.a11y': 'Messaggio effimero scaduto',
+  'message.story.reply': 'risposta alla sua storia',
+  'message.story.label': 'Storia',
+  'message.story.unavailable': 'Storia non disponibile',
+  'message.mood.label': 'Umore',
   'message.withheld': 'Contenuto trattenuto',
   'message.withheld.a11y': 'Contenuto trattenuto: questo messaggio esiste e non viene mostrato',
   'message.veiled': 'Contenuto nascosto',
@@ -1077,6 +1098,8 @@ const it = {
   'attachment.protected.video': 'Video protetto',
   'attachment.protected.audio': 'Audio protetto',
   'attachment.protected.file': 'Allegato protetto',
+  'media.reactions.badge.a11y': 'Reazioni',
+  'media.reactions.badge.mine.a11y': 'compresa la tua',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',
@@ -1099,6 +1122,8 @@ const it = {
   'message.detail.sent': 'Inviato',
   'message.detail.language.original': '{language} (originale)',
 
+  ...itMentions,
+  ...itStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default it;

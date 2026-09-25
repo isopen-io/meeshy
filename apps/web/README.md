@@ -117,6 +117,30 @@ CONNECTENT AU STAGING** — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
 | connexion réelle (#5815) | compte `cible-web-trois` : Lentille avec « Voyage Lisbonne » épinglée et le Salon Rivière — capture `render/shell.android.png` | idem, `render/shell.ios.png` |
 | origine de la WebView (CORS) | `https://localhost` (`CapConfig.java:38-39`) | `capacitor://localhost` (`CAPInstanceDescriptor.m:10-11`) |
 
+**Permissions de la coque Android — `scripts/check-android-manifest.mjs` (#7844).**
+`android/app/src/main/AndroidManifest.xml` doit déclarer EXACTEMENT UNE FOIS chaque
+permission qu'un consommateur du web utilise réellement : `INTERNET`, `RECORD_AUDIO`,
+`MODIFY_AUDIO_SETTINGS` (#5668) et, depuis #7844, `ACCESS_NETWORK_STATE` —
+sans elle, la WebView peut ne jamais faire lever les événements `online`/
+`offline` que `useOnline()` (`src/lib/net/online.ts`) et ses trois
+consommateurs (`socket.ts`, `receipts.ts`, `media-absent.ts`) écoutent ;
+l'app native gelée (`apps/android/app/src/main/AndroidManifest.xml:6`) la
+déclare déjà. Ce gate est dans `bun run gate` et nomme la permission en
+défaut s'il rougit. Depuis #7869 il compte les déclarations EFFECTIVES et en
+exige exactement une : une fusion avait laissé un doublon que rien n'avait
+signalé (`996e392937`), et ne comptent pas une déclaration en commentaire,
+une balise d'une autre casse ou d'un autre nom (`uses-permission-sdk-23`),
+`tools:node="remove"` (la fusion du manifeste la retire) ni
+`android:maxSdkVersion` (l'octroi s'arrête à ce niveau d'API). Sa logique a
+son témoin (`scripts/check-android-manifest.test.ts`) ; son pilote ne tourne
+que lancé, par `scripts/lib/entry-point.mjs`, qui compare les chemins résolus
+— la comparaison brute rendait le gate muet (rc 0) lancé par un lien
+symbolique.
+**Recette manuelle restante, non exécutable depuis un conteneur Linux** (aucun
+émulateur Android ici) : sur l'AVD `Meeshy_Poc_Web-v31`, mode avion → une
+pastille hors-ligne doit apparaître, retour réseau → le socket doit se
+reconnecter sans relance de l'app.
+
 **Le piège de `cap sync`, à connaître avant toute recette.** `bun run gate`
 reconstruit `dist/` en variante **A** (base absolue, service worker) : un
 `cap sync` lancé juste après pousserait CE dist dans les coques, qui
@@ -493,6 +517,32 @@ valeur posée sur directive ne peut pas avoir de témoin : elle ne survit que
 par ce commentaire. La piste structurelle (un TROISIÈME catalogue à la
 demande, sur le patron de `interface_catalogs_admin`) reste ouverte à
 **#7121** — elle ne paie qu'à l'échelle d'une FAMILLE de clés, pas à cinq.
+
+### Relevé du 2026-09-24 (`bun run gate`, segment `measure-weight.mjs`)
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+**52,84 Ko gzip avant le premier pixel · 7 requêtes · 2,29 s de téléchargement
+Fast 3G (préréglage Chrome DevTools)** ; **776,18 Ko** à la demande hors
+première peinture, répartis en ~55 chunks nommés (`interface_catalogs`
+100,66 Ko/7 fichiers, `thread-modes` 78,09 Ko, `story_studio` 15,97 Ko,
+`feed` 14,06 Ko, `notifications` 8,4 Ko, `communities` 8,54 Ko,
+`interface_catalogs_invite` 18,75 Ko). Les sept pages institutionnelles :
+**57,04 Ko** gzip pour les sept (`/about`, `/contact`, `/faq`, `/help`,
+`/partners`, `/privacy`, `/terms`). Précache PWA : **348 entrées**
+(2687,01 KiB). Aucun dépassement de `budgets.json` — le segment reste **vert**
+sur les 59 du gate composite.
+
+Hors ligne (`node scripts/check-offline.mjs`, variante A) : visite froide
+**105 requêtes / 233,5 Ko** réseau ; visite avec service worker installé
+**89 requêtes / 121,4 Ko** réseau + **7 requêtes / 7,7 Ko** de cache SW ;
+troisième visite hors ligne : le fil s'ouvre, titre inchangé
+(« Meeshy Chats »).
+
+`bun test` : **8456 pass / 0 fail / 51 498 `expect()`** sur 642 fichiers en
+90,28 s.
 
 ## L'interface
 

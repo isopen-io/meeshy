@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { EMPTY_PROGRESS, withDone, withFriendRequest } from './journey';
+import { EMPTY_PROGRESS, withDone, withFriendRequest, withScore } from './journey';
 import { createJourneyProgressStore } from './progress-store';
 
 function fakeStorage(initial: Record<string, string> = {}) {
@@ -29,6 +29,18 @@ describe('createJourneyProgressStore — ce qui s’est confirmé survit à la r
     store.write('me', progress);
     expect(createJourneyProgressStore({ storage }).read('me')).toEqual(progress);
     expect(createJourneyProgressStore({ storage }).read('other')).toEqual(EMPTY_PROGRESS);
+  });
+
+  test('le repère de score survit à la reprise — la story crédite au retour du studio (#7908)', () => {
+    const storage = fakeStorage();
+    const progress = withScore(withScore(EMPTY_PROGRESS, 30), 44);
+    createJourneyProgressStore({ storage }).write('me', progress);
+    expect(createJourneyProgressStore({ storage }).read('me').score).toEqual({ baseline: 30, last: 44 });
+  });
+
+  test('un repère de score altéré se lit absent, sans perdre le reste', () => {
+    const storage = fakeStorage({ 'meeshy.onboarding.me': '{"done":["global"],"friendRequests":[],"score":{"baseline":"x","last":3}}' });
+    expect(createJourneyProgressStore({ storage }).read('me')).toEqual({ done: ['global'], friendRequests: [] });
   });
 
   test('une valeur altérée ne fabrique aucun point', () => {
