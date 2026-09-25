@@ -62,6 +62,8 @@ const MEMBRE = {
   lastName: '',
   bio: '',
   avatar: '',
+  banner: '',
+  profileCompletionRate: null,
   email: 'membre@example.test',
   phoneNumber: '',
   role: 'USER',

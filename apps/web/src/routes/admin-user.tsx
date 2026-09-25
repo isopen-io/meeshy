@@ -18,6 +18,7 @@ import { ActionButton } from '@/routes/link-page-parts';
 import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
+import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 import {
@@ -118,6 +119,9 @@ export default function AdminUserScreen() {
         <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
           {onglet === 'profile' ? (
             <div className="grid gap-5 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <AdminUserGallery membre={membre} language={language} />
+              </div>
               <Section titre={translateAdmin(language, 'admin.user.identity')}>
                 <Ligne label="@" valeur={membre.username} />
                 <Ligne label="✉" valeur={membre.email} />
@@ -139,6 +143,7 @@ export default function AdminUserScreen() {
                   valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
                 />
               </Section>
+              <Metadonnees membre={membre} language={language} />
 
               <div className="grid gap-2">
                 <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
@@ -328,5 +333,39 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * TOUTES LES MÉTADONNÉES SERVIES (#7845) — langues du Prisme, fuseau,
+ * vérifications, verrouillage, complétion. Une ligne sans valeur ne
+ * s'affiche pas : « — » répété dix fois ne dit rien de plus qu'une absence.
+ */
+function Metadonnees({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
+  const date = (valeur: string | null) => (valeur === null ? '' : adminMoment(valeur, language));
+  const lignes: readonly (readonly [string, string])[] = [
+    [translateAdmin(language, 'admin.meta.name'), [membre.firstName, membre.lastName].filter((part) => part !== '').join(' ')],
+    [translateAdmin(language, 'admin.meta.systemLanguage'), membre.systemLanguage],
+    [translateAdmin(language, 'admin.meta.regionalLanguage'), membre.regionalLanguage],
+    [translateAdmin(language, 'admin.meta.customLanguage'), membre.customDestinationLanguage],
+    [translateAdmin(language, 'admin.meta.timezone'), membre.timezone],
+    [translateAdmin(language, 'admin.meta.emailVerified'), date(membre.emailVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.phoneVerified'), date(membre.phoneVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.completion'), membre.profileCompletionRate === null ? '' : `${Math.round(membre.profileCompletionRate)} %`],
+    [translateAdmin(language, 'admin.meta.passwordChanged'), date(membre.lastPasswordChange)],
+    [translateAdmin(language, 'admin.meta.failedLogins'), membre.failedLoginAttempts === 0 ? '' : String(membre.failedLoginAttempts)],
+    [translateAdmin(language, 'admin.meta.lockedUntil'), date(membre.lockedUntil)],
+    [translateAdmin(language, 'admin.meta.lockedReason'), membre.lockedReason ?? ''],
+    [translateAdmin(language, 'admin.meta.deactivated'), date(membre.deactivatedAt)],
+    [translateAdmin(language, 'admin.meta.updated'), date(membre.updatedAt)],
+  ];
+  return (
+    <Section titre={translateAdmin(language, 'admin.meta.title')}>
+      {lignes
+        .filter(([, valeur]) => valeur !== '')
+        .map(([label, valeur]) => (
+          <Ligne key={label} label={label} valeur={valeur} />
+        ))}
+    </Section>
   );
 }
