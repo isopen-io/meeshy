@@ -19,7 +19,6 @@ import {
   AVATAR_FRAME,
   AVATAR_INSET,
   AVATAR_SIZE,
-  CONTENT_PULL,
   FLAG_LIMIT_PLAIN,
   GROUP_TOP_PADDING,
   META_TEXT_OPACITY,
@@ -50,21 +49,12 @@ import {
   Flags,
   PrismPastille,
   Quote,
-  QuoteIndent,
   ReactionChip,
   reactionEntries,
+  RowQuote,
 } from './message-blocks';
 
 const defaultNow = (): number => Date.now();
-
-/**
- * L'ORIGINE DU CONTENU (#7929) — ce qui appartient au message remonte de la
- * colonne du nom au bord gauche de la pastille ; la tête d'identité seule
- * reste dans sa colonne. Une MARGE négative, et non une seconde grille : la
- * carte d'élection, le chip d'identité et la bande de focus restent ancrés à
- * la colonne `relative`, qu'ils débordent déjà jusqu'à la pastille.
- */
-const CONTENT_ORIGIN = { marginInlineStart: -CONTENT_PULL } as const;
 
 /**
  * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
@@ -322,7 +312,7 @@ export const FocalRow = memo(function FocalRow({
         }}
       >
         <div aria-hidden />
-        <div data-row-content style={CONTENT_ORIGIN}>
+        <div data-row-content>
           <ProtectionNotice kind={kind} surface="row" />
         </div>
       </div>
@@ -499,12 +489,6 @@ export const FocalRow = memo(function FocalRow({
    */
   const storyCitation = storyCitationOf(message);
   const moodCitation = moodCitationOf(message);
-  /* EN MODE SÉLECTION, la coche prend la place de l'avatar sur CHAQUE
-     rangée : le contenu reste dans la colonne du nom — ramené sous la coche,
-     il la recouvrait et interceptait son clic (#7929, gate
-     `check-thread-states.mjs`). */
-  const pulled = selected === undefined;
-  const contentOrigin = pulled ? CONTENT_ORIGIN : undefined;
   const sharedPlace = placeOf(message);
   const body = bodyKindOf(message);
 
@@ -518,7 +502,7 @@ export const FocalRow = memo(function FocalRow({
           (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
           l'expéditeur mais sur la SURFACE qui la porte. */}
       {storyCitation !== null ? (
-        <QuoteIndent railed indented={pulled}>
+        <RowQuote railed>
           <StoryCitationCard
             citation={storyCitation}
             accent="var(--accent)"
@@ -526,20 +510,20 @@ export const FocalRow = memo(function FocalRow({
             now={new Date(nowMs)}
             {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
           />
-        </QuoteIndent>
+        </RowQuote>
       ) : moodCitation !== null ? (
-        <QuoteIndent indented={pulled}>
+        <RowQuote>
           <MoodQuote citation={moodCitation} isMine={false} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
-        </QuoteIndent>
+        </RowQuote>
       ) : message.replyTo ? (
-        <QuoteIndent indented={pulled}>
+        <RowQuote>
           <Quote
             quote={message.replyTo}
             isMine={false}
             languages={languages}
             onJump={() => onJumpToMessage(message.replyTo!.id)}
           />
-        </QuoteIndent>
+        </RowQuote>
       ) : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
@@ -626,9 +610,9 @@ export const FocalRow = memo(function FocalRow({
       {/* LA BANDE DE TÊTE — badges (épinglé, transféré, #5936) puis chrome
           de protection (F11, #7454), AU-DESSUS de l'identité
           (`FocalRow.swift:233`, `:365-376`). Elle s'étend sur les DEUX
-          colonnes et part du bord gauche de la pastille (#7929) : posée dans
-          la colonne du nom puis ramenée à l'origine, elle recouvrait
-          l'avatar, qui partage la même ligne de grille. Les effets décoratifs
+          colonnes et part du bord gauche de la pastille (#7929), comme
+          `badgesSection` iOS : elle COIFFE le message, avatar compris — ce
+          n'est pas du contenu, que #7995 range sur la colonne du nom. Les effets décoratifs
           ne s'y comptent plus : ils s'EXÉCUTENT (#7596). L'horloge du chrome
           est PARTAGÉE (`secondClock`) — cette rangée ne re-rend jamais pour
           elle. */}
@@ -796,7 +780,7 @@ export const FocalRow = memo(function FocalRow({
             basse) à gauche ; l'heure et l'accusé à droite, alignés sur la
             DERNIÈRE ligne du bloc — `items-end` fait ce que
             `HStack(alignment:.bottom)` fait côté iOS. */}
-        <div data-row-content className="flex items-end gap-2" style={contentOrigin}>
+        <div data-row-content className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
