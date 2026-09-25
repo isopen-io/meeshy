@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itIdentity from './catalog-it-identity';
 
 import itMentions from './catalog-it-mentions';
+import itStoriesMine from './catalog-it-stories-mine';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -101,11 +102,19 @@ const it = {
   'feed.post.menu.unsave': 'Rimuovi dai salvati',
   'feed.post.menu.pin': 'Fissa',
   'feed.post.menu.delete': 'Elimina',
+  'feed.post.edit': 'Modifica',
+  'feed.post.edit.title': 'Modifica post',
+  'feed.post.edit.body.a11y': 'Contenuto del post',
+  'feed.post.edit.remaining.a11y': '{count} caratteri rimanenti',
+  'feed.post.edit.publish': 'Pubblica',
   'report.post.title': 'Segnala questo post',
   'feed.post.copied': 'Testo copiato',
   'feed.post.copy_failed': 'Impossibile copiare il testo',
   'feed.post.pinned': 'Post fissato',
   'feed.post.pin_failed': 'Impossibile fissare il post',
+  'feed.post.edited': 'Post aggiornato',
+  'feed.post.edit_failed': 'Impossibile aggiornare il post',
+  'feed.post.edit_busy': 'È già in corso una modifica',
   'feed.post.deleted': 'Post eliminato',
   'feed.post.delete_failed': 'Errore durante l’eliminazione',
   'feed.post.repost.success': 'Ripubblicato',
@@ -758,6 +767,8 @@ const it = {
   'story.studio.publish': 'Pubblica',
   'story.studio.publishing': 'Pubblicazione…',
   'story.studio.publish.waiting': 'In attesa della rete…',
+  'story.studio.publishing.progress': 'Pubblicazione {current}/{total}…',
+  'story.studio.outcome.partial': '{published} su {total} pubblicate — le altre restano qui.',
   'story.studio.title.post': 'Nuovo post',
   'story.studio.title.reel': 'Nuovo reel',
   'story.studio.publish.as.story': 'Pubblica storia',
@@ -768,7 +779,6 @@ const it = {
   'story.studio.kind.post': 'Post',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel richiede un video o un suono di almeno 3 secondi, o almeno due immagini.',
-  'story.studio.refusal.story-pages': 'Una storia contiene una sola scena: pubblicala come post o rimuovi le altre scene.',
   'story.studio.offline': 'Offline — la story verrà pubblicata al ritorno della rete.',
   'story.studio.stage': 'Anteprima della story',
   'story.studio.background.add': 'Aggiungi una foto o un video',
@@ -1102,6 +1112,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default it;

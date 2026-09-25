@@ -11,6 +11,12 @@ import MeeshySDK
 /// contacts locaux répondent INSTANTANÉMENT, la recherche réseau complète
 /// ensuite. Une liste qui n'arrive qu'après un aller-retour n'aide personne à
 /// la vitesse où l'on tape un pseudo.
+///
+/// **L'ordre et l'étape sont `MentionSuggestionRule` / `MentionLookupRule`**
+/// (#7847) — la MÊME règle que `MentionComposerController` côté app : `@` et
+/// une lettre restent locaux, la deuxième lettre interroge l'annuaire, les
+/// suivantes affinent localement puis relancent la recherche sans vider ce
+/// qui est déjà affiché.
 @MainActor
 final class MentionSuggestionsModel: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -22,59 +28,86 @@ final class MentionSuggestionsModel: ObservableObject {
     @Published private(set) var isSearching = false
 
     private let userService: AudienceUserSearching
-    private let contactsProvider: AudienceContactsProviding
+    private var contactsProvider: AudienceContactsProviding
     private let currentUserId: String?
+    private let debounce: Duration
     private var contacts: [UserSearchResult] = []
+    private var others: [UserSearchResult] = []
+    private var query = ""
     private var didLoadContacts = false
     private var searchTask: Task<Void, Never>?
 
     init(currentUserId: String? = AuthManager.shared.currentUser?.id,
          userService: AudienceUserSearching = UserService.shared,
-         contactsProvider: AudienceContactsProviding = FriendsCacheAudienceContacts()) {
+         contactsProvider: AudienceContactsProviding = FriendsCacheAudienceContacts(),
+         debounce: Duration = .milliseconds(300)) {
         self.currentUserId = currentUserId
         self.userService = userService
         self.contactsProvider = contactsProvider
+        self.debounce = debounce
     }
 
-    /// Une seule fois par vie de la vue : les contacts ne bougent pas entre
-    /// deux frappes, et les relire à chaque caractère ferait un accès disque
-    /// par touche.
-    func loadContactsIfNeeded() async {
+    /// Une seule fois par vie de la vue — qui naît au `@` : le cache sert
+    /// d'abord, puis le fournisseur RÉCHAUFFE si le cache était vide ou périmé.
+    /// `provider` est celui que l'app injecte par l'environnement ; sans lui,
+    /// la lecture seule du cache d'amis.
+    func loadContactsIfNeeded(provider: AudienceContactsProviding? = nil) async {
         guard !didLoadContacts else { return }
         didLoadContacts = true
-        contacts = await contactsProvider.cachedContacts().filter { $0.id != currentUserId }
-        if candidates.isEmpty { candidates = contacts }
+        if let provider { contactsProvider = provider }
+        contacts = await contactsProvider.cachedContacts()
+        recompute()
+        guard let refreshed = await contactsProvider.refreshedContacts(), !refreshed.isEmpty else { return }
+        contacts = refreshed
+        recompute()
     }
 
-    /// Le filtre local s'applique TOUT DE SUITE ; la recherche réseau est
-    /// débattue de 300 ms puis fusionnée. Annuler la précédente est ce qui
-    /// empêche une réponse lente d'écraser une frappe plus récente.
-    ///
-    /// **Le seuil de l'appel distant est `MentionLookupRule`** (directive
-    /// porteur 2026-09-05), pas `!trimmed.isEmpty`. Ce modèle partait dès la
-    /// PREMIÈRE lettre ; son jumeau applicatif
-    /// (`MentionComposerController`) partait dès le `@` NU. Deux familles de
-    /// résolveurs, deux seuils, neuf sites de montage — donc trois régimes
-    /// pour un même geste selon l'écran où le doigt se trouvait.
     func update(query: String) {
         searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let local = trimmed.isEmpty ? contacts : contacts.filter {
-            $0.username.localizedCaseInsensitiveContains(trimmed)
-                || ($0.displayName ?? "").localizedCaseInsensitiveContains(trimmed)
+        self.query = trimmed
+        guard MentionLookupRule.stage(for: trimmed) == .remote else {
+            others = []
+            isSearching = false
+            recompute()
+            return
         }
-        candidates = local
-        guard MentionLookupRule.queriesRemote(trimmed) else { return }
+        recompute()
+        let debounce = self.debounce
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: debounce)
             guard let self, !Task.isCancelled else { return }
             self.isSearching = true
             defer { self.isSearching = false }
             guard let found = try? await self.userService.searchUsers(query: trimmed, limit: 20, offset: 0),
                   !Task.isCancelled else { return }
-            let known = Set(local.map(\.id))
-            self.candidates = local + found.filter { $0.id != self.currentUserId && !known.contains($0.id) }
+            self.others = found
+            self.recompute()
         }
+    }
+
+    private func recompute() {
+        candidates = MentionSuggestionRule.ordered(
+            contacts: contacts, participants: [], others: others,
+            query: query, excludingUserId: currentUserId,
+            identity: MentionIdentity.init(userSearchResult:)
+        )
+    }
+}
+
+// MARK: - Fournisseur de contacts injecté par l'app
+
+private struct MentionContactsProviderKey: EnvironmentKey {
+    static let defaultValue: (any AudienceContactsProviding)? = nil
+}
+
+public extension EnvironmentValues {
+    /// **Le fournisseur de contacts des listes `@` du SDK** (#7847). L'app y
+    /// pose son orchestrateur de cache (lecture instantanée + réchauffement) ;
+    /// `nil` ⇒ lecture seule du cache d'amis.
+    var mentionContactsProvider: (any AudienceContactsProviding)? {
+        get { self[MentionContactsProviderKey.self] }
+        set { self[MentionContactsProviderKey.self] = newValue }
     }
 }
 
@@ -101,6 +134,7 @@ public struct MentionSuggestionList<Menu: View>: View {
     /// a été demandée, et c'est lui qui pose ce drapeau.
     private let attachesContextMenu: Bool
     @StateObject private var model = MentionSuggestionsModel()
+    @Environment(\.mentionContactsProvider) private var contactsProvider
 
     public init(query: String,
                 maxHeight: CGFloat = 200,
@@ -143,8 +177,8 @@ public struct MentionSuggestionList<Menu: View>: View {
         }
         .frame(maxHeight: maxHeight)
         .task {
-            await model.loadContactsIfNeeded()
             model.update(query: query)
+            await model.loadContactsIfNeeded(provider: contactsProvider)
         }
         .adaptiveOnChange(of: query) { _, newValue in
             model.update(query: newValue)

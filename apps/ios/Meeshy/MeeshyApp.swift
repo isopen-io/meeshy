@@ -127,6 +127,10 @@ struct MeeshyApp: App {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
+                                // #7847 — les listes `@` du SDK servent les
+                                // mêmes contacts que celles de l'app, réchauffés
+                                // de la même façon.
+                                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {

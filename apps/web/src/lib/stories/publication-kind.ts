@@ -1,6 +1,6 @@
 import { qualifiesAsReel, type ReelMediaLike } from '@meeshy/shared/utils/reel-composition';
 
-import { studioPublishablePageCount, type StudioDraft } from './studio';
+import type { StudioDraft } from './studio';
 import type { StudioVisualAsset } from './studio-page';
 
 /**
@@ -17,6 +17,19 @@ export type PublicationKind = 'STORY' | 'POST' | 'REEL';
 
 /** L'ordre du menu — celui d'iOS pour une porte de story : story, post, réel. */
 export const PUBLICATION_KINDS: readonly PublicationKind[] = ['STORY', 'POST', 'REEL'];
+
+/**
+ * **PAR OÙ CHAQUE FORMAT PART** (#7707) — miroir de
+ * `ComposerPublishChannel.channel(for:)` (`ComposerPublishChannel.swift:79-104`) :
+ * `scene` publie UN post PAR page (une story, dont chaque page EST une
+ * publication), `document` UN post portant toutes les pages (post, réel).
+ * Une DONNÉE typée par format, lue par `studioPublishPlan` : un quatrième
+ * format ne compile pas tant qu'on n'a pas décidé par où il part, comme le
+ * `switch` exhaustif de Swift (:75-78).
+ */
+export type PublicationChannel = 'scene' | 'document';
+
+export const PUBLICATION_CHANNEL: Readonly<Record<PublicationKind, PublicationChannel>> = { STORY: 'scene', POST: 'document', REEL: 'document' };
 
 const SEARCH_VALUES: Readonly<Record<PublicationKind, string>> = { STORY: 'story', POST: 'post', REEL: 'reel' };
 
@@ -40,7 +53,7 @@ export type StudioOrigin = 'onboarding';
 export const studioOriginFromSearch = (search: URLSearchParams): StudioOrigin | null =>
   search.get('from') === 'onboarding' ? 'onboarding' : null;
 
-export type PublicationRefusal = 'reel-without-qualifying-media' | 'story-with-several-pages';
+export type PublicationRefusal = 'reel-without-qualifying-media';
 
 const visualMedia = (asset: StudioVisualAsset | null): ReelMediaLike[] =>
   asset === null ? [] : [{ mimeType: `${asset.mediaType}/*`, duration: asset.durationMs ?? null }];
@@ -64,14 +77,13 @@ export function studioReelMedia(draft: StudioDraft): ReelMediaLike[] {
  * SERVEUR (`packages/shared/utils/reel-composition.ts`) : sans elle côté
  * client, la passerelle rétrograderait le réel en post sans un mot.
  *
- * **UNE STORY DE PLUSIEURS PAGES SE REFUSE AUSSI** (#7684, question 9.4) :
- * iOS la publie en UN post PAR page (canal `.scene`,
- * `ComposerPublishChannel.swift:87`) ; ce canal n'est pas écrit côté web, et
- * le lecteur de story ne rend que la scène 0 (`routes/story.tsx`) — publier
- * le document entier perdrait les pages suivantes EN SILENCE.
+ * **UNE STORY DE PLUSIEURS PAGES NE SE REFUSE PLUS** (#7707) : le canal
+ * `.scene` (`ComposerPublishChannel.swift:79-104`, miroir
+ * `studioPublishPlan`, `studio-publish.ts`) publie désormais UN post PAR page
+ * publiable, dans l'ordre — ce que #7684 refusait faute de ce canal est
+ * maintenant écrit.
  */
 export function studioPublishRefusal(draft: StudioDraft, kind: PublicationKind): PublicationRefusal | null {
-  if (kind === 'STORY') return studioPublishablePageCount(draft) > 1 ? 'story-with-several-pages' : null;
   if (kind !== 'REEL') return null;
   return qualifiesAsReel(studioReelMedia(draft)) ? null : 'reel-without-qualifying-media';
 }

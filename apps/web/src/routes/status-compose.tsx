@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 
@@ -12,6 +12,9 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
+import { useMentionSource } from '@/lib/view/mention-source';
+import { useMentionField } from '@/lib/view/use-mention-field';
+import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { selfRailEntry } from '@/lib/view/story-rail-self';
 import { Link } from '@/routes/route-table';
 
@@ -143,6 +146,8 @@ export function MoodGrid({
   );
 }
 
+const DIRECTORY = { directory: true } as const;
+
 export default function StatusComposeScreen() {
   const language = currentInterfaceLanguage();
   const session = useStore(sessionStore, (s) => s.session);
@@ -155,12 +160,18 @@ export default function StatusComposeScreen() {
      seconde lecture du corpus, qui pourrait un jour élire une autre ligne que
      celle que la pastille montre. */
   const courante = useMemo(
-    () => selfRailEntry({ viewerId: viewer.id ?? undefined, groups: [], moods: moods.data ?? [] })?.moodEmoji,
+    () => selfRailEntry({ viewerId: viewer.id ?? undefined, groups: [], moods: moods.data ?? [], now: Date.now() })?.moodEmoji,
     [viewer.id, moods.data],
   );
 
   const [choisi, setChoisi] = useState<string | undefined>(undefined);
   const [note, setNote] = useState('');
+  /* LA NOTE D'UNE HUMEUR EST LE `content` DU POST MOOD — la passerelle y lit
+     les mentions comme dans toute publication (#7846). Pas encore publiée :
+     la recherche passe par l'annuaire. */
+  const noteRef = useRef<HTMLInputElement>(null);
+  const mentionSource = useMentionSource(DIRECTORY);
+  const mention = useMentionField({ text: note, fieldRef: noteRef, onText: setNote, source: mentionSource });
   const [enVol, setEnVol] = useState(false);
   const [refus, setRefus] = useState(false);
 
@@ -214,20 +225,28 @@ export default function StatusComposeScreen() {
 
         <MoodGrid language={language} selected={selection} onSelect={setChoisi} />
 
-        <div className="px-4 py-3">
+        <div className="relative px-4 py-3">
           <label className="flex flex-col gap-1.5">
             <span className="text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
               {translate(language, 'status.compose.note')}
             </span>
             <input
+              ref={noteRef}
               data-mood-note
               type="text"
               value={note}
               maxLength={MOOD_NOTE_MAX_LENGTH}
               placeholder={translate(language, 'status.compose.note')}
               onInput={(e) => {
-                setNote((e.currentTarget as HTMLInputElement).value);
+                setNote(e.currentTarget.value);
+                mention.syncCaret(e.currentTarget);
               }}
+              onFocus={mention.onFocus}
+              onBlur={mention.onBlur}
+              onClick={(e) => mention.syncCaret(e.currentTarget)}
+              onKeyUp={(e) => mention.syncCaret(e.currentTarget)}
+              onKeyDown={(e) => void mention.onKeyDown(e.nativeEvent)}
+              {...mention.aria}
               className="w-full rounded-card px-3 py-2.5 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{
                 backgroundColor: 'var(--color-ios-card)',
@@ -236,6 +255,7 @@ export default function StatusComposeScreen() {
               }}
             />
           </label>
+          <MentionFieldPanel field={mention} language={language} placement="below" />
         </div>
 
         {/* LES DEUX ÉTATS DESSINÉS — hors ligne AVANT le geste (on ne promet

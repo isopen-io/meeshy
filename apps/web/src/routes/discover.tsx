@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery, type UseInfiniteQueryResu
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { PullIndicator } from '@/components/pull-indicator';
@@ -65,7 +66,6 @@ import {
   ReceivedRequestRow,
   RequestFilterRail,
   SentRequestRow,
-  UnblockConfirm,
   type ConnectionHandlers,
   type InviteStatus,
 } from '@/routes/discover-parts';
@@ -396,10 +396,19 @@ export default function DiscoverScreen() {
           deux produits. Le motif que les 40 surfaces restantes vont copier n'a
           plus qu'un site. */}
       <LiveAnnouncement text={announcer.text} tone={announcer.tone} marker="discover" />
+      {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149, défaut
+          majeur 2, issue #7858) — `UnblockConfirm` était la SECONDE des trois
+          copies divergentes, blanc sur `--color-warning` mêlé de noir. */}
       {unblockTarget === null ? null : (
-        <UnblockConfirm
-          language={language}
-          name={personNameOf(unblockTarget, translate(language, 'discover.unknown'))}
+        <ConfirmDialog
+          name="unblock"
+          title={translate(language, 'discover.blocked.confirm.title')}
+          body={translate(language, 'discover.blocked.confirm.body', {
+            name: personNameOf(unblockTarget, translate(language, 'discover.unknown')),
+          })}
+          cancelLabel={translate(language, 'discover.blocked.confirm.cancel')}
+          confirmLabel={translate(language, 'discover.blocked.unblock')}
+          tone="destructive"
           onCancel={closeConfirm}
           onConfirm={confirmUnblock}
         />

@@ -64,13 +64,16 @@ export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: s
   const self = useMemo(
     /* `avatar` (#6975) — `Viewer.avatar` avait été ajouté POUR cette pastille
        et n'atteignait AUCUN rendu : le paramètre le fait descendre jusqu'à la
-       loi, qui décide (photo de session, puis auteur de mes stories). */
+       loi, qui décide (photo de session, puis auteur de mes stories).
+       `now` (#6149) — évalué ICI, à chaque recalcul de `groups` : la loi
+       elle-même reste pure et ne lit jamais l'horloge système. */
     () =>
       selfRailEntry({
         viewerId,
         ...(viewerAvatar === undefined ? {} : { avatar: viewerAvatar }),
         groups,
         moods: moods.data ?? EMPTY_STATUS_MOODS,
+        now: Date.now(),
       }),
     [viewerId, viewerAvatar, groups, moods.data],
   );

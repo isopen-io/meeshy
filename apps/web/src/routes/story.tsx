@@ -55,6 +55,7 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  scopeToSingleGroup,
   slideDurationForScene,
   slideDurationMs,
   stableGroupOrder,
@@ -72,7 +73,7 @@ import { screenGestureYields } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { useParams } from '@/lib/router';
+import { useParams, useSearch } from '@/lib/router';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
@@ -166,6 +167,15 @@ function authorLabel(group: StoryPlaybackGroup): string {
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
   const [currentId, setCurrentId] = useState(post);
+  /**
+   * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
+   * `?scope=mine`, posé par les deux liens de `MyStoryCard`
+   * (`routes/stories-mine.tsx`) : le lecteur ouvert depuis « Mes stories » ne
+   * doit jamais passer à un AUTRE auteur, miroir
+   * `StoryViewerRequest(singleGroup: true)` (`StoryTrayView.swift:75`).
+   */
+  const [search] = useSearch();
+  const singleGroupScope = search.get('scope') === 'mine';
 
   /* Une NOUVELLE adresse sur la MÊME route (une notification ouverte pendant
      la lecture, un lien collé) change `post` sans remonter l'écran : sans
@@ -218,10 +228,18 @@ export default function StoryScreen() {
     return stableGroupOrder(fresh, frozenOrder.current);
   }, [primaryGroups, fallback.data, feed.data, viewer.id]);
 
-  const rawPosition = useMemo(() => resolvePosition(groups, currentId), [groups, currentId]);
+  /* `scopeToSingleGroup` NARROWS le tableau AVANT toute navigation : c'est ce
+     qui fait fermer `nextPosition` en fin de mon groupe au lieu de passer à
+     l'auteur suivant, sans ajouter de branche à cette loi pure. */
+  const scopedGroups = useMemo(
+    () => (singleGroupScope ? scopeToSingleGroup(groups, currentId) : groups),
+    [groups, singleGroupScope, currentId],
+  );
+
+  const rawPosition = useMemo(() => resolvePosition(scopedGroups, currentId), [scopedGroups, currentId]);
   const playablePosition = useMemo(
-    () => (rawPosition === null ? null : resolvePlayablePosition(groups, rawPosition, Date.now())),
-    [groups, rawPosition],
+    () => (rawPosition === null ? null : resolvePlayablePosition(scopedGroups, rawPosition, Date.now())),
+    [scopedGroups, rawPosition],
   );
 
   const closeViewer = useCallback(() => {
@@ -239,33 +257,33 @@ export default function StoryScreen() {
     }
     if (playablePosition === null || rawPosition === null) return;
     if (playablePosition.groupIndex === rawPosition.groupIndex && playablePosition.storyIndex === rawPosition.storyIndex) return;
-    const skippedTo = currentStoryAt(groups, playablePosition);
+    const skippedTo = currentStoryAt(scopedGroups, playablePosition);
     if (skippedTo !== undefined) setCurrentId(skippedTo.id);
-  }, [playablePosition, rawPosition, groups, closeViewer]);
+  }, [playablePosition, rawPosition, scopedGroups, closeViewer]);
 
-  const group = playablePosition !== null && playablePosition !== 'close' ? groups[playablePosition.groupIndex] : undefined;
+  const group = playablePosition !== null && playablePosition !== 'close' ? scopedGroups[playablePosition.groupIndex] : undefined;
   /* LA PHOTO DE L'AUTEUR, DÉRIVÉE UNE FOIS (#6975) — `participantAvatarOf`
      accepte un auteur ABSENT, donc pas de garde à écrire ici. */
   const authorPhoto = participantAvatarOf(group?.author);
   const currentStory: StoryPlaybackStory | undefined =
-    playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(groups, playablePosition) : undefined;
+    playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(scopedGroups, playablePosition) : undefined;
 
   const advance = useCallback(
     (direction: 'previous' | 'next') => {
       if (playablePosition === null || playablePosition === 'close') return;
       const target =
         direction === 'next'
-          ? nextPosition(groups, playablePosition, Date.now())
-          : previousPosition(groups, playablePosition);
+          ? nextPosition(scopedGroups, playablePosition, Date.now())
+          : previousPosition(scopedGroups, playablePosition);
       if (target === 'close') {
         closeViewer();
         return;
       }
       if (target === null) return;
-      const story = currentStoryAt(groups, target);
+      const story = currentStoryAt(scopedGroups, target);
       if (story !== undefined) setCurrentId(story.id);
     },
-    [groups, playablePosition, closeViewer],
+    [scopedGroups, playablePosition, closeViewer],
   );
 
   const media = currentStory?.media?.[0];

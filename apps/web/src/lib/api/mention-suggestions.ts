@@ -69,16 +69,25 @@ export function decodeMentionSuggestion(raw: unknown): MentionCandidate | null {
   };
 }
 
+/**
+ * LE CONTEXTE D'UNE MENTION (#7846) — les deux que la route sait classer
+ * (`SuggestionsQuerySchema.contextType`) : une conversation (ses membres
+ * d'abord) ou une publication (son auteur et ses commentateurs d'abord). Un
+ * champ qui n'a ni l'un ni l'autre — une publication pas encore publiée —
+ * passe par l'annuaire (`users-search.ts`), jamais par cette route.
+ */
+export type MentionContext = { readonly type: 'conversation' | 'post'; readonly id: string };
+
 export async function fetchMentionSuggestions(
   deps: ConversationsDeps,
-  params: { readonly conversationId: string; readonly query: string; readonly signal?: AbortSignal },
+  params: { readonly context: MentionContext; readonly query: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<readonly MentionCandidate[]>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: [] };
-  const contextId = encodeURIComponent(params.conversationId);
+  const contextId = encodeURIComponent(params.context.id);
   const query = encodeURIComponent(params.query);
   const result = await deps.transport.request<unknown>({
     method: 'GET',
-    path: `/api/v1/mentions/suggestions?contextId=${contextId}&contextType=conversation&query=${query}`,
+    path: `/api/v1/mentions/suggestions?contextId=${contextId}&contextType=${params.context.type}&query=${query}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

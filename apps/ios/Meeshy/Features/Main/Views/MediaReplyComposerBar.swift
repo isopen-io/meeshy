@@ -63,11 +63,26 @@ struct MediaReplyComposerBar: View {
     @State private var emojiToInject = ""
     @State private var focusTrigger = false
 
+    /// **La mention `@` d'une réponse à une pièce** (#7847) : la même liste
+    /// que partout — contacts depuis le cache, puis l'annuaire dès la deuxième
+    /// lettre. La galerie ne connaît pas l'id de la conversation, d'où
+    /// l'annuaire plutôt que l'endpoint contextuel.
+    @StateObject private var mentionController = MentionComposerController(context: .composerDraft)
+
     private var secondaryColor: String {
         DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            MentionSuggestionOverlay(controller: mentionController, accentColor: accentColor) { candidate in
+                draft = mentionController.insertMention(candidate, into: draft)
+            }
+            composerBar
+        }
+    }
+
+    private var composerBar: some View {
         UniversalComposerBar(
             style: .dark,
             // **Pas de `mode:`, et c'est une décision.** `.message` allumerait
@@ -91,8 +106,12 @@ struct MediaReplyComposerBar: View {
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSendMessage: { text, _, language in onSend(text, language) },
+            textBinding: $draft,
             replyBanner: AnyView(citationBanner),
-            onTextChange: { draft = $0 },
+            onTextChange: { text in
+                draft = text
+                mentionController.handleQuery(in: text)
+            },
             // Les quatre relais d'enregistrement sont OBLIGATOIRES par
             // signature (#4560 : un `?` y codait « ce relais peut manquer »,
             // et un hôte mal câblé posait alors des vocaux muets). Ici

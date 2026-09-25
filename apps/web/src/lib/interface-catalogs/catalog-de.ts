@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deIdentity from './catalog-de-identity';
 
 import deMentions from './catalog-de-mentions';
+import deStoriesMine from './catalog-de-stories-mine';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -101,11 +102,19 @@ const de = {
   'feed.post.menu.unsave': 'Aus Gespeichertem entfernen',
   'feed.post.menu.pin': 'Anheften',
   'feed.post.menu.delete': 'Löschen',
+  'feed.post.edit': 'Bearbeiten',
+  'feed.post.edit.title': 'Beitrag bearbeiten',
+  'feed.post.edit.body.a11y': 'Beitragsinhalt',
+  'feed.post.edit.remaining.a11y': 'Noch {count} Zeichen',
+  'feed.post.edit.publish': 'Veröffentlichen',
   'report.post.title': 'Diesen Beitrag melden',
   'feed.post.copied': 'Text kopiert',
   'feed.post.copy_failed': 'Text konnte nicht kopiert werden',
   'feed.post.pinned': 'Beitrag angeheftet',
   'feed.post.pin_failed': 'Beitrag konnte nicht angeheftet werden',
+  'feed.post.edited': 'Beitrag aktualisiert',
+  'feed.post.edit_failed': 'Beitrag konnte nicht aktualisiert werden',
+  'feed.post.edit_busy': 'Eine Bearbeitung läuft bereits',
   'feed.post.deleted': 'Beitrag gelöscht',
   'feed.post.delete_failed': 'Fehler beim Löschen',
   'feed.post.repost.success': 'Repostet',
@@ -758,6 +767,8 @@ const de = {
   'story.studio.publish': 'Veröffentlichen',
   'story.studio.publishing': 'Wird veröffentlicht…',
   'story.studio.publish.waiting': 'Warte auf Netzwerk…',
+  'story.studio.publishing.progress': 'Veröffentliche {current}/{total}…',
+  'story.studio.outcome.partial': '{published} von {total} veröffentlicht — die anderen bleiben hier.',
   'story.studio.title.post': 'Neuer Beitrag',
   'story.studio.title.reel': 'Neues Reel',
   'story.studio.publish.as.story': 'Story veröffentlichen',
@@ -768,7 +779,6 @@ const de = {
   'story.studio.kind.post': 'Beitrag',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Ein Reel braucht ein Video oder einen Ton von mindestens 3 Sekunden oder mindestens zwei Bilder.',
-  'story.studio.refusal.story-pages': 'Eine Story trägt nur eine Szene: Veröffentliche sie als Beitrag oder entferne die anderen Szenen.',
   'story.studio.offline': 'Offline — die Story wird veröffentlicht, sobald das Netzwerk zurück ist.',
   'story.studio.stage': 'Story-Vorschau',
   'story.studio.background.add': 'Foto oder Video hinzufügen',
@@ -1102,6 +1112,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default de;

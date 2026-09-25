@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arIdentity from './catalog-ar-identity';
 
 import arMentions from './catalog-ar-mentions';
+import arStoriesMine from './catalog-ar-stories-mine';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -101,11 +102,19 @@ const ar = {
   'feed.post.menu.unsave': 'إزالة من المحفوظات',
   'feed.post.menu.pin': 'تثبيت',
   'feed.post.menu.delete': 'حذف',
+  'feed.post.edit': 'تعديل',
+  'feed.post.edit.title': 'تعديل المنشور',
+  'feed.post.edit.body.a11y': 'محتوى المنشور',
+  'feed.post.edit.remaining.a11y': '{count} حرف متبقٍّ',
+  'feed.post.edit.publish': 'نشر',
   'report.post.title': 'الإبلاغ عن هذا المنشور',
   'feed.post.copied': 'تم نسخ النص',
   'feed.post.copy_failed': 'تعذّر نسخ النص',
   'feed.post.pinned': 'تم تثبيت المنشور',
   'feed.post.pin_failed': 'تعذّر تثبيت المنشور',
+  'feed.post.edited': 'تم تحديث المنشور',
+  'feed.post.edit_failed': 'تعذّر تحديث المنشور',
+  'feed.post.edit_busy': 'يوجد تعديل قيد التنفيذ بالفعل',
   'feed.post.deleted': 'تم حذف المنشور',
   'feed.post.delete_failed': 'حدث خطأ أثناء الحذف',
   'feed.post.repost.success': 'تمت إعادة النشر',
@@ -755,6 +764,8 @@ const ar = {
   'story.studio.publish': 'نشر',
   'story.studio.publishing': 'جارٍ النشر…',
   'story.studio.publish.waiting': 'في انتظار الشبكة…',
+  'story.studio.publishing.progress': 'نشر {current}/{total}…',
+  'story.studio.outcome.partial': 'تم نشر {published} من {total} — تبقى البقية هنا.',
   'story.studio.title.post': 'منشور جديد',
   'story.studio.title.reel': 'ريل جديد',
   'story.studio.publish.as.story': 'نشر القصة',
@@ -765,7 +776,6 @@ const ar = {
   'story.studio.kind.post': 'منشور',
   'story.studio.kind.reel': 'ريل',
   'story.studio.refusal.reel': 'يحتاج الريل إلى فيديو أو صوت لا يقل عن 3 ثوانٍ، أو صورتين على الأقل.',
-  'story.studio.refusal.story-pages': 'تحمل القصة مشهدًا واحدًا فقط: انشرها كمنشور، أو احذف المشاهد الأخرى.',
   'story.studio.offline': 'غير متصل — ستُنشر القصة عند عودة الشبكة.',
   'story.studio.stage': 'معاينة القصة',
   'story.studio.background.add': 'إضافة صورة أو فيديو',
@@ -1099,6 +1109,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default ar;

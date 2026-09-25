@@ -304,8 +304,24 @@ emit({
  * `star` / `star-fill` (#7378) — le favori de la feuille « Plus... »
  * (`action.star` / `action.unstar`, `star.fill` iOS) : Ajouter (contour),
  * Retirer (plein). La feuille vit dans le chunk du fil, comme ce jeu.
+ *
+ * `pencil-simple` (#7534) — « Modifier » du menu « ⋯ » d'une carte du fil,
+ * miroir `pencil` (SF Symbols, `FeedPostCard+Header.swift:213`) : même
+ * glyphe que `AUTH`/`THREAD_STATES` (composeur, avatar), un jeu D'ÉCRAN
+ * distinct parce que ce menu et le fil des messages ne se chargent jamais
+ * ensemble.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three', 'star', 'star-fill'];
+const THREAD_MENU = [
+  'check-circle',
+  'globe',
+  'copy',
+  'arrow-bend-up-right',
+  'magic-wand',
+  'dots-three',
+  'star',
+  'star-fill',
+  'pencil-simple',
+];
 
 emit({
   ids: THREAD_MENU,
@@ -897,4 +913,20 @@ emit({
   constant: 'STORY_AUDIENCE_PEOPLE_GLYPHS',
   type: 'StoryAudiencePeopleGlyphName',
   role: "LE JEU DE LA FEUILLE D'AUDIENCE (#7683) : les deux modes NOMINATIFS, charges avec la feuille a la demande, jamais avec le studio.",
+});
+
+/**
+ * LE JEU D'ECRAN DE « MES STORIES » (#6149) — le listing que la pastille «
+ * moi » du rail ouvre desormais. `eye` (Vues) et `fill-play` (Ouvrir) restent
+ * au SOCLE, ou ils vivent deja (le fil et le lecteur les paient avant ce
+ * chunk) : seul `trash` (Supprimer) est propre a cet ecran, comme il l'est
+ * deja a la cloche (`glyphs-notifications.ts`) — deux jeux qui portent le
+ * meme tracé plutot qu'un import croise qui lierait la cloche au listing.
+ */
+emit({
+  ids: ['trash'],
+  output: join(HERE, '../src/components/glyphs-stories-mine.ts'),
+  constant: 'STORIES_MINE_GLYPHS',
+  type: 'StoriesMineGlyphName',
+  role: 'LE JEU DE « MES STORIES » (#6149) : le bouton Supprimer du listing, charge avec /stories/mine.',
 });

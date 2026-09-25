@@ -13,12 +13,16 @@ describe('postMenuEntries', () => {
     expect(postMenuEntries(base)).toEqual(['open', 'copyText', 'share', 'save', 'report']);
   });
 
-  test('MA publication : Épingler et Supprimer, jamais Signaler', () => {
-    expect(postMenuEntries({ ...base, authorId: 'u-me' })).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'delete']);
+  test('MA publication : Épingler, Modifier puis Supprimer — dans l’ordre d’iOS —, jamais Signaler', () => {
+    expect(postMenuEntries({ ...base, authorId: 'u-me' })).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
   });
 
   test('sans texte, rien à copier ; sur la fiche, rien à ouvrir', () => {
     expect(postMenuEntries({ ...base, hasText: false, isDetail: true })).toEqual(['share', 'save', 'report']);
+  });
+
+  test('sur la fiche, MA publication garde Épingler, Modifier et Supprimer', () => {
+    expect(postMenuEntries({ ...base, authorId: 'u-me', isDetail: true })).toEqual(['copyText', 'share', 'save', 'pin', 'edit', 'delete']);
   });
 
   test('sans hôte de partage ni de signet, ces entrées n’existent pas', () => {
@@ -29,8 +33,13 @@ describe('postMenuEntries', () => {
     expect(postMenuEntries({ ...base, viewerId: null, authorId: undefined })).toEqual(['open', 'copyText', 'share']);
   });
 
-  test('un auteur INCONNU n’est jamais « moi »', () => {
+  test('un auteur INCONNU n’est jamais « moi » — ni Signaler ni Modifier', () => {
     expect(postMenuEntries({ ...base, authorId: undefined })).toContain('report');
     expect(postMenuEntries({ ...base, authorId: undefined })).not.toContain('delete');
+    expect(postMenuEntries({ ...base, authorId: undefined })).not.toContain('edit');
+  });
+
+  test('la publication d’un AUTRE n’offre jamais Modifier', () => {
+    expect(postMenuEntries(base)).not.toContain('edit');
   });
 });

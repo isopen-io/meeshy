@@ -4,12 +4,13 @@ import { createStore } from 'zustand/vanilla';
 
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { fetchMentionSuggestions, type MentionCandidate } from '@/lib/api/mention-suggestions';
+import { fetchMentionSuggestions, type MentionCandidate, type MentionContext } from '@/lib/api/mention-suggestions';
 import { sessionStore } from '@/lib/api/session';
 import type { Message } from '@/lib/api/types';
+import { searchUsers } from '@/lib/api/users-search';
 import { resolveViewer } from '@/lib/api/viewer';
 
-import { localMentionCandidates } from './mention-query';
+import { localMentionCandidates, peopleMentionCandidates } from './mention-query';
 
 /**
  * LA SOURCE DES MENTIONS DU FIL OUVERT (#7826).
@@ -35,9 +36,21 @@ import { localMentionCandidates } from './mention-query';
 
 export type MentionSource = {
   readonly selfId: string | null;
+  /** Les PARTICIPANTS du contexte — les contacts, eux, viennent de leur
+   * propre cache (`mention-contacts.ts`), communs à tous les champs. */
   readonly locals: readonly MentionCandidate[];
   readonly search: (query: string, signal: AbortSignal) => Promise<readonly MentionCandidate[]>;
 };
+
+const NO_PARTICIPANTS: readonly MentionCandidate[] = [];
+
+const contextSearch =
+  (context: MentionContext) =>
+  async (query: string, signal: AbortSignal): Promise<readonly MentionCandidate[]> =>
+    unwrap(await fetchMentionSuggestions(apiDeps, { context, query, signal }));
+
+const directorySearch = async (query: string): Promise<readonly MentionCandidate[]> =>
+  peopleMentionCandidates(unwrap(await searchUsers(apiDeps, query)), null);
 
 export type MentionSourceState = { readonly source: MentionSource | null };
 
@@ -63,11 +76,7 @@ export function usePublishMentionSource(input: {
   const selfId = useSelfId();
   const locals = useMemo(() => localMentionCandidates(messages, selfId), [messages, selfId]);
   const search = useMemo(
-    () =>
-      conversationId === undefined
-        ? null
-        : async (query: string, signal: AbortSignal) =>
-            unwrap(await fetchMentionSuggestions(apiDeps, { conversationId, query, signal })),
+    () => (conversationId === undefined ? null : contextSearch({ type: 'conversation', id: conversationId })),
     [conversationId],
   );
 
@@ -75,4 +84,29 @@ export function usePublishMentionSource(input: {
     if (search === null) return undefined;
     return publishMentionSource({ selfId, locals, search });
   }, [search, selfId, locals]);
+}
+
+type MentionablePeople = Parameters<typeof peopleMentionCandidates>[0];
+
+/**
+ * LA SOURCE D'UN CHAMP HORS FIL (#7846) — rendue au champ, jamais publiée :
+ * plusieurs de ces champs peuvent vivre ensemble (le fil de commentaires sous
+ * une story, son champ de modification), chacun avec son contexte.
+ *
+ * - une PUBLICATION existante ⇒ `contextType=post` : la passerelle classe son
+ *   auteur et ses commentateurs, puis les amis, puis le reste ;
+ * - rien encore (une publication en cours d'écriture, une humeur) ⇒
+ *   l'ANNUAIRE (`/directory/people`, ≥ 2 caractères comme la règle).
+ *
+ * `null` pour un lecteur sans identité : les deux routes exigent un compte.
+ */
+export function useMentionSource(
+  context: { readonly postId: string; readonly people: MentionablePeople } | { readonly directory: true },
+): MentionSource | null {
+  const selfId = useSelfId();
+  const postId = 'postId' in context ? context.postId : null;
+  const people = 'people' in context ? context.people : null;
+  const locals = useMemo(() => (people === null ? NO_PARTICIPANTS : peopleMentionCandidates(people, selfId)), [people, selfId]);
+  const search = useMemo(() => (postId === null ? directorySearch : contextSearch({ type: 'post', id: postId })), [postId]);
+  return useMemo(() => (selfId === null ? null : { selfId, locals, search }), [selfId, locals, search]);
 }

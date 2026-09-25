@@ -1906,13 +1906,14 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     /// Deux chargements auraient donné deux listes à faire diverger, et deux
     /// moments où « aucun ami » se lit différemment.
     func test_lesCandidats_viennentDeLaSourcePartagee() throws {
-        // La BOÎTE alimente le contrôleur : cache d'abord, réseau ensuite. C'est
-        // elle qui possède ce chemin, pas le meuble qui la transporte.
+        // #7847 — les contacts viennent du magasin PARTAGÉ par toutes les
+        // listes `@` (`MentionContactsStore`) : la boîte ne fait que le
+        // confier au contrôleur et en amorcer le cache au montage.
         let source = compact(try mentionBoxSource())
-        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"),
-                      "les candidats doivent venir de la source PARTAGÉE, jamais d'une liste locale")
-        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.cachedFriends()"),
-                      "et le cache doit servir en premier — sinon un `@` reste vide le temps d'un aller-retour")
+        XCTAssertTrue(source.contains("MentionContactsStore.shared"),
+                      "les candidats doivent venir du magasin PARTAGÉ, jamais d'une liste locale")
+        XCTAssertTrue(source.contains("awaitcontroller.primeContacts()"),
+                      "et le cache doit être amorcé au montage — sinon un `@` reste vide le temps d'une lecture")
     }
 }
 

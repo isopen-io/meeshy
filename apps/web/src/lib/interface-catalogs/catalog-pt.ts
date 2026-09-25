@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptIdentity from './catalog-pt-identity';
 
 import ptMentions from './catalog-pt-mentions';
+import ptStoriesMine from './catalog-pt-stories-mine';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -105,11 +106,19 @@ const pt = {
   'feed.post.menu.unsave': 'Remover dos salvos',
   'feed.post.menu.pin': 'Fixar',
   'feed.post.menu.delete': 'Excluir',
+  'feed.post.edit': 'Editar',
+  'feed.post.edit.title': 'Editar publicação',
+  'feed.post.edit.body.a11y': 'Conteúdo da publicação',
+  'feed.post.edit.remaining.a11y': '{count} caracteres restantes',
+  'feed.post.edit.publish': 'Publicar',
   'report.post.title': 'Denunciar esta publicação',
   'feed.post.copied': 'Texto copiado',
   'feed.post.copy_failed': 'Não foi possível copiar o texto',
   'feed.post.pinned': 'Publicação fixada',
   'feed.post.pin_failed': 'Não foi possível fixar a publicação',
+  'feed.post.edited': 'Publicação atualizada',
+  'feed.post.edit_failed': 'Não foi possível atualizar a publicação',
+  'feed.post.edit_busy': 'Já há uma edição em curso',
   'feed.post.deleted': 'Publicação excluída',
   'feed.post.delete_failed': 'Erro ao excluir',
   'feed.post.repost.success': 'Republicado',
@@ -762,6 +771,8 @@ const pt = {
   'story.studio.publish': 'Publicar',
   'story.studio.publishing': 'A publicar…',
   'story.studio.publish.waiting': 'À espera da rede…',
+  'story.studio.publishing.progress': 'Publicando {current}/{total}…',
+  'story.studio.outcome.partial': '{published} de {total} publicadas — as outras continuam aqui.',
   'story.studio.title.post': 'Nova publicação',
   'story.studio.title.reel': 'Novo reel',
   'story.studio.publish.as.story': 'Publicar story',
@@ -772,7 +783,6 @@ const pt = {
   'story.studio.kind.post': 'Publicação',
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Um reel precisa de um vídeo ou de um som de pelo menos 3 segundos, ou de pelo menos duas imagens.',
-  'story.studio.refusal.story-pages': 'Uma story leva uma única cena: publique como post ou remova as outras cenas.',
   'story.studio.offline': 'Sem ligação — a story será publicada quando a rede voltar.',
   'story.studio.stage': 'Pré-visualização da story',
   'story.studio.background.add': 'Adicionar uma foto ou um vídeo',
@@ -1106,6 +1116,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default pt;
