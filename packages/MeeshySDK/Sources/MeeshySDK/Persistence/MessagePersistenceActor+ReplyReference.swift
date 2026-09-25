@@ -87,6 +87,8 @@ extension MessagePersistenceActor {
     /// `authorAvatarUrl` reste nil, DÉLIBÉRÉMENT : le snapshot `postReplyTo`
     /// ne porte pas d'avatar, et ce nom est vide — aucun profil à ouvrir.
     nonisolated private static func postReplyReference(_ story: APIPostReplyTarget) -> ReplyReference {
+        // #7950 — même décision que le jumeau réseau (`APIMessage.toMessage`).
+        if story.deletedAt != nil { return .unavailableStory(storyId: story.id) }
         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
         if let emoji = story.moodEmoji {
             return ReplyReference(

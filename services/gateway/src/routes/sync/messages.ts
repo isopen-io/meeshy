@@ -6,6 +6,7 @@ import { serializeAttachmentForSocket } from '../../socketio/serializeAttachment
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { messageAttachmentSchema, messageTranslationSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import { MESSAGE_PROTECTION_SELECT } from '../conversations/messages-list-query';
 import { logger } from '../../utils/logger';
 import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
@@ -554,9 +555,12 @@ export async function syncMessages(opts: {
     : null;
   const withReaderReactions = (m: SyncMessage, served: Record<string, unknown>): Record<string, unknown> =>
     readerReactions === null ? served : { ...served, currentUserReactions: readerReactions.get(m.id) ?? [] };
+  // #7950 — la citation d'une story RETIRÉE par son auteur sort expurgée de
+  // `metadata.postReplyTo` : UNE requête pour la page.
+  const withdrawnCitations = await loadWithdrawnCitations(prisma, visible);
   const serialize = (m: SyncMessage): Record<string, unknown> =>
     projectViewOnceForReader(
-      hoistLocationOnto(
+      servePostReplyCitation(hoistLocationOnto(
         withReaderReactions(
           m,
           restrictFields(
@@ -565,7 +569,7 @@ export async function syncMessages(opts: {
             servedPinned,
           ),
         ),
-      ) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
+      ), withdrawnCitations) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
       viewOnceStates.get(m.id),
     );
 

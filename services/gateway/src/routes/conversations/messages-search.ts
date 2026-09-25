@@ -41,6 +41,7 @@ import { transformTranslationsToArray } from '../../utils/translation-transforme
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -335,9 +336,11 @@ export function registerMessageSearchRoute(
       // field that iOS SDK (MessagesSearchResponse) and web (crud.service.ts) parse at
       // root level. Migration to sendSuccess requires a coordinated client update
       // (breaking change).
+      // #7950 — la citation d'une story retirée sort expurgée (une requête).
+      const servedResults = await servePostReplyCitations(prisma, mappedResults);
       reply.send({
         success: true,
-        data: mappedResults,
+        data: servedResults,
         cursorPagination: {
           hasMore,
           nextCursor: hasMore ? lastId : null,

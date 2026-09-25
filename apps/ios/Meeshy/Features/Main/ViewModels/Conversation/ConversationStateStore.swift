@@ -49,7 +49,6 @@ final class ConversationStateStore: ObservableObject {
     @Published var ephemeralDuration: EphemeralDuration?
     @Published var isBlurEnabled: Bool = false
     @Published var pendingEffects: MessageEffects = .none
-    @Published var showEffectsPicker: Bool = false
     
     @Published var searchResults: [SearchResultItem] = []
     @Published var isSearching = false

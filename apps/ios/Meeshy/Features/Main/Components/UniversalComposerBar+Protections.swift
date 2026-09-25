@@ -37,6 +37,7 @@ extension UniversalComposerBar {
                 }
             } else {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEffectsPanel = false
                     showEphemeralPicker.toggle()
                 }
             }
@@ -136,13 +137,22 @@ extension UniversalComposerBar {
         }
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
+                .fill(railSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 8)
+    }
+
+    /// Le rail qui s'ouvre au-dessus de la barre d'outils garde cette marge
+    /// avec le bord HAUT du verre (#7966).
+    static let railTopInset: CGFloat = 8
+
+    /// Le fond commun des rails du composeur — durée éphémère, effets.
+    var railSurface: Color {
+        style == .dark || isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9)
     }
 
     // ========================================================================
@@ -294,7 +304,10 @@ extension UniversalComposerBar {
         return Button {
             onAnyInteraction?()
             HapticFeedback.light()
-            onRequestEffectsPicker?()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showEphemeralPicker = false
+                showEffectsPanel.toggle()
+            }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")

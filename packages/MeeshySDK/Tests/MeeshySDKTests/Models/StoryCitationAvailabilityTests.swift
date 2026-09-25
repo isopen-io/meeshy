@@ -143,6 +143,67 @@ struct StoryCitationAvailabilityTests {
         #expect(reference.storyThumbnailUrl == "https://cdn.example/s42.jpg")
     }
 
+    // MARK: - La story SUPPRIMÉE par son auteur (#7950)
+
+    /// La passerelle sert encore l'instantané, vidé de tout ce qui décrit le
+    /// contenu, et le marque `deletedAt` (même nom que `replyTo.deletedAt`).
+    /// Une vignette laissée à côté du marqueur ne rend pas la carte tapable.
+    private static let withdrawnSnapshot = """
+    {
+      "id": "story-42", "type": "STORY", "reactionCount": 0, "commentCount": 0, "shareCount": 0,
+      "createdAt": "2026-09-24T08:00:00.000Z",
+      "thumbnailUrl": "https://cdn.example/s42.jpg", "previewText": "",
+      "deletedAt": "2026-09-24T09:00:00.000Z"
+    }
+    """
+
+    @Test("Le marqueur deletedAt se décode sur l'instantané")
+    func withdrawnMarkerDecodes() throws {
+        let target = try #require(try Self.message(storyReplyToId: "story-42", snapshot: Self.withdrawnSnapshot).postReplyTo)
+        #expect(target.deletedAt != nil)
+        #expect(try #require(try Self.message(storyReplyToId: "story-42", snapshot: Self.liveSnapshot).postReplyTo).deletedAt == nil)
+    }
+
+    @Test("Une story supprimée par son auteur est indisponible et n'ouvre rien, vignette comprise")
+    func withdrawnStoryIsUnavailable() throws {
+        let reply = try #require(
+            try Self.message(storyReplyToId: "story-42", snapshot: Self.withdrawnSnapshot)
+                .toMessage(currentUserId: "me").replyTo
+        )
+        #expect(reply.isUnavailableStory)
+        #expect(!reply.opensQuotedTarget)
+        #expect(reply.messageId == "story-42")
+        #expect(reply.storyThumbnailUrl == nil, "la vignette d'une story retirée ne se peint plus")
+    }
+
+    @Test("Une humeur supprimée devient aussi une citation indisponible")
+    func withdrawnMoodIsUnavailable() throws {
+        let mood = """
+        { "id": "mood-1", "type": "STATUS", "reactionCount": 0, "commentCount": 0,
+          "createdAt": "2026-09-24T08:00:00.000Z", "previewText": "Grosse fatigue", "moodEmoji": "😴",
+          "deletedAt": "2026-09-24T08:30:00.000Z" }
+        """
+        let reply = try #require(try Self.message(storyReplyToId: "mood-1", snapshot: mood).toMessage(currentUserId: "me").replyTo)
+        #expect(reply.isUnavailableStory)
+        #expect(reply.moodEmoji == nil)
+    }
+
+    @Test("Le cache grave la story supprimée à la place de la citation riche gravée plus tôt")
+    func withdrawnSnapshotReplacesARichCachedCitation() throws {
+        let rich = try JSONEncoder().encode(ReplyReference(
+            messageId: "story-42", authorName: "Story", previewText: "Coucher de soleil",
+            isStoryReply: true, storyThumbnailUrl: "https://cdn.example/s42.jpg"
+        ))
+        let blob = MessagePersistenceActor.ingestedReply(
+            for: try Self.message(storyReplyToId: "story-42", snapshot: Self.withdrawnSnapshot),
+            currentUserId: "me", preferredLanguages: ["fr"], encoder: JSONEncoder()
+        )
+        let data = try #require(blob.persisted(over: rich))
+        let reference = try JSONDecoder().decode(ReplyReference.self, from: data)
+        #expect(reference.isUnavailableStory)
+        #expect(reference.storyThumbnailUrl == nil)
+    }
+
     @Test("Un message sans réponse ne grave rien")
     func plainMessageStoresNoCitation() throws {
         let blob = MessagePersistenceActor.ingestedReply(

@@ -267,8 +267,6 @@ struct UniversalComposerBar: View {
     /// Binding to pending effects. Parent owns the state.
     var pendingEffects: Binding<MessageEffects> = .constant(.none)
 
-    /// Called when user taps effects button — parent should show EffectsPickerView
-    var onRequestEffectsPicker: (() -> Void)? = nil
 
     /// When true, the effects button is hidden (e.g. in edit mode)
     var hideEffects: Bool = false
@@ -341,6 +339,8 @@ struct UniversalComposerBar: View {
 
     // Ephemeral picker
     @State var showEphemeralPicker = false
+    /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
+    @State var showEffectsPanel = false
     // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 
