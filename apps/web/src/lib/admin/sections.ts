@@ -78,6 +78,7 @@ export type AdminPermissionKey = keyof AdminPermissions;
 export type AdminSectionLabelKey =
   | 'admin.nav.dashboard'
   | 'admin.nav.users'
+  | 'admin.nav.anonymous'
   | 'admin.nav.conversations'
   | 'admin.nav.moderation'
   | 'admin.nav.audit'
@@ -95,7 +96,7 @@ export type AdminSectionLabelKey =
  * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
  * écran que le sien.
  */
-export type AdminRoute = 'admin' | 'adminUsers' | 'adminConversations' | 'adminAgent';
+export type AdminRoute = 'admin' | 'adminUsers' | 'adminAnonymous' | 'adminConversations' | 'adminAgent';
 
 export type AdminSection = {
   readonly id: string;
@@ -134,6 +135,10 @@ export type ServedAdminSection = AdminSection & { readonly route: AdminRoute };
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { id: 'dashboard', labelKey: 'admin.nav.dashboard', route: 'admin', permission: 'canAccessAdmin', glyph: '📊' },
   { id: 'users', labelKey: 'admin.nav.users', route: 'adminUsers', permission: 'canManageUsers', glyph: '👥' },
+  /* LES ANONYMES (#7873) — les participants entrés par un lien sans compte.
+     Même seuil que les comptes : ce sont des personnes, et leur fiche mène à
+     la conversation qu'elles ont rejointe. */
+  { id: 'anonymous', labelKey: 'admin.nav.anonymous', route: 'adminAnonymous', permission: 'canManageUsers', glyph: '🕶️' },
   {
     id: 'conversations',
     labelKey: 'admin.nav.conversations',

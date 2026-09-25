@@ -1,58 +1,55 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 
-import {
-  ADMIN_USERS_PAGE_SIZE,
-  adminIdentityQueryOptions,
-  adminUsersQueryKey,
-  loadAdminUsers,
-  type AdminUserRow,
-} from '@/lib/api/admin';
+import { Avatar } from '@/components/avatar';
+import { adminIdentityQueryOptions, adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
+import { adminMoment } from '@/lib/admin/format';
+import { toggleSort, withFilter, withPage, type ListState } from '@/lib/admin/list-state';
 import { visibleAdminSections } from '@/lib/admin/sections';
+import { useAdminListState } from '@/lib/admin/use-list-state';
+import { ADMIN_ROLES, USER_LIST_SPEC } from '@/lib/admin/user-list';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
+import { initialsOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
-/** `Link` vient de la TABLE, pas du module générique : `createRouter(table)` le
- * fabrique typé sur elle, de sorte que `to` n'accepte qu'une clé réelle et
- * `params` la forme exacte du motif. Même import que `admin-parts`,
- * `links-parts` et `link-page-parts`. */
+import {
+  AdminFilterBar,
+  AdminPager,
+  AdminResetButton,
+  AdminSearchField,
+  AdminSelect,
+  AdminTable,
+  PlainTh,
+  SortableTh,
+  Td,
+} from '@/routes/admin-table';
+/** `Link` vient de la TABLE, pas du module générique : `to` n'accepte qu'une clé réelle. */
 import { Link } from '@/routes/route-table';
 
 /**
- * **LES COMPTES** (#6432) — la section d'administration la plus consultée,
- * servie NATIVEMENT par la v2. Miroir de `apps/web/app/admin/users`, réduit à
- * ce qui se LIT : chercher, parcourir, voir l'état d'un compte.
- *
- * ## Aucune écriture, et c'est un choix
- *
- * Bannir, changer un rôle, réinitialiser un mot de passe restent au legacy
- * tant que leurs confirmations n'ont pas été portées. Une action irréversible
- * derrière un bouton sans sa confirmation serait pire que son absence — et la
- * porte de suppression en dur (`DELETE <username>`, directive porteur
- * 2026-09-13) est un lot à elle seule.
+ * **LES COMPTES** (#6432, #7873) — la section d'administration la plus
+ * consultée, en TABLEAU : tri par colonne, filtres par rôle, état,
+ * vérification et double authentification, taille de page. Tout l'état vit
+ * dans l'adresse (`list-state.ts`) : un lien partagé, un retour depuis une
+ * fiche ou un rechargement rendent la liste telle qu'on l'a laissée.
  *
  * ## La garde est la MÊME que celle du hub
  *
  * `canManageUsers` est relue ici, pas héritée d'une navigation : on entre sur
- * cette adresse par un lien profond aussi bien que par le hub, et une garde
+ * cette adresse par un lien profond aussi bien que par le menu, et une garde
  * posée seulement à l'étage du dessus ne garde que l'escalier.
  */
 
-const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
+type UserListState = ListState<(typeof USER_LIST_SPEC.sortKeys)[number], keyof typeof USER_LIST_SPEC.filters>;
+
 /**
- * LA LIGNE OUVRE LA FICHE (#6819) — `cible` vient de l'écran et vaut `admUser`
- * ou `adminUser` selon l'espace d'où l'on parcourt la liste. La calculer ici
- * obligerait chaque ligne à relire la route ; la recevoir la garde muette et
- * cohérente avec le retour, qui suit la même règle (D-76 tient les deux
- * administrations séparées).
- *
- * Le lien porte la mise en page, pas le `<li>` : une cible tactile doit être
- * l'élément CLIQUABLE lui-même, sinon le pouce touche la carte sans rien
- * ouvrir sur ses bords. `minHeight: 44` est le plancher du dépôt.
+ * LA LIGNE OUVRE LA FICHE (#6819) — `cible` vaut `admUser` ou `adminUser`
+ * selon l'espace d'où l'on parcourt la liste (D-76). Le lien porte le nom,
+ * cible tactile réelle, et non la rangée entière : une rangée cliquable n'est
+ * ni un lien pour le lecteur d'écran, ni un élément qu'on atteint au clavier.
  */
 function UserRow({
   compte,
@@ -64,62 +61,145 @@ function UserRow({
   readonly cible: 'adminUser' | 'admUser';
 }) {
   return (
-    <li data-admin-user={compte.id}>
-      <Link
-        to={cible}
-        params={{ user: compte.id }}
-        className="flex items-center gap-3 rounded-card px-4 py-3"
-        style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-      >
-      <span
-        aria-hidden="true"
-        className="grid size-2 shrink-0 place-items-center rounded-full"
-        style={{ backgroundColor: compte.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body font-medium" style={{ color: INK }}>
-          {compte.displayName}
-        </p>
-        <p className="truncate text-caption" style={{ color: INK2 }}>
-          @{compte.username} · {compte.email}
-        </p>
-      </div>
-      <span className="shrink-0 rounded-chip px-2 py-0.5 text-caption" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)', color: INK2 }}>
-        {compte.role}
-      </span>
-      {compte.isActive ? null : (
-        <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translateAdmin(language, 'admin.users.inactive')}
+    <tr data-admin-user={compte.id}>
+      <Td>
+        <Link to={cible} params={{ user: compte.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
+          <span className="relative shrink-0">
+            <Avatar initials={initialsOf(compte.displayName)} color="var(--color-ios-brand)" size={36} name={compte.displayName} />
+            {compte.isOnline ? (
+              <span
+                aria-hidden="true"
+                className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full"
+                style={{ backgroundColor: '#34D399', border: '2px solid var(--color-ios-surface)' }}
+              />
+            ) : null}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{compte.displayName}</span>
+            <span className="block truncate text-caption" style={{ color: INK2 }}>
+              @{compte.username}
+            </span>
+          </span>
+        </Link>
+      </Td>
+      <Td className="max-w-[16rem] truncate">{compte.email}</Td>
+      <Td>
+        <span
+          className="rounded-chip px-2 py-0.5 text-caption"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)', color: INK2 }}
+        >
+          {compte.role}
         </span>
-      )}
-      </Link>
-    </li>
+      </Td>
+      <Td className="text-caption">
+        {compte.isActive ? (
+          <span style={{ color: 'var(--color-success, #34D399)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
+        ) : (
+          <span style={{ color: 'var(--color-danger)' }}>{translateAdmin(language, 'admin.users.inactive')}</span>
+        )}
+        {compte.twoFactorEnabled ? <span className="ms-2" title={translateAdmin(language, 'admin.filter.twoFactor')}>🔐</span> : null}
+      </Td>
+      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(compte.createdAt, language)}</Td>
+      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(compte.lastActiveAt, language)}</Td>
+    </tr>
+  );
+}
+
+function Filtres({
+  language,
+  state,
+  write,
+  draft,
+  setDraft,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly state: UserListState;
+  readonly write: (state: UserListState) => void;
+  readonly draft: string;
+  readonly setDraft: (value: string) => void;
+}) {
+  const tous = { value: '', label: translateAdmin(language, 'admin.list.all') };
+  const ouiNon = [tous, { value: 'true', label: translateAdmin(language, 'admin.list.yes') }, { value: 'false', label: translateAdmin(language, 'admin.list.no') }];
+  const filtre = (cle: keyof typeof USER_LIST_SPEC.filters) => (valeur: string) => write(withFilter(state, cle, valeur, USER_LIST_SPEC));
+  const actif = Object.keys(state.filters).length > 0 || state.q !== '';
+
+  return (
+    <AdminFilterBar>
+      <AdminSearchField label={translateAdmin(language, 'admin.users.search')} value={draft} onChange={setDraft} anchor="admin-users-search" />
+      <AdminSelect
+        label={translateAdmin(language, 'admin.col.role')}
+        value={state.filters.role ?? ''}
+        options={[tous, ...ADMIN_ROLES.map((role) => ({ value: role, label: role }))]}
+        onChange={filtre('role')}
+        anchor="admin-filter-role"
+      />
+      <AdminSelect
+        label={translateAdmin(language, 'admin.col.status')}
+        value={state.filters.isActive ?? ''}
+        options={[
+          tous,
+          { value: 'true', label: translateAdmin(language, 'admin.filter.active') },
+          { value: 'false', label: translateAdmin(language, 'admin.filter.inactive') },
+        ]}
+        onChange={filtre('isActive')}
+        anchor="admin-filter-active"
+      />
+      <AdminSelect
+        label={translateAdmin(language, 'admin.filter.emailVerified')}
+        value={state.filters.emailVerified ?? ''}
+        options={ouiNon}
+        onChange={filtre('emailVerified')}
+        anchor="admin-filter-email"
+      />
+      <AdminSelect
+        label={translateAdmin(language, 'admin.filter.twoFactor')}
+        value={state.filters.twoFactorEnabled ?? ''}
+        options={ouiNon}
+        onChange={filtre('twoFactorEnabled')}
+        anchor="admin-filter-2fa"
+      />
+      {actif ? (
+        <AdminResetButton
+          language={language}
+          onReset={() => {
+            setDraft('');
+            write({ ...state, filters: {}, q: '', offset: 0 });
+          }}
+        />
+      ) : null}
+    </AdminFilterBar>
   );
 }
 
 export default function AdminUsersScreen() {
   const language = currentInterfaceLanguage();
-  const [recherche, setRecherche] = useState('');
-  const [offset, setOffset] = useState(0);
+  const { state, write, draft, setDraft, address } = useAdminListState(USER_LIST_SPEC);
 
   const { key } = useRoute();
-  /** On reste dans l'espace d'où l'on vient : `/adm/users` ouvre `/adm/users/$user`,
-   * `/admin/users` ouvre `/admin/users/$user`. Mélanger les deux ferait sauter
-   * l'administrateur d'une administration à l'autre au premier tap. */
+  /** On reste dans l'espace d'où l'on vient (D-76). */
   const cible = key === 'admUsers' ? ('admUser' as const) : ('adminUser' as const);
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-
   const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((s) => s.id === 'users');
 
   const liste = useQuery({
-    queryKey: adminUsersQueryKey(offset, recherche),
+    queryKey: adminUsersQueryKey(address),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUsers({ ...apiDeps, offset, search: recherche, signal });
+      const resultat = await loadAdminUsers({
+        ...apiDeps,
+        offset: state.offset,
+        limit: state.limit,
+        search: state.q,
+        sortBy: state.sort,
+        sortOrder: state.order,
+        filters: state.filters,
+        signal,
+      });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
     enabled: autorise,
+    placeholderData: (precedent) => precedent,
     retry: false,
   });
 
@@ -142,33 +222,14 @@ export default function AdminUsersScreen() {
   }
 
   const page = liste.data;
+  const trier = (colonne: UserListState['sort']) => () => write(toggleSort(state, colonne, USER_LIST_SPEC));
+  const entete = (colonne: UserListState['sort'], libelle: string) => (
+    <SortableTh language={language} label={libelle} column={colonne} sort={state.sort} order={state.order} onSort={trier(colonne)} />
+  );
 
   return (
     <AdminScreenFrame language={language} title={titre} back="admin">
-      <label className="grid gap-1 pb-4">
-        <span className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.users.search')}
-        </span>
-        <input
-          type="search"
-          value={recherche}
-          data-admin-users-search
-          onChange={(event) => {
-            setRecherche(event.target.value);
-            // Toute nouvelle recherche repart de la PREMIÈRE page : garder
-            // l'offset rendrait une liste vide sur un filtre qui a pourtant
-            // des résultats — un « aucun compte » qui ment.
-            setOffset(0);
-          }}
-          className="rounded-chip px-4 text-body"
-          style={{
-            minHeight: 44,
-            backgroundColor: 'var(--color-ios-surface)',
-            border: '1px solid var(--color-edge)',
-            color: INK,
-          }}
-        />
-      </label>
+      <Filtres language={language} state={state} write={write} draft={draft} setDraft={setDraft} />
 
       {liste.isPending ? (
         <AdminSkeleton rows={6} />
@@ -182,36 +243,33 @@ export default function AdminUsersScreen() {
         </p>
       ) : (
         <>
-          <p className="pb-2 text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.users.count', { count: String(page.total) })}
-          </p>
-          <ul className="grid gap-2">
-            {page.users.map((compte) => (
-              <UserRow key={compte.id} compte={compte} language={language} cible={cible} />
-            ))}
-          </ul>
-          <div className="flex justify-between gap-2 pt-4">
-            <button
-              type="button"
-              data-admin-users-prev
-              disabled={offset === 0}
-              onClick={() => setOffset((valeur) => Math.max(0, valeur - ADMIN_USERS_PAGE_SIZE))}
-              className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-              style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
-            >
-              {translateAdmin(language, 'admin.users.previous')}
-            </button>
-            <button
-              type="button"
-              data-admin-users-next
-              disabled={!page.hasMore}
-              onClick={() => setOffset((valeur) => valeur + ADMIN_USERS_PAGE_SIZE)}
-              className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-              style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
-            >
-              {translateAdmin(language, 'admin.users.next')}
-            </button>
-          </div>
+          <AdminTable>
+            <thead>
+              <tr>
+                {entete('username', translateAdmin(language, 'admin.col.member'))}
+                {entete('email', translateAdmin(language, 'admin.col.email'))}
+                <PlainTh>{translateAdmin(language, 'admin.col.role')}</PlainTh>
+                <PlainTh>{translateAdmin(language, 'admin.col.status')}</PlainTh>
+                {entete('createdAt', translateAdmin(language, 'admin.col.created'))}
+                {entete('lastActiveAt', translateAdmin(language, 'admin.col.lastActive'))}
+              </tr>
+            </thead>
+            <tbody style={{ opacity: liste.isPlaceholderData ? 0.6 : 1 }}>
+              {page.users.map((compte) => (
+                <UserRow key={compte.id} compte={compte} language={language} cible={cible} />
+              ))}
+            </tbody>
+          </AdminTable>
+          <AdminPager
+            language={language}
+            offset={state.offset}
+            limit={state.limit}
+            count={page.users.length}
+            total={page.total}
+            hasMore={page.hasMore}
+            pageSizes={USER_LIST_SPEC.pageSizes}
+            onPage={(demande) => write(withPage(state, demande, USER_LIST_SPEC))}
+          />
         </>
       )}
     </AdminScreenFrame>

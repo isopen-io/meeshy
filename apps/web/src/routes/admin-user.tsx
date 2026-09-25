@@ -14,7 +14,7 @@ import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { ActionButton } from '@/routes/link-page-parts';
 
-import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
@@ -236,35 +236,6 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
           {translateAdmin(language, etat)}
         </span>
       )}
-    </div>
-  );
-}
-
-function Section({ titre, children }: { readonly titre: string; readonly children: React.ReactNode }) {
-  return (
-    <section className="grid gap-2">
-      <h2 className="text-caption font-medium" style={{ color: INK2 }}>
-        {titre}
-      </h2>
-      <dl
-        className="grid gap-1 rounded-card px-4 py-3"
-        style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-      >
-        {children}
-      </dl>
-    </section>
-  );
-}
-
-function Ligne({ label, valeur }: { readonly label: string; readonly valeur: string }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
-        {label}
-      </dt>
-      <dd className="min-w-0 flex-1 truncate text-right text-body" style={{ color: INK }}>
-        {valeur}
-      </dd>
     </div>
   );
 }

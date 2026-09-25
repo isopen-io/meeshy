@@ -176,6 +176,14 @@ export type RouteKey =
    */
   | 'adminAgent'
   | 'admAgent'
+  /**
+   * LES ANONYMES (#7873) — la liste et la fiche d'un participant sans compte.
+   * Privées comme le reste de l'administration.
+   */
+  | 'adminAnonymous'
+  | 'admAnonymous'
+  | 'adminAnonymousOne'
+  | 'admAnonymousOne'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -304,6 +312,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
      un message dans une vraie conversation. */
   'adminAgent',
   'admAgent',
+  'adminAnonymous',
+  'admAnonymous',
+  'adminAnonymousOne',
+  'admAnonymousOne',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
