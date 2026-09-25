@@ -155,6 +155,13 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     await act(async () => new Promise((resolve) => setTimeout(resolve, 200)));
   };
 
+  test('champ vide hors focus : la tonalité (toujours « neutre ») cède sa place au cadre des emojis', () => {
+    const el = mount(() => {});
+    expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).toBeNull();
+    act(() => el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!.focus());
+    expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).not.toBeNull();
+  });
+
   test('la baguette ouvre le PANNEAU inline (aucune feuille), cocher « Confettis » ⇒ onSend porte SON bit', async () => {
     let sent: { protection: unknown } | null = null;
     const el = mount((p) => {
@@ -237,6 +244,7 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
 
   test('la tonalité est un indicateur PASSIF — aucun `<button>`, un `role="img"` labellisé', () => {
     const el = mount(() => {});
+    type(el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!, 'bonjour');
     const el2 = el.querySelector<HTMLElement>('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]');
     expect(el2).not.toBeNull();
     expect(el2?.tagName).not.toBe('BUTTON');
