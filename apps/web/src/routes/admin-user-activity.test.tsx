@@ -7,11 +7,12 @@ import { createActMounter } from '@/test-support/act-mount';
 import { pathOf, queryOf, routedTransport } from '@/test-support/admin-member';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { AdminUserActivityPanel } from './admin-user-activity';
+import { AdminUserContactsPanel, AdminUserReportsPanel } from './admin-user-activity';
 
 /**
- * **L'ONGLET ACTIVITÉ** (#7845) — un contenu masqué se DIT masqué, et le refus
- * d'une section n'éteint pas les autres.
+ * **LES ONGLETS CONTACTS ET SIGNALEMENTS** (#7845, #7873) — un contenu masqué
+ * se DIT masqué, le refus d'une section n'éteint pas l'autre, et l'autre
+ * personne d'une demande d'ami mène à SA fiche.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -57,7 +58,8 @@ async function monter() {
   });
   return mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <AdminUserActivityPanel userId="u-membre" language="fr" deps={{ source: 'gateway', transport }} />
+      <AdminUserReportsPanel userId="u-membre" language="fr" deps={{ source: 'gateway', transport }} />
+      <AdminUserContactsPanel userId="u-membre" language="fr" cible="admUser" deps={{ source: 'gateway', transport }} />
     </QueryClientProvider>,
   );
 }
@@ -66,6 +68,12 @@ describe('l’activité d’un membre', () => {
   test('un message signalé au contenu MASQUÉ le dit', async () => {
     const host = await monter();
     expect(host.querySelector('[data-admin-activity="r1"]')?.textContent ?? '').toContain(translateAdmin('fr', 'admin.activity.hiddenContent'));
+  });
+
+  test('l’autre personne d’une demande d’ami mène à SA fiche, dans l’espace d’où l’on vient', async () => {
+    const host = await monter();
+    const lien = host.querySelector('[data-admin-activity="f1"] a[data-admin-contact-open="u2"]');
+    expect(lien?.getAttribute('href')).toBe('/adm/users/u2');
   });
 
   test('le refus des signalements émis n’éteint ni les liens ni les demandes d’amis', async () => {

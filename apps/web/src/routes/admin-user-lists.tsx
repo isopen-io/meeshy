@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { Sheet } from '@/components/sheet';
+import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
 import { adminMoment } from '@/lib/admin/format';
 import { adminConversationTypeLabel } from '@/lib/admin/enum-labels';
 import {
@@ -33,6 +34,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { AdminAbsence, AdminPagination, AdminSkeleton } from './admin-parts';
 import { AdminConversationReading } from './admin-conversation-reading';
 import { AdminConversationSettingsSheet } from './admin-conversation-settings-sheet';
+import { Link } from './route-table';
 
 /**
  * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819, étendu par #6862) — les
@@ -185,7 +187,8 @@ function viewerDuMembre(membre: AdminUserDetail): Viewer {
 }
 
 
-const TYPES_DE_CONVERSATION = ['direct', 'group', 'public', 'global', 'broadcast'] as const;
+/** La fiche d'une conversation, dans l'ESPACE d'où l'on vient (D-76). */
+export type AdminConversationRoute = 'adminConversation' | 'admConversation';
 
 const LIBELLES_TRI: Readonly<Record<AdminConversationSort, AdminPlainCatalogKey>> = {
   lastMessageAt: 'admin.conv.sort.lastMessageAt',
@@ -232,22 +235,30 @@ const CONTROLE = {
  * ferait clignoter une liste qui est déjà là. Tout changement de critère
  * ramène à la première page — une page 3 d'un autre tri ne veut rien dire.
  *
- * ## Deux gestes par ligne
+ * ## Trois gestes par ligne, dont deux réservés
  *
  * « Lire » ouvre la lecture souveraine AU PRISME DU MEMBRE ; « Configurer »
- * ouvre la feuille des écritures souveraines. Après une écriture, TOUTES les
- * pages de la liste sont invalidées (`adminUserConversationsRootKey`) : un
- * archivage change ce que chaque tri et chaque filtre rendent.
+ * ouvre la feuille des écritures souveraines ; « Gérer » mène à la fiche de
+ * la conversation, dans l'espace courant. Les deux derniers n'existent que
+ * pour qui a la section Conversations (`gerer`, résolu par la fiche depuis
+ * `GET /me/permissions`) : la passerelle garde ces écritures par
+ * `canManageConversations` au rang ADMIN, et un bouton qui rend un 403 à qui
+ * le touche est pire que son absence. Après une écriture, TOUTES les pages de
+ * la liste sont invalidées (`adminUserConversationsRootKey`) : un archivage
+ * change ce que chaque tri et chaque filtre rendent.
  */
 export function AdminUserConversationsSection({
   membre,
   language,
   onAnnounce = () => undefined,
+  gerer = null,
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: InterfaceLanguage;
   readonly onAnnounce?: (texte: string) => void;
+  /** La fiche d'une conversation dans l'espace courant — `null` : ni « Configurer » ni « Gérer ». */
+  readonly gerer?: AdminConversationRoute | null;
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
   readonly deps?: AdminDeps;
 }) {
@@ -363,7 +374,7 @@ export function AdminUserConversationsSection({
               style={CONTROLE}
             >
               <option value="">{`${translateAdmin(language, 'admin.conv.filterType')} · ${translateAdmin(language, 'admin.conv.all')}`}</option>
-              {TYPES_DE_CONVERSATION.map((t) => (
+              {CONVERSATION_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {adminConversationTypeLabel(language, t)}
                 </option>
@@ -408,7 +419,8 @@ export function AdminUserConversationsSection({
                     conversation={conversation}
                     language={language}
                     onOpen={() => setOuverte(conversation)}
-                    onConfigure={() => setConfiguree(conversation)}
+                    onConfigure={gerer === null ? null : () => setConfiguree(conversation)}
+                    gerer={gerer}
                   />
                 ))}
               </ul>
@@ -463,6 +475,13 @@ export function AdminUserConversationsSection({
   );
 }
 
+const SECONDAIRE = {
+  minHeight: 44,
+  color: 'var(--color-ios-brand)',
+  outlineColor: 'var(--color-ios-brand)',
+  backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)',
+} as const;
+
 function Puce({ texte, ton = 'neutre' }: { readonly texte: string; readonly ton?: 'neutre' | 'danger' }) {
   const couleur = ton === 'danger' ? 'var(--color-danger)' : 'var(--color-ios-brand)';
   return (
@@ -476,9 +495,9 @@ function Puce({ texte, ton = 'neutre' }: { readonly texte: string; readonly ton?
 }
 
 /**
- * LA LIGNE PORTE DEUX BOUTONS, pas un `<li>` cliquable : le clavier, le focus
- * et le rôle viennent avec, et le lecteur d'écran annonce qu'il y a quelque
- * chose à ouvrir. Un `onClick` posé sur le `<li>` aurait le même effet à la
+ * LA LIGNE PORTE SES GESTES EN BOUTONS ET EN LIENS, pas un `<li>` cliquable :
+ * le clavier, le focus et le rôle viennent avec, et le lecteur d'écran annonce
+ * qu'il y a quelque chose à ouvrir. Un `onClick` posé sur le `<li>` aurait le même effet à la
  * souris et aucun au clavier — la moitié des lecteurs, silencieusement.
  */
 function ConversationRow({
@@ -486,11 +505,13 @@ function ConversationRow({
   language,
   onOpen,
   onConfigure,
+  gerer,
 }: {
   readonly conversation: AdminConversation;
   readonly language: InterfaceLanguage;
   readonly onOpen: () => void;
-  readonly onConfigure: () => void;
+  readonly onConfigure: (() => void) | null;
+  readonly gerer: AdminConversationRoute | null;
 }) {
   /* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de l'autre, que
      cette route ne sert pas. On montre alors son identifiant plutôt qu'une
@@ -540,21 +561,30 @@ function ConversationRow({
           >
             {translateAdmin(language, 'admin.conv.read')}
           </button>
-          <button
-            type="button"
-            data-admin-conversation-configure={conversation.id}
-            aria-label={`${translateAdmin(language, 'admin.conv.configure')} — ${titre}`}
-            onClick={onConfigure}
-            className="rounded-chip px-4 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{
-              minHeight: 44,
-              color: 'var(--color-ios-brand)',
-              outlineColor: 'var(--color-ios-brand)',
-              backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)',
-            }}
-          >
-            {translateAdmin(language, 'admin.conv.configure')}
-          </button>
+          {onConfigure === null ? null : (
+            <button
+              type="button"
+              data-admin-conversation-configure={conversation.id}
+              aria-label={`${translateAdmin(language, 'admin.conv.configure')} — ${titre}`}
+              onClick={onConfigure}
+              className="rounded-chip px-4 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={SECONDAIRE}
+            >
+              {translateAdmin(language, 'admin.conv.configure')}
+            </button>
+          )}
+          {gerer === null ? null : (
+            <Link
+              to={gerer}
+              params={{ conversation: conversation.id }}
+              data-admin-conversation-manage={conversation.id}
+              aria-label={`${translateAdmin(language, 'admin.conv.manage')} — ${titre}`}
+              className="grid place-items-center rounded-chip px-4 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={SECONDAIRE}
+            >
+              {translateAdmin(language, 'admin.conv.manage')}
+            </Link>
+          )}
         </span>
       </div>
     </li>

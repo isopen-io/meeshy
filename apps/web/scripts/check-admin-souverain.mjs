@@ -340,10 +340,10 @@ async function main() {
       const { page } = ctx;
       await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-user="${MEMBRE_ID}"]`));
-      /* LA FICHE EST EN ONGLETS depuis #7845 : chaque section ne se monte
-         qu'avec le sien. On ouvre donc celui des conversations pour la voir. */
-      await ouvrirOnglet(page, 'conversations');
-      await attendre(() => present(page, '[data-admin-section="conversations"]'));
+      /* LA FICHE S'OUVRE SUR SON PROFIL (#7845, #7873) : sans `?tab=`, c'est
+         l'onglet Profil qui est monté — le seul dont les dates peuplent la
+         fiche, donc celui où le constat d'horodatage mord. */
+      await attendre(() => present(page, '[data-admin-user-panel="profile"]'));
       await page.waitForTimeout(500);
       await cliche(page, 'fiche-membre-profil', { fullPage: true });
 
@@ -352,17 +352,29 @@ async function main() {
          charge au lieu de la LIRE, et aucun témoin unitaire ne le voit. */
       const fiche = await texteDe(page, `[data-admin-user="${MEMBRE_ID}"]`);
       check(!ISO_NU.test(fiche), `la fiche ne peint aucun horodatage ISO brut${ISO_NU.test(fiche) ? ` — « ${(fiche.match(ISO_NU) ?? [''])[0]} »` : ''}`);
+
+      /* LA FICHE EST EN ONGLETS : chaque section ne se monte qu'avec le sien,
+         l'onglet choisi s'écrit dans l'adresse (un lien partagé rouvre le bon),
+         et le clavier passe de l'un à l'autre par les flèches d'un tablist. */
+      await ouvrirOnglet(page, 'conversations');
+      await attendre(() => present(page, '[data-admin-section="conversations"]'));
       check(
         await present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`),
         'l’onglet Conversations porte ses lignes',
       );
+      check(new URL(page.url()).searchParams.get('tab') === 'conversations', 'l’onglet choisi s’écrit dans l’adresse (?tab=conversations)');
       /* Le cadre d'administration défile dans un conteneur À LUI : `fullPage`
-         ne descend pas dedans. On amène donc la seconde section à l'écran pour
-         la VOIR — une capture qui ne montre pas ce qu'on affirme ne prouve
-         rien. */
+         ne descend pas dedans. On amène donc la section à l'écran pour la
+         VOIR — une capture qui ne montre pas ce qu'on affirme ne prouve rien. */
       await page.locator(`[data-admin-conversation-open="${CONVERSATION_ID}"]`).scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
       await cliche(page, 'fiche-membre-section-conversations');
+
+      await page.focus('[data-admin-user-tab="conversations"]');
+      await page.keyboard.press('ArrowRight');
+      check(await attendre(() => present(page, '[data-admin-section="media"]')), 'la flèche droite passe de Conversations à Médias');
+      await page.waitForTimeout(300);
+      await cliche(page, 'fiche-membre-onglet-medias');
 
       /* Un repliable du même titre que l'onglet le RÉPÉTAIT, et un clic
          vidait le panneau entier (revue #7845) : la section est désormais le

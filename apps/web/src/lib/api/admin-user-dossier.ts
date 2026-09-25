@@ -3,24 +3,21 @@ import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
- * **LE DOSSIER D'UN MEMBRE** (#7845, #7873) — ce que la fiche montre au-delà
- * de son identité : ses contacts, ses communautés, son profil vocal, ses
- * sessions et événements de sécurité, les signalements qu'il a faits et ceux
- * qui le visent.
+ * **LE DOSSIER D'UN MEMBRE** (#7845, #7873) — les deux onglets de la fiche que
+ * seule cette adresse sert : ses COMMUNAUTÉS et son PROFIL VOCAL. Contacts,
+ * sessions, événements de sécurité et signalements ont chacun leur module
+ * (`admin-user-activity.ts`, `admin-user-security.ts`) : deux décodeurs pour
+ * une même route divergeraient au premier champ ajouté, et deux clés de cache
+ * pour une même lecture la feraient partir deux fois.
  *
- * ## Deux régimes de cache, selon ce que la charge PORTE
+ * ## Aucune de ces clés ne touche le disque
  *
  * Le cache des requêtes est persisté sur le disque du navigateur de
- * l'administrateur (`query-client.ts`). Ce qui y survit ne doit pas être une
- * empreinte de traçage d'un tiers :
- *
- * - les SESSIONS et les ÉVÉNEMENTS DE SÉCURITÉ portent des adresses IP, des
- *   lieux, des appareils ; le PROFIL VOCAL est une donnée biométrique (même
- *   sans ses octets) ; le texte d'un MESSAGE SIGNALÉ est le contenu d'un
- *   tiers. Leurs clés descendent d'`ADMIN_SOUVERAIN_PREFIXE`, que le filtre
- *   de déshydratation exclut ;
- * - les contacts, communautés et signalements faits sont des métadonnées que
- *   la fiche et la liste montrent déjà ailleurs.
+ * l'administrateur (`query-client.ts`). Le PROFIL VOCAL est une donnée
+ * biométrique (même sans ses octets) ; la liste des COMMUNAUTÉS d'un membre
+ * dit à quels groupes, parfois privés, une personne NOMMÉE appartient — ce
+ * n'est pas un agrégat. Les deux clés descendent d'`ADMIN_SOUVERAIN_PREFIXE`,
+ * que le filtre de déshydratation exclut.
  *
  * Chaque décodeur construit sa ligne champ par champ — jamais de `...spread`
  * de la charge, qui recopierait en silence ce que la passerelle ajoutera.
@@ -62,63 +59,6 @@ const cheminMembre = (userId: string, suite: string) => `/api/v1/admin/users/${e
 
 const pagine = (offset: number) =>
   new URLSearchParams({ offset: String(offset), limit: String(ADMIN_DOSSIER_PAGE_SIZE) }).toString();
-
-// ---------------------------------------------------------------------------
-// LES CONTACTS — GET /admin/users/:userId/activity (`contacts.sent|received`)
-// ---------------------------------------------------------------------------
-
-export type AdminContact = {
-  readonly id: string;
-  readonly direction: 'sent' | 'received';
-  readonly status: string;
-  readonly createdAt: string | null;
-  readonly other: { readonly id: string; readonly username: string; readonly displayName: string; readonly avatar: string };
-};
-
-export type AdminActivity = {
-  readonly contacts: readonly AdminContact[];
-  readonly shareLinks: number;
-  readonly trackingLinks: number;
-  readonly affiliateTokens: number;
-};
-
-function decodeContact(brut: unknown, direction: AdminContact['direction']): AdminContact | null {
-  const ligne = asRecord(brut);
-  const autre = asRecord(direction === 'sent' ? ligne?.receiver : ligne?.sender);
-  if (ligne === null || typeof ligne.id !== 'string' || autre === null || typeof autre.id !== 'string') return null;
-  const username = asText(autre.username);
-  return {
-    id: ligne.id,
-    direction,
-    status: asText(ligne.status) || 'pending',
-    createdAt: dateOuNull(ligne.createdAt),
-    other: { id: autre.id, username, displayName: asText(autre.displayName) || username, avatar: asText(autre.avatar) },
-  };
-}
-
-export function decodeAdminActivity(raw: unknown): AdminActivity {
-  const charge = asRecord(raw) ?? {};
-  const contacts = asRecord(charge.contacts) ?? {};
-  const liste = (valeur: unknown): readonly unknown[] => (Array.isArray(valeur) ? valeur : []);
-  const tous = [
-    ...liste(contacts.sent).map((c) => decodeContact(c, 'sent')),
-    ...liste(contacts.received).map((c) => decodeContact(c, 'received')),
-  ]
-    .filter(garder)
-    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-  return {
-    contacts: tous,
-    shareLinks: liste(charge.shareLinks).length,
-    trackingLinks: liste(charge.trackingLinks).length,
-    affiliateTokens: liste(charge.affiliateTokens).length,
-  };
-}
-
-export const adminUserActivityQueryKey = (userId: string) => ['admin', 'user', userId, 'activity'] as const;
-
-export function loadAdminUserActivity(params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal }) {
-  return lire(params, cheminMembre(params.userId, 'activity'), (r) => decodeAdminActivity(r.data));
-}
 
 // ---------------------------------------------------------------------------
 // LES COMMUNAUTÉS — GET /admin/users/:userId/communities
@@ -168,7 +108,8 @@ export function decodeAdminCommunities(resultat: { readonly data: unknown; reado
   return page(lignes.map(decodeCommunity).filter(garder), meta, offset);
 }
 
-export const adminUserCommunitiesQueryKey = (userId: string, offset: number) => ['admin', 'user', userId, 'communities', offset] as const;
+export const adminUserCommunitiesQueryKey = (userId: string, offset: number) =>
+  [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'communities', offset] as const;
 
 export function loadAdminUserCommunities(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
   return lire(params, `${cheminMembre(params.userId, 'communities')}?${pagine(params.offset)}`, (r) => decodeAdminCommunities(r, params.offset));
@@ -220,144 +161,4 @@ export const adminUserVoiceQueryKey = (userId: string) => [ADMIN_SOUVERAIN_PREFI
 
 export function loadAdminUserVoice(params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal }) {
   return lire(params, cheminMembre(params.userId, 'voice-profile'), (r) => decodeAdminVoiceProfile(r.data));
-}
-
-// ---------------------------------------------------------------------------
-// LES SESSIONS ET LES ÉVÉNEMENTS DE SÉCURITÉ (souverains, canViewSensitiveData)
-// ---------------------------------------------------------------------------
-
-export type AdminSession = {
-  readonly id: string;
-  readonly device: string;
-  readonly ipAddress: string;
-  readonly place: string;
-  readonly isValid: boolean;
-  readonly isTrusted: boolean;
-  readonly createdAt: string | null;
-  readonly lastActivityAt: string | null;
-};
-
-function decodeSession(brut: unknown): AdminSession | null {
-  const ligne = asRecord(brut);
-  if (ligne === null || typeof ligne.id !== 'string') return null;
-  const morceaux = (valeurs: readonly unknown[]) => valeurs.map(asText).filter((v) => v !== '').join(' ');
-  const appareil = [
-    morceaux([ligne.browserName, ligne.browserVersion]),
-    morceaux([ligne.osName, ligne.osVersion]),
-    morceaux([ligne.deviceVendor, ligne.deviceModel]),
-  ].filter((v) => v !== '');
-  return {
-    id: ligne.id,
-    device: appareil.join(' · ') || asText(ligne.deviceType) || '—',
-    ipAddress: asText(ligne.ipAddress),
-    place: [asText(ligne.city), asText(ligne.country)].filter((v) => v !== '').join(', ') || asText(ligne.location),
-    isValid: ligne.isValid === true,
-    isTrusted: ligne.isTrusted === true,
-    createdAt: dateOuNull(ligne.createdAt),
-    lastActivityAt: dateOuNull(ligne.lastActivityAt),
-  };
-}
-
-export type AdminSecurityEvent = {
-  readonly id: string;
-  readonly eventType: string;
-  readonly severity: string;
-  readonly status: string;
-  readonly description: string;
-  readonly ipAddress: string;
-  readonly createdAt: string | null;
-};
-
-function decodeSecurityEvent(brut: unknown): AdminSecurityEvent | null {
-  const ligne = asRecord(brut);
-  if (ligne === null || typeof ligne.id !== 'string') return null;
-  return {
-    id: ligne.id,
-    eventType: asText(ligne.eventType),
-    severity: asText(ligne.severity),
-    status: asText(ligne.status),
-    description: asText(ligne.description),
-    ipAddress: asText(ligne.ipAddress),
-    createdAt: dateOuNull(ligne.createdAt),
-  };
-}
-
-export const adminUserSessionsQueryKey = (userId: string, offset: number) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'sessions', offset] as const;
-export const adminUserSecurityQueryKey = (userId: string, offset: number) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'security', offset] as const;
-
-export function loadAdminUserSessions(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'sessions')}?${pagine(params.offset)}`, (r) => {
-    const servie = pageServie(r);
-    return page(servie.lignes.map(decodeSession).filter(garder), servie.meta, params.offset);
-  });
-}
-
-export function loadAdminUserSecurityEvents(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'security-events')}?${pagine(params.offset)}`, (r) => {
-    const servie = pageServie(r);
-    return page(servie.lignes.map(decodeSecurityEvent).filter(garder), servie.meta, params.offset);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// LES SIGNALEMENTS — faits par le membre, et ceux qui visent ses messages
-// ---------------------------------------------------------------------------
-
-export type AdminReport = {
-  readonly id: string;
-  readonly subject: string;
-  readonly reportType: string;
-  readonly reason: string;
-  readonly status: string;
-  readonly createdAt: string | null;
-  /** Pour un signalement REÇU : le texte du message, `null` quand la passerelle le retient (#4494). */
-  readonly excerpt: string | null;
-};
-
-function decodeReportFiled(brut: unknown): AdminReport | null {
-  const ligne = asRecord(brut);
-  if (ligne === null || typeof ligne.id !== 'string') return null;
-  return {
-    id: ligne.id,
-    subject: asText(ligne.reportedType),
-    reportType: asText(ligne.reportType),
-    reason: asText(ligne.reason),
-    status: asText(ligne.status),
-    createdAt: dateOuNull(ligne.createdAt),
-    excerpt: null,
-  };
-}
-
-function decodeReportReceived(brut: unknown): AdminReport | null {
-  const ligne = asRecord(brut);
-  if (ligne === null || typeof ligne.id !== 'string') return null;
-  const message = asRecord(ligne.message);
-  const contenu = message === null ? null : typeof message.content === 'string' ? message.content : null;
-  return {
-    id: ligne.id,
-    subject: asText(ligne.reporterName),
-    reportType: asText(ligne.reportType),
-    reason: asText(ligne.reason),
-    status: asText(ligne.status),
-    createdAt: dateOuNull(ligne.createdAt),
-    excerpt: contenu,
-  };
-}
-
-export const adminUserReportsFiledQueryKey = (userId: string, offset: number) => ['admin', 'user', userId, 'reports', offset] as const;
-export const adminUserReportsReceivedQueryKey = (userId: string, offset: number) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'reported-messages', offset] as const;
-
-export function loadAdminUserReportsFiled(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'reports')}?${pagine(params.offset)}`, (r) => {
-    const servie = pageServie(r);
-    return page(servie.lignes.map(decodeReportFiled).filter(garder), servie.meta, params.offset);
-  });
-}
-
-export function loadAdminUserReportsReceived(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
-  return lire(params, `${cheminMembre(params.userId, 'reported-messages')}?${pagine(params.offset)}`, (r) => {
-    const servie = pageServie(r);
-    return page(servie.lignes.map(decodeReportReceived).filter(garder), servie.meta, params.offset);
-  });
 }

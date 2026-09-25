@@ -13,16 +13,24 @@ import {
   loadAdminUserActivity,
   loadAdminUserReportedMessages,
   loadAdminUserReports,
+  type AdminFriendRequest,
 } from '@/lib/api/admin-user-activity';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { AdminAbsence, AdminPagination, AdminSkeleton } from './admin-parts';
+import { Link } from './route-table';
 
 /**
- * **L'ONGLET ACTIVITÉ D'UN MEMBRE** (#7845) — ce qu'il a signalé, ce qu'on lui
- * a signalé, les liens qu'il a créés, ses demandes d'amis.
+ * **LES ONGLETS CONTACTS ET SIGNALEMENTS D'UN MEMBRE** (#7845, #7873) — ce
+ * qu'il a signalé et ce qu'on lui a signalé d'un côté ; les liens qu'il a
+ * créés et ses demandes d'amis de l'autre.
+ *
+ * Deux onglets et non un : l'ancien onglet « Activité » mêlait la modération
+ * (qui lit des motifs et des extraits) et le réseau (qui lit des noms). Un
+ * administrateur venu voir qui ce membre connaît n'a pas à ouvrir, au passage,
+ * les signalements — ni à les faire lire à la passerelle.
  *
  * ## Un contenu MASQUÉ se dit masqué
  *
@@ -44,7 +52,7 @@ const CARTE = { backgroundColor: 'var(--color-ios-surface)', border: '1px solid 
 
 const joindre = (...parties: readonly string[]) => parties.filter((p) => p.trim() !== '').join(' · ');
 
-function Ligne({ data, titre, children }: { readonly data: string; readonly titre: string; readonly children: ReactNode }) {
+function Ligne({ data, titre, children }: { readonly data: string; readonly titre: ReactNode; readonly children: ReactNode }) {
   return (
     <li data-admin-activity={data} className="grid gap-1 rounded-card px-4 py-3" style={CARTE}>
       <p className="break-words text-body font-semibold [overflow-wrap:anywhere]" style={{ color: INK }}>
@@ -65,7 +73,10 @@ function Vide({ language }: { readonly language: InterfaceLanguage }) {
   );
 }
 
-export function AdminUserActivityPanel({
+/** La fiche d'un autre membre, dans l'ESPACE d'où l'on vient (D-76). */
+export type AdminMemberRoute = 'adminUser' | 'admUser';
+
+export function AdminUserReportsPanel({
   userId,
   language,
   deps = apiDeps,
@@ -75,10 +86,27 @@ export function AdminUserActivityPanel({
   readonly deps?: AdminDeps;
 }) {
   return (
-    <div className="grid gap-5" data-admin-activity-panel>
+    <div className="grid gap-5" data-admin-reports-panel>
       <MessagesSignales userId={userId} language={language} deps={deps} />
       <SignalementsEmis userId={userId} language={language} deps={deps} />
-      <LiensEtAmis userId={userId} language={language} deps={deps} />
+    </div>
+  );
+}
+
+export function AdminUserContactsPanel({
+  userId,
+  language,
+  cible,
+  deps = apiDeps,
+}: {
+  readonly userId: string;
+  readonly language: InterfaceLanguage;
+  readonly cible: AdminMemberRoute;
+  readonly deps?: AdminDeps;
+}) {
+  return (
+    <div className="grid gap-5" data-admin-contacts-panel>
+      <LiensEtAmis userId={userId} language={language} deps={deps} cible={cible} />
     </div>
   );
 }
@@ -171,7 +199,7 @@ function SignalementsEmis({ userId, language, deps }: Props) {
   );
 }
 
-function LiensEtAmis({ userId, language, deps }: Props) {
+function LiensEtAmis({ userId, language, deps, cible }: Props & { readonly cible: AdminMemberRoute }) {
   const activite = useQuery({
     queryKey: adminUserActivityQueryKey(userId),
     queryFn: async ({ signal }) => {
@@ -225,13 +253,7 @@ function LiensEtAmis({ userId, language, deps }: Props) {
         ) : (
           <ul className="grid gap-2">
             {friendRequests.map((r) => (
-              <Ligne
-                key={r.id}
-                data={r.id}
-                titre={translateAdmin(language, r.direction === 'sent' ? 'admin.activity.sentTo' : 'admin.activity.receivedFrom', {
-                  name: r.other === null ? '—' : `${r.other.displayName} (@${r.other.username})`,
-                })}
-              >
+              <Ligne key={r.id} data={r.id} titre={<Personne demande={r} language={language} cible={cible} />}>
                 {joindre(adminEnumLabel(language, 'status', r.status), adminMoment(r.createdAt, language))}
               </Ligne>
             ))}
@@ -239,5 +261,37 @@ function LiensEtAmis({ userId, language, deps }: Props) {
         )}
       </CollapsibleSection>
     </>
+  );
+}
+
+/**
+ * L'AUTRE PERSONNE d'une demande d'ami MÈNE À SA FICHE (#7873) : un
+ * administrateur qui instruit un harcèlement suit le fil d'un membre à
+ * l'autre, et recopier un pseudonyme dans la recherche de la liste lui ferait
+ * perdre l'onglet où il était. Une demande dont l'autre compte n'est plus
+ * servi reste un texte — un lien vers une fiche absente ne mène nulle part.
+ */
+function Personne({
+  demande,
+  language,
+  cible,
+}: {
+  readonly demande: AdminFriendRequest;
+  readonly language: InterfaceLanguage;
+  readonly cible: AdminMemberRoute;
+}) {
+  const cle = demande.direction === 'sent' ? 'admin.activity.sentTo' : 'admin.activity.receivedFrom';
+  const autre = demande.other;
+  if (autre === null) return <>{translateAdmin(language, cle, { name: '—' })}</>;
+  return (
+    <Link
+      to={cible}
+      params={{ user: autre.id }}
+      data-admin-contact-open={autre.id}
+      className="inline-flex items-center underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+    >
+      {translateAdmin(language, cle, { name: `${autre.displayName} (@${autre.username})` })}
+    </Link>
   );
 }

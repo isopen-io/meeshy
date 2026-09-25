@@ -1,15 +1,20 @@
 import { useRef, type KeyboardEvent } from 'react';
 
+import { ADMIN_USER_TABS, type AdminUserTab } from '@/lib/admin/user-tabs';
 import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+export type { AdminUserTab } from '@/lib/admin/user-tabs';
+
 /**
- * **LES ONGLETS DE LA FICHE D'UN MEMBRE** (#7845) — six surfaces, une à la fois.
+ * **LES ONGLETS DE LA FICHE D'UN MEMBRE** (#7845, #7873) — neuf surfaces, une à
+ * la fois. Leur liste et leur ordre vivent dans `lib/admin/user-tabs.ts`, avec
+ * leur lecture dans l'adresse ; ce fichier n'en porte que le RENDU.
  *
  * ## Un onglet ne MONTE que sa section
  *
  * Chaque section lit sa propre route (préférences, conversations, sessions…).
- * Les monter toutes à l'ouverture de la fiche coûterait six requêtes pour un
+ * Les monter toutes à l'ouverture de la fiche coûterait neuf requêtes pour un
  * administrateur venu vérifier une adresse e-mail — et trois d'entre elles
  * écrivent une ligne d'audit « a consulté des données sensibles ». Le panneau
  * de l'onglet actif est le seul rendu ; revenir sur un onglet se repeint
@@ -25,22 +30,17 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * le cache le sert). Cibles de 44 px ; la barre défile à l'horizontale sur un
  * téléphone plutôt que de faire défiler la page.
  */
-export const ADMIN_USER_TABS = ['profile', 'preferences', 'conversations', 'media', 'security', 'activity'] as const;
-
-export type AdminUserTab = (typeof ADMIN_USER_TABS)[number];
-
 const LIBELLES: Readonly<Record<AdminUserTab, AdminPlainCatalogKey>> = {
   profile: 'admin.tab.profile',
-  preferences: 'admin.tab.preferences',
   conversations: 'admin.tab.conversations',
   media: 'admin.tab.media',
+  contacts: 'admin.tab.contacts',
+  communities: 'admin.tab.communities',
+  voice: 'admin.tab.voice',
+  preferences: 'admin.tab.preferences',
   security: 'admin.tab.security',
-  activity: 'admin.tab.activity',
+  reports: 'admin.tab.reports',
 };
-
-export function isAdminUserTab(value: unknown): value is AdminUserTab {
-  return typeof value === 'string' && (ADMIN_USER_TABS as readonly string[]).includes(value);
-}
 
 export const adminUserTabId = (tab: AdminUserTab) => `admin-user-tab-${tab}`;
 export const adminUserPanelId = (tab: AdminUserTab) => `admin-user-panel-${tab}`;
@@ -88,7 +88,7 @@ export function AdminUserTabs({
     <div
       ref={liste}
       role="tablist"
-      aria-label={translateAdmin(language, 'admin.user.title')}
+      aria-label={translateAdmin(language, 'admin.tab.label')}
       onKeyDown={surTouche}
       data-admin-user-tabs
       className="-mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:px-0"

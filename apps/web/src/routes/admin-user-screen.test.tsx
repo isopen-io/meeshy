@@ -12,10 +12,10 @@ import { adminMember, pathOf, routedTransport } from '@/test-support/admin-membe
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminUserWorkspace } from './admin-user';
-import type { AdminUserTab } from './admin-user-tabs';
+import type { AdminUserTab } from '@/lib/admin/user-tabs';
 
 /**
- * **LA FICHE D'UN MEMBRE, EN DEUX COLONNES ET SIX ONGLETS** (#7845).
+ * **LA FICHE D'UN MEMBRE, EN DEUX COLONNES ET NEUF ONGLETS** (#7845, #7873).
  *
  * Ce qui se mesure ici : la disposition déclarée, le motif ARIA des onglets et
  * leur parcours clavier, et surtout **qu'un onglet ne monte QUE sa section** —
@@ -46,12 +46,15 @@ afterEach(() => {
 function transport() {
   return routedTransport((req: HttpRequest) => {
     const chemin = pathOf(req);
-    if (chemin.endsWith('/media') || chemin.endsWith('/conversations') || chemin.endsWith('/sessions') || chemin.endsWith('/security-events')) {
+    const pagines = ['/media', '/conversations', '/sessions', '/security-events', '/communities', '/reports', '/reported-messages'];
+    if (pagines.some((fin) => chemin.endsWith(fin))) {
       return { ok: true, data: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } } as never;
     }
     if (chemin.endsWith('/stats')) return { ok: true, data: { counts: { messagesSent: 5 }, languages: [] } };
     if (chemin.endsWith('/preferences')) return { ok: true, data: { userId: 'u-membre', categories: {} } };
     if (chemin.endsWith('/bans')) return { ok: true, data: [] };
+    if (chemin.endsWith('/activity')) return { ok: true, data: { shareLinks: [], trackingLinks: [], affiliateTokens: [], contacts: { sent: [], received: [] } } };
+    if (chemin.endsWith('/voice-profile')) return { ok: true, data: { voiceProfile: null, consents: {} } };
     return undefined;
   });
 }
@@ -79,14 +82,15 @@ describe('la disposition', () => {
   test('deux colonnes déclarées : l’identité à part, les onglets à côté', async () => {
     const { host } = await monter();
     const racine = host.querySelector('[data-admin-user-layout="split"]');
-    expect(racine?.className ?? '').toContain('lg:grid-cols-');
+    expect(racine?.className ?? '').toContain('xl:grid-cols-');
+    expect(racine?.className ?? '').not.toContain('lg:grid-cols-');
     expect(racine?.querySelector('[data-admin-user-aside] [data-admin-user-hero]')).not.toBe(null);
     expect(racine?.querySelector('[data-admin-user-aside] [data-admin-carousel]')).not.toBe(null);
     expect(racine?.querySelector('[data-admin-user-aside] [data-admin-stats]')).not.toBe(null);
     expect(racine?.querySelector('[data-admin-user-aside] [data-admin-user-tabs]')).toBe(null);
   });
 
-  test('sous `lg`, les onglets viennent juste après l’identité et les gestes — pas à mille pixels', async () => {
+  test('sous `xl`, les onglets viennent juste après l’identité et les gestes — pas à mille pixels', async () => {
     const { host } = await monter();
     const rang = (id: string) => {
       const classes = host.querySelector(`[data-admin-user-order="${id}"]`)?.className ?? '';
@@ -126,7 +130,18 @@ describe('les onglets', () => {
   test('le motif ARIA : une liste d’onglets, un sélectionné, un panneau qui le nomme', async () => {
     const { host } = await monter();
     const liste = host.querySelector('[role="tablist"]');
-    expect(liste?.querySelectorAll('[role="tab"]')).toHaveLength(6);
+    expect([...(liste?.querySelectorAll('[role="tab"]') ?? [])].map((t) => t.getAttribute('data-admin-user-tab'))).toEqual([
+      'profile',
+      'conversations',
+      'media',
+      'contacts',
+      'communities',
+      'voice',
+      'preferences',
+      'security',
+      'reports',
+    ]);
+    expect(liste?.getAttribute('aria-label')).toBe(translateAdmin('fr', 'admin.tab.label'));
     expect(onglet(host, 'profile')?.getAttribute('aria-selected')).toBe('true');
     expect(onglet(host, 'profile')?.tabIndex).toBe(0);
     expect(onglet(host, 'media')?.tabIndex).toBe(-1);
@@ -144,14 +159,14 @@ describe('les onglets', () => {
       await mounter.settle();
     };
     await presser('ArrowRight');
-    expect(onglet(host, 'preferences')?.getAttribute('aria-selected')).toBe('true');
-    expect(document.activeElement).toBe(onglet(host, 'preferences'));
+    expect(onglet(host, 'conversations')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(onglet(host, 'conversations'));
     await presser('End');
-    expect(onglet(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
+    expect(onglet(host, 'reports')?.getAttribute('aria-selected')).toBe('true');
     await presser('ArrowRight');
     expect(onglet(host, 'profile')?.getAttribute('aria-selected')).toBe('true');
     await presser('ArrowLeft');
-    expect(onglet(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
+    expect(onglet(host, 'reports')?.getAttribute('aria-selected')).toBe('true');
   });
 
   test('un onglet ne monte QUE sa section — rien n’est lu avant d’être ouvert', async () => {
@@ -173,6 +188,37 @@ describe('les onglets', () => {
     expect(lus(calls, '/sessions')).toBe(1);
   });
 
+  test('chaque onglet du dossier lit SA route, et seulement à son ouverture', async () => {
+    const { host, calls } = await monter();
+    const routes = ['/activity', '/communities', '/voice-profile', '/reported-messages', '/reports'] as const;
+    expect(routes.map((fin) => lus(calls, fin))).toEqual([0, 0, 0, 0, 0]);
+
+    await mounter.click(onglet(host, 'contacts'));
+    expect(host.querySelector('[data-admin-contacts-panel]')).not.toBe(null);
+    expect(routes.map((fin) => lus(calls, fin))).toEqual([1, 0, 0, 0, 0]);
+
+    await mounter.click(onglet(host, 'communities'));
+    expect(host.querySelector('[data-admin-communities]')).not.toBe(null);
+    expect(lus(calls, '/communities')).toBe(1);
+
+    await mounter.click(onglet(host, 'voice'));
+    expect(host.querySelector('[data-admin-voice]')).not.toBe(null);
+    expect(lus(calls, '/voice-profile')).toBe(1);
+
+    await mounter.click(onglet(host, 'reports'));
+    expect(host.querySelector('[data-admin-reports-panel]')).not.toBe(null);
+    expect([lus(calls, '/reported-messages'), lus(calls, '/reports')]).toEqual([1, 1]);
+  });
+
+  test('les communautés d’un membre vivent sous une clé qui ne touche pas le disque', async () => {
+    const { host } = await monter();
+    await mounter.click(onglet(host, 'communities'));
+    const cles = appQueryClient.getQueryCache().getAll().map((q) => q.queryKey);
+    const de = (morceau: string) => cles.filter((k) => k.includes(morceau));
+    expect(de('communities').every((k) => k[0] === 'admin-souverain')).toBe(true);
+    expect(de('communities').length).toBeGreaterThan(0);
+  });
+
   test('l’onglet Médias ne relit pas la page que le carrousel a déjà lue', async () => {
     const { host, calls } = await monter();
     expect(lus(calls, '/media')).toBe(1);
@@ -190,6 +236,20 @@ describe('l’état du compte se voit sur la carte', () => {
   test('DÉSACTIVÉ sinon — jamais « supprimé » sur la seule foi de isActive', async () => {
     const { host } = await monter(adminMember({ isActive: false }));
     expect(host.querySelector('[data-admin-user-chip="state"]')?.textContent).toBe(translateAdmin('fr', 'admin.users.inactive'));
+  });
+
+  test('la DATE de désactivation se lit sur le compte, en clair', async () => {
+    const { host } = await monter(adminMember({ isActive: false, deactivatedAt: '2026-09-02T08:30:00.000Z' }));
+    const ligne = host.querySelector('[data-admin-user-field="deactivated"]');
+    expect(ligne).not.toBe(null);
+    expect(ligne?.querySelector('dt')?.textContent).toBe(translateAdmin('fr', 'admin.user.deactivated'));
+    expect(ligne?.querySelector('dd')?.textContent ?? '').not.toContain('T08:30');
+    expect(ligne?.querySelector('dd')?.textContent ?? '').not.toBe('—');
+  });
+
+  test('un compte jamais désactivé n’a pas de ligne de désactivation', async () => {
+    const { host } = await monter();
+    expect(host.querySelector('[data-admin-user-field="deactivated"]')).toBe(null);
   });
 
   test('un compte actif ne porte aucune puce d’état', async () => {

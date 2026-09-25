@@ -193,7 +193,9 @@ export function AdminPager({
   readonly onPage: (page: { readonly offset?: number; readonly limit?: number }) => void;
 }) {
   const bouton = 'rounded-chip px-4 text-body font-semibold disabled:opacity-40';
-  const fond = { minHeight: 40, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK };
+  /* 44 px, le plancher tactile de la fiche (#7845) : ce pied de page sert
+     aussi les onglets du dossier d'un membre, que l'on feuillette au doigt. */
+  const fond = { minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK };
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
       <p className="text-caption tabular-nums" style={{ color: INK2 }} data-admin-list-range>
@@ -211,7 +213,7 @@ export function AdminPager({
             data-admin-page-size
             onChange={(event) => onPage({ limit: Number(event.target.value) })}
             className="rounded-chip px-2 text-body"
-            style={CHAMP}
+            style={{ ...CHAMP, minHeight: 44 }}
           >
             {pageSizes.map((taille) => (
               <option key={taille} value={String(taille)}>

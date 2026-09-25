@@ -116,6 +116,14 @@ export function AdminUserProfile({
         <Ligne label={t('admin.user.created')} valeur={adminMoment(membre.createdAt, language)} id="created" />
         <Ligne label={t('admin.user.updated')} valeur={adminMoment(membre.updatedAt, language)} id="updated" />
         <Ligne label={t('admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} id="lastActive" />
+        {/* Servie À CÔTÉ de `isActive` (#7873) : la puce de la carte dit que le
+            compte est désactivé, cette ligne dit DEPUIS QUAND — ce qu'un
+            administrateur cite quand le membre demande sa réactivation. Un
+            compte jamais désactivé n'a pas de ligne : un tiret suggérerait
+            une date perdue. */}
+        {membre.deactivatedAt === null ? null : (
+          <Ligne label={t('admin.user.deactivated')} valeur={adminMoment(membre.deactivatedAt, language)} id="deactivated" />
+        )}
         <Ligne label={t('admin.user.onboarding')} valeur={adminMoment(membre.onboardingCompletedAt, language)} id="onboarding" />
         <Ligne
           label={translateAdmin(language, 'admin.user.terms', { version: membre.termsVersion ?? '—' })}

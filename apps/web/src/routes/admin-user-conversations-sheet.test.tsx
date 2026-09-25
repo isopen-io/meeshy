@@ -355,7 +355,7 @@ describe('le tri et la configuration', () => {
     const t = transportComptant();
     const host = await mounter.mount(
       <QueryClientProvider client={appQueryClient}>
-        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport: t.transport }} />
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer="adminConversation" deps={{ source: 'gateway', transport: t.transport }} />
       </QueryClientProvider>,
     );
     return { host, appels: t.appels };
@@ -395,5 +395,26 @@ describe('le tri et la configuration', () => {
     await mounter.click(host.querySelector('[data-admin-conversation-configure="c-atelier"]') as HTMLElement | null);
     expect(document.querySelector('[data-admin-conv-settings="c-atelier"]')).not.toBe(null);
     expect(document.querySelector('[data-admin-conversation-sheet]')).toBe(null);
+  });
+  test('« Gérer » mène à la fiche de la conversation, dans l’espace courant', async () => {
+    const t = transportComptant();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer="admConversation" deps={{ source: 'gateway', transport: t.transport }} />
+      </QueryClientProvider>,
+    );
+    expect(host.querySelector('[data-admin-conversation-manage="c-atelier"]')?.getAttribute('href')).toBe('/adm/conversations/c-atelier');
+  });
+
+  test('sans la section Conversations, ni « Configurer » ni « Gérer » — la lecture reste', async () => {
+    const t = transportComptant();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport: t.transport }} />
+      </QueryClientProvider>,
+    );
+    expect(host.querySelector('[data-admin-conversation-open="c-atelier"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-conversation-configure]')).toBe(null);
+    expect(host.querySelector('[data-admin-conversation-manage]')).toBe(null);
   });
 });

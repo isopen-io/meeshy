@@ -2,15 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import type { HttpTransport } from './http';
 import {
-  adminUserReportsReceivedQueryKey,
-  adminUserSecurityQueryKey,
-  adminUserSessionsQueryKey,
+  adminUserCommunitiesQueryKey,
   adminUserVoiceQueryKey,
-  decodeAdminActivity,
   decodeAdminCommunities,
   decodeAdminVoiceProfile,
-  loadAdminUserReportsReceived,
-  loadAdminUserSessions,
+  loadAdminUserCommunities,
 } from './admin-user-dossier';
 import { estClefSouveraine } from './souverain';
 
@@ -21,26 +17,6 @@ const transport = (reponse: { readonly data: unknown; readonly pagination?: unkn
       return { ok: true as const, ...reponse };
     },
   }) as unknown as HttpTransport;
-
-describe('les contacts d’un membre', () => {
-  test('fusionnent demandes envoyées et reçues, les plus récentes d’abord, avec l’autre personne', () => {
-    const activite = decodeAdminActivity({
-      shareLinks: [{}, {}],
-      trackingLinks: [],
-      affiliateTokens: [{}],
-      contacts: {
-        sent: [{ id: 'f1', status: 'accepted', createdAt: '2026-09-01T00:00:00Z', receiver: { id: 'u2', username: 'bob', displayName: 'Bob' } }],
-        received: [{ id: 'f2', status: 'pending', createdAt: '2026-09-10T00:00:00Z', sender: { id: 'u3', username: 'eve', displayName: '' } }],
-      },
-    });
-
-    expect(activite.contacts.map((c) => [c.id, c.direction, c.status, c.other.displayName])).toEqual([
-      ['f2', 'received', 'pending', 'eve'],
-      ['f1', 'sent', 'accepted', 'Bob'],
-    ]);
-    expect([activite.shareLinks, activite.trackingLinks, activite.affiliateTokens]).toEqual([2, 0, 1]);
-  });
-});
 
 describe('les communautés d’un membre', () => {
   test('lisent l’adhésion et la communauté, qu’elles soient à plat ou imbriquées', () => {
@@ -104,84 +80,23 @@ describe('le profil vocal', () => {
   });
 });
 
-describe('ce qui porte une empreinte d’un tiers ne touche jamais le disque', () => {
-  test('sessions, sécurité, voix et messages signalés vivent sous le préfixe souverain', () => {
-    expect(estClefSouveraine(adminUserSessionsQueryKey('u1', 0))).toBe(true);
-    expect(estClefSouveraine(adminUserSecurityQueryKey('u1', 0))).toBe(true);
+describe('ce qui nomme un tiers ne touche jamais le disque', () => {
+  test('la voix et les communautés vivent sous le préfixe souverain', () => {
     expect(estClefSouveraine(adminUserVoiceQueryKey('u1'))).toBe(true);
-    expect(estClefSouveraine(adminUserReportsReceivedQueryKey('u1', 0))).toBe(true);
+    expect(estClefSouveraine(adminUserCommunitiesQueryKey('u1', 0))).toBe(true);
   });
 });
 
-describe('les sessions', () => {
-  test('composent l’appareil et le lieu, et lisent la pagination servie à côté de data', async () => {
+describe('le chargement des communautés', () => {
+  test('pagine l’adresse du membre, identifiant échappé', async () => {
     const vu: string[] = [];
-    const resultat = await loadAdminUserSessions({
+    const resultat = await loadAdminUserCommunities({
       source: 'gateway',
-      transport: transport(
-        {
-          data: [
-            {
-              id: 's1',
-              browserName: 'Chrome',
-              browserVersion: '140',
-              osName: 'Android',
-              osVersion: '15',
-              ipAddress: '10.0.0.1',
-              city: 'Lyon',
-              country: 'FR',
-              isValid: true,
-              lastActivityAt: '2026-09-20T00:00:00Z',
-            },
-          ],
-          pagination: { total: 30, hasMore: true },
-        },
-        vu,
-      ),
+      transport: transport({ data: [], pagination: { total: 0, hasMore: false } }, vu),
       userId: 'u 1',
       offset: 20,
     });
-
-    expect(vu[0]).toBe('/api/v1/admin/users/u%201/sessions?offset=20&limit=20');
-    expect(resultat.ok && resultat.data).toEqual({
-      rows: [
-        {
-          id: 's1',
-          device: 'Chrome 140 · Android 15',
-          ipAddress: '10.0.0.1',
-          place: 'Lyon, FR',
-          isValid: true,
-          isTrusted: false,
-          createdAt: null,
-          lastActivityAt: '2026-09-20T00:00:00Z',
-        },
-      ],
-      total: 30,
-      hasMore: true,
-    });
-  });
-});
-
-describe('les signalements reçus', () => {
-  test('gardent la ligne quand la passerelle retient le texte du message', async () => {
-    const resultat = await loadAdminUserReportsReceived({
-      source: 'gateway',
-      transport: transport({
-        data: [{ id: 'r1', reportType: 'spam', reason: 'pub', status: 'pending', reporterName: 'Ana', message: { id: 'm1', content: null } }],
-        pagination: { total: 1 },
-      }),
-      userId: 'u1',
-      offset: 0,
-    });
-
-    expect(resultat.ok && resultat.data.rows[0]).toEqual({
-      id: 'r1',
-      subject: 'Ana',
-      reportType: 'spam',
-      reason: 'pub',
-      status: 'pending',
-      createdAt: null,
-      excerpt: null,
-    });
+    expect(vu[0]).toBe('/api/v1/admin/users/u%201/communities?offset=20&limit=20');
+    expect(resultat.ok && resultat.data).toEqual({ rows: [], total: 0, hasMore: false });
   });
 });
