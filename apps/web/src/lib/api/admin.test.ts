@@ -174,4 +174,26 @@ describe('loadAdminUsers — l’adresse demandée', () => {
     await loadAdminUsers({ source: 'gateway', transport, offset: 0, search: '  alice ' });
     expect(appels[1]?.path).toContain('search=alice');
   });
+
+  test('transmet le tri, l’ordre, la taille de page et les filtres de la liste (#7873)', async () => {
+    const { transport, appels } = transportEspion();
+
+    await loadAdminUsers({
+      source: 'gateway',
+      transport,
+      offset: 50,
+      search: '',
+      limit: 50,
+      sortBy: 'username',
+      sortOrder: 'asc',
+      filters: { role: 'ADMIN', isActive: 'false' },
+    });
+
+    const adresse = new URL(appels[0]?.path ?? '', 'https://x.test');
+    expect(adresse.searchParams.get('limit')).toBe('50');
+    expect(adresse.searchParams.get('sortBy')).toBe('username');
+    expect(adresse.searchParams.get('sortOrder')).toBe('asc');
+    expect(adresse.searchParams.get('role')).toBe('ADMIN');
+    expect(adresse.searchParams.get('isActive')).toBe('false');
+  });
 });
