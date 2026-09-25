@@ -28,14 +28,19 @@ import MeeshySDK
 @MainActor
 final class FocalRowColumnAlignmentTests: XCTestCase {
 
-    private static let rowWidth: CGFloat = 402
+    /// La largeur que la rangée REÇOIT dans le fil : l'écran de l'iPhone 16 Pro
+    /// (402) moins les deux marges de section (`MessageListViewController`).
+    /// Mesurer à 402 laissait au média la place qu'il n'a jamais au téléphone.
+    private static let rowWidth: CGFloat = 402 - 2 * MessageListViewController.sectionHorizontalInset
 
     // MARK: - Fabrique
 
     private func content(
         text: String?,
         reply: ReplyReference? = nil,
-        attachments: BubbleContent.Attachments = .none
+        attachments: BubbleContent.Attachments = .none,
+        isMe: Bool = false,
+        editedAt: Date? = nil
     ) -> BubbleContent {
         BubbleContent(
             messageId: "m1", kind: .standard,
@@ -48,10 +53,10 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
             translation: nil,
             reply: reply.map { BubbleContent.Reply(reference: $0, isStory: $0.isStoryReply) },
             attachments: attachments, location: nil, protection: .unprotected, isBlurred: false,
-            isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: nil,
+            isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: editedAt,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),
-            isMe: false, senderName: "Ali", callNotice: nil, joinNotice: nil
+            isMe: isMe, senderName: "Ali", callNotice: nil, joinNotice: nil
         )
     }
 
@@ -67,7 +72,8 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
                 highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: (nil, nil),
                 activeDisplayLangCode: "fr", secondaryLangCode: nil, voiceConsentMissing: false,
                 transcription: nil, translatedAudios: [], allAudioItems: [],
-                conversationName: "Conv"
+                conversationName: "Conv",
+                availableWidth: Self.rowWidth
             ),
             actions: FocalRowActions()
         )
@@ -97,6 +103,11 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
             return pixels[offset] < 235 || pixels[offset + 1] < 235 || pixels[offset + 2] < 235
         }
 
+        /// Un pixel encré, sur n'importe quelle ligne, dans `columns`.
+        func hasInk(columns: Range<Int>) -> Bool {
+            (0..<height).contains { y in columns.contains { x in isInked(x: x, y: y) } }
+        }
+
         /// Première colonne encrée parmi les lignes `rows`.
         func leftmostColumn(in rows: Range<Int>) -> Int? {
             (0..<width).first { x in rows.contains { y in isInked(x: x, y: y) } }
@@ -120,6 +131,7 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
                 .frame(width: Self.rowWidth)
                 .background(Color.white)
                 .environment(\.colorScheme, .light)
+                .environmentObject(FocalTimestampRevealState())
         )
         renderer.scale = 1
         let image = try XCTUnwrap(renderer.cgImage, "le rendu n'a produit aucune image")
@@ -149,6 +161,101 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
         }
     }
 
+    /// Recette iPhone du 2026-09-25 (#7881) : l'image, la grille et la vidéo
+    /// partaient 11 pt à GAUCHE de l'avatar. La grille gardait sa largeur fixe
+    /// de 300 pt alors que la colonne de contenu, amputée de la colonne de
+    /// l'heure, n'en offre que 278 : la rangée débordait et SwiftUI la
+    /// recentrait.
+    func test_aMediaGrid_startsOnTheAvatarEdge_withinTheRealRowWidth() throws {
+        let avatarEdge = FocalMetrics.Row.paddingHorizontal + FocalMetrics.Row.contentIndent
+        for count in [1, 2] {
+            let items = (0..<count).map { image(id: "i\($0)") }
+            for density in [FocalRowInput.Density.script, .focal] {
+                let x = try leftmostInk(of: row(content(text: nil, attachments: .visualGrid(items)), density: density))
+                XCTAssertEqual(x, avatarEdge, accuracy: 2,
+                               "\(count) média(s) (\(density)) commence(nt) à x=\(x) — le média part sous l'avatar, comme le texte.")
+            }
+        }
+    }
+
+    // MARK: - La marque « modifié »
+
+    /// Recette iPhone du 2026-09-25 (#7881) : en Script et en Focal, le crayon
+    /// d'un message MODIFIÉ n'apparaissait que sur les messages des AUTRES. La
+    /// colonne de l'heure le teintait comme sur MA bulle d'accent — blanc — sur
+    /// une rangée plate qui n'a aucun fond : invisible en mode clair.
+    func test_theEditedMarkOfMyOwnMessage_isVisibleOnTheFlatRow() throws {
+        let edited = content(text: "Texte après modification", isMe: true, editedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        let metaColumn = Int(Self.rowWidth - FocalMetrics.Row.paddingHorizontal - FocalMetrics.MetaColumn.reservedWidth)..<Int(Self.rowWidth)
+        for density in [FocalRowInput.Density.script, .focal] {
+            let ink = try render(row(edited, density: density))
+            XCTAssertTrue(ink.hasInk(columns: metaColumn),
+                          "(\(density)) aucun pixel dans la colonne de l'heure : le crayon « modifié » de mon message ne se voit pas.")
+        }
+    }
+
+    // MARK: - Le texte atténué suit le thème de la RANGÉE
+
+    /// Recette sombre du 2026-09-25 (#7881) : « Message supprimé », dans la
+    /// rangée comme dans une citation, s'écrivait en indigo foncé sur le fond
+    /// sombre. Les deux vues lisaient `ThemeManager.shared.textMuted`, un
+    /// singleton qui n'invalide pas la cellule, au lieu du `isDark` qu'elles
+    /// reçoivent. Le témoin désaccorde exprès le singleton de la rangée.
+    func test_mutedTexts_followTheRowTheme_notTheThemeSingleton() throws {
+        let theme = ThemeManager.shared
+        let saved = theme.mode
+        theme.mode = .light
+        defer { theme.mode = saved }
+
+        let deletedQuote = ReplyReference(messageId: "m0", authorName: "", previewText: "Message supprimé Message supprimé Message supprimé")
+        // L'aperçu se mesure à DROITE du filet et du titre (tous deux clairs
+        // par construction) : seul le texte atténué y encre.
+        let views: [(String, AnyView, Int)] = [
+            ("la rangée « Message supprimé »", AnyView(FocalDeletedRow(isDark: true)), 0),
+            ("l'aperçu d'une citation", AnyView(FocalQuotedReplyView(
+                reply: BubbleContent.Reply(reference: deletedQuote, isStory: false),
+                accentHex: "#31B6BA", isDark: true, mentionDisplayNames: [:]
+            )), 180),
+        ]
+        for (label, view, fromColumn) in views {
+            let brightest = try brightestLuminance(of: view, fromColumn: fromColumn)
+            XCTAssertGreaterThan(brightest, 100, "\(label) en sombre culmine à \(brightest) : illisible sur le fond sombre.")
+        }
+    }
+
+    private func brightestLuminance(of view: some View, fromColumn: Int) throws -> Int {
+        let renderer = ImageRenderer(
+            content: view
+                .frame(width: Self.rowWidth)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+                .environmentObject(FocalTimestampRevealState())
+        )
+        renderer.scale = 1
+        guard let image = renderer.cgImage, image.width > 0, image.height > 0 else {
+            XCTFail("le rendu n'a produit aucune image")
+            return 0
+        }
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixels, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            XCTFail("contexte bitmap indisponible")
+            return 0
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return stride(from: 0, to: pixels.count, by: 4)
+            .filter { ($0 / 4) % width >= fromColumn }
+            .map { offset in
+                (299 * Int(pixels[offset]) + 587 * Int(pixels[offset + 1]) + 114 * Int(pixels[offset + 2])) / 1000
+            }
+            .max() ?? 0
+    }
+
     // MARK: - Les citations, toutes au même retrait
 
     func test_everyCitation_startsOnTheCitationIndent_inScriptAndFocal() throws {
@@ -164,8 +271,8 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
 
     // MARK: - Un message MÉDIA qui répond garde sa citation (#7928)
 
-    private func image() -> MeeshyMessageAttachment {
-        MeeshyMessageAttachment(id: "i1", fileName: "p.jpg", originalName: "p.jpg", mimeType: "image/jpeg", fileSize: 1)
+    private func image(id: String = "i1") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(id: id, fileName: "p.jpg", originalName: "p.jpg", mimeType: "image/jpeg", fileSize: 1)
     }
 
     private static let quotedMessage = ReplyReference(messageId: "m0", authorName: "Bea", previewText: "Désolé pour hier")

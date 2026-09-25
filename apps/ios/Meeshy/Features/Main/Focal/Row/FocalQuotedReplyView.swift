@@ -124,7 +124,7 @@ struct FocalQuotedReplyView: View, Equatable {
     }
 
     private var previewColor: Color {
-        ThemeManager.shared.textMuted
+        MeeshyColors.textMuted(isDark: isDark)
     }
 
     /// NOM de l'auteur cité, avant la ponctuation du titre (« Alice : »).

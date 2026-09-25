@@ -50,8 +50,8 @@ extension UniversalComposerBar {
     /// le champ reprend sa largeur. La réduction porte donc exactement sur
     /// l'état où le champ n'a rien à montrer.
     static let sendSlotWidth: CGFloat = 44
-    /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
-    static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.width
+    /// La largeur du cadre des emojis rapides, que la ligne lui réserve.
+    static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.frameWidth
 
     /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
     /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
@@ -92,7 +92,10 @@ extension UniversalComposerBar {
                     .transition(tourbillonTransition)
             }
         }
-        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44)
+        // Aligné en BAS : le cadre des emojis, plus haut que la ligne, monte
+        // par-dessus la droite vide de la barre d'outils (directive porteur
+        // 2026-09-25) sans pousser la ligne.
+        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44, alignment: .bottom)
         .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
@@ -197,7 +200,7 @@ extension UniversalComposerBar {
                             sendQuickEmoji(emoji)
                         } label: {
                             Text(emoji)
-                                .font(.system(size: 15))
+                                .font(.system(size: QuickEmojiGrid.emojiSize))
                                 .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
                                 .contentShape(Rectangle())
                         }
@@ -224,8 +227,8 @@ extension UniversalComposerBar {
                 }
             }
         }
-        .frame(width: QuickEmojiGrid.width, height: 44)
-        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.frameHeight(toolbarHeight: topToolbarHeight))
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
