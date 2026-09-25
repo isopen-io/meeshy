@@ -140,11 +140,11 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     /// n'annonce pas une porte qui n'existe pas (loi 4).
     func test_theOpenGesture_isArmedOnlyWhenThereIsSomethingToOpen() throws {
         let host = try source(Self.host)
-        XCTAssertTrue(host.contains("!citation.messageId.isEmpty"))
+        XCTAssertTrue(host.contains("citation.opensQuotedTarget"))
 
         let card = try source(Self.card)
         XCTAssertTrue(
-            card.contains("accessibilityAddTraits(onOpen == nil ? [] : .isButton)"),
+            card.contains("accessibilityAddTraits(armedOpen == nil ? [] : .isButton)"),
             "Un trait de BOUTON sur une carte que personne n'a câblée annoncerait à " +
             "VoiceOver une cible qui ne fait rien."
         )
@@ -257,6 +257,53 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
         XCTAssertNotEqual(base, card(storyReference(thumbnailUrl: nil)))
         XCTAssertNotEqual(base, card(storyReference(), isDark: false))
         XCTAssertNotEqual(base, card(storyReference(), accent: "#FF0000"))
+        XCTAssertNotEqual(base, card(.unavailableStory(storyId: "story-1")),
+                          "la story qui DISPARAÎT doit redessiner la carte en « indisponible »")
+    }
+
+    // MARK: - 4 bis. La story DISPARUE (#7895)
+
+    /// Même carte que le web (#7893) : compacte, NON tapable, et elle le DIT.
+    /// Le trait de bouton est mesuré sur la carte elle-même — l'hôte lui passe
+    /// un geste, c'est la carte qui refuse de l'armer vers une story absente.
+    @MainActor
+    func test_aVanishedStory_isNotAButton_evenWhenTheHostWiresOne() {
+        let card = BubbleStoryCitationCard(
+            reply: .unavailableStory(storyId: "story-9"), isDark: false,
+            accentHex: "#7C6CF6", onOpen: { XCTFail("une story disparue n'ouvre rien") }
+        )
+        XCTAssertTrue(card.isUnavailable)
+        XCTAssertFalse(card.announcesButton, "pas de trait `.isButton` sur une carte qui n'ouvre rien")
+    }
+
+    @MainActor
+    func test_aVanishedStory_saysUnavailable_fromTheCatalog() {
+        let card = BubbleStoryCitationCard(reply: .unavailableStory(storyId: "story-9"), isDark: true, accentHex: "#7C6CF6")
+        XCTAssertTrue(card.accessibilityLabel.contains(QuotedStoryLabel.unavailable), card.accessibilityLabel)
+        XCTAssertFalse(card.accessibilityLabel.contains("\u{1F4F7}"),
+                       "« 📷 Story » n'est plus ce que dit une story disparue")
+        XCTAssertEqual(QuotedStoryLabel.text(for: .unavailableStory(storyId: "story-9")), QuotedStoryLabel.unavailable,
+                       "la citation À PLAT dit le même mot que la carte")
+    }
+
+    @MainActor
+    func test_aLiveStory_staysAButton() {
+        let card = BubbleStoryCitationCard(reply: storyReference(), isDark: true, accentHex: "#7C6CF6", onOpen: {})
+        XCTAssertFalse(card.isUnavailable)
+        XCTAssertTrue(card.announcesButton)
+    }
+
+    /// **La vignette EST la scène** (retour porteur 2026-09-25) : peindre
+    /// l'aperçu par-dessus doublait le texte de la story et le faisait
+    /// chevaucher celui de l'image. Le libellé ne remplace qu'une scène vide.
+    @MainActor
+    func test_theSceneText_onlyStandsInForAMissingThumbnail() {
+        func card(_ url: String?) -> BubbleStoryCitationCard {
+            BubbleStoryCitationCard(reply: storyReference(thumbnailUrl: url), isDark: true, accentHex: "#7C6CF6")
+        }
+        XCTAssertFalse(card("https://cdn.example/s1.webp").overlaysSceneText)
+        XCTAssertTrue(card(nil).overlaysSceneText)
+        XCTAssertTrue(card("").overlaysSceneText)
     }
 
     /// La scène tient ENTIÈRE : une story est en 9:16, et la recadrer

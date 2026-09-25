@@ -1009,7 +1009,7 @@ struct BubbleStandardLayout: View {
             quotedReplyView(reply.reference)
                 .padding(.bottom, 4)
                 .onTapGesture {
-                    guard !reply.reference.messageId.isEmpty else { return }
+                    guard reply.reference.opensQuotedTarget else { return }
                     HapticFeedback.light()
                     if reply.isStory {
                         onStoryReplyTap?(reply.reference.messageId)
@@ -1308,7 +1308,7 @@ struct BubbleStandardLayout: View {
     /// qu'il ne retrouve pas la story, et c'est lui qui le dit.
     private var storyCitationOpenTap: (() -> Void)? {
         guard let citation = detachedStoryCitation,
-              !citation.messageId.isEmpty,
+              citation.opensQuotedTarget,
               let onStoryReplyTap else { return nil }
         return { onStoryReplyTap(citation.messageId) }
     }
