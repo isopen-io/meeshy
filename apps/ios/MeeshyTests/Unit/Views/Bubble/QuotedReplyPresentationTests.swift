@@ -33,6 +33,36 @@ final class QuotedReplyPresentationTests: XCTestCase {
         bundle: .main
     )
 
+    // MARK: - #7927 — la citation d'un message supprimé
+
+    private static let deletedLabel = String(
+        localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main
+    )
+
+    private static func quote() -> ReplyReference {
+        ReplyReference(messageId: "m0", authorName: "Bob", previewText: "le code est 4271",
+                       attachmentType: "image", attachmentThumbnailUrl: "https://cdn/m0-t.jpg")
+    }
+
+    func test_displayed_deletedQuote_readsTheCatalogDeletionState() {
+        let shown = QuotedReplyPresentation.displayed(Self.quote().tombstoned(at: Date()))
+        XCTAssertEqual(shown.previewText, Self.deletedLabel)
+        XCTAssertNil(shown.attachmentThumbnailUrl)
+    }
+
+    func test_displayed_liveQuote_isUnchanged() {
+        XCTAssertEqual(QuotedReplyPresentation.displayed(Self.quote()), Self.quote())
+    }
+
+    @MainActor
+    func test_bubbleContent_replyToDeletedMessage_neverShowsItsText() {
+        var message = MeeshyMessage(id: "m1", conversationId: "c1", senderId: "u2",
+                                    content: "ma réponse", createdAt: Date(), updatedAt: Date())
+        message.replyTo = Self.quote().tombstoned(at: Date())
+        let content = BubbleContent(message: message, translations: [], preferredTranslation: nil, currentUserId: "u1")
+        XCTAssertEqual(content.reply?.reference.previewText, Self.deletedLabel)
+    }
+
     // MARK: - Le titre : « Auteur : »
 
     func test_title_composesAuthorWithNonBreakingSpaceBeforeColon() {

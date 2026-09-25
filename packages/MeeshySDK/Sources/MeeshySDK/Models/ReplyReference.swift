@@ -120,6 +120,11 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
     /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
     public var storyAuthorId: String?
+    /// #7927 — le message CITÉ a été supprimé : la citation ne porte plus
+    /// rien de lui (`tombstoned(at:)`), et l'app rend « Message supprimé ».
+    /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
+    /// avant lui doit se relire.
+    public var quotedMessageDeletedAt: Date?
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni

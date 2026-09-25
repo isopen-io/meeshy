@@ -404,7 +404,7 @@ extension ConversationSyncEngine {
         let msg = apiMessage.toMessage(
             currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName, preferredLanguages: preferredLanguages)
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
-            existing = msg
+            existing = Self.edit(msg, keepingLocalStateOf: existing)
         }
         await realtimeMessagePersistor?(Self.mutation(for: apiMessage, content: msg.content))
         _messagesDidChange.send(msg.conversationId)
@@ -412,6 +412,15 @@ extension ConversationSyncEngine {
         // preview still shows the pre-edit text — refresh it in place.
         await refreshLastMessagePreviewIfEdited(
             conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content)
+    }
+
+    /// `message:edited` ne sert que le texte : les réactions et les pièces
+    /// jointes que la charge ne porte pas restent celles du cache (#7927).
+    static func edit(_ edited: MeeshyMessage, keepingLocalStateOf existing: MeeshyMessage) -> MeeshyMessage {
+        var merged = edited
+        if merged.reactions.isEmpty { merged.reactions = existing.reactions }
+        if merged.attachments.isEmpty { merged.attachments = existing.attachments }
+        return merged
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
@@ -551,7 +560,8 @@ extension ConversationSyncEngine {
             reactionId: reaction.id,
             emoji: event.emoji,
             participantId: event.participantId,
-            maxCount: event.aggregation?.count
+            maxCount: event.aggregation?.count,
+            ownerUserId: event.userId
         ))
         _messagesDidChange.send(convId)
     }
@@ -564,7 +574,10 @@ extension ConversationSyncEngine {
         await realtimeMessagePersistor?(.reactionRemoved(
             messageId: event.messageId,
             emoji: event.emoji,
-            participantId: event.participantId
+            participantId: event.participantId,
+            ownerUserId: event.userId,
+            aggregateCount: event.aggregation?.count,
+            aggregateParticipantIds: event.aggregation?.participantIds
         ))
         _messagesDidChange.send(convId)
     }
