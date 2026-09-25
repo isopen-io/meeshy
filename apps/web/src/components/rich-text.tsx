@@ -7,6 +7,7 @@ import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment }
 import { apiConfig } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { webOriginOf } from '@/lib/links/web-origin';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { isAppPath } from '@/routes/app-paths';
 import { Link, navigate } from '@/routes/route-table';
 
@@ -86,7 +87,12 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
     switch (segment.kind) {
       case 'mention':
         return (
-          <Link key={key} to="userProfile" params={{ username: segment.username }} style={linkStyle} className="hover:underline">
+          <Link
+            key={key}
+            to="userProfile"
+            params={{ username: segment.username }}
+            onClick={peekProfileOnClick(segment.username)}
+            style={linkStyle} className="hover:underline">
             {segment.text}
           </Link>
         );

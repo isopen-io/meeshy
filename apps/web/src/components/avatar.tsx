@@ -9,6 +9,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -337,6 +338,7 @@ export function Avatar({
     <Link
       to="userProfile"
       params={{ username: cible.username }}
+      onClick={peekProfileOnClick(cible.username)}
       className="avatar-profile-link"
       style={sizeVar}
       aria-label={nomme('a11y.avatar.profile')}
