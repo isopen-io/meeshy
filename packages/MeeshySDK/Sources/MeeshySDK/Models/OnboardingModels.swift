@@ -11,17 +11,20 @@ import Foundation
 // Deux règles de décodage, écrites ici parce que c'est ici qu'on serait tenté
 // de les relâcher :
 // 1. **Un identifiant d'étape inconnu est ÉCARTÉ, jamais fatal.** Une
-//    passerelle plus récente peut ajouter une étape ; l'app installée garde les
-//    cinq qu'elle sait dessiner au lieu de perdre tout le parcours.
+//    passerelle plus récente peut ajouter une étape ; l'app installée garde
+//    celles qu'elle sait dessiner au lieu de perdre tout le parcours.
 // 2. **Le régime protégé se lit FAIL-CLOSED.** `protectedRegime` absent vaut
 //    `true`, et un régime protégé impose l'audience « amis » quelle que soit la
 //    valeur servie à côté — la même règle que le serveur (âge inconnu ⇒
 //    mineur), rejouée ici pour qu'une charge incomplète ne publie jamais en
 //    public la story d'un mineur.
 
-/// Les cinq cartes, dans l'ordre du parcours.
+/// Les cartes, dans l'ordre du parcours. `email` (#7907) n'est proposée qu'à
+/// un compte dont l'adresse n'est pas vérifiée ; la passerelle la pré-coche
+/// sinon.
 public enum OnboardingStepId: String, CaseIterable, Codable, Sendable, Hashable {
     case languages
+    case email
     case global
     case story
     case friends
@@ -74,6 +77,13 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
     public let protectedRegime: Bool
     public let storyDefaultVisibility: OnboardingStoryVisibility
     public let suggestions: [APIOnboardingSuggestion]
+    /// L'adresse est-elle vérifiée ? `nil` : passerelle antérieure à #7907,
+    /// qui ne le dit pas — la carte « valide ton adresse » ne s'invente pas.
+    public let emailVerified: Bool?
+    /// La carte Story peut-elle publier ? `false` quand l'adresse n'est pas
+    /// vérifiée ET que l'exception « première story » est déjà consommée.
+    /// `nil` : non servi — la carte publie comme avant.
+    public let canPublishStory: Bool?
 
     public init(
         eligible: Bool,
@@ -83,7 +93,9 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         globalConversationId: String?,
         protectedRegime: Bool,
         storyDefaultVisibility: OnboardingStoryVisibility,
-        suggestions: [APIOnboardingSuggestion]
+        suggestions: [APIOnboardingSuggestion],
+        emailVerified: Bool? = nil,
+        canPublishStory: Bool? = nil
     ) {
         self.eligible = eligible
         self.completedAt = completedAt
@@ -93,11 +105,14 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         self.protectedRegime = protectedRegime
         self.storyDefaultVisibility = protectedRegime ? .friends : storyDefaultVisibility
         self.suggestions = Array(suggestions.prefix(Self.maxSuggestions))
+        self.emailVerified = emailVerified
+        self.canPublishStory = canPublishStory
     }
 
     private enum CodingKeys: String, CodingKey {
         case eligible, completedAt, seenSteps, prefilledSteps, globalConversationId
         case protectedRegime, storyDefaultVisibility, suggestions
+        case emailVerified, canPublishStory
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,7 +128,9 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
             globalConversationId: try container.decodeIfPresent(String.self, forKey: .globalConversationId),
             protectedRegime: isProtected,
             storyDefaultVisibility: servedVisibility,
-            suggestions: try container.decodeIfPresent([APIOnboardingSuggestion].self, forKey: .suggestions) ?? []
+            suggestions: try container.decodeIfPresent([APIOnboardingSuggestion].self, forKey: .suggestions) ?? [],
+            emailVerified: try container.decodeIfPresent(Bool.self, forKey: .emailVerified),
+            canPublishStory: try container.decodeIfPresent(Bool.self, forKey: .canPublishStory)
         )
     }
 
