@@ -132,6 +132,19 @@ final class ScenePlaybackScrubberTests: XCTestCase {
         XCTAssertNotNil(view.displayLink, "L'horloge du canvas repart")
     }
 
+    /// Un glissé dont le relâcher n'est jamais arrivé ne doit pas tenir en
+    /// pause la scène SUIVANTE : la story change de canvas, le glissé est mort.
+    func test_attach_newCanvasDuringAnOrphanScrub_dropsTheScrub() {
+        let (scrubber, _) = attached()
+        scrubber.begin()
+
+        let next = canvas()
+        scrubber.attach(next)
+
+        XCTAssertFalse(scrubber.isScrubbing)
+        XCTAssertFalse(next.isPlaybackPaused)
+    }
+
     // MARK: - Le fil descend du player jusqu'au canvas
 
     func test_scenePlayer_forwardsItsScrubberToTheCanvasHost() {

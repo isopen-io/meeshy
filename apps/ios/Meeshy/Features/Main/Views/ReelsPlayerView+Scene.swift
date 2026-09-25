@@ -48,11 +48,17 @@ extension ReelPageView {
 
 /// La position de lecture de la scène, publiée à la cadence du player et lue par
 /// la SEULE barre de progression : la page ne se ré-évalue pas à chaque image.
+///
+/// Elle porte aussi le pont du parcours au doigt (#7878) : la page le passe au
+/// player, la barre le pilote, et le canvas se redessine sous le doigt sans
+/// qu'aucun body de page ne soit ré-évalué.
 @MainActor
 final class ReelSceneClock: ObservableObject {
     nonisolated deinit {}
 
     @Published var progress: Double = 0
+
+    let scrubber = ScenePlaybackScrubber()
 }
 
 /// Possède le moteur audio d'une page de réel SANS le republier : la page le
@@ -150,7 +156,8 @@ struct ReelSceneView: View {
                                       // Le canvas ne peint jamais son hors-champ :
                                       // la carte le peint, comme aux quatre
                                       // montages du lecteur de stories (#6791).
-                                      servesLetterboxFill: false)
+                                      servesLetterboxFill: false,
+                                      scrubber: clock.scrubber)
                         .onPlaybackTime { seconds in
                             clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
                         }
@@ -199,23 +206,27 @@ struct ReelSceneView: View {
     }
 }
 
-/// La progression d'un réel composé : une barre, sans poignée — la scène se
-/// rejoue, elle ne se parcourt pas.
+/// La progression d'un réel composé — et depuis #7878, un CURSEUR.
+///
+/// Elle disait « une barre, sans poignée — la scène se rejoue, elle ne se
+/// parcourt pas ». La demande porteur du 2026-09-25 renverse la décision : au
+/// toucher, la barre s'épaissit, une poignée suit le doigt, la scène se
+/// redessine à l'instant pointé et reprend de là au relâcher — le geste du
+/// réel VIDÉO (`ReelScrubBar`), sur le moteur de la scène.
 struct ReelSceneProgressBar: View {
     @ObservedObject var clock: ReelSceneClock
     let accentColor: String
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.3))
-                Capsule().fill(Color(hex: accentColor))
-                    .frame(width: geo.size.width * CGFloat(clock.progress))
-            }
-        }
-        .frame(height: 4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "reels.scene.progress", defaultValue: "Progression du réel", bundle: .main))
-        .accessibilityValue(LocalizedNumber.percent(Int((clock.progress * 100).rounded())))
+        SceneScrubTrack(playback: clock.progress,
+                        fill: AnyShapeStyle(Color(hex: accentColor)),
+                        scrubber: clock.scrubber,
+                        onCommit: { clock.progress = $0 })
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
+            .accessibilityValue(LocalizedNumber.percent(Int((clock.progress * 100).rounded())))
+            .sceneScrubAccessibility(progress: clock.progress,
+                                     scrubber: clock.scrubber,
+                                     onCommit: { clock.progress = $0 })
     }
 }

@@ -36,8 +36,11 @@ public final class ScenePlaybackScrubber {
 
     public init() {}
 
+    /// Un nouveau canvas (la story suivante, un tour de boucle) solde tout
+    /// glissé resté ouvert : son relâcher, perdu avec l'ancien, ne viendra plus.
     func attach(_ canvas: StoryCanvasUIView) {
         self.canvas = canvas
+        isScrubbing = false
     }
 
     public func begin() {
