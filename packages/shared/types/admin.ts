@@ -199,6 +199,7 @@ export type AdminAuditAction =
   | 'UPDATE_STATUS'
   | 'UPDATE_COMMUNITY'
   | 'UPDATE_CONVERSATION'
+  | 'UPDATE_PREFERENCES'
   // Actions de securite
   | 'CHANGE_PASSWORD'
   | 'RESET_PASSWORD'

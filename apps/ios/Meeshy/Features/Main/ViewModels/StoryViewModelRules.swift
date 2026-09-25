@@ -160,3 +160,24 @@ extension StoryViewModel {
         declaredMentions(declared: ComposerReferences.payload(references), effects: effects)
     }
 }
+
+/// Un upload REFUSÉ pour de bon par la passerelle (#7907) : son identité et le
+/// code machine du refus (`EMAIL_NOT_VERIFIED`…), quand il y en a un.
+struct StoryUploadRejection: Equatable {
+    let id: String
+    let code: String?
+}
+
+/// Ce qu'on fait d'un upload en ligne qui échoue. Un refus DÉFINITIF (4xx non
+/// réessayable, `StoryPublishRetryPolicy`) ne se rejoue pas : il quitte la file
+/// d'attente pour l'historique d'échecs. Sauf si des slides sont DÉJÀ publiées
+/// — seul le réessai local sait alors où reprendre sans les dupliquer.
+enum StoryUploadFailureDisposition: Equatable {
+    case retryable
+    case rejected(code: String?)
+
+    static func of(_ error: Error, hasCommittedSlides: Bool) -> StoryUploadFailureDisposition {
+        guard !hasCommittedSlides, StoryPublishRetryPolicy.isPermanent(error) else { return .retryable }
+        return .rejected(code: StoryPublishRetryPolicy.rejectionCode(error))
+    }
+}

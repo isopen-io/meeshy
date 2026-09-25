@@ -110,11 +110,15 @@ struct ConversationPreviewLine: View {
         return spokenText(preview, strings: strings)
     }
 
-    nonisolated static func spokenText(
+    /// Sans la notation (#7871) : VoiceOver dit « un mot », jamais
+    /// « astérisque astérisque un mot », comme `plainTextOf` sur le web.
+    static func spokenText(
         _ preview: ConversationPreview, strings: ConversationPreviewStrings, locale: Locale = .current
     ) -> String {
         let spoken = preview.segments.map { segment -> String in
-            guard case .label(let text) = segment, let seconds = clockSeconds(text) else { return segment.text }
+            guard case .label(let text) = segment, let seconds = clockSeconds(text) else {
+                return MessageTextRenderer.plainText(segment.text)
+            }
             return LocalizedNumber.spokenDuration(seconds: seconds, locale: locale)
         }.joined(separator: ", ")
         guard let author = preview.author else { return spoken }

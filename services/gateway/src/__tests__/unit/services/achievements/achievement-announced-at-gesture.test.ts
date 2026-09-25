@@ -86,8 +86,13 @@ function makePrisma(params: {
   });
 
   const prisma = {
-    engagementMilestone: { create },
-    participant: { count: participantCount },
+    engagementMilestone: {
+      create,
+      findMany: jest.fn(async () => [...deja].map((milestoneKey) => ({ milestoneKey }))),
+    },
+    // Les identités de conversation du compte : le balayage les lit une fois et
+    // compte messages, réactions et appels par `participantId` (#7909).
+    participant: { count: participantCount, findMany: jest.fn().mockResolvedValue([{ id: 'p1' }]) },
     communityMember: { count: compteur('communityMember') },
     community: { count: compteur('community') },
     message: { count: compteur('message') },
@@ -96,6 +101,7 @@ function makePrisma(params: {
     callSession: { count: compteur('callSession'), findMany: jest.fn().mockResolvedValue([]) },
     callParticipant: { count: compteur('callParticipant'), groupBy: jest.fn().mockResolvedValue([]) },
     affiliateRelation: { count: compteur('affiliateRelation') },
+    trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
     trackingLinkClick: { count: compteur('trackingLinkClick') },
     user: { findUnique: jest.fn().mockResolvedValue({ systemLanguage: 'fr' }) },
   } as unknown as PrismaClient;

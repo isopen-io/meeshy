@@ -1098,6 +1098,8 @@ const es = {
   'attachment.protected.video': 'Vídeo protegido',
   'attachment.protected.audio': 'Audio protegido',
   'attachment.protected.file': 'Archivo protegido',
+  'media.reactions.badge.a11y': 'Reacciones',
+  'media.reactions.badge.mine.a11y': 'incluida la suya',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Audio',

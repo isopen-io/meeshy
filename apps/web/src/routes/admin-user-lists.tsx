@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
+
 import { CollapsibleSection } from '@/components/collapsible-section';
 import { Sheet } from '@/components/sheet';
 import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
+  ADMIN_USER_CONVERSATION_SORTS,
   adminUserConversationsQueryKey,
+  type AdminUserConversationSort,
   loadAdminUserConversations,
   type AdminConversation,
 } from '@/lib/api/admin-user-conversations';
@@ -25,6 +29,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminSkeleton } from './admin-parts';
+import { AdminFilterBar, AdminSelect } from './admin-table';
+import { Link } from './route-table';
 import { AdminConversationReading } from './admin-conversation-reading';
 
 /**
@@ -211,10 +217,13 @@ function viewerDuMembre(membre: AdminUserDetail): Viewer {
 export function AdminUserConversationsSection({
   membre,
   language,
+  gerer = null,
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: InterfaceLanguage;
+  /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
+  readonly gerer?: 'adminConversation' | 'admConversation' | null;
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
   readonly deps?: AdminDeps;
 }) {
@@ -225,10 +234,14 @@ export function AdminUserConversationsSection({
    * motif à zéro, ce qui est voulu (un motif par lecture). */
   const [ouverte, setOuverte] = useState<AdminConversation | null>(null);
 
+  const [tri, setTri] = useState<AdminUserConversationSort>('lastMessageAt');
+  const [ordre, setOrdre] = useState<'asc' | 'desc'>('desc');
+  const [type, setType] = useState('');
+
   const page = useQuery({
-    queryKey: adminUserConversationsQueryKey(membre.id, offset, ''),
+    queryKey: adminUserConversationsQueryKey(membre.id, offset, type, tri, ordre),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserConversations({ ...deps, userId: membre.id, offset, signal });
+      const resultat = await loadAdminUserConversations({ ...deps, userId: membre.id, offset, type, sortBy: tri, sortOrder: ordre, signal });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
@@ -240,6 +253,44 @@ export function AdminUserConversationsSection({
   return (
     <>
       <CollapsibleSection id="admin-conv" title={translateAdmin(language, 'admin.conv.title')} card={false}>
+        <AdminFilterBar>
+          <AdminSelect
+            label={translateAdmin(language, 'admin.list.sort')}
+            value={tri}
+            options={ADMIN_USER_CONVERSATION_SORTS.map((valeur) => ({
+              value: valeur,
+              label: translateAdmin(language, valeur === 'lastMessageAt' ? 'admin.col.lastMessage' : 'admin.col.createdOn'),
+            }))}
+            onChange={(valeur) => {
+              setTri(valeur === 'createdAt' ? 'createdAt' : 'lastMessageAt');
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-sort"
+          />
+          <AdminSelect
+            label={translateAdmin(language, 'admin.list.order')}
+            value={ordre}
+            options={[
+              { value: 'desc', label: translateAdmin(language, 'admin.list.newest') },
+              { value: 'asc', label: translateAdmin(language, 'admin.list.oldest') },
+            ]}
+            onChange={(valeur) => {
+              setOrdre(valeur === 'asc' ? 'asc' : 'desc');
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-order"
+          />
+          <AdminSelect
+            label={translateAdmin(language, 'admin.col.type')}
+            value={type}
+            options={[{ value: '', label: translateAdmin(language, 'admin.list.all') }, ...CONVERSATION_TYPES.map((valeur) => ({ value: valeur, label: valeur }))]}
+            onChange={(valeur) => {
+              setType(valeur);
+              setOffset(0);
+            }}
+            anchor="admin-user-conv-type"
+          />
+        </AdminFilterBar>
         {page.isPending ? (
           <AdminSkeleton rows={3} />
         ) : page.data === undefined ? (
@@ -257,6 +308,7 @@ export function AdminUserConversationsSection({
                   conversation={conversation}
                   language={language}
                   onOpen={() => setOuverte(conversation)}
+                  gerer={gerer}
                 />
               ))}
             </ul>
@@ -304,13 +356,15 @@ function ConversationRow({
   conversation,
   language,
   onOpen,
+  gerer,
 }: {
   readonly conversation: AdminConversation;
   readonly language: InterfaceLanguage;
   readonly onOpen: () => void;
+  readonly gerer: 'adminConversation' | 'admConversation' | null;
 }) {
   return (
-    <li data-admin-conversation={conversation.id}>
+    <li data-admin-conversation={conversation.id} className="flex items-stretch gap-2">
       <button
         type="button"
         data-admin-conversation-open={conversation.id}
@@ -332,6 +386,17 @@ function ConversationRow({
           </p>
         </div>
       </button>
+      {gerer === null ? null : (
+        <Link
+          to={gerer}
+          params={{ conversation: conversation.id }}
+          data-admin-conversation-manage={conversation.id}
+          className="grid shrink-0 place-items-center rounded-card px-3 text-caption font-semibold"
+          style={{ ...CARTE, color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translateAdmin(language, 'admin.conv.manage')}
+        </Link>
+      )}
     </li>
   );
 }

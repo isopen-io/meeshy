@@ -25,16 +25,14 @@ public struct SignupForm: Equatable {
 
     // MARK: - Saisies
 
-    /// Le nom que l'utilisateur se donne. Seul champ d'identité de la charge —
-    /// la passerelle en dérive pseudo, prénom et nom (#5218).
-    /// Le pseudo TAPÉ, vide tant que l'utilisateur n'a rien changé (#6479).
+    /// Le pseudo et le nom affiché TAPÉS (#6479, refaits par #7897).
     ///
-    /// Distinct d'`effectiveUsername`, qui rend celui qui PARTIRA — dérivé de
-    /// l'adresse à défaut de saisie. L'écran montre le second et écrit dans le
-    /// premier : sans cette séparation, taper une lettre dans l'adresse
-    /// écraserait un pseudo choisi à la main.
-    public var username: String
-    public var displayName: String
+    /// `nil` = jamais touché : le champ SUIT l'adresse en direct. Une chaîne =
+    /// la saisie, qui gagne ; vidée, la dérivation reparaît en filigrane et
+    /// repart. L'écran montre `effectiveUsername` / `effectiveDisplayName` et
+    /// écrit ici. Miroir de `SignupFormState` (`apps/web/src/lib/signup-form.ts`).
+    public var username: String?
+    public var displayName: String?
     public var email: String
     /// Les chiffres SEULS, sans indicatif : l'indicatif vient de `country`.
     public var phoneDigits: String
@@ -133,35 +131,39 @@ public struct SignupForm: Equatable {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName) }
+    public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName ?? "") }
     public var isEmailValid: Bool { Self.isEmailValid(email) }
     public var isPasswordValid: Bool { Self.isPasswordValid(password) }
     public var hasPassword: Bool { Self.hasPassword(password) }
-    public var hasDisplayName: Bool { Self.hasDisplayName(displayName) }
+    public var hasDisplayName: Bool { Self.hasDisplayName(displayName ?? "") }
 
-    /// LE PSEUDO QUI PARTIRA — tapé s'il l'a été, dérivé de l'adresse sinon.
+    /// LE PSEUDO QUI PARTIRA — tapé s'il l'a été, tiré de l'ADRESSE sinon
+    /// (#6479, #7897 : « le pseudo rempli à partir de l'email »).
     ///
-    /// Directive porteur 2026-09-14 : « dès qu'un champ username est rempli la
-    /// passerelle n'a plus rien à créer ; elle crée quand aucune valeur n'est
-    /// disponible. Ici on a des données et la passerelle doit utiliser ces
-    /// données. » C'est exactement ce que fait `resoudreUsername`
-    /// (`registration.service.ts`) : un pseudo fourni traverse
-    /// `normalizeUsername` et rien n'est généré.
-    ///
-    /// Rend `""` quand la dérivation retombe sur le RECOURS (`user`) : là on
-    /// n'a justement AUCUNE donnée, et envoyer `user` garantirait une collision
-    /// pour tout le monde. C'est la règle du porteur lue jusqu'au bout.
+    /// `resoudreUsername` (`registration.service.ts`) emploie tel quel un
+    /// pseudo fourni. Rend `""` quand la dérivation retombe sur le RECOURS
+    /// (`user`) : l'envoyer garantirait une collision.
     public var effectiveUsername: String {
-        let tape = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tape = (username ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !tape.isEmpty { return tape }
-        let derive = RegistrationIdentity.pseudoRacine(displayName: displayName, email: email)
+        let derive = RegistrationIdentity.pseudoRacine(displayName: nil, email: email)
         return derive == RegistrationIdentity.pseudoDeSecours ? "" : derive
     }
 
     /// Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon.
     public var effectiveDisplayName: String {
-        let tape = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tape = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return tape.isEmpty ? RegistrationIdentity.displayNameDepuisEmail(email) : tape
+    }
+
+    /// L'IDENTITÉ EST DÉFINIE (#7897) — nom affiché ET pseudo existent et
+    /// tiennent leurs bornes. Directive porteur : « c'est quand tout est
+    /// défini qu'on active le champ mot de passe ».
+    public var isIdentityDefined: Bool {
+        isEmailValid
+            && !effectiveDisplayName.isEmpty
+            && Self.isDisplayNameValid(effectiveDisplayName)
+            && !effectiveUsername.isEmpty
     }
 
     /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
@@ -300,8 +302,8 @@ public struct SignupForm: Equatable {
     /// langue régionale. Rien à configurer avant de commencer à taper.
     public init(locale: Locale = .current) {
         let system = Self.defaultSystemLanguage(for: locale)
-        self.username = ""
-        self.displayName = ""
+        self.username = nil
+        self.displayName = nil
         self.email = ""
         self.phoneDigits = ""
         self.password = ""
@@ -313,8 +315,8 @@ public struct SignupForm: Equatable {
     /// Initialiseur complet — les suites l'emploient pour poser un état sans
     /// rejouer la saisie champ par champ.
     public init(
-        username: String = "",
-        displayName: String,
+        username: String? = nil,
+        displayName: String?,
         email: String,
         phoneDigits: String = "",
         password: String,

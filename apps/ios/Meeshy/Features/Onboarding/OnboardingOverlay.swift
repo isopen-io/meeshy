@@ -187,6 +187,21 @@ struct OnboardingHost: ViewModifier {
             .onReceive(storyViewModel.storyUploadSucceeded) { id in
                 model.storyUploadSucceeded(id: id)
             }
+            // Un refus définitif (#7907) est annoncé AVANT le retrait de la
+            // ligne — même ordre que le succès.
+            .onReceive(storyViewModel.storyUploadRejected) { rejection in
+                model.storyUploadRejected(rejection)
+            }
+            // Le lien de vérification se touche dans l'app Mail : au retour,
+            // l'état se relit et la carte en attente avance d'elle-même.
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                Task { await model.refreshVerification() }
+            }
+            // Les célébrations plein écran attendent que le calque parte
+            // (#7914) : elles lisent ce signal, jamais le modèle.
+            .adaptiveOnChange(of: model.isPresented, initial: true) { _, presented in
+                OnboardingPresenceSignal.shared.update(isPresented: presented)
+            }
     }
 
     private static func snapshot(_ uploads: [StoryViewModel.StoryUploadState]) -> [OnboardingStoryUpload] {

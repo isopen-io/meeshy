@@ -1098,6 +1098,8 @@ const en = {
   'attachment.protected.video': 'Protected video',
   'attachment.protected.audio': 'Protected voice message',
   'attachment.protected.file': 'Protected attachment',
+  'media.reactions.badge.a11y': 'Reactions',
+  'media.reactions.badge.mine.a11y': 'including yours',
   'attachment.kind.image': 'Photo',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

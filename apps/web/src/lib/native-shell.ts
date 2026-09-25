@@ -9,6 +9,12 @@ export type CoqueNative = {
   readonly nativePromise?: (plugin: string, methode: string, options: object) => Promise<unknown>;
   /** `android` ou `ios` dans une coque, `web` ailleurs. */
   readonly getPlatform?: () => string;
+  /** L'écoute d'un événement de plugin (`native-bridge.js`, `initEvents`). */
+  readonly addListener?: (
+    plugin: string,
+    evenement: string,
+    rappel: (donnees: unknown) => void,
+  ) => { readonly remove: () => Promise<void> };
 };
 
 export function coqueCourante(): CoqueNative | undefined {
