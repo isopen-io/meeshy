@@ -10,6 +10,7 @@ import {
   acceptPendingFiles,
   addPendingAttachment,
   mayAttach,
+  pendingAttachmentOf,
   removePendingAttachment,
   type PendingAttachment,
 } from '@/lib/send/attachments';
@@ -29,6 +30,7 @@ import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useSentiment } from '@/lib/view/use-sentiment';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
@@ -84,6 +86,9 @@ const ComposerTray = lazy(() => import('./composer-tray'));
  */
 const ComposerEmojiSheet = lazy(() =>
   import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
+);
+const ComposerStickerSheet = lazy(() =>
+  import('./composer-sticker-sheet').then((m) => ({ default: m.ComposerStickerSheet })),
 );
 
 /**
@@ -149,6 +154,9 @@ export const Composer = memo(function Composer({
      * `location` DÉDIÉ du corps (`perform-send.ts § bodyOf`), jamais fusionné
      * dans un `metadata` brut. */
     place: SharedPlace | null;
+    /** LE STICKER DE LA BIBLIOTHÈQUE (#7938) — posé par le panneau
+     * « Stickers » seul ; son image part en pièce jointe. */
+    sticker?: MessageSticker | null;
   }) => void;
   /**
    * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
@@ -205,6 +213,7 @@ export const Composer = memo(function Composer({
    * possède l'état du micro et le vocal qu'il rend. */
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
+  const [stickerSheetOpen, setStickerSheetOpen] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
@@ -525,6 +534,24 @@ export const Composer = memo(function Composer({
   };
 
   /**
+   * ENVOYER UN STICKER DE LA BIBLIOTHÈQUE (#7938) — un message À LUI SEUL,
+   * comme sur iOS : le texte en cours, les pièces en attente et le lieu
+   * restent dans le composeur. L'image relue par la feuille part en pièce
+   * jointe, le descripteur `{ stickerId }` dans le champ `sticker` du corps.
+   */
+  const sendSticker = ({ stickerId, file }: { readonly stickerId: string; readonly file: File }) => {
+    setStickerSheetOpen(false);
+    onSend({
+      text: '',
+      attachments: [pendingAttachmentOf(file)],
+      language: compose.language,
+      protection,
+      place: null,
+      sticker: { stickerId },
+    });
+  };
+
+  /**
    * RETIRER UNE PIÈCE AVANT L'ENVOI EST LE SEUL GESTE QUI SAIT QUE SON URL
    * NE SERT PLUS JAMAIS (défaut 7, revue #5668) — cette pièce ne deviendra
    * JAMAIS l'attachement d'une bulle optimiste, donc rien d'autre ne
@@ -673,6 +700,12 @@ export const Composer = memo(function Composer({
       {emojiSheetOpen ? (
         <Suspense fallback={null}>
           <ComposerEmojiSheet onPick={insertEmoji} onClose={() => setEmojiSheetOpen(false)} />
+        </Suspense>
+      ) : null}
+
+      {stickerSheetOpen ? (
+        <Suspense fallback={null}>
+          <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
 
@@ -868,6 +901,10 @@ export const Composer = memo(function Composer({
             onRequestEmoji={() => {
               setPanelOpen(false);
               setEmojiSheetOpen(true);
+            }}
+            onRequestSticker={() => {
+              setPanelOpen(false);
+              setStickerSheetOpen(true);
             }}
             onStartVoice={() => {
               setPanelOpen(false);

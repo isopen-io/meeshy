@@ -13,6 +13,7 @@ import { messageTypeOfPending, type PendingAttachment } from './attachments';
 import type { ComposeProtection } from './compose-protection';
 import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
 import type { SharedPlace } from './shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { entriesOf, type OutboxState } from './outbox-store';
 
 /**
@@ -68,6 +69,12 @@ export type Draft = {
    * son expéditeur (voir le doc-comment de `LocalMessage.location`).
    */
   readonly place?: SharedPlace;
+  /**
+   * LE STICKER (#7938) — le descripteur d'un sticker de bibliothèque
+   * (`{ stickerId }`), porté comme le lieu : sur le `LocalMessage`, relu par
+   * `bodyOf`. L'image elle-même voyage en pièce jointe ordinaire.
+   */
+  readonly sticker?: MessageSticker;
 };
 
 /**
@@ -170,6 +177,7 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
        `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
        sans qu'aucune relecture d'entrée ne le rattrape. */
     ...(message.location === undefined ? {} : { location: message.location }),
+    ...(message.sticker === undefined ? {} : { sticker: message.sticker }),
     ...protectionBodyOf(message),
   };
 }
@@ -371,6 +379,7 @@ export async function performSend(params: {
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
     ...(draft.place === undefined ? {} : { place: draft.place }),
+    ...(draft.sticker === undefined ? {} : { sticker: draft.sticker }),
     now: new Date(nowMs),
   });
 

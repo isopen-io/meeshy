@@ -174,7 +174,9 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 67 → 68 le 2026-09-24 (#7729) : entrée `me-onboarding`, les adresses
     // NEUVES `GET`/`PATCH /api/v1/me/onboarding` (l'état du parcours
     // d'accueil). Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(68);
+    // 69 : #7938 ajoute `me-stickers` — quatre routes NEUVES sous
+    // `/api/v1/me/stickers` (la bibliothèque « Mes stickers »). Aucun alias.
+    expect(ROUTE_TABLE.length).toBe(69);
   });
 });
 

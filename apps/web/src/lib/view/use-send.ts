@@ -10,6 +10,7 @@ import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import { NO_PROTECTION, type ComposeProtection } from '@/lib/send/compose-protection';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
 
@@ -85,6 +86,9 @@ export function useSend(params: {
     /** LE LIEU PARTAGÉ (#7280) — `null` (le défaut) ⇒ aucune clé `location`
      * sur le corps ; les appelants historiques ne changent rien. */
     place?: SharedPlace | null,
+    /** LE STICKER DE LA BIBLIOTHÈQUE (#7938) — `null` (le défaut) ⇒ aucune
+     * clé `sticker` sur le corps ; son image voyage en pièce jointe. */
+    sticker?: MessageSticker | null,
   ) => void;
   readonly retry: (messageId: string) => void;
 } {
@@ -128,6 +132,7 @@ export function useSend(params: {
       language: string,
       protection: ComposeProtection = NO_PROTECTION,
       place: SharedPlace | null = null,
+      sticker: MessageSticker | null = null,
     ) => {
       void sendAction({
         conversationId,
@@ -145,6 +150,7 @@ export function useSend(params: {
              que `outbox-store` conserve. */
           ...(Object.keys(protection).length === 0 ? {} : { protection }),
           ...(place === null ? {} : { place }),
+          ...(sticker === null ? {} : { sticker }),
         },
         viewerId,
         ...(sender === undefined ? {} : { sender }),

@@ -42,6 +42,9 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case root
     case starredMessages
     case starredMessagesByMessageId(messageId: String)
+    case stickers
+    case stickersByStickerId(stickerId: String)
+    case stickersByStickerIdUse(stickerId: String)
     case terms
 
     public var path: String {
@@ -76,6 +79,9 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .root: return "/api/v1/me"
         case .starredMessages: return "/api/v1/me/starred-messages"
         case .starredMessagesByMessageId(let messageId): return "/api/v1/me/starred-messages/\(messageId)"
+        case .stickers: return "/api/v1/me/stickers"
+        case .stickersByStickerId(let stickerId): return "/api/v1/me/stickers/\(stickerId)"
+        case .stickersByStickerIdUse(let stickerId): return "/api/v1/me/stickers/\(stickerId)/use"
         case .terms: return "/api/v1/me/terms"
         }
     }
