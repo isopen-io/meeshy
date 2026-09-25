@@ -174,11 +174,11 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
 
     // MARK: - Emojis rapides : source, envoi direct, enregistrement d'usage
 
-    func test_quickSendEmojis_sourcesTopTwoFromEmojiUsageTracker() throws {
+    func test_quickSendEmojis_sourcesTopFiveFromEmojiUsageTracker() throws {
         let block = try Self.propertyBlock(anchor: "var quickSendEmojis: [String] {")
         XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: 2"),
-            "les emojis rapides doivent venir du tracker partagé des réactions, limité à 2"
+            block.contains("EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count"),
+            "les emojis rapides viennent du tracker partagé des réactions, autant que la grille en montre (#7931)"
         )
     }
 
