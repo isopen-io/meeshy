@@ -53,6 +53,12 @@ extension UniversalComposerBar {
     /// La largeur du cadre des emojis rapides, que la ligne lui réserve.
     static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.frameWidth
 
+    /// Le cadre des emojis rapides occupe la droite de la barre d'outils —
+    /// hors focus seulement (#7966) : au focus, la barre redevient entière.
+    var quickEmojiCoversToolbar: Bool {
+        actionSlot == .quickEmoji && QuickEmojiGrid.coversToolbar(focused: isFocused)
+    }
+
     /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
     /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
     /// pose pas (loi 4).
@@ -193,7 +199,7 @@ extension UniversalComposerBar {
     @ViewBuilder
     private var quickEmojiButtons: some View {
         VStack(spacing: QuickEmojiGrid.spacing) {
-            ForEach(Array(QuickEmojiGrid.rows(quickSendEmojis).enumerated()), id: \.offset) { _, rangée in
+            ForEach(Array(QuickEmojiGrid.rows(quickSendEmojis, focused: isFocused).enumerated()), id: \.offset) { _, rangée in
                 HStack(spacing: QuickEmojiGrid.spacing) {
                     ForEach(rangée, id: \.self) { emoji in
                         Button {
@@ -227,7 +233,8 @@ extension UniversalComposerBar {
                 }
             }
         }
-        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.frameHeight(toolbarHeight: topToolbarHeight))
+        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.frameHeight(toolbarHeight: topToolbarHeight, focused: isFocused))
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
         .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 

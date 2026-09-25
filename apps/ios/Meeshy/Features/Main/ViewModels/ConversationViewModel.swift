@@ -314,9 +314,6 @@ class ConversationViewModel: ObservableObject {
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
 
-    /// When true, the effects picker sheet is presented
-    @Published var showEffectsPicker: Bool = false
-
     /// True when the current user has not yet granted voice-cloning consent.
     /// Drives the in-bubble `AudioConsentNotice` nudge on outgoing audio
     /// messages. Set asynchronously after `start()` via a one-shot

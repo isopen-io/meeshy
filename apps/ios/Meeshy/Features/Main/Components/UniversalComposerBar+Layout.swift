@@ -184,15 +184,33 @@ extension UniversalComposerBar {
                     swipeHandle
                 }
 
-                // Ephemeral duration picker (slides up from toolbar)
+                // Les rails qui s'ouvrent au-dessus de la barre d'outils gardent
+                // une marge avec le bord du verre (#7966) : leur propre
+                // `.padding(.horizontal, 8)` sur les côtés, celle-ci en haut.
                 if showEphemeralPicker {
                     ephemeralDurationPicker
+                        .padding(.top, Self.railTopInset)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // Les effets du message s'ouvrent comme la durée éphémère : un
+                // petit panneau dans le verre, jamais une feuille (#7967).
+                if showEffectsPanel {
+                    EffectsPickerView(
+                        flags: pendingEffects.flags,
+                        accent: servedAccent,
+                        muted: mutedColor,
+                        surface: railSurface
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.top, Self.railTopInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
                 // Permanent effects inline picker (for comments)
                 if showPermanentEffectsPicker {
                     permanentEffectsInlinePicker
+                        .padding(.top, Self.railTopInset)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -202,7 +220,7 @@ extension UniversalComposerBar {
                     topToolbar
                         // La droite de la barre appartient au cadre des emojis
                         // rapides tant qu'il est là : rien ne glisse dessous.
-                        .padding(.trailing, actionSlot == .quickEmoji ? Self.quickEmojiSlotWidth + 4 : 0)
+                        .padding(.trailing, quickEmojiCoversToolbar ? Self.quickEmojiSlotWidth + 4 : 0)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topToolbarHeight = $0 }
                         .padding(.horizontal, 8)
                         .padding(.top, 6)
@@ -279,6 +297,7 @@ extension UniversalComposerBar {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEffectsPanel)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showAttachOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: allAttachments.count)
         .animation(

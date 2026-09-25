@@ -11,9 +11,15 @@ import CoreGraphics
 /// est vide tant que le champ l'est. Chaque cellule reste sous la cible
 /// tactile de 44 pt ; l'appui long vers la feuille des emojis en est le
 /// recours.
+///
+/// **Au focus, le cadre se REPLIE** (#7966) : la barre d'outils redevient
+/// entière — sa pastille de langue montre son contenu normal — et le cadre ne
+/// garde que les trois emojis les plus employés, sur UNE rangée, à la hauteur
+/// de la ligne de saisie.
 nonisolated enum QuickEmojiGrid {
 
     static let count = 5
+    static let focusedCount = 3
     static let cell: CGFloat = 32
     static let spacing: CGFloat = 3
     static let inset: CGFloat = 4
@@ -38,14 +44,19 @@ nonisolated enum QuickEmojiGrid {
 
     /// Le cadre couvre la ligne de saisie ET la barre d'outils mesurée ; sans
     /// barre, il ne descend jamais sous la ligne ni sous ses deux rangées.
-    static func frameHeight(toolbarHeight: CGFloat) -> CGFloat {
+    static func frameHeight(toolbarHeight: CGFloat, focused: Bool = false) -> CGFloat {
+        if focused { return rowHeight }
         guard toolbarHeight > 0 else { return max(rowHeight, contentHeight + 2 * inset) }
         return max(rowHeight + toolbarGap + toolbarHeight, contentHeight + 2 * inset)
     }
 
-    /// Trois puis deux ; jamais plus de cinq, jamais de rangée vide.
-    static func rows(_ emojis: [String]) -> [[String]] {
-        let servis = Array(emojis.prefix(count))
+    /// Le cadre ne monte sur la barre d'outils que hors focus.
+    static func coversToolbar(focused: Bool) -> Bool { !focused }
+
+    /// Hors focus, trois puis deux ; au focus, les trois premiers sur une
+    /// rangée. Jamais de rangée vide.
+    static func rows(_ emojis: [String], focused: Bool = false) -> [[String]] {
+        let servis = Array(emojis.prefix(focused ? focusedCount : count))
         return [Array(servis.prefix(firstRowCount)), Array(servis.dropFirst(firstRowCount))]
             .filter { !$0.isEmpty }
     }
