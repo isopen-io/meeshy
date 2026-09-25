@@ -32,6 +32,7 @@ export function StudioPageAssets({
   onRemove,
   onCaption,
   onSoundPlane,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly page: StudioPage;
@@ -39,6 +40,10 @@ export function StudioPageAssets({
   readonly onRemove: (door: StudioDoor) => void;
   readonly onCaption: (door: 'visual' | 'overlay', value: string) => void;
   readonly onSoundPlane: (plane: StudioPlane) => void;
+  /** VERROUILLÉ pendant l'envoi (#7707, revue-correction) — le plan que la
+   * séquence publie est figé au premier clic sur Publier ; retirer, réessayer
+   * ou légender un média après coup ne change plus rien à ce qui part. */
+  readonly locked?: boolean;
 }) {
   if (page.background === null && page.overlay === null && page.sound === null) return null;
   return (
@@ -57,6 +62,7 @@ export function StudioPageAssets({
             onRetry={asset.file !== undefined ? () => onRetry(door) : undefined}
             onRemove={() => onRemove(door)}
             caption={{ value: asset.caption, inputId: `story-studio-caption-${door}`, onChange: (value) => onCaption(door, value) }}
+            locked={locked}
           />
         );
       })}
@@ -69,8 +75,9 @@ export function StudioPageAssets({
           upload={page.sound.upload}
           onRetry={page.sound.file !== undefined ? () => onRetry('sound') : undefined}
           onRemove={() => onRemove('sound')}
+          locked={locked}
         >
-          <StudioSoundPlaneToggle lang={lang} plane={page.sound.plane} onChange={onSoundPlane} />
+          <StudioSoundPlaneToggle lang={lang} plane={page.sound.plane} onChange={onSoundPlane} locked={locked} />
         </StudioAssetRow>
       ) : null}
     </ul>

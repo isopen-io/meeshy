@@ -340,6 +340,55 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(drafts.get(VIEWER_ID)).toBeNull();
   });
 
+  test('pendant l’envoi, TOUTE la composition est verrouillée — portes, rail, texte, audience (défauts 1 et 2, revue de #7707)', async () => {
+    const bench = harness({ postsHold: () => true });
+    const el = await threeTypedPages(bench, 'STORY');
+    const audience = () => el.querySelector<HTMLButtonElement>('[data-story-audience]');
+    const addText = () => el.querySelector<HTMLButtonElement>('[data-story-option="add-text"]');
+    const door = (name: string) => el.querySelector<HTMLInputElement>(`input[data-door="${name}"]`);
+    const stage = () => el.querySelector('[data-scene-stage]');
+
+    // AVANT l'envoi : tout répond.
+    expect(addPage(el)?.disabled).toBe(false);
+    expect(addText()?.disabled).toBe(false);
+    expect(textField(el)?.disabled).toBe(false);
+    expect(audience()?.disabled).toBe(false);
+    expect(door('visual')?.disabled).toBe(false);
+    expect(pageDelete(el)).not.toBeNull();
+    expect(pageRail(el)?.hasAttribute('inert')).toBe(false);
+    expect(stage()?.hasAttribute('inert')).toBe(false);
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length === 1);
+
+    // PENDANT l'envoi : le plan est figé, plus aucune surface n'édite.
+    expect(addPage(el)?.disabled).toBe(true);
+    expect(addText()?.disabled).toBe(true);
+    expect(textField(el)?.disabled).toBe(true);
+    expect(audience()?.disabled).toBe(true);
+    expect(door('visual')?.disabled).toBe(true);
+    expect(door('overlay')?.disabled).toBe(true);
+    expect(door('sound')?.disabled).toBe(true);
+    // La corbeille est RETIRÉE, jamais grisée (loi 4) — elle n'a plus d'effet
+    // honnête sur un plan déjà envoyé page par page.
+    expect(pageDelete(el)).toBeNull();
+    expect(pageRail(el)?.hasAttribute('inert')).toBe(true);
+    expect(stage()?.hasAttribute('inert')).toBe(true);
+
+    // Une frappe pendant l'envoi ne doit rien écrire dans le brouillon qui
+    // publiera la page suivante — le champ est DISABLED, une saisie native ne
+    // l'atteint plus (le témoin d'attribut est le contrat, `typeText` force le
+    // DOM par un setter natif que le navigateur n'emprunte jamais lui-même).
+    expect(textField(el)?.value).toBe('Trois');
+
+    bench.releasePost();
+    await flush(() => bench.posts.length === 2);
+    bench.releasePost();
+    await flush(() => bench.posts.length === 3);
+    bench.releasePost();
+    await flush();
+  });
+
   test('une story d’UNE page garde « Publication… » — une fraction 1/1 ne dirait rien', async () => {
     const bench = harness({ postsHold: () => true });
     const el = mount(bench.deps, 'STORY');

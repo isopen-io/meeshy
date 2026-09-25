@@ -110,14 +110,24 @@ import { StudioTextInput } from '@/routes/story-compose-text-input';
  * elles ne règlent rien, elles SONT l'objet qu'on saisit
  * (`story-compose-stage.tsx`).
  *
- * TROIS lois tenues ici, inchangées depuis #6900 :
+ * QUATRE lois tenues ici, les trois premières inchangées depuis #6900 :
  *  - **le brouillon est persisté à CHAQUE changement** (par lecteur,
  *    `studio-draft-store.ts`) — un échec, un départ par ✕, un rechargement le
  *    conservent ; seul un succès le purge ;
  *  - **un média PRÊT n'est jamais remonté** : la publication lit son identité
  *    dans le brouillon ; seul un média EN VOL est attendu (§ 1.4) ;
  *  - **hors ligne, l'intention de publier est ARMÉE** et part seule au retour
- *    du réseau — l'écran ne promet que ce qu'il fait.
+ *    du réseau — l'écran ne promet que ce qu'il fait ;
+ *  - **LE PLAN EST FIGÉ AU PREMIER CLIC SUR PUBLIER** (#7707, revue-correction)
+ *    — `studioPublishPlan` lit le brouillon UNE fois, avant la première
+ *    requête de la séquence ; tant que `publishing` est vrai, la composition
+ *    entière (couloirs, plateau, rail de pages, pied, audience) passe en
+ *    LECTURE SEULE, comme iOS ferme le composer à la publication
+ *    (`StoryViewModel+Publication.swift:549`). Sans ce verrou, une page
+ *    retirée du rail pendant l'envoi partait quand même, une retouche de
+ *    texte partait dans son ancienne version puis se perdait, et un
+ *    changement d'audience était ignoré en silence (défauts 1 et 2, revue de
+ *    #7707). Seuls le ✕ (`StudioShell`) et la capsule Publier restent actifs.
  */
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
@@ -712,7 +722,14 @@ function StoryStudio({
       rail={
         draft.pages.length > 1 ? (
           <Suspense fallback={<span className="min-w-0 flex-1" />}>
-            <StudioPageRail lang={lang} pages={draft.pages} currentPageId={draft.currentPage} onSelect={selectPage} onDelete={deletePage} />
+            <StudioPageRail
+              lang={lang}
+              pages={draft.pages}
+              currentPageId={draft.currentPage}
+              onSelect={selectPage}
+              onDelete={deletePage}
+              locked={publishing}
+            />
           </Suspense>
         ) : undefined
       }
@@ -725,7 +742,10 @@ function StoryStudio({
 
       <div className="flex min-h-0 flex-1 gap-2 px-2">
         {/* COULOIR GAUCHE — ce qu'on POSE sur la scène, puis ce qui y est déjà
-            posé (`meeshy-composer-modele.md` § 6, `apps/ios/CLAUDE.md` § 1). */}
+            posé (`meeshy-composer-modele.md` § 6, `apps/ios/CLAUDE.md` § 1).
+            VERROUILLÉ pendant l'envoi (#7707, revue-correction) : le plan
+            publié est figé au premier clic sur Publier — poser un objet après
+            coup ne rejoindrait jamais la séquence en cours. */}
         <div className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto pt-2 pb-2">
           <StudioDoorButton
             door="visual"
@@ -733,6 +753,7 @@ function StoryStudio({
             glyph="image"
             accept="image/*,video/*"
             onSelect={(file) => place('visual', file)}
+            disabled={publishing}
           />
           <StudioDoorButton
             door="overlay"
@@ -740,6 +761,7 @@ function StoryStudio({
             glyph="layer"
             accept="image/*,video/*"
             onSelect={(file) => place('overlay', file)}
+            disabled={publishing}
           />
           <StudioDoorButton
             door="sound"
@@ -747,6 +769,7 @@ function StoryStudio({
             glyph="microphone"
             accept="audio/*"
             onSelect={(file) => place('sound', file)}
+            disabled={publishing}
           />
           <div
             role="group"
@@ -763,6 +786,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withSelected(current, layer.id))}
                 probe={`select:${layer.id}`}
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <span aria-hidden="true">T{index + 1}</span>
               </StudioChip>
@@ -774,6 +798,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withSelected(current, 'overlay'))}
                 probe="select:overlay"
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <LayerMark size={16} />
               </StudioChip>
@@ -782,6 +807,13 @@ function StoryStudio({
         </div>
 
         <div className="grid min-w-0 flex-1 place-items-center" style={{ containerType: 'size' }}>
+          {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707,
+              revue-correction) — le plan publié lit le brouillon tel qu'il
+              était au premier clic sur Publier : déplacer une poignée ou
+              couper le son de l'aperçu après coup ne change plus rien à ce
+              qui part, et laisser le geste actif fait croire le contraire à
+              l'auteur (`StoryViewModel+Publication.swift:549` : sur iOS ce
+              feedback est le dismiss, déjà passé). */}
           <div
             data-scene-stage
             data-story-studio-current-page={page.id}
@@ -796,6 +828,7 @@ function StoryStudio({
               containerType: 'inline-size',
               backgroundColor: backgroundCss(STORY_PLAIN_BACKGROUND, 'var(--color-ios-card)'),
             }}
+            inert={publishing}
           >
             {previewDocument !== null ? (
               <Suspense fallback={null}>
@@ -837,6 +870,7 @@ function StoryStudio({
               fontSize={textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null}
               onText={onTextChange}
               onPublish={() => void publish()}
+              locked={publishing}
             />
             {/* LES POIGNÉES — seule chose posée sur la scène, et elles ne
                 règlent rien : elles SONT l'objet qu'on saisit. */}
@@ -869,6 +903,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withAddedPage(current, language))}
                 probe="add-page"
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <PageMark size={18} />
               </StudioChip>
@@ -881,6 +916,7 @@ function StoryStudio({
             onPress={() => setDraft((current) => withAddedText(current, language))}
             probe="add-text"
             style={{ minWidth: 44, paddingInline: 0 }}
+            disabled={publishing}
           >
             <Glyph name="plus" size={18} />
           </StudioChip>
@@ -890,6 +926,7 @@ function StoryStudio({
             onPress={() => setEditorOpen((open) => !open)}
             probe="editor-toggle"
             style={{ minWidth: 44, paddingInline: 0 }}
+            disabled={publishing}
           >
             <SlidersMark size={18} />
           </StudioChip>
@@ -897,12 +934,15 @@ function StoryStudio({
       </div>
 
       {/* LES CONTRÔLEURS DE L'OUTIL OUVERT — la zone BASSE d'iOS, plafonnée en
-          hauteur pour que la scène garde sa place. */}
+          hauteur pour que la scène garde sa place. VERROUILLÉE pendant l'envoi
+          (#7707) : un panneau déjà ouvert avant Publier ne doit pas rester une
+          voie d'édition sur un plan déjà figé. */}
       {editorOpen ? (
         <div
           data-story-editor-panel
           className="shrink-0 overflow-y-auto border-t px-4 py-2"
           style={{ maxHeight: 200, borderColor: 'var(--color-edge)' }}
+          inert={publishing}
         >
           <Suspense fallback={null}>
             <StudioObjectEditor
@@ -929,6 +969,7 @@ function StoryStudio({
           onRemove={remove}
           onCaption={(door, value) => setDraft((current) => withVisualCaption(current, door, value))}
           onSoundPlane={(plane) => setDraft((current) => withSoundPlane(current, plane))}
+          locked={publishing}
         />
         <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
         {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
@@ -940,6 +981,7 @@ function StoryStudio({
             source={audienceSource}
             open={audienceOpen}
             onOpen={openAudience}
+            disabled={publishing}
           />
           <span aria-hidden="true" className="flex-1" />
           <PublishSplitButton
