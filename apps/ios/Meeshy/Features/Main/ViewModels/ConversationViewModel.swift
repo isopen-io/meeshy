@@ -520,7 +520,6 @@ class ConversationViewModel: ObservableObject {
     var lastNewerPaginationTime: Date = .distantPast
     static let paginationDebounceInterval: TimeInterval = 0.3
     static let paginationRetryCount: Int = 3
-    private static let paginationRetryDelay: UInt64 = 500_000_000
 
     let authManager: AuthManaging
     let messageService: MessageServiceProviding

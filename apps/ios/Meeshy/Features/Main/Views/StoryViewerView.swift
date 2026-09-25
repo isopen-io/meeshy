@@ -176,7 +176,6 @@ struct StoryViewerView: View {
     @State var storyDrafts: [String: StoryDraft] = [:]
 
     @Environment(\.colorScheme) private var colorScheme
-    private var theme: ThemeManager { ThemeManager.shared }
 
     /// Durée dynamique du slide courant — max(6, durée max des médias vidéo/audio).
     /// Static text/image slides default to 6s (parité Instagram/Snapchat) — la

@@ -66,14 +66,6 @@ struct InviteFriendsSheet: View {
         String(localized: "invite.defaultLinkName", defaultValue: "Rejoins la conversation") + " \"\(conversation.name)\""
     }
 
-    private var effectiveMessage: String {
-        inviteMessage.isEmpty ? defaultInviteMessage : inviteMessage
-    }
-
-    private var effectiveLinkName: String {
-        linkName.isEmpty ? defaultLinkName : linkName
-    }
-
     // MARK: - Body
 
     var body: some View {

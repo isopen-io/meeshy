@@ -76,7 +76,6 @@ struct MessageOverlayMenu: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
-    @State private var isEmojiPickerOpen = false
     /// Classement des emojis rapides figé pour la durée de la présentation —
     /// cf. `emojiQuickBar`.
     @State private var cachedTopEmojis: [String]?

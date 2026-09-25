@@ -325,7 +325,6 @@ struct UniversalComposerBar: View {
     /// complète — cf. `ComposerLibraryHandoff`. Non-`private` : muté depuis
     /// `UniversalComposerBar+Attachments.swift`.
     @State var isExpandingToLibrary = false
-    @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
 
     // Attachments
@@ -390,7 +389,6 @@ struct UniversalComposerBar: View {
         if forceHideAttachment { return false }
         return forceShowAttachment || (mode?.showAttachment ?? showAttachment)
     }
-    private var resolvedShowLanguage: Bool { mode?.showLanguageSelector ?? showLanguageSelector }
     var resolvedHideEphemeral: Bool {
         if let mode { return !mode.showEphemeral }
         return hideEphemeral

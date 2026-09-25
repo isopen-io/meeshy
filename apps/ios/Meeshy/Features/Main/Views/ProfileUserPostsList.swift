@@ -613,7 +613,6 @@ final class ProfileUserPostsViewModel: ObservableObject {
     /// zone « plus de contenu » (on a atteint le tout premier contenu publié).
     @Published private(set) var paginationState: PaginationState = .idle
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
     /// so the nested LazyVStack never builds the whole cached list at once.
     @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow {

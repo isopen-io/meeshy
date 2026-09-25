@@ -17,14 +17,11 @@ struct WidgetPreviewView: View {
     var onNewConversation: (() -> Void)?
 
     @State private var animatedUnreadCount: Int = 0
-    @State private var showCards = false
     @StateObject private var affiliateVM = AffiliateViewModel()
     @State private var trackingStats: TrackingLinkStats? = nil
     @State private var shareStats: MyShareLinkStats? = nil
     @State private var communityLinks: [CommunityLink] = []
     @State private var showCreateShareLink = false
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "widget")
 
     private var totalUnread: Int {
         conversationListViewModel.totalUnreadCount

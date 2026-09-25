@@ -207,10 +207,6 @@ struct SyncPill: View {
     /// doc `SyncPillMarquee`). Alimentée par la mesure `GeometryReader` en
     /// fond du `Text` du label.
     @State private var measuredLabelWidth: CGFloat = 0
-    /// Largeur réellement disponible pour la zone de texte (mesurée une
-    /// seule fois via `GeometryReader` sur le conteneur, indépendante du
-    /// contenu texte lui-même).
-    @State private var availableTextWidth: CGFloat = 140
     /// Décalage horizontal courant du texte en défilement. `0` = position de
     /// repos (texte visible depuis le début).
     @State private var marqueeOffset: CGFloat = 0

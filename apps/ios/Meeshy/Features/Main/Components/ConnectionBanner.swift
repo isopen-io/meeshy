@@ -59,8 +59,6 @@ struct ConnectionBanner: View {
     /// `RootView.body` ne se ré-évalue pas pour une frappe.
     @StateObject private var typingSource: TypingEntriesSource
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     // **L'annonce de frappe est retournée à la pastille** (#6188, directive
     // porteur 2026-09-12). Elle avait été confiée le 2026-08-28 (#4066) à une
     // capsule naissant dans la Dynamic Island, orchestrée ici : trois états et

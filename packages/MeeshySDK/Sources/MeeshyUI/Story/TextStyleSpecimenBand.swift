@@ -73,7 +73,6 @@ public struct TextStyleSpecimenBand: View {
     private static let gap: CGFloat = 8
 
     private var ink: Color { onDarkSurface ? .white : .primary }
-    private var inkMuted: Color { onDarkSurface ? .white.opacity(0.62) : .secondary }
     private var restingFill: Color { onDarkSurface ? .white.opacity(0.14) : .gray.opacity(0.18) }
 
     public var body: some View {

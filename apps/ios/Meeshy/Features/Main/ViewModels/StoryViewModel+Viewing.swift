@@ -14,15 +14,6 @@ import MeeshySDK
 import MeeshyUI
 
 extension StoryViewModel {
-    private func buildLocallyViewedSet() -> Set<String> {
-        var ids = Set<String>()
-        for group in storyGroups {
-            for story in group.stories where story.isViewed {
-                ids.insert(story.id)
-            }
-        }
-        return ids
-    }
 
     /// `id → viewedAt` des stories vues localement (`.distantPast` quand le
     /// moment de la vue est inconnu — caches antérieurs au champ). Sert à la

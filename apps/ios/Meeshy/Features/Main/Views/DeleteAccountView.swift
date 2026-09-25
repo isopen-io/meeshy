@@ -6,7 +6,6 @@ import MeeshyUI
 struct DeleteAccountView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
 
     @State private var confirmationText = ""
     /// Le mot de passe COURANT. Sans lui, un jeton volé ouvrait la suppression

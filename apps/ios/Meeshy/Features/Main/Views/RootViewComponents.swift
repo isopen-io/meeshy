@@ -131,7 +131,6 @@ struct ThemedFeedOverlay: View {
     /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
     /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
     @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
-    @FocusState private var isComposerFocused: Bool
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
 
@@ -167,12 +166,6 @@ struct ThemedFeedOverlay: View {
 
     private struct LikeRESTPayload: Decodable { let liked: Bool? }
     private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
-    private struct SharePayload: Decodable {
-        let shared: Bool?
-        let shareCount: Int?
-        let shortUrl: String?
-        let token: String?
-    }
 
     @MainActor
     private func togglePostHeart(post: FeedPost) {

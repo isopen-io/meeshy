@@ -311,7 +311,6 @@ struct ConversationView: View {
     /// du composeur ; sa courbe est celle sur laquelle le fil rejoint sa
     /// réserve basse, au lieu de s'y téléporter (#4949).
     @State var keyboardTransition: KeyboardTransition?
-    @State private var initialScrollCompleted: Bool = false
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]

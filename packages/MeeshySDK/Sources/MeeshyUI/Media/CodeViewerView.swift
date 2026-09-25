@@ -20,7 +20,6 @@ public struct CodeViewerView: View {
     @State private var isLoading = true
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
-    private var accent: Color { Color(hex: accentColor) }
     private var langColor: Color { Color(hex: language.color) }
     private var syntaxTheme: SyntaxTheme { .github(isDark: isDark) }
 

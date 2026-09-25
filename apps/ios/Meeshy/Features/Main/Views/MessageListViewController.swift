@@ -916,16 +916,6 @@ final class MessageListViewController: UIViewController {
         }
     }
 
-    private func topVisibleMessageDate() -> Date? {
-        guard let dataSource,
-              let topIndexPath = collectionView.indexPathsForVisibleItems.max(),
-              let topItem = dataSource.itemIdentifier(for: topIndexPath),
-              case .message(let localId) = topItem,
-              let record = store.message(for: localId)
-        else { return nil }
-        return record.createdAt
-    }
-
     /// Recalcule le label de la pill sticky à partir de la cellule la plus
     /// haute visuellement. Liste inversée : « plus haute » = plus grand index
     /// dans le snapshot diffable. Si le séparateur natif de ce même jour est

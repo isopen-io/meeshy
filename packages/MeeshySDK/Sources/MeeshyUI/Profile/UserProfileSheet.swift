@@ -639,29 +639,6 @@ public struct UserProfileSheet: View {
         }
     }
 
-    // MARK: - Blocked By Target
-
-    private var blockedByTargetCard: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 20))
-                .foregroundColor(theme.error)
-
-            Text(String(localized: "profile.blocked.restrictedProfile", defaultValue: "Profil restreint", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-
-            Text(String(localized: "profile.blocked.restrictedDescription", defaultValue: "Cet utilisateur a restreint l'acces a son profil.", bundle: .module))
-                .font(.system(size: 13))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(theme.surfaceGradient(tint: "FF6B6B"))
-        .glassCard(cornerRadius: 16)
-    }
-
     // MARK: - Blocked By Me
 
     private var blockedByMeCard: some View {
@@ -696,14 +673,6 @@ public struct UserProfileSheet: View {
     }
 
     // MARK: - Helpers
-
-    private func lastActiveText(from date: Date) -> String {
-        let seconds = Int(-date.timeIntervalSinceNow)
-        if seconds < 60 { return String(localized: "profile.presence.justNow", defaultValue: "Vu a l'instant", bundle: .module) }
-        if seconds < 3600 { return "Vu il y a \(seconds / 60)min" }
-        if seconds < 86400 { return "Vu il y a \(seconds / 3600)h" }
-        return "Vu il y a \(seconds / 86400)j"
-    }
 
     func formatRegistrationDate(_ date: Date) -> String {
         date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))

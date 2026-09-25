@@ -40,7 +40,6 @@ struct FeedView: View {
     /// composer que le fil iPhone emploie depuis T3.1.
     let conversationListViewModel: ConversationListViewModel
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -61,10 +60,8 @@ struct FeedView: View {
     /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
-    @State private var searchText = ""
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
-    @State private var composerBounce: Bool = false
     @State var composerText = ""
     /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
     /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non

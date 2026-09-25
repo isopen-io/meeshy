@@ -47,7 +47,6 @@ final class ForwardPickerViewModel: ObservableObject {
     /// web (`use-friend-requests-v2.ts`).
     private static let friendsFetchCap = 500
     private static let searchMinimumLength = 2
-    private static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
     /// Conversations paginées, EN MÉMOIRE UNIQUEMENT — source de `targets`
     /// hors recherche. Dédupliquée par id à chaque page, comme

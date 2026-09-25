@@ -7,7 +7,6 @@ struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @StateObject private var router = Router()
     @StateObject private var viewModel: NewConversationViewModel
     /// Outgoing-block awareness for graying out / disabling blocked users in
     /// the picker. Observed so rows update live on block/unblock.

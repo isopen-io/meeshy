@@ -41,7 +41,6 @@ struct ConversationPreferencesTab: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var viewModel: ConversationOptionsViewModel
@@ -52,17 +51,14 @@ struct ConversationPreferencesTab: View {
     @State private var showEmojiPicker: Bool = false
     @State private var customNameLocal: String = ""
 
-    @State private var memberSearchQuery: String = ""
     @State private var platformSearchResults: [PrefsUserSearchResult] = []
     @State private var isSearchingPlatform: Bool = false
-    @State private var addingUserId: String? = nil
     @State private var addedUserIds: Set<String> = []
     @State private var memberCancellable: AnyCancellable?
 
     private let memberSearchSubject = PassthroughSubject<String, Never>()
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-prefs")
-    private var presenceManager: PresenceManager { PresenceManager.shared }
 
     private var isDirect: Bool { conversation.type == .direct }
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
@@ -73,15 +69,6 @@ struct ConversationPreferencesTab: View {
     private var canManageMembers: Bool {
         guard let role = conversation.currentUserRole?.lowercased() else { return false }
         return ["creator", "admin", "moderator"].contains(role)
-    }
-
-    private var filteredParticipants: [PaginatedParticipant] {
-        let trimmed = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty else { return participants }
-        return participants.filter { p in
-            p.name.lowercased().contains(trimmed) ||
-            (p.username?.lowercased().contains(trimmed) ?? false)
-        }
     }
 
     private var existingMemberIds: Set<String> {

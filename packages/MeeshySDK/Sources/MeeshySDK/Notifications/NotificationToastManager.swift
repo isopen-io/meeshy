@@ -185,7 +185,6 @@ public final class NotificationToastManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: UInt64 = 7_000_000_000
-    private static let refreshDelay: UInt64 = 500_000_000
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     private var recentNotificationIds = Set<String>()

@@ -229,7 +229,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private var rotationCount = 0
     private var configurationChangeObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
 

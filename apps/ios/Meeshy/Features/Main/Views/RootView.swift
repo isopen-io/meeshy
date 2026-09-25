@@ -63,7 +63,6 @@ final class ConversationListVMOwner: ObservableObject {
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
@@ -77,10 +76,8 @@ struct RootView: View {
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
-    @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @StateObject private var notifications = RootNotificationSource()  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
-    @Environment(\.colorScheme) private var systemColorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false

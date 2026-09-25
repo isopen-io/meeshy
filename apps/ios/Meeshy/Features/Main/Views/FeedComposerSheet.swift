@@ -1130,13 +1130,6 @@ struct FeedComposerSheet: View {
     }
 
     // MARK: - Helpers
-    private func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        return try? await UIImage(cgImage: generator.image(at: .zero).image)
-    }
 
     private func mimeTypeForURL(_ url: URL) -> String {
         // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).

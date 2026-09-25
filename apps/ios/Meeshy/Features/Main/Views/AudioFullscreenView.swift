@@ -352,10 +352,6 @@ private struct AudioFullscreenPage: View {
         return LanguageDisplay.colorHex(for: selectedLanguage)
     }
 
-    private var currentLangColor: Color {
-        Color(hex: currentLangColorHex)
-    }
-
     private var originalFlag: String {
         LanguageFlagChip.flag(for: item.originalLanguage)
     }
