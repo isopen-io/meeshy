@@ -409,8 +409,9 @@ export const FocalRow = memo(function FocalRow({
      (D-7) : elle est vue à chaque message de chaque conversation. */
   const senderPhoto = participantAvatarOf(message.sender);
   const senderName = isMine ? 'Vous' : senderAvatarName;
-  /* LE PSEUDO DE L'EXPÉDITEUR (#7241) — sous `sender.user.username`, jamais à
-     la racine du participant. `undefined` sur soi : on n'ouvre pas SON profil
+  /* LE PSEUDO DE L'EXPÉDITEUR (#7241) — sous `sender.user.username` ; la liste REST
+     le sert à la racine, et `withSenderAccount` (`lib/api/sender-account.ts`,
+     #7991) l'y replie à la frontière. `undefined` sur soi : on n'ouvre pas SON profil
      depuis son propre message, la fiche de soi n'offre aucun geste relationnel
      (`user-profile.tsx`, `isSelf`). */
   const senderHandle = isMine ? undefined : message.sender?.user?.username;

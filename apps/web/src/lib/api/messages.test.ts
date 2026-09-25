@@ -139,6 +139,32 @@ describe('loadMessages — gateway', () => {
     }
   });
 
+  /* LE PSEUDO SERVI À PLAT (#7991) — `messageSchema.sender` est
+     `userMinimalSchema` : `username` y voyage à la racine et le `user`
+     imbriqué, non déclaré, est retiré par la sérialisation. Le fil lit
+     `sender.user.username` : sans ce repli, aucun nom d'historique ne menait
+     au profil. */
+  test('`sender.username` servi à plat ⇒ `sender.user.username` ; jamais pour un anonyme', async () => {
+    const { impl } = fakeFetch({
+      status: 200,
+      body: {
+        success: true,
+        data: [
+          { id: 'm3', sender: { id: 'p-ano', type: 'anonymous', displayName: 'Invité', username: 'ano_x1' } },
+          { id: 'm2', sender: { id: 'p-kwame', userId: 'u-kwame', type: 'user', displayName: 'Kwame', username: 'kwame' } },
+          { id: 'm1', sender: { id: 'p-amina', userId: 'u-amina', displayName: 'Amina', user: { id: 'u-amina', username: 'amina' } } },
+        ],
+      },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.messages.map((m: Message) => m.sender?.user?.username)).toEqual(['amina', 'kwame', undefined]);
+      expect(result.data.messages[1]?.sender?.user?.id).toBe('u-kwame');
+    }
+  });
+
   test('401 (sans-session) propagé', async () => {
     const { impl } = fakeFetch({
       status: 401,
