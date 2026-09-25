@@ -38,7 +38,6 @@ struct SignupView: View {
     @State private var expandedHint: SignupField?
     /// Le bloc d'identité est-il ouvert à la saisie (#6479) ? Fermé par défaut :
     /// le chemin nominal ne demande AUCUN geste.
-    @State private var isEditingIdentity = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
 
@@ -111,7 +110,7 @@ struct SignupView: View {
         }
     }
 
-    // MARK: - Nom affiché
+    // MARK: - Identité
 
     /// CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ (#6479).
     ///
@@ -120,115 +119,101 @@ struct SignupView: View {
     /// l'utilisateur de modifier ou non ». Puis, sur relecture : « dès qu'un
     /// champ username est rempli la passerelle n'a plus rien à créer ».
     ///
-    /// Les deux valeurs viennent de `RegistrationIdentity`, miroir de la loi
-    /// que la passerelle applique. Un champ « nom affiché » vide ne disait rien
-    /// de ce qui arriverait ; ce bloc REND le résultat et n'ouvre la saisie que
-    /// si on la demande — le chemin nominal est ZÉRO geste.
+    /// Refait par #7897 (directive porteur 2026-09-25 : « ne plus avoir un
+    /// éditer […] modifiables directement par simple touché ») : prénom et nom
+    /// tirés de l'adresse, nom affiché composé d'eux, pseudo tiré de
+    /// l'adresse — quatre SAISIES déjà remplies, qui suivent la dérivation en
+    /// direct tant qu'on ne les touche pas. Les valeurs viennent de
+    /// `SignupForm.effective*`, miroir de la loi que la passerelle applique.
+    /// Le chemin nominal reste ZÉRO geste.
     private var derivedIdentityBlock: some View {
-        let pseudo = viewModel.form.effectiveUsername
-        let nom = viewModel.form.effectiveDisplayName
-        let refus = viewModel.error(for: .username) ?? viewModel.error(for: .displayName)
-        // Un refus qui vise l'identité OUVRE la saisie : laisser replié
-        // montrerait un message sous un champ que rien ne permet d'atteindre.
-        let ouvert = isEditingIdentity || refus != nil
+        let form = viewModel.form
+        let derive = SignupIdentityDerivation(form: form)
 
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "auth.signup.identity.title", defaultValue: "Votre identité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            HStack(spacing: MeeshySpacing.md) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Le repli est le PSEUDO, jamais du blanc : une adresse dont
-                    // rien n'est slugifiable ne donne aucun nom affiché, et
-                    // laisser vide ferait croire que rien ne sera créé.
-                    Text(nom.isEmpty ? pseudo : nom)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-                    Text(pseudo.isEmpty ? "@…" : "@\(pseudo)")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Button {
-                    HapticFeedback.light()
-                    // LE RESSORT DU COMPOSER — `UniversalComposerBar+Attachments.swift:228`.
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                        isEditingIdentity.toggle()
-                    }
-                } label: {
-                    HStack(spacing: MeeshySpacing.xs) {
-                        Image(systemName: ouvert ? "xmark" : "pencil")
-                        Text(ouvert
-                             ? String(localized: "auth.signup.identity.close", defaultValue: "Fermer", bundle: .main)
-                             : String(localized: "auth.signup.identity.edit", defaultValue: "Modifier", bundle: .main))
-                    }
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
-                }
-                .buttonStyle(.plain)
-                .frame(minHeight: 44)
-                .accessibilityLabel(String(
-                    localized: "auth.signup.identity.editLabel",
-                    defaultValue: "Modifier le pseudo et le nom affiché",
-                    bundle: .main
-                ))
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+                identityInput(
+                    field: .firstName,
+                    label: String(localized: "auth.signup.identity.firstName", defaultValue: "Prénom", bundle: .main),
+                    placeholder: derive.firstName,
+                    text: Binding(
+                        get: { viewModel.form.firstName ?? viewModel.form.effectiveFirstName },
+                        set: { viewModel.form.firstName = $0 }
+                    )
+                )
+                identityInput(
+                    field: .lastName,
+                    label: String(localized: "auth.signup.identity.lastName", defaultValue: "Nom", bundle: .main),
+                    placeholder: derive.lastName,
+                    text: Binding(
+                        get: { viewModel.form.lastName ?? viewModel.form.effectiveLastName },
+                        set: { viewModel.form.lastName = $0 }
+                    )
+                )
             }
 
-            if ouvert {
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    identityInput(
-                        field: .username,
-                        label: String(localized: "auth.signup.identity.username", defaultValue: "Pseudo", bundle: .main),
-                        prefix: "@",
-                        text: Binding(
-                            get: { viewModel.form.username.isEmpty ? pseudo : viewModel.form.username },
-                            set: { viewModel.form.username = $0 }
-                        )
-                    )
+            identityInput(
+                field: .displayName,
+                label: String(localized: "auth.signup.identity.displayName", defaultValue: "Nom affiché", bundle: .main),
+                placeholder: derive.displayName,
+                text: Binding(
+                    get: { viewModel.form.displayName ?? viewModel.form.effectiveDisplayName },
+                    set: { viewModel.form.displayName = $0 }
+                )
+            )
 
-                    if !viewModel.usernameSuggestions.isEmpty {
-                        // Les trois pseudos LIBRES servis avec le refus. Sans
-                        // eux, refuser un pseudo montré serait un mur.
-                        HStack(spacing: MeeshySpacing.xs) {
-                            ForEach(viewModel.usernameSuggestions, id: \.self) { candidat in
-                                Button {
-                                    HapticFeedback.light()
-                                    viewModel.form.username = candidat
-                                } label: {
-                                    Text("@\(candidat)")
-                                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                        .foregroundColor(MeeshyColors.indigo500)
-                                        .padding(.horizontal, MeeshySpacing.md)
-                                        .frame(minHeight: 44)
-                                        .background(inputSurface(isFocused: false))
-                                }
-                                .buttonStyle(.plain)
-                            }
+            identityInput(
+                field: .username,
+                label: String(localized: "auth.signup.identity.username", defaultValue: "Pseudo", bundle: .main),
+                prefix: "@",
+                placeholder: derive.username,
+                text: Binding(
+                    get: { viewModel.form.username ?? viewModel.form.effectiveUsername },
+                    set: { viewModel.form.username = $0 }
+                )
+            )
+
+            if !viewModel.usernameSuggestions.isEmpty {
+                HStack(spacing: MeeshySpacing.xs) {
+                    ForEach(viewModel.usernameSuggestions, id: \.self) { candidat in
+                        Button {
+                            HapticFeedback.light()
+                            viewModel.form.username = candidat
+                        } label: {
+                            Text("@\(candidat)")
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                                .padding(.horizontal, MeeshySpacing.md)
+                                .frame(minHeight: 44)
+                                .background(inputSurface(isFocused: false))
                         }
+                        .buttonStyle(.plain)
                     }
-
-                    identityInput(
-                        field: .displayName,
-                        label: String(localized: "auth.signup.identity.displayName", defaultValue: "Nom affiché", bundle: .main),
-                        prefix: nil,
-                        text: Binding(
-                            get: { viewModel.form.displayName.isEmpty ? nom : viewModel.form.displayName },
-                            set: { viewModel.form.displayName = $0 }
-                        )
-                    )
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(MeeshySpacing.md)
         .background(inputSurface(isFocused: false))
     }
 
-    private func identityInput(field: SignupField, label: String, prefix: String?, text: Binding<String>) -> some View {
+    /// Une saisie d'identité, TOUJOURS ouverte (#7897) : un toucher suffit pour
+    /// modifier. Le filigrane rend la dérivation quand le champ est vidé.
+    private func identityInput(
+        field: SignupField,
+        label: String,
+        prefix: String? = nil,
+        placeholder: String,
+        text: Binding<String>
+    ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
             HStack(spacing: MeeshySpacing.xs) {
                 if let prefix {
                     Text(prefix)
@@ -236,18 +221,30 @@ struct SignupView: View {
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
-                TextField(label, text: text)
+                TextField(placeholder.isEmpty ? label : placeholder, text: text)
+                    .textContentType(identityContentType(field))
                     .textInputAutocapitalization(prefix == nil ? .words : .never)
                     .autocorrectionDisabled()
                     .focused($focusedField, equals: field)
                     .foregroundColor(theme.textPrimary)
                     .accessibilityLabel(label)
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .frame(minHeight: 48)
+            .padding(.horizontal, MeeshySpacing.md)
+            .frame(minHeight: 44)
             .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func identityContentType(_ field: SignupField) -> UITextContentType? {
+        switch field {
+        case .firstName: return .givenName
+        case .lastName: return .familyName
+        case .displayName: return .nickname
+        case .username: return .username
+        default: return nil
         }
     }
 
@@ -761,5 +758,30 @@ struct SignupCountrySheet: View {
                 }
             }
         }
+    }
+}
+
+
+/// Ce que la dérivation proposerait pour chaque champ d'identité, champ par
+/// champ — le filigrane d'une saisie qu'on a vidée (#7897).
+struct SignupIdentityDerivation {
+    let firstName: String
+    let lastName: String
+    let displayName: String
+    let username: String
+
+    init(form: SignupForm) {
+        var sansPrenom = form
+        sansPrenom.firstName = nil
+        var sansNom = form
+        sansNom.lastName = nil
+        var sansNomAffiche = form
+        sansNomAffiche.displayName = nil
+        var sansPseudo = form
+        sansPseudo.username = nil
+        firstName = sansPrenom.effectiveFirstName
+        lastName = sansNom.effectiveLastName
+        displayName = sansNomAffiche.effectiveDisplayName
+        username = sansPseudo.effectiveUsername
     }
 }

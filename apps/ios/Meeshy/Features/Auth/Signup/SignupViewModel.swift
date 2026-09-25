@@ -55,6 +55,9 @@ enum SignupField: String, CaseIterable, Hashable {
     /// Le pseudo a sa PROPRE saisie depuis #6479 — l'écran le montre et
     /// l'envoie, donc un refus qui le vise doit se poser sous lui.
     case username
+    /// Prénom et nom ont leur saisie depuis #7897.
+    case firstName
+    case lastName
     case displayName
     case email
     case phoneNumber
@@ -231,8 +234,8 @@ final class SignupViewModel: ObservableObject {
     /// un désormais, et il ENVOIE sa valeur : le refus se pose sous lui, sinon
     /// le message accuse un champ que l'utilisateur n'a pas touché.
     ///
-    /// `firstName`/`lastName` restent sous le nom affiché : la passerelle les
-    /// dérive de lui, et c'est la seule saisie qui permet de les changer.
+    /// `firstName`/`lastName` ont chacun leur saisie depuis #7897 : un refus
+    /// se pose sous celle qu'il vise.
     ///
     /// `systemLanguage` / `regionalLanguage` ne sont volontairement PAS mappés :
     /// la langue régionale ne se montre pas, et un refus sur elle est un défaut
@@ -240,7 +243,9 @@ final class SignupViewModel: ObservableObject {
     static func field(forServerName name: String) -> SignupField? {
         switch name {
         case "username": return .username
-        case "displayName", "firstName", "lastName": return .displayName
+        case "firstName": return .firstName
+        case "lastName": return .lastName
+        case "displayName": return .displayName
         case "email": return .email
         case "phoneNumber", "phoneCountryCode": return .phoneNumber
         case "password": return .password

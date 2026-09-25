@@ -348,28 +348,26 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// saisie que si on la demande. Une promesse RENDUE vaut mieux qu'une
     /// promesse ANNONCÉE.
     ///
-    /// Ce témoin garde donc ce qui reste vrai : le bloc existe, il rend les
-    /// deux valeurs, et il tient la saisie derrière un geste explicite.
-    func test_derivedIdentity_showsWhatWillBeCreated() throws {
+    /// #7897 va plus loin encore (directive porteur 2026-09-25 : « ne plus
+    /// avoir un éditer […] modifiables directement par simple touché ») : les
+    /// quatre valeurs sont des SAISIES déjà remplies, sans bouton « Modifier ».
+    func test_derivedIdentity_showsWhatWillBeCreated_asDirectInputs() throws {
         let body = try code(Self.signupView)
         let bloc = try fieldBody("derivedIdentityBlock", in: body)
 
-        XCTAssertTrue(bloc.contains("effectiveUsername"),
-                      "le PSEUDO qui partira doit être rendu, pas un champ vide")
-        XCTAssertTrue(bloc.contains("effectiveDisplayName"),
-                      "le NOM AFFICHÉ qui partira aussi")
-        XCTAssertTrue(bloc.contains("isEditingIdentity"),
-                      "la saisie reste derrière un geste — le chemin nominal ne demande AUCUN geste")
+        for valeur in ["effectiveFirstName", "effectiveLastName", "effectiveDisplayName", "effectiveUsername"] {
+            XCTAssertTrue(bloc.contains(valeur), "\(valeur) doit être rendu, déjà rempli")
+        }
         XCTAssertTrue(bloc.contains("usernameSuggestions"),
-                      "et les pseudos libres d'un refus doivent atteindre un pixel, sinon le refus est un mur")
+                      "les pseudos libres d'un refus doivent atteindre un pixel, sinon le refus est un mur")
     }
 
-    /// Un refus qui vise l'identité OUVRE la saisie : laisser replié montrerait
-    /// un message sous un champ que rien ne permet d'atteindre.
-    func test_derivedIdentity_opensOnRefusal() throws {
-        let bloc = try fieldBody("derivedIdentityBlock", in: try code(Self.signupView))
-        XCTAssertTrue(bloc.contains("error(for: .username)"))
-        XCTAssertTrue(bloc.contains("isEditingIdentity || refus != nil"))
+    /// Aucun geste intermédiaire : ni état « en édition », ni bouton crayon.
+    func test_derivedIdentity_hasNoEditButton() throws {
+        let body = try code(Self.signupView)
+        XCTAssertFalse(body.contains("isEditingIdentity"), "plus de bloc replié derrière « Modifier »")
+        let bloc = try fieldBody("derivedIdentityBlock", in: body)
+        XCTAssertFalse(bloc.contains("\"pencil\""), "plus de bouton crayon")
     }
 
     /// L'AVERTISSEMENT DE VALIDATION passe derrière un (i) (#6626).

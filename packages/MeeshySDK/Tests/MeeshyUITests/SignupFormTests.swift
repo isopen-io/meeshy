@@ -19,7 +19,7 @@ final class SignupFormTests: XCTestCase {
     // MARK: - Fabriques
 
     private func makeForm(
-        displayName: String = "Awa N’Diaye",
+        displayName: String? = "Awa N’Diaye",
         email: String = "awa@example.com",
         phoneDigits: String = "",
         password: String = "motdepasse",
@@ -260,21 +260,63 @@ final class SignupFormTests: XCTestCase {
 
     // MARK: - La charge exacte
 
-    /// `username` A CHANGÉ DE CAMP (#6479), les deux noms d'état civil NON.
-    ///
-    /// #5218 retirait les trois pour ne pas faire inventer un pseudo unique à
-    /// l'utilisateur. Le pseudo n'est plus INVENTÉ : il est MONTRÉ, dérivé de
-    /// l'adresse, et modifiable — donc il part. `firstName`/`lastName` restent
-    /// dérivés côté serveur : rien ne les saisit.
+    /// L'identité ENTIÈRE part depuis #7897 : pseudo tiré de l'adresse,
+    /// prénom et nom tirés de l'adresse, nom affiché tapé.
     ///
     /// Assertion sur l'ABSENCE et non sur `nil` — c'est le JSON que la
-    /// passerelle lit, et un `Optional` nil encodé par erreur en `null` serait
-    /// une clé PRÉSENTE à valeur nulle, que `AuthSchemas.register` refuserait.
-    func test_registerRequest_carriesUsername_butNeverFirstOrLastName() throws {
-        let payload = try encodedPayload(makeForm())
+    /// passerelle lit : un `lastName` vide serait refusé par `minLength: 1`.
+    func test_registerRequest_carriesUsernameAndNames_fromTheAddress() throws {
+        let payload = try encodedPayload(makeForm(email: "awa.ndiaye@example.com"))
         XCTAssertEqual(payload["username"] as? String, "awa-ndiaye")
-        XCTAssertNil(payload["firstName"])
+        XCTAssertEqual(payload["firstName"] as? String, "Awa")
+        XCTAssertEqual(payload["lastName"] as? String, "Ndiaye")
+        XCTAssertEqual(payload["displayName"] as? String, "Awa N’Diaye")
+    }
+
+    func test_registerRequest_mononym_omitsLastName() throws {
+        let payload = try encodedPayload(makeForm(email: "awa@example.com"))
+        XCTAssertEqual(payload["firstName"] as? String, "Awa")
         XCTAssertNil(payload["lastName"])
+    }
+
+    // MARK: - Identité en direct (#7897)
+
+    func test_effectiveIdentity_followsTheAddress_untilTouched() {
+        var form = makeForm(displayName: nil, email: "jean.dupont@example.com")
+        XCTAssertEqual(form.effectiveFirstName, "Jean")
+        XCTAssertEqual(form.effectiveLastName, "Dupont")
+        XCTAssertEqual(form.effectiveDisplayName, "Jean Dupont")
+        XCTAssertEqual(form.effectiveUsername, "jean-dupont")
+
+        form.firstName = "Jean-Luc"
+        XCTAssertEqual(form.effectiveDisplayName, "Jean-Luc Dupont")
+        XCTAssertEqual(form.effectiveUsername, "jean-dupont")
+
+        form.email = "jean.martin@example.com"
+        XCTAssertEqual(form.effectiveFirstName, "Jean-Luc")
+        XCTAssertEqual(form.effectiveLastName, "Martin")
+        XCTAssertEqual(form.effectiveDisplayName, "Jean-Luc Martin")
+        XCTAssertEqual(form.effectiveUsername, "jean-martin")
+    }
+
+    func test_effectiveDisplayName_typedWins_clearedFallsBackToNames() {
+        var form = makeForm(displayName: "JD", email: "jean.dupont@example.com")
+        XCTAssertEqual(form.effectiveDisplayName, "JD")
+        form.displayName = "  "
+        XCTAssertEqual(form.effectiveDisplayName, "Jean Dupont")
+    }
+
+    func test_clearedLastName_staysEmpty() {
+        var form = makeForm(displayName: nil, email: "jean.dupont@example.com")
+        form.lastName = ""
+        XCTAssertEqual(form.effectiveLastName, "")
+        XCTAssertEqual(form.effectiveDisplayName, "Jean")
+    }
+
+    func test_typedFirstNameWithoutLetter_blocksSubmit() {
+        var form = makeForm()
+        form.firstName = "42"
+        XCTAssertFalse(form.canSubmit)
     }
 
     func test_registerRequest_carriesTheIdentityAsDisplayName() throws {

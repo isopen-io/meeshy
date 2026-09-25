@@ -212,7 +212,8 @@ export function effectiveLastName(form: SignupFormState): string {
 export function effectiveDisplayName(form: SignupFormState): string {
   const tape = (form.displayName ?? '').trim();
   if (tape !== '') return tape;
-  return recevable(`${effectiveFirstName(form)} ${effectiveLastName(form)}`.trim());
+  const compose = `${effectiveFirstName(form)} ${effectiveLastName(form)}`.trim();
+  return isDisplayNameValid(compose) ? compose : '';
 }
 
 /** Les chiffres saisis, débarrassés de tout ce qui n'en est pas. */

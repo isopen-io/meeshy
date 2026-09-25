@@ -41067,53 +41067,6 @@
         }
       }
     },
-    "auth.signup.identity.close": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiudi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fechar"
-          }
-        }
-      }
-    },
     "auth.signup.identity.displayName": {
       "extractionState": "manual",
       "localizations": {
@@ -41161,96 +41114,96 @@
         }
       }
     },
-    "auth.signup.identity.edit": {
+    "auth.signup.identity.firstName": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعديل"
+            "value": "الاسم الأول"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ändern"
+            "value": "Vorname"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit"
+            "value": "First name"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar"
+            "value": "Nombre"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifier"
+            "value": "Prénom"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifica"
+            "value": "Nome"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar"
+            "value": "Nome"
           }
         }
       }
     },
-    "auth.signup.identity.editLabel": {
+    "auth.signup.identity.lastName": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعديل الاسم المستعار والاسم المعروض"
+            "value": "اسم العائلة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Benutzernamen und Anzeigenamen ändern"
+            "value": "Nachname"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit username and display name"
+            "value": "Last name"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar usuario y nombre visible"
+            "value": "Apellido"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifier le pseudo et le nom affiché"
+            "value": "Nom"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifica nome utente e nome visualizzato"
+            "value": "Cognome"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar usuário e nome de exibição"
+            "value": "Sobrenome"
           }
         }
       }

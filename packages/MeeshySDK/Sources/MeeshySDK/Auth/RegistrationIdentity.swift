@@ -74,6 +74,17 @@ public enum RegistrationIdentity {
         pseudoSlug(partieLocale(email).replacingOccurrences(of: ".", with: "-"))
     }
 
+    /// Découpe un nom affiché en prénom / nom — miroir de `derivedNames`
+    /// (TS). Un mononyme rend `lastName == ""` : la colonne l'exige, on
+    /// n'invente pas un nom de famille (#7897 : l'écran en remplit les champs).
+    public static func derivedNames(_ displayName: String) -> (firstName: String, lastName: String) {
+        let mots = displayName.split(whereSeparator: \.isWhitespace).map(String.init)
+        return (
+            firstName: capitalizeName(mots.first ?? ""),
+            lastName: capitalizeName(mots.dropFirst().joined(separator: " "))
+        )
+    }
+
     /// Le nom affiché tiré d'une adresse — `jean.dupont@…` rend `Jean Dupont`.
     /// Rend `""` quand rien n'est slugifiable : l'écran doit alors rendre le
     /// PSEUDO plutôt qu'une promesse vide.
