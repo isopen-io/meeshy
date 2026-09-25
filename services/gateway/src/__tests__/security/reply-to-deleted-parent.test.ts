@@ -128,6 +128,20 @@ describe('les select nommés du message cité demandent deletedAt', () => {
     expect(blocApres(source, '  replyTo: {')).toContain('deletedAt: true');
   });
 
+  /**
+   * Le CINQUIÈME site : `PUT /conversations/:id/messages/:messageId` répand
+   * la ligne mise à jour, `replyTo` inclus (`include`), dans la réponse HTTP ET
+   * dans la charge `message:edited`. Éditer une réponse republiait donc le
+   * texte d'un parent supprimé — ou protégé — sans passer par la garde.
+   */
+  it('édition — la réponse et message:edited passent la citation par servedQuotedMessage', () => {
+    const source = readFileSync(join(GATEWAY_SRC, 'routes/conversations/messages-advanced-edit.ts'), 'utf-8');
+    expect(source).toMatch(/\bimport\s*\{[^}]*\bservedQuotedMessage\b[^}]*\}\s*from\s*['"][^'"]*servedQuotedMessage['"]/);
+    const reponse = blocApres(source, 'const messageResponse = {');
+    expect(reponse).toMatch(/replyTo:/);
+    expect(reponse).toMatch(/servedQuotedMessage\(/);
+  });
+
   it('lien de partage — le formateur sert deletedAt', () => {
     const source = readFileSync(join(GATEWAY_SRC, 'routes/links/utils/message-formatters.ts'), 'utf-8');
     expect(blocApres(source, 'function formatReplyToMessage')).toMatch(/deletedAt/);
