@@ -1097,6 +1097,8 @@ const it = {
   'attachment.protected.video': 'Video protetto',
   'attachment.protected.audio': 'Audio protetto',
   'attachment.protected.file': 'Allegato protetto',
+  'media.reactions.badge.a11y': 'Reazioni',
+  'media.reactions.badge.mine.a11y': 'compresa la tua',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',
