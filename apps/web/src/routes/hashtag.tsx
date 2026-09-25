@@ -51,7 +51,7 @@ export default function HashtagScreen() {
      retombait en `<span>` inerte, ce que la loi 4 rend correct et ce qui fait
      qu'aucun témoin ne rougissait. Le rappel vient du seul hôte des gestes
      d'une publication, comme les deux autres de la rangée. */
-  const { announcement, onGesture, onShare, onComment, onRepost, menu } = usePostGesture();
+  const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   const page = useInfiniteQuery(hashtagInfiniteOptions({ ...apiDeps, tag: canonical }));
 
@@ -142,6 +142,7 @@ export default function HashtagScreen() {
           </>
         )}
       </main>
+      {repostConfirm}
     </div>
   );
 }

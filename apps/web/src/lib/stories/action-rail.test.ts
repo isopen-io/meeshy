@@ -67,6 +67,12 @@ describe('resolveStoryActionRailPlan — StoryActionRailPlan.resolve (StoryViewe
     expect(resolveStoryActionRailPlan(autrui()).showsForward).toBe(true);
     expect(resolveStoryActionRailPlan(autrui({ isOwnStory: true })).showsForward).toBe(true);
   });
+
+  test('l’AUTEUR voit « Traductions » — aucune gate sur l’auteur (Sidebar.swift:70-74, #7114)', () => {
+    expect(resolveStoryActionRailPlan(autrui({ isOwnStory: true, hasTranslatableContent: true })).showsTranslations).toBe(
+      true,
+    );
+  });
 });
 
 describe('freezeStoryActionRail — le plan est CALCULÉ À L’ENTRÉE puis FIGÉ (directive 2026-07-10)', () => {
@@ -112,6 +118,16 @@ describe('freezeStoryActionRail — le plan est CALCULÉ À L’ENTRÉE puis FIG
     const apres = freezeStoryActionRail(entree, autrui({ hasAudibleSound: true, commentCount: 12 }));
     expect(apres.plan.showsSound).toBe(true);
     expect(apres.plan.showsComments).toBe(false);
+  });
+
+  test('« hasTranslatableContent » NE FRANCHIT PAS le gel — figée `false` à l’entrée, une remontée `true` sur la MÊME story ne change rien (#7114)', () => {
+    /* La disponibilité vient du corpus déjà en main (§ loi du module) : elle
+       ne peut pas arriver en second temps, contrairement au son (sondage
+       asynchrone) et aux commentaires (réconciliation d'ouverture). */
+    const entree = freezeStoryActionRail(null, autrui({ hasTranslatableContent: false }));
+    const pendant = freezeStoryActionRail(entree, autrui({ hasTranslatableContent: true }));
+    expect(pendant).toBe(entree);
+    expect(pendant.plan.showsTranslations).toBe(false);
   });
 });
 

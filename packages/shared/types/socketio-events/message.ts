@@ -30,6 +30,18 @@ export interface MessageExpiredEventData {
 }
 
 /**
+ * Le post cité par des messages de `conversationId` a été retiré (#7969).
+ * `postId` est l'identifiant que les messages portent dans `storyReplyToId` ;
+ * `deletedAt` (ISO 8601) est le marqueur que la lecture REST sert déjà sur
+ * `postReplyTo.deletedAt`. Aucun champ du contenu retiré. @see MESSAGE_CITED_POST_WITHDRAWN
+ */
+export interface MessageCitedPostWithdrawnEventData {
+  readonly conversationId: string;
+  readonly postId: string;
+  readonly deletedAt: string;
+}
+
+/**
  * LE DÉCOMPTE D'UN ÉPHÉMÈRE COMMENCE (contrat du fil #7451, point 5) — émis à
  * la PREMIÈRE réception d'un destinataire, jamais à l'envoi.
  *

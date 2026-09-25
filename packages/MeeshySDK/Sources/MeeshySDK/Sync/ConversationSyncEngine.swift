@@ -19,6 +19,14 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
     case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
     case deleted(messageId: String, deletedAt: Date)
+    /// `message:expired` (#7960) — un éphémère échu, brûlé par le SERVEUR.
+    /// Distinct de `.deleted` : l'hôte l'applique comme la conversation
+    /// OUVERTE (`ConversationSocketHandler`), sans épargner une vue unique.
+    case expired(messageId: String, expiredAt: Date)
+    /// `message:cited-post-withdrawn` (#7969) — le post que des messages de
+    /// `conversationId` citent a été retiré : chaque citation devient
+    /// « Story indisponible ».
+    case citedPostWithdrawn(postId: String, conversationId: String, deletedAt: Date)
     /// `ownerUserId` (le `User.id` de l'auteur) est ce qui reconnaît MA
     /// réaction posée d'un autre appareil (#7927) : sans lui, le relais d'une
     /// conversation fermée l'écrivait sous mon `Participant.id`, jamais

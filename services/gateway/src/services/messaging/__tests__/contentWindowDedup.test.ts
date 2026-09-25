@@ -56,6 +56,28 @@ describe("un message renvoyé avec une clé NEUVE ne crée plus de seconde ligne
     });
   });
 
+  describe("les emojis partent EN SÉRIE (#7985)", () => {
+    it("ÉCARTE un message fait d'un seul emoji — 😂😂😂 tapés d'affilée sont trois messages", () => {
+      expect(isContentWindowDedupEligible(candidate({ content: '😂' }))).toBe(false);
+    });
+
+    it("ÉCARTE plusieurs emojis, séquences ZWJ et variantes comprises", () => {
+      expect(isContentWindowDedupEligible(candidate({ content: '❤️👍🏽' }))).toBe(false);
+      expect(isContentWindowDedupEligible(candidate({ content: ' 👨‍👩‍👧 ' }))).toBe(false);
+    });
+
+    it("retient un texte qui CONTIENT un emoji — le filet contre #6915 garde le texte", () => {
+      expect(isContentWindowDedupEligible(candidate({ content: 'Bravo 😂' }))).toBe(true);
+    });
+
+    it("n'interroge pas la base pour un emoji seul", async () => {
+      const { lookup, calls } = lookupReturning({ id: 'm-1' });
+      const found = await findRecentIdenticalMessage({ candidate: candidate({ content: '😂' }), now: new Date(), lookup });
+      expect(found).toBeNull();
+      expect(calls).toHaveLength(0);
+    });
+  });
+
   describe('la recherche', () => {
     it("rend le message existant quand la conversation, l'expéditeur et le contenu coïncident dans la fenêtre", async () => {
       const { lookup, calls } = lookupReturning({ id: 'msg-deja-la' });

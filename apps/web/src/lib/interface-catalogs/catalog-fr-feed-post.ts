@@ -54,6 +54,14 @@ const frFeedPost = {
   'feed.post.repost.offline': 'Hors ligne — le repartage n’a pas pu partir.',
   'feed.post.repost.unconfirmed': 'Repartage non confirmé — réessayez',
   'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
+  /* LA CONFIRMATION AVANT L'ENVOI (revue-correction #6278) — le repost est
+     APPEND-ONLY, sans « annuler » nulle part dans l'interface : iOS ouvre une
+     alerte (`FeedPostCard.swift:1049-1053`) avant d'envoyer, jamais au seul
+     tap. `feed.post.action.repost` sert de libellé au bouton de confirmation
+     (« Repartager »), `common.cancel` à celui d'annulation — ce sont les
+     MÊMES mots que le bouton de la rangée et le reste de l'app. */
+  'feed.post.repost.confirm.title': 'Repartager cette publication ?',
+  'feed.post.repost.confirm.body': 'Elle apparaîtra dans votre fil, visible par vos abonnés. Cette action ne peut pas être annulée.',
   'feed.post.reel.chip': 'Réel',
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Réel de {author}',

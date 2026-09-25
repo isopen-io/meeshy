@@ -43,11 +43,13 @@
  *
  * `2 s` retient les rafales — 3 à 5 copies en 75–100 ms, qu'aucun humain ne
  * produit — et reste loin de l'intervalle où répéter un texte redevient un
- * geste humain plausible. Elle prolonge la règle que les DEUX clients déclarent
- * déjà pour eux-mêmes (`DEBOUNCE_MS = 600` côté web-v2,
- * `duplicateSendDebounce = 0.6` côté iOS) : ce module ne l'invente pas, il la
- * porte côté serveur où elle survit à une instance de vue recréée, et l'élargit
- * de la gigue réseau entre le geste et l'arrivée.
+ * geste humain plausible.
+ *
+ * ### Un message fait UNIQUEMENT d'emojis ne se déduplique JAMAIS (#7985)
+ *
+ * Taper 😂 trois fois de suite est un geste humain voulu, et les clients ne
+ * dédoublonnent plus par contenu (directive porteur 2026-09-25). Le filet
+ * reste pour le TEXTE tant que la cause (#6915) n'est pas corrigée.
  *
  * ### Un contenu VIDE ne se déduplique JAMAIS
  *
@@ -58,6 +60,8 @@
  * sûre : **hors fenêtre d'éligibilité.** Un message sans texte est rendu à la
  * garde nominale `clientMessageId`, et à elle seule.
  */
+
+import { isEmojiOnly } from '../../utils/emoji-only';
 
 export const CONTENT_WINDOW_DEDUP_MS = 2000;
 
@@ -90,6 +94,7 @@ export type ContentWindowCandidate = {
  */
 export function isContentWindowDedupEligible(candidate: ContentWindowCandidate): boolean {
   if ((candidate.attachmentIds?.length ?? 0) > 0) return false;
+  if (isEmojiOnly(candidate.content)) return false;
   return candidate.content.trim().length > 0;
 }
 
