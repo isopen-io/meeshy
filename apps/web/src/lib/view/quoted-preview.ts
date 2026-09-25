@@ -99,6 +99,30 @@ export type QuotedMedia = {
   readonly durationLabel: string | null;
   /** Piste temporelle (vidéo, vocal) : le badge de lecture se pose sur la vignette. */
   readonly timebased: boolean;
+  /**
+   * LE CADRE DE LA MINIATURE (#7929) — non nul quand la citation vise UNE
+   * image ou UNE vidéo (pièce seule, ou pièce NOMMÉE d'un carrousel) : la
+   * citation la montre alors en grand, à la largeur de la carte de story et au
+   * rapport d'aspect du média. `null` sur un média protégé : ses dimensions
+   * décrivent ce que le lecteur n'a pas le droit de voir.
+   */
+  readonly frame: QuotedFrame | null;
+};
+
+/**
+ * `aspectRatio` = largeur / hauteur du média cité, BORNÉ : jamais plus haut
+ * que la scène de story (9:16), jamais plus plat que 3:1. `measured` est faux
+ * quand la pièce ne porte pas ses dimensions — repli CARRÉ, jamais inventé.
+ */
+export type QuotedFrame = { readonly aspectRatio: number; readonly measured: boolean };
+
+const FRAME_TALLEST = 9 / 16;
+const FRAME_FLATTEST = 3;
+
+const frameOf = (attachment: Attachment): QuotedFrame => {
+  const { width, height } = attachment;
+  if (width === undefined || height === undefined || width <= 0 || height <= 0) return { aspectRatio: 1, measured: false };
+  return { aspectRatio: Math.min(FRAME_FLATTEST, Math.max(FRAME_TALLEST, width / height)), measured: true };
 };
 
 export type QuotedPreview = {
@@ -139,10 +163,15 @@ const namedPieceIdOf = (quoted: object): string | undefined => {
   return typeof id === 'string' && id !== '' ? id : undefined;
 };
 
-const representativeOf = (quoted: Pick<Message, 'attachments'>): Attachment | undefined => {
+/** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
+const representativeOf = (
+  quoted: Pick<Message, 'attachments'>,
+): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
   const namedId = namedPieceIdOf(quoted);
   const named = namedId === undefined ? undefined : quoted.attachments?.find((a) => a.id === namedId);
-  return named ?? quoted.attachments?.[0];
+  if (named !== undefined) return { attachment: named, single: true };
+  const first = quoted.attachments?.[0];
+  return first === undefined ? undefined : { attachment: first, single: quoted.attachments?.length === 1 };
 };
 
 /**
@@ -176,12 +205,14 @@ const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | nu
  */
 const mediaOf = (params: {
   readonly attachment: Attachment;
+  readonly single: boolean;
   readonly messageIsProtected: boolean;
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedMedia => {
-  const { attachment, messageIsProtected, interfaceLanguage } = params;
+  const { attachment, single, messageIsProtected, interfaceLanguage } = params;
   const kind = kindOf(attachment);
   const mayTravel = !messageIsProtected && !quotedIsProtected(attachment);
+  const framed = mayTravel && single && (kind === 'image' || kind === 'video');
   return {
     kind,
     label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
@@ -189,6 +220,7 @@ const mediaOf = (params: {
     placeholderSrc: (mayTravel ? thumbHashPlaceholder(attachment.thumbHash) : undefined) ?? null,
     durationLabel: mayTravel ? attachmentDurationLabel(attachment.duration) : null,
     timebased: kind === 'video' || kind === 'audio',
+    frame: framed ? frameOf(attachment) : null,
   };
 };
 
@@ -213,9 +245,8 @@ export function quotedPreviewOf(params: {
 }): QuotedPreview {
   const { quoted, readerLanguages, interfaceLanguage } = params;
   const messageIsProtected = quotedIsProtected(quoted);
-  const attachment = representativeOf(quoted);
-  const media =
-    attachment === undefined ? null : mediaOf({ attachment, messageIsProtected, interfaceLanguage });
+  const piece = representativeOf(quoted);
+  const media = piece === undefined ? null : mediaOf({ ...piece, messageIsProtected, interfaceLanguage });
 
   /* UN PLACEHOLDER NE SE TRADUIT PAS. La passerelle retire déjà les
      traductions d'une citation protégée (`servedQuotedMessage`), mais ce
