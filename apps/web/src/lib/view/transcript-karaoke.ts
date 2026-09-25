@@ -91,3 +91,82 @@ export function segmentSeekTarget(
   const segment = segments[index];
   return segment === undefined ? null : segment.startMs / 1000;
 }
+
+/** Ce que `karaokeSegments` lit d'une transcription — la forme audio/vidéo, sans l'exiger. */
+type TranscriptionLike = { readonly language?: string; readonly segments?: readonly TimedSegment[] };
+
+const timedOf = (value: unknown): readonly TimedSegment[] | undefined => {
+  if (value === null || typeof value !== 'object' || !('segments' in value)) return undefined;
+  const { segments } = value as { readonly segments?: unknown };
+  return Array.isArray(segments) && segments.length > 0 ? (segments as readonly TimedSegment[]) : undefined;
+};
+
+/**
+ * Les MOTS répartis sur la durée, au prorata de leur longueur (espace compris).
+ *
+ * Miroir du repli proportionnel d'iOS (`activeSegmentIndex`, « transcription
+ * sans découpe temporelle → karaoké quand même synchronisé »), porté au mot
+ * plutôt qu'au segment : un bloc unique surligné du début à la fin ne suit
+ * rien. Une voix prononce un mot long plus longtemps qu'un mot court — la
+ * longueur est la meilleure estimation que le texte seul autorise.
+ */
+const proportionalWords = (text: string, durationMs: number): readonly TimedSegment[] => {
+  const words = text.split(/\s+/).filter((w) => w !== '');
+  const weights = words.map((w) => w.length + 1);
+  const total = weights.reduce((a, b) => a + b, 0);
+  const bounds = weights.reduce<readonly number[]>((acc, w) => [...acc, (acc.at(-1) ?? 0) + w], [0]);
+  return words.map((word, i) => ({
+    startMs: Math.round(((bounds[i] ?? 0) / total) * durationMs),
+    endMs: Math.round(((bounds[i + 1] ?? total) / total) * durationMs),
+    text: word,
+  }));
+};
+
+/**
+ * LES BORNES DU TEXTE SERVI (#7911) — celles de la piste qu'on ENTEND.
+ *
+ * Miroir de `resolveDisplaySegments` (`AudioPlayerView+Transcription.swift:37`) :
+ * 1. texte original ⇒ les segments de la transcription ;
+ * 2. traduction ⇒ les segments de SA piste (`AttachmentTranslation.segments`) ;
+ * 3. rien d'horodaté ⇒ les mots répartis sur la durée de la piste.
+ *
+ * **Garde : le texte et la piste parlent la MÊME langue.** Quand le Prisme sert
+ * une traduction sans piste traduite, la voix reste l'originale : allumer le
+ * texte français au rythme d'une voix anglaise affirmerait une synchronisation
+ * qui n'existe pas (#6306, « un karaoké faux est pire qu'aucun karaoké »).
+ */
+export function karaokeSegments(params: {
+  readonly transcription: TranscriptionLike | undefined;
+  readonly translations: unknown;
+  readonly servedText: string;
+  readonly servedLanguage: string;
+  readonly trackLanguage: string;
+  readonly durationMs: number;
+}): readonly TimedSegment[] | undefined {
+  const { transcription, translations, servedText, servedLanguage, trackLanguage, durationMs } = params;
+  if (servedText.trim() === '' || servedLanguage !== trackLanguage) return undefined;
+
+  const stamped =
+    servedLanguage === transcription?.language
+      ? timedOf(transcription)
+      : translations !== null && typeof translations === 'object'
+        ? timedOf((translations as Readonly<Record<string, unknown>>)[servedLanguage])
+        : undefined;
+  if (stamped !== undefined) return stamped;
+
+  return durationMs > 0 ? proportionalWords(servedText, durationMs) : undefined;
+}
+
+/** Le rôle d'un segment pendant l'écoute — `idle` partout quand rien ne joue. */
+export type KaraokeTone = 'idle' | 'past' | 'active' | 'upcoming';
+
+/**
+ * Miroir de `inlineSegmentColor` (`AudioPlayerView+Transcription.swift:562`) :
+ * l'actif ressort, les passés restent pleins, les suivants s'effacent — et à
+ * l'arrêt (`active === null`) le texte redevient uniforme.
+ */
+export function karaokeTone(index: number, active: number | null): KaraokeTone {
+  if (active === null) return 'idle';
+  if (index === active) return 'active';
+  return index < active ? 'past' : 'upcoming';
+}
