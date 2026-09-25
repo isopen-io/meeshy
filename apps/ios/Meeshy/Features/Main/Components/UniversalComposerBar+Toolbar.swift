@@ -159,14 +159,33 @@ extension UniversalComposerBar {
     }
 }
 
+// ============================================================================
+// MARK: - Bande de la barre d'outils (#7997)
+// ============================================================================
+//
+// Un `HStack` dont aucun enfant ne se compresse (cadres de 30 pt, pastille de
+// langue en `.fixedSize()`, capsules des protections) rend une largeur PLUS
+// GRANDE que celle qu'on lui propose dès que Dynamic Type grossit les glyphes ;
+// chaque parent non borné la reprend, et tout l'écran de conversation était
+// mis en page sur 493 pt pour un iPhone de 402 pt. La bande garde la rangée
+// telle quelle quand elle tient, et la fait DÉFILER horizontalement sinon :
+// sa largeur ne dépasse jamais celle proposée.
+
 struct ComposerToolbarStrip<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
         HStack(spacing: 6) {
-            leading
-            Spacer()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    leading
+                    Spacer(minLength: 0)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) { leading }
+                }
+            }
             trailing
         }
     }
