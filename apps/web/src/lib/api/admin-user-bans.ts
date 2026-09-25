@@ -1,5 +1,6 @@
 import { type AdminDeps, asRecord, asText } from './admin';
 import type { ApiResult } from './http';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
  * **BANNIR, LEVER, LISTER** (#6819) — `POST /api/v1/admin/users/:userId/ban`,
@@ -60,7 +61,13 @@ export function decodeAdminBans(raw: unknown): readonly AdminBan[] {
     .filter((ban): ban is AdminBan => ban !== null);
 }
 
-export const adminUserBansQueryKey = (userId: string) => ['admin', 'user', userId, 'bans'] as const;
+/**
+ * Sous {@link ADMIN_SOUVERAIN_PREFIXE}, donc jamais écrite sur le disque : les
+ * motifs de bannissement et de levée sont du texte libre de modération, écrit
+ * SUR un membre, et l'onglet Sécurité le lit à chaque ouverture de la fiche.
+ * Les invalidations passent par cette même fabrique : elles suivent.
+ */
+export const adminUserBansQueryKey = (userId: string) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'bans'] as const;
 
 /**
  * L'HISTORIQUE, sous `canViewUsers` — une lecture plus largement ouverte que

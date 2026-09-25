@@ -1,5 +1,6 @@
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import type { ApiResult } from './http';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
  * **LES MÉDIAS D'UN MEMBRE** (#6819) —
@@ -51,8 +52,16 @@ export type AdminMediaPage = {
 
 export const ADMIN_MEDIA_PAGE_SIZE = 20;
 
+/**
+ * Sous {@link ADMIN_SOUVERAIN_PREFIXE}, donc jamais écrite sur le disque : une
+ * page porte le nom, l'URL et la vignette de chaque fichier, et l'identifiant
+ * du message qui le porte — pièces jointes de conversations privées comprises.
+ * Le carrousel de la fiche la lit à CHAQUE ouverture d'un membre : persistée,
+ * elle laisserait dans `localStorage` une copie des médias de tous les membres
+ * consultés, que ni la trace d'audit ni la déconnexion ne révoquent.
+ */
 export const adminUserMediaQueryKey = (userId: string, offset: number) =>
-  ['admin', 'user', userId, 'media', offset] as const;
+  [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'media', offset] as const;
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;

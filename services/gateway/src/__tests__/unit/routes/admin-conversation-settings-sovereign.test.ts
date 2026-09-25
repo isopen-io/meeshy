@@ -34,6 +34,7 @@ const CONV_ID = '507f1f77bcf86cd799439aaa';
 const MEMBER_ID = '507f1f77bcf86cd799439bbb';
 const CREATOR_ID = '507f1f77bcf86cd799439ccc';
 const BOSS_ID = '507f1f77bcf86cd799439ddd';
+const GONE_ID = '507f1f77bcf86cd799439eee';
 const MOTIF = 'signalement #42 instruit';
 
 type AnyRecord = Record<string, unknown>;
@@ -49,7 +50,7 @@ type Etat = {
 const PARTICIPANTS = [
   { id: 'pt-member', userId: MEMBER_ID, isActive: true, role: 'member', displayName: 'Bob' },
   { id: 'pt-creator', userId: CREATOR_ID, isActive: true, role: 'creator', displayName: 'Alice' },
-  { id: 'pt-gone', userId: 'gone', isActive: false, role: 'member', displayName: 'Old' },
+  { id: 'pt-gone', userId: GONE_ID, isActive: false, role: 'member', displayName: 'Old' },
   { id: 'pt-boss', userId: BOSS_ID, isActive: true, role: 'member', displayName: 'Boss' },
 ];
 
@@ -336,8 +337,17 @@ describe('PATCH /admin/conversations/:conversationId/participants/:userId', () =
 
   it('rend 404 pour un participant inactif ou absent', async () => {
     const { app } = await monter('ADMIN');
-    const res = await patchRole(app, 'gone', { role: 'admin', reason: MOTIF });
+    const res = await patchRole(app, GONE_ID, { role: 'admin', reason: MOTIF });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuse un identifiant de membre malformé en 400, avant la garde de hiérarchie', async () => {
+    const { app, prisma } = await monter('ADMIN');
+    const res = await patchRole(app, 'pas-un-objectid', { role: 'admin', reason: MOTIF });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -399,6 +409,15 @@ describe('POST /admin/conversations/:conversationId/participants/:userId/remove'
     const { app, prisma } = await monter('ADMIN');
     const res = await remove(app, BOSS_ID, { reason: MOTIF });
     expect(res.statusCode).toBe(403);
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse un identifiant de membre malformé en 400, avant la garde de hiérarchie', async () => {
+    const { app, prisma } = await monter('ADMIN');
+    const res = await remove(app, 'pas-un-objectid', { reason: MOTIF });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
     expect(prisma.participant.update).not.toHaveBeenCalled();
     await app.close();
   });

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeAdminMediaPage, loadAdminUserMedia } from './admin-user-media';
+import { adminUserMediaQueryKey, decodeAdminMediaPage, loadAdminUserMedia } from './admin-user-media';
 import type { HttpTransport } from './http';
+import { persistableQuery } from './query-client';
+import { estClefSouveraine } from './souverain';
 import { pageServie } from './admin';
 import { resultatServi } from '@/test-support/served-pagination';
 
@@ -131,5 +133,15 @@ describe('loadAdminUserMedia — l’adresse demandée', () => {
 
     expect(resultat.ok).toBe(false);
     expect(!resultat.ok && resultat.status).toBe(403);
+  });
+});
+
+describe('la clé des médias ne touche pas le disque', () => {
+  test('elle commence par `admin-souverain`, et `persistableQuery` la refuse', () => {
+    const clef = adminUserMediaQueryKey('u-1', 20);
+
+    expect(clef).toEqual(['admin-souverain', 'user', 'u-1', 'media', 20]);
+    expect(estClefSouveraine(clef)).toBe(true);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: clef })).toBe(false);
   });
 });

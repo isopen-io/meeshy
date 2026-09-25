@@ -79,7 +79,7 @@ import { logError } from '../../utils/logger.js';
 import {
   conversationConfigurationSuccess,
   conversationMemberRoleSuccess,
-  conversationMemberRemovalSuccess, adminErrorResponses } from './user-admin-response-schemas';
+  conversationMemberRemovalSuccess, adminErrorResponses, userIdParams } from './user-admin-response-schemas';
 
 /** Même seuil que la lecture souveraine des messages. */
 const MOTIF_MINIMAL = 10;
@@ -126,10 +126,17 @@ const SELECT_ECRITURE = {
   participants: { select: { id: true, userId: true, isActive: true } },
 } as const;
 
+/**
+ * `:userId` reprend le motif ObjectId de {@link userIdParams} : un identifiant
+ * malformé est refusé en 400 au schéma, avant que la garde de hiérarchie ne le
+ * remette à Prisma — qui lèverait, et rendrait un 500 à l'administrateur.
+ */
 const params = (noms: readonly string[]) => ({
   type: 'object',
   required: [...noms],
-  properties: Object.fromEntries(noms.map((nom) => [nom, { type: 'string' }])),
+  properties: Object.fromEntries(
+    noms.map((nom) => [nom, nom === 'userId' ? userIdParams.properties.userId : { type: 'string' }])
+  ),
 });
 
 function acteurId(request: FastifyRequest): string {
@@ -160,6 +167,8 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
   // Les deux gestes sur un MEMBRE écrivent sur un compte nommé : la
   // hiérarchie de plateforme s'y applique comme à toute écriture d'admin sur
   // un utilisateur (#4154) — un ADMIN ne retire ni ne rétrograde un BIGBOSS.
+  // Elles courent en `preHandler`, APRÈS la validation du schéma : c'est elle
+  // qui refuse un `:userId` malformé avant que la garde ne le lise.
   const gardesSurMembre = [...gardes, requireHierarchy({ param: 'userId' })];
 
   fastify.patch<{ Params: { conversationId: string }; Body: CorpsDeConfiguration }>('/admin/conversations/:conversationId', {
@@ -305,7 +314,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
     Params: { conversationId: string; userId: string };
     Body: { role: 'admin' | 'moderator' | 'member'; reason: string };
   }>('/admin/conversations/:conversationId/participants/:userId', {
-    onRequest: gardesSurMembre,
+    preHandler: gardesSurMembre,
     schema: {
       description: "Change le rang d'un membre dans une conversation, sans en être membre. Le créateur est protégé. #7845.",
       tags: ['admin'],
@@ -360,7 +369,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
     Params: { conversationId: string; userId: string };
     Body: { reason: string };
   }>('/admin/conversations/:conversationId/participants/:userId/remove', {
-    onRequest: gardesSurMembre,
+    preHandler: gardesSurMembre,
     schema: {
       description: "Retire un membre d'une conversation, sans en être membre. Le créateur est protégé. #7845.",
       tags: ['admin'],

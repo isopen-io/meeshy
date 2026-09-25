@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { banAdminUser, decodeAdminBans, liftAdminUserBan, loadAdminUserBans } from './admin-user-bans';
+import { adminUserBansQueryKey, banAdminUser, decodeAdminBans, liftAdminUserBan, loadAdminUserBans } from './admin-user-bans';
 import type { HttpTransport } from './http';
+import { persistableQuery } from './query-client';
+import { estClefSouveraine } from './souverain';
 
 /**
  * BANNIR, LEVER, LISTER (#6819) — `POST …/ban`, `POST …/bans/:banId/lift`,
@@ -186,5 +188,15 @@ describe('loadAdminUserBans — lire l’historique, sous canViewUsers', () => {
 
     expect(resultat.ok).toBe(false);
     expect(!resultat.ok && resultat.status).toBe(403);
+  });
+});
+
+describe('la clé de l’historique des bannissements ne touche pas le disque', () => {
+  test('elle commence par `admin-souverain`, et `persistableQuery` la refuse', () => {
+    const clef = adminUserBansQueryKey('u-1');
+
+    expect(clef).toEqual(['admin-souverain', 'user', 'u-1', 'bans']);
+    expect(estClefSouveraine(clef)).toBe(true);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: clef })).toBe(false);
   });
 });
