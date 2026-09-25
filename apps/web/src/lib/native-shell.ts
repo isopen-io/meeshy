@@ -7,6 +7,8 @@
 export type CoqueNative = {
   readonly PluginHeaders?: ReadonlyArray<{ readonly name: string; readonly methods?: ReadonlyArray<{ readonly name: string }> }>;
   readonly nativePromise?: (plugin: string, methode: string, options: object) => Promise<unknown>;
+  /** `android` ou `ios` dans une coque, `web` ailleurs. */
+  readonly getPlatform?: () => string;
 };
 
 export function coqueCourante(): CoqueNative | undefined {

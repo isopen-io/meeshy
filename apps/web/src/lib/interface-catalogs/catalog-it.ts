@@ -914,6 +914,7 @@ const it = {
 
   'appUpdate.available': 'È disponibile una nuova versione di Meeshy!',
   'appUpdate.hint': 'Ricarica per avere le ultime novità.',
+  'appUpdate.storeHint': 'Installala dallo store delle app.',
   'appUpdate.action': 'Aggiorna',
   'appUpdate.dismiss': 'Attendi',
   'appUpdate.applying': 'Aggiornamento…',

@@ -911,6 +911,7 @@ const ar = {
 
   'appUpdate.available': 'يتوفر إصدار جديد من Meeshy!',
   'appUpdate.hint': 'أعد التحميل للحصول على أحدث المزايا.',
+  'appUpdate.storeHint': 'ثبّتها من متجر التطبيقات.',
   'appUpdate.action': 'تحديث',
   'appUpdate.dismiss': 'انتظار',
   'appUpdate.applying': 'جارٍ التحديث…',
