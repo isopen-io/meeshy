@@ -49,4 +49,9 @@
          "requesting" (recette QEMU, socle du prompt). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- #7307 — Android 13+ (targetSdk 36) : sans elle, aucune bannière ne
+         s'affiche, et requestPermissions() de @capacitor/push-notifications
+         rend « denied » sans dialogue. Le manifeste du plugin ne la fournit
+         pas (il ne déclare que son MessagingService). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
