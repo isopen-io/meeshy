@@ -311,6 +311,8 @@ const fr = {
   'admin.user.deviceCountry': 'Pays de l\'appareil',
   'admin.user.participations': 'Participations',
   'admin.stats.more': 'Toutes les statistiques',
+  'admin.stats.reportsOnMessages': 'Signalements sur ses messages',
+  'admin.stats.withheld': 'Non communiqué',
   'admin.pref.edit': 'Modifier : {category}',
   'admin.carousel.unavailable': 'Images indisponibles pour l\'instant.',
   'admin.conv.type.direct': 'Tête-à-tête',

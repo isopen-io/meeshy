@@ -77,7 +77,18 @@ export function AdminCounter({ label, value }: { readonly label: string; readonl
  * 12 345 » — jamais un nombre orphelin dont il faudrait deviner l'objet.
  * `value` est déjà FORMATÉ par l'appelant (`adminCount`, langue de la page).
  */
-export function AdminStatTile({ id, label, value }: { readonly id: string; readonly label: string; readonly value: string }) {
+export function AdminStatTile({
+  id,
+  label,
+  value,
+  valueLabel,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  /** Ce que le lecteur d'écran dit à la place d'un `value` muet (« — »). */
+  readonly valueLabel?: string;
+}) {
   return (
     <div
       data-admin-stat={id}
@@ -87,7 +98,7 @@ export function AdminStatTile({ id, label, value }: { readonly id: string; reado
       <dt className="truncate text-caption" style={{ color: INK2 }}>
         {label}
       </dt>
-      <dd className="text-screen font-bold tabular-nums" style={{ color: INK }}>
+      <dd className="text-screen font-bold tabular-nums" style={{ color: INK }} aria-label={valueLabel}>
         {value}
       </dd>
     </div>

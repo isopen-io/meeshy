@@ -147,6 +147,15 @@ describe('GET /admin/users/:userId/conversations', () => {
     await app.close();
   });
 
+  it('refuse un identifiant qui n\'est pas un ObjectId (400) avant toute lecture', async () => {
+    const prisma = createMockPrisma({});
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/users/not-an-id/conversations' });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('returns paginated conversations with the target user membership flattened', async () => {
     const prisma = createMockPrisma({
       conversations: [

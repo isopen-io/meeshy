@@ -47,6 +47,7 @@
  * pas.
  */
 import type { FastifyInstance } from 'fastify';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { requireUserViewAccess } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission } from '../../middleware/authorize';
@@ -64,6 +65,32 @@ import { logError } from '../../utils/logger.js';
 // messages, tout en éliminant le scan réellement illimité que l'audit signale.
 export const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
 export const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
+
+/**
+ * Les identifiants des messages ÉCRITS par un compte, tels que `Report` peut
+ * les viser — l'énumération bornée que `reported-messages` paie avant de
+ * filtrer `reportedEntityId IN […]`, et que le compteur de la fiche
+ * (`services/admin/admin-user-stats.ts`) paie avant de compter. Une seule
+ * énumération : deux copies divergeraient au premier plafond changé, et le
+ * compteur cesserait de dire le total de la liste qu'il résume.
+ */
+export async function reportableMessageIdsOf(prisma: PrismaClient, userId: string): Promise<readonly string[]> {
+  const participants = await prisma.participant.findMany({
+    where: { userId, type: 'user' },
+    select: { id: true },
+    orderBy: { joinedAt: 'desc' },
+    take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
+  });
+  if (participants.length === 0) return [];
+
+  const messages = await prisma.message.findMany({
+    where: { senderId: { in: participants.map((p) => p.id) } },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+    take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
+  });
+  return messages.map((m) => m.id);
+}
 
 /**
  * Le seuil de CHAQUE porte de ce fichier qui lit `Report` (#4157, étendu par
@@ -214,26 +241,10 @@ export function registerUserReportsRoutes(fastify: FastifyInstance): void {
       // modération active. Une borne exacte demanderait une relation dédiée
       // sur `Report` (hors territoire de ce lot, `schema.prisma` étant un
       // fichier-carrefour).
-      const participants = await fastify.prisma.participant.findMany({
-        where: { userId, type: 'user' },
-        select: { id: true },
-        orderBy: { joinedAt: 'desc' },
-        take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
-      });
-      const participantIds = participants.map((p) => p.id);
-      if (participantIds.length === 0) return emptyPage();
-
-      // Message ids authored by the user (bounded by the user's own messages).
-      const userMessages = await fastify.prisma.message.findMany({
-        where: { senderId: { in: participantIds } },
-        select: { id: true },
-        orderBy: { createdAt: 'desc' },
-        take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
-      });
-      const messageIds = userMessages.map((m) => m.id);
+      const messageIds = await reportableMessageIdsOf(fastify.prisma, userId);
       if (messageIds.length === 0) return emptyPage();
 
-      const reportWhere = { reportedType: 'message', reportedEntityId: { in: messageIds } };
+      const reportWhere = { reportedType: 'message', reportedEntityId: { in: [...messageIds] } };
 
       const [reports, total] = await Promise.all([
         fastify.prisma.report.findMany({

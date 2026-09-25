@@ -284,6 +284,8 @@ const en = {
   'admin.user.deviceCountry': 'Device country',
   'admin.user.participations': 'Memberships',
   'admin.stats.more': 'All statistics',
+  'admin.stats.reportsOnMessages': 'Reports on their messages',
+  'admin.stats.withheld': 'Not disclosed',
   'admin.pref.edit': 'Edit: {category}',
   'admin.carousel.unavailable': 'Images unavailable for now.',
   'admin.conv.type.direct': 'Direct',

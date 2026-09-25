@@ -284,6 +284,8 @@ const it = {
   'admin.user.deviceCountry': 'Paese del dispositivo',
   'admin.user.participations': 'Partecipazioni',
   'admin.stats.more': 'Tutte le statistiche',
+  'admin.stats.reportsOnMessages': 'Segnalazioni sui suoi messaggi',
+  'admin.stats.withheld': 'Non comunicato',
   'admin.pref.edit': 'Modifica: {category}',
   'admin.carousel.unavailable': 'Immagini non disponibili per ora.',
   'admin.conv.type.direct': 'Diretta',

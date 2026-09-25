@@ -28,6 +28,13 @@ import { AdminAbsence, AdminSkeleton, AdminStatTile } from './admin-parts';
  * publications : deux compteurs servis, un seul geste de l'utilisateur. Aucune
  * tuile ne se calcule depuis autre chose que des compteurs servis.
  *
+ * ## Un signalement RETENU se lit « — », pas « 0 »
+ *
+ * Sans `canModerateContent`, la passerelle rend les trois compteurs de
+ * signalements à `null`. La tuile reste (la fiche a la même forme pour tous
+ * les rôles), affiche « — » et le DIT au lecteur d'écran (« non communiqué ») :
+ * un tiret muet se lirait « tiret », un zéro affirmerait un fait.
+ *
  * ## Une panne n'est pas un zéro
  *
  * Le décodeur rend 0 pour un compteur NON SERVI dans une charge lisible ; une
@@ -38,7 +45,7 @@ import { AdminAbsence, AdminSkeleton, AdminStatTile } from './admin-parts';
 type Tuile = {
   readonly id: string;
   readonly label: AdminPlainCatalogKey;
-  readonly valeur: (stats: AdminUserStats) => number;
+  readonly valeur: (stats: AdminUserStats) => number | null;
 };
 
 const compte = (cle: keyof AdminUserStats['counts']) => (stats: AdminUserStats) => stats.counts[cle];
@@ -56,13 +63,19 @@ const SECONDAIRES: readonly Tuile[] = [
   { id: 'stories', label: 'admin.stats.stories', valeur: compte('stories') },
   { id: 'reels', label: 'admin.stats.reels', valeur: compte('reels') },
   { id: 'comments', label: 'admin.stats.comments', valeur: compte('comments') },
-  { id: 'reactions', label: 'admin.stats.reactions', valeur: (s) => s.counts.messageReactions + s.counts.postReactions },
+  {
+    id: 'reactions',
+    label: 'admin.stats.reactions',
+    valeur: (s) => s.counts.messageReactions + s.counts.postReactions + s.counts.commentReactions,
+  },
   { id: 'attachments', label: 'admin.stats.attachments', valeur: (s) => s.counts.attachments + s.counts.postMedia },
   { id: 'friendRequestsPending', label: 'admin.stats.friendRequests', valeur: compte('friendRequestsPending') },
+  { id: 'friendRequestsSent', label: 'admin.stats.pendingOut', valeur: compte('friendRequestsSent') },
   { id: 'contacts', label: 'admin.stats.contacts', valeur: compte('contacts') },
   { id: 'communities', label: 'admin.stats.communities', valeur: compte('communities') },
   { id: 'reportsReceived', label: 'admin.stats.reportsReceived', valeur: compte('reportsReceived') },
   { id: 'reportsMade', label: 'admin.stats.reportsMade', valeur: compte('reportsMade') },
+  { id: 'reportsOnMessages', label: 'admin.stats.reportsOnMessages', valeur: compte('reportsOnMessages') },
   { id: 'sessionsActive', label: 'admin.stats.sessions', valeur: compte('sessionsActive') },
   { id: 'bans', label: 'admin.stats.bans', valeur: compte('bansTotal') },
   { id: 'shareLinks', label: 'admin.stats.shareLinks', valeur: compte('shareLinks') },
@@ -81,14 +94,18 @@ function Grille({
 }) {
   return (
     <dl className="grid grid-cols-2 gap-2">
-      {tuiles.map((tuile) => (
-        <AdminStatTile
-          key={tuile.id}
-          id={tuile.id}
-          label={translateAdmin(language, tuile.label)}
-          value={adminCount(tuile.valeur(stats), language)}
-        />
-      ))}
+      {tuiles.map((tuile) => {
+        const valeur = tuile.valeur(stats);
+        return (
+          <AdminStatTile
+            key={tuile.id}
+            id={tuile.id}
+            label={translateAdmin(language, tuile.label)}
+            value={valeur === null ? '—' : adminCount(valeur, language)}
+            {...(valeur === null ? { valueLabel: translateAdmin(language, 'admin.stats.withheld') } : {})}
+          />
+        );
+      })}
     </dl>
   );
 }

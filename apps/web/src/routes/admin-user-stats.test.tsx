@@ -39,7 +39,16 @@ afterEach(() => {
 const STATS = {
   userId: 'u-membre',
   computedAt: '2026-09-24T10:00:00.000Z',
-  counts: { messagesSent: 12345, conversations: 42, messageReactions: 3, postReactions: 4, bansTotal: 2 },
+  counts: {
+    messagesSent: 12345,
+    conversations: 42,
+    messageReactions: 3,
+    postReactions: 4,
+    commentReactions: 5,
+    friendRequestsSent: 6,
+    reportsOnMessages: 8,
+    bansTotal: 2,
+  },
   languages: ['fr', 'en'],
 };
 
@@ -74,11 +83,29 @@ describe('une tuile se lit dans la langue de la page', () => {
     expect(carte?.querySelector('dt')?.textContent).toBe(translateAdmin('fr', 'admin.stats.messages'));
   });
 
-  test('le reste se DÉPLIE, et les réactions aux messages ET aux publications y font UNE tuile', async () => {
+  test('le reste se DÉPLIE, et les réactions aux messages, publications ET commentaires y font UNE tuile', async () => {
     const host = await monter('fr');
     expect(tuile(host, 'reactions')).toBe(null);
     await mounter.click(host.querySelector('[data-collapsible-toggle="admin-stats-more"]') as HTMLElement | null);
-    expect(tuile(host, 'reactions')?.querySelector('dd')?.textContent).toBe('7');
+    expect(tuile(host, 'reactions')?.querySelector('dd')?.textContent).toBe('12');
+    expect(tuile(host, 'friendRequestsSent')?.querySelector('dd')?.textContent).toBe('6');
+    expect(tuile(host, 'reportsOnMessages')?.querySelector('dd')?.textContent).toBe('8');
+    expect(tuile(host, 'reportsOnMessages')?.querySelector('dt')?.textContent).toBe(
+      translateAdmin('fr', 'admin.stats.reportsOnMessages'),
+    );
+  });
+
+  test('un signalement RETENU par la passerelle se lit « — » et se dit « non communiqué », jamais 0', async () => {
+    const host = await monter('fr', {
+      ok: true,
+      data: { ...STATS, counts: { ...STATS.counts, reportsReceived: null, reportsMade: null, reportsOnMessages: null } },
+    });
+    await mounter.click(host.querySelector('[data-collapsible-toggle="admin-stats-more"]') as HTMLElement | null);
+    for (const id of ['reportsReceived', 'reportsMade', 'reportsOnMessages']) {
+      const carte = tuile(host, id);
+      expect(carte?.querySelector('dd')?.textContent).toBe('—');
+      expect(carte?.querySelector('dd')?.getAttribute('aria-label')).toBe(translateAdmin('fr', 'admin.stats.withheld'));
+    }
   });
 
   test('un compteur non servi vaut zéro, jamais une case vide', async () => {

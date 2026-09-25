@@ -56,6 +56,30 @@ describe('decodeAdminUserStats', () => {
     expect(Object.keys(stats?.counts ?? {})).toEqual([...ADMIN_STAT_KEYS]);
   });
 
+  test('un compteur de signalement RETENU (null) reste null — « non communiqué » n’est pas zéro', () => {
+    const stats = decodeAdminUserStats({
+      ...CHARGE,
+      counts: { ...COUNTS, reportsReceived: null, reportsMade: null, reportsOnMessages: null },
+    });
+
+    expect(stats?.counts.reportsReceived).toBeNull();
+    expect(stats?.counts.reportsMade).toBeNull();
+    expect(stats?.counts.reportsOnMessages).toBeNull();
+    expect(stats?.counts.messagesSent).toBe(COUNTS.messagesSent);
+  });
+
+  test('null n’est un état que pour un compteur de signalement — ailleurs, il vaut zéro', () => {
+    const stats = decodeAdminUserStats({ ...CHARGE, counts: { ...COUNTS, messagesSent: null } });
+
+    expect(stats?.counts.messagesSent).toBe(0);
+  });
+
+  test('nomme les compteurs ajoutés par la passerelle : réactions de commentaires, demandes envoyées, signalements sur messages', () => {
+    for (const cle of ['commentReactions', 'friendRequestsSent', 'reportsOnMessages']) {
+      expect(ADMIN_STAT_KEYS as readonly string[]).toContain(cle);
+    }
+  });
+
   test('rend null sur une charge illisible', () => {
     for (const charge of [null, 'x', [], { counts: 'x' }]) {
       expect(decodeAdminUserStats(charge)).toBeNull();

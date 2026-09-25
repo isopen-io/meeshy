@@ -20,7 +20,8 @@
  * lui, fermé.
  */
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { ADMIN_STAT_KEYS } from '../../services/admin/admin-user-stats';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { ADMIN_REPORT_STAT_KEYS, ADMIN_STAT_KEYS } from '../../services/admin/admin-user-stats';
 
 const chaine = { type: 'string' } as const;
 const chaineNulle = { type: 'string', nullable: true } as const;
@@ -29,12 +30,24 @@ const dateNulle = { type: 'string', format: 'date-time', nullable: true } as con
 const booleen = { type: 'boolean' } as const;
 const booleenNul = { type: 'boolean', nullable: true } as const;
 const nombre = { type: 'number' } as const;
+const nombreNul = { type: 'number', nullable: true } as const;
 const listeDeChaines = { type: 'array', items: chaine } as const;
 
 const enveloppe = (data: Record<string, unknown>) => ({
   type: 'object',
   properties: { success: booleen, message: chaine, data },
 });
+
+/**
+ * `:userId` est un ObjectId, refusé en 400 AVANT tout gestionnaire : un
+ * identifiant malformé n'atteint ni Prisma (qui lèverait, rendant un 500), ni
+ * la garde de hiérarchie (qui le lirait comme une cible introuvable).
+ */
+export const userIdParams = {
+  type: 'object',
+  required: ['userId'],
+  properties: { userId: { type: 'string', pattern: OBJECT_ID_PATTERN } },
+} as const;
 
 export const adminErrorResponses = { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 500: errorResponseSchema };
 
@@ -87,7 +100,9 @@ export const userStatsSuccess = enveloppe({
       computedAt: date,
       counts: {
         type: 'object',
-        properties: Object.fromEntries(ADMIN_STAT_KEYS.map((cle) => [cle, nombre])),
+        properties: Object.fromEntries(
+          ADMIN_STAT_KEYS.map((cle) => [cle, ADMIN_REPORT_STAT_KEYS.some((k) => k === cle) ? nombreNul : nombre])
+        ),
       },
       languages: listeDeChaines,
       achievements: {

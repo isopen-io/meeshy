@@ -20,6 +20,15 @@ import type { ApiResult } from './http';
  * cache, un compteur nommé que la charge ne porte pas vaut zéro — jamais
  * `undefined` au milieu d'une grille de tuiles.
  *
+ * ## Un signalement RETENU n'est pas un zéro
+ *
+ * Les trois compteurs de {@link ADMIN_REPORT_STAT_KEYS} lisent la table
+ * `Report`, dont le seuil (`canModerateContent`) est plus haut que celui de la
+ * fiche : AUDIT ouvre la fiche et reçoit `null` pour eux. Le décodeur garde ce
+ * `null` — le rendre en 0 dirait « personne n'a signalé ce membre » à celui qui
+ * n'a pas le droit de le savoir, un fait faux plutôt qu'un silence. Ailleurs,
+ * `null` n'est pas un état prévu et vaut zéro, comme toute valeur illisible.
+ *
  * ## Une clé PERSISTÉE
  *
  * Des agrégats, sans identifiant ni contenu : rien qui ne puisse survivre sur le
@@ -36,15 +45,18 @@ export const ADMIN_STAT_KEYS = [
   'comments',
   'messageReactions',
   'postReactions',
+  'commentReactions',
   'attachments',
   'postMedia',
   'friends',
   'friendRequestsPending',
   'friendRequestsReceived',
+  'friendRequestsSent',
   'contacts',
   'communities',
   'reportsReceived',
   'reportsMade',
+  'reportsOnMessages',
   'sessionsActive',
   'bansTotal',
   'bansActive',
@@ -55,8 +67,23 @@ export const ADMIN_STAT_KEYS = [
 
 export type AdminStatKey = (typeof ADMIN_STAT_KEYS)[number];
 
+/** Miroir d'`ADMIN_REPORT_STAT_KEYS` de la passerelle — `null` sans `canModerateContent`. */
+export const ADMIN_REPORT_STAT_KEYS = ['reportsReceived', 'reportsMade', 'reportsOnMessages'] as const satisfies readonly AdminStatKey[];
+
+export type AdminReportStatKey = (typeof ADMIN_REPORT_STAT_KEYS)[number];
+
+export type AdminUserStatCounts = Readonly<
+  Record<Exclude<AdminStatKey, AdminReportStatKey>, number> & Record<AdminReportStatKey, number | null>
+>;
+
+const isReportStatKey = (cle: AdminStatKey): cle is AdminReportStatKey =>
+  ADMIN_REPORT_STAT_KEYS.some((cleSignalement) => cleSignalement === cle);
+
+const decodeCount = (cle: AdminStatKey, valeur: unknown): number | null =>
+  valeur === null && isReportStatKey(cle) ? null : asCount(valeur);
+
 export type AdminUserStats = {
-  readonly counts: Readonly<Record<AdminStatKey, number>>;
+  readonly counts: AdminUserStatCounts;
   readonly languages: readonly string[];
   readonly computedAt: string | null;
 };
@@ -70,10 +97,7 @@ export function decodeAdminUserStats(raw: unknown): AdminUserStats | null {
   if (compteurs === null) return null;
 
   return {
-    counts: Object.fromEntries(ADMIN_STAT_KEYS.map((cle) => [cle, asCount(compteurs[cle])])) as Record<
-      AdminStatKey,
-      number
-    >,
+    counts: Object.fromEntries(ADMIN_STAT_KEYS.map((cle) => [cle, decodeCount(cle, compteurs[cle])])) as AdminUserStatCounts,
     languages: Array.isArray(charge.languages)
       ? charge.languages.filter((langue): langue is string => typeof langue === 'string' && langue !== '')
       : [],

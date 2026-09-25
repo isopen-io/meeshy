@@ -284,6 +284,8 @@ const ar = {
   'admin.user.deviceCountry': 'بلد الجهاز',
   'admin.user.participations': 'المشاركات',
   'admin.stats.more': 'كل الإحصاءات',
+  'admin.stats.reportsOnMessages': 'بلاغات على رسائله',
+  'admin.stats.withheld': 'غير مُفصَح عنه',
   'admin.pref.edit': 'تعديل: {category}',
   'admin.carousel.unavailable': 'الصور غير متاحة حاليًا.',
   'admin.conv.type.direct': 'مباشرة',

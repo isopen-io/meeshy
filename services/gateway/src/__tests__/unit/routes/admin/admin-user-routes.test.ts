@@ -1133,7 +1133,7 @@ describe('GET /admin/users/:userId/conversations', () => {
 
   it('returns 404 when user not found', async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null);
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
+    const res = await app.inject({ method: 'GET', url: '/admin/users/507f1f77bcf86cd799439123/conversations' });
     expect(res.statusCode).toBe(404);
   });
 
@@ -1143,14 +1143,14 @@ describe('GET /admin/users/:userId/conversations', () => {
     const conv = { id: 'c1', identifier: 'conv1', title: 'Test', participants: [], _count: { participants: 0 } };
     mockPrisma.conversation.findMany.mockResolvedValue([conv]);
     mockPrisma.conversation.count.mockResolvedValue(1);
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
+    const res = await app.inject({ method: 'GET', url: '/admin/users/507f1f77bcf86cd799439123/conversations' });
     expect(res.statusCode).toBe(200);
   });
 
   it('adds type to where when type query param is provided', async () => {
     mockPrisma.conversation.findMany.mockResolvedValue([]);
     mockPrisma.conversation.count.mockResolvedValue(0);
-    await app.inject({ method: 'GET', url: '/admin/users/user123/conversations?type=group' });
+    await app.inject({ method: 'GET', url: '/admin/users/507f1f77bcf86cd799439123/conversations?type=group' });
     const callArgs = mockPrisma.conversation.findMany.mock.calls[0][0] as { where: { type?: string } };
     expect(callArgs.where.type).toBe('group');
   });
@@ -1160,22 +1160,22 @@ describe('GET /admin/users/:userId/conversations', () => {
       id: 'c1',
       identifier: 'conv1',
       participants: [
-        { userId: 'user123', role: 'MEMBER', joinedAt: new Date() },
+        { userId: '507f1f77bcf86cd799439123', role: 'MEMBER', joinedAt: new Date() },
         { userId: 'other456', role: 'MEMBER', joinedAt: new Date() }
       ],
       _count: { participants: 2 }
     };
     mockPrisma.conversation.findMany.mockResolvedValue([conv]);
     mockPrisma.conversation.count.mockResolvedValue(1);
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
+    const res = await app.inject({ method: 'GET', url: '/admin/users/507f1f77bcf86cd799439123/conversations' });
     expect(res.statusCode).toBe(200);
     const data = res.json().data[0];
-    expect(data.membership).toMatchObject({ userId: 'user123' });
+    expect(data.membership).toMatchObject({ userId: '507f1f77bcf86cd799439123' });
   });
 
   it('returns 500 when prisma throws', async () => {
     mockPrisma.user.findUnique.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/conversations' });
+    const res = await app.inject({ method: 'GET', url: '/admin/users/507f1f77bcf86cd799439123/conversations' });
     expect(res.statusCode).toBe(500);
   });
 });

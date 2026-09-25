@@ -47,7 +47,7 @@ import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError } from '../../utils/logger.js';
-import { userConversationsSuccess, adminErrorResponses } from './user-admin-response-schemas';
+import { userConversationsSuccess, adminErrorResponses, userIdParams } from './user-admin-response-schemas';
 
 export const TRIS_MEMBRE = ['lastMessageAt', 'createdAt', 'title', 'joinedAt'] as const;
 export const ORDRES = ['asc', 'desc'] as const;
@@ -212,6 +212,7 @@ export function registerUserConversationsRoute(fastify: FastifyInstance): void {
         'Aucun contenu de message. Tri par activité, création, titre ou arrivée du membre. #7845.',
       tags: ['admin'],
       summary: "List a member's conversations (admin)",
+      params: userIdParams,
       querystring: {
         type: 'object',
         properties: {

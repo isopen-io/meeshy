@@ -100,7 +100,45 @@ describe('GET /admin/users/:userId/preferences', () => {
     expect(data.categories.audio.stored).toEqual([]);
     expect(data.categories.privacy.fields.showOnlineStatus).toEqual({ type: 'boolean', default: true });
     expect(data.categories.privacy.readOnly).toContain('extras');
+    await app.close();
+  });
+
+  it('trace la consultation — VIEW_USER, surface preferences, au nom de l\'acteur', async () => {
+    const { app, audit } = await monter(fauxPrisma(), 'ADMIN');
+    await app.inject({ method: 'GET', url: `/api/v1/admin/users/${TARGET_ID}/preferences` });
+    expect(audit.createAuditLog).toHaveBeenCalledTimes(1);
+    expect(audit.createAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      userId: TARGET_ID,
+      adminId: ADMIN_ID,
+      action: UserAuditAction.VIEW_USER,
+      entityId: TARGET_ID,
+      metadata: { surface: 'preferences' },
+    }));
+    await app.close();
+  });
+
+  it('ne trace rien pour un membre introuvable', async () => {
+    const { app, audit } = await monter(fauxPrisma({ existe: false }), 'ADMIN');
+    await app.inject({ method: 'GET', url: `/api/v1/admin/users/${TARGET_ID}/preferences` });
     expect(audit.createAuditLog).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse un identifiant qui n\'est pas un ObjectId (400) avant toute lecture', async () => {
+    const prisma = fauxPrisma();
+    const { app } = await monter(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/users/xyz/preferences' });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert la famille CHIFFREMENT en lecture seule — un administrateur n\'abaisse pas la protection d\'un membre', async () => {
+    const { app } = await monter(fauxPrisma(), 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: `/api/v1/admin/users/${TARGET_ID}/preferences?categories=privacy` });
+    const readOnly: string[] = res.json().data.categories.privacy.readOnly;
+    expect(readOnly).toEqual(expect.arrayContaining(['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted']));
+    expect(readOnly).not.toContain('showOnlineStatus');
     await app.close();
   });
 
@@ -186,13 +224,54 @@ describe('PATCH /admin/users/:userId/preferences/:category', () => {
       adminId: ADMIN_ID,
       action: UserAuditAction.UPDATE_PREFERENCES,
       entityId: TARGET_ID,
-      changes: { showOnlineStatus: { before: true, after: false } },
-      metadata: { reason: 'plainte du membre', category: 'privacy' },
+      changes: { 'privacy.showOnlineStatus': { before: true, after: false } },
+      metadata: { category: 'privacy', keys: ['showOnlineStatus'], reason: 'plainte du membre' },
     }));
     const { data } = res.json();
     expect(data.category).toBe('privacy');
     expect(data.values.showOnlineStatus).toBe(false);
     expect(data.stored).toEqual(expect.arrayContaining(['showLastSeen', 'showOnlineStatus']));
+    await app.close();
+  });
+
+  it('ne trace que les clés CHANGÉES — une clé soumise à sa valeur courante n\'est pas un changement', async () => {
+    const prisma = fauxPrisma();
+    const { app, audit } = await monter(prisma, 'ADMIN');
+    await patch(app, 'privacy', { values: { showOnlineStatus: false, showReadReceipts: true } });
+    expect(audit.createAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      changes: { 'privacy.showOnlineStatus': { before: true, after: false } },
+      metadata: { category: 'privacy', keys: ['showOnlineStatus'] },
+    }));
+    await app.close();
+  });
+
+  it('refuse d\'écrire la famille chiffrement (403), nomme les clés refusées et n\'écrit rien', async () => {
+    const prisma = fauxPrisma();
+    const { app, audit } = await monter(prisma, 'BIGBOSS');
+    const res = await patch(app, 'privacy', { values: { encryptionPreference: 'disabled', showLastSeen: false } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('READ_ONLY_PREFERENCE');
+    expect(res.json().keys).toEqual(['encryptionPreference']);
+    expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    expect(applyCategoryWriteEffects).not.toHaveBeenCalled();
+    expect(audit.createAuditLog).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('nomme le champ refusé dans `issues`', async () => {
+    const { app } = await monter(fauxPrisma(), 'ADMIN');
+    const res = await patch(app, 'application', { values: { theme: 'purple' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ['theme'] })]));
+    await app.close();
+  });
+
+  it('refuse un identifiant qui n\'est pas un ObjectId (400) avant la garde de hiérarchie', async () => {
+    const prisma = fauxPrisma();
+    const { app } = await monter(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'PATCH', url: '/api/v1/admin/users/nope/preferences/privacy', payload: { values: { showOnlineStatus: false } } });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
     await app.close();
   });
 

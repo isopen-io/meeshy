@@ -34,6 +34,24 @@
  * catégorie de préférences n'est pas une porte dérobée vers eux.
  * `tutorialsCompleted` est l'état de progression du membre, pas un réglage.
  *
+ * Et la famille CHIFFREMENT (`privacy` : `encryptionPreference`,
+ * `autoEncryptNewConversations`, `warnOnUnencrypted`). Aucune n'est un secret
+ * — les clés Signal vivent dans `SignalPreKeyBundle`, jamais ici — mais elles
+ * décident si les conversations du membre sont chiffrées : les écrire en son
+ * nom, c'est pouvoir abaisser sa protection sans qu'il le sache. L'état se
+ * CONSTATE (servi, en `readOnly`), il ne se pose pas. Cette règle-là dépend de
+ * la CATÉGORIE : une clé homonyme d'une autre catégorie n'en hérite pas.
+ *
+ * ## La trace
+ *
+ * Lire écrit `VIEW_USER` (`metadata.surface: 'preferences'`), comme le profil
+ * vocal (`user-profile-reads.ts`) : des réglages de confidentialité sont une
+ * pièce de la vie privée du membre, et l'onglet peut s'ouvrir sans que la fiche
+ * se recharge. Écrire trace `UPDATE_PREFERENCES` avec les SEULES clés changées
+ * (`catégorie.clé` en `changes`, la catégorie et ces clés en `metadata`) : une
+ * clé soumise à sa valeur courante n'a rien changé, et la tracer ferait lire au
+ * relecteur un geste qui n'a pas eu lieu.
+ *
  * Et ce que le membre n'a pas consenti : la validation des consentements lit
  * ceux de la CIBLE (`ConsentValidationService`), jamais ceux de l'acteur. Un
  * administrateur ne rallume pas une télémétrie que le membre a refusée.
@@ -59,8 +77,8 @@ import {
 import { PREFERENCE_DESCRIPTORS } from '../me/preferences/preference-descriptors';
 import { parseSelection } from '../me/preferences/preference-selection';
 import { zodIssueSchema, issuesServies } from '../../utils/zod-issue-schema';
-import { userPreferencesSuccess, userPreferenceWriteSuccess, adminErrorResponses } from './user-admin-response-schemas';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { userPreferencesSuccess, userPreferenceWriteSuccess, adminErrorResponses, userIdParams } from './user-admin-response-schemas';
+import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
 
 type Deps = {
@@ -71,14 +89,21 @@ type Deps = {
  * `true` quand la clé n'est pas un réglage qu'un administrateur peut poser —
  * voir « Ce qu'un administrateur ne PEUT PAS écrire » dans l'en-tête.
  */
-export function isAdminReadOnlyPreference(key: string): boolean {
+export const ADMIN_READ_ONLY_PREFERENCE_KEYS: Readonly<Partial<Record<PreferenceCategory, readonly string[]>>> = {
+  privacy: ['encryptionPreference', 'autoEncryptNewConversations', 'warnOnUnencrypted'],
+};
+
+export function isAdminReadOnlyPreference(category: PreferenceCategory, key: string): boolean {
   return (
     key === 'extras' ||
     key === 'tutorialsCompleted' ||
     key === 'voiceCloningEnabledAt' ||
-    key.endsWith('ConsentAt')
+    key.endsWith('ConsentAt') ||
+    (ADMIN_READ_ONLY_PREFERENCE_KEYS[category] ?? []).includes(key)
   );
 }
+
+const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 type CategorieServie = {
   readonly values: PreferenceDocument;
@@ -95,7 +120,7 @@ function servirCategorie(category: PreferenceCategory, stored: PreferenceDocumen
     values,
     stored: Object.keys(stored ?? {}),
     fields,
-    readOnly: [...cles].filter(isAdminReadOnlyPreference),
+    readOnly: [...cles].filter((cle) => isAdminReadOnlyPreference(category, cle)),
   };
 }
 
@@ -110,9 +135,14 @@ function categoriesDemandees(brut: string | undefined): readonly PreferenceCateg
   return resultat.ok ? resultat.selection.categories : null;
 }
 
-function acteurId(request: FastifyRequest): string {
-  const ctx = (request as UnifiedAuthRequest).authContext;
-  return ctx.userId ?? ctx.registeredUser?.id ?? '';
+/**
+ * L'identifiant de l'acteur, ou `null` — jamais une chaîne vide. Les gardes en
+ * amont exigent un compte enregistré ; si l'une d'elles venait à céder, la
+ * route REFUSE plutôt que d'écrire une trace signée par personne.
+ */
+function acteurId(request: FastifyRequest): string | null {
+  const id = (request as UnifiedAuthRequest).authContext.registeredUser?.id;
+  return typeof id === 'string' && id !== '' ? id : null;
 }
 
 const erreurDeValidation = {
@@ -134,6 +164,7 @@ const refusDeConsentement = {
   properties: {
     ...errorResponseSchema.properties,
     violations: { type: 'array' },
+    keys: { type: 'array', items: { type: 'string' } },
   },
 } as const;
 
@@ -144,9 +175,7 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
   /**
    * GET /admin/users/:userId/preferences — les valeurs EFFECTIVES de chaque
    * catégorie, ce qui est réellement stocké, et la description des champs.
-   *
-   * Aucune ligne `VIEW_USER` n'est écrite : la fiche l'écrit déjà en
-   * s'ouvrant, et un onglet n'est pas une seconde consultation.
+   * Lecture tracée (`VIEW_USER`, voir « La trace » en tête).
    */
   fastify.get<{
     Params: { userId: string };
@@ -157,6 +186,7 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
       description: "Préférences d'un membre (sept catégories), défauts comblés, clés stockées et description des champs. #7845.",
       tags: ['admin'],
       summary: "Read a member's preferences (admin)",
+      params: userIdParams,
       querystring: {
         type: 'object',
         properties: { categories: { type: 'string', description: 'Liste séparée par des virgules' } },
@@ -166,6 +196,8 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
+      const acteur = acteurId(request);
+      if (!acteur) return sendForbidden(reply, 'Registered administrator required', { code: 'FORBIDDEN' });
       const categories = categoriesDemandees(request.query.categories);
       if (!categories) {
         return sendBadRequest(reply, 'Unknown preference category', { code: 'INVALID_CATEGORY' });
@@ -177,6 +209,16 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
       const stockes = await Promise.all(
         categories.map((category) => readStoredCategory(fastify.prisma, userId, category))
       );
+
+      await userAuditService.createAuditLog({
+        userId,
+        adminId: acteur,
+        action: UserAuditAction.VIEW_USER,
+        entityId: userId,
+        metadata: { surface: 'preferences' },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
 
       return sendSuccess(reply, {
         userId,
@@ -204,6 +246,11 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
       description: "Écrit une catégorie de préférences d'un membre. Consentements en lecture seule. #7845.",
       tags: ['admin'],
       summary: "Update a member's preference category (admin)",
+      params: {
+        type: 'object',
+        required: ['userId', 'category'],
+        properties: { userId: userIdParams.properties.userId, category: { type: 'string' } },
+      },
       body: {
         type: 'object',
         required: ['values'],
@@ -237,12 +284,17 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
       return sendBadRequest(reply, 'Unknown preference category', { code: 'INVALID_CATEGORY' });
     }
 
-    const interdites = Object.keys(values).filter(isAdminReadOnlyPreference);
+    const interdites = Object.keys(values).filter((cle) => isAdminReadOnlyPreference(category, cle));
     if (interdites.length > 0) {
-      return sendForbidden(reply, 'Consent-bearing preference cannot be written by an administrator', {
+      return sendError(reply, 403, 'READ_ONLY_PREFERENCE', {
+        message: `An administrator cannot write ${interdites.join(', ')} on behalf of a member`,
         code: 'READ_ONLY_PREFERENCE',
+        details: { keys: interdites },
       });
     }
+
+    const acteur = acteurId(request);
+    if (!acteur) return sendForbidden(reply, 'Registered administrator required', { code: 'FORBIDDEN' });
 
     try {
       const submitted = parseSubmittedKeys(category, values);
@@ -277,16 +329,17 @@ export function registerUserPreferenceRoutes(fastify: FastifyInstance, deps: Dep
 
       await applyCategoryWriteEffects(fastify, userId, [category]);
 
+      const changees = Object.keys(submitted).filter((cle) => !sameValue(avant[cle], submitted[cle]));
       const changes = Object.fromEntries(
-        Object.keys(submitted).map((cle) => [cle, { before: avant[cle] ?? null, after: submitted[cle] }])
+        changees.map((cle) => [`${category}.${cle}`, { before: avant[cle] ?? null, after: submitted[cle] }])
       );
       await userAuditService.createAuditLog({
         userId,
-        adminId: acteurId(request),
+        adminId: acteur,
         action: UserAuditAction.UPDATE_PREFERENCES,
         entityId: userId,
         changes,
-        metadata: reason ? { reason, category } : { category },
+        metadata: { category, keys: changees, ...(reason ? { reason } : {}) },
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'],
       });
