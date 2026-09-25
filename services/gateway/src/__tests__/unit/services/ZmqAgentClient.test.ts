@@ -4,8 +4,8 @@
  * push failure, sub failure), sendEvent (initialized, not-initialized),
  * startListening (agent:response, agent:reaction, invalid schema, parse error,
  * running=false early exit, a rejecting handler costing exactly one message,
- * the roleConfidence bound at both ends), close (happy path, already-closed,
- * error).
+ * the roleConfidence bound at both ends, the agentType enum on both sides,
+ * exclusive routing by discriminant), close (happy path, already-closed, error).
  *
  * @jest-environment node
  */
@@ -324,6 +324,56 @@ describe('startListening', () => {
 
     expect(responseHandler).toHaveBeenCalledTimes(1);
     expect(responseHandler.mock.calls[0][0]).toMatchObject({ metadata: { roleConfidence: 1 } });
+  });
+
+  it("rejects an unknown agentType and accepts all three of the enum's members", async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    // `agentResponseSchema` declares
+    // `agentType: z.enum(['impersonator', 'animator', 'orchestrator'])`.
+    // Both sides of that rule are asserted here: a value outside the enum never
+    // reaches the handler, and each of the three members does. Without the second
+    // half, dropping a member would silently stop that traffic — the message would
+    // be counted an invalid schema and logged at warn, nothing more.
+    const responseHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onResponse(responseHandler);
+
+    const payloads = [
+      { agentType: 'saboteur', roleConfidence: 0.9 },
+      { agentType: 'impersonator', roleConfidence: 0.9 },
+      { agentType: 'animator', roleConfidence: 0.9 },
+      { agentType: 'orchestrator', roleConfidence: 0.9 },
+    ].map((metadata) => [Buffer.from(JSON.stringify(makeAgentResponse({ metadata })))]);
+    Object.assign(mockSubSocket, makeAsyncIterable(payloads));
+
+    await client.startListening();
+
+    expect(responseHandler).toHaveBeenCalledTimes(3);
+    expect(responseHandler.mock.calls.map((c: any) => c[0].metadata.agentType))
+      .toEqual(['impersonator', 'animator', 'orchestrator']);
+  });
+
+  it('routes by discriminant: a response never reaches the reaction handler, nor the reverse', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const responseHandler = jest.fn<any>().mockResolvedValue(undefined);
+    const reactionHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onResponse(responseHandler);
+    client.onReaction(reactionHandler);
+
+    Object.assign(mockSubSocket, makeAsyncIterable([
+      [Buffer.from(JSON.stringify(makeAgentResponse()))],
+      [Buffer.from(JSON.stringify(makeAgentReaction()))],
+    ]));
+
+    await client.startListening();
+
+    expect(responseHandler).toHaveBeenCalledTimes(1);
+    expect(reactionHandler).toHaveBeenCalledTimes(1);
+    expect(responseHandler.mock.calls[0][0]).toMatchObject({ type: 'agent:response' });
+    expect(reactionHandler.mock.calls[0][0]).toMatchObject({ type: 'agent:reaction' });
   });
 
   it('stops the loop when no handler is registered for the message type', async () => {
