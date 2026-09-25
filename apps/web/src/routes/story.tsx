@@ -68,7 +68,9 @@ import {
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
+import { useProfilePeekOpen } from '@/lib/view/profile-peek';
 import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
+import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { screenGestureYields } from '@/lib/view/shortcut-scope';
@@ -555,6 +557,7 @@ export default function StoryScreen() {
    */
   const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
   const viewersOpen = ownerRail.viewers.postId !== null;
+  const profilePeekOpen = useProfilePeekOpen();
 
   /* EXTRAIT dans `use-story-keyboard-shortcuts.ts` (§ budget, #7116) —
      comportement INCHANGÉ, sauf `layerOpen` qui gagne `viewersOpen` :
@@ -569,7 +572,7 @@ export default function StoryScreen() {
     closeViewer,
     showsSound,
     onToggleMute: toggleSound,
-    layerOpen: commentsOpen || viewersOpen,
+    layerOpen: commentsOpen || viewersOpen || profilePeekOpen,
   });
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
@@ -609,12 +612,11 @@ export default function StoryScreen() {
   /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
      le fil qu'on lit, et le composeur changerait de publication à mi-phrase.
      Le focus et la fermeture au changement de story sont la loi PARTAGÉE de
-     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. */
-  useEffect(() => {
-    if (!commentsOpen) return;
-    pause();
-    return () => resume();
-  }, [commentsOpen, pause, resume]);
+     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. Le profil de
+     l'auteur (ou d'un commentateur, d'un spectateur) ouvert par-dessus
+     attend de même, et UNE seule condition les réunit : fermer le profil
+     ouvert depuis une feuille ne doit pas relancer la story sous elle. */
+  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen, pause, resume);
 
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};

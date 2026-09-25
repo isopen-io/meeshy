@@ -12,6 +12,7 @@ const itIdentity = {
   'a11y.avatar.story': 'Vedi la storia di {name}',
   'avatar.menu.label': 'Azioni per {name}',
   'avatar.menu.view_profile': 'Vedi il profilo',
+  'userProfile.peek.openPage': 'Apri il profilo completo',
   'avatar.menu.view_story': 'Vedi la storia',
   'avatar.menu.conversation_details': 'Dettagli della conversazione',
   'conversation.details.title': 'Dettagli della conversazione',

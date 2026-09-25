@@ -41,6 +41,7 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 const MARKERS = {
   discover: { 'data-discover-announce': '' },
   profile: { 'data-profile-announce': '' },
+  profilePeek: { 'data-profile-peek-announce': '' },
   invite: { 'data-invite-announce': '' },
   /* « Mes stories » (#6149) — l'issue d'une suppression : réussie, ou refusée
      et la rangée revenue. */

@@ -12,6 +12,7 @@ const deIdentity = {
   'a11y.avatar.story': 'Story von {name} ansehen',
   'avatar.menu.label': 'Aktionen für {name}',
   'avatar.menu.view_profile': 'Profil ansehen',
+  'userProfile.peek.openPage': 'Vollständiges Profil öffnen',
   'avatar.menu.view_story': 'Story ansehen',
   'avatar.menu.conversation_details': 'Details der Unterhaltung',
   'conversation.details.title': 'Details der Unterhaltung',
