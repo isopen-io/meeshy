@@ -28,7 +28,7 @@ public extension View {
 
 /// The hand-made glass recipe, as plain values — a `ViewModifier` cannot be
 /// inspected, its recipe can.
-public struct LiquidGlassFallbackRecipe: Equatable, Sendable {
+public nonisolated struct LiquidGlassFallbackRecipe: Equatable, Sendable {
     public let tintWash: Double
     public let sheen: Double
     public let rimLit: Double
