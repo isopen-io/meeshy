@@ -6,6 +6,7 @@ import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
 
 import type { SceneClockHandle } from './scene-clock';
+import { useMediaSeek } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
 
 const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error && error.name === 'NotAllowedError';
@@ -32,6 +33,7 @@ export function SceneObjectAudio({
   playing,
   muted,
   clock,
+  seekClock = null,
   onPlaybackBlocked,
   mediaDeps = defaultAudioMediaDeps,
 }: {
@@ -40,6 +42,8 @@ export function SceneObjectAudio({
   readonly playing: boolean;
   readonly muted: boolean;
   readonly clock: SceneClockHandle | null;
+  /** L'horloge du parcours au doigt (#7879) — le son s'y recale à chaque `seek`. */
+  readonly seekClock?: SceneClockHandle | null;
   readonly onPlaybackBlocked: (() => void) | undefined;
   /** Injectable pour les témoins UNIQUEMENT — la production prend
    * `defaultAudioMediaDeps`, dont l'identité est gardée par un témoin. */
@@ -64,6 +68,7 @@ export function SceneObjectAudio({
   const { src } = useProtectedMediaSrc(posee ?? '', mediaDeps);
   const ref = useRef<HTMLAudioElement | null>(null);
   const loop = object.payload.loop === true;
+  useMediaSeek({ ref, clock: seekClock, loop });
 
   // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901) : `src`
   // dépend du PORTEUR (`carrier.media`), qui change quand le fil se

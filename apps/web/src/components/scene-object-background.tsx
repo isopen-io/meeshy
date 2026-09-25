@@ -5,6 +5,9 @@ import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/ca
 import type { CanvasObject } from '@/lib/canvas/document';
 import { LETTERBOX_FILL_OPACITY } from '@/lib/stories/letterbox';
 
+import type { SceneClockHandle } from './scene-clock';
+import { useMediaSeek } from './scene-media-seek';
+
 export type SceneCallbacks = {
   readonly onContentReady: (() => void) | undefined;
   readonly onDurationKnown: ((durationMs: number) => void) | undefined;
@@ -39,6 +42,7 @@ export function BackgroundLayer({
   framing,
   letterboxFillSrc,
   callbacks,
+  seekClock,
 }: {
   readonly object: CanvasObject;
   readonly carrier: SceneCarrier;
@@ -53,6 +57,9 @@ export function BackgroundLayer({
    * letterbox — miroir `StoryBackgroundLayer+LetterboxFill.swift:54-56`). */
   readonly letterboxFillSrc: string | undefined;
   readonly callbacks: { readonly current: SceneCallbacks };
+  /** L'horloge du parcours au doigt (#7879) — la vidéo de fond (qui boucle)
+   * s'y recale à chaque `seek`. */
+  readonly seekClock: SceneClockHandle | null;
 }) {
   const { payload } = object;
   const mediaType = typeof payload.mediaType === 'string' ? payload.mediaType : undefined;
@@ -61,6 +68,7 @@ export function BackgroundLayer({
   const background = typeof payload.background === 'string' ? payload.background : undefined;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  useMediaSeek({ ref: videoRef, clock: seekClock, loop: true });
   const isVideo = src !== undefined && mediaType?.startsWith('video') === true;
   /**
    * LE MUET DE L'AUTEUR EST DÉFINITIF (revue-correction #6903) — `payload.muted`

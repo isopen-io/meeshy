@@ -3,6 +3,10 @@ import { useEffect, useRef } from 'react';
 import { protectedMediaDeps, type ProtectedMediaDeps, type ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
+import { trackSeekPlan } from '@/lib/canvas/media-seek';
+
+import type { SceneClockHandle } from './scene-clock';
+import { alignMediaElement } from './scene-media-seek';
 
 /**
  * `BackgroundTrackAudio` (#6899, extrait en site UNIQUE pour #6903) — LE SON
@@ -37,6 +41,9 @@ export type BackgroundTrackAudioProps = {
   /** Injectable pour les témoins UNIQUEMENT — la production prend
    * `defaultMediaDeps`, dont l'identité est gardée par un témoin. */
   readonly mediaDeps?: ProtectedMediaDeps;
+  /** L'horloge de la scène (`ScenePlayer.onClock`, #7879) — la piste se
+   * recale à chaque `seek` du parcours au doigt. Absente ⇒ inchangé. */
+  readonly clock?: SceneClockHandle | null;
 };
 
 /** `NotAllowedError` — le refus de la politique de lecture automatique. */
@@ -88,6 +95,7 @@ function BackgroundTrackElement({
   muted,
   onDurationKnown,
   onPlaybackBlocked,
+  clock = null,
   src,
 }: Omit<BackgroundTrackAudioProps, 'mediaDeps' | 'onUnavailable'> & { readonly src: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -95,6 +103,25 @@ function BackgroundTrackElement({
   const callbacks = useRef({ onDurationKnown, onPlaybackBlocked });
   callbacks.current = { onDurationKnown, onPlaybackBlocked };
   const { bounds } = track;
+
+  // LE PARCOURS AU DOIGT (#7879) — la piste suit le temps pointé : le délai
+  // de départ se recompte depuis lui (`playedMsRef`), et la position tombe
+  // dans la fenêtre (`trackSeekPlan`). Avant le départ, elle attend au début.
+  // La piste derrière une ref : l'hôte la ré-élit à chaque rendu (objet
+  // neuf), ce qui ne doit pas désabonner puis réabonner l'écoute.
+  const trackRef = useRef(track);
+  trackRef.current = track;
+  useEffect(() => {
+    if (clock === null) return;
+    return clock.subscribeSeek((t) => {
+      const el = audioRef.current;
+      if (el === null) return;
+      const current = trackRef.current;
+      const plan = trackSeekPlan({ t, track: current, mediaDuration: el.duration });
+      playedMsRef.current = plan.playedMs;
+      alignMediaElement(el, plan.position ?? (current.bounds !== undefined ? current.bounds.startMs / 1000 : 0));
+    });
+  }, [clock]);
 
   useEffect(() => {
     const el = audioRef.current;
