@@ -12,6 +12,7 @@ import {
 } from './stories';
 import { CANVAS_CAPS_HEADERS } from './feed-pages';
 import { createHttpTransport } from './http';
+import { recordFixtureStory } from './stories-publish';
 
 /** Motif `conversations.test.ts` — un `fetchImpl` qui recopie la forme d'une
  * route réelle et enregistre les appels reçus. */
@@ -93,6 +94,27 @@ describe('loadStoryTray', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('/api/v1/social/posts?scope=stories&projection=tray&limit=50');
     expect(calls[0]?.init.method).toBe('GET');
+  });
+});
+
+/**
+ * `loadStoryTray` — fixtures — CE QUI EST PARTI DANS CET ONGLET PASSE DEVANT
+ * (#7707, même motif que `loadStatusMoods` pour les humeurs) : une story
+ * publiée pendant la session (`recordFixtureStory`, `stories-publish.ts`)
+ * entre dans le rail sans qu'aucun réseau ne soit touché.
+ */
+describe('loadStoryTray — fixtures — une story publiée dans cet onglet ENTRE dans le rail (#7707)', () => {
+  test('elle apparaît EN TÊTE du corpus, avec son auteur', async () => {
+    recordFixtureStory({ id: 'fx-story-du-temoin', authorId: 'u-viewer' });
+    const { impl, calls } = fakeFetch({ status: 200 });
+    const result = await loadStoryTray({ source: 'fixtures', transport: createHttpTransport({ base: '', fetchImpl: impl }) });
+    expect(calls).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0]?.id).toBe('fx-story-du-temoin');
+    expect(result.data[0]?.type).toBe('STORY');
+    expect(result.data[0]?.author?.id).toBe('u-viewer');
+    expect(result.data[0]?.isViewedByMe).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import { unclaimedStoryMediaIds } from '@/lib/stories/story-document';
 
 import type { ConversationsDeps } from './conversations';
 import { CANVAS_CAPS_HEADERS } from './feed-pages';
+import { VIEWER_ID as FIXTURE_VIEWER_ID } from './fixtures-base';
 import type { ApiResult } from './http';
 
 /**
@@ -88,6 +89,26 @@ export type PublishStoryResult = { readonly id: string };
 
 let fixturePublications = 0;
 
+/**
+ * **LES STORIES PUBLIÉES EN FIXTURES** (#7707) — le pendant de
+ * `recordFixtureMood`/`fixtureMoods` (`api/status.ts`) : sans lui, publier
+ * une story de plusieurs pages hors réseau n'a AUCUN effet observable, le
+ * plateau (`loadStoryTray`) resservant le corpus littéral d'origine à la
+ * première invalidation. Ne vit que le temps de l'onglet (jamais
+ * `localStorage`) : les fixtures sont un corpus de démonstration.
+ */
+const fixturePosts: { readonly id: string; readonly authorId: string }[] = [];
+
+export function recordFixtureStory(entry: { readonly id: string; readonly authorId: string }): void {
+  fixturePosts.unshift(entry);
+}
+
+/** Les stories publiées dans cet onglet, la plus récente d'abord — même
+ * ordre que le corpus servi (`createdAt desc`). */
+export function fixtureStories(): readonly { readonly id: string; readonly authorId: string }[] {
+  return fixturePosts;
+}
+
 export async function publishStory(params: PublishStoryParams): Promise<ApiResult<PublishStoryResult>> {
   const unclaimed = unclaimedStoryMediaIds(params.storyEffects, params.mediaIds);
   if (unclaimed.length > 0) {
@@ -96,7 +117,9 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
 
   if (__FIXTURES__ && params.source === 'fixtures') {
     fixturePublications += 1;
-    return { ok: true, data: { id: `fx-story-${fixturePublications}` } };
+    const id = `fx-story-${fixturePublications}`;
+    if ((params.type ?? 'STORY') === 'STORY') recordFixtureStory({ id, authorId: FIXTURE_VIEWER_ID });
+    return { ok: true, data: { id } };
   }
 
   return params.transport.request<PublishStoryResult>({

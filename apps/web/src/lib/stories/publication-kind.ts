@@ -1,6 +1,6 @@
 import { qualifiesAsReel, type ReelMediaLike } from '@meeshy/shared/utils/reel-composition';
 
-import { studioPublishablePageCount, type StudioDraft } from './studio';
+import type { StudioDraft } from './studio';
 import type { StudioVisualAsset } from './studio-page';
 
 /**
@@ -40,7 +40,7 @@ export type StudioOrigin = 'onboarding';
 export const studioOriginFromSearch = (search: URLSearchParams): StudioOrigin | null =>
   search.get('from') === 'onboarding' ? 'onboarding' : null;
 
-export type PublicationRefusal = 'reel-without-qualifying-media' | 'story-with-several-pages';
+export type PublicationRefusal = 'reel-without-qualifying-media';
 
 const visualMedia = (asset: StudioVisualAsset | null): ReelMediaLike[] =>
   asset === null ? [] : [{ mimeType: `${asset.mediaType}/*`, duration: asset.durationMs ?? null }];
@@ -64,14 +64,13 @@ export function studioReelMedia(draft: StudioDraft): ReelMediaLike[] {
  * SERVEUR (`packages/shared/utils/reel-composition.ts`) : sans elle côté
  * client, la passerelle rétrograderait le réel en post sans un mot.
  *
- * **UNE STORY DE PLUSIEURS PAGES SE REFUSE AUSSI** (#7684, question 9.4) :
- * iOS la publie en UN post PAR page (canal `.scene`,
- * `ComposerPublishChannel.swift:87`) ; ce canal n'est pas écrit côté web, et
- * le lecteur de story ne rend que la scène 0 (`routes/story.tsx`) — publier
- * le document entier perdrait les pages suivantes EN SILENCE.
+ * **UNE STORY DE PLUSIEURS PAGES NE SE REFUSE PLUS** (#7707) : le canal
+ * `.scene` (`ComposerPublishChannel.swift:79-104`, miroir
+ * `studioPublishPlan`, `studio-publish.ts`) publie désormais UN post PAR page
+ * publiable, dans l'ordre — ce que #7684 refusait faute de ce canal est
+ * maintenant écrit.
  */
 export function studioPublishRefusal(draft: StudioDraft, kind: PublicationKind): PublicationRefusal | null {
-  if (kind === 'STORY') return studioPublishablePageCount(draft) > 1 ? 'story-with-several-pages' : null;
   if (kind !== 'REEL') return null;
   return qualifiesAsReel(studioReelMedia(draft)) ? null : 'reel-without-qualifying-media';
 }

@@ -208,20 +208,108 @@ describe('StoryComposeScreen — PLUSIEURS PAGES DE MÉDIAS, ET LEUR AGENCEMENT 
     expect(effects && 'layout' in effects).toBe(false);
   });
 
-  test('une STORY de deux pages avec matière se REFUSE en le disant ; retirer la seconde lève le refus', async () => {
-    const bench = harness({});
-    const el = await twoTypedPages(bench, 'STORY');
-    expect(el.querySelector('[data-publish-refusal="story-with-several-pages"]')).not.toBeNull();
-    expect(publishButton(el)?.disabled).toBe(true);
-    act(() => kindToggle(el)!.click());
-    expect(kindChoice('STORY')?.getAttribute('aria-disabled')).toBe('true');
-    act(() => kindChoice('STORY')!.click());
-    await flush();
-    expect(bench.posts).toHaveLength(0);
+  async function threeTypedPages(bench: Harness, kind: PublicationKind = 'STORY'): Promise<HTMLDivElement> {
+    const el = mount(bench.deps, kind);
+    typeText(el, 'Une');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    typeText(el, 'Deux');
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 3);
+    typeText(el, 'Trois');
+    return el;
+  }
 
-    act(() => pageDelete(el)!.click());
-    await flush(() => pageRail(el) === null);
+  test('une STORY de trois pages part en TROIS stories, dans l’ordre (#7707)', async () => {
+    const bench = harness({});
+    const el = await threeTypedPages(bench, 'STORY');
     expect(el.querySelector('[data-publish-refusal]')).toBeNull();
+    expect(publishButton(el)?.disabled).toBe(false);
+    act(() => kindToggle(el)!.click());
+    expect(kindChoice('STORY')?.getAttribute('aria-disabled')).toBe('false');
+    act(() => kindMenu()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length >= 3);
+
+    expect(bench.posts).toHaveLength(3);
+    bench.posts.forEach((post, index) => {
+      const pageId = `page-${index + 1}`;
+      expect(post.type).toBe('STORY');
+      const effects = post.storyEffects as { readonly scenes: readonly { readonly id: string }[] };
+      expect(effects.scenes).toHaveLength(1);
+      expect(effects.scenes[0]?.id).toBe(pageId);
+      expect(post.originalLanguage).toBeDefined();
+      expect(post.mediaIds).toEqual([]);
+    });
+  });
+
+  test('avec des médias, chaque story de la séquence porte SES `mediaIds` — pas ceux des autres pages', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'STORY');
+    selectFile(el, 'visual', image());
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 2);
+    selectFile(el, 'visual', another('deuxieme.jpg'));
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+    act(() => addPage(el)!.click());
+    await flush(() => pageTiles(el).length === 3);
+    selectFile(el, 'visual', another('troisieme.jpg'));
+    await flush(() => bench.uploadCreations() === 3 && el.querySelector('[data-asset-phase="ready"]') !== null);
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length >= 3);
+
+    bench.posts.forEach((post, index) => {
+      expect(post.mediaIds).toEqual([`pm-${index + 1}`]);
+      const effects = post.storyEffects as { readonly scenes: readonly { readonly objects: readonly { readonly payload: Record<string, unknown> }[] }[] };
+      const postMediaIds = effects.scenes[0]!.objects.map((o) => o.payload.postMediaId).filter((id): id is string => typeof id === 'string');
+      expect(postMediaIds).toEqual([`pm-${index + 1}`]);
+    });
+  });
+
+  test('échec PARTIEL : la 2ᵉ story échoue ⇒ 1 story part, le brouillon garde les pages 2 et 3, le retry ne renvoie JAMAIS la page 1', async () => {
+    const drafts = createStudioDraftStore(null);
+    const bench = harness({ postsStatus: () => (bench.posts.length === 2 ? 500 : 201), drafts });
+    const el = await threeTypedPages(bench, 'STORY');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length >= 2);
+    await flush(() => pageTiles(el).length === 2);
+
+    expect(bench.posts).toHaveLength(2);
+    expect(Array.from(pageTiles(el)).map((tile) => tile.getAttribute('data-story-studio-page'))).toEqual(['page-2', 'page-3']);
+    expect(drafts.get(VIEWER_ID)?.pages.map((p) => p.id)).toEqual(['page-2', 'page-3']);
+    const outcome = el.querySelector('[data-publish-outcome="partial"]');
+    expect(outcome).not.toBeNull();
+    expect(outcome?.getAttribute('data-published')).toBe('1');
+    expect(outcome?.getAttribute('data-total')).toBe('3');
+    expect(publishButton(el)?.disabled).toBe(false);
+
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length >= 4);
+    expect(bench.posts).toHaveLength(4);
+    const effects2 = bench.posts[2]!.storyEffects as { readonly scenes: readonly { readonly id: string }[] };
+    const effects3 = bench.posts[3]!.storyEffects as { readonly scenes: readonly { readonly id: string }[] };
+    expect(effects2.scenes[0]?.id).toBe('page-2');
+    expect(effects3.scenes[0]?.id).toBe('page-3');
+    expect(bench.posts.every((post, index) => index < 2 || (post.storyEffects as { scenes: { id: string }[] }).scenes[0]?.id !== 'page-1')).toBe(true);
+    await flush(() => drafts.get(VIEWER_ID) === null);
+    expect(drafts.get(VIEWER_ID)).toBeNull();
+  });
+
+  test('échec TOTAL : la 1ʳᵉ story échoue ⇒ rien ne bouge, le message est celui d’aujourd’hui', async () => {
+    const bench = harness({ postsStatus: () => 500 });
+    const el = await threeTypedPages(bench, 'STORY');
+
+    act(() => publishButton(el)!.click());
+    await flush(() => el.querySelector('[role="alert"]') !== null);
+
+    expect(bench.posts).toHaveLength(1);
+    expect(pageTiles(el)).toHaveLength(3);
+    expect(el.querySelector('[data-publish-outcome]')).toBeNull();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('La story n’a pas pu être publiée.');
     expect(publishButton(el)?.disabled).toBe(false);
   });
 

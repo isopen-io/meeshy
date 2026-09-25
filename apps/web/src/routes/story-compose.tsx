@@ -11,7 +11,6 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { refreshFeedAction } from '@/lib/api/query';
-import { publishStory } from '@/lib/api/stories-publish';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { backgroundCss } from '@/lib/canvas/background';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
@@ -40,6 +39,7 @@ import {
   pageWithVisualUpload,
   type StudioDoor,
   type StudioFailureKey,
+  type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
 import {
@@ -48,7 +48,6 @@ import {
   currentStudioPage,
   selectedTextLayer,
   studioDraftFromSnapshot,
-  studioFailureKey,
   studioPlaceRefusal,
   studioPublishablePageCount,
   studioSnapshotOf,
@@ -64,13 +63,15 @@ import {
   withVisualCaption,
   withVisualPose,
   withoutPage,
+  withoutPages,
   withoutSound,
   withoutText,
   withoutVisual,
   type StudioDraft,
 } from '@/lib/stories/studio';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
-import { settle, studioPublishPayload, uploadStateOf, type PendingUpload, type SettledPage } from '@/lib/stories/studio-publish';
+import { settlePages, studioPublishPlan, uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
+import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
@@ -80,7 +81,7 @@ import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { Link, href, navigate } from '@/routes/route-table';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
-import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice } from '@/routes/story-compose-footer';
+import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishOutcomeNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import {
   LayerMark,
@@ -166,6 +167,15 @@ const ALL_DOORS: readonly StudioDoor[] = ['visual', 'overlay', 'sound'];
 
 function revokeIfLocal(url: string | undefined): void {
   if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
+/** Les TROIS aperçus locaux d'UNE page — fond, calque, son — révoqués
+ * ensemble : une page qui quitte le brouillon (retrait, publication) ne
+ * laisse aucun `blob:` derrière elle. */
+function revokePageMedia(page: StudioPage): void {
+  revokeIfLocal(page.background?.previewUrl);
+  revokeIfLocal(page.overlay?.previewUrl);
+  revokeIfLocal(page.sound?.previewUrl);
 }
 
 const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
@@ -284,6 +294,10 @@ function StoryStudio({
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
   const [publishFailure, setPublishFailure] = useState<StudioFailureKey | null>(null);
+  /** **L'ISSUE D'UN ENVOI PARTIEL** (#7707, canal `.scene`) — les pages déjà
+   * parties le restent (`withoutPages`) ; un échec TOTAL (rien de parti)
+   * reste porté par `publishFailure`. */
+  const [publishOutcome, setPublishOutcome] = useState<StudioPublishOutcomeNotice | null>(null);
   const [placeRefusal, setPlaceRefusal] = useState<StudioPlaceRefusalNotice | null>(null);
   /** Les contrôleurs de l'outil ouvert (zone BASSE d'iOS) — FERMÉS par défaut :
    * la scène garde toute sa hauteur tant que l'auteur ne règle rien. */
@@ -307,11 +321,7 @@ function StoryStudio({
   useEffect(
     () => () => {
       Object.values(abortRef.current).forEach((controller) => controller?.abort());
-      latestDraft.current.pages.forEach((p) => {
-        revokeIfLocal(p.background?.previewUrl);
-        revokeIfLocal(p.overlay?.previewUrl);
-        revokeIfLocal(p.sound?.previewUrl);
-      });
+      latestDraft.current.pages.forEach(revokePageMedia);
     },
     [],
   );
@@ -403,9 +413,7 @@ function StoryStudio({
       const removed = latestDraft.current.pages.find((p) => p.id === id);
       if (removed === undefined || latestDraft.current.pages.length <= 1) return;
       ALL_DOORS.forEach((door) => forgetUpload(id, door));
-      revokeIfLocal(removed.background?.previewUrl);
-      revokeIfLocal(removed.overlay?.previewUrl);
-      revokeIfLocal(removed.sound?.previewUrl);
+      revokePageMedia(removed);
       setDraft((current) => withoutPage(current, id));
     },
     [forgetUpload],
@@ -474,11 +482,12 @@ function StoryStudio({
   );
 
   /**
-   * **PLUSIEURS PAGES, PLUSIEURS SCÈNES, UN SEUL ENVOI** (#7684) — chaque
-   * page règle ses TROIS montées en vol (`settle`, adressées par
-   * `${pageId}:${door}`), jamais seulement celles de la page à l'écran.
-   * `chosen` est le GESTE entier (format ET disposition, `PublishChoice`) :
-   * une intention armée hors ligne, ou un échec, repart avec les deux.
+   * **PLUSIEURS PAGES, PLUSIEURS PUBLICATIONS** (#7684, canal `.scene` #7707)
+   * — `settlePages` règle les montées, `studioPublishPlan` décide du NOMBRE
+   * de publications (une par page pour une story, une pour tout le reste),
+   * `publishStudioPlan` les envoie en séquence. `chosen` porte le GESTE
+   * entier (format et disposition) : un échec ou une intention armée hors
+   * ligne repart avec les deux.
    */
   async function publish(chosen: PublishChoice = choice) {
     if (!canPublishStudioDraft(draft) || publishing) return;
@@ -491,52 +500,44 @@ function StoryStudio({
     setAwaitingNetwork(false);
     setPublishing(true);
     setPublishFailure(null);
+    setPublishOutcome(null);
 
-    const settledByPage = new Map(
-      await Promise.all(
-        draft.pages.map(
-          async (p): Promise<readonly [string, SettledPage]> => [
-            p.id,
-            await Promise.all([
-              settle(p.background?.upload, pendingRef.current[uploadKey(p.id, 'visual')] ?? null),
-              settle(p.overlay?.upload, pendingRef.current[uploadKey(p.id, 'overlay')] ?? null),
-              settle(p.sound?.upload, pendingRef.current[uploadKey(p.id, 'sound')] ?? null),
-            ]),
-          ],
-        ),
-      ),
-    );
-
+    const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
     const current = latestDraft.current;
-    // Le sous-menu n'offre une disposition QUE pour Post (`layoutIsServed`) :
-    // un autre format part sans `layout`, même choisi plus tôt sur un Post.
-    const payload = studioPublishPayload({ pages: current.pages, settled: settledByPage, layout: chosen.kind === 'POST' ? chosen.layout : null });
-    if (payload.kind !== 'ready') {
+    const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
+    if (plan.kind !== 'ready') {
       setPublishing(false);
       setPublishFailure(null);
       return;
     }
 
-    // **AUCUN `content`** (défaut 4, revue-correction #6900) : le texte d'une
-    // story vit dans `storyEffects` — l'envoyer en `content` le ferait rendre
-    // DEUX FOIS chez le lecteur, miroir du `content: nil` iOS
-    // (`StoryViewModel+PublicationUpload.swift:378-391`). `mediaCaption`, LUI,
-    // part (#6944) : `PostMedia.caption` est le contenu du MÉDIA.
-    const result = await publishStory({
-      ...deps.api,
-      type: chosen.kind,
-      // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le défaut
-      // reste une règle SERVEUR (`core.ts:421`) — jamais un défaut recopié ici.
-      ...(current.visibility !== null ? { visibility: current.visibility } : {}),
-      ...(current.pages.some((p) => p.texts.some((layer) => layer.text.trim() !== '')) ? { originalLanguage: language } : {}),
-      ...(payload.mediaCaption !== undefined ? { mediaCaption: payload.mediaCaption } : {}),
-      storyEffects: payload.storyEffects,
-      mediaIds: payload.mediaIds,
+    const publishedPageIds: string[] = [];
+    const outcome = await publishStudioPlan({
+      plan,
+      api: deps.api,
+      kind: chosen.kind,
+      visibility: current.visibility,
+      language,
+      onPublished: (event) => publishedPageIds.push(...event.pageIds),
     });
 
-    if (!result.ok) {
+    if (outcome.kind !== 'published') {
+      const { published } = outcome;
+      // **LES PAGES PARTIES RESTENT PARTIES** (#7707) — retirées du brouillon
+      // (`withoutPages`) et de leurs aperçus locaux : un retry ne les renvoie
+      // JAMAIS, miroir `publishedPostIds`
+      // (`StoryViewModel+Publication.swift:240-245`, « retry skips them —
+      // otherwise a partial-failure retry creates duplicate slides »).
+      if (published > 0) {
+        setDraft((draftBefore) => withoutPages(draftBefore, publishedPageIds));
+        current.pages.filter((p) => publishedPageIds.includes(p.id)).forEach(revokePageMedia);
+      }
       setPublishing(false);
-      setPublishFailure(studioFailureKey(result, 'publish') ?? 'story.studio.failure.network');
+      if (published === 0) {
+        setPublishFailure(outcome.kind === 'failed' ? outcome.failure : 'story.studio.failure.network');
+        return;
+      }
+      if (outcome.kind === 'failed') setPublishOutcome({ published: outcome.published, total: outcome.total, failure: outcome.failure });
       return;
     }
 
@@ -545,16 +546,15 @@ function StoryStudio({
     // story deux fois.
 
     if (viewerId !== null) deps.drafts.clear(viewerId);
-    current.pages.forEach((p) => {
-      revokeIfLocal(p.background?.previewUrl);
-      revokeIfLocal(p.overlay?.previewUrl);
-      revokeIfLocal(p.sound?.previewUrl);
-    });
+    current.pages.forEach(revokePageMedia);
     if (chosen.kind === 'STORY') {
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
-      if (origin === 'onboarding') {
-        storyReturn.note(result.data.id);
-        navigate(href('onboarding', undefined, { story: result.data.id }), true);
+      // La PREMIÈRE story de la séquence — celle par laquelle le lecteur
+      // commence — porte le retour de l'accueil post-inscription.
+      const firstPostId = outcome.postIds[0];
+      if (origin === 'onboarding' && firstPostId !== undefined) {
+        storyReturn.note(firstPostId);
+        navigate(href('onboarding', undefined, { story: firstPostId }), true);
         return;
       }
       navigate(href('stories'), false);
@@ -943,7 +943,13 @@ function StoryStudio({
           onCaption={(door, value) => setDraft((current) => withVisualCaption(current, door, value))}
           onSoundPlane={(plane) => setDraft((current) => withSoundPlane(current, plane))}
         />
-        <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
+        <StudioFooterMessage
+          lang={lang}
+          placeRefusal={placeRefusal}
+          kindRefusal={kindRefusal}
+          publishFailure={publishFailure}
+          publishOutcome={publishOutcome}
+        />
         {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
             l'audience en TÊTE, un espace, la capsule Publier. */}
         <div className="flex items-center gap-3 pb-3">

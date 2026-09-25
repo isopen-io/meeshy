@@ -4,7 +4,7 @@ import { buildStoryCanvasEffects, studioMediaIds } from '@/lib/stories/story-doc
 import { newTextLayer } from '@/lib/stories/studio-text';
 
 import { createHttpTransport } from './http';
-import { publishStory } from './stories-publish';
+import { fixtureStories, publishStory, recordFixtureStory } from './stories-publish';
 
 const BACKGROUND = { postMediaId: 'pm-bg', fileUrl: '2026/09/u1/bg.jpg' } as const;
 const texts = (text: string) => (text === '' ? [] : [newTextLayer({ id: 'text-1', language: 'fr', text })]);
@@ -193,5 +193,35 @@ describe('publishStory — la source fixtures ne touche jamais le réseau', () =
       mediaIds: [],
     });
     expect(refused.ok).toBe(false);
+  });
+});
+
+/**
+ * `recordFixtureStory` / `fixtureStories` (#7707) — le registre des stories
+ * PUBLIÉES en fixtures, motif EXACT de `recordFixtureMood`/`fixtureMoods`
+ * (`api/status.ts`) : sans lui, une story publiée hors réseau n'a aucun effet
+ * observable, `loadStoryTray` reservant le corpus littéral d'origine.
+ */
+describe('recordFixtureStory / fixtureStories — le registre des stories publiées en fixtures (#7707)', () => {
+  test('publier une STORY en fixtures l’enregistre EN TÊTE ; publier un POST ne l’enregistre PAS', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Un') })!;
+    const { impl } = fakeFetch({ status: 500 });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const before = fixtureStories().length;
+
+    const story = await publishStory({ source: 'fixtures', transport, storyEffects: effects, mediaIds: [] });
+    expect(story.ok).toBe(true);
+    expect(fixtureStories()).toHaveLength(before + 1);
+    if (story.ok) expect(fixtureStories()[0]?.id).toBe(story.data.id);
+
+    await publishStory({ source: 'fixtures', transport, type: 'POST', storyEffects: effects, mediaIds: [] });
+    expect(fixtureStories()).toHaveLength(before + 1);
+  });
+
+  test('`recordFixtureStory` place la nouvelle entrée EN TÊTE — même ordre que le corpus servi (`createdAt desc`)', () => {
+    const before = fixtureStories().length;
+    recordFixtureStory({ id: 'fx-story-manuelle', authorId: 'u-viewer' });
+    expect(fixtureStories()).toHaveLength(before + 1);
+    expect(fixtureStories()[0]).toEqual({ id: 'fx-story-manuelle', authorId: 'u-viewer' });
   });
 });

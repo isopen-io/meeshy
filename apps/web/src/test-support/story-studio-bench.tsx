@@ -172,7 +172,7 @@ export function harness(options: {
     if (!url.endsWith('/api/v1/posts') || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
     posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
     const status = options.postsStatus?.() ?? 201;
-    const body = status === 201 ? { success: true, data: { id: 'post-1' } } : { success: false, error: 'boom' };
+    const body = status === 201 ? { success: true, data: { id: `post-${posts.length}` } } : { success: false, error: 'boom' };
     return new Response(JSON.stringify(body), { status });
   }) as typeof fetch;
   const uploadsFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {

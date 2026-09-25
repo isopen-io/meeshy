@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 
-import { settle, studioPublishPayload, uploadStateOf, type SettledPage } from './studio-publish';
+import { settle, studioPublishPayload, studioPublishPlan, uploadStateOf, type SettledPage } from './studio-publish';
 import { emptyStudioPage, pageWithText, pageWithVisual, type StudioPage, type StudioVisualAsset } from './studio-page';
 import { IDENTITY_POSE } from './studio-pose';
 
@@ -85,6 +85,78 @@ describe('studioPublishPayload — la loi PURE d’un envoi à plusieurs pages (
     const payload = studioPublishPayload({ pages, settled, layout: null });
     expect(payload.kind === 'ready' ? payload.mediaIds : null).toEqual(['pm-1']);
     expect(payload.kind === 'ready' ? payload.storyEffects.scenes?.map((scene) => scene.id) : null).toEqual(['page-1', 'page-2']);
+  });
+});
+
+const pageWithBackgroundAndText = (id: string, textId: string, text: string, caption = ''): StudioPage =>
+  pageWithText(pageWithBackground(id, textId, caption), textId, text);
+
+describe('studioPublishPlan — le canal de la STORY publie UNE fois PAR PAGE (#7707)', () => {
+  const threePages = () => [
+    pageWithBackgroundAndText('page-1', 'text-1', 'Un'),
+    pageWithBackgroundAndText('page-2', 'text-2', 'Deux'),
+    pageWithBackgroundAndText('page-3', 'text-3', 'Trois'),
+  ];
+  const settledThree = () =>
+    new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+      ['page-3', [ready('pm-3'), NONE, NONE]],
+    ]);
+
+  test('trois pages avec matière, format STORY ⇒ TROIS publications, dans l’ORDRE, chacune SA scène et SES mediaIds', () => {
+    const plan = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind).toBe('ready');
+    if (plan.kind !== 'ready') return;
+    expect(plan.publications).toHaveLength(3);
+    plan.publications.forEach((publication, index) => {
+      const pageId = `page-${index + 1}`;
+      expect(publication.pageIds).toEqual([pageId]);
+      expect(publication.storyEffects.scenes).toHaveLength(1);
+      expect(publication.storyEffects.scenes?.[0]?.id).toBe(pageId);
+      expect(publication.mediaIds).toEqual([`pm-${index + 1}`]);
+      expect(publication.hasText).toBe(true);
+      expect('layout' in publication.storyEffects).toBe(false);
+    });
+  });
+
+  test('les mêmes trois pages en POST ⇒ UNE publication portant les trois scènes, avec la disposition ; en REEL, SANS disposition', () => {
+    const post = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'POST', layout: 'hero' } });
+    expect(post.kind).toBe('ready');
+    if (post.kind === 'ready') {
+      expect(post.publications).toHaveLength(1);
+      expect(post.publications[0]!.pageIds).toEqual(['page-1', 'page-2', 'page-3']);
+      expect(post.publications[0]!.storyEffects.scenes).toHaveLength(3);
+      expect(post.publications[0]!.storyEffects.layout).toBe('hero');
+    }
+    const reel = studioPublishPlan({ pages: threePages(), settled: settledThree(), choice: { kind: 'REEL', layout: null } });
+    expect(reel.kind === 'ready' && 'layout' in reel.publications[0]!.storyEffects).toBe(false);
+  });
+
+  test('une page VIDE entre deux pages avec matière ne produit AUCUNE publication — jamais une scène vide', () => {
+    const pages = [pageWithBackgroundAndText('page-1', 'text-1', 'Un'), emptyStudioPage('page-2', 'text-2', 'fr'), pageWithBackgroundAndText('page-3', 'text-3', 'Trois')];
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-3', [ready('pm-3'), NONE, NONE]],
+    ]);
+    const plan = studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } });
+    expect(plan.kind).toBe('ready');
+    if (plan.kind === 'ready') expect(plan.publications.map((p) => p.pageIds)).toEqual([['page-1'], ['page-3']]);
+  });
+
+  test('toutes les pages vides ⇒ `empty`', () => {
+    const pages = [emptyStudioPage('page-1', 'text-1', 'fr'), emptyStudioPage('page-2', 'text-2', 'fr')];
+    expect(studioPublishPlan({ pages, settled: new Map(), choice: { kind: 'STORY', layout: null } }).kind).toBe('empty');
+  });
+
+  test('un média non réglé (échoué) sur UNE page ⇒ `unresolved` pour le PLAN ENTIER, rien ne part — pas même la page 1', () => {
+    const pages = threePages();
+    const settled = new Map<string, SettledPage>([
+      ['page-1', [ready('pm-1'), NONE, NONE]],
+      ['page-2', [ready('pm-2'), NONE, NONE]],
+      ['page-3', [{ kind: 'failed' }, NONE, NONE]],
+    ]);
+    expect(studioPublishPlan({ pages, settled, choice: { kind: 'STORY', layout: null } }).kind).toBe('unresolved');
   });
 });
 

@@ -14,9 +14,8 @@ import { StudioAssetRow, StudioSoundPlaneToggle } from '@/routes/story-compose-p
 
 const VISUAL_DOORS = ['visual', 'overlay'] as const;
 
-const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.reel' | 'story.studio.refusal.story-pages'>> = {
+const REFUSAL_KEY: Readonly<Record<PublicationRefusal, 'story.studio.refusal.reel'>> = {
   'reel-without-qualifying-media': 'story.studio.refusal.reel',
-  'story-with-several-pages': 'story.studio.refusal.story-pages',
 };
 
 /** La raison d'un format refusé, dans la langue de l'interface — UNE raison
@@ -81,16 +80,24 @@ export function StudioPageAssets({
 /** LE MESSAGE du pied (aide, refus, échec) a sa PROPRE ligne, pleine largeur :
  * partagée avec la pastille et la capsule Publier, elle ne gardait que
  * quelques pixels à 320 px. */
+/** **L'ISSUE D'UN ENVOI PARTIEL** (#7707) — la STORY publie une page à la
+ * fois ; une panne EN COURS DE ROUTE laisse les pages déjà parties PARTIES et
+ * le dit : « k sur N publiées » + la cause, jamais un silence sur ce qui a
+ * réussi. */
+export type StudioPublishOutcomeNotice = { readonly published: number; readonly total: number; readonly failure: StudioFailureKey };
+
 export function StudioFooterMessage({
   lang,
   placeRefusal,
   kindRefusal,
   publishFailure,
+  publishOutcome,
 }: {
   readonly lang: InterfaceLanguage;
   readonly placeRefusal: StudioPlaceRefusalNotice | null;
   readonly kindRefusal: PublicationRefusal | null;
   readonly publishFailure: StudioFailureKey | null;
+  readonly publishOutcome?: StudioPublishOutcomeNotice | null;
 }) {
   return (
     <div className="text-caption">
@@ -103,6 +110,17 @@ export function StudioFooterMessage({
       ) : kindRefusal !== null ? (
         <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
           {publicationRefusalText(lang, kindRefusal)}
+        </p>
+      ) : publishOutcome != null ? (
+        <p
+          role="alert"
+          data-publish-outcome="partial"
+          data-published={publishOutcome.published}
+          data-total={publishOutcome.total}
+          style={{ color: 'var(--color-error)' }}
+        >
+          {translate(lang, 'story.studio.outcome.partial', { published: String(publishOutcome.published), total: String(publishOutcome.total) })}{' '}
+          {translate(lang, publishOutcome.failure)}
         </p>
       ) : publishFailure !== null ? (
         <p role="alert" style={{ color: 'var(--color-error)' }}>

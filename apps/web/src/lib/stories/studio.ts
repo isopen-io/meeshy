@@ -175,6 +175,26 @@ export function withCurrentPage(draft: StudioDraft, id: string): StudioDraft {
   return draft.pages.some((page) => page.id === id) ? { ...draft, currentPage: id } : draft;
 }
 
+/**
+ * **RETIRER PLUSIEURS PAGES D'UN COUP** (#7707) — ce qu'un échec PARTIEL du
+ * canal `.scene` laisse derrière lui : les pages PARTIES n'ont plus leur
+ * place dans le brouillon, celles qui restent gardent leur IDENTITÉ D'OBJET
+ * (Zero Unnecessary Re-render, comme `withPage`). Des `id` inconnus sont
+ * ignorés — jamais une exception pour un id déjà retiré.
+ *
+ * **Retirer TOUTES les pages laisse le brouillon INCHANGÉ** : le succès
+ * COMPLET d'une publication passe par `clear(viewerId)` (le brouillon entier
+ * disparaît) — jamais par ici, qui ne réduit un document qu'à ce qu'il en
+ * reste à publier.
+ */
+export function withoutPages(draft: StudioDraft, ids: readonly string[]): StudioDraft {
+  const removed = new Set(ids);
+  const pages = draft.pages.filter((page) => !removed.has(page.id));
+  if (pages.length === 0 || pages.length === draft.pages.length) return draft;
+  const currentPage = removed.has(draft.currentPage) ? pages[0]!.id : draft.currentPage;
+  return { ...draft, pages, currentPage };
+}
+
 /** Le nombre de médias (fond/calque/son) que le DOCUMENT ENTIER porte, prêts
  * OU en vol — comparé à `MAX_POST_MEDIA` par `studioPlaceRefusal`. */
 export function studioMediaCount(draft: StudioDraft): number {
