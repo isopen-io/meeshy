@@ -1,4 +1,4 @@
-import { Avatar } from './avatar';
+import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Check, Flags, PrismPastille, ReactionChip } from './message-blocks';
 import {
@@ -85,7 +85,7 @@ export function FocusIdentity({
       style={{ minHeight: IDENTITY_CHIP_HEIGHT }}
       aria-hidden
     >
-      <Avatar
+      <AuthorAvatar
         initials={initials}
         color={accent}
         size={IDENTITY_AVATAR_SIZE}

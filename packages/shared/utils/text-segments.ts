@@ -21,7 +21,7 @@
  * empile `react-markdown` + `remark-gfm` + `rehype-raw` + une coloration
  * syntaxique + Mermaid ; le budget de première peinture de `apps/web-v2` est
  * de 90 Ko, gardé par `scripts/measure-weight.mjs`. Ce module ne coûte rien à
- * ce budget : ZÉRO dépendance, quatre expressions régulières.
+ * ce budget : ZÉRO dépendance, quelques expressions régulières.
  *
  * ## Les classes de caractères sont DÉRIVÉES, jamais recopiées
  *
@@ -44,6 +44,7 @@
 /* `.js` EXPLICITE — la convention ESM du paquet (`esm-relative-imports.test.ts`
    la garde) : sans elle, le `dist` construit échoue à la RÉSOLUTION au
    démarrage, et aucun témoin de comportement ne le voit. */
+import type { ContentTrackingLink } from '../types/post.js';
 import { MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from './mention-parser.js';
 
 /** Un morceau de texte qui n'est pas de l'emphase — le seul contenu qu'une
@@ -52,7 +53,20 @@ export type InlineSegment =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'mention'; readonly text: string; readonly username: string }
   | { readonly kind: 'hashtag'; readonly text: string; readonly tag: string }
-  | { readonly kind: 'url'; readonly text: string; readonly href: string };
+  | { readonly kind: 'url'; readonly text: string; readonly href: string }
+  /**
+   * UN LIEN DE SUIVI (#7827) — il s'ouvre par `/l/<token>`, la route qui
+   * compte le clic puis redirige. Deux origines, une seule forme :
+   *
+   *  - `m+<token>` écrit par la passerelle à la place d'un `[[url]]` / `<url>`
+   *    — `url: null`, l'adresse d'origine n'est plus dans le texte ;
+   *  - une URL BRUTE que `trackingLinks` associe à un token — `url` est
+   *    l'adresse affichée, et `text` reste ce que l'auteur a écrit.
+   *
+   * Le token n'entre ici qu'après `isTrackingToken` : c'est ce qui borne ce
+   * qu'un consommateur pose dans une adresse.
+   */
+  | { readonly kind: 'tracked-link'; readonly text: string; readonly token: string; readonly url: string | null };
 
 /**
  * LES QUATRE EMPHASES, et quatre seulement (directive porteur) : gras,
@@ -86,7 +100,65 @@ export type SegmentOptions = {
    * le serveur s'est prononcé, et il dit qu'il n'y en a aucune.
    */
   readonly mentions?: readonly string[] | undefined;
+  /**
+   * Les URL BRUTES que la passerelle a rendues traçables
+   * (`metadata.trackingLinks`, ou le champ hissé du socket) — voir
+   * `trackingLinksOf` pour les décoder. Absent ⇒ aucune URL n'est suivie ;
+   * `m+<token>` se reconnaît sans elles.
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 };
+
+/**
+ * LA FORME D'UN TOKEN — jumelle de `mshyShortRegex` / `trackingLinkRegex`
+ * (`services/gateway/src/services/TrackingLinkService.ts`), qui reconnaissent
+ * les liens de suivi déjà posés : `[A-Za-z0-9_-]{2,50}`. Le dernier caractère
+ * est alphanumérique, comme la frontière `\b` de la passerelle l'impose.
+ */
+const TRACKING_TOKEN_BODY = '[A-Za-z0-9_-]{1,49}[A-Za-z0-9]';
+const TRACKING_TOKEN_REGEX = new RegExp(`^${TRACKING_TOKEN_BODY}$`);
+
+/**
+ * `m+<token>`, le lien court que la passerelle écrit (`buildShortLink`). Le
+ * `m` est MINUSCULE et ne se colle à aucun mot (`am+abc` n'en est pas un) —
+ * même frontière que `meeshyLinkRegex` côté iOS (`MessageTextRenderer.swift`).
+ */
+const SHORT_LINK_REGEX = new RegExp(`(?<![\\p{L}\\p{N}_+])m\\+(${TRACKING_TOKEN_BODY})(?![A-Za-z0-9_])`, 'gu');
+
+export function isTrackingToken(value: string): boolean {
+  return TRACKING_TOKEN_REGEX.test(value);
+}
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const trackingLinkEntries = (value: unknown): readonly ContentTrackingLink[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: unknown) => {
+        if (!isRecord(entry)) return [];
+        const { url, token } = entry;
+        if (typeof url !== 'string' || typeof token !== 'string') return [];
+        if (!/^https?:\/\//.test(url) || !isTrackingToken(token)) return [];
+        return [{ url, token }];
+      })
+    : [];
+
+/**
+ * **CE QUE LA PASSERELLE SERT, DÉCODÉ SANS JAMAIS LEVER** (#7827). Un message
+ * ou une publication porte ses liens suivis à DEUX endroits selon le
+ * transport : hissés en `trackingLinks` sur le socket (`message:new` n'embarque
+ * pas `metadata`), rangés dans `metadata.trackingLinks` en REST. Le champ hissé
+ * gagne quand il porte quelque chose ; toute entrée mal formée est écartée —
+ * un lien perdu vaut mieux qu'un fil entier par terre.
+ */
+export function trackingLinksOf(carrier: {
+  readonly trackingLinks?: unknown;
+  readonly metadata?: unknown;
+}): readonly ContentTrackingLink[] {
+  const hoisted = trackingLinkEntries(carrier.trackingLinks);
+  if (hoisted.length > 0) return hoisted;
+  return isRecord(carrier.metadata) ? trackingLinkEntries(carrier.metadata.trackingLinks) : [];
+}
 
 /**
  * `NAME_BOUNDARY_LEFT` écarte les adresses e-mail (`contact@marie.com`), y
@@ -159,6 +231,22 @@ const trimUrlTail = (url: string): string => {
 const URL_HAS_AUTHORITY = /^https?:\/\/[^\s]/;
 
 /**
+ * LE TOKEN D'UNE URL BRUTE — cherché sur l'adresse AFFICHÉE puis sur chaque
+ * forme plus longue jusqu'au match brut. La passerelle extrait les URL avec sa
+ * propre expression (`processExplicitLinksInContent`), qui GARDE un point ou un
+ * `?` final : `https://meeshy.me/notes.` y est la clé, `…/notes` ici le texte.
+ * Même double essai que `resolvedLinkURL` côté iOS.
+ */
+const trackedTokenFor = (
+  raw: string,
+  shown: string,
+  tokens: ReadonlyMap<string, string>,
+): string | undefined =>
+  Array.from({ length: raw.length - shown.length + 1 }, (_, extra) => raw.slice(0, shown.length + extra))
+    .map((candidate) => tokens.get(candidate))
+    .find((token) => token !== undefined);
+
+/**
  * **LES QUATRE MARQUEURS, DANS L'ORDRE OÙ ILS SONT ESSAYÉS.** L'alternation
  * est ordonnée, et le gras DOIT précéder l'italique : à une position portant
  * `**`, c'est la paire qui doit gagner sur l'étoile seule.
@@ -219,6 +307,11 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
   if (content === '') return [];
 
   const allowed = options.mentions === undefined ? null : new Set(options.mentions.map((m) => m.toLowerCase()));
+  const trackedTokens = new Map(
+    (options.trackingLinks ?? [])
+      .filter((link) => isTrackingToken(link.token))
+      .map((link) => [link.url, link.token] as const),
+  );
 
   const matches = [
     ...collect(content, MENTION_REGEX, (match) => {
@@ -239,7 +332,15 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
       : []),
     ...collect(content, URL_REGEX, (match) => {
       const url = trimUrlTail(match[0]);
-      return URL_HAS_AUTHORITY.test(url) ? { kind: 'url', text: url, href: url } : null;
+      if (!URL_HAS_AUTHORITY.test(url)) return null;
+      const token = trackedTokenFor(match[0], url, trackedTokens);
+      return token === undefined
+        ? { kind: 'url', text: url, href: url }
+        : { kind: 'tracked-link', text: url, token, url };
+    }),
+    ...collect(content, SHORT_LINK_REGEX, (match) => {
+      const token = match[1];
+      return token === undefined ? null : { kind: 'tracked-link', text: match[0], token, url: null };
     }),
   ].sort((a, b) => a.start - b.start);
 

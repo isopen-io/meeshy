@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE } from '@/components/grouped-section';
@@ -10,7 +10,6 @@ import { translateInvite } from '@/lib/i18n-invite-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
 import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, type RuleKey } from '@/routes/share-link-form';
 
@@ -402,91 +401,11 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
 }
 
 /**
- * LA CONFIRMATION DE « SUPPRIMER » — un `<dialog>` modal (focus piégé, Échap),
- * fermé aussi par le retour matériel d'Android (`useBackDismiss`). Le texte
- * dit ce que le geste FAIT — le lien cesse de fonctionner, les invités sans
- * compte perdent l'accès — et ne promet pas d'« irréversible » que la
- * passerelle ne tient pas encore (#6411).
+ * **LA CONFIRMATION DE « SUPPRIMER » VIT DÉSORMAIS DANS `ConfirmDialog`**
+ * (revue-correction #6149, défaut majeur 2, issue #7858) — c'était la
+ * TROISIÈME copie divergente du dépôt, et la seule avec un rayon écrit à la
+ * main (`rounded-[24px]`, jamais dérivé d'un jeton). Le composant partagé
+ * (`components/confirm-dialog.tsx`) est monté directement par
+ * `routes/share-link.tsx`, avec son `busy` — cet écran attend encore la
+ * réponse réseau avant de fermer (#6411, pas encore optimiste).
  */
-export function ConfirmDelete({
-  language,
-  busy,
-  onConfirm,
-  onCancel,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly busy: boolean;
-  readonly onConfirm: () => void;
-  readonly onCancel: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useBackDismiss(onCancel);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog === null) return undefined;
-    if (!dialog.open && typeof dialog.showModal === 'function') dialog.showModal();
-    return () => {
-      if (dialog.open) dialog.close();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      data-share-link-delete-dialog
-      aria-labelledby="link-delete-title"
-      aria-describedby="link-delete-body"
-      onClose={onCancel}
-      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-[24px] p-0 backdrop:bg-black/40"
-      style={{ backgroundColor: 'var(--color-ios-card)', color: INK, border: 0 }}
-    >
-      <div className="grid gap-3 p-5">
-        <h2 id="link-delete-title" className="text-thread font-extrabold">
-          {translateInvite(language, 'linkDetail.delete.title')}
-        </h2>
-        <p id="link-delete-body" className="text-body" style={{ color: INK_2 }}>
-          {translateInvite(language, 'linkDetail.delete.body')}
-        </p>
-        <div className="mt-2 grid grid-cols-2 gap-2.5">
-          <DialogButton onClick={onCancel} tone="neutral" data="cancel">
-            {translateInvite(language, 'linkDetail.delete.cancel')}
-          </DialogButton>
-          <DialogButton onClick={onConfirm} tone="danger" data="confirm" busy={busy}>
-            {translateInvite(language, 'linkDetail.delete.confirm')}
-          </DialogButton>
-        </div>
-      </div>
-    </dialog>
-  );
-}
-
-function DialogButton({
-  onClick,
-  tone,
-  data,
-  busy = false,
-  children,
-}: {
-  readonly onClick: () => void;
-  readonly tone: 'neutral' | 'danger';
-  readonly data: string;
-  readonly busy?: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      data-share-link-delete={data}
-      onClick={onClick}
-      disabled={busy}
-      aria-busy={busy}
-      className="grid place-items-center rounded-[14px] px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={
-        tone === 'danger'
-          ? { minHeight: 48, color: 'white', backgroundColor: 'var(--color-error)', outlineColor: 'var(--color-error)' }
-          : { minHeight: 48, color: INK, border: '1.5px solid color-mix(in srgb, var(--color-ios-ink-3) 45%, transparent)', outlineColor: BRAND }
-      }
-    >
-      {children}
-    </button>
-  );
-}

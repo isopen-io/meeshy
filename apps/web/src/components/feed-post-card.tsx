@@ -372,6 +372,7 @@ function FeedPostText({
           style={{ color: 'var(--color-ios-ink)' }}
           hashtags
           mentions={mentions}
+          trackingLinks={text.trackingLinks}
         />
         {/* LA PASTILLE SE GARDE ELLE-MÊME (`servedLanguage === originalLanguage`
             ⇒ `null`) : une publication non traduite n'annonce rien, et aucune

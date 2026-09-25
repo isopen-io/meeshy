@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
@@ -10,6 +10,7 @@ import { logout } from '@/lib/api/auth';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import {
   currentInterfaceLanguage,
@@ -20,7 +21,6 @@ import {
 } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { href, navigate } from '@/routes/route-table';
 import {
   AboutSection,
@@ -69,64 +69,6 @@ const actionDeps = (): PreferenceActionDeps => ({
 });
 
 const togglePatch = (key: BooleanPreference, value: boolean): PreferencesPatch => ({ [key]: value });
-
-function LogoutConfirm({
-  language,
-  onConfirm,
-  onCancel,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly onConfirm: () => void;
-  readonly onCancel: () => void;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useBackDismiss(onCancel);
-  useEffect(() => {
-    const element = dialog.current;
-    if (element !== null && !element.open) element.showModal();
-  }, []);
-  /* `flex-auto` SANS `min-w-0` : un bouton ne rétrécit jamais sous son libellé ;
-     à 320 px, les deux se superposent plutôt que de tronquer « Déconnexion ». */
-  const buttonClass = 'grid flex-auto place-items-center rounded-chip px-4 text-body font-semibold focus-visible:outline-2';
-  return (
-    <dialog
-      ref={dialog}
-      data-logout-confirm
-      aria-labelledby="settings-logout-title"
-      aria-describedby="settings-logout-message"
-      onClose={onCancel}
-      className="m-auto w-[min(22rem,calc(100vw-2rem))] rounded-card p-5 backdrop:bg-[rgb(0_0_0/0.45)]"
-      style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
-    >
-      <h2 id="settings-logout-title" className="text-body font-bold">
-        {translate(language, 'settings.logout.title')}
-      </h2>
-      <p id="settings-logout-message" className="mt-1.5 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'settings.logout.message')}
-      </p>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          type="button"
-          data-logout-cancel
-          onClick={() => dialog.current?.close()}
-          className={buttonClass}
-          style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)' }}
-        >
-          {translate(language, 'common.cancel')}
-        </button>
-        <button
-          type="button"
-          data-logout-proceed
-          onClick={onConfirm}
-          className={buttonClass}
-          style={{ minHeight: 44, color: 'white', outlineColor: 'var(--color-danger)', backgroundColor: 'var(--color-danger)' }}
-        >
-          {translate(language, 'settings.logout.title')}
-        </button>
-      </div>
-    </dialog>
-  );
-}
 
 const notices = {
   offline: 'settings.offline.body',
@@ -232,7 +174,24 @@ export default function SettingsScreen() {
           <LogoutButton language={language} busy={loggingOut} onPress={() => setConfirming(true)} />
         </SettingsContent>
       </main>
-      {confirming ? <LogoutConfirm language={language} onConfirm={() => void logOut()} onCancel={() => setConfirming(false)} /> : null}
+      {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149, défaut
+          majeur 2, issue #7858) — `LogoutConfirm` était la première des trois
+          copies divergentes du dépôt, blanc sur `--color-danger` à 3,2:1 en
+          sombre. `ConfirmDialog` porte le geste destructif en TEXTE rouge sur
+          la carte (5,3:1 clair / 5,7:1 sombre), jamais du blanc sur un aplat
+          rouge. */}
+      {confirming ? (
+        <ConfirmDialog
+          name="logout"
+          title={translate(language, 'settings.logout.title')}
+          body={translate(language, 'settings.logout.message')}
+          cancelLabel={translate(language, 'common.cancel')}
+          confirmLabel={translate(language, 'settings.logout.title')}
+          tone="destructive"
+          onConfirm={() => void logOut()}
+          onCancel={() => setConfirming(false)}
+        />
+      ) : null}
       <p
         role="status"
         aria-live="polite"

@@ -146,7 +146,11 @@ struct ShareLinksView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(viewModel.links) { link in
-                        NavigationLink(destination: ShareLinkDetailView(link: link)) {
+                        NavigationLink(destination: ShareLinkDetailView(
+                            link: link,
+                            onLinkChanged: viewModel.replace,
+                            onLinkDeleted: viewModel.remove
+                        )) {
                             shareLinkRow(link)
                         }
                         .buttonStyle(.plain)
@@ -289,6 +293,24 @@ class ShareLinksViewModel: ObservableObject {
         stats = try? await s
         try? await CacheCoordinator.shared.shareLinks.save(links, for: "list")
         isLoading = false
+    }
+
+    /// La fiche d'un lien (#7797) écrit ici sa valeur optimiste : revenir à
+    /// la liste montre le lien tel qu'il vient d'être modifié, et le cache
+    /// le garde pour le prochain démarrage.
+    func replace(_ link: MyShareLink) {
+        links = links.map { $0.id == link.id ? link : $0 }
+        persist()
+    }
+
+    func remove(_ linkId: String) {
+        links.removeAll { $0.id == linkId }
+        persist()
+    }
+
+    private func persist() {
+        let snapshot = links
+        Task { try? await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") }
     }
 
     func loadStats() async {

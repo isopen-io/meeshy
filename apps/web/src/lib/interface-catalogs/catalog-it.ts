@@ -1,4 +1,8 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import itIdentity from './catalog-it-identity';
+
+import itMentions from './catalog-it-mentions';
+import itStoriesMine from './catalog-it-stories-mine';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -168,8 +172,7 @@ const it = {
   'feed.allLoaded': 'Tutte le pubblicazioni sono state caricate',
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
-  'a11y.avatar.profile': 'Vedi il profilo di {name}',
-  'a11y.avatar.story': 'Vedi la storia di {name}',
+  ...itIdentity,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
   'report.body': 'Scegli il motivo della segnalazione. Il nostro team di moderazione la riceverà.',
@@ -1099,6 +1102,8 @@ const it = {
   'message.detail.sent': 'Inviato',
   'message.detail.language.original': '{language} (originale)',
 
+  ...itMentions,
+  ...itStoriesMine,
 } satisfies InterfaceCatalog;
 
 export default it;

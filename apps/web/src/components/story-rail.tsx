@@ -13,6 +13,7 @@ import {
   railStroke,
 } from '@/components/rail-tile';
 import { StoryRailSelfTile } from '@/components/story-rail-self-tile';
+import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
@@ -134,6 +135,109 @@ function StoryTile({
   const cellule = railCellWidth(size, showsLabel);
   const hitPad = railHitPad(cellule);
   const trait = railStroke(size, group.hasUnseen);
+  const authorAriaLabel =
+    combien > 1
+      ? `${label}, ${combien} stories${group.hasUnseen ? ', non vues' : ''}`
+      : `${label}${group.hasUnseen ? ', non vue' : ''}`;
+
+  /* LES PROPRIÉTÉS COMMUNES AUX DEUX DESTINATIONS — une seule écriture de la
+     cible tactile, de l'identité focalisable et du focus : les deux liens ne
+     diffèrent QUE par où ils mènent et ce qu'ils annoncent.
+
+     `data-story-author` — L'IDENTITÉ DE LA TUILE EST PORTÉE PAR L'ÉLÉMENT
+     FOCALISABLE (porté de #6103, où elle s'appelait `data-conversation`) :
+     `ListHeader` retient celle que la bande épinglée avait sous le focus, puis
+     rend le focus à sa JUMELLE du grand plateau quand la bande se retire. Sans
+     cet attribut, la reprise ne trouve rien et le focus reste sur `<body>`.
+
+     `width` — LA LARGEUR EST PORTÉE PAR LE LIEN, pas seulement par le `<li>`
+     (#6080, revue à la capture) : `truncate` ne peut couper que dans une boîte
+     CONTRAINTE, et ce lien n'en avait aucune — le libellé prenait sa largeur
+     naturelle et DÉBORDAIT sur la tuile voisine, « Camille Roy » et « Inès
+     Baraka » se chevauchant en « Camille RoyInès Baraka ». iOS contraint le
+     sien à la même cote.
+
+     Les marges NÉGATIVES — LA CIBLE TACTILE (charte, dimension 5) : la bande
+     épinglée mesure 42, le lien s'étend à 44 par `railHitPad`, jamais en
+     élargissant la case que les gates mesurent. */
+  const linkProps = {
+    'data-story-author': group.authorId,
+    className: 'flex flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2',
+    style: {
+      width: cellule,
+      minWidth: MIN_TOUCH_TARGET,
+      minHeight: MIN_TOUCH_TARGET,
+      marginLeft: -hitPad,
+      marginRight: -hitPad,
+      marginTop: -hitPad,
+      marginBottom: -hitPad,
+      justifyContent: 'center',
+      outlineColor: 'var(--color-ios-brand)',
+    },
+  } as const;
+
+  const body = (
+    <>
+      <span
+        data-anneau
+        data-accented={group.hasUnseen ? 'true' : undefined}
+        /* L'ANNEAU SE POSE AUTOUR DE L'AVATAR (`ringSize = size + 6`,
+           `MeeshyAvatar.swift:165`) : un trait de `railStroke` au bord d'une
+           boîte de 6 px plus large, et l'air entre les deux — jamais un
+           disque plein qui mangerait l'avatar. */
+        className="relative grid shrink-0 place-items-center rounded-chip"
+        style={{
+          width: anneau,
+          height: anneau,
+          boxShadow: `inset 0 0 0 ${trait}px ${
+            group.hasUnseen ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)'
+          }`,
+        }}
+      >
+        {/* LA PHOTO DE L'AUTEUR (#6975) — `storyAuthorSelect` la SERT
+            (`StoryTrayAuthor.avatar`) et le rail rendait des initiales sous
+            un anneau qui promet un visage. `participantAvatarOf` plutôt
+            qu'un `group.author?.avatar` direct : la loi partagée reste le
+            seul site, et un `avatar: ''` servi n'y devient pas un
+            `<img src="">`. */}
+        <Avatar
+          initials={initialsOf(label)}
+          color={'var(--color-ios-brand)'}
+          size={size}
+          {...(photo === undefined ? {} : { src: photo })}
+        />
+        {/* LE BADGE D'HUMEUR (#5652) — miroir `LentilleRailEntry.moodEmoji`
+            (`StoriesVivantsRail.swift`) : une pastille SECONDAIRE posée sur
+            l'anneau, jamais un second anneau — l'humeur et la story sont
+            deux signaux distincts sur la MÊME entrée. */}
+        {group.moodEmoji ? (
+          <span
+            data-mood={group.moodEmoji}
+            aria-hidden="true"
+            className="absolute right-0 bottom-0 grid place-items-center rounded-full leading-none"
+            style={{
+              width: Math.max(16, Math.round(size * 0.28)),
+              height: Math.max(16, Math.round(size * 0.28)),
+              fontSize: Math.max(10, Math.round(size * 0.16)),
+              background: 'var(--color-ios-surface)',
+              boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+            }}
+          >
+            {group.moodEmoji}
+          </span>
+        ) : null}
+      </span>
+      {showsLabel ? (
+        <span
+          data-libelle
+          className="w-full truncate text-center text-check"
+          style={{ color: 'var(--color-ios-ink-2)' }}
+        >
+          {label}
+        </span>
+      ) : null}
+    </>
+  );
 
   return (
     /* `data-story-tile` porte la COTE de l'avatar, pour que le gate des stories
@@ -149,101 +253,21 @@ function StoryTile({
       className="flex shrink-0 flex-col items-center gap-1"
       style={{ width: cellule }}
     >
-      <Link
-        to="story"
-        params={{ post: group.entryStoryId }}
-        /* L'IDENTITÉ DE LA TUILE EST PORTÉE PAR L'ÉLÉMENT FOCALISABLE (porté de
-           #6103, où elle s'appelait `data-conversation`) : `ListHeader` retient
-           celle que la bande épinglée avait sous le focus, puis rend le focus à
-           sa JUMELLE du grand plateau quand la bande se retire. Sans cet
-           attribut, la reprise ne trouve rien et le focus reste sur `<body>`. */
-        data-story-author={group.authorId}
-        aria-label={
-          combien > 1
-            ? `${label}, ${combien} stories${group.hasUnseen ? ', non vues' : ''}`
-            : `${label}${group.hasUnseen ? ', non vue' : ''}`
-        }
-        /* LA LARGEUR EST PORTÉE PAR LE LIEN, pas seulement par le `<li>`
-           (#6080, revue à la capture) : `truncate` ne peut couper que dans une
-           boîte CONTRAINTE, et ce lien n'en avait aucune — le libellé prenait
-           sa largeur naturelle et DÉBORDAIT sur la tuile voisine, « Camille
-           Roy » et « Inès Baraka » se chevauchant en « Camille RoyInès
-           Baraka ». iOS contraint le sien à la même cote. */
-        className="flex flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        /* LA CIBLE TACTILE (charte, dimension 5) — la bande épinglée mesure
-           42 : le lien s'étend à 44 par une marge NÉGATIVE (`railHitPad`),
-           jamais en élargissant la case que les gates mesurent. */
-        style={{
-          width: cellule,
-          minWidth: MIN_TOUCH_TARGET,
-          minHeight: MIN_TOUCH_TARGET,
-          marginLeft: -hitPad,
-          marginRight: -hitPad,
-          marginTop: -hitPad,
-          marginBottom: -hitPad,
-          justifyContent: 'center',
-          outlineColor: 'var(--color-ios-brand)',
-        }}
-      >
-        <span
-          data-anneau
-          data-accented={group.hasUnseen ? 'true' : undefined}
-          /* L'ANNEAU SE POSE AUTOUR DE L'AVATAR (`ringSize = size + 6`,
-             `MeeshyAvatar.swift:165`) : un trait de `railStroke` au bord d'une
-             boîte de 6 px plus large, et l'air entre les deux — jamais un
-             disque plein qui mangerait l'avatar. */
-          className="relative grid shrink-0 place-items-center rounded-chip"
-          style={{
-            width: anneau,
-            height: anneau,
-            boxShadow: `inset 0 0 0 ${trait}px ${
-              group.hasUnseen ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)'
-            }`,
-          }}
-        >
-          {/* LA PHOTO DE L'AUTEUR (#6975) — `storyAuthorSelect` la SERT
-              (`StoryTrayAuthor.avatar`) et le rail rendait des initiales sous
-              un anneau qui promet un visage. `participantAvatarOf` plutôt
-              qu'un `group.author?.avatar` direct : la loi partagée reste le
-              seul site, et un `avatar: ''` servi n'y devient pas un
-              `<img src="">`. */}
-          <Avatar
-            initials={initialsOf(label)}
-            color={'var(--color-ios-brand)'}
-            size={size}
-            {...(photo === undefined ? {} : { src: photo })}
-          />
-          {/* LE BADGE D'HUMEUR (#5652) — miroir `LentilleRailEntry.moodEmoji`
-              (`StoriesVivantsRail.swift`) : une pastille SECONDAIRE posée sur
-              l'anneau, jamais un second anneau — l'humeur et la story sont
-              deux signaux distincts sur la MÊME entrée. */}
-          {group.moodEmoji ? (
-            <span
-              data-mood={group.moodEmoji}
-              aria-hidden="true"
-              className="absolute right-0 bottom-0 grid place-items-center rounded-full leading-none"
-              style={{
-                width: Math.max(16, Math.round(size * 0.28)),
-                height: Math.max(16, Math.round(size * 0.28)),
-                fontSize: Math.max(10, Math.round(size * 0.16)),
-                background: 'var(--color-ios-surface)',
-                boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
-              }}
-            >
-              {group.moodEmoji}
-            </span>
-          ) : null}
-        </span>
-        {showsLabel ? (
-          <span
-            data-libelle
-            className="w-full truncate text-center text-check"
-            style={{ color: 'var(--color-ios-ink-2)' }}
-          >
-            {label}
-          </span>
-        ) : null}
-      </Link>
+      {/* **MON ANNEAU OUVRE LE LISTING, JAMAIS MA STORY** (revue-correction
+          #6149) — la bande épinglée porte ma story parmi les anneaux
+          (`selfAvatarCell` de `PinnedStoryTrailBand`, StoryTrayView.swift:887-915)
+          et iOS la route par le MÊME résolveur que la grande trail
+          (`StoryTrayActionResolver.avatarTap`) : « Mes stories », annoncé comme
+          tel. Une tuile D'AUTRUI ouvre sa story. */}
+      {group.isMine ? (
+        <Link to="storiesMine" aria-label={translate(language, 'storiesMine.manage')} {...linkProps}>
+          {body}
+        </Link>
+      ) : (
+        <Link to="story" params={{ post: group.entryStoryId }} aria-label={authorAriaLabel} {...linkProps}>
+          {body}
+        </Link>
+      )}
     </li>
   );
 }

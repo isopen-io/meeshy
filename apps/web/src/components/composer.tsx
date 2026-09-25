@@ -4,6 +4,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { ComposerTopRow } from './composer-top-row';
 import { Glyph } from './glyph';
+import { MentionFieldPanel } from './mention-suggestions';
 import type { ComposerNotice } from './composer-tray';
 import {
   acceptPendingFiles,
@@ -31,6 +32,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+import { useMentionField } from '@/lib/view/use-mention-field';
 
 /**
  * LA FEUILLE D'EFFETS, CHARGÉE À LA DEMANDE (#6175) — même discipline que
@@ -201,6 +203,18 @@ export const Composer = memo(function Composer({
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
+  /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
+   * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
+   * insertion. Sans `source`, il lit celle que le fil ouvert publie. */
+  const mention = useMentionField({
+    text,
+    fieldRef: field,
+    onText: (next) => {
+      setText(next);
+      onTextChange?.(next);
+      compose.setText(next);
+    },
+  });
   /* UN LIEU SEUL SUFFIT À ENVOYER — comme une pièce jointe seule. Sans lui
      dans cette somme, partager sa position aurait demandé d'écrire un mot,
      et le bouton d'envoi serait resté invisible sur un composeur qui porte
@@ -465,22 +479,8 @@ export const Composer = memo(function Composer({
     const el = field.current;
     const start = el?.selectionStart ?? text.length;
     const end = el?.selectionEnd ?? text.length;
-    const next = `${text.slice(0, start)}${emoji}${text.slice(end)}`;
-    setText(next);
-    onTextChange?.(next);
-    compose.setText(next);
     setEmojiSheetOpen(false);
-    /* LE CURSEUR SUIT L'EMOJI — sans ce rappel, il retombait au DÉBUT du
-       champ (React réécrit `value`, le navigateur remet la sélection à 0) et
-       le mot suivant s'écrivait avant la phrase. Différé d'un tour : la
-       valeur n'est posée sur le nœud qu'après le rendu. */
-    queueMicrotask(() => {
-      const after = field.current;
-      if (after === null) return;
-      const caret = start + emoji.length;
-      after.focus();
-      after.setSelectionRange(caret, caret);
-    });
+    mention.write(`${text.slice(0, start)}${emoji}${text.slice(end)}`, start + emoji.length);
   };
 
   /**
@@ -519,7 +519,9 @@ export const Composer = memo(function Composer({
        `data-message` : sans elle, le script doit deviner la racine du
        composeur en remontant le DOM, et il attrape le lien « Retour » de
        l'en-tête. Une ancre nommée est moins chère qu'un sélecteur fragile. */
-    <div data-composer className="flex flex-col pb-safe" style={chromeAccentStyle}>
+    <div data-composer className="relative flex flex-col pb-safe" style={chromeAccentStyle}>
+      <MentionFieldPanel field={mention} language={uiLanguage} />
+
       {replyTo ? (
         <div
           data-composer-reply
@@ -709,18 +711,33 @@ export const Composer = memo(function Composer({
               ref={field}
               rows={1}
               value={text}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onFocus={() => {
+                setFocused(true);
+                mention.onFocus();
+              }}
+              onBlur={() => {
+                setFocused(false);
+                mention.onBlur();
+              }}
               onInput={(e) => {
                 const el = e.currentTarget;
                 setText(el.value);
+                mention.syncCaret(el);
                 onTextChange?.(el.value);
                 compose.setText(el.value);
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
               }}
+              onClick={(e) => mention.syncCaret(e.currentTarget)}
+              onKeyUp={(e) => mention.syncCaret(e.currentTarget)}
+              /* LE MOTIF « CHAMP + LISTE À DESCENDANT ACTIF » (#7826) — le
+                 champ reste un `textbox` multiligne (ARIA in HTML n'admet
+                 aucun autre rôle sur `<textarea>`), et annonce sa liste par
+                 `aria-autocomplete`/`aria-controls`/`aria-activedescendant`. */
+              {...mention.aria}
               onKeyDown={(e) => {
+                if (mention.onKeyDown(e.nativeEvent)) return;
                 // La touche Entree ENVOIE (`.submitLabel(.send)`) ; Maj+Entree
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {

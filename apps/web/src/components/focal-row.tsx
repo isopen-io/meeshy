@@ -29,7 +29,7 @@ import {
 import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
-import { Avatar } from './avatar';
+import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
@@ -559,6 +559,7 @@ export const FocalRow = memo(function FocalRow({
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           style={{ color: 'var(--color-ios-ink)' }}
           mentions={message.validatedMentions}
+          trackingLinks={message.trackingLinks}
           plainTextHidden
         />
       ) : null}
@@ -636,7 +637,7 @@ export const FocalRow = memo(function FocalRow({
             <span className="offscreen">Sélectionner ce message</span>
           </button>
         ) : head ? (
-          <Avatar
+          <AuthorAvatar
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}

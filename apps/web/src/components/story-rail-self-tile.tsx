@@ -23,11 +23,11 @@ import { Link } from '@/routes/route-table';
  *
  * ## TROIS CONTRÔLES, TROIS ARBRES — jamais l'un DANS l'autre
  *
- * L'avatar (quand j'ai une story) ouvre ma story ; le (+) ouvre le studio ; la
- * pastille ouvre ma composition d'humeur. Les trois sont FRÈRES dans un
+ * L'avatar (quand j'ai une story) ouvre le listing « Mes stories » (#6149) ;
+ * le (+) ouvre le studio ; la pastille ouvre ma composition d'humeur. Les trois sont FRÈRES dans un
  * conteneur positionné, jamais imbriqués : un bouton dans un `<a>` produit un
- * arbre d'accessibilité invalide, et taper la pastille ouvrirait AUSSI la
- * story. C'est exactement pourquoi iOS les monte en `ZStack` plutôt qu'en
+ * arbre d'accessibilité invalide, et taper la pastille ouvrirait AUSSI le
+ * listing. C'est exactement pourquoi iOS les monte en `ZStack` plutôt qu'en
  * `label:` du bouton principal.
  *
  * ## LE DÉBORD DES CIBLES EST DÉLIBÉRÉ
@@ -170,14 +170,42 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
       style={{ width: cellule }}
     >
       <div className="relative grid place-items-center" style={{ width: anneau, height: anneau }}>
-        {entry.entryStoryId === undefined ? (
-          pastille
+        {/* **LE LISTING, JAMAIS LE LECTEUR DIRECT** (#6149) — miroir
+            `ConversationListView.swift:1394-1397` : le tap sur MON avatar
+            ouvre TOUJOURS « Mes stories », y compris quand mes seules
+            stories sont expirées (`hasAnyStory`, `StoryTrayActions.swift:71-75`).
+            Créer une story reste le rôle du (+) ; ouvrir directement une
+            story reste celui d'une tuile D'AUTRUI.
+
+            **NI L'UN NI L'AUTRE : LE STUDIO** (revue de #6149, défaut majeur
+            4) — miroir `StoryTrayActionResolver.avatarTap(hasMyStory:hasAnyStory:)`
+            (`StoryTrayActions.swift:73-77`), dont ce fichier ne portait que
+            deux branches sur trois : sans AUCUNE story (y compris expirée),
+            iOS route vers `.createStory`, jamais vers un listing vide. Sans ce
+            troisième cas, un compte qui vient de supprimer sa dernière story
+            voyait sa cible centrale de 94 px devenir INERTE — mesuré au
+            navigateur, aucun geste n'y avait plus d'effet (loi 4). Le libellé
+            suit `avatarAccessibilityLabel` pour ce même cas : « Créer une
+            story », jamais « Gérer mes stories » qui annoncerait un listing
+            vide. */}
+        {entry.hasAnyStory ? (
+          <Link
+            to="storiesMine"
+            data-story-self-open
+            /* L'ANNONCE DIT LA DESTINATION (miroir
+               `StoryTrayActionResolver.avatarAccessibilityLabel`) : le lien
+               ouvre une GESTION, « Votre story » annonçait un contenu. */
+            aria-label={translate(language, 'storiesMine.manage')}
+            className="rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ outlineColor: 'var(--color-ios-brand)' }}
+          >
+            {pastille}
+          </Link>
         ) : (
           <Link
-            to="story"
-            params={{ post: entry.entryStoryId }}
-            data-story-self-open
-            aria-label={translate(language, 'stories.mine')}
+            to="storyCompose"
+            data-story-self-create
+            aria-label={translate(language, 'stories.create')}
             className="rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ outlineColor: 'var(--color-ios-brand)' }}
           >

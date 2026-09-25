@@ -14,6 +14,20 @@ describe('pillAnnouncesOffline — une seule voix pour l’état réseau', () =>
     expect(pillAnnouncesOffline('profile')).toBe(false);
   });
 
+  /**
+   * **REVUE-CORRECTION #6149, défaut majeur 5** — mesuré aux captures
+   * `10-offline-dark.png` / `21-offline-light.png` : le bandeau
+   * `[data-my-stories-offline]` (« Hors ligne — la suppression sera possible
+   * au retour du réseau. », rectangle plein-largeur `[0,64,390,23]`) était
+   * recouvert par la pastille globale « Hors ligne » posée par-dessus,
+   * centrée vers `y≈72-98` — même chevauchement, même verdict que `/u/` et
+   * `/me` : la carte de l'écran dit un SUR-ENSEMBLE de ce que dirait la
+   * pastille, elle se tait donc ici aussi (D-11).
+   */
+  test('« Mes stories » porte déjà sa propre carte hors ligne : la pastille s’y tait', () => {
+    expect(pillAnnouncesOffline('storiesMine')).toBe(false);
+  });
+
   test('partout ailleurs la pastille reste la voix de l’état réseau', () => {
     expect(pillAnnouncesOffline('list')).toBe(true);
     expect(pillAnnouncesOffline('thread')).toBe(true);

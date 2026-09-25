@@ -11,6 +11,7 @@ import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITransl
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
 import type { MessageSticker } from './message-sticker.js';
 import type { ConversationBridge } from './conversation-bridge.js';
+import type { ContentTrackingLink } from './post.js';
 
 // Re-export canonical types from message-types.ts
 export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
@@ -220,6 +221,12 @@ export interface Message {
    * ou une pièce jointe protégé (#7591).
    */
   readonly sticker?: MessageSticker | null;
+  /**
+   * Les URL BRUTES du contenu que la passerelle a rendues traçables
+   * (`metadata.trackingLinks`, hissé tel quel sur `message:new`) — le client
+   * garde le texte et fait passer le lien par `/l/<token>` (#7827).
+   */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
 
   // ===== METADONNEES =====
   readonly createdAt: Date;

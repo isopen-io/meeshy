@@ -86,7 +86,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, suggestions);
     } catch (error) {
       // Post/conversation not found or access denied
-      if (error instanceof Error && error.message.includes('non trouvé ou accès refusé')) {
+      if (error instanceof Error && error.message.includes('accès refusé')) {
         return sendForbidden(reply, error.message);
       }
 

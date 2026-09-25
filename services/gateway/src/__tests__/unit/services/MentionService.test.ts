@@ -113,10 +113,10 @@ describe('MentionService', () => {
     // Ensure getCacheStore returns the shared mock instance
     (getCacheStore as jest.Mock).mockReturnValue(mockRedis);
 
-    // Create new Prisma instance
     prisma = new PrismaClient();
+    prisma.conversation.findUnique.mockResolvedValue({ id: 'conv-123', type: 'public' });
+    prisma.participant.findFirst.mockResolvedValue({ id: 'membership-current' });
 
-    // Create service instance
     service = new MentionService(prisma);
   });
 
@@ -870,13 +870,13 @@ describe('MentionService', () => {
     it('should delete cache entries matching conversation pattern', async () => {
       const conversationId = 'conv-123';
       mockRedis.keys.mockResolvedValue([
-        `mentions:suggestions:${conversationId}:user1:`,
-        `mentions:suggestions:${conversationId}:user2:jo`,
+        `mentions:suggestions:v2:${conversationId}:user1:`,
+        `mentions:suggestions:v2:${conversationId}:user2:jo`,
       ]);
 
       await service.invalidateCacheForConversation(conversationId);
 
-      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:${conversationId}:*`);
+      expect(mockRedis.keys).toHaveBeenCalledWith(`mentions:suggestions:v2:${conversationId}:*`);
       expect(mockRedis.del).toHaveBeenCalledTimes(2);
     });
 

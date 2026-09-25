@@ -6,6 +6,7 @@ import { scriptedTransport } from '@/test-support/scripted-transport';
 import { FEED_QUERY_KEY } from './feed';
 import { deletePost, pinPost } from './publication-actions';
 import { reportPost } from './reports';
+import { STORY_TRAY_QUERY_KEY, type StoryTrayPost } from './stories';
 
 /** LES GESTES DE L'AUTEUR (#7533) — ce qui PART, et ce que le fil montre. */
 const feedWith = (ids: readonly string[]) => {
@@ -38,6 +39,74 @@ describe('deletePost', () => {
 
     expect(await deletePost({ postId: 'p1', deps: { source: 'gateway', transport, queryClient } })).toBe('failed');
     expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+});
+
+/**
+ * **UNE STORY SE SUPPRIME PAR LE MÊME GESTE** (#6149) — `deletePost` sert le
+ * listing « Mes stories » comme il sert le menu « ⋯ » d'une carte du fil :
+ * même route, même optimisme, même retour en arrière. Voir le doc-comment de
+ * `story-caches.ts`.
+ */
+describe('deletePost — une story quitte le plateau AVANT la réponse, et y revient sur refus', () => {
+  const trayWith = (ids: readonly string[]) => {
+    const queryClient = new QueryClient();
+    const stories: readonly StoryTrayPost[] = ids.map((id) => ({ id, type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' }));
+    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, stories);
+    return queryClient;
+  };
+  const trayIdsOf = (queryClient: QueryClient): readonly string[] =>
+    (queryClient.getQueryData(STORY_TRAY_QUERY_KEY) as readonly StoryTrayPost[]).map((s) => s.id);
+
+  test('la story quitte le plateau avant même la réponse réseau', async () => {
+    const queryClient = trayWith(['s1', 's2']);
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/s1': { ok: true, data: null } });
+
+    const pending = deletePost({ postId: 's1', deps: { source: 'gateway', transport, queryClient } });
+    expect(trayIdsOf(queryClient)).toEqual(['s2']);
+
+    expect(await pending).toBe('done');
+  });
+
+  test('un refus relit le plateau des stories, comme le Flux — la story revient', async () => {
+    const queryClient = trayWith(['s1']);
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/s1': { ok: false, status: 500, error: 'INTERNAL_ERROR' } });
+
+    expect(await deletePost({ postId: 's1', deps: { source: 'gateway', transport, queryClient } })).toBe('offline');
+    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * **UNE RELECTURE PENDANT LE VOL NE RESSUSCITE PAS LA STORY** (revue-
+   * correction #6149) — deux suppressions en vol, ou un `story:viewed` qui
+   * invalide le plateau pendant le DELETE : la relecture rapporte la story
+   * que le serveur n'a pas encore retirée. La confirmation RÉAPPLIQUE le
+   * retrait ; sans elle, une story supprimée restait affichée jusqu'à la
+   * relecture suivante, et le listing devait sérialiser ses suppressions.
+   */
+  test('une relecture qui ramène la story pendant le vol est défaite par la confirmation', async () => {
+    const queryClient = trayWith(['s1', 's2']);
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/s1': { ok: true, data: null } });
+
+    const pending = deletePost({ postId: 's1', deps: { source: 'gateway', transport, queryClient } });
+    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, [
+      { id: 's1', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' },
+      { id: 's2', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' },
+    ] satisfies readonly StoryTrayPost[]);
+
+    expect(await pending).toBe('done');
+    expect(trayIdsOf(queryClient)).toEqual(['s2']);
+  });
+
+  test('supprimer une carte du Flux ne touche à AUCUN corpus de stories', async () => {
+    const stories: readonly StoryTrayPost[] = [{ id: 's1', type: 'STORY', createdAt: '2026-09-24T10:00:00.000Z' }];
+    const queryClient = feedWith(['p1']);
+    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, stories);
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/p1': { ok: true, data: null } });
+
+    await deletePost({ postId: 'p1', deps: { source: 'gateway', transport, queryClient } });
+
+    expect(queryClient.getQueryData(STORY_TRAY_QUERY_KEY)).toBe(stories);
   });
 });
 

@@ -15,7 +15,7 @@ struct PendingLinkNotice: View {
         if isVisible {
             HStack(spacing: 10) {
                 Image(systemName: "link")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo500)
                     .accessibilityHidden(true)
                 Text(String(localized: "auth.pendingLink.notice",

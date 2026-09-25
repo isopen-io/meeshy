@@ -116,6 +116,36 @@ concurrency:
 
 jobs:
   # ===========================================================================
+  # CHANGES: ce que la poussée touche (#7711)
+  # Les quatre jobs du traducteur ne tournent que si un fichier qu'ils lisent
+  # a changé ; tout le reste tourne toujours. La règle et ses cas vivent dans
+  # `scripts/ci-affected.mjs` (en cas de doute, tout tourne).
+  # ===========================================================================
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      translator: ${{ steps.affected.outputs.translator }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Self-test
+        run: node scripts/ci-affected.mjs --self-test
+
+      - name: Detect affected domains
+        id: affected
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci-affected.mjs >> "$GITHUB_OUTPUT"
+
+  # ===========================================================================
   # QUALITY: Lint & Type-check (Fast feedback)
   # ===========================================================================
   quality:
@@ -973,6 +1003,15 @@ jobs:
           cd apps/web
           node scripts/check-shell-dist.mjs
 
+      # #7844 — le maillon `check-android-manifest` du composite n'était
+      # exécuté par AUCUN job : `gate-ci-parity.test.ts` le signalait vert par
+      # omission. Pur node, il ne lit que le manifeste versionné de la coque.
+      - name: Gate manifeste de la coque Android (permissions requises)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-android-manifest.mjs
+
       # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
@@ -1205,7 +1244,8 @@ jobs:
   # ===========================================================================
   # TEST: Python Tests with Coverage
   #
-  # RALLUME au sprint 0.3 (`if: true` ci-dessous), et ce bloc a porté
+  # RALLUME au sprint 0.3 (un `if: true`, remplacé depuis par le job
+  # `changes`, #7711), et ce bloc a porté
   # « DISABLED: Downloads ML models that fill up GitHub runner disk » pendant
   # tout ce temps — trois lignes au-dessus du `if` qui le contredisait. Le
   # commentaire disait une raison technique précise et plausible, ce qui le
@@ -1219,9 +1259,9 @@ jobs:
   # ===========================================================================
   test-python:
     name: Test Python (translator)
-    if: true  # Sprint 0.3: re-enabled with CPU-only marker split + baseline threshold
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1361,7 +1401,8 @@ jobs:
   test-audio-pipeline:
     name: Audio Pipeline Tests
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1513,7 +1554,8 @@ jobs:
   test-tts-stt:
     name: TTS/STT Integration
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1677,7 +1719,8 @@ jobs:
   test-voice-api:
     name: Voice API Tests
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, changes]
+    if: needs.changes.outputs.translator == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -2119,7 +2162,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -2130,6 +2173,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Changes (translator: ${{ needs.changes.outputs.translator }}) | ${{ needs.changes.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY

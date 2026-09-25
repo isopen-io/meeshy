@@ -76,6 +76,11 @@ const SCREENS = [
       aucune image, et la porte `isOwnStory` serait tenue pour acquise sur la
       seule foi d'un témoin. */
   { name: 'story-mienne', path: '/story/st-mienne' },
+  /** « MES STORIES » (#6149) — le listing que la pastille « moi » du rail
+      ouvre désormais : `st-mienne` (fixtures-stories.ts, active 12 h) rend
+      une seule rangée, sa vignette, sa date relative et sa bande d'actions
+      (Ouvrir, Vues, Supprimer). */
+  { name: 'stories-mine', path: '/stories/mine' },
   /** LE LECTEUR DE SCÈNE (#6899) — un document canvas v:3 rendu par le MÊME
       moteur que le fil (`ScenePlayer`, D-79), carte 9:16 sur le plateau :
       verdict `canvas` (texte sur la bande, bandes au ThumbHash), image seule

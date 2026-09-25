@@ -1360,15 +1360,7 @@ final class MessageListViewController: UIViewController {
             }
 
             let openProfileHandler: ((ProfileSheetUser) -> Void) = { [weak self] user in
-                guard let self else { return }
-                if user.isAnonymous, let participantId = user.participantId {
-                    self.router.participantProfileTarget = ParticipantProfileTarget(
-                        conversationId: message.conversationId,
-                        participantId: participantId
-                    )
-                } else {
-                    self.router.deepLinkProfileUser = user
-                }
+                self?.router.openProfile(user, inConversation: message.conversationId)
             }
             let user = AuthManager.shared.currentUser
             let userLanguages: (regional: String?, custom: String?) = (

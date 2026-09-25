@@ -33,6 +33,8 @@ const mood = (id: string, authorId: string, moodEmoji: string | null): StatusMoo
 const groupsOf = (stories: readonly StoryTrayPost[], viewerId: string | undefined) =>
   groupStoriesByAuthor(stories, { viewerId, viewedIds: EMPTY_SEEN });
 
+const NOW = new Date('2026-09-17T10:00:00.000Z').getTime();
+
 describe('selfRailEntry — la cellule existe dès qu\'un lecteur est identifié', () => {
   /**
    * **ELLE NE DÉPEND PAS DE MES STORIES** — c'est la règle d'iOS, et c'est
@@ -42,24 +44,39 @@ describe('selfRailEntry — la cellule existe dès qu\'un lecteur est identifié
    * (`LentilleRailPolicy.shouldRender(selfEntry:entries:)`).
    */
   test('un lecteur SANS story ni humeur a quand même sa cellule', () => {
-    const entry = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [] });
+    const entry = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [], now: NOW });
     expect(entry).toEqual({
       viewerId: 'u-moi',
       hasActiveStory: false,
-      entryStoryId: undefined,
+      hasAnyStory: false,
       moodEmoji: undefined,
     });
   });
 
   test('aucun lecteur identifié ⇒ aucune cellule — jamais un (+) qui ne mène nulle part', () => {
-    expect(selfRailEntry({ viewerId: undefined, groups: [], moods: [] })).toBeUndefined();
+    expect(selfRailEntry({ viewerId: undefined, groups: [], moods: [], now: NOW })).toBeUndefined();
   });
 
-  test('mes stories accentuent l\'anneau et donnent l\'adresse d\'entrée', () => {
+  test('mes stories accentuent l\'anneau et ouvrent la porte du listing', () => {
     const groups = groupsOf([story('s-1', 'u-moi', '2026-09-17T08:00:00.000Z')], 'u-moi');
-    const entry = selfRailEntry({ viewerId: 'u-moi', groups, moods: [] });
+    const entry = selfRailEntry({ viewerId: 'u-moi', groups, moods: [], now: NOW });
     expect(entry?.hasActiveStory).toBe(true);
-    expect(entry?.entryStoryId).toBe('s-1');
+    expect(entry?.hasAnyStory).toBe(true);
+  });
+
+  /**
+   * **L'ANNEAU ET LA PORTE SONT DEUX QUESTIONS** (#6149) — le corpus du
+   * plateau garde mes stories expirées pendant sa fenêtre d'archive
+   * (`PostFeedService.ts:283-312`) : une story trop vieille pour l'anneau
+   * garde quand même sa porte, miroir
+   * `StoryTrayActionResolver.avatarTap` (« aucun chemin ne menait plus vers
+   * ses stories passées »).
+   */
+  test('une story à moi mais EXPIRÉE éteint l\'anneau sans fermer le listing', () => {
+    const groups = groupsOf([story('s-1', 'u-moi', '2026-01-01T00:00:00.000Z')], 'u-moi');
+    const entry = selfRailEntry({ viewerId: 'u-moi', groups, moods: [], now: NOW });
+    expect(entry?.hasActiveStory).toBe(false);
+    expect(entry?.hasAnyStory).toBe(true);
   });
 
   /**
@@ -72,6 +89,7 @@ describe('selfRailEntry — la cellule existe dès qu\'un lecteur est identifié
       viewerId: 'u-moi',
       groups: [],
       moods: [mood('st-1', 'u-moi', '🎉')],
+      now: NOW,
     });
     expect(entry?.moodEmoji).toBe('🎉');
     expect(entry?.hasActiveStory).toBe(false);
@@ -82,13 +100,14 @@ describe('selfRailEntry — la cellule existe dès qu\'un lecteur est identifié
       viewerId: 'u-moi',
       groups: [],
       moods: [mood('st-2', 'u-moi', '☕'), mood('st-1', 'u-moi', '🎉')],
+      now: NOW,
     });
     expect(entry?.moodEmoji).toBe('☕');
   });
 
   test('une humeur vide ou nulle ne compte pas — la pastille retombe sur 💭', () => {
-    const vide = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [mood('st-1', 'u-moi', '')] });
-    const nulle = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [mood('st-2', 'u-moi', null)] });
+    const vide = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [mood('st-1', 'u-moi', '')], now: NOW });
+    const nulle = selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [mood('st-2', 'u-moi', null)], now: NOW });
     expect(vide?.moodEmoji).toBeUndefined();
     expect(nulle?.moodEmoji).toBeUndefined();
   });
@@ -98,6 +117,7 @@ describe('selfRailEntry — la cellule existe dès qu\'un lecteur est identifié
       viewerId: 'u-moi',
       groups: [],
       moods: [mood('st-1', 'u-ines', '🎉')],
+      now: NOW,
     });
     expect(entry?.moodEmoji).toBeUndefined();
   });
@@ -138,7 +158,7 @@ describe('railGroupsWithoutSelf — la cellule « soi » ne se peint pas deux fo
  */
 describe('selfRailEntry — ma photo (#6975)', () => {
   test('`avatar` du lecteur servi ⇒ porté par l’entrée', () => {
-    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: 'moi.png', groups: [], moods: [] });
+    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: 'moi.png', groups: [], moods: [], now: NOW });
     expect(entry?.avatar).toBe('moi.png');
   });
 
@@ -146,19 +166,19 @@ describe('selfRailEntry — ma photo (#6975)', () => {
     const stories: readonly StoryTrayPost[] = [
       { id: 's1', type: 'STORY', createdAt: '2026-09-01T10:00:00.000Z', author: { id: 'u-moi', username: 'moi', avatar: 'story.png' } },
     ];
-    const entry = selfRailEntry({ viewerId: 'u-moi', groups: groupsOf(stories, 'u-moi'), moods: [] });
+    const entry = selfRailEntry({ viewerId: 'u-moi', groups: groupsOf(stories, 'u-moi'), moods: [], now: NOW });
     expect(entry?.avatar).toBe('story.png');
   });
 
   test('aucune photo NULLE PART ⇒ `undefined` (la tuile rend ses initiales)', () => {
-    expect(selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [] })?.avatar).toBeUndefined();
+    expect(selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [], now: NOW })?.avatar).toBeUndefined();
   });
 
   test('un `avatar` BLANC ne masque pas celui de mon groupe', () => {
     const stories: readonly StoryTrayPost[] = [
       { id: 's1', type: 'STORY', createdAt: '2026-09-01T10:00:00.000Z', author: { id: 'u-moi', username: 'moi', avatar: 'story.png' } },
     ];
-    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: '  ', groups: groupsOf(stories, 'u-moi'), moods: [] });
+    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: '  ', groups: groupsOf(stories, 'u-moi'), moods: [], now: NOW });
     expect(entry?.avatar).toBe('story.png');
   });
 });

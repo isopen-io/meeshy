@@ -702,25 +702,15 @@ struct RootView: View {
                 return
             }
 
-            switch resolution.intent {
-            case .openConversation(let conversationId):
-                navigateToConversationById(conversationId)
-
-            case .chooseIdentity(let conversationId):
-                shareLinkChoice = ShareLinkIdentityChoice(
-                    identifier: identifier,
-                    conversationId: conversationId,
-                    conversationTitle: resolution.conversationTitle,
-                    resumesGuestSession: AnonymousSessionStore.load(linkId: identifier) != nil
-                )
-
-            // `joinWithAccount` est la voie nominale ; les trois dernières
-            // supposent l'absence de compte, que ce chemin exclut par
-            // construction. On ne les tait pas — rendre la main sans rien
-            // ouvrir laisserait un lien mort à l'écran.
-            case .joinWithAccount, .joinAnonymously, .resumeGuestSession, .requiresAccount:
-                joinViaShareLink(identifier: identifier)
+            if let landing = resolution.landing(identifier: identifier) {
+                shareLinkChoice = landing
+                return
             }
+            guard case .openConversation(let conversationId) = resolution.intent else {
+                joinViaShareLink(identifier: identifier)
+                return
+            }
+            navigateToConversationById(conversationId)
         }
     }
 

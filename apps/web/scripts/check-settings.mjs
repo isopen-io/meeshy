@@ -294,19 +294,21 @@ try {
       check((await stored(page, LANGUAGE_KEY)) === null, `${label} : « Automatique » retire le choix stocké`);
 
       // ------------------------------------------------ 7. la déconnexion
+      // Prise UNIQUE (revue-correction #6149, issue #7858) : `ConfirmDialog`,
+      // partagée avec Découvrir › Débloquer et Mes liens › Supprimer.
       await page.click('[data-settings-logout]');
-      await page.waitForSelector('dialog[open][data-logout-confirm]');
+      await page.waitForSelector('dialog[open][data-confirm-dialog="logout"]');
       await capture(page, `reglages-deconnexion-${suffix}`);
       const clipped = await page.$$eval('dialog[open] button', (els) =>
         els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => (el.textContent ?? '').trim()),
       );
       check(clipped.length === 0, `${label} : aucun bouton de la confirmation ne tronque son libellé — ${JSON.stringify(clipped)}`);
-      await page.click('[data-logout-cancel]');
+      await page.click('[data-confirm-dialog="logout"] [data-confirm="cancel"]');
       await page.waitForFunction(() => document.querySelector('dialog[open]') === null);
       check((await stored(page, SESSION_KEY)) !== null, `${label} : « Annuler » ne déconnecte pas`);
       await page.click('[data-settings-logout]');
-      await page.waitForSelector('dialog[open][data-logout-confirm]');
-      await page.click('[data-logout-proceed]');
+      await page.waitForSelector('dialog[open][data-confirm-dialog="logout"]');
+      await page.click('[data-confirm-dialog="logout"] [data-confirm="confirm"]');
       await page.waitForURL(/\/login$/);
       check((await stored(page, SESSION_KEY)) === null, `${label} : la session est effacée`);
       check(logoutCalls.includes('POST'), `${label} : la passerelle est prévenue (POST /api/v1/auth/logout)`);

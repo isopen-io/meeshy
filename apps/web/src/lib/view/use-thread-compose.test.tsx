@@ -4,9 +4,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { createDraftStore, type StorageLike } from '@/lib/send/draft-store';
-import { message } from '@/lib/api/fixtures-base';
+import { VIEWER_ID, message } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 
+import { mentionSourceStore } from './mention-source';
 import { useThreadCompose, type ThreadComposeState } from './use-thread-compose';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -165,5 +166,41 @@ describe('useThreadCompose — brouillon, citation, envoi (#7429, extrait de rou
     rerender();
     const second = state().onSend;
     expect(Object.is(first, second)).toBe(true);
+  });
+});
+
+describe('useThreadCompose — publie la source des mentions du fil (#7826)', () => {
+  const sender = (userId: string, username: string): NonNullable<Message['sender']> =>
+    ({
+      id: `p-${userId}`,
+      conversationId: 'c-1',
+      type: 'user',
+      userId,
+      displayName: username,
+      role: 'member',
+      language: 'fr',
+      isActive: true,
+      isOnline: false,
+      joinedAt: new Date(0),
+      user: { id: userId, username },
+    }) as NonNullable<Message['sender']>;
+
+  test('le fil ouvert publie ses expéditeurs, hors lecteur ; le démontage retire la source', () => {
+    mount({
+      messages: [
+        messageOf({ id: 'm1', senderId: 'u-2', sender: sender('u-2', 'alice') }),
+        messageOf({ id: 'm2', senderId: VIEWER_ID, sender: sender(VIEWER_ID, 'moi') }),
+      ],
+      send: () => {},
+    });
+    const published = mentionSourceStore.getState().source;
+    expect(published?.selfId).toBe(VIEWER_ID);
+    expect(published?.locals.map((c) => c.username)).toEqual(['alice']);
+
+    act(() => {
+      root.unmount();
+    });
+    expect(mentionSourceStore.getState().source).toBeNull();
+    root = createRoot(container);
   });
 });

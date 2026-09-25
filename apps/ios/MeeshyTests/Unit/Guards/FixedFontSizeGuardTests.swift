@@ -269,7 +269,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // POPULATION ne bouge pas ; l'hôte en garde d'autres et reste dans la liste.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
-        "Features/Main/Views/ShareLinkIdentitySheet.swift",
         "Features/Main/Views/ShareLinksView.swift",
         "Features/Main/Views/SharePickerView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
@@ -394,7 +393,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // figé ne bouge donc pas). `ComposerFormatFan.swift` sort de `bearingFiles`
     // dans le même commit (règle 4) ; `ComposerPublishMenu.swift`, qui le
     // remplace, n'emploie que des polices relatives.
-    private static let totalCeiling = 213
+    // 213 → 211 (#7795) : la feuille « compte ou anonyme » devient la page
+    // d'invitation de MeeshyUI ; ses deux glyphes figés (20 et 13 pt, sur des
+    // `Image`, donc le texte figé ne bouge pas) partent avec elle.
+    // `ShareLinkIdentitySheet.swift` sort de `bearingFiles` (règle 4).
+    private static let totalCeiling = 211
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

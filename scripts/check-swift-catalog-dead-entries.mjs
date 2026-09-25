@@ -260,7 +260,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // appelant Swift est l'écran de détail du lien (`ShareLinkDetailView`, lot iOS
 // de #7797, développé en parallèle) ; ce lot rabaisse la référence. Valeur
 // MESURÉE en CI sur la branche du 2026-09-24.
-const BASELINE_DEAD_ENTRIES = 263;
+// 263 → 262 (#7797) : `ShareLinkDetailView` appelle désormais
+// `LinksEndpoint.byLinkIdStats` via `ShareLinkService.fetchLinkStats` (#7802)
+// — l'entrée n'est plus morte. Valeur MESURÉE en CI sur la #7802 du 2026-09-24.
+const BASELINE_DEAD_ENTRIES = 262;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

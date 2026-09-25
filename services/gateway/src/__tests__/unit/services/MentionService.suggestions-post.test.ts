@@ -146,6 +146,7 @@ describe('MentionService.getUserSuggestionsForPost', () => {
     (getCacheStore as jest.Mock).mockReturnValue(mockCache);
 
     prisma = new PrismaClient() as unknown as typeof prisma;
+    (prisma.user as { findMany: jest.Mock }).findMany.mockResolvedValue([]);
     service = new MentionService(prisma as unknown as import('@meeshy/shared/prisma/client').PrismaClient);
   });
 

@@ -127,6 +127,10 @@ struct MeeshyApp: App {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
+                                // #7847 — les listes `@` du SDK servent les
+                                // mêmes contacts que celles de l'app, réchauffés
+                                // de la même façon.
+                                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -180,7 +184,11 @@ struct MeeshyApp: App {
                                     isDeliberate: guestSession.isDeliberate
                                 )
                             },
-                            onDismiss: { dismissGuestSession() }
+                            onDismiss: { dismissGuestSession() },
+                            onAccountRequest: { entry in
+                                deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
+                                dismissGuestSession()
+                            }
                         )
                     }
                 }
@@ -673,6 +681,7 @@ struct MeeshyApp: App {
                     )
                     if isAuth {
                         activeGuestSession = nil
+                        deepLinkRouter.replayShareLinkAwaitingAccount()
                         // Re-arm every coordinator after a logout/login cycle.
                         // `start()` is idempotent-guarded, so without the
                         // matching `reset()` on the logout branch below the

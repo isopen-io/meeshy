@@ -68,6 +68,22 @@ describe('LiveAnnouncement — la même loi sur les deux surfaces', () => {
     expect(region?.style.backgroundColor).toBe('var(--color-error)');
   });
 
+  /**
+   * **L'ENCRE TIENT AA DANS LES DEUX SCHÉMAS** (revue-correction #6149,
+   * défaut majeur 1, issue #7859) — `#fff` codé en dur ne tenait que 3,23:1
+   * sur `--color-error` en sombre (`--color-danger` `#f45b5b`) ; le calcul
+   * complet, depuis les jetons réels, vit dans
+   * `live-announcement-contrast.test.ts`. Ce témoin-ci garde seulement que le
+   * composant ne recopie plus jamais `#fff` — un jeton par schéma
+   * (`--color-on-status`), jamais une constante.
+   */
+  test('l’encre d’erreur suit un jeton PAR SCHÉMA, jamais `#fff` recopié', () => {
+    const el = render(<LiveAnnouncement text="Impossible de bloquer" tone="error" marker="profile" />);
+    const region = el.querySelector<HTMLElement>('[data-profile-announce]');
+    expect(region?.style.color).toBe('var(--color-on-status)');
+    expect(region?.style.color).not.toBe('#fff');
+  });
+
   test('les deux surfaces gardent leur point d’accroche de gate', () => {
     const profil = render(<LiveAnnouncement text="Bonjour" tone="neutral" marker="profile" />);
     expect(profil.querySelector('[data-profile-announce]')).not.toBeNull();

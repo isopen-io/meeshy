@@ -373,6 +373,29 @@ final class DeepLinkRouter: ObservableObject {
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
 
+    /// L'écran de compte que la page d'invitation a demandé, SANS compte
+    /// (#7795) : « Se connecter » ou « Créer un compte ». `LoginView` le
+    /// consomme — l'inscription s'y ouvre par sa propre feuille.
+    @Published var requestedAccountEntry: InviteLandingChoice?
+
+    /// Le lien sur lequel la personne a choisi de se connecter ou de créer un
+    /// compte. Il est REJOUÉ une fois le compte présent : la même page
+    /// d'invitation revient, cette fois avec « Rejoindre avec mon compte ».
+    /// Sans lui, se connecter depuis une invitation la faisait oublier.
+    private(set) var shareLinkAwaitingAccount: String?
+
+    func requestAccount(_ entry: InviteLandingChoice, forShareLink identifier: String) {
+        shareLinkAwaitingAccount = identifier
+        requestedAccountEntry = entry
+    }
+
+    /// À l'arrivée du compte : le lien en attente redevient une destination.
+    func replayShareLinkAwaitingAccount() {
+        guard let identifier = shareLinkAwaitingAccount else { return }
+        shareLinkAwaitingAccount = nil
+        pendingDeepLink = .chatLink(identifier: identifier)
+    }
+
     /// Brouillons par conversation. Injecté pour que le dépôt du texte d'un
     /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
     /// soit observable en test sans toucher aux `UserDefaults` du simulateur.
