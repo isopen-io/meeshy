@@ -196,10 +196,21 @@ export type StoryCitation = {
    * le post cité n'existe plus (« post supprimé sans snapshot → citation
    * absente », `enrichPostReplyMessagesForList`). Rien à montrer, rien à
    * ouvrir — mais la réponse garde la trace de ce à quoi elle répondait
-   * (`MessageModels.swift:914-920`, #7881).
+   * (`MessageModels.swift:914-920`, #7881). Ou bien elle en a servi un que
+   * son auteur a retiré depuis (`postReplyTo.deletedAt`, #7950).
    */
   readonly unavailable: boolean;
 };
+
+/**
+ * #7950 — le post cité a été SUPPRIMÉ par son auteur : la passerelle pose
+ * `postReplyTo.deletedAt` (même nom que `replyTo.deletedAt`, #7927) et vide
+ * l'instantané. Le marqueur prime sur tout ce qui resterait à côté — une
+ * vignette relayée par une charge plus ancienne ne rend pas la carte tapable.
+ */
+function isWithdrawnCitation(obj: MetadataRecord): boolean {
+  return typeof obj.deletedAt === 'string' && obj.deletedAt !== '';
+}
 
 /**
  * `postReplyTo` à la racine, `metadata.postReplyTo` en repli
@@ -218,6 +229,9 @@ export function storyCitationOf(
   }
 
   const obj = raw as MetadataRecord;
+  if (isWithdrawnCitation(obj)) {
+    return { id: typeof obj.id === 'string' ? obj.id : message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+  }
   if (obj.moodEmoji !== null && obj.moodEmoji !== undefined) return null;
   if (typeof obj.id !== 'string') return null;
 
@@ -252,6 +266,7 @@ export function moodCitationOf(
   const raw = hoistedOf(message, 'postReplyTo');
   if (raw === undefined || raw === null || typeof raw !== 'object') return null;
   const obj = raw as MetadataRecord;
+  if (isWithdrawnCitation(obj)) return null;
   if (typeof obj.moodEmoji !== 'string' || obj.moodEmoji === '') return null;
   return {
     id: typeof obj.id === 'string' ? obj.id : '',
