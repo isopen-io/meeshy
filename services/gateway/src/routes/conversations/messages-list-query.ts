@@ -335,6 +335,9 @@ export function buildMessageListSelect(options: {
           select: {
             id: true,
             content: true,
+            // #7927 — la suppression garde `content` en base : sans ce champ,
+            // `servedQuotedMessage` ne peut pas savoir qu'il doit le taire.
+            deletedAt: true,
             originalLanguage: true,
             createdAt: true,
             senderId: true,
