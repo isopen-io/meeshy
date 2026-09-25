@@ -145,7 +145,9 @@ export default function PostDetailScreen() {
      `PostDetailView.swift` (`router.pop()` après `deletePost`) ; vers le FIL,
      comme le retour de l'en-tête, et en REMPLAÇANT l'adresse : un retour
      arrière ne doit pas rouvrir une publication qui n'existe plus. */
-  const { announcement, onGesture, onShare, onRepost, menu } = usePostGesture({ onDeleted: () => navigate(href('feed'), true) });
+  const { announcement, onGesture, onShare, onRepost, repostConfirm, menu } = usePostGesture({
+    onDeleted: () => navigate(href('feed'), true),
+  });
   const frame = useRef<HTMLElement | null>(null);
   // MÊME élection que le fil (#6898 § 5.3) — un `IntersectionObserver`
   // dédié à ce scrollport.
@@ -245,6 +247,7 @@ export default function PostDetailScreen() {
           onClose={sceneGallery.close}
         />
       ) : null}
+      {repostConfirm}
     </div>
   );
 }
