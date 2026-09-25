@@ -83,6 +83,16 @@ describe('stickerOf — lit metadata.sticker comme la passerelle', () => {
     expect(stickerOf(message({ metadata: { sticker: {} } }))).toBeNull();
   });
 
+  test('un sticker de BIBLIOTHÈQUE (#7938) ⇒ {stickerId}, rendu par son image jointe', () => {
+    const sticker = message({
+      metadata: { sticker: { stickerId: '65f0c0ffee0000000000abcd' } },
+      attachments: [{ id: 'att', fileUrl: 'stickers/u/x.png', mimeType: 'image/png' } as never],
+    });
+
+    expect(stickerOf(sticker)).toEqual({ stickerId: '65f0c0ffee0000000000abcd' });
+    expect(bodyKindOf(sticker).kind).toBe('sticker');
+  });
+
   test('metadata absent ⇒ null', () => {
     expect(stickerOf(message())).toBeNull();
   });
@@ -177,6 +187,58 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
     });
   });
 
+  /**
+   * #7950 — LA STORY SUPPRIMÉE PAR SON AUTEUR. La passerelle sert encore un
+   * `postReplyTo`, mais vidé de tout ce qui décrit son contenu et marqué
+   * `deletedAt` (`servedPostReply.ts`). La carte est INDISPONIBLE — même si un
+   * client plus ancien, ou une charge relayée, y laissait une vignette.
+   */
+  test('postReplyTo.deletedAt ⇒ citation INDISPONIBLE, aucune vignette ni aperçu', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: {
+          postReplyTo: {
+            id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Coucher de soleil',
+            thumbnailUrl: 'https://cdn.meeshy.me/soleil.jpg', createdAt: '2026-09-10T08:00:00.000Z',
+            deletedAt: '2026-09-10T09:00:00.000Z',
+          },
+        },
+      }),
+    );
+    expect(citation).toEqual({ id: 'p1', previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true });
+  });
+
+  test('postReplyTo.deletedAt HISSÉ à la racine (liste REST) ⇒ indisponible', () => {
+    const hoisted = {
+      ...message({ storyReplyToId: 'p1' }),
+      postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z', deletedAt: '2026-09-10T09:00:00.000Z' },
+    };
+    expect(storyCitationOf(hoisted)?.unavailable).toBe(true);
+  });
+
+  test('une HUMEUR supprimée ⇒ indisponible aussi, jamais null', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STATUS', moodEmoji: '😴', previewText: 'Grosse fatigue', thumbnailUrl: null, createdAt: '', deletedAt: '2026-09-10T09:00:00.000Z' } },
+      }),
+    );
+    expect(citation?.unavailable).toBe(true);
+  });
+
+  test('une story seulement EXPIRÉE (sans deletedAt) garde sa carte pleine', () => {
+    const citation = storyCitationOf(
+      message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Scène', thumbnailUrl: 'https://cdn.meeshy.me/s.jpg', createdAt: '2026-09-01T08:00:00.000Z' } },
+      }),
+    );
+    expect(citation).toEqual({
+      id: 'p1', previewText: 'Scène', thumbnailUrl: 'https://cdn.meeshy.me/s.jpg', createdAt: '2026-09-01T08:00:00.000Z', unavailable: false,
+    });
+  });
+
   test('id vide ⇒ la carte se rend quand même', () => {
     const citation = storyCitationOf(
       message({ storyReplyToId: 'p1', metadata: { postReplyTo: { id: '', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '' } } }),
@@ -260,6 +322,10 @@ describe('moodCitationOf — l’humeur citée se lit', () => {
 
   test('snapshot legacy sans auteur ⇒ authorName vide (le composant retombe sur « Humeur »)', () => {
     expect(moodCitationOf(mood({ moodEmoji: '☕', previewText: '', createdAt: '' }))?.authorName).toBe('');
+  });
+
+  test('une humeur SUPPRIMÉE (deletedAt) n’est plus rendue comme humeur — c’est la carte indisponible qui la dit', () => {
+    expect(moodCitationOf(mood({ moodEmoji: '😴', previewText: 'Grosse fatigue', createdAt: '', deletedAt: '2026-09-10T09:00:00.000Z' }))).toBeNull();
   });
 
   test('une STORY (moodEmoji nul) n’est pas une humeur', () => {

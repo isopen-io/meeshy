@@ -25,6 +25,7 @@ const mockCanAccessConversation = jest.fn<any>();
 const mockResolveConversationId = jest.fn<any>();
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
   // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
   // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la

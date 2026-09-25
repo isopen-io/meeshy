@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 
 import enMentions from './catalog-en-mentions';
@@ -123,9 +124,13 @@ const en = {
   'feed.post.repost.offline': 'Offline — the repost couldn’t go out.',
   'feed.post.repost.unconfirmed': 'Repost not confirmed — try again',
   'feed.post.repost.audience': 'That audience would widen the original post’s reach',
+  'feed.post.repost.confirm.title': 'Repost this post?',
+  'feed.post.repost.confirm.body': 'It will appear in your feed, visible to your followers. This action can’t be undone.',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel by {author}',
   'feed.post.open': 'Open {author}’s post',
+  'feed.post.original.open': 'Original post by {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Saved posts',
   'bookmarks.back': 'Back to settings',
@@ -930,6 +935,9 @@ const en = {
   'story.action.save': 'Save',
   'story.action.comments': 'Comments',
   'story.action.translations': 'Translations',
+  'story.language.bar': 'Available languages',
+  'story.language.original': 'Original',
+  'story.language.more': 'More languages',
   'story.views.empty.title': 'No views yet',
   'story.views.empty.subtitle': 'People who watch your story will appear here.',
   'story.views.count.one': '{count} view',
@@ -1025,28 +1033,7 @@ const en = {
   'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
-  'composer.attach.group': 'Attachment types',
-  'composer.attach.handle': 'Panel handle',
-  'composer.attach.photo': 'Photos',
-  'composer.attach.photo.action': 'Choose photos',
-  'composer.attach.camera': 'Camera',
-  'composer.attach.camera.action': 'Take a photo',
-  'composer.attach.file': 'File',
-  'composer.attach.file.action': 'Choose a file',
-  'composer.attach.location': 'Location',
-  'composer.attach.location.action': 'Share my location',
-  'composer.attach.voice': 'Voice',
-  'composer.attach.voice.action': 'Record a voice message',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Insert an emoji',
-  'composer.emoji.title': 'Insert an emoji',
-  'composer.location.locating': 'Finding your location…',
-  'composer.location.denied': 'Location denied — allow it in settings',
-  'composer.location.unavailable': 'Location unavailable in this browser',
-  'composer.location.failed': 'Location not found — try again',
-  'composer.location.chip': 'PLACE',
-  'composer.location.unknown': 'Unknown place',
-  'composer.location.remove': 'Remove the location',
+  ...enComposerAttach,
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',

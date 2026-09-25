@@ -65,20 +65,114 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     });
   });
 
-  test('l’attribution de republication porte le pseudo, jamais un objet vide', () => {
+  /** `repostOfHandle` a été RETIRÉ (#6278 c, Q3) : la carte citée
+   * (`repostOf`, ci-dessous) remplace désormais la ligne « ↻ @handle » —
+   * ce témoin mesure `repostOf.author`, le SEUL porteur du pseudo depuis. */
+  test('l’attribution de republication porte l’auteur, jamais un objet vide', () => {
     const model = resolveFeedCardModel(
       basePost({ content: 'Bien vu.', originalLanguage: 'fr', repostOf: { author: { username: 'yann.petit' } } }),
       { preferredLanguages: ['fr'], now: NOW },
     );
-    expect(model.repostOfHandle).toBe('yann.petit');
+    expect(model.repostOf?.author.username).toBe('yann.petit');
   });
 
-  test('sans republication, aucune clé `repostOfHandle` (pas `undefined` posé)', () => {
+  /** LA CARTE CITÉE (#6278 c) — `repostOf` porte l'auteur, le corps déjà
+   * résolu par le Prisme (rang ≠ 1, comme le témoin de rang de la carte
+   * elle-même) et la vignette du premier média de l'ORIGINAL. */
+  test('la carte citée descend le Prisme jusqu’au rang 2, distinct du texte de la republication', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Regardez ça',
+        originalLanguage: 'fr',
+        repostOf: {
+          id: 'orig-1',
+          type: 'POST',
+          content: 'Good morning',
+          originalLanguage: 'en',
+          translations: { es: { text: 'Buenos días' } },
+          author: { id: 'u9', displayName: 'Yann Petit', username: 'yann.petit' },
+          media: [{ id: 'm9', fileUrl: 'orig.jpg', thumbnailUrl: 'orig-thumb.jpg' }],
+          likeCount: 12,
+          createdAt: '2026-09-13T10:00:00.000Z',
+        },
+      }),
+      { preferredLanguages: ['fr', 'es'], now: NOW },
+    );
+    expect(model.repostOf?.text).toEqual({
+      full: 'Buenos días',
+      language: 'es',
+      translated: true,
+      original: 'Good morning',
+      originalLanguage: 'en',
+    });
+    expect(model.repostOf?.author.name).toBe('Yann Petit');
+    expect(model.repostOf?.likeCount).toBe(12);
+    expect(model.repostOf?.thumbnailSrc).toBeDefined();
+    expect(model.repostOf?.isStory).toBe(false);
+    expect(model.repostOf?.isReel).toBe(false);
+    expect(model.repostOf?.id).toBe('orig-1');
+  });
+
+  test('la carte citée marque STORY et REEL par le type de l’original', () => {
+    const story = resolveFeedCardModel(basePost({ repostOf: { id: 'o1', type: 'STORY', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(story.repostOf?.isStory).toBe(true);
+    expect(story.repostOf?.isReel).toBe(false);
+
+    const reel = resolveFeedCardModel(basePost({ repostOf: { id: 'o2', type: 'REEL', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(reel.repostOf?.isReel).toBe(true);
+  });
+
+  test('sans republication, aucune clé `repostOf` (pas `undefined` posé)', () => {
     const model = resolveFeedCardModel(basePost({ content: 'x', originalLanguage: 'fr' }), {
       preferredLanguages: ['fr'],
       now: NOW,
     });
-    expect('repostOfHandle' in model).toBe(false);
+    expect('repostOf' in model).toBe(false);
+  });
+
+  /** LA VIGNETTE DE LA CARTE CITÉE (#6278 c, G10) — `FeedPostCard.swift:131-134` :
+   * une vignette DÉDIÉE gagne toujours ; à défaut, une IMAGE peut servir SA
+   * PROPRE source, jamais une vidéo ; « +N » compte ce qui ne tient pas dans
+   * la vignette. */
+  test('la vignette citée vient de `thumbnailUrl` en priorité, et « +N » compte le reste', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        repostOf: {
+          id: 'orig-3',
+          type: 'POST',
+          author: { id: 'u9' },
+          media: [
+            { id: 'm1', fileUrl: 'a.jpg', thumbnailUrl: 'a-thumb.jpg', mimeType: 'image/jpeg' },
+            { id: 'm2', fileUrl: 'b.jpg', mimeType: 'image/jpeg' },
+            { id: 'm3', fileUrl: 'c.jpg', mimeType: 'image/jpeg' },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.repostOf?.thumbnailSrc).toBeDefined();
+    expect(model.repostOf?.moreCount).toBe(2);
+  });
+
+  test('sans vignette dédiée, une IMAGE sert sa propre source — jamais une vidéo', () => {
+    const withImage = resolveFeedCardModel(
+      basePost({ repostOf: { id: 'orig-4', type: 'POST', author: { id: 'u9' }, media: [{ id: 'm1', fileUrl: 'a.jpg', mimeType: 'image/jpeg' }] } }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(withImage.repostOf?.thumbnailSrc).toBeDefined();
+    expect(withImage.repostOf?.moreCount).toBeUndefined();
+
+    const withVideo = resolveFeedCardModel(
+      basePost({ repostOf: { id: 'orig-5', type: 'POST', author: { id: 'u9' }, media: [{ id: 'm1', fileUrl: 'v.mp4', mimeType: 'video/mp4' }] } }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(withVideo.repostOf?.thumbnailSrc).toBeUndefined();
   });
 
   test('type REEL ⇒ isReel vrai et le ratio du média suit reelCardRatio, pas postMediaRatio', () => {

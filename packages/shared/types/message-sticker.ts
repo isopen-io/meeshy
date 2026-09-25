@@ -40,4 +40,10 @@ export type MessageSticker = {
   readonly slots?: Readonly<Record<string, string>>;
   readonly animation?: MessageStickerAnimation;
   readonly emoji?: string;
+  /**
+   * Le sticker de BIBLIOTHÈQUE d'où vient l'image jointe (`StickerDefinition.id`,
+   * #7938). Le rendu reste la pièce jointe : cet identifiant dit seulement
+   * « ce sticker est à ranger / reconnaître », il ne suffit jamais à rendre.
+   */
+  readonly stickerId?: string;
 };

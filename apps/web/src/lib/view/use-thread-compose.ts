@@ -5,6 +5,7 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { usePublishMentionSource } from './mention-source';
 import { useThreadDraft } from './use-draft';
@@ -18,6 +19,7 @@ export type ThreadComposeSendInput = {
   readonly language: string;
   readonly protection: ComposeProtection;
   readonly place: SharedPlace | null;
+  readonly sticker?: MessageSticker | null;
 };
 
 export type ThreadComposeState = {
@@ -86,7 +88,7 @@ export function useThreadCompose(params: {
   const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
 
   const onSend = useCallback(
-    ({ text, attachments, language, protection, place }: ThreadComposeSendInput) => {
+    ({ text, attachments, language, protection, place, sticker }: ThreadComposeSendInput) => {
       /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT (revue-correction
          #5813, défaut majeur 6) — `replyToMessage` est déjà résolu ci-dessus
          pour la bande du composeur ; le réutiliser ici évite une seconde
@@ -100,7 +102,7 @@ export function useThreadCompose(params: {
          part dans un champ `location` DÉDIÉ du corps, que la passerelle
          valide seule (`parseSharedPlace`) avant de l'écrire dans
          `Message.metadata.location`. */
-      send(text, attachments, replyToMessage ?? null, language, protection, place);
+      send(text, attachments, replyToMessage ?? null, language, protection, place, sticker ?? null);
       setReplyTarget(null);
     },
     [send, replyToMessage, setReplyTarget],

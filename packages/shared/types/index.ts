@@ -54,6 +54,7 @@ export * from './share-link-stats.js';
 
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
+export * from './sticker-definition.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';

@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
 
 import esMentions from './catalog-es-mentions';
@@ -123,9 +124,13 @@ const es = {
   'feed.post.repost.offline': 'Sin conexión — la republicación no pudo salir.',
   'feed.post.repost.unconfirmed': 'Republicación no confirmada — inténtalo de nuevo',
   'feed.post.repost.audience': 'Esa audiencia ampliaría el alcance de la publicación original',
+  'feed.post.repost.confirm.title': '¿Republicar esta publicación?',
+  'feed.post.repost.confirm.body': 'Aparecerá en tu feed, visible para tus seguidores. Esta acción no se puede deshacer.',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Historia',
   'feed.post.reel.of': 'Reel de {author}',
   'feed.post.open': 'Abrir la publicación de {author}',
+  'feed.post.original.open': 'Publicación original de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publicaciones guardadas',
   'bookmarks.back': 'Volver a los ajustes',
@@ -930,6 +935,9 @@ const es = {
   'story.action.save': 'Guardar',
   'story.action.comments': 'Comentarios',
   'story.action.translations': 'Traducciones',
+  'story.language.bar': 'Idiomas disponibles',
+  'story.language.original': 'Original',
+  'story.language.more': 'Más idiomas',
   'story.views.empty.title': 'Aún no hay vistas',
   'story.views.empty.subtitle': 'Las personas que vean tu historia aparecerán aquí.',
   'story.views.count.one': '{count} vista',
@@ -1025,28 +1033,7 @@ const es = {
   'download.otherPlatforms': 'En Android y en el ordenador, Meeshy funciona directamente en el navegador.',
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
-  'composer.attach.group': 'Tipos de adjuntos',
-  'composer.attach.handle': 'Tirador del panel',
-  'composer.attach.photo': 'Fotos',
-  'composer.attach.photo.action': 'Elegir fotos',
-  'composer.attach.camera': 'Cámara',
-  'composer.attach.camera.action': 'Hacer una foto',
-  'composer.attach.file': 'Archivo',
-  'composer.attach.file.action': 'Elegir un archivo',
-  'composer.attach.location': 'Ubicación',
-  'composer.attach.location.action': 'Compartir mi ubicación',
-  'composer.attach.voice': 'Voz',
-  'composer.attach.voice.action': 'Grabar un mensaje de voz',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Insertar un emoji',
-  'composer.emoji.title': 'Insertar un emoji',
-  'composer.location.locating': 'Buscando tu ubicación…',
-  'composer.location.denied': 'Ubicación denegada: permítela en los ajustes',
-  'composer.location.unavailable': 'Ubicación no disponible en este navegador',
-  'composer.location.failed': 'Ubicación no encontrada: inténtalo de nuevo',
-  'composer.location.chip': 'LUGAR',
-  'composer.location.unknown': 'Lugar desconocido',
-  'composer.location.remove': 'Quitar la ubicación',
+  ...esComposerAttach,
   'composer.viewOnce.activate': 'Activar el modo de vista única',
   'composer.viewOnce.active': 'Modo de vista única activo',
   'composer.viewOnce.label': 'Vista única',

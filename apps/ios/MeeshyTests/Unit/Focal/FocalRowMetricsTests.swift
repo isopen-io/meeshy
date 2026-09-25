@@ -87,6 +87,7 @@ final class FocalRowMetricsTests: XCTestCase {
         "FocalMetaRow.swift",
         "FocalAttachmentBlock.swift",
         "FocalQuotedReplyView.swift",
+        "FocalQuoteRail.swift",
         "FocalConversationStartRow.swift"
     ]
 
@@ -141,6 +142,7 @@ final class FocalRowMetricsTests: XCTestCase {
             "FocalRow.swift": "FocalMetrics.Row.contentIndent",
             "FocalAttachmentBlock.swift": "FocalMetrics.Row.contentIndent",
             "FocalQuotedReplyView.swift": "FocalMetrics.Quote.indent",
+            "FocalQuoteRail.swift": "FocalMetrics.Quote.indent",
             "FocalMetaRow.swift": "FocalMetrics.Text.indent",
         ]
         for (fileName, cote) in indentedFiles {

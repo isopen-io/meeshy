@@ -92,6 +92,7 @@
   --ios-radius-bubble: 18px; /* Bubble/BubbleBackground.swift — cornerRadius: 18, littéral */
   --ios-radius-field: 22px; /* UniversalComposerBar+Recording.swift — RoundedRectangle(cornerRadius: 22) */
   --ios-radius-quote: 12px; /* Bubble/BubbleQuotedReply.swift — style .card */
+  --ios-radius-repost-embed: 14px; /* FeedPostCard.swift:893 — RoundedRectangle(14) autour de repostView (#6278 c) */
   --ios-text-time: 12px; /* BubbleFooter.swift — .caption de SwiftUI, hors MeeshyFont */
   --ios-text-input: 16px; /* UniversalComposerBar — .callout de SwiftUI */
   --ios-text-large-title: 28px; /* ConversationListView+Overlays.swift — .system(size: 28, weight: .bold) */
@@ -112,6 +113,7 @@
   --ios-tile-location: #2ECC71; /* UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color */
   --ios-tile-voice: #E74C3C; /* UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color */
   --ios-tile-emoji: #FF9F43; /* UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color */
+  --ios-tile-sticker: #6C5CE7; /* UniversalComposerBar+Attachments.swift:295 — CarouselTile(id: "sticker").color */
   --ios-recording-ink-dark: #FFFFFF; /* UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor */
   --ios-bubble-other-opacity: 28%; /* BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16) */
   --ios-bubble-other-hairline-opacity: 34%; /* BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26) */
@@ -119,6 +121,7 @@
   --ios-read-receipt: var(--ios-indigo-400); /* BubbleDeliveryCheck.swift — readTint */
   --ios-quote-bg: color-mix(in srgb, white 8%, transparent); /* BubbleQuotedReply.swift — style .card, hôte non-isMe */
   --ios-quote-bg-mine: color-mix(in srgb, white 15%, transparent); /* BubbleQuotedReply.swift — style .card, hôte isMe */
+  --ios-repost-embed-fill: color-mix(in srgb, white 5%, transparent); /* FeedPostCard.swift:892-901 — repostView, fond de la carte citée (#6278 c) */
   --ios-edge: color-mix(in srgb, white 6%, transparent); /* ThemedConversationRow.swift:202-241 — strokeBorder de la carte, 0,5 px */
   --ios-day-ink: var(--ios-indigo-200); /* MessageDaySeparator.swift */
   --ios-day-hairline: var(--ios-indigo-900); /* MessageDaySeparator.swift — strokeBorder */
@@ -140,6 +143,7 @@
   --ios-read-receipt: var(--ios-indigo-600);
   --ios-quote-bg: color-mix(in srgb, black 5%, transparent);
   --ios-quote-bg-mine: color-mix(in srgb, white 15%, transparent);
+  --ios-repost-embed-fill: color-mix(in srgb, black 3%, transparent);
   --ios-edge: color-mix(in srgb, black 6%, transparent);
   --ios-day-ink: var(--ios-indigo-700);
   --ios-day-hairline: var(--ios-indigo-200);

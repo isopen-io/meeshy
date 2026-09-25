@@ -2642,18 +2642,6 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.pendingEffects, .none)
     }
 
-    func test_showEffectsPicker_toggles() {
-        let sut = makeSUT()
-
-        XCTAssertFalse(sut.showEffectsPicker)
-
-        sut.showEffectsPicker = true
-        XCTAssertTrue(sut.showEffectsPicker)
-
-        sut.showEffectsPicker = false
-        XCTAssertFalse(sut.showEffectsPicker)
-    }
-
     // MARK: - Persistence Orchestrator Tests
 
     func test_init_createsMessageStoreEagerly() async throws {

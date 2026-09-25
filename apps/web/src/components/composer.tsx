@@ -2,7 +2,8 @@ import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'reac
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
-import { ComposerTopRow } from './composer-top-row';
+import { ComposerEphemeralRail, ComposerTopRow } from './composer-top-row';
+import { QUICK_EMOJI_FRAME_WIDTH, QuickEmojiFrame } from './composer-quick-emoji';
 import { Glyph } from './glyph';
 import { MentionFieldPanel } from './mention-suggestions';
 import type { ComposerNotice } from './composer-tray';
@@ -10,6 +11,7 @@ import {
   acceptPendingFiles,
   addPendingAttachment,
   mayAttach,
+  pendingAttachmentOf,
   removePendingAttachment,
   type PendingAttachment,
 } from '@/lib/send/attachments';
@@ -29,7 +31,7 @@ import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useSentiment } from '@/lib/view/use-sentiment';
 import type { SharedPlace } from '@/lib/send/shared-place';
-import { QUICK_REACTIONS } from '@/lib/view/message-actions';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
 import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
@@ -38,11 +40,11 @@ import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
 
 /**
- * LA FEUILLE D'EFFETS, CHARGÉE À LA DEMANDE (#6175) — même discipline que
- * `LanguageSheet` ci-dessous : elle ne pèse sur le chunk du fil que si un
- * lecteur touche la capsule « effets ».
+ * LE PANNEAU D'EFFETS, CHARGÉ À LA DEMANDE (#6175, panneau inline depuis
+ * #7980) — même discipline que `LanguageSheet` ci-dessous : il ne pèse sur le
+ * chunk du fil que si un lecteur touche la baguette.
  */
-const EffectsSheet = lazy(() => import('./effects-sheet').then((m) => ({ default: m.EffectsSheet })));
+const EffectsPanel = lazy(() => import('./effects-panel').then((m) => ({ default: m.EffectsPanel })));
 
 /**
  * LA FEUILLE DE LANGUE, CHARGÉE À LA DEMANDE (#5828) — même discipline que
@@ -59,10 +61,10 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
  * 1. Le MICRO est DANS le champ, a gauche, et DISPARAIT des que le champ prend
  *    le focus. Il ne prend donc aucune place au moment ou l'on ecrit, et reste
  *    a portee immediate quand on hesite.
- * 2. Le bouton d'envoi est INVISIBLE quand il n'y a rien a envoyer
- *    (`opacity: 0`), jamais grise — et sa place est occupee par DEUX emojis
- *    d'envoi rapide. L'emplacement passe donc de 44 a 96 px de large. Griser
- *    un bouton, c'est montrer une porte fermee ; iOS montre une autre porte.
+ * 2. Le bouton d'envoi est ABSENT quand il n'y a rien a envoyer, jamais
+ *    grise — sa place est prise par le cadre des emojis rapides
+ *    (`composer-quick-emoji.tsx`, #7980). Griser un bouton, c'est montrer une
+ *    porte fermee ; iOS montre une autre porte.
  * 3. Le fond du composeur est TRANSPARENT (aucun materiau, decision #3920) :
  *    ce sont les bandeaux et le champ qui portent leur propre fond.
  *
@@ -85,22 +87,9 @@ const ComposerTray = lazy(() => import('./composer-tray'));
 const ComposerEmojiSheet = lazy(() =>
   import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
 );
-
-/**
- * LES DEUX EMOJIS D'ENVOI RAPIDE — la TÊTE de la liste que le dépôt tient
- * déjà (`QUICK_REACTIONS`, `lib/view/message-actions.ts`, miroir
- * `MessageOverlayMenu.swift:99-101`), jamais une seconde liste : elle était
- * écrite ici en dur et avait déjà DIVERGÉ (`['👍','❤️']` au lieu des
- * `['😂','❤️']` que `quickSendDefaultEmojis` sert en tête,
- * `UniversalComposerBar+Send.swift:198-202`).
- *
- * iOS classe ces deux-là par USAGE (`EmojiUsageTracker.topEmojis(count: 2,
- * defaults:)`) ; le dépôt a explicitement tranché « jamais un classement par
- * usage ce lot » pour le rail du menu (`message-actions.ts:77`), et ce lot-ci
- * s'y tient : ce sont les DEUX PREMIERS de la liste, c'est-à-dire le défaut
- * d'iOS avant toute mesure d'usage.
- */
-const QUICK_EMOJIS = QUICK_REACTIONS.slice(0, 2);
+const ComposerStickerSheet = lazy(() =>
+  import('./composer-sticker-sheet').then((m) => ({ default: m.ComposerStickerSheet })),
+);
 
 /** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)
  * — un `[]` littéral en valeur par défaut serait reconstruit à CHAQUE rendu
@@ -108,6 +97,10 @@ const QUICK_EMOJIS = QUICK_REACTIONS.slice(0, 2);
  * Prisme, cycle 123 : « son IDENTITÉ change à chaque rendu chez tout hôte qui
  * le construit en ligne »). */
 const NO_PREFERRED_LANGUAGES: readonly string[] = [];
+
+/** Ce que la barre d'outils réserve au cadre des emojis rapides : sa marge de
+ * fin (`px-3`), le cadre, et 4 px d'air (miroir `quickEmojiSlotWidth + 4`). */
+const QUICK_EMOJI_TOOLBAR_RESERVE = 12 + QUICK_EMOJI_FRAME_WIDTH + 4;
 
 /**
  * `memo` (revue-correction #6175, défaut majeur 3) — `thread.tsx` re-rend à
@@ -149,6 +142,9 @@ export const Composer = memo(function Composer({
      * `location` DÉDIÉ du corps (`perform-send.ts § bodyOf`), jamais fusionné
      * dans un `metadata` brut. */
     place: SharedPlace | null;
+    /** LE STICKER DE LA BIBLIOTHÈQUE (#7938) — posé par le panneau
+     * « Stickers » seul ; son image part en pièce jointe. */
+    sticker?: MessageSticker | null;
   }) => void;
   /**
    * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
@@ -205,6 +201,7 @@ export const Composer = memo(function Composer({
    * possède l'état du micro et le vocal qu'il rend. */
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
+  const [stickerSheetOpen, setStickerSheetOpen] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
@@ -239,6 +236,9 @@ export const Composer = memo(function Composer({
   const sendTarget = text.trim().length > 0 || pending.length > 0 || locator.place !== null;
   const hasReply = replyTo !== undefined;
   const isRecording = recorder.state.status === 'recording';
+  /** Le cadre des emojis rapides monte sur la barre d'outils : champ vide,
+   * NON focalisé, hors enregistrement (miroir `quickEmojiCoversToolbar`). */
+  const quickEmojiCoversToolbar = !sendTarget && !focused && !isRecording;
 
   /**
    * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
@@ -275,7 +275,10 @@ export const Composer = memo(function Composer({
     setBlurred(next.blurred);
     setViewOnce(next.viewOnce);
   };
-  const [effectsSheetOpen, setEffectsSheetOpen] = useState(false);
+  /** LE PANNEAU D'EFFETS INLINE (#7980) — il partage la place du rail
+   * éphémère, au-dessus de la barre d'outils : l'un s'ouvre, l'autre se
+   * ferme (miroir #7967). */
+  const [effectsPanelOpen, setEffectsPanelOpen] = useState(false);
   const protection: ComposeProtection = useMemo(
     () => ({
       ...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds }),
@@ -440,6 +443,7 @@ export const Composer = memo(function Composer({
     // LANGUE (qui reste COLLANTE, `compose.noteSent()`).
     setEphemeralSeconds(undefined);
     setEphemeralPickerOpen(false);
+    setEffectsPanelOpen(false);
     setBlurred(false);
     setViewOnce(false);
     setEffectFlags(0);
@@ -522,6 +526,24 @@ export const Composer = memo(function Composer({
     const end = el?.selectionEnd ?? text.length;
     setEmojiSheetOpen(false);
     mention.write(`${text.slice(0, start)}${emoji}${text.slice(end)}`, start + emoji.length);
+  };
+
+  /**
+   * ENVOYER UN STICKER DE LA BIBLIOTHÈQUE (#7938) — un message À LUI SEUL,
+   * comme sur iOS : le texte en cours, les pièces en attente et le lieu
+   * restent dans le composeur. L'image relue par la feuille part en pièce
+   * jointe, le descripteur `{ stickerId }` dans le champ `sticker` du corps.
+   */
+  const sendSticker = ({ stickerId, file }: { readonly stickerId: string; readonly file: File }) => {
+    setStickerSheetOpen(false);
+    onSend({
+      text: '',
+      attachments: [pendingAttachmentOf(file)],
+      language: compose.language,
+      protection,
+      place: null,
+      sticker: { stickerId },
+    });
   };
 
   /**
@@ -610,6 +632,29 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
+      {/* LES RAILS AU-DESSUS DE LA BARRE D'OUTILS (#7980, miroir #7966/#7967)
+          — la durée éphémère OU les effets, jamais les deux, posés HORS du
+          pont que couvre le cadre des emojis rapides, à 8 px du bord haut du
+          verre et de ses côtés. */}
+      {!isRecording && ephemeralPickerOpen ? (
+        <ComposerEphemeralRail
+          {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
+          onSelectEphemeral={(seconds) => {
+            setEphemeralSeconds(seconds);
+            setEphemeralPickerOpen(false);
+          }}
+        />
+      ) : null}
+      {!isRecording && effectsPanelOpen ? (
+        <Suspense fallback={null}>
+          <EffectsPanel flags={effectFlags} onChange={setEffectFlags} />
+        </Suspense>
+      ) : null}
+
+      {/* LE PONT (#7980) — la barre d'outils et la ligne de saisie, sous un
+          même repère : le cadre des emojis rapides s'y pose en absolu sur
+          tout le côté droit. */}
+      <div data-composer-deck className="relative" style={{ containerType: 'inline-size' }}>
       {/* LA RANGÉE HAUTE (#5828, #6175) — miroir `topToolbar`
           (`UniversalComposerBar+Toolbar.swift:25-81`) : posée AU-DESSUS du
           champ, jamais DANS lui, et DÉMONTÉE pendant un enregistrement
@@ -631,24 +676,26 @@ export const Composer = memo(function Composer({
               setEphemeralPickerOpen(false);
               return;
             }
+            setEffectsPanelOpen(false);
             setEphemeralPickerOpen((v) => !v);
-          }}
-          onSelectEphemeral={(seconds) => {
-            setEphemeralSeconds(seconds);
-            setEphemeralPickerOpen(false);
           }}
           blurred={blurred}
           onToggleBlur={() => applyVeil(toggledVeil('blurred', { blurred, viewOnce }))}
           viewOnce={viewOnce}
           onToggleViewOnce={() => applyVeil(toggledVeil('viewOnce', { blurred, viewOnce }))}
           effectCount={decorativeEffectCountOf(effectFlags)}
-          onOpenEffects={() => setEffectsSheetOpen(true)}
+          effectsPanelOpen={effectsPanelOpen}
+          onToggleEffects={() => {
+            setEphemeralPickerOpen(false);
+            setEffectsPanelOpen((v) => !v);
+          }}
           sentiment={sentiment}
           languageCode={compose.language}
           onOpenLanguage={() => setLanguageSheetOpen(true)}
           languagePillRef={languagePillRef}
           text={text}
           {...(maxLength === undefined ? {} : { maxLength })}
+          reserveEnd={quickEmojiCoversToolbar ? QUICK_EMOJI_TOOLBAR_RESERVE : 0}
         />
       ) : null}
 
@@ -676,9 +723,9 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
-      {effectsSheetOpen ? (
+      {stickerSheetOpen ? (
         <Suspense fallback={null}>
-          <EffectsSheet flags={effectFlags} onChange={setEffectFlags} onClose={() => setEffectsSheetOpen(false)} />
+          <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
 
@@ -807,8 +854,8 @@ export const Composer = memo(function Composer({
           </div>
 
           <div
-            className="flex shrink-0 items-center justify-end gap-2 transition-all"
-            style={{ width: sendTarget ? 44 : 96, height: 44 }}
+            className="flex shrink-0 items-end justify-end"
+            style={{ width: sendTarget ? 44 : QUICK_EMOJI_FRAME_WIDTH, height: 44 }}
           >
             {sendTarget ? (
               <button
@@ -829,24 +876,13 @@ export const Composer = memo(function Composer({
                 <Glyph name="arrowUp" size={20} className="text-white" />
               </button>
             ) : (
-              QUICK_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => send(emoji)}
-                  className="grid size-11 place-items-center rounded-chip text-[22px]"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
-                  aria-label={`Envoyer ${emoji}`}
-                >
-                  <span aria-hidden>{emoji}</span>
-                </button>
-              ))
+              <QuickEmojiFrame focused={focused} onSend={send} />
             )}
           </div>
         </div>
         </>
       )}
+      </div>
 
       {/* SOUS la rangée, à la place du clavier — `attachmentCarouselPanel`
           (`+Layout.swift:254-258`). */}
@@ -868,6 +904,10 @@ export const Composer = memo(function Composer({
             onRequestEmoji={() => {
               setPanelOpen(false);
               setEmojiSheetOpen(true);
+            }}
+            onRequestSticker={() => {
+              setPanelOpen(false);
+              setStickerSheetOpen(true);
             }}
             onStartVoice={() => {
               setPanelOpen(false);

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
-import { DECORATIVE_EFFECTS, activeDecorativeEffects } from './effects';
+import { DECORATIVE_EFFECTS, activeDecorativeEffects, withoutDecorativeEffects } from './effects';
 
 describe('DECORATIVE_EFFECTS — les dix bits décoratifs, SITE UNIQUE (#6175)', () => {
   test('dix entrées, six d’entrée et quatre permanentes (EffectsPickerView.swift:65-96)', () => {
@@ -38,5 +38,22 @@ describe('activeDecorativeEffects — filtre par bit, dans l’ordre iOS', () =>
   test('un bit de cycle de vie mêlé (BLURRED) ne fait naître aucune entrée', () => {
     const flags = MESSAGE_EFFECT_FLAGS.BLURRED | MESSAGE_EFFECT_FLAGS.GLOW;
     expect(activeDecorativeEffects(flags).map((e) => e.label)).toEqual(['Lueur']);
+  });
+});
+
+/**
+ * « TOUT EFFACER » (#7980, miroir `EffectsPickerView.panelFlags` / #7967) — ne
+ * retire QUE les dix effets du panneau, jamais un bit de cycle de vie
+ * (éphémère, flou, vue unique) que la barre d'outils règle.
+ */
+describe('withoutDecorativeEffects — « Tout effacer » ne retire que les dix effets', () => {
+  test('les dix bits décoratifs tombent', () => {
+    const all = DECORATIVE_EFFECTS.reduce((acc, e) => acc | e.flag, 0);
+    expect(withoutDecorativeEffects(all)).toBe(0);
+  });
+
+  test('éphémère, flou et vue unique survivent', () => {
+    const lifecycle = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.BLURRED | MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+    expect(withoutDecorativeEffects(lifecycle | MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW)).toBe(lifecycle);
   });
 });

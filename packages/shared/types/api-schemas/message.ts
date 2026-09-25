@@ -98,12 +98,13 @@ export const anonymousSenderSchema = {
 export const messageStickerResponseSchema = {
   type: 'object',
   nullable: true,
-  description: 'Sticker (gabarit + slots + animation, ou emoji) — hissé depuis metadata.sticker, validé serveur ; null si absent',
+  description: 'Sticker (gabarit + slots + animation, emoji, ou sticker de bibliothèque) — hissé depuis metadata.sticker, validé serveur ; null si absent',
   properties: {
     templateId: { type: 'string' },
     slots: { type: 'object', additionalProperties: { type: 'string' } },
     animation: { type: 'string', enum: [...MESSAGE_STICKER_ANIMATIONS] },
-    emoji: { type: 'string' }
+    emoji: { type: 'string' },
+    stickerId: { type: 'string', description: 'Sticker de bibliothèque d’où vient l’image jointe (#7938)' }
   }
 } as const;
 
@@ -176,7 +177,18 @@ export const messageSchema = {
         thumbnailUrl: { type: 'string', nullable: true },
         previewText: { type: 'string' },
         // Non-null ⇒ mood/statut : citation dédiée emoji + contenu + date.
-        moodEmoji: { type: 'string', nullable: true }
+        moodEmoji: { type: 'string', nullable: true },
+        // Auteur figé par `buildPostReplyTo` (2026-08-10), décodé par iOS
+        // (`APIPostReplyTarget.authorName`) : sans déclaration,
+        // fast-json-stringify les retirait en silence.
+        authorId: { type: 'string', nullable: true },
+        authorName: { type: 'string', nullable: true },
+        // #7950 — la story citée a été SUPPRIMÉE par son auteur (même nom que
+        // `replyTo.deletedAt`, #7927) : la passerelle a vidé tout ce qui décrit
+        // son contenu (aperçu, vignette, emoji, compteurs), et le client rend
+        // « Story indisponible », non tapable. Absent ⇒ disponible — une story
+        // seulement EXPIRÉE garde son instantané (`servedPostReply.ts`).
+        deletedAt: { type: 'string', format: 'date-time', nullable: true }
       }
     },
     location: {

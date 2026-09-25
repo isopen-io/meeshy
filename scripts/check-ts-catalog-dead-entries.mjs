@@ -351,7 +351,13 @@ export const parseCatalogBlock = (blockLines) => {
 // morte ici au même titre, jusqu'à #7716. Valeur MESURÉE sur la branche du
 // 2026-09-25.
 // Fusion #6937 + #7845 : les deux ajouts se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 464;
+// 464 → 467 (#7938) : `me.stickers`, `me.stickersByStickerId`,
+// `me.stickersByStickerIdUse` — la bibliothèque « Mes stickers », entrées
+// GÉNÉRÉES depuis `route-manifest.json`. Leur client
+// (`apps/web/src/lib/api/stickers.ts`) écrit l'adresse en littéral comme tout
+// `apps/web` : mortes ici au même titre que `me.starredMessages`, jusqu'à
+// #7716. Valeur MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
+const BASELINE_DEAD_ENTRIES = 467;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

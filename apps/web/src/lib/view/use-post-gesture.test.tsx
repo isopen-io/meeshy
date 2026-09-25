@@ -395,13 +395,25 @@ describe('usePostGesture — une suppression CONFIRMÉE prévient l’hôte (#75
   });
 });
 
-describe('usePostGesture — repartager annonce dans la langue d’interface (#6484)', () => {
+/**
+ * **`onRepost` DEMANDE, `confirmRepost` ENVOIE** (revue-correction #6278,
+ * défaut majeur 1) — le repost est APPEND-ONLY, sans « annuler » nulle part
+ * dans l'interface une fois parti ; iOS n'envoie jamais depuis le seul tap du
+ * bouton, il ouvre une alerte (`FeedPostCard.swift:1049-1053`). Un tap seul
+ * ne doit donc AUCUN effet — ni réseau, ni annonce — tant que
+ * `confirmRepost()` n'a pas été appelé ; `cancelRepost()` referme la demande
+ * sans qu'aucun des deux ne se produise jamais.
+ */
+describe('usePostGesture — repartager DEMANDE une confirmation avant d’envoyer (#6278)', () => {
   function RepostHarness({ postId }: { readonly postId: string }) {
-    const { announcement, onRepost } = usePostGesture();
+    const { announcement, onRepost, pendingRepostId, confirmRepost, cancelRepost } = usePostGesture();
     return (
       <div>
         <span data-live>{announcement}</span>
+        <span data-pending>{pendingRepostId ?? ''}</span>
         <button type="button" data-repost onClick={() => onRepost(postId)} />
+        <button type="button" data-repost-confirm onClick={confirmRepost} />
+        <button type="button" data-repost-cancel onClick={cancelRepost} />
       </div>
     );
   }
@@ -416,15 +428,45 @@ describe('usePostGesture — repartager annonce dans la langue d’interface (#6
     return container;
   }
 
-  test('fr : le repost s’annonce en français, jamais la clé brute', async () => {
-    document.documentElement.lang = 'fr';
+  const pendingOf = (el: HTMLDivElement): string => el.querySelector('[data-pending]')!.textContent ?? '';
+
+  test('le seul tap n’envoie RIEN : il pose la demande, sans annonce', async () => {
     const el = montreRepost('reel-1');
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-repost]')!.click();
     });
     await laisserPasser();
+    expect(pendingOf(el)).toBe('reel-1');
+    expect(liveOf(el)).toBe('');
+  });
+
+  test('fr : confirmer envoie le repost et l’annonce en français, jamais la clé brute', async () => {
+    document.documentElement.lang = 'fr';
+    const el = montreRepost('reel-1');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-repost]')!.click();
+    });
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-repost-confirm]')!.click();
+    });
+    await laisserPasser();
     const texte = liveOf(el);
     expect(texte).not.toBe('feed.post.repost.success');
     expect(texte).toBe(translate('fr', 'feed.post.repost.success'));
+    expect(pendingOf(el)).toBe('');
+  });
+
+  test('annuler ne laisse AUCUN effet : ni annonce, ni demande restante', async () => {
+    const el = montreRepost('reel-1');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-repost]')!.click();
+    });
+    expect(pendingOf(el)).toBe('reel-1');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-repost-cancel]')!.click();
+    });
+    await laisserPasser();
+    expect(pendingOf(el)).toBe('');
+    expect(liveOf(el)).toBe('');
   });
 });

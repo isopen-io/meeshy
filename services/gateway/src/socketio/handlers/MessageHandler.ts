@@ -36,12 +36,9 @@ import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
 import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
-import {
-  buildPostReplyTo,
-  postReplyToFromMetadata,
-  POST_REPLY_SNAPSHOT_SELECT,
-} from '../../services/messaging/postReplySnapshot';
+import { serveNewMessagePostReply } from '../../services/messaging/servedPostReply';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { carriesNonTextBody } from '../../services/messaging/nonTextBody';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -304,38 +301,19 @@ export class MessageHandler {
       // tout ce chemin à échapper au schéma, donc toujours `undefined`.
       const encryptedPayload = toEncryptedPayload(validated);
 
-      // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend
-      // le corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ
-      // SERVEUR (`MessageProcessor.copyForwardedAttachments`), le client
-      // n'envoie donc ni texte ni `attachmentIds` pour un transfert de média.
-      // L'exemption vivait dans le validateur mais pas ici : ce transport —
-      // celui que la modale de transfert web emprunte en PRIMAIRE — refusait
-      // tout transfert de média sans légende. Toute évolution de l'une des deux
-      // exemptions touche l'autre.
-      //
-      // `copyAttachmentsFromMessageId` porte la MÊME exemption pour la MÊME
-      // raison (diffusion à plusieurs destinataires : les pièces jointes sont
-      // copiées côté serveur par `copyAttachments.ts`, le client n'envoie ni
-      // texte ni `attachmentIds`). Cette troisième porte est restée fermée
-      // pendant que les deux autres s'ouvraient.
-      //
-      // QUATRIÈME porteur de la même exemption : un corps chiffré. Le
-      // déclencheur est désormais l'enveloppe VALIDÉE ci-dessus, non plus un
-      // champ brut que le fil ne portait jamais.
-      //
-      // CINQUIÈME porteur : une géolocalisation SEULE (`location`, ni texte ni
-      // attachmentIds). Restée fermée ici, cette porte rejetait à coup sûr —
-      // sur CHAQUE tentative, y compris le rejeu depuis la file offline —
-      // tout message de géolocalisation seule ; ce transport est le repli
-      // documenté quand le POST REST échoue (#4039).
+      // RÈGLE JUMELLE de `MessageValidator.validateRequest` — une seule loi
+      // (`carriesNonTextBody`, qui dit chaque porteur et pourquoi) : ce
+      // transport est le repli documenté quand le POST REST échoue (#4039),
+      // une porte restée fermée ici refuse à coup sûr sur chaque tentative.
       const validation = validateMessageLength(validated.content);
-      if (
-        !validation.isValid &&
-        !encryptedPayload &&
-        !validated.forwardedFromId &&
-        !validated.copyAttachmentsFromMessageId &&
-        !validated.location
-      ) {
+      const bodyWithoutText = carriesNonTextBody({
+        encryptedPayload,
+        forwardedFromId: validated.forwardedFromId,
+        copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
+        location: validated.location,
+        sticker: validated.sticker,
+      });
+      if (!validation.isValid && !bodyWithoutText) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
@@ -1303,19 +1281,9 @@ export class MessageHandler {
       // Réponse à un post (status/story/reel/post) : servir le SNAPSHOT figé
       // (rangé dans `metadata.postReplyTo` à la création) pour que le
       // destinataire voie la citation immédiatement et qu'elle survive à
-      // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
-      // legacy via lookup du post.
-      const postReplyParts = await (async () => {
-        if (!message.storyReplyToId) return {};
-        const fromSnapshot = postReplyToFromMetadata(message.metadata);
-        if (fromSnapshot) return { postReplyTo: fromSnapshot };
-        // Best-effort : le fallback live ne doit pas gater la délivrance.
-        const post = await this.prisma.post.findUnique({
-          where: { id: message.storyReplyToId },
-          select: POST_REPLY_SNAPSHOT_SELECT,
-        }).catch(() => null);
-        return post ? { postReplyTo: buildPostReplyTo(post) } : {};
-      })();
+      // l'expiration du post, pas à son retrait (#7950). Hissé en `postReplyTo`
+      // top-level. Même loi que la liste : `serveNewMessagePostReply`.
+      const postReplyParts = await serveNewMessagePostReply(this.prisma, message);
 
       const mentionParts = await (async () => {
         if (!message.content) return {};

@@ -143,34 +143,41 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
   });
 
   /**
-   * LA CHAÎNE ENTIÈRE DES EFFETS (revue-correction #6175) — la capsule était
-   * la SEULE des quatre dont l'effet sur la charge n'était prouvé nulle part :
-   * `perform-send.test.ts` prouve que la LOI sait composer `effectFlags`, et
-   * `effects-sheet.test.tsx` que la feuille rend le bon `onChange` — mais
-   * personne ne mesurait le CÂBLAGE entre les deux, qui est précisément
-   * l'endroit où un contrôle devient inerte (loi 4). On l'ouvre, on coche, on
-   * envoie, on lit la charge.
+   * LA CHAÎNE ENTIÈRE DES EFFETS (revue-correction #6175, puis #7980) — la
+   * baguette ne présente plus de feuille : elle bascule un PANNEAU inline
+   * au-dessus de la barre d'outils (jumelle de #7967). On l'ouvre, on coche,
+   * on envoie, on lit la charge.
    */
-  test('la capsule « effets » ouvre la feuille, cocher « Confettis » ⇒ onSend porte SON bit', async () => {
+  const openEffects = async (el: HTMLElement) => {
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-effects]')!.click();
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 200)));
+  };
+
+  test('champ vide hors focus : la tonalité (toujours « neutre ») cède sa place au cadre des emojis', () => {
+    const el = mount(() => {});
+    expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).toBeNull();
+    act(() => el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!.focus());
+    expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).not.toBeNull();
+  });
+
+  test('la baguette ouvre le PANNEAU inline (aucune feuille), cocher « Confettis » ⇒ onSend porte SON bit', async () => {
     let sent: { protection: unknown } | null = null;
     const el = mount((p) => {
       sent = p;
     });
     type(el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!, 'boum');
+    await openEffects(el);
 
+    expect(el.querySelector('dialog')).toBeNull();
+    const panel = el.querySelector<HTMLElement>('[data-composer-effects-panel]');
+    expect(panel).not.toBeNull();
+    expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-expanded')).toBe('true');
     act(() => {
-      el.querySelector<HTMLButtonElement>('[data-composer-effects]')!.click();
-    });
-    // Le `lazy()` de la feuille — même attente que la feuille de langue.
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 200)));
-
-    const dialog = el.querySelector<HTMLDialogElement>('dialog[open]');
-    expect(dialog).not.toBeNull();
-    act(() => {
-      dialog!.querySelector<HTMLButtonElement>('[aria-label="Confettis, inactif"]')!.click();
+      panel!.querySelector<HTMLButtonElement>('[aria-label="Confettis, inactif"]')!.click();
     });
 
-    // La capsule ANNONCE le compte — l'état est visible avant même l'envoi.
     expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-label')).toBe('1 effet(s) actif(s)');
 
     act(() => {
@@ -181,8 +188,63 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     );
   });
 
+  test('un second tap sur la baguette REFERME le panneau', async () => {
+    const el = mount(() => {});
+    await openEffects(el);
+    await openEffects(el);
+    expect(el.querySelector('[data-composer-effects-panel]')).toBeNull();
+    expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  test('le panneau des effets et le rail éphémère s’EXCLUENT', async () => {
+    const el = mount(() => {});
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    expect(el.querySelector('[data-composer-ephemeral-picker]')).not.toBeNull();
+    await openEffects(el);
+    expect(el.querySelector('[data-composer-effects-panel]')).not.toBeNull();
+    expect(el.querySelector('[data-composer-ephemeral-picker]')).toBeNull();
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    expect(el.querySelector('[data-composer-ephemeral-picker]')).not.toBeNull();
+    expect(el.querySelector('[data-composer-effects-panel]')).toBeNull();
+  });
+
+  test('« Tout effacer » retire les effets et laisse le flou armé', async () => {
+    let sent: { protection: unknown } | null = null;
+    const el = mount((p) => {
+      sent = p;
+    });
+    type(el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!, 'calme');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-blur]')!.click();
+    });
+    await openEffects(el);
+    const panel = () => el.querySelector<HTMLElement>('[data-composer-effects-panel]')!;
+    act(() => {
+      panel().querySelector<HTMLButtonElement>('[aria-label="Lueur, inactif"]')!.click();
+    });
+    act(() => {
+      panel().querySelector<HTMLButtonElement>('[aria-label="Zoom, inactif"]')!.click();
+    });
+    const clear = [...panel().querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Tout effacer');
+    act(() => {
+      clear!.click();
+    });
+    expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-label')).toBe('Ajouter des effets au message');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+    });
+    const protection = (sent as unknown as { protection: { blurred?: boolean; effectFlags?: number } }).protection;
+    expect(protection.blurred).toBe(true);
+    expect(protection.effectFlags).toBeUndefined();
+  });
+
   test('la tonalité est un indicateur PASSIF — aucun `<button>`, un `role="img"` labellisé', () => {
     const el = mount(() => {});
+    type(el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!, 'bonjour');
     const el2 = el.querySelector<HTMLElement>('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]');
     expect(el2).not.toBeNull();
     expect(el2?.tagName).not.toBe('BUTTON');

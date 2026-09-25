@@ -226,6 +226,16 @@ nonisolated enum FocalScrollPerspective {
     /// `Row.groupTopPadding`), 0 sinon — écrite à la configuration, lue par la
     /// passe pour encadrer la carte avec les bonnes marges.
     static let groupHeadCellTag = 1
+    /// Bit de l'étiquette : la rangée REND ses pastilles de focus (#7953).
+    static let focusDetailsCellTag = 2
+
+    static func cellTag(isFirstInGroup: Bool, showsFocusDetails: Bool) -> Int {
+        (isFirstInGroup ? groupHeadCellTag : 0) | (showsFocusDetails ? focusDetailsCellTag : 0)
+    }
+
+    static func isGroupHead(cellTag: Int) -> Bool { cellTag & groupHeadCellTag != 0 }
+
+    static func showsFocusDetails(cellTag: Int) -> Bool { cellTag & focusDetailsCellTag != 0 }
 
     @MainActor
     final class FocusCardView: UIView {
@@ -284,16 +294,69 @@ nonisolated enum FocalScrollPerspective {
 
     /// Pose la loupe sur le layer de l'élu, la retire des autres — animée au
     /// changement d'élu, sèche entre deux frames d'un même élu.
+    // MARK: - Le passage ouvert autour de la carte magnifiée (#7953)
+
+    /// Ce que les voisines d'une rangée magnifiée doivent céder pour qu'AUCUNE
+    /// pastille ne recouvre leur texte : au-dessus, la moitié haute de la
+    /// pastille d'identité ; au-dessous, la bande basse et le contenu descendu
+    /// d'une suite de groupe (`FocusStrip.contentLift`). Au-delà de ce que les
+    /// rembourrages des deux rangées offrent déjà, plus une marge de rangée
+    /// pour que la capsule ne touche pas le texte.
+    struct ElectionClearance: Equatable {
+        let above: CGFloat
+        let below: CGFloat
+    }
+
+    static func electionClearance(isFirstInGroup: Bool) -> ElectionClearance {
+        let pad = FocalMetrics.Row.paddingVertical
+        let breathing = pad
+        // Ce qui sépare déjà le bloc magnifié du texte voisin : son propre
+        // rembourrage (tête de groupe comprise) et celui de la voisine.
+        let gapAbove = pad + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) + pad
+        let gapBelow = pad + pad
+        let above = FocalMetrics.FocusStrip.identityOverhang - gapAbove + breathing
+        let below = FocalMetrics.FocusStrip.contentLift(isFirstInGroup: isFirstInGroup)
+            + FocalMetrics.FocusStrip.stripDrop + FocalMetrics.FocusStrip.overhang - gapBelow + breathing
+        return ElectionClearance(above: max(0, above), below: max(0, below))
+    }
+
+    /// Translation VISUELLE (> 0 vers le bas) d'une cellule autour de la
+    /// rangée magnifiée : celles du dessus montent, celles du dessous
+    /// descendent — toutes du même pas, donc aucune ne mord sa voisine. La
+    /// croissance de la loupe (`loupeGrowth`, par bord) s'y ajoute. Transform
+    /// seul : la hauteur des rangées ne change jamais.
+    static func electionShift(
+        cellMidY: CGFloat,
+        magnifiedMidY: CGFloat?,
+        clearance: ElectionClearance,
+        loupeGrowth: CGFloat
+    ) -> CGFloat {
+        guard let magnifiedMidY, cellMidY != magnifiedMidY else { return 0 }
+        return cellMidY < magnifiedMidY ? -(clearance.above + loupeGrowth) : clearance.below + loupeGrowth
+    }
+
+    /// La croissance de la loupe par bord, pour une rangée magnifiée.
     @MainActor
-    static func magnify(_ layer: CALayer, isFocused: Bool, animated: Bool) {
+    static func loupeGrowth(of layer: CALayer) -> CGFloat {
+        let size = layer.bounds.size
+        return (loupeScale(isFocused: true, reduceMotion: UIAccessibility.isReduceMotionEnabled, size: size) - 1) * size.height / 2
+    }
+
+    @MainActor
+    static func magnify(_ layer: CALayer, isFocused: Bool, shift: CGFloat = 0, animated: Bool) {
         let scale = loupeScale(isFocused: isFocused, reduceMotion: UIAccessibility.isReduceMotionEnabled, size: layer.bounds.size)
-        let target = CATransform3DMakeScale(scale, scale, 1)
+        // Repère RENVERSÉ du fil : une translation visuelle vers le bas est
+        // un −y du layer (voir `transform(scale:pull:…)`).
+        let target = CATransform3DScale(CATransform3DMakeTranslation(0, -shift, 0), scale, scale, 1)
         guard !CATransform3DEqualToTransform(layer.transform, target) || layer.opacity != 1 else { return }
+        // Le passage ne change qu'avec la rangée magnifiée : il s'ouvre et se
+        // referme en douceur, jamais par saut.
+        let passageMoves = abs(layer.transform.m42 - target.m42) > 0.5
         let pose = {
             layer.transform = target
             layer.opacity = 1
         }
-        guard animated else { return pose() }
+        guard animated || passageMoves else { return pose() }
         UIView.animate(
             withDuration: FocalMetrics.Scene.enterDuration,
             delay: 0,

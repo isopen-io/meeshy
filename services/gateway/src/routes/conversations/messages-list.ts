@@ -721,7 +721,10 @@ export function registerMessagesListRoute(
 
       timings.forwardedEnrichment = performance.now() - t0;
 
-      await enrichPostReplyMessagesForList(prisma, mappedMessages);
+      // #7950 — la citation d'une story RETIRÉE sort expurgée : la page
+      // continue sur les lignes servies (la suite de la route les complète).
+      const servedMessages = await enrichPostReplyMessagesForList(prisma, mappedMessages);
+      mappedMessages.splice(0, mappedMessages.length, ...servedMessages);
 
       // #6164 — la pièce NOMMÉE d'une citation peut tomber hors de la fenêtre
       // `take: 4` du `select` de `replyTo` (répondre à la 5e photo d'un
