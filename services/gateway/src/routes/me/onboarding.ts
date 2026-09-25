@@ -80,6 +80,22 @@ const onboardingResponseSchema = {
         protectedRegime: { type: 'boolean' },
         storyDefaultVisibility: { type: 'string', enum: ['public', 'friends'] },
         suggestions: { type: 'array', items: suggestionSchema },
+        // #7907 — l'adresse est-elle vérifiée, et la story passera-t-elle la
+        // garde du courriel (vérifié, OU première story du compte) ?
+        emailVerified: { type: 'boolean' },
+        canPublishStory: { type: 'boolean' },
+        // #7910 — demandes d'ami ENVOYÉES par le compte, toujours en attente.
+        pendingFriendRequests: { type: 'integer', minimum: 0 },
+        // #7908 — ce que chaque geste créditera à l'élan courant.
+        stepRewards: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            global: { type: 'integer', minimum: 0 },
+            story: { type: 'integer', minimum: 0 },
+            friendship: { type: 'integer', minimum: 0 },
+          },
+        },
       },
     },
   },
@@ -107,7 +123,8 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
           "État de l'onboarding post-inscription (#7729) de l'utilisateur AUTHENTIFIÉ : éligibilité " +
           '(compte créé depuis le 2026-09-24, non fini, de moins de 7 jours — au-delà, le parcours est clos), ' +
           'étapes vues, étapes déjà faites par l\'engagement, Meeshy Global, régime protégé (âge inconnu ou ' +
-          '< 18 ans) et au plus 6 suggestions sans croisement de classe d\'âge (adulte, mineur, inconnu) ni présence.',
+          '< 18 ans) et au plus 6 suggestions sans croisement de classe d\'âge (adulte, mineur, inconnu) ni présence. ' +
+          'Depuis #7907/#7908/#7910 : courriel vérifié, story publiable, demandes envoyées en attente, points de chaque geste à l\'élan courant.',
         tags: ['me', 'onboarding'],
         summary: 'Get onboarding state',
         response: { 200: onboardingResponseSchema, ...errorResponses },

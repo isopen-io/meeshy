@@ -44,6 +44,9 @@ export type QuotedMessageRow = {
   /// une ligne entière sans conversion : l'éphémère n'est pas une protection
   /// au sens de la citation (voir l'en-tête).
   readonly expiresAt?: Date | string | null;
+  /// #7927 — la suppression GARDE `content` en base : seul ce champ dit que
+  /// le texte ne doit plus sortir.
+  readonly deletedAt?: Date | string | null;
   readonly id?: string;
   readonly translations?: unknown;
   readonly attachments?: unknown;
@@ -114,6 +117,7 @@ export function servedQuotedMessage(
   }
 ): Record<string, unknown> {
   if (!quoted) return {};
+  if (quoted.deletedAt) return servedDeletedQuote(quoted.deletedAt);
   const isProtected = quotedMessageIsProtected(quoted);
   const served: Record<string, unknown> = {};
 
@@ -172,6 +176,28 @@ export function servedQuotedMessage(
   }
 
   return served;
+}
+
+/**
+ * #7927 — la citation d'un message SUPPRIMÉ ne transporte plus rien de lui.
+ * Fail-closed : chaque clé qui pourrait porter un morceau du message est
+ * POSÉE (même à `undefined`) pour écraser ce que le site d'appel a répandu
+ * avant — la ligne Mongo brute, ou une position/un sticker déjà hissés. Seul
+ * `deletedAt` voyage, pour que le client rende « Message supprimé » au lieu
+ * d'une citation vide.
+ */
+function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
+  return {
+    deletedAt,
+    content: '',
+    translations: undefined,
+    attachments: [],
+    metadata: undefined,
+    location: undefined,
+    sticker: undefined,
+    validatedMentions: [],
+    attachmentReplyTo: undefined,
+  };
 }
 
 /**

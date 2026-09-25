@@ -992,6 +992,7 @@ const fr = {
      que le legacy n'avait pas. */
   'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
   'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',
+  'appUpdate.storeHint': 'Installez-la depuis le magasin d’applications.',
   'appUpdate.action': 'Mettre à jour',
   'appUpdate.dismiss': 'Attendre',
   'appUpdate.applying': 'Mise à jour…',

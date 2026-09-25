@@ -28,7 +28,8 @@ extension MessagePersistenceActor {
         for api: APIMessage,
         currentUserId: String?,
         preferredLanguages: [String],
-        encoder: JSONEncoder
+        encoder: JSONEncoder,
+        quotedDeletedAt: Date? = nil
     ) -> Data? {
         if let story = api.postReplyTo {
             return encoder.encodeOrLog(
@@ -38,8 +39,9 @@ extension MessagePersistenceActor {
             )
         }
         return api.replyTo.flatMap { reply in
-            encoder.encodeOrLog(
-                reply.toReplyReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages),
+            let reference = reply.toReplyReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages)
+            return encoder.encodeOrLog(
+                quotedDeletedAt.map { reference.tombstoned(at: $0) } ?? reference,
                 field: "replyToJson",
                 id: api.id
             )
@@ -66,10 +68,12 @@ extension MessagePersistenceActor {
         for api: APIMessage,
         currentUserId: String?,
         preferredLanguages: [String],
-        encoder: JSONEncoder
+        encoder: JSONEncoder,
+        quotedDeletedAt: Date? = nil
     ) -> IngestedReply {
         let served = replyToJson(for: api, currentUserId: currentUserId,
-                                 preferredLanguages: preferredLanguages, encoder: encoder)
+                                 preferredLanguages: preferredLanguages, encoder: encoder,
+                                 quotedDeletedAt: quotedDeletedAt)
         guard served == nil, let storyId = api.storyReplyToId, !storyId.isEmpty else {
             return IngestedReply(served: served, fallback: nil)
         }

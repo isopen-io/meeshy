@@ -33,6 +33,16 @@ import MeeshySDK
 /// Gardes d'exécution : `QuotedReplyPresentationTests`.
 nonisolated enum QuotedReplyPresentation {
 
+    /// La citation telle que TOUTES les peaux la lisent (#7927) : celle d'un
+    /// message SUPPRIMÉ dit « Message supprimé » — la même clé que la rangée
+    /// fantôme du message lui-même —, jamais le texte qu'il portait (le SDK
+    /// l'a déjà retiré) ni le libellé générique « Médias » d'un aperçu vide.
+    static func displayed(_ reference: ReplyReference) -> ReplyReference {
+        reference.presentingDeletion(
+            label: String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main)
+        )
+    }
+
     /// La peau qui rend la citation. Elle ne change QUE le budget de lignes :
     /// le titre, les détails et la protection sont les mêmes partout — c'est
     /// tout l'objet de ce type.

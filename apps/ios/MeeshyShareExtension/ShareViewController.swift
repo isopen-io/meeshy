@@ -133,7 +133,7 @@ class ShareViewController: UIViewController {
             return
         }
         contexte.open(url) { [weak self] _ in
-            self?.complete()
+            Task { @MainActor in self?.complete() }
         }
     }
 

@@ -4,7 +4,9 @@ import type { OnboardingState } from '@meeshy/shared/types/onboarding';
 
 import {
   EMPTY_PROGRESS,
+  FRIENDSHIP_POINTS,
   LEVEL_ONE_POINTS,
+  announcedPoints,
   greetingDraft,
   nextStepAfter,
   pointsOf,
@@ -13,6 +15,7 @@ import {
   resumeStep,
   withDone,
   withFriendRequest,
+  withScore,
   type JourneyContext,
 } from './journey';
 
@@ -96,23 +99,28 @@ describe('nextStepAfter — on avance sans jamais revenir en arrière', () => {
   });
 });
 
-describe('les points — ce que les règles du serveur créditent, jamais plus', () => {
-  test('rien fait : zéro, et le premier niveau est à 10', () => {
+describe('les points de la session — lus au serveur, jamais calculés ici (#7908)', () => {
+  test('rien lu : zéro, et le premier niveau est à 10', () => {
     expect(pointsOf(EMPTY_PROGRESS)).toBe(0);
     expect(LEVEL_ONE_POINTS).toBe(10);
   });
 
-  test('un salut confirmé rapporte 9 + 5, une story 9 + 1', () => {
-    expect(pointsOf(withDone(EMPTY_PROGRESS, 'global'))).toBe(14);
-    expect(pointsOf(withDone(withDone(EMPTY_PROGRESS, 'global'), 'story'))).toBe(24);
+  test('la première lecture du score pose la BASE : la session part de zéro', () => {
+    expect(pointsOf(withScore(EMPTY_PROGRESS, 120))).toBe(0);
+  });
+
+  test('la session vaut ce que le serveur a crédité depuis la base — élan compris', () => {
+    const started = withScore(EMPTY_PROGRESS, 120);
+    expect(pointsOf(withScore(started, 148))).toBe(28);
+    expect(pointsOf(withScore(withScore(started, 148), 169))).toBe(49);
+  });
+
+  test('une étape confirmée ne fabrique aucun point sans relecture', () => {
+    expect(pointsOf(withDone(withScore(EMPTY_PROGRESS, 0), 'global'))).toBe(0);
   });
 
   test('une demande d’ami ne crédite rien tant qu’elle n’est pas acceptée', () => {
     expect(pointsOf(withFriendRequest(EMPTY_PROGRESS, 'u1'))).toBe(0);
-  });
-
-  test('marquer deux fois la même étape ne compte qu’une fois', () => {
-    expect(pointsOf(withDone(withDone(EMPTY_PROGRESS, 'global'), 'global'))).toBe(14);
   });
 
   test('la même personne ajoutée deux fois est UNE demande', () => {
@@ -120,14 +128,55 @@ describe('les points — ce que les règles du serveur créditent, jamais plus',
   });
 });
 
-describe('recapOf — le récapitulatif final', () => {
-  test('salut + story + deux demandes', () => {
-    const progress = withFriendRequest(withFriendRequest(withDone(withDone(EMPTY_PROGRESS, 'global'), 'story'), 'u1'), 'u2');
-    expect(recapOf(progress)).toEqual({ points: 24, levelReached: true, streakDays: 1, badges: 2, pendingFriends: 2 });
+describe('announcedPoints — l’annonce avant le geste est celle du serveur, élan compris (#7908)', () => {
+  test('servie à l’élan courant : le chiffre servi, pas le barème', () => {
+    const served = state({ stepRewards: { global: 28, story: 20, friendship: 14 } });
+    expect(announcedPoints('global', served)).toBe(28);
+    expect(announcedPoints('story', served)).toBe(20);
   });
 
-  test('rien fait : aucun niveau, aucune série', () => {
-    expect(recapOf(EMPTY_PROGRESS)).toEqual({ points: 0, levelReached: false, streakDays: 0, badges: 0, pendingFriends: 0 });
+  test('un serveur qui ne la sert pas : le barème nu, un plancher', () => {
+    expect(announcedPoints('global', state())).toBe(14);
+    expect(announcedPoints('story', state())).toBe(10);
+  });
+
+  test('l’amitié s’annonce par son plancher : l’autre personne crédite à son propre élan', () => {
+    expect(FRIENDSHIP_POINTS).toBe(7);
+  });
+});
+
+describe('recapOf — le récapitulatif ne compte que ce que le serveur sait', () => {
+  test('les demandes en route sont celles que le serveur dit EN ATTENTE, pas celles parties d’ici (#7910)', () => {
+    const progress = withFriendRequest(withFriendRequest(EMPTY_PROGRESS, 'u1'), 'u2');
+    expect(recapOf(progress, state({ pendingFriendRequests: 1 })).pendingFriends).toBe(1);
+    expect(recapOf(progress, state({ pendingFriendRequests: 0 })).pendingFriends).toBe(0);
+  });
+
+  test('ni série ni badges inventés : seulement les points de la session', () => {
+    const progress = withScore(withScore(withDone(EMPTY_PROGRESS, 'global'), 10), 24);
+    expect(recapOf(progress, state())).toEqual({ points: 14, pendingFriends: 0 });
+  });
+});
+
+describe('l’étape du courriel (#7907) — proposée au seul courriel NON vérifié', () => {
+  test('non vérifié : elle vient juste après les langues', () => {
+    const unverified = context({ state: state({ emailVerified: false }) });
+    expect(nextStepAfter('languages', unverified)).toBe('email');
+    expect(nextStepAfter('email', unverified)).toBe('global');
+  });
+
+  test('vérifié (pré-cochée par le serveur) ou inconnu : jamais proposée', () => {
+    expect(nextStepAfter('languages', context({ state: state({ emailVerified: true, prefilledSteps: ['email'] }) }))).toBe('global');
+    expect(nextStepAfter('languages', context())).toBe('global');
+  });
+
+  test('la carte affichée, le courriel vérifié ailleurs (le lien cliqué) : on passe à la suite', () => {
+    const verified = context({ state: state({ emailVerified: true, seenSteps: ['languages'], prefilledSteps: ['email'] }) });
+    expect(replayServedState({ context: verified, step: 'email', ownSteps: new Set() })).toBe('global');
+  });
+
+  test('passée (« Plus tard ») : la reprise ne la rouvre pas', () => {
+    expect(resumeStep(context({ state: state({ emailVerified: false, seenSteps: ['languages', 'email'] }) }))).toBe('global');
   });
 });
 

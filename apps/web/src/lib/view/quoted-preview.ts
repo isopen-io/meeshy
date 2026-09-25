@@ -1,5 +1,3 @@
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-
 import { served } from '@/lib/api/prism';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
@@ -8,6 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { kindOf } from './message';
+import { quotedIsProtected } from './quoted-protection';
 import { attachmentSegments } from './message-a11y-label';
 import { attachmentDurationLabel } from './media-transport';
 
@@ -55,37 +54,7 @@ export const QUOTED_KIND_KEY = {
   file: 'attachment.kind.file',
 } as const satisfies Readonly<Record<QuotedMediaKind, InterfaceCatalogKey>>;
 
-const MASKING_FLAGS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
-
-type QuotedProtectionFields = {
-  readonly isViewOnce?: boolean;
-  readonly isBlurred?: boolean;
-  readonly isEncrypted?: boolean;
-  readonly effectFlags?: number;
-};
-
-/**
- * LA MOITIÉ CLIENTE DE `quotedMessageIsProtected`
- * (`services/gateway/src/services/messaging/servedQuotedMessage.ts`) — MÊME
- * prédicat, MÊME lecture du bitfield canonique.
- *
- * DISTINCT de `protectionOf` (`lib/reading-mode/protection.ts`), et ce n'est
- * pas une jumelle : celle-là répond « quel tombstone cette RANGÉE peint-elle,
- * à cet instant ? » et compte donc l'éphémère échu ; celle-ci répond « cette
- * CITATION a-t-elle le droit de décrire ce qu'elle cite ? », question à
- * laquelle la passerelle a déjà répondu dans la charge — et pour laquelle
- * l'éphémère n'est PAS une protection (son texte est lisible dans le fil
- * jusqu'à l'expiration, et la citation vit dans ce même fil). Poser ici la
- * loi de la rangée masquerait un texte que le serveur sert, et le client
- * dirait alors autre chose que les deux autres.
- */
-export const quotedIsProtected = (quoted: QuotedProtectionFields): boolean =>
-  Boolean(
-    quoted.isViewOnce ||
-      quoted.isBlurred ||
-      quoted.isEncrypted ||
-      ((quoted.effectFlags ?? 0) & MASKING_FLAGS) !== 0,
-  );
+export { quotedIsProtected };
 
 export type QuotedMedia = {
   readonly kind: QuotedMediaKind;
@@ -207,11 +176,19 @@ export function quotedPreviewOf(params: {
   readonly quoted: Pick<
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
-  >;
+  > &
+    Partial<Pick<Message, 'deletedAt'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedPreview {
   const { quoted, readerLanguages, interfaceLanguage } = params;
+  /* UN MESSAGE CITÉ SUPPRIMÉ NE DIT PLUS RIEN DE LUI (#7926) — le libellé du
+     catalogue, celui de la bulle supprimée (`ProtectionNotice`), jamais
+     l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
+     encore une trace. Aucune langue de CONTENU : c'est de l'interface. */
+  if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) {
+    return { text: translate(interfaceLanguage, 'message.deleted'), language: '', media: null, inventory: [], isProtected: true };
+  }
   const messageIsProtected = quotedIsProtected(quoted);
   const attachment = representativeOf(quoted);
   const media =

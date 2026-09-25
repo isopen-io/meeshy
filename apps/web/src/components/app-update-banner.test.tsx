@@ -31,7 +31,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 afterEach(async () => {
   mounter.unmountAll();
-  appUpdateStore.setState({ pending: null, dismissed: false, applying: false });
+  appUpdateStore.setState({ pending: null, store: null, dismissed: false, applying: false });
   await setInterfaceLanguage('fr');
   online = true;
 });
@@ -167,5 +167,44 @@ describe('la bannière de mise à jour — ce que ses contrôles font', () => {
     });
 
     expect(host.textContent).toContain(translate('fr', 'appUpdate.available'));
+  });
+});
+
+describe('la bannière de mise à jour — dans la coque, la version vient du magasin (#6937)', () => {
+  const PLAY = 'https://play.google.com/store/apps/details?id=me.meeshy.app';
+
+  test('les mêmes libellés, et l’action OUVRE la fiche du magasin au lieu de recharger', async () => {
+    appUpdateStore.getState().announceStore({ version: '2.0.8', storeUrl: PLAY });
+    const applied: RegistrationLike[] = [];
+    const host = await mount((target) => applied.push(target));
+
+    expect(host.textContent).toContain(translate('fr', 'appUpdate.available'));
+    expect(host.textContent).toContain(translate('fr', 'appUpdate.storeHint'));
+    expect(host.textContent).not.toContain(translate('fr', 'appUpdate.hint'));
+    const link = [...host.querySelectorAll('a')].find((a) => a.textContent?.trim() === translate('fr', 'appUpdate.action'));
+    expect(link?.getAttribute('href')).toBe(PLAY);
+    expect(link?.getAttribute('rel')).toContain('noopener');
+    expect(link?.className).toContain('min-h-11');
+    expect(button(host, translate('fr', 'appUpdate.action'))).toBeNull();
+    expect(applied).toEqual([]);
+  });
+
+  test('« Attendre » la referme aussi', async () => {
+    appUpdateStore.getState().announceStore({ version: '2.0.8', storeUrl: PLAY });
+    const host = await mount();
+
+    await act(async () => {
+      button(host, translate('fr', 'appUpdate.dismiss'))?.click();
+    });
+
+    expect(host.textContent).toBe('');
+  });
+
+  test('HORS LIGNE ⇒ rien, comme sur le web', async () => {
+    appUpdateStore.getState().announceStore({ version: '2.0.8', storeUrl: PLAY });
+    online = false;
+    const host = await mount();
+
+    expect(host.textContent).toBe('');
   });
 });

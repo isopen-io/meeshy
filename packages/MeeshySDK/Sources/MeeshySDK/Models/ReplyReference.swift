@@ -129,6 +129,11 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// ce champ doit se relire sans emporter le message entier. `nil` =
     /// disponible — aucune citation existante ne change de rendu.
     public let storyUnavailable: Bool?
+    /// #7927 — le message CITÉ a été supprimé : la citation ne porte plus
+    /// rien de lui (`tombstoned(at:)`), et l'app rend « Message supprimé ».
+    /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
+    /// avant lui doit se relire.
+    public var quotedMessageDeletedAt: Date?
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni

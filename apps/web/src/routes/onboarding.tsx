@@ -7,29 +7,33 @@ import '@/styles/onboarding.css';
 
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
-import { ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
+import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
-import { loadEngagementProgress } from '@/lib/api/engagement';
+import { fetchEngagementProgress, loadEngagementProgress } from '@/lib/api/engagement';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
+import { observeCredit } from '@/lib/onboarding/credit';
+import { resendOwnVerification } from '@/lib/onboarding/resend-verification';
 import { createGreetingSender } from '@/lib/onboarding/greeting-send';
 import { appNotificationsOffer } from '@/lib/onboarding/notifications-offer';
 import {
+  FRIENDSHIP_POINTS,
+  announcedPoints,
+  isOffered,
   nextStepAfter,
   pointsOf,
-  producedSomething,
   recapOf,
   replayServedState,
   resumeStep,
-  stepPoints,
   withDone,
   withFriendRequest,
+  withScore,
   type JourneyContext,
   type JourneyProgress,
   type JourneyStep,
@@ -40,6 +44,7 @@ import { useSearch } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import {
+  EmailCard,
   FriendsCard,
   GlobalCard,
   LanguagesCard,
@@ -50,6 +55,7 @@ import {
   type CardHost,
   type GreetingSend,
   type LanguagesSave,
+  type ResendLink,
 } from './onboarding-cards';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
@@ -91,6 +97,16 @@ export type OnboardingScreenDeps = {
   readonly notificationsAskable: () => boolean;
   readonly askNotifications: () => Promise<void>;
   readonly loadRecap: () => Promise<RecapNumbers | null>;
+  /**
+   * Le score d'engagement SERVI (`GET /me/engagement`, `level.engagementScore`)
+   * — `null` quand il n'a pas pu être lu. Les points de la session et chaque
+   * « +N » en sont des écarts (#7908) : aucun barème local ne les chiffre.
+   */
+  readonly readScore: () => Promise<number | null>;
+  /** L'échelonnement de la relecture après un geste (`credit.ts`) ; les témoins passent `[0]`. */
+  readonly creditDelays?: readonly number[];
+  /** Renvoie le lien de vérification à l'adresse du compte (#7907) — `true` quand il est parti. */
+  readonly resendVerification: () => Promise<boolean>;
   /** Le retour du studio n'est crédité qu'avec sa preuve (`story-return.ts`). */
   readonly takeStoryProof: (storyId: string) => boolean;
   readonly random: () => number;
@@ -141,6 +157,12 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
     const { level, streak, badgesEarned } = result.data;
     return { points: level.value, level: level.level, streakDays: streak.currentDays, badges: badgesEarned };
   },
+  readScore: async () => {
+    if (apiDeps.source === 'fixtures') return null;
+    const result = await fetchEngagementProgress(apiDeps.transport);
+    return result.ok ? result.data.level.engagementScore : null;
+  },
+  resendVerification: () => (apiDeps.source === 'fixtures' ? Promise.resolve(false) : resendOwnVerification(apiDeps.transport)),
   takeStoryProof: storyReturn.take,
   random: Math.random,
   navigate,
@@ -191,9 +213,8 @@ function useRewardFlight(lang: InterfaceLanguage) {
 /** « Étape N sur M » — M compte les étapes de CE parcours : ni celles que le
  * serveur a pré-cochées, ni l'étape 5 tant que rien ne l'appelle. */
 function journeyPositions(context: JourneyContext, current: JourneyStep): { readonly position: number; readonly count: number } {
-  const offersNotifications = context.notificationsAskable && producedSomething(context);
   const offered = ONBOARDING_STEPS.filter(
-    (step) => step === current || (!context.state.prefilledSteps.includes(step) && (step !== 'notifications' || offersNotifications)),
+    (step) => step === current || (!context.state.prefilledSteps.includes(step) && isOffered(step, context)),
   );
   const index = current === 'recap' ? offered.length : offered.indexOf(current) + 1;
   return { position: Math.max(1, index), count: Math.max(1, offered.length) };
@@ -220,10 +241,15 @@ export function OnboardingJourney({
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = resolveViewer({ source: deps.api.source, session });
   const viewerKey = viewer.id ?? 'anonyme';
-  const query = useQuery(onboardingQueryOptions(deps.api), deps.queryClient);
+  /* Relu à CHAQUE ouverture (#7910) : le cache persisté ouvre l'écran tout de
+     suite, mais ce qui a changé ailleurs — une demande acceptée, l'adresse
+     vérifiée — doit rattraper la carte, pas attendre cinq minutes. */
+  const query = useQuery({ ...onboardingQueryOptions(deps.api), refetchOnMount: 'always' }, deps.queryClient);
   const state = query.data;
 
   const [progress, setProgressState] = useState<JourneyProgress>(() => deps.progress.read(viewerKey));
+  const progressNow = useRef(progress);
+  progressNow.current = progress;
   const setProgress = useCallback(
     (update: (current: JourneyProgress) => JourneyProgress) =>
       setProgressState((current) => {
@@ -258,6 +284,35 @@ export function OnboardingJourney({
     [actionDeps],
   );
 
+  /* LE « +N » EST LE CRÉDIT RELU (#7908) : l'écart entre le score servi avant
+     le geste et celui que la relecture voit bouger — élan compris. Rien de lu,
+     rien d'annoncé. */
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  const credit = useCallback(
+    async (before: number | undefined) => {
+      const observed = await observeCredit({
+        readScore: deps.readScore,
+        before,
+        ...(deps.creditDelays === undefined ? {} : { delays: deps.creditDelays }),
+      });
+      if (observed === null || !alive.current) return;
+      setProgress((current) => withScore(current, observed.score));
+      celebrate(observed.credit);
+    },
+    [deps.readScore, deps.creditDelays, setProgress, celebrate],
+  );
+  const syncScore = useCallback(() => {
+    void deps.readScore().then((score) => {
+      if (score !== null && alive.current) setProgress((current) => withScore(current, score));
+    });
+  }, [deps.readScore, setProgress]);
+
   const context = useMemo<JourneyContext | null>(
     () => (state === undefined ? null : { state, progress, notificationsAskable: askable }),
     [state, progress, askable],
@@ -274,7 +329,8 @@ export function OnboardingJourney({
       setStoryPublished(true);
       setProgress((current) => withDone(current, 'story'));
       record('story', 'done');
-      celebrate(stepPoints('story'));
+      /* Le repère d'avant le studio est persisté : l'écart est le crédit de la story. */
+      void credit(progressNow.current.score?.last);
       setStep('story');
       clearSearch();
       return;
@@ -282,6 +338,7 @@ export function OnboardingJourney({
     if (returned !== null) clearSearch();
     const asked = search.get('step');
     if (isStepId(asked)) {
+      syncScore();
       setStep(asked);
       return;
     }
@@ -291,19 +348,25 @@ export function OnboardingJourney({
       deps.navigate(href('list'), true);
       return;
     }
+    syncScore();
     setStep(resumeStep(context));
-  }, [context, step, search, clearSearch, setProgress, record, celebrate, deps]);
+  }, [context, step, search, clearSearch, setProgress, record, credit, syncScore, deps]);
 
   /* LE SERVEUR ARBITRE À CHAQUE RELECTURE, pas une seule fois sur le cache
-     (persisté, parfois vieux d'une heure). Seule une lecture de
-     `GET /me/onboarding` qui ABOUTIT se rejoue contre la carte affichée
-     (`journey.ts § replayServedState`) — jamais nos propres écritures, qui ne
-     disent que ce que ce parcours vient de faire. */
-  const wasFetching = useRef(query.isFetching);
+     (persisté, parfois vieux d'une heure). Chaque état qui ARRIVE dans le
+     cache — une relecture de `GET /me/onboarding`, ou la réponse d'une de nos
+     écritures — se rejoue contre la carte affichée (`journey.ts §
+     replayServedState`) ; ce que CE parcours a écrit y reste sans effet
+     (`ownSteps`). Le signal est l'IDENTITÉ de la donnée (le partage
+     structurel de la requête la garde quand rien n'a changé), jamais la
+     transition « en cours → fini » : une relecture assez rapide pour tenir
+     dans un seul rendu (le retour sur l'onglet après le clic du lien, #7907)
+     ne la montrait jamais. */
+  const replayed = useRef(state);
   useEffect(() => {
-    const fetched = wasFetching.current && !query.isFetching && query.status === 'success';
-    wasFetching.current = query.isFetching;
-    if (!fetched || context === null || step === null || step === 'recap' || leaving.current) return;
+    if (state === replayed.current) return;
+    replayed.current = state;
+    if (query.status !== 'success' || context === null || step === null || step === 'recap' || leaving.current) return;
     const replay = replayServedState({ context, step, ownSteps: recorded.current });
     if (replay === 'stay') return;
     if (replay === 'closed') {
@@ -312,7 +375,7 @@ export function OnboardingJourney({
       return;
     }
     setStep(replay);
-  }, [query.isFetching, query.status, context, step, deps]);
+  }, [state, query.status, context, step, deps]);
 
   const leave = useCallback(
     (path: string) => {
@@ -334,12 +397,37 @@ export function OnboardingJourney({
 
   const reward = useCallback(
     (step: OnboardingStepId) => {
+      const before = progressNow.current.score?.last;
       setProgress((current) => withDone(current, step));
       record(step, 'done');
-      celebrate(stepPoints(step));
+      void credit(before);
     },
-    [setProgress, record, celebrate],
+    [setProgress, record, credit],
   );
+
+  /* LE COURRIEL SE VÉRIFIE AILLEURS (#7907) — dans la boîte, souvent dans un
+     autre onglet. Tant qu'une carte en dépend, chaque retour sur l'écran relit
+     l'état : la relecture qui le dit vérifié fait céder la carte du courriel
+     (`replayServedState`) et rend la carte Story publiable. */
+  const refetch = query.refetch;
+  useEffect(() => {
+    if (step !== 'email' && step !== 'story') return;
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') void refetch();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [step, refetch]);
+
+  /* Le récapitulatif compte les demandes que le SERVEUR dit en attente
+     (#7910) : il les relit en y entrant. */
+  useEffect(() => {
+    if (step === 'recap') void deps.queryClient.refetchQueries({ queryKey: ONBOARDING_QUERY_KEY });
+  }, [step, deps.queryClient]);
 
   if (context === null || state === undefined || step === null) {
     return <OnboardingSkeleton lang={lang} failed={query.isError} onLater={() => deps.navigate(href('list'), true)} />;
@@ -353,6 +441,7 @@ export function OnboardingJourney({
   const secondaryLanguage = account?.regionalLanguage ?? null;
   const displayName = account?.displayName ?? account?.username ?? (viewer.displayName === '' ? (viewer.handle ?? '') : viewer.displayName);
   const avatar = account?.avatar ?? viewer.avatar;
+  const resend: ResendLink = deps.resendVerification;
   const languagesLabel = listIn(lang, [primaryLanguage, ...(secondaryLanguage === null ? [] : [secondaryLanguage])].map((code) => languageNameIn(lang, code)));
 
   return (
@@ -397,11 +486,14 @@ export function OnboardingJourney({
             onDone={() => advance('languages', 'done')}
             onLater={() => advance('languages', 'skipped')}
           />
+        ) : step === 'email' ? (
+          <EmailCard host={host} resend={resend} onLater={() => advance('email', 'skipped')} />
         ) : step === 'global' ? (
           <GlobalCard
             host={host}
             available={state.globalConversationId !== null}
             alreadySent={progress.done.includes('global') || state.prefilledSteps.includes('global')}
+            reward={announcedPoints('global', state)}
             name={displayName}
             languagesLabel={languagesLabel}
             pick={(n) => Math.floor(deps.random() * n)}
@@ -421,6 +513,9 @@ export function OnboardingJourney({
             name={displayName}
             avatar={avatar}
             published={storyPublished || progress.done.includes('story')}
+            reward={announcedPoints('story', state)}
+            canPublish={state.canPublishStory !== false}
+            resend={resend}
             onOpen={() => deps.navigate(href('storyCompose', undefined, { audience: state.storyDefaultVisibility, from: 'onboarding' }))}
             onDone={() => advance('story', 'done')}
             onLater={() => advance('story', 'skipped')}
@@ -430,6 +525,7 @@ export function OnboardingJourney({
             host={host}
             suggestions={state.suggestions}
             alreadySent={progress.friendRequests}
+            reward={FRIENDSHIP_POINTS}
             add={(suggestion) => deps.addFriend(suggestion, viewer.id)}
             onSent={(userId) => setProgress((current) => withFriendRequest(current, userId))}
             onDone={() => advance('friends', 'done')}
@@ -444,7 +540,7 @@ export function OnboardingJourney({
         ) : (
           <RecapCard
             host={host}
-            session={recapOf(progress)}
+            session={recapOf(progress, state)}
             load={deps.loadRecap}
             onExplore={() => leave(state.globalConversationId === null ? href('list') : href('thread', { conversation: state.globalConversationId }))}
             onDone={() => leave(href('list'))}

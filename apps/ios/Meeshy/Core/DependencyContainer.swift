@@ -178,14 +178,17 @@ final class DependencyContainer {
                 )
             case let .deleted(messageId, deletedAt):
                 try await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: true)
-            case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount):
+            case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount, ownerUserId):
                 try await persistence.appendReaction(
                     localId: messageId, reactionId: reactionId, messageId: messageId,
-                    participantId: participantId, emoji: emoji, maxCount: maxCount
+                    participantId: participantId, emoji: emoji, maxCount: maxCount,
+                    ownerUserId: ownerUserId
                 )
-            case let .reactionRemoved(messageId, emoji, participantId):
+            case let .reactionRemoved(messageId, emoji, participantId, ownerUserId, aggregateCount, aggregateParticipantIds):
                 try await persistence.removeReaction(
-                    localId: messageId, emoji: emoji, participantId: participantId
+                    localId: messageId, emoji: emoji, participantId: participantId,
+                    ownerUserId: ownerUserId, aggregateCount: aggregateCount,
+                    aggregateParticipantIds: aggregateParticipantIds
                 )
             case let .consumed(messageId, viewOnceCount):
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)

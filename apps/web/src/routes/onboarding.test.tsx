@@ -1,21 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
-import { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingPatchBody, OnboardingState, OnboardingStepId, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
-
-import type { HttpRequest } from '@/lib/api/http';
-import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
-import { createJourneyProgressStore } from '@/lib/onboarding/progress-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { scriptedTransport } from '@/test-support/scripted-transport';
+import { harness, served, signIn } from '@/test-support/onboarding-harness';
 
-import type { GreetingSend } from './onboarding-cards';
-import { OnboardingJourney, type OnboardingScreenDeps } from './onboarding';
+import { OnboardingJourney } from './onboarding';
 
 /**
  * L'ACCUEIL POST-INSCRIPTION (#7729), MONTÉ — le parcours tel que le lecteur
@@ -43,114 +36,6 @@ afterEach(() => {
   document.documentElement.lang = 'fr';
   sessionStore.getState().clearSession();
 });
-
-const SUGGESTION: OnboardingSuggestion = { id: 'u-aicha', username: 'aicha', displayName: 'Aïcha', avatarUrl: null, languages: ['fr', 'ar'] };
-
-const served = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
-  eligible: true,
-  completedAt: null,
-  seenSteps: [],
-  prefilledSteps: [],
-  globalConversationId: 'g-global',
-  protectedRegime: false,
-  storyDefaultVisibility: 'public',
-  suggestions: [SUGGESTION],
-  ...overrides,
-});
-
-function memoryStorage() {
-  const values = new Map<string, string>();
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      values.set(key, value);
-    },
-    removeItem: (key: string) => {
-      values.delete(key);
-    },
-  };
-}
-
-function harness(
-  options: {
-    readonly state?: OnboardingState;
-    readonly greeting?: GreetingSend;
-    readonly askable?: boolean;
-    readonly confirmed?: readonly OnboardingStepId[];
-    /** Un cache PERSISTÉ vieux d'une heure : l'écran s'ouvre dessus, puis la relecture de `state` arrive quand le témoin la relâche. */
-    readonly staleCache?: OnboardingState;
-    /** L'id de la story que le studio vient VRAIMENT de publier (sa preuve de retour). */
-    readonly publishedStory?: string;
-  } = {},
-) {
-  const state = options.state ?? served();
-  let release: () => void = () => undefined;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const patches: OnboardingPatchBody[] = [];
-  const greetings: { conversationId: string; content: string; language: string }[] = [];
-  const friends: string[] = [];
-  const visits: { path: string; replace: boolean }[] = [];
-  const saves: unknown[] = [];
-  let asked = 0;
-
-  const { transport } = scriptedTransport({});
-  transport.request = (async (request: HttpRequest) => {
-    if (request.method === 'PATCH') {
-      patches.push(request.body as OnboardingPatchBody);
-      return { ok: true, data: state };
-    }
-    if (options.staleCache !== undefined) await held;
-    return { ok: true, data: state };
-  }) as typeof transport.request;
-
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (options.staleCache === undefined) queryClient.setQueryData(ONBOARDING_QUERY_KEY, state);
-  else queryClient.setQueryData(ONBOARDING_QUERY_KEY, options.staleCache, { updatedAt: Date.now() - 60 * 60_000 });
-
-  const progress = createJourneyProgressStore({ storage: memoryStorage() });
-  progress.write('u-maya', { done: options.confirmed ?? [], friendRequests: [] });
-
-  const deps: OnboardingScreenDeps = {
-    api: { source: 'gateway', transport },
-    queryClient,
-    progress,
-    sendGreeting: async (input) => {
-      greetings.push({ conversationId: input.conversationId, content: input.content, language: input.language });
-      return options.greeting ?? 'sent';
-    },
-    addFriend: async (suggestion) => {
-      friends.push(suggestion.id);
-      return 'done';
-    },
-    saveLanguages: async (patch) => {
-      saves.push(patch);
-      return 'saved';
-    },
-    notificationsAskable: () => options.askable ?? true,
-    askNotifications: async () => {
-      asked += 1;
-    },
-    loadRecap: async () => null,
-    takeStoryProof: (storyId) => storyId === options.publishedStory,
-    random: () => 0,
-    navigate: (path, replace = false) => visits.push({ path, replace }),
-  };
-  const arrive = () => act(async () => {
-    release();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  return { deps, patches, greetings, friends, visits, saves, asked: () => asked, arrive };
-}
-
-const signIn = () =>
-  sessionStore.getState().establish({
-    user: { id: 'u-maya', username: 'maya', displayName: 'Maya', systemLanguage: 'fr' },
-    token: 'jwt',
-    sessionToken: 's',
-    expiresIn: 3600,
-  });
 
 /** Le « +N » arrive à la pastille après son vol (850 ms) : on attend qu'il
  * se pose, en temps réel — c'est ce que le lecteur voit. */
@@ -389,7 +274,7 @@ describe('carte 3 — la première story, visibilité servie', () => {
 
   test('au retour d’une publication : +10, et l’adresse est nettoyée', async () => {
     signIn();
-    const { deps } = harness({ publishedStory: 'story-1' });
+    const { deps } = harness({ publishedStory: 'story-1', mark: { baseline: 0, last: 0 }, serverScore: 10 });
     let cleared = 0;
     const host = await mount(
       <OnboardingJourney deps={deps} search={new URLSearchParams('story=story-1')} clearSearch={() => (cleared += 1)} />,

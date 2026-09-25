@@ -35,7 +35,7 @@ import MeeshySDK
 ///
 /// RECHERCHE d'abord parce que c'est le seul onglet qui atteint TOUT ;
 /// FAVORIS et RÉCENTS ensuite parce qu'ils sont les plus courts chemins pour
-/// qui revient ; DYNAMIQUE puis SMILEYS ferment, parce qu'ils sont les deux
+/// qui revient ; PERSONNALISÉS (ex-DYNAMIQUE, 2026-09-25) puis SMILEYS ferment, parce qu'ils sont les deux
 /// seuls qu'on ouvre en SACHANT ce qu'on veut.
 public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
 
@@ -45,11 +45,11 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
     case favorites
     /// Ce qu'il a posé récemment.
     case recents
-    /// Les décorations qui portent une donnée VIVANTE : ses mots, un lieu
-    /// alentour, l'heure, la météo. Elles sont ensemble parce qu'elles
-    /// partagent une propriété que les quatorze autres familles n'ont pas —
-    /// leur contenu n'existe pas avant l'ouverture de la feuille.
-    case dynamic
+    /// Ce que l'auteur fait sien (directive porteur 2026-09-25 : « une tab
+    /// customisée plutôt que dynamique ») : ses propres stickers, puis les
+    /// décorations qui se remplissent de SES données — ses mots, son lieu,
+    /// son heure, sa météo.
+    case custom
     /// Les glyphes du système, par catégorie Unicode.
     case smileys
 
@@ -60,7 +60,7 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         case .search:    return "magnifyingglass"
         case .favorites: return "star.fill"
         case .recents:   return "clock.arrow.circlepath"
-        case .dynamic:   return "bolt.fill"
+        case .custom:    return "paintbrush.pointed.fill"
         case .smileys:   return "face.smiling"
         }
     }
@@ -73,8 +73,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             return String(localized: "sticker.sheet.tab.favorites", defaultValue: "Favoris", bundle: .module)
         case .recents:
             return String(localized: "sticker.sheet.tab.recents", defaultValue: "Récents", bundle: .module)
-        case .dynamic:
-            return String(localized: "sticker.sheet.tab.dynamic", defaultValue: "Dynamique", bundle: .module)
+        case .custom:
+            return String(localized: "sticker.sheet.tab.custom", defaultValue: "Personnalisés", bundle: .module)
         case .smileys:
             return String(localized: "sticker.sheet.tab.smileys", defaultValue: "Smileys", bundle: .module)
         }
@@ -109,15 +109,15 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         switch tab {
         case .smileys:
             return offered.filter { $0 == .emoji }
-        case .dynamic:
-            return dynamicTabs.filter(offered.contains)
+        case .custom:
+            return ([.library] + dynamicTabs).filter(offered.contains)
         case .search:
-            // Tout ce qui n'est ni un smiley ni une donnée vivante — c'est-à-dire
-            // les catalogues figés, plus « Mes stickers ». L'onglet RECHERCHE
+            // Tout ce qui n'est ni un smiley ni personnalisé — c'est-à-dire
+            // les catalogues figés. L'onglet RECHERCHE
             // est le seul qui les atteint, donc il les prend tous : une famille
             // qui n'appartiendrait à aucun onglet serait invisible, et rien ne
             // le dirait.
-            return offered.filter { $0 != .emoji && !dynamicTabs.contains($0) }
+            return offered.filter { $0 != .emoji && $0 != .library && !dynamicTabs.contains($0) }
         case .favorites, .recents:
             return []
         }

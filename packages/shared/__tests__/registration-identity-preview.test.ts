@@ -7,6 +7,7 @@ import {
   pseudoRacine,
   slugDAdresse,
 } from '../utils/registration-identity';
+import { personNamePatternSource } from '../types/api-schemas/auth';
 
 /**
  * LE CONTRAT QUE L'ÉCRAN MONTRE (#6479).
@@ -39,6 +40,37 @@ describe('ce que l’écran peut promettre', () => {
    * slugifiable. `displayNameDepuisEmail` rend `''` — l'écran ne doit donc PAS
    * afficher une promesse vide, mais le repli que la passerelle emploiera.
    */
+  /**
+   * #7912 — l'écran ENVOIE ce nom quand rien n'est tapé, et la passerelle
+   * refuse tout chiffre dans `displayName` (`personNamePatternSource`).
+   * `rcoba2251253@…` rendait « Rcoba2251253 » : inscription refusée, sans
+   * issue. Les chiffres SÉPARENT comme `.`, `-` et `_`.
+   */
+  test.each([
+    ['rcoba2251253@example.com', 'Rcoba'],
+    ['marie.dupont1990@example.com', 'Marie Dupont'],
+    ['jean2luc@example.com', 'Jean Luc'],
+    ['42jean@example.com', 'Jean'],
+  ])('les chiffres de %j ne passent pas dans le nom affiché (%j)', (adresse, attendu) => {
+    expect(displayNameDepuisEmail(adresse)).toBe(attendu);
+  });
+
+  test('une adresse sans aucune lettre ne donne AUCUN nom affiché', () => {
+    expect(displayNameDepuisEmail('20251253@example.com')).toBe('');
+  });
+
+  test('tout nom dérivé satisfait le motif que la passerelle impose', () => {
+    const motif = new RegExp(personNamePatternSource, 'u');
+    const adresses = [
+      'rcoba2251253@example.com', 'a1@example.com', 'jean.dupont@example.com',
+      'x_9_y@example.com', 'jérôme.77@example.com', 'o-brien3@example.com',
+    ];
+    for (const adresse of adresses) {
+      const nom = displayNameDepuisEmail(adresse);
+      if (nom !== '') expect(nom).toMatch(motif);
+    }
+  });
+
   test('une adresse non slugifiable ne donne AUCUN nom affiché', () => {
     expect(displayNameDepuisEmail('@example.com')).toBe('');
   });

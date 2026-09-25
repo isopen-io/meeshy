@@ -30,6 +30,7 @@ function makePrisma(user: Record<string, unknown> | null = {}) {
           blockedUserIds: [],
           onboardingCompletedAt: null,
           onboardingSteps: [],
+          emailVerifiedAt: null,
           ...user,
         };
   return {
@@ -44,8 +45,14 @@ function makePrisma(user: Record<string, unknown> | null = {}) {
     friendRequest: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      count: jest.fn<any>().mockResolvedValue(0),
     },
-    engagementCounter: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    post: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    engagementCounter: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    engagementMilestone: { findMany: jest.fn<any>().mockResolvedValue([]) },
     engagementConversationCredit: { findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as any;
 }
@@ -98,9 +105,30 @@ describe('GET /me/onboarding', () => {
       protectedRegime: true,
       storyDefaultVisibility: 'friends',
       suggestions: [],
+      emailVerified: false,
+      canPublishStory: true,
+      pendingFriendRequests: 0,
+      stepRewards: { global: 14, story: 10, friendship: 7 },
     });
     expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: USER_ID } }));
     expect(res.headers['cache-control']).toBe('private, no-cache');
+    await app.close();
+  });
+
+  it('sert l’état du courriel, la story publiable, les demandes en attente et les points à l’élan courant', async () => {
+    const prisma = makePrisma({ emailVerifiedAt: new Date('2026-09-25T10:00:00.000Z') });
+    prisma.friendRequest.count.mockResolvedValue(2);
+    prisma.post.findFirst.mockResolvedValue({ id: 'story-0' });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+
+    expect(res.json().data).toMatchObject({
+      prefilledSteps: ['email'],
+      emailVerified: true,
+      canPublishStory: true,
+      pendingFriendRequests: 2,
+    });
     await app.close();
   });
 

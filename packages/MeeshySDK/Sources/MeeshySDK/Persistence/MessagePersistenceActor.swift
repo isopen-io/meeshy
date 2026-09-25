@@ -52,7 +52,7 @@ public actor MessagePersistenceActor {
     /// reaction with the right owner. Set by the app at auth time (see
     /// `DependencyContainer`); `nil` until then (cold-start reactions simply
     /// carry no ownership until the next refresh, never the wrong owner).
-    private var currentUserId: String?
+    private(set) var currentUserId: String?
 
     enum WriteOperation: Sendable {
         case reconcileBatch([IncomingMessageData])
@@ -807,51 +807,6 @@ public actor MessagePersistenceActor {
     // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
     // resolves at most one row.
 
-    /// Slack for the `markEdited` ordering guard — see its comment for why a
-    /// strict `<` is unsafe across a GRDB `Date` round-trip.
-    private static let editOrderingTolerance: TimeInterval = 0.05
-
-    public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
-        var affectedConversationId: String?
-        var didApply = false
-        try dbWriter.write { db in
-            guard let existing = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)
-            else { return }
-            // Ordering guard: `message:edited` carries no monotonic sequence, so a
-            // delayed/duplicate socket delivery can arrive after a newer edit was
-            // already applied. Comparing against the stored `editedAt` stops a
-            // stale edit from permanently clobbering the current content.
-            //
-            // A tolerance (rather than a strict `<`) is required: GRDB round-trips
-            // `Date` through a millisecond-precision text column, so re-applying
-            // the exact same in-memory `Date` twice (e.g. an optimistic edit
-            // followed by its own failure rollback, which reuses the same
-            // `editedAt`) can read back a value a fraction of a millisecond off
-            // from what was passed in — enough to misfire a strict comparison.
-            // Genuine out-of-order deliveries differ by network-delay magnitudes
-            // (well beyond this), so the tolerance doesn't weaken the guard.
-            if let currentEditedAt = existing.editedAt,
-               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
-                return
-            }
-            affectedConversationId = existing.conversationId
-            try db.execute(
-                sql: """
-                    UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
-                    updatedAt = ?, changeVersion = changeVersion + 1
-                    WHERE localId = ? OR serverId = ?
-                    """,
-                arguments: [newContent, editedAt, Date(), localId, localId]
-            )
-            didApply = true
-        }
-        if didApply, let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
-    }
-
     /// In-place update of a call system message when its state changes on the
     /// server — the live "Appel … en cours" bubble becoming the terminal
     /// summary ("Appel audio · 04:32", "Appel manqué", …) via a
@@ -900,40 +855,6 @@ public actor MessagePersistenceActor {
             let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
         else { return false }
         return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
-    }
-
-    /// - Parameter sparingOpenedViewOnce: `true` pour une suppression annoncée
-    ///   par le SERVEUR (`message:deleted`) : une VUE UNIQUE n'y devient pas
-    ///   « Message supprimé » mais `(1) · Déjà ouvert`, contenu purgé (#7579) —
-    ///   le serveur la détruit quand tous ses destinataires l'ont ouverte, et
-    ///   ce n'est pas une suppression pour qui la voit passer. Une suppression
-    ///   explicite de l'utilisateur passe `false`.
-    public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false) throws {
-        var affectedConversationId: String?
-        try dbWriter.write { db in
-            guard var record = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return }
-            affectedConversationId = record.conversationId
-            if sparingOpenedViewOnce, record.holdsViewOnce {
-                record.sealAsOpenedViewOnce(at: deletedAt)
-                record.updatedAt = Date()
-                record.changeVersion += 1
-                try record.update(db)
-                return
-            }
-            try db.execute(
-                sql: """
-                    UPDATE messages SET deletedAt = ?, content = NULL,
-                    updatedAt = ?, changeVersion = changeVersion + 1
-                    WHERE localId = ? OR serverId = ?
-                    """,
-                arguments: [deletedAt, Date(), localId, localId]
-            )
-        }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
     }
 
     /// Retirer des messages du stockage local, LIGNES COMPRISES.
@@ -1263,107 +1184,6 @@ public actor MessagePersistenceActor {
         }
     }
 
-
-    /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
-    /// The GRDB change triggers store observation so the view re-renders.
-    /// Appends a reaction row to a message.
-    ///
-    /// `maxCount` is an optional authoritative cap on the number of rows for
-    /// `emoji` (the server's `aggregation.count` from a `reaction:added`
-    /// broadcast). When set, the append is skipped if the message already holds
-    /// `maxCount` rows for that emoji — this stops a server echo of the user's
-    /// OWN reaction (keyed by the resolved `Participant.id`) from double-counting
-    /// on top of the optimistic row (keyed by the `currentUserId` sentinel),
-    /// which made a single tap render as "2". `nil` (the default) keeps the
-    /// legacy unbounded behaviour for the optimistic and rollback write paths.
-    /// `ownerUserId` (le `User.id` de l'auteur, porté par l'écho socket) étend
-    /// la dédup à la ligne optimiste keyée par la sentinelle `currentUserId` :
-    /// sans lui, l'écho (keyé `Participant.id`) ne matchait jamais la ligne
-    /// optimiste (keyée `User.id`) et une seule réaction s'affichait « 2 ».
-    public func appendReaction(localId: String, reactionId: String,
-                                messageId: String, participantId: String?,
-                                emoji: String, maxCount: Int? = nil,
-                                ownerUserId: String? = nil) throws {
-        var affectedConversationId: String?
-        var didMutate = false
-        try dbWriter.write { db in
-            guard var record = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return }
-            affectedConversationId = record.conversationId
-            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
-            // doit PAS être journalisé : on ne décode que s'il y a des octets.
-            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
-                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
-                                          field: "reactionsJson", id: localId)
-            } ?? []
-            let alreadyExists = reactions.contains {
-                guard $0.emoji == emoji else { return false }
-                if $0.participantId == participantId { return true }
-                // Ligne optimiste keyée par le User.id de l'auteur : même
-                // identité humaine que l'écho serveur keyé Participant.id.
-                if let ownerUserId, $0.participantId == ownerUserId { return true }
-                return false
-            }
-            guard !alreadyExists else { return }
-            if let cap = maxCount {
-                let currentEmojiCount = reactions.filter { $0.emoji == emoji }.count
-                guard currentEmojiCount < cap else { return }
-            }
-            let reaction = MeeshyReaction(id: reactionId, messageId: messageId,
-                                          participantId: participantId, emoji: emoji)
-            reactions.append(reaction)
-            record.reactionsJson = try JSONEncoder().encode(reactions)
-            record.reactionCount = reactions.count
-            record.updatedAt = Date()
-            record.changeVersion += 1
-            try record.update(db)
-            didMutate = true
-        }
-        if didMutate, let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
-    }
-
-    /// Remove a reaction from a persisted message, matched by emoji+participantId.
-    /// The GRDB change triggers store observation so the view re-renders.
-    /// `ownerUserId` : même extension d'identité que `appendReaction` — l'écho
-    /// de suppression (keyé `Participant.id`) doit aussi effacer une ligne
-    /// optimiste keyée `User.id`, sinon un doublon historique devient collant.
-    public func removeReaction(localId: String, emoji: String, participantId: String?,
-                               ownerUserId: String? = nil) throws {
-        var affectedConversationId: String?
-        var didMutate = false
-        try dbWriter.write { db in
-            guard var record = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return }
-            affectedConversationId = record.conversationId
-            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
-            // doit PAS être journalisé : on ne décode que s'il y a des octets.
-            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
-                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
-                                          field: "reactionsJson", id: localId)
-            } ?? []
-            let countBefore = reactions.count
-            reactions.removeAll {
-                guard $0.emoji == emoji else { return false }
-                if $0.participantId == participantId { return true }
-                if let ownerUserId, $0.participantId == ownerUserId { return true }
-                return false
-            }
-            guard reactions.count != countBefore else { return }
-            record.reactionsJson = try JSONEncoder().encode(reactions)
-            record.reactionCount = reactions.count
-            record.updatedAt = Date()
-            record.changeVersion += 1
-            try record.update(db)
-            didMutate = true
-        }
-        if didMutate, let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
-    }
 
     /// Merge a server-pushed attachment enrichment (transcription and/or
     /// audio translations) into the persisted `attachmentsJson` blob.
@@ -1716,7 +1536,8 @@ public actor MessagePersistenceActor {
 
                 let ingestedReply = Self.ingestedReply(
                     for: api, currentUserId: currentUserId,
-                    preferredLanguages: preferredLanguages, encoder: encoder
+                    preferredLanguages: preferredLanguages, encoder: encoder,
+                    quotedDeletedAt: try Self.deletedAtOfQuotedMessage(api.replyToId, in: db)
                 )
 
                 let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in

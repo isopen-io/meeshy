@@ -81,6 +81,9 @@ const threadMessageSelect = {
     select: {
       id: true,
       content: true,
+      // #7927 — un parent supprimé garde `content` en base : sans ce champ, la
+      // citation le resservirait.
+      deletedAt: true,
       originalLanguage: true,
       createdAt: true,
       senderId: true,

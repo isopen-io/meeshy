@@ -51,38 +51,13 @@ extension UniversalComposerBar {
     /// l'état où le champ n'a rien à montrer.
     static let sendSlotWidth: CGFloat = 44
     /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
-    static let quickEmojiSlotWidth: CGFloat = 96
+    static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.width
 
-    /// **La cadence de la rotation des cadres à mots**, en secondes (#6537).
-    ///
-    /// Assez lente pour qu'on ait le temps de reconnaître un cadre et de le
-    /// taper — assez vive pour qu'on comprenne, en regardant la barre, que la
-    /// fonction en propose plusieurs. En deçà de deux secondes, le tap devient
-    /// une loterie : on vise ce qu'on voit, et on envoie le suivant.
-    static let stickerRotationPeriod: TimeInterval = 3
-
-    /// **Le cadre à mots servi à la pastille** — `nil` quand l'hôte ne câble
-    /// pas l'envoi de sticker ou quand le catalogue ne rend rien. C'est ce
-    /// `nil` qui fait retomber `ComposerActionSlot` sur le bouton d'envoi :
-    /// une pastille sans destination ne se monte pas (loi 4).
-    var textStickerTemplate: StickerTemplate? {
-        guard onSendTextSticker != nil else { return nil }
-        // Le magasin est LU, jamais observé : la barre se re-rend déjà à chaque
-        // frappe, et un `@ObservedObject` sur un singleton global depuis une
-        // feuille rouvrirait exactement les re-rendus que le § « Zero
-        // Unnecessary Re-render » ferme.
-        let tour = ComposerTextStickerChoice.rotation(
-            recents: StickerUsageStore.shared.recents,
-            favorites: StickerUsageStore.shared.favorites,
-            catalog: StickerTemplateCatalog.templates(family: .text)
-        )
-        guard !tour.isEmpty else { return nil }
-        // LE CADRE AFFICHÉ EST CELUI QU'UN TAP ENVOIE (#6537). Une seule
-        // propriété calculée sert les deux : la vue la rend, et la fermeture
-        // d'envoi capture sa valeur au même instant. Deux sources — l'une pour
-        // le dessin, l'autre pour le geste — auraient fini par diverger d'un
-        // tour, et l'auteur aurait envoyé le cadre qu'il venait de voir partir.
-        return tour[stickerRotationStep % tour.count]
+    /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
+    /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
+    /// pose pas (loi 4).
+    var offersTextStickers: Bool {
+        onSendTextSticker != nil && hasText && !isEditMode
     }
 
     /// Ce que l'emplacement de 44 points MONTRE — la règle est dans
@@ -93,11 +68,7 @@ extension UniversalComposerBar {
             hasText: hasText,
             hasOtherContent: effectiveIsRecording || !allAttachments.isEmpty || externalHasContent,
             isEditMode: isEditMode,
-            isSending: externalIsSending,
-            keyboardIsUp: isFocused,
-            offersQuickEmoji: showEmoji,
-            offersTextSticker: textStickerTemplate != nil,
-            exceedsWordLimit: ComposerActionSlot.exceedsTextStickerLimit(text)
+            offersQuickEmoji: showEmoji
         )
     }
 
@@ -114,16 +85,6 @@ extension UniversalComposerBar {
             if showsQuickEmoji {
                 quickEmojiButtons
                     .transition(tourbillonTransition)
-            } else if slot == .textSticker, let gabarit = textStickerTemplate {
-                ComposerTextStickerButton(
-                    template: gabarit,
-                    text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                    accentColor: servedAccentHex,
-                    isDark: style == .dark,
-                    onSend: { sendTextSticker(gabarit) },
-                    onBrowse: { showTextStickerSheet = true }
-                )
-                .transition(tourbillonTransition)
             } else {
                 sendButton
                     .opacity(isReady ? 1.0 : 0)
@@ -135,6 +96,17 @@ extension UniversalComposerBar {
         .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+        // La feuille vit sur l'EMPLACEMENT, toujours monté, et pas sur la
+        // grille : envoyer vide le champ puis remplit l'emplacement d'autre
+        // chose — une feuille posée sur la grille disparaîtrait avec elle.
+        .sheet(isPresented: $showQuickEmojiPicker) {
+            EmojiKeyboardPanel(style: isDark ? .dark : .light) { emoji in
+                showQuickEmojiPicker = false
+                sendQuickEmoji(emoji)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // ========================================================================
@@ -144,10 +116,8 @@ extension UniversalComposerBar {
     /// **Le texte part DESSINÉ dans le cadre, et le champ se vide.**
     ///
     /// L'usage est noté ici, au moment de l'envoi, dans le MÊME magasin que la
-    /// palette (`StickerUsageStore.noteUse`) : c'est ce qui rend la pastille
-    /// dynamique au tour suivant (`ComposerTextStickerChoice`). L'écrire
-    /// ailleurs aurait fait diverger le cadre que la pastille montre de celui
-    /// que l'auteur vient d'envoyer.
+    /// palette (`StickerUsageStore.noteUse`) : c'est ce qui met ce cadre en
+    /// tête de la feuille au prochain appui long (`ComposerTextStickerChoice`).
     ///
     /// Le champ se vide SANS attendre l'hôte : contrairement à `handleSend`,
     /// rien ici ne peut être refusé plus loin — le texte est déjà rendu dans
@@ -214,27 +184,48 @@ extension UniversalComposerBar {
     private static let quickSendDefaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
 
     private var quickSendEmojis: [String] {
-        EmojiUsageTracker.topEmojis(count: 2, defaults: Self.quickSendDefaultEmojis)
+        EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count, defaults: Self.quickSendDefaultEmojis)
     }
 
     @ViewBuilder
     private var quickEmojiButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(quickSendEmojis, id: \.self) { emoji in
-                Button {
-                    sendQuickEmoji(emoji)
-                } label: {
-                    Text(emoji)
-                        .font(.system(size: 24))
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(mutedColor.opacity(0.12)))
+        VStack(spacing: QuickEmojiGrid.spacing) {
+            ForEach(Array(QuickEmojiGrid.rows(quickSendEmojis).enumerated()), id: \.offset) { _, rangée in
+                HStack(spacing: QuickEmojiGrid.spacing) {
+                    ForEach(rangée, id: \.self) { emoji in
+                        Button {
+                            sendQuickEmoji(emoji)
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 15))
+                                .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        // L'appui long ouvre la feuille des emojis : l'emoji
+                        // choisi part directement (#7931). En
+                        // `simultaneousGesture` pour ne pas manger le tap.
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                                HapticFeedback.medium()
+                                showQuickEmojiPicker = true
+                            }
+                        )
+                        .accessibilityLabel(
+                            String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
+                        )
+                        .accessibilityAction(named: Text(String(localized: "composer.quickEmoji.more",
+                                                                defaultValue: "Choisir un autre emoji",
+                                                                bundle: .main))) {
+                            showQuickEmojiPicker = true
+                        }
+                        .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
+                    }
                 }
-                .accessibilityLabel(
-                    String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
-                )
-                .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
             }
         }
+        .frame(width: QuickEmojiGrid.width, height: 44)
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
@@ -317,6 +308,23 @@ extension UniversalComposerBar {
             .scaleEffect(sendBounce ? 1.2 : 1)
         }
         .frame(width: 44, height: 44)
+        // Les cadres à mots de #5326, à un appui long du bouton d'envoi
+        // (directive porteur 2026-09-25). En `simultaneousGesture` : enchaîné
+        // avec `.onLongPressGesture`, il mangerait le tap sur certaines
+        // versions d'iOS — le geste le plus fréquent paierait pour le plus rare.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                guard offersTextStickers else { return }
+                HapticFeedback.medium()
+                showTextStickerSheet = true
+            }
+        )
+        .accessibilityAction(named: Text(String(localized: "composer.textSticker.browse",
+                                                defaultValue: "Choisir un autre cadre",
+                                                bundle: .main))) {
+            guard offersTextStickers else { return }
+            showTextStickerSheet = true
+        }
         .accessibilityLabel(isEditMode
             ? String(localized: "composer.send.editLabel", defaultValue: "Enregistrer les modifications", bundle: .main)
             : String(localized: "composer.send.label", defaultValue: "Envoyer le message", bundle: .main))

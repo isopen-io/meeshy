@@ -1,6 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { calculateAge } from '@meeshy/shared/utils/age';
+import { ELAN_WINDOW_DAYS } from '@meeshy/shared/utils/engagement-elan';
 import {
+  ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_MAX_SUGGESTIONS,
   ONBOARDING_START_AT,
   ONBOARDING_STEP_IDS,
@@ -10,8 +12,11 @@ import {
   type OnboardingPatchBody,
   type OnboardingState,
   type OnboardingStepId,
+  type OnboardingStepRewards,
   type OnboardingSuggestion,
 } from '@meeshy/shared/types/onboarding';
+import { hasAuthoredStory, storyPublishable } from '../posts/firstStory';
+import { elanInputOf, onboardingStepRewards } from './onboardingRewards';
 
 /**
  * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
@@ -117,6 +122,7 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
+  emailVerifiedAt: true,
 } as const;
 
 const CANDIDATE_SELECT = {
@@ -141,11 +147,20 @@ type UserStateRow = {
   blockedUserIds: string[] | null;
   onboardingCompletedAt: Date | null;
   onboardingSteps: string[] | null;
+  emailVerifiedAt: Date | null;
 };
 
 type OnboardingPrisma = Pick<
   PrismaClient,
-  'user' | 'conversation' | 'message' | 'participant' | 'friendRequest' | 'engagementCounter' | 'engagementConversationCredit'
+  | 'user'
+  | 'conversation'
+  | 'message'
+  | 'participant'
+  | 'friendRequest'
+  | 'post'
+  | 'engagementCounter'
+  | 'engagementConversationCredit'
+  | 'engagementMilestone'
 >;
 
 const languagesOf = (row: { systemLanguage: string; regionalLanguage: string | null }): string[] =>
@@ -177,12 +192,16 @@ export class OnboardingService {
     const completedAt = window === 'expired' ? await this.closeExpired(user.id, now) : user.onboardingCompletedAt;
     const ageClass = ageClassOf(user.birthDate, now);
     const protectedRegime = ageClass !== 'adult';
+    const emailVerified = user.emailVerifiedAt !== null;
     const globalConversationId = await this.globalConversationId();
-    const [prefilledSteps, suggestions] = await Promise.all([
-      this.prefilledSteps(user.id, globalConversationId),
+    const [prefilledSteps, suggestions, storyAuthored, pendingFriendRequests, stepRewards] = await Promise.all([
+      this.prefilledSteps(user.id, globalConversationId, emailVerified),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
+      emailVerified ? Promise.resolve(false) : hasAuthoredStory(this.prisma, user.id),
+      this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
+      this.stepRewards(user.id, now),
     ]);
     return {
       eligible: window === 'open',
@@ -193,7 +212,30 @@ export class OnboardingService {
       protectedRegime,
       storyDefaultVisibility: protectedRegime ? 'friends' : 'public',
       suggestions,
+      emailVerified,
+      canPublishStory: storyPublishable({ emailVerified, hasAuthoredStory: storyAuthored }),
+      pendingFriendRequests,
+      stepRewards,
     };
+  }
+
+  /**
+   * Les points de chaque geste à l'élan COURANT (#7908) : les compteurs
+   * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
+   * lectures indexées (`[userId]`, `[userId, milestoneType]`).
+   */
+  private async stepRewards(userId: string, now: Date): Promise<OnboardingStepRewards> {
+    const [counters, milestones] = await Promise.all([
+      this.prisma.engagementCounter.findMany({
+        where: { userId, updatedAt: { gte: new Date(now.getTime() - ELAN_WINDOW_DAYS * DAY_MS) } },
+        select: { axisKey: true, updatedAt: true },
+      }),
+      this.prisma.engagementMilestone.findMany({
+        where: { userId, milestoneType: { in: ['achievement', 'badge'] } },
+        select: { milestoneType: true, milestoneKey: true },
+      }),
+    ]);
+    return onboardingStepRewards(elanInputOf({ counters, milestones, now }));
   }
 
   private async closeExpired(userId: string, now: Date): Promise<Date> {
@@ -214,7 +256,11 @@ export class OnboardingService {
    * déjà crédité dans Global (quel qu'en soit l'axe — avant #7739 il tombait
    * sur `conversation.private`), une amitié acceptée.
    */
-  private async prefilledSteps(userId: string, globalConversationId: string | null): Promise<OnboardingStepId[]> {
+  private async prefilledSteps(
+    userId: string,
+    globalConversationId: string | null,
+    emailVerified: boolean,
+  ): Promise<OnboardingStepId[]> {
     const [storyCounter, globalCredit, friendship] = await Promise.all([
       this.prisma.engagementCounter.findUnique({
         where: { userId_axisKey: { userId, axisKey: 'content.story' } },
@@ -232,6 +278,7 @@ export class OnboardingService {
       }),
     ]);
     const done = new Set<OnboardingStepId>([
+      ...(emailVerified ? (['email'] as const) : []),
       ...(globalCredit ? (['global'] as const) : []),
       ...((storyCounter?.count ?? 0) > 0 ? (['story'] as const) : []),
       ...(friendship ? (['friends'] as const) : []),
@@ -330,7 +377,8 @@ export function nextOnboardingWrite(
   const current = (user.onboardingSteps ?? []).filter(isOnboardingStepId);
   const steps = addOnboardingStep(current, body.step);
   const stepsChanged = steps.length !== current.length || (user.onboardingSteps ?? []).length !== current.length;
-  const completes = steps.length === ONBOARDING_STEP_IDS.length && !user.onboardingCompletedAt;
+  const completes =
+    ONBOARDING_COMPLETION_STEP_IDS.every((id) => steps.includes(id)) && !user.onboardingCompletedAt;
   if (!stepsChanged && !completes) return null;
   return {
     ...(stepsChanged ? { onboardingSteps: steps } : {}),
