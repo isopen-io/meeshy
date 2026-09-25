@@ -1197,12 +1197,6 @@ struct EmojiUsageTracker {
         UserDefaults.standard.set(counts, forKey: key)
     }
 
-    static func sortedEmojis(from emojis: [String]) -> [String] {
-        let counts = getCounts()
-        if counts.isEmpty { return emojis }
-        return emojis.sorted { (counts[$0] ?? 0) > (counts[$1] ?? 0) }
-    }
-
     static func topEmojis(count: Int, defaults: [String]) -> [String] {
         let counts = getCounts()
 

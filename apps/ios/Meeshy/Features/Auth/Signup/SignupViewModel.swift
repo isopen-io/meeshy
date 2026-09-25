@@ -221,7 +221,6 @@ final class SignupViewModel: ObservableObject {
     static let emailTakenCode = "EMAIL_TAKEN"
     static let usernameTakenCode = "USERNAME_TAKEN"
     static let phoneInvalidCode = "PHONE_INVALID"
-    static let validationErrorCode = "VALIDATION_ERROR"
 
     /// Le champ SERVEUR → la saisie qui le porte à l'écran.
     ///

@@ -2431,10 +2431,6 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
-    func refreshStoriesPrefetch() {
-        prefetchRecentStories()
-    }
-
     /// Called when app returns to foreground — refresh stories if stale.
     /// `isCacheValid` means "we fetched within the last `cacheTTL`
     /// (30s)" — i.e. the useful case is precisely when it's FALSE (a long

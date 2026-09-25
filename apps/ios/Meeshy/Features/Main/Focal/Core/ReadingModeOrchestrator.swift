@@ -488,13 +488,6 @@ nonisolated public enum ReadingModeOrchestrator {
         func probe(conversationType: ConversationType) -> Bool
     }
 
-    /// Implémentation d'aujourd'hui : aucun appareil n'est jamais capable —
-    /// miroir de `neverCapableProbe`.
-    nonisolated public struct NeverCapableProbe: AssistCapabilityProbing {
-        public init() {}
-        public func probe(conversationType: ConversationType) -> Bool { false }
-    }
-
     /// Cascade de confidentialité de l'assistance — agent local (rang 1) →
     /// `services/agent` (rang 2) → pont déterministe (rang 3, plancher
     /// permanent). Miroir de `resolveAssistTier`.

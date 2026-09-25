@@ -402,25 +402,6 @@ final class WidgetDataManager: NotificationWidgetSink {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    // MARK: - Legacy shim (kept for callers still using the old API)
-
-    func updateConversations(_ conversations: [MeeshyConversation]) {
-        publishConversations(conversations)
-        publishFavoriteContacts(conversations)
-        let totalUnread = conversations.reduce(0) { $0 + $1.userState.unreadCount }
-        publishUnreadCount(totalUnread)
-        reloadTimelines()
-    }
-
-    func updateFavoriteContacts(_ conversations: [MeeshyConversation]) {
-        publishFavoriteContacts(conversations)
-    }
-
-    func updateUnreadCount(_ count: Int) {
-        publishUnreadCount(count)
-        reloadTimelines()
-    }
-
     // MARK: - Private
 
     /// Présence d'un pair, temps réel d'abord, horodatage REST ensuite.

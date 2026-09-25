@@ -187,7 +187,6 @@ public final class MessageStore: ObservableObject {
     /// Number of messages fetched on initial load (no anchor). Once the user
     /// scrolls and an anchor is set, the window grows dynamically without cap.
     static let initialWindowSize = 200
-    static let prefetchThreshold = 30
 
     /// Plafond de la relecture ANCRÉE en temps réel (#4943, D-RT-02). Après
     /// une remontée profonde du fil, la fenêtre `.latest` ancrée n'avait
@@ -216,7 +215,6 @@ public final class MessageStore: ObservableObject {
 
     @Published private(set) var messages: [MessageRecord] = []
     @Published private(set) var sections: [MessageSection] = []
-    @Published private(set) var unreadBelowCount: Int = 0
     var currentVisibleMessageIds: Set<String> = []
     var isUserScrolling = false
 

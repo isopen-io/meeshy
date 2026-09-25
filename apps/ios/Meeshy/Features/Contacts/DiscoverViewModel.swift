@@ -205,25 +205,6 @@ final class DiscoverViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Accept Received Request
-
-    func acceptReceivedRequest(from userId: String) async {
-        let status = cache.status(for: userId)
-        guard case .pendingReceived(let requestId) = status else { return }
-        cache.didAcceptRequest(from: userId)
-        objectWillChange.send()
-        HapticFeedback.success()
-        do {
-            _ = try await friendService.respond(requestId: requestId, accepted: true)
-            FeedbackToastManager.shared.showSuccess(String(localized: "contacts.discover.accept.success", defaultValue: "Connexion acceptée", bundle: .main))
-        } catch {
-            cache.rollbackAccept(senderId: userId, requestId: requestId)
-            objectWillChange.send()
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.accept.error", defaultValue: "Impossible d'accepter", bundle: .main))
-        }
-    }
-
     // MARK: - Email Invitation
 
     func sendEmailInvitation() async {

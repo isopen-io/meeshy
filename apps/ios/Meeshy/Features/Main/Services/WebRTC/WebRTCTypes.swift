@@ -40,11 +40,6 @@ struct IceServer: Sendable {
     ]
 }
 
-struct MediaTracks: Sendable {
-    let audioEnabled: Bool
-    let videoEnabled: Bool
-}
-
 enum CallMediaType: Sendable {
     case audioOnly
     case audioVideo
@@ -1182,7 +1177,6 @@ nonisolated enum QualityThresholds {
     /// are NOT debounced (terminal/decisive).
     static let disconnectDebounceSeconds: TimeInterval = 3.5
 
-    static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
     /// Frame-rate floor applied when `VideoQualityLevel.critical.targetFPS == 0`.

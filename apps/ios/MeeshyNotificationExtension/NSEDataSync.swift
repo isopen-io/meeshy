@@ -226,27 +226,6 @@ nonisolated enum NSEDataSync {
         }
     }
 
-    /// Called by the main app on foreground resume to consume pending messages.
-    /// Returns array of (conversationId, messageJSON) tuples.
-    static func consumePendingMessages() -> [(conversationId: String, data: Data)] {
-        guard let dir = pendingDirectory() else { return [] }
-
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-            return []
-        }
-
-        var results: [(String, Data)] = []
-        for file in files where file.pathExtension == "json" {
-            let name = file.deletingPathExtension().lastPathComponent
-            let parts = name.split(separator: "_", maxSplits: 1)
-            guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
-            results.append((String(parts[0]), data))
-            nseRemoveFile(file, context: "consumed staged message")
-        }
-        return results
-    }
-
     private static func pendingPostsDirectory() -> URL? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
