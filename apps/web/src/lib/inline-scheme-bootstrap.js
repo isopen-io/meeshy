@@ -28,6 +28,12 @@ export const SCHEME_KEY = 'meeshy.scheme';
  * si rien n'est stocké, et ne lève jamais (mode privé, stockage refusé — le
  * schéma sombre du HTML reste alors, sans qu'aucun consommateur ait à le
  * savoir).
+ *
+ * Il allume aussi la meta `theme-color` du schéma peint et éteint l'autre,
+ * même règle que `syncBrowserBar` (scheme.ts) : sans cela, la barre du
+ * navigateur suit le SYSTÈME jusqu'à l'arrivée de `main.tsx`, plusieurs
+ * secondes en 3G, là où la coque Android règle la sienne presque aussitôt
+ * (#7970).
  */
 export const INLINE_SCHEME_BOOTSTRAP =
   `(function(){try{` +
@@ -35,4 +41,7 @@ export const INLINE_SCHEME_BOOTSTRAP =
   `var l=c?c==='light':window.matchMedia('(prefers-color-scheme: light)').matches;` +
   `document.documentElement.classList.toggle('light',l);` +
   `document.documentElement.classList.toggle('dark',!l);` +
+  `var s=l?'light':'dark';` +
+  `document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach(function(m){` +
+  `m.media=m.getAttribute('data-scheme')===s?'all':'not all';});` +
   `}catch(e){}})();`;
