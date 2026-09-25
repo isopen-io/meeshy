@@ -17,12 +17,14 @@
  *
  * CE QU'IL VÉRIFIE : chaque permission de `REQUIRED_PERMISSIONS` figure
  * exactement une fois dans `apps/web/android/app/src/main/AndroidManifest.xml`
- * sous forme d'un `<uses-permission android:name="…" />`. Un manifeste
- * absent, illisible, ou une permission manquante fait échouer ce gate avec
- * le NOM de la permission manquante — jamais un message générique.
+ * sous forme d'un `<uses-permission android:name="…" />` — pas zéro, pas deux,
+ * jamais en commentaire. Un manifeste absent, illisible, ou une permission
+ * manquante / dupliquée / commentée fait échouer ce gate avec le NOM de la
+ * permission en défaut — jamais un message générique.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
@@ -34,18 +36,69 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * `MODIFY_AUDIO_SETTINGS`) sont déjà posées (#5668) et restent gardées ici
  * pour que ce témoin soit la référence UNIQUE des permissions de la coque.
  */
-const REQUIRED_PERMISSIONS = [
+export const REQUIRED_PERMISSIONS = [
   'android.permission.INTERNET',
   'android.permission.RECORD_AUDIO',
   'android.permission.MODIFY_AUDIO_SETTINGS',
   'android.permission.ACCESS_NETWORK_STATE',
 ];
 
-function permissionPattern(name) {
-  return new RegExp(
-    `<uses-permission\\s+android:name="${name.replace(/\./g, '\\.')}"\\s*/>`,
-  );
+/**
+ * Ôte les commentaires XML du manifeste — une ligne commentée ne doit pas
+ * être comptée comme une déclaration valide.
+ */
+function stripXmlComments(xml) {
+  return xml.replace(/<!--[\s\S]*?-->/g, '');
 }
+
+/**
+ * Extrait toutes les occurrences d'une permission dans l'XML (commentaires ôtés).
+ * Reconnaît les attributs dans n'importe quel ordre et les guillemets simple/double.
+ */
+function declaredPermissions(xml) {
+  const cleaned = stripXmlComments(xml);
+  const matches = [...cleaned.matchAll(
+    /<uses-permission\b[^>]*\bandroid:name\s*=\s*["']([^"']+)["'][^>]*\/?>/gi,
+  )];
+  return matches.map((m) => m[1]);
+}
+
+/**
+ * Juge si chaque permission requise est déclarée exactement une fois.
+ * Retourne un tableau des violations : { permission, count }.
+ * Un count !== 1 est une violation (0 = absent, ≥2 = dupliqué).
+ */
+export const auditManifestPermissions = ({ manifest, required = REQUIRED_PERMISSIONS }) => {
+  return required
+    .map((permission) => ({
+      permission,
+      count: declaredPermissions(manifest).filter((n) => n === permission).length,
+    }))
+    .filter(({ count }) => count !== 1);
+};
+
+/**
+ * Compose le message d'erreur du gate.
+ * Format : une ligne par violation, nommant la permission, son count,
+ * et le chemin du manifeste.
+ */
+export const formatViolations = ({ manifestPath, violations }) => {
+  if (violations.length === 0) {
+    return '';
+  }
+
+  const lines = violations.map(({ permission, count }) => {
+    if (count === 0) {
+      return `  • ${permission} — manquante, ajouter <uses-permission android:name="${permission}" />`;
+    }
+    return `  • ${permission} — déclarée ${count} fois, n'en garder qu'une (cf. 996e392937)`;
+  });
+
+  return [
+    `check-android-manifest: permission(s) manquante(s) ou dupliquée(s) dans ${manifestPath} :`,
+    ...lines,
+  ].join('\n');
+};
 
 function main() {
   if (!existsSync(MANIFEST_PATH)) {
@@ -56,13 +109,10 @@ function main() {
   }
 
   const manifest = readFileSync(MANIFEST_PATH, 'utf8');
-  const missing = REQUIRED_PERMISSIONS.filter((name) => !permissionPattern(name).test(manifest));
+  const violations = auditManifestPermissions({ manifest });
 
-  if (missing.length > 0) {
-    throw new Error(
-      `check-android-manifest: permission(s) manquante(s) dans ${MANIFEST_PATH} : ` +
-        `${missing.join(', ')} — ajouter <uses-permission android:name="…" /> pour chacune.`,
-    );
+  if (violations.length > 0) {
+    throw new Error(formatViolations({ manifestPath: MANIFEST_PATH, violations }));
   }
 
   console.log(
@@ -70,4 +120,8 @@ function main() {
   );
 }
 
-main();
+// N'exécute main() que si ce module est lancé directement,
+// pas s'il est importé par un test.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

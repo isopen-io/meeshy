@@ -67,6 +67,7 @@
     "check:shell-dist": "node scripts/check-shell-dist.mjs",
     "check:gateway-build": "node scripts/check-gateway-build.mjs",
     "check:capacitor-config": "node scripts/check-capacitor-config.mjs",
+    "check:android-manifest": "node scripts/check-android-manifest.mjs",
     "check:api-source": "node scripts/check-api-source.mjs",
     "check:sw-api-cache": "node scripts/check-sw-api-cache.mjs",
     "check:push-target-parity": "node scripts/check-push-target-parity.mjs",
