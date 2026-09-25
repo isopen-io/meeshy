@@ -69,6 +69,14 @@ describe('decodeAdminAnonymousOne', () => {
     expect(fiche?.messageCount).toBe(12);
   });
 
+  test('lit la forme SERVIE, à plat, et le lien de partage par lequel l’anonyme est entré', () => {
+    const fiche = decodeAdminAnonymousOne(
+      ligne({ shareLink: { id: 'l1', name: 'Invitation salon', isActive: false, expiresAt: null, createdAt: '2026-09-01T00:00:00Z' } }),
+    );
+    expect(fiche?.shareLink).toEqual({ name: 'Invitation salon', isActive: false });
+    expect(decodeAdminAnonymousOne(ligne())?.shareLink).toBeNull();
+  });
+
   test('une charge sans identifiant ne produit pas de fiche', () => {
     expect(decodeAdminAnonymousOne({})).toBeNull();
   });

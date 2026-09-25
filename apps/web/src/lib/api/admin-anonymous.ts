@@ -38,6 +38,8 @@ export type AdminAnonymousPage = {
 
 export type AdminAnonymousOne = AdminAnonymousRow & {
   readonly permissions: readonly { readonly key: string; readonly granted: boolean }[];
+  /** Le lien par lequel il est entré — son nom et son état, jamais ses clés de jointure. */
+  readonly shareLink: { readonly name: string; readonly isActive: boolean } | null;
 };
 
 const dateOuNull = (valeur: unknown): string | null => (typeof valeur === 'string' && valeur !== '' ? valeur : null);
@@ -83,7 +85,9 @@ export function decodeAdminAnonymousOne(raw: unknown): AdminAnonymousOne | null 
   const permissions = Object.entries(asRecord(asRecord(source)?.permissions) ?? {})
     .filter((entree): entree is [string, boolean] => typeof entree[1] === 'boolean')
     .map(([key, granted]) => ({ key, granted }));
-  return { ...ligne, permissions };
+  const lien = asRecord(asRecord(source)?.shareLink);
+  const shareLink = lien === null || typeof lien.id !== 'string' ? null : { name: asText(lien.name) || '—', isActive: lien.isActive !== false };
+  return { ...ligne, permissions, shareLink };
 }
 
 export const adminAnonymousQueryKey = (adresse: string) => ['admin', 'anonymous', adresse] as const;
