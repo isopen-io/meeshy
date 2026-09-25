@@ -140,7 +140,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
             manager.sessionProfile = .content
-            manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
+            manager.playbackPermissionGuard = { !CallManagerHost.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()
         wireAuthLogoutHook()
@@ -156,7 +156,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         current: QueuedAudio, tail: [QueuedAudio],
         conversationName: String, conversationArtworkURL: String?
     ) {
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("play() ignored: a CallKit call is active")
             return
         }
@@ -175,7 +175,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// sélecteur de langue du plein écran route ici pour que la carte système
     /// et l'enchaînement survivent au changement de langue.
     public func playVariant(urlString: String) {
-        guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
         guard activeContext != nil, !urlString.isEmpty, let head = queue.first else { return }
         // Rejoue la tête avec la nouvelle URL — SANS ça, tout chemin qui
         // rejoue `queue.first.fileUrl` (ex: `resumeAfterSystemCall()` via
@@ -244,7 +244,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// `currentName`/`currentArtwork` ne sont JAMAIS touchés ici — c'est ce
     /// qui garde le titre de conversation stable pendant la navigation.
     public func playKeepingQueue(_ queued: QueuedAudio) {
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("playKeepingQueue() ignored: a CallKit call is active")
             return
         }
@@ -265,7 +265,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     public func togglePlayPause() {
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
         }
@@ -289,7 +289,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // garde, un tap « suivant » sur la carte Control Center périmée pendant
         // un appel DÉTRUISAIT la file — les autres transports étaient gardés,
         // celui-ci ne l'était pas.
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("playNext() ignored: a CallKit call is active")
             return
         }
@@ -393,7 +393,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         case .interruptionEndedShouldResume:
             guard wasPlayingBeforeInterruption else { return }
             wasPlayingBeforeInterruption = false
-            guard !CallManager.shared.isCallActiveForAudioGuard else { return }
+            guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
             engine.resumeFromInterruption()
         case .interruptionEndedShouldNotResume:
             wasPlayingBeforeInterruption = false
@@ -435,7 +435,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// it pops the played-history stack and re-heads the prior track. With no
     /// history it falls back to restarting the current track from 0.
     public func playPrevious() {
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("playPrevious() ignored: a CallKit call is active")
             return
         }
@@ -526,7 +526,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // MARK: - Internals
 
     private func startCurrentHead() {
-        guard !CallManager.shared.isCallActiveForAudioGuard else {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("startCurrentHead() ignored: a CallKit call is active")
             // A pending advance-queue background task (opened by advanceQueue()
             // before calling this method) would otherwise never see the
