@@ -200,7 +200,7 @@ extension BubbleStandardLayout {
             .background(neutralBg)
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !reply.reference.messageId.isEmpty else { return }
+                guard reply.reference.opensQuotedTarget else { return }
                 HapticFeedback.light()
                 if reply.isStory {
                     onStoryReplyTap?(reply.reference.messageId)

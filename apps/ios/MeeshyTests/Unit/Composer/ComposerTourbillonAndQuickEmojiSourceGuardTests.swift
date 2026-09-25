@@ -55,19 +55,21 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Une cible tactile fait 44 pt (dimension 5 du `CLAUDE.md` racine), et la
-    /// contre-épreuve nomme la valeur d'AVANT : `30` ne doit plus décrire une
-    /// pastille d'emoji rapide.
-    func test_quickEmojiButtons_meetTheFortyFourPointTouchTarget() throws {
+    /// **Cinq emojis, deux rangées, et l'appui long ouvre la feuille** (#7931,
+    /// directive porteur 2026-09-25 : « diminue la taille des emoji qu'on peut
+    /// envoyer rapidement pour avoir 5 emoji 2 par rangée, si on appuie long
+    /// sur un des emoji la feuille des emojis apparaît »).
+    ///
+    /// Remplace la garde des 44 pt par emoji (#3927) : la directive rend cinq
+    /// emojis dans l'emplacement de 44 pt de haut, chacun sous la cible
+    /// tactile. L'écart est ASSUMÉ et nommé ici — il ne se rouvre pas au nom de
+    /// la dimension 5 sans une nouvelle directive.
+    func test_quickEmojiButtons_areAGridOfFive_andLongPressOpensTheSheet() throws {
         let block = try Self.propertyBlock(anchor: "var quickEmojiButtons: some View {")
-        XCTAssertTrue(
-            block.contains(".frame(width: 44, height: 44)"),
-            "chaque emoji rapide doit occuper une cible de 44 pt — 30 pt était sous le minimum tactile"
-        )
-        XCTAssertFalse(
-            block.contains("width: 30"),
-            "la pastille de 30 pt doit avoir disparu, pas cohabiter avec la neuve"
-        )
+        XCTAssertTrue(block.contains("QuickEmojiGrid.rows("), "les emojis se rangent par la règle pure de la grille")
+        XCTAssertTrue(block.contains("LongPressGesture"), "l'appui long sur un emoji ouvre la feuille des emojis")
+        XCTAssertTrue(block.contains("showQuickEmojiPicker = true"), "l'appui long ouvre la feuille")
+        XCTAssertTrue(block.contains("accessibilityAction(named:"), "VoiceOver atteint la feuille par une action nommée")
     }
 
     /// **L'invariant a MIGRÉ, il n'a pas disparu** (#5326, 2026-09-06).
@@ -172,11 +174,11 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
 
     // MARK: - Emojis rapides : source, envoi direct, enregistrement d'usage
 
-    func test_quickSendEmojis_sourcesTopTwoFromEmojiUsageTracker() throws {
+    func test_quickSendEmojis_sourcesTopFiveFromEmojiUsageTracker() throws {
         let block = try Self.propertyBlock(anchor: "var quickSendEmojis: [String] {")
         XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: 2"),
-            "les emojis rapides doivent venir du tracker partagé des réactions, limité à 2"
+            block.contains("EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count"),
+            "les emojis rapides viennent du tracker partagé des réactions, autant que la grille en montre (#7931)"
         )
     }
 

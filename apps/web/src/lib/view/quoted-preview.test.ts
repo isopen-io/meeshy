@@ -361,5 +361,28 @@ describe('quotedPreviewOf — le cadre d’une pièce unique citée (#7929)', ()
   test('un rapport extrême est borné : jamais plus haut que la scène de story (9:16), jamais plus plat que 3:1', () => {
     expect(preview(quoted({ attachments: [photo({ width: 100, height: 1000 })] })).media?.frame?.aspectRatio).toBe(9 / 16);
     expect(preview(quoted({ attachments: [photo({ width: 4000, height: 500 })] })).media?.frame?.aspectRatio).toBe(3);
+ * #7926 — UNE CITATION D'UN MESSAGE SUPPRIMÉ NE DIT PLUS CE QU'IL DISAIT.
+ * `message:deleted` pose `deletedAt` sur la citation embarquée
+ * (`realtime-message-mutations.ts`) ; la citation rend alors le libellé du
+ * catalogue — jamais l'ancien texte, ni sa traduction, ni sa pièce jointe,
+ * même si une charge en garde encore une trace.
+ */
+describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
+  const gone = quoted({
+    content: 'Le code est 4521',
+    translations: [{ targetLanguage: 'en', translatedContent: 'The code is 4521' } as unknown as Message['translations'][number]],
+    attachments: [PHOTO],
+    deletedAt: '2026-09-25T10:00:00.000Z' as unknown as Date,
+  });
+
+  test('le libellé « Message supprimé » remplace le texte', () => {
+    expect(preview(gone).text).toBe('Message supprimé');
+  });
+
+  test('ni traduction, ni vignette, ni inventaire ne voyagent', () => {
+    const shown = preview(gone, ['en', 'fr']);
+    expect(shown.text).toBe('Message supprimé');
+    expect(shown.media).toBeNull();
+    expect(shown.inventory).toEqual([]);
   });
 });

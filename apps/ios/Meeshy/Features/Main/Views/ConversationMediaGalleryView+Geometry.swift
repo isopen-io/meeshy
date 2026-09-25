@@ -245,7 +245,7 @@ enum MediaGalleryStage {
 
     /// **Le nom de l'espace du PLATEAU** — la région qui porte le cadre et le chrome
     /// (#6760), où la colonne d'actions mesure sa place (#6709).
-    static let cadreSpace = "media.stage.cadre"
+    nonisolated static let cadreSpace = "media.stage.cadre"
 
     /// **Ce que la colonne d'actions a SOUS elle** (#6709, recette du 2026-09-16).
     ///

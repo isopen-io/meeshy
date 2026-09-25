@@ -222,6 +222,10 @@ export const messageSchema = {
         effectFlags: { type: 'number' },
         isEncrypted: { type: 'boolean' },
         encryptionMode: { type: 'string', nullable: true },
+        // #7927 — un message cité SUPPRIMÉ : son texte est vidé par
+        // `servedQuotedMessage`, et ce champ dit au client de rendre
+        // « Message supprimé » plutôt qu'une citation vide.
+        deletedAt: { type: 'string', format: 'date-time', nullable: true },
         // #6164 — la PIÈCE NOMMÉE que cette réponse vise, quand elle en vise
         // une : l'instantané FIGÉ gravé dans `metadata.attachmentReplyTo` du
         // message QUI CITE (arbitrage porteur du 2026-09-12, #6123 voie C —

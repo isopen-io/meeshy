@@ -51,6 +51,7 @@ nonisolated enum StoryCanvasInlineEditTouchPolicy {
     /// - `touched` : `UITouch.view`, la vue que UIKit a élue par hit-test.
     /// - `inlineEditor` : le champ monté, ou `nil` quand aucune édition n'est en
     ///   cours — auquel cas rien n'est disputé et tout revient au canvas.
+    @MainActor
     static func canvasReceives(touched: UIView?, inlineEditor: UIView?) -> Bool {
         guard let inlineEditor, let touched else { return true }
         return !(touched === inlineEditor || touched.isDescendant(of: inlineEditor))

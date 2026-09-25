@@ -477,10 +477,12 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "y dessine l'avatar de l'auteur cité, que focal et script ne montrent plus (#7491)."
         )
         // Et l'exclusion qui rend ce chemin nécessaire est toujours là : si
-        // elle disparaissait, la citation serait rendue DEUX fois.
+        // elle disparaissait, la citation serait rendue DEUX fois. Elle ne
+        // porte QUE sur l'audio : le bloc média nu n'héberge aucune citation,
+        // et l'exclure aussi la faisait disparaître (#7928).
         XCTAssertTrue(
-            row.contains("content.reply != nil && !content.audioHostsReply && !content.visualHostsReply"),
-            "la rangée ne dessine la citation que si aucun widget ne l'héberge — c'est CETTE exclusion qui " +
+            row.contains("content.flatRowDrawsQuote"),
+            "la rangée ne dessine pas la citation qu'héberge le lecteur audio — c'est CETTE exclusion qui " +
             "envoie la citation d'un vocal chez BubbleQuotedReply."
         )
     }

@@ -19,8 +19,16 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// parce qu'un avis d'appel ne doit JAMAIS porter le drapeau « modifié ».
     case callNoticeUpdated(messageId: String, content: String, callSummaryJson: Data?, serverUpdatedAt: Date)
     case deleted(messageId: String, deletedAt: Date)
-    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?, maxCount: Int?)
-    case reactionRemoved(messageId: String, emoji: String, participantId: String?)
+    /// `ownerUserId` (le `User.id` de l'auteur) est ce qui reconnaît MA
+    /// réaction posée d'un autre appareil (#7927) : sans lui, le relais d'une
+    /// conversation fermée l'écrivait sous mon `Participant.id`, jamais
+    /// « mienne » ici.
+    case reactionAdded(messageId: String, reactionId: String, emoji: String, participantId: String?,
+                       maxCount: Int?, ownerUserId: String?)
+    /// L'agrégat servi (`aggregateCount`, `aggregateParticipantIds`) cale le
+    /// compte quand les lignes locales n'ont pas d'auteur (rechargées REST).
+    case reactionRemoved(messageId: String, emoji: String, participantId: String?,
+                         ownerUserId: String?, aggregateCount: Int?, aggregateParticipantIds: [String]?)
     case consumed(messageId: String, viewOnceCount: Int)
     /// La vue unique est « déjà ouverte » pour CE lecteur, ou son contenu a été
     /// purgé par le serveur : vider le contenu local, garder la bulle (#7579).

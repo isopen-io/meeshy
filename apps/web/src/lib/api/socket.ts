@@ -19,6 +19,13 @@ import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import {
+  applyMessageDeleted,
+  applyMessageEdited,
+  isMessageDeletedEvent,
+  isMessageEditedEvent,
+} from './realtime-message-mutations';
+import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
+import {
   applyMediaCaptionTranslation,
   applyPostCreated,
   applyPostDeleted,
@@ -385,6 +392,23 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentReactionChanged = (payload: unknown): void => {
     if (!isAttachmentReactionUpdate(payload)) return;
     applyAttachmentReactionUpdate(deps.queryClient, payload);
+  };
+
+  /** `reaction:added|removed` (#5863) — le compte ABSOLU d'un emoji ; « ma réaction » ne suit que MON geste. Règle : `realtime-message-reactions.ts`. */
+  const onMessageReactionChanged = (payload: unknown): void => {
+    if (!isMessageReactionUpdate(payload)) return;
+    applyMessageReactionUpdate(deps.queryClient, payload, deps.viewerId());
+  };
+
+  /** `message:edited` / `message:deleted` (#7926) — la rangée, ses citations et la ligne de liste. Règle : `realtime-message-mutations.ts`. */
+  const onMessageEdited = (payload: unknown): void => {
+    if (!isMessageEditedEvent(payload)) return;
+    applyMessageEdited(deps.queryClient, payload);
+  };
+
+  const onMessageDeleted = (payload: unknown): void => {
+    if (!isMessageDeletedEvent(payload)) return;
+    applyMessageDeleted(deps.queryClient, payload);
   };
 
   /**
@@ -845,6 +869,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.REACTION_ADDED, onMessageReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -921,6 +949,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.REACTION_ADDED, onMessageReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);

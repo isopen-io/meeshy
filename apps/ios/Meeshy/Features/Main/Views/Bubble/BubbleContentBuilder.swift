@@ -205,7 +205,7 @@ extension BubbleContent {
 
         // --- Reply ---
         if let replyRef = message.replyTo {
-            self.reply = Reply(reference: replyRef, isStory: replyRef.isStoryReply)
+            self.reply = Reply(reference: QuotedReplyPresentation.displayed(replyRef), isStory: replyRef.isStoryReply)
         } else {
             self.reply = nil
         }
