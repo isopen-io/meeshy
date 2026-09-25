@@ -48,7 +48,8 @@ public extension ReplyReference {
                 thumbHash: attachmentThumbHash, width: attachmentWidth, height: attachmentHeight,
                 durationMs: attachmentDurationMs, fileSize: attachmentFileSize,
                 pageCount: attachmentPageCount, mimeType: attachmentMimeType
-            )
+            ),
+            storyUnavailable: storyUnavailable
         )
         copy.quotedMessageDeletedAt = quotedMessageDeletedAt
         return copy

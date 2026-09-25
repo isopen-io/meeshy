@@ -371,8 +371,8 @@ struct FocalGridCell: View {
 
 // MARK: - FocalAttachmentBlock (WS-3)
 
-/// Bloc média NU de la rangée plate — retrait `29`
-/// (`FocalMetrics.Text.indent`), grille 1/2/3/4+ via `FocalMediaGridLayout`,
+/// Bloc média NU de la rangée plate — sous l'avatar (`Row.contentIndent`)
+/// — grille 1/2/3/4+ via `FocalMediaGridLayout`,
 /// radius `16` (`FocalMetrics.Media.radius`). Aucune bulle, aucun fond.
 ///
 /// Vue PURE : entrées primitives uniquement, aucun `@State`, `Equatable`
@@ -404,7 +404,7 @@ struct FocalAttachmentBlock: View, Equatable {
     var body: some View {
         let visibleItems = Array(items.prefix(slots.count))
         gridBody(visibleItems: visibleItems)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, FocalMetrics.Row.contentIndent)
     }
 
     /// Dispatch par arité — reprend la structure HStack/VStack réelle

@@ -134,13 +134,14 @@ final class FocalRowMetricsTests: XCTestCase {
         // rangées suivantes, il ne s'indente pas sous lui-même) et
         // `FocalConversationStartRow` (rangée centrée) en sont exclus.
         let indentedFiles = [
-            // Retrait CONSTANT au gabarit de l'élue depuis `0c619a98` : la
-            // pastille de 34 est réservée en permanence.
-            "FocalRow.swift": "FocalMetrics.Focus.textIndent",
-            // Rangées satellites : toujours alignées sur la pastille de 22.
+            // #7928 (directive porteur 2026-09-25) : le CONTENU PROPRE sous
+            // l'avatar, les CITATIONS au retrait de citation — deux cotes, une
+            // par nature, et la rangée pose les deux (la carte de story est
+            // une citation).
+            "FocalRow.swift": "FocalMetrics.Row.contentIndent",
+            "FocalAttachmentBlock.swift": "FocalMetrics.Row.contentIndent",
+            "FocalQuotedReplyView.swift": "FocalMetrics.Quote.indent",
             "FocalMetaRow.swift": "FocalMetrics.Text.indent",
-            "FocalAttachmentBlock.swift": "FocalMetrics.Text.indent",
-            "FocalQuotedReplyView.swift": "FocalMetrics.Text.indent",
         ]
         for (fileName, cote) in indentedFiles {
             let stripped = AppSourceGuard.stripComments(try source(fileName))

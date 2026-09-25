@@ -120,6 +120,15 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
     /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
     public var storyAuthorId: String?
+    /// La story citée a DISPARU sans laisser d'instantané (#7895) : la
+    /// passerelle n'a servi que `storyReplyToId`, sans `postReplyTo` — le
+    /// message n'en gravait pas et le post n'existe plus. Posé par un seul
+    /// producteur, `unavailableStory(storyId:)`.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit se relire sans emporter le message entier. `nil` =
+    /// disponible — aucune citation existante ne change de rendu.
+    public let storyUnavailable: Bool?
     /// #7927 — le message CITÉ a été supprimé : la citation ne porte plus
     /// rien de lui (`tombstoned(at:)`), et l'app rend « Message supprimé ».
     /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
@@ -137,6 +146,28 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// vue unique et posait par-dessus un bouton play que le verrou de l'hote
     /// refusait d'honorer : une exposition, doublee d'un controle qui ment.
     public var quotedMediaIsProtected: Bool { attachmentIsProtected == true }
+
+    /// Le PRÉDICAT unique « la story citée a-t-elle disparu ? » (#7895), lu
+    /// par la carte de scène et par les citations plates des trois modes.
+    /// Vrai ⇒ carte compacte « Story indisponible », sans scène ni porte.
+    /// Une humeur n'est jamais concernée : elle n'a pas de scène.
+    public var isUnavailableStory: Bool {
+        isStoryReply && moodEmoji == nil && storyUnavailable == true
+    }
+
+    /// ZONE 3 côté DONNÉE : un tap sur cette citation a-t-il une cible ? Sans
+    /// identifiant, ou vers une story disparue, il n'ouvrirait rien — et un
+    /// contrôle sans effet est un contrôle qui ment (loi 4).
+    public var opensQuotedTarget: Bool {
+        !messageId.isEmpty && !isUnavailableStory
+    }
+
+    /// La citation d'une story dont il ne reste que l'identifiant. Aucun
+    /// aperçu : c'est la vue qui DIT « Story indisponible », depuis son
+    /// catalogue, et non un texte figé dans la donnée.
+    public static func unavailableStory(storyId: String) -> ReplyReference {
+        ReplyReference(messageId: storyId, authorName: "Story", previewText: "", isStoryReply: true, storyUnavailable: true)
+    }
 
     /// ZONE 1 de la LOI DES ZONES, cote DONNEE : cette citation designe-t-elle
     /// une PERSONNE dont la fiche peut s'ouvrir ?
@@ -172,7 +203,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
-                attachmentFacts: QuotedAttachmentFacts? = nil) {
+                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -198,6 +229,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.storyThumbnailUrl = storyThumbnailUrl
         self.moodEmoji = moodEmoji
         self.storyAuthorId = storyAuthorId
+        self.storyUnavailable = storyUnavailable
     }
 }
 

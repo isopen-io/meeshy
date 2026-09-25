@@ -433,4 +433,49 @@ final class QuotedReplyPresentationTests: XCTestCase {
         XCTAssertLessThan(grand, normal)
         XCTAssertGreaterThan(grand, 0, "un budget nul masquerait TOUTE citation")
     }
+
+    // MARK: - La miniature d'une image ou d'une vidéo citée (retour porteur 2026-09-25)
+
+    private func media(_ type: String, width: Int?, height: Int?) -> ReplyReference {
+        ReplyReference(
+            messageId: "m0", authorName: "Bea", previewText: "", attachmentType: type,
+            attachmentThumbnailUrl: "https://cdn.example/t.jpg",
+            attachmentFacts: .init(thumbHash: nil, width: width, height: height, durationMs: nil,
+                                   fileSize: nil, pageCount: nil, mimeType: nil)
+        )
+    }
+
+    /// Une largeur, deux consommateurs : la carte de story et la miniature.
+    @MainActor
+    func test_aQuotedMediaThumbnail_isAsWideAsAStoryCard() throws {
+        let size = try XCTUnwrap(QuotedReplyPresentation.mediaThumbnailSize(for: media("image", width: 4000, height: 3000)))
+        XCTAssertEqual(size.width, BubbleStoryCitationCard.cardWidth)
+    }
+
+    func test_aLandscapeImage_givesALowThumbnail_aPortraitATallOne() throws {
+        let paysage = try XCTUnwrap(QuotedReplyPresentation.mediaThumbnailSize(for: media("image", width: 4000, height: 3000)))
+        let portrait = try XCTUnwrap(QuotedReplyPresentation.mediaThumbnailSize(for: media("image", width: 3000, height: 4000)))
+        XCTAssertEqual(paysage.height / paysage.width, 0.75, accuracy: 0.01)
+        XCTAssertEqual(portrait.height / portrait.width, 4.0 / 3.0, accuracy: 0.01)
+        XCTAssertLessThan(paysage.height, paysage.width)
+        XCTAssertGreaterThan(portrait.height, portrait.width)
+    }
+
+    func test_aVideo_keepsItsOwnAspect_evenUnderItsMimeType() throws {
+        let video = try XCTUnwrap(QuotedReplyPresentation.mediaThumbnailSize(for: media("video/mp4", width: 1920, height: 1080)))
+        XCTAssertEqual(video.height / video.width, 1080.0 / 1920.0, accuracy: 0.01)
+    }
+
+    func test_aMediaWithoutDimensions_fallsBackToTheSquare() throws {
+        let size = try XCTUnwrap(QuotedReplyPresentation.mediaThumbnailSize(for: media("image", width: nil, height: nil)))
+        XCTAssertEqual(size.width, size.height)
+    }
+
+    /// Un vocal, un document ou une story gardent leur propre forme.
+    func test_onlyAnImageOrAVideo_takesTheSceneWidth() {
+        XCTAssertNil(QuotedReplyPresentation.mediaThumbnailSize(for: media("audio", width: nil, height: nil)))
+        XCTAssertNil(QuotedReplyPresentation.mediaThumbnailSize(for: media("application/pdf", width: 800, height: 1100)))
+        XCTAssertNil(QuotedReplyPresentation.mediaThumbnailSize(
+            for: ReplyReference(messageId: "s", authorName: "Story", previewText: "", isStoryReply: true)))
+    }
 }

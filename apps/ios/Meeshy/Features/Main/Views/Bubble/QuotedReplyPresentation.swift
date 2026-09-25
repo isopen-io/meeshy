@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import MeeshySDK
 
@@ -185,6 +186,43 @@ nonisolated enum QuotedReplyPresentation {
             pageCount: reference.attachmentPageCount,
             locale: locale
         )
+    }
+
+    // MARK: - La miniature d'un média cité (retour porteur 2026-09-25)
+
+    /// **La largeur d'une scène citée** — celle de la carte d'une story
+    /// répondue ET de la miniature d'une image ou d'une vidéo citée. Une
+    /// constante, deux consommateurs : la carte de story la lit
+    /// (`BubbleStoryCitationCard.cardWidth`), la miniature aussi.
+    static let citedSceneWidth: CGFloat = 132
+
+    /// Le rapport hauteur/largeur servi quand la pièce citée ne dit pas ses
+    /// dimensions : le CARRÉ — ni paysage ni portrait, il ne ment sur aucun.
+    static let unknownMediaAspect: CGFloat = 1
+
+    /// **La miniature d'une image ou d'une vidéo citée a la largeur d'une
+    /// scène citée, et la hauteur de SON rapport d'aspect** : un paysage donne
+    /// une vignette basse, un portrait une vignette haute. Les dimensions sont
+    /// celles que la citation grave (`attachmentWidth` / `attachmentHeight`) ;
+    /// absentes, le repli est le carré (`unknownMediaAspect`).
+    ///
+    /// `nil` pour tout ce qui n'est ni image ni vidéo (vocal, document, lieu)
+    /// et pour une story : ces citations gardent leur glyphe ou leur carte.
+    static func mediaThumbnailSize(for reference: ReplyReference) -> CGSize? {
+        guard !reference.isStoryReply,
+              let kind = BubbleQuotedReply.resolveAttachmentKind(reference.attachmentMimeType ?? reference.attachmentType),
+              kind == .image || kind == .video
+        else { return nil }
+        let width = citedSceneWidth
+        return CGSize(width: width, height: (width * mediaAspect(of: reference)).rounded())
+    }
+
+    /// Hauteur sur largeur du média cité, ou le carré s'il se tait.
+    static func mediaAspect(of reference: ReplyReference) -> CGFloat {
+        guard let w = reference.attachmentWidth, let h = reference.attachmentHeight, w > 0, h > 0 else {
+            return unknownMediaAspect
+        }
+        return CGFloat(h) / CGFloat(w)
     }
 
     /// Le ThumbHash à servir à `CachedAsyncImage` — le flou instantané qui
