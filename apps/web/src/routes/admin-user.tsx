@@ -9,16 +9,26 @@ import { adminMoment } from '@/lib/admin/format';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { useParams, useRoute } from '@/lib/router';
+import { useParams, useRoute, useSearch } from '@/lib/router';
+import { ADMIN_USER_TABS, adminUserTabOf, withAdminUserTab, type AdminUserTab } from '@/lib/admin/user-tabs';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { ActionButton } from '@/routes/link-page-parts';
 
-import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
+import { AdminUserGallery } from './admin-user-gallery';
+import { AdminUserPreferencesTab, AdminUserStatsSection } from './admin-user-member';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
+import {
+  AdminUserCommunitiesTab,
+  AdminUserContactsTab,
+  AdminUserReportsTab,
+  AdminUserSecurityTab,
+  AdminUserVoiceTab,
+} from './admin-user-dossier';
 
 /**
  * **LE DÉTAIL D'UN MEMBRE** (#6819) — `/admin/users/$user` et `/adm/users/$user`,
@@ -50,9 +60,14 @@ export default function AdminUserScreen() {
   const { user: userId } = useParams<'/admin/users/$user'>();
   const { key } = useRoute();
   const retour = key === 'admUser' ? 'admUsers' : 'adminUsers';
+  const cibleMembre = key === 'admUser' ? ('admUser' as const) : ('adminUser' as const);
+  const [search, setSearch] = useSearch();
+  const onglet = adminUserTabOf(search);
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-  const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((section) => section.id === 'users');
+  const sections = visibleAdminSections(identite.data?.permissions ?? null, identite.data?.role);
+  const autorise = sections.some((section) => section.id === 'users');
+  const gererConversation = sections.some((section) => section.id === 'conversations') ? (key === 'admUser' ? 'admConversation' : 'adminConversation') : null;
 
   const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
 
@@ -103,50 +118,66 @@ export default function AdminUserScreen() {
     <AdminScreenFrame language={language} title={titre} back={retour}>
       <div className="grid gap-5" data-admin-user={membre.id}>
         <Entete membre={membre} language={language} />
-        <Section titre={translateAdmin(language, 'admin.user.identity')}>
-          <Ligne label="@" valeur={membre.username} />
-          <Ligne label="✉" valeur={membre.email} />
-          {membre.phoneNumber === '' ? null : <Ligne label="☎" valeur={membre.phoneNumber} />}
-        </Section>
-        <Section titre={translateAdmin(language, 'admin.user.account')}>
-          <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
-          {/* UNE DATE SE LIT, ELLE NE SE RECOPIE PAS (#6819, recette au
-              navigateur) : ces deux lignes peignaient
-              « 2026-01-12T08:30:00.000Z ». Le champ, son décodage et le
-              libellé étaient justes — seul le RENDU ne l'était pas, et aucun
-              témoin ne pouvait tomber puisque la valeur affichée était
-              exactement la valeur servie. `adminMoment` est le site que cet
-              écran partage avec le pilotage de l'agent. */}
-          <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={adminMoment(membre.createdAt, language)} />
-          <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} />
-          <Ligne
-            label={translateAdmin(language, 'admin.user.twoFactor')}
-            valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
-          />
-        </Section>
+        <Onglets language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
+        <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
+          {onglet === 'profile' ? (
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <AdminUserGallery membre={membre} language={language} />
+              </div>
+              <div className="lg:col-span-2">
+                <AdminUserStatsSection userId={membre.id} language={language} />
+              </div>
+              <Section titre={translateAdmin(language, 'admin.user.identity')}>
+                <Ligne label="@" valeur={membre.username} />
+                <Ligne label="✉" valeur={membre.email} />
+                {membre.phoneNumber === '' ? null : <Ligne label="☎" valeur={membre.phoneNumber} />}
+              </Section>
+              <Section titre={translateAdmin(language, 'admin.user.account')}>
+                <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
+                {/* UNE DATE SE LIT, ELLE NE SE RECOPIE PAS (#6819, recette au
+                    navigateur) : ces deux lignes peignaient
+                    « 2026-01-12T08:30:00.000Z ». Le champ, son décodage et le
+                    libellé étaient justes — seul le RENDU ne l'était pas, et aucun
+                    témoin ne pouvait tomber puisque la valeur affichée était
+                    exactement la valeur servie. `adminMoment` est le site que cet
+                    écran partage avec le pilotage de l'agent. */}
+                <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={adminMoment(membre.createdAt, language)} />
+                <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} />
+                <Ligne
+                  label={translateAdmin(language, 'admin.user.twoFactor')}
+                  valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
+                />
+              </Section>
+              <Metadonnees membre={membre} language={language} />
 
-        <div className="grid gap-2">
-          <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
-          {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
-              qui se retrouve déconnectée partout. La couleur le dit avant que
-              la feuille ne l'écrive. */}
-          <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
-            {translateAdmin(language, 'admin.password.title')}
-          </ActionButton>
-          <ActionButton tone="danger" onClick={() => setBannissement(true)}>
-            {translateAdmin(language, 'admin.ban.open')}
-          </ActionButton>
+              <div className="grid gap-2">
+                <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
+                {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
+                    qui se retrouve déconnectée partout. La couleur le dit avant que
+                    la feuille ne l'écrive. */}
+                <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
+                  {translateAdmin(language, 'admin.password.title')}
+                </ActionButton>
+                <ActionButton tone="danger" onClick={() => setBannissement(true)}>
+                  {translateAdmin(language, 'admin.ban.open')}
+                </ActionButton>
+              </div>
+            </div>
+          ) : null}
+          {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les routes
+              sont servies jusqu'à AUDIT, plus largement que les gestes
+              d'écriture du profil qui exigent ADMIN+. La modale de lecture
+              rend le fil dans le Prisme DU MEMBRE (#6862). */}
+          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} /> : null}
+          {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} /> : null}
+          {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} cible={cibleMembre} /> : null}
+          {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} /> : null}
+          {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} /> : null}
+          {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} /> : null}
+          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} /> : null}
+          {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} /> : null}
         </div>
-
-        {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les deux
-            routes sont servies jusqu'à AUDIT, plus largement que les gestes
-            d'écriture ci-dessus qui exigent ADMIN+. */}
-        <AdminUserMediaSection userId={membre.id} language={language} />
-        {/* La fiche ENTIÈRE, et pas seulement son identifiant (#6862) : la
-            modale de lecture rend le fil dans le Prisme DU MEMBRE, qui se
-            compose de ses trois rangs de langue, et le montre de SON point de
-            vue, qui demande son identité. */}
-        <AdminUserConversationsSection membre={membre} language={language} />
       </div>
 
       {edition ? (
@@ -185,6 +216,79 @@ export default function AdminUserScreen() {
 
       <AdminAnnouncement text={annonceur.text} />
     </AdminScreenFrame>
+  );
+}
+
+const LIBELLES_ONGLETS = {
+  profile: 'admin.tab.profile',
+  conversations: 'admin.tab.conversations',
+  media: 'admin.tab.media',
+  contacts: 'admin.tab.contacts',
+  communities: 'admin.tab.communities',
+  voice: 'admin.tab.voice',
+  preferences: 'admin.tab.preferences',
+  security: 'admin.tab.security',
+  reports: 'admin.tab.reports',
+} as const satisfies Readonly<Record<AdminUserTab, string>>;
+
+/**
+ * LES ONGLETS DE LA FICHE (#7845, #7873) — un `tablist` ARIA : flèches
+ * gauche/droite pour passer d'un onglet à l'autre, un seul arrêt de
+ * tabulation (l'onglet actif), et l'onglet dans l'adresse.
+ */
+function Onglets({
+  language,
+  actif,
+  onChange,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly actif: AdminUserTab;
+  readonly onChange: (onglet: AdminUserTab) => void;
+}) {
+  const aller = (pas: number) => {
+    const index = ADMIN_USER_TABS.indexOf(actif);
+    const suivant = ADMIN_USER_TABS[(index + pas + ADMIN_USER_TABS.length) % ADMIN_USER_TABS.length] ?? 'profile';
+    onChange(suivant);
+    requestAnimationFrame(() => document.getElementById(`admin-user-tab-${suivant}`)?.focus());
+  };
+  return (
+    <div
+      role="tablist"
+      aria-label={translateAdmin(language, 'admin.tab.label')}
+      className="flex gap-1 overflow-x-auto"
+      style={{ borderBottom: '1px solid var(--color-edge)' }}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowRight') aller(document.dir === 'rtl' ? -1 : 1);
+        if (event.key === 'ArrowLeft') aller(document.dir === 'rtl' ? 1 : -1);
+      }}
+    >
+      {ADMIN_USER_TABS.map((onglet) => {
+        const selectionne = onglet === actif;
+        return (
+          <button
+            key={onglet}
+            type="button"
+            role="tab"
+            id={`admin-user-tab-${onglet}`}
+            aria-selected={selectionne}
+            aria-controls={`admin-user-panel-${onglet}`}
+            tabIndex={selectionne ? 0 : -1}
+            data-admin-user-tab={onglet}
+            onClick={() => onChange(onglet)}
+            className="shrink-0 px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              minHeight: 44,
+              color: selectionne ? 'var(--color-ios-brand)' : INK2,
+              fontWeight: selectionne ? 600 : 500,
+              borderBottom: `2px solid ${selectionne ? 'var(--color-ios-brand)' : 'transparent'}`,
+              outlineColor: 'var(--color-ios-brand)',
+            }}
+          >
+            {translateAdmin(language, LIBELLES_ONGLETS[onglet])}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -240,31 +344,36 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
   );
 }
 
-function Section({ titre, children }: { readonly titre: string; readonly children: React.ReactNode }) {
+/**
+ * TOUTES LES MÉTADONNÉES SERVIES (#7845) — langues du Prisme, fuseau,
+ * vérifications, verrouillage, complétion. Une ligne sans valeur ne
+ * s'affiche pas : « — » répété dix fois ne dit rien de plus qu'une absence.
+ */
+function Metadonnees({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
+  const date = (valeur: string | null) => (valeur === null ? '' : adminMoment(valeur, language));
+  const lignes: readonly (readonly [string, string])[] = [
+    [translateAdmin(language, 'admin.meta.name'), [membre.firstName, membre.lastName].filter((part) => part !== '').join(' ')],
+    [translateAdmin(language, 'admin.meta.systemLanguage'), membre.systemLanguage],
+    [translateAdmin(language, 'admin.meta.regionalLanguage'), membre.regionalLanguage],
+    [translateAdmin(language, 'admin.meta.customLanguage'), membre.customDestinationLanguage],
+    [translateAdmin(language, 'admin.meta.timezone'), membre.timezone],
+    [translateAdmin(language, 'admin.meta.emailVerified'), date(membre.emailVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.phoneVerified'), date(membre.phoneVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.completion'), membre.profileCompletionRate === null ? '' : `${Math.round(membre.profileCompletionRate)} %`],
+    [translateAdmin(language, 'admin.meta.passwordChanged'), date(membre.lastPasswordChange)],
+    [translateAdmin(language, 'admin.meta.failedLogins'), membre.failedLoginAttempts === 0 ? '' : String(membre.failedLoginAttempts)],
+    [translateAdmin(language, 'admin.meta.lockedUntil'), date(membre.lockedUntil)],
+    [translateAdmin(language, 'admin.meta.lockedReason'), membre.lockedReason ?? ''],
+    [translateAdmin(language, 'admin.meta.deactivated'), date(membre.deactivatedAt)],
+    [translateAdmin(language, 'admin.meta.updated'), date(membre.updatedAt)],
+  ];
   return (
-    <section className="grid gap-2">
-      <h2 className="text-caption font-medium" style={{ color: INK2 }}>
-        {titre}
-      </h2>
-      <dl
-        className="grid gap-1 rounded-card px-4 py-3"
-        style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-      >
-        {children}
-      </dl>
-    </section>
-  );
-}
-
-function Ligne({ label, valeur }: { readonly label: string; readonly valeur: string }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
-        {label}
-      </dt>
-      <dd className="min-w-0 flex-1 truncate text-right text-body" style={{ color: INK }}>
-        {valeur}
-      </dd>
-    </div>
+    <Section titre={translateAdmin(language, 'admin.meta.title')}>
+      {lignes
+        .filter(([, valeur]) => valeur !== '')
+        .map(([label, valeur]) => (
+          <Ligne key={label} label={label} valeur={valeur} />
+        ))}
+    </Section>
   );
 }

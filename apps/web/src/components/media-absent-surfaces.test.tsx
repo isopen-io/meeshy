@@ -461,10 +461,11 @@ describe('la vignette d’une story citée dans un MESSAGE — #7022', () => {
     previewText: 'Une story de démonstration',
     thumbnailUrl: '2025/10/68f33afa/disparue.jpg',
     createdAt: new Date('2026-09-18T10:00:00Z').toISOString(),
+    unavailable: false,
   };
 
   const carte = () => (
-    <StoryCitationCard citation={citation} accent="#5B5BD6" now={new Date('2026-09-18T12:00:00Z')} />
+    <StoryCitationCard citation={citation} accent="#5B5BD6" language="fr" now={new Date('2026-09-18T12:00:00Z')} />
   );
 
   /**
@@ -498,7 +499,7 @@ describe('la vignette d’une story citée dans un MESSAGE — #7022', () => {
    */
   test('SANS aperçu à découvrir, l’échec rend l’état dessiné COMPACT', () => {
     act(() => {
-      root.render(<StoryCitationCard citation={{ ...citation, previewText: '' }} accent="#5B5BD6" now={new Date()} />);
+      root.render(<StoryCitationCard citation={{ ...citation, previewText: '' }} accent="#5B5BD6" language="fr" now={new Date()} />);
     });
 
     act(() => {

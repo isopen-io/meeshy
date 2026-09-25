@@ -7,8 +7,8 @@ import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment }
 import { apiConfig } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { webOriginOf } from '@/lib/links/web-origin';
-import { compile, match } from '@/lib/router';
-import { Link, navigate, ROUTES } from '@/routes/route-table';
+import { isAppPath } from '@/routes/app-paths';
+import { Link, navigate } from '@/routes/route-table';
 
 /**
  * **LE TEXTE ÉCRIT PAR QUELQU'UN, RENDU** (#7032) — le site UNIQUE de la v2
@@ -53,13 +53,6 @@ import { Link, navigate, ROUTES } from '@/routes/route-table';
  * ouvre, et celle qu'iOS construit (`MessageTextRenderer.swift`).
  */
 const trackedLinkLabel = (token: string): string => `meeshy.me/l/${token}`;
-
-/**
- * LES CHEMINS QUE L'APP SERT (#7849) — compilés UNE fois : un lien Meeshy
- * dont le chemin n'est pas ici reste un lien sortant.
- */
-const APP_PATTERNS = Object.values(ROUTES).map((route) => compile(route.pattern));
-const isAppPath = (path: string): boolean => APP_PATTERNS.some((pattern) => match(pattern, path) !== null);
 
 const inAppPathOf = (href: string): string | null =>
   internalPathOf(href, {

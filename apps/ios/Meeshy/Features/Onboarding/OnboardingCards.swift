@@ -21,6 +21,7 @@ struct OnboardingCardView: View {
     var body: some View {
         switch model.card {
         case .step(.languages): languages
+        case .step(.email): email
         case .step(.global): global
         case .step(.story): story
         case .step(.friends): friends
@@ -121,6 +122,68 @@ struct OnboardingCardView: View {
         }
     }
 
+    // MARK: Valide ton adresse (#7907)
+
+    /// Passable comme les autres. L'état est relu au retour au premier plan
+    /// (l'hôte) et, tant que la carte est à l'écran, toutes les quelques
+    /// secondes : le lien touché dans le courriel fait avancer le parcours.
+    private var email: some View {
+        OnboardingCardLayout(
+            title: String(localized: "onboarding.email.title", bundle: .main),
+            message: String(localized: "onboarding.email.body", bundle: .main),
+            isDark: isDark,
+            primary: resendLink,
+            secondary: later,
+            illustration: { OnboardingEmailIllustration(isDark: isDark) },
+            content: {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                    if let address = model.accountEmail {
+                        Label(String.localizedStringWithFormat(String(localized: "onboarding.email.address", bundle: .main), address),
+                              systemImage: "envelope")
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                    }
+                    verificationStatus
+                }
+            }
+        )
+        .task { await watchVerification() }
+    }
+
+    private var resendLink: OnboardingAction {
+        OnboardingAction(title: String(localized: "onboarding.email.resend", bundle: .main),
+                         identifier: "onboarding.email.resend",
+                         isBusy: model.verificationLinkState == .sending) {
+            Task { await model.resendVerificationLink() }
+        }
+    }
+
+    @ViewBuilder
+    private var verificationStatus: some View {
+        switch model.verificationLinkState {
+        case .sent:
+            Label(String(localized: "onboarding.email.sent", bundle: .main), systemImage: "checkmark.circle.fill")
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(MeeshyColors.success)
+        case .failed:
+            Text(String(localized: "onboarding.email.failed", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(MeeshyColors.error)
+        case .idle, .sending:
+            Label(String(localized: "onboarding.email.waiting", bundle: .main), systemImage: "hourglass")
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
+        }
+    }
+
+    /// Relit l'état tant que la vue vit — `.task` s'annule quand la carte part.
+    private func watchVerification() async {
+        while !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            await model.refreshVerification()
+        }
+    }
+
     // MARK: 2 — salut dans Meeshy Global
 
     private var global: some View {
@@ -144,7 +207,7 @@ struct OnboardingCardView: View {
                     if sent {
                         outcomeBanner(
                             text: String(localized: "onboarding.global.sent", bundle: .main),
-                            reward: String.localizedStringWithFormat(String(localized: "onboarding.global.reward", bundle: .main), OnboardingRewards.greeting)
+                            reward: model.greetingReward.map { String.localizedStringWithFormat(String(localized: "onboarding.global.reward", bundle: .main), $0) }
                         )
                     } else {
                         greetingEditor
@@ -196,18 +259,32 @@ struct OnboardingCardView: View {
                 }
             }
         )
+        .task(id: model.storyNeedsEmailVerification) {
+            guard model.storyNeedsEmailVerification else { return }
+            await watchVerification()
+        }
+    }
+
+    /// La story attend une adresse vérifiée (#7907) : l'invitation remplace le
+    /// geste, et la carte reprend d'elle-même une fois l'adresse validée.
+    private var storyAwaitsVerification: Bool {
+        model.storyNeedsEmailVerification && model.storyState == .idle
     }
 
     /// Partie ≠ publiée : tant que l'upload n'a pas abouti, la carte dit « ta
     /// story part… » et n'affiche AUCUN « +N ». On peut continuer sans
     /// attendre — les points arriveront avec le succès, où qu'on soit.
     private var storyPrimary: OnboardingAction {
+        if storyAwaitsVerification { return resendLink }
         switch model.storyState {
         case .published, .publishing:
             return proceed
         case .failed:
             return OnboardingAction(title: String(localized: "onboarding.story.retry", bundle: .main),
                                     identifier: "onboarding.story.retry", perform: onRetryStory)
+        case .rejected:
+            return OnboardingAction(title: String(localized: "onboarding.continue", bundle: .main),
+                                    identifier: "onboarding.continue") { Task { await model.later() } }
         case .idle:
             return OnboardingAction(title: String(localized: "onboarding.story.create", bundle: .main),
                                     identifier: "onboarding.story.create", perform: onOpenStory)
@@ -216,11 +293,29 @@ struct OnboardingCardView: View {
 
     @ViewBuilder
     private var storyStatus: some View {
+        if storyAwaitsVerification {
+            statusBanner(
+                text: String(localized: "onboarding.story.verify", bundle: .main),
+                detail: String(localized: "onboarding.story.verify.detail", bundle: .main),
+                tint: MeeshyColors.indigo500
+            ) {
+                Image(systemName: "envelope.badge.fill")
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize))
+                    .foregroundStyle(MeeshyColors.indigo500)
+            }
+            verificationStatus
+        } else {
+            storyProgressStatus
+        }
+    }
+
+    @ViewBuilder
+    private var storyProgressStatus: some View {
         switch model.storyState {
         case .published:
             outcomeBanner(
                 text: String(localized: "onboarding.story.published", bundle: .main),
-                reward: String.localizedStringWithFormat(String(localized: "onboarding.story.reward", bundle: .main), OnboardingRewards.story)
+                reward: model.storyReward.map { String.localizedStringWithFormat(String(localized: "onboarding.story.reward", bundle: .main), $0) }
             )
         case .publishing:
             statusBanner(
@@ -237,6 +332,16 @@ struct OnboardingCardView: View {
                 Image(systemName: "arrow.clockwise.circle.fill")
                     .font(MeeshyFont.relative(MeeshyFont.titleSize))
                     .foregroundStyle(MeeshyColors.warning)
+            }
+        case .rejected:
+            statusBanner(
+                text: String(localized: "onboarding.story.rejected", bundle: .main),
+                detail: String(localized: "onboarding.story.rejected.detail", bundle: .main),
+                tint: MeeshyColors.error
+            ) {
+                Image(systemName: "xmark.octagon.fill")
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize))
+                    .foregroundStyle(MeeshyColors.error)
             }
         case .idle:
             Label(
@@ -393,7 +498,9 @@ struct OnboardingCardView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func outcomeBanner(text: String, reward: String) -> some View {
+    /// `reward` absent tant que le crédit n'est pas relu : on n'affiche jamais
+    /// un chiffre qu'il faudrait corriger une seconde plus tard (#7908).
+    private func outcomeBanner(text: String, reward: String?) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(MeeshyFont.titleSize))
@@ -403,9 +510,11 @@ struct OnboardingCardView: View {
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(reward)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                if let reward {
+                    Text(reward)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

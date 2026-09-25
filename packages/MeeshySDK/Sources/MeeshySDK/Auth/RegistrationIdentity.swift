@@ -75,13 +75,15 @@ public enum RegistrationIdentity {
     }
 
     /// Le nom affiché tiré d'une adresse — `jean.dupont@…` rend `Jean Dupont`.
+    /// Les CHIFFRES séparent comme `.`, `-` et `_` (#7912) : le nom part au
+    /// serveur, qui refuse tout chiffre dans `displayName` — `jean42@…` rend `Jean`.
     /// Rend `""` quand rien n'est slugifiable : l'écran doit alors rendre le
     /// PSEUDO plutôt qu'une promesse vide.
     public static func displayNameDepuisEmail(_ email: String?) -> String {
         let slug = slugDAdresse(email)
         guard slug.count >= pseudoMin else { return "" }
         return slug
-            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .split(whereSeparator: { !$0.isLetter })
             .filter { !$0.isEmpty }
             .map { capitalizeName(String($0)) }
             .joined(separator: " ")

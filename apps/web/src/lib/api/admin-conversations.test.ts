@@ -259,12 +259,12 @@ describe('decodeAdminSovereignThread — le fil, dans le type PARTAGÉ', () => {
 
 describe('la clé de requête porte le préfixe souverain — le point d\'accroche de la NON-persistance', () => {
   test('les deux fabriques de clés en descendent', () => {
-    expect(adminConversationsQueryKey(0, '', '')[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
+    expect(adminConversationsQueryKey('')[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
     expect(adminConversationMessagesQueryKey('c1', 0)[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
   });
 
   test('`estClefSouveraine` reconnaît ces clés et REJETTE les autres', () => {
-    expect(estClefSouveraine(adminConversationsQueryKey(0, '', ''))).toBe(true);
+    expect(estClefSouveraine(adminConversationsQueryKey(''))).toBe(true);
     expect(estClefSouveraine(adminConversationMessagesQueryKey('c1', 0))).toBe(true);
 
     // Le contraste est ce qui donne sa valeur au prédicat : s'il rendait
@@ -324,5 +324,31 @@ describe('la pagination SERVIE atteint le bouton', () => {
     if (!resultat.ok) return;
     expect(resultat.data.total).toBe(42);
     expect(resultat.data.hasMore).toBe(true);
+  });
+});
+
+describe('loadAdminInstanceConversations — tri, ordre, filtres et taille de page (#7873)', () => {
+  test('transmet ce que la liste demande, et rien de vide', async () => {
+    const vu: { path?: string } = {};
+    await loadAdminInstanceConversations({
+      source: 'gateway',
+      transport: transportQuiRend({ data: [], pagination: { total: 0 } }, vu),
+      offset: 50,
+      limit: 50,
+      search: '',
+      sort: 'createdAt',
+      order: 'asc',
+      filters: { type: 'group', isActive: 'false' },
+    } as never);
+
+    const adresse = new URL(vu.path ?? '', 'https://x.test');
+    expect(Object.fromEntries(adresse.searchParams)).toEqual({
+      offset: '50',
+      limit: '50',
+      sort: 'createdAt',
+      order: 'asc',
+      type: 'group',
+      isActive: 'false',
+    });
   });
 });

@@ -54,6 +54,10 @@ const adminConversationScreen = () =>
    `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
    route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
    jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
+const adminAnonymousScreen = () =>
+  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminAnonymousOneScreen = () =>
+  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
@@ -383,6 +387,13 @@ export const ROUTES = {
      devrait rester AVANT elle, comme `communityNew` avant `community`. */
   adminAgent: { pattern: '/admin/agent', screen: adminAgentScreen },
   admAgent: { pattern: '/adm/agent', screen: adminAgentScreen },
+  /* LES ANONYMES (#7873) — la liste, puis la fiche d'un participant sans
+     compte, trois segments comme `adminUser`. Déclarées AUSSI dans
+     `session-guard.ts`. */
+  adminAnonymous: { pattern: '/admin/anonymous', screen: adminAnonymousScreen },
+  admAnonymous: { pattern: '/adm/anonymous', screen: adminAnonymousScreen },
+  adminAnonymousOne: { pattern: '/admin/anonymous/$participant', screen: adminAnonymousOneScreen },
+  admAnonymousOne: { pattern: '/adm/anonymous/$participant', screen: adminAnonymousOneScreen },
 } as const;
 
 /**

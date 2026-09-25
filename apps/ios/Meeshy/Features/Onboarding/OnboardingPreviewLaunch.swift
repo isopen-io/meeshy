@@ -40,12 +40,14 @@ enum OnboardingPreviewLaunch {
         UserDefaults.standard.bool(forKey: "MeeshyOnboardingPreviewDone")
     }
 
-    /// `-MeeshyOnboardingPreviewStory publishing|failed` : la carte 3 pendant
-    /// l'upload, ou après son échec.
+    /// `-MeeshyOnboardingPreviewStory publishing|failed|rejected|verify` : la
+    /// carte 3 pendant l'upload, après son échec, après un refus définitif, ou
+    /// quand l'adresse doit être vérifiée pour publier (#7907).
     static var storyState: OnboardingStoryState? {
         switch UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewStory") {
         case "publishing": return .publishing
         case "failed": return .failed
+        case "rejected": return .rejected
         default: return nil
         }
     }
@@ -63,7 +65,9 @@ enum OnboardingPreviewLaunch {
             globalConversationId: "66f1c0ffee00000000000001",
             protectedRegime: protected,
             storyDefaultVisibility: protected ? .friends : .public,
-            suggestions: Array(fixtureSuggestions.prefix(suggestionCount))
+            suggestions: Array(fixtureSuggestions.prefix(suggestionCount)),
+            emailVerified: false,
+            canPublishStory: UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewStory") != "verify"
         )
     }
 

@@ -77,6 +77,10 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'admConversation',
   'adminAgent',
   'admAgent',
+  'adminAnonymous',
+  'admAnonymous',
+  'adminAnonymousOne',
+  'admAnonymousOne',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 

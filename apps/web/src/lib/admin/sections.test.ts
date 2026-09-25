@@ -59,7 +59,7 @@ describe('visibleAdminSections — fail-closed par construction', () => {
   test('une matrice complète ne voit que les sections que la v2 SERT (#6702)', () => {
     // SANS rôle : la section réservée au rang d'administration reste masquée —
     // l'absence de rôle est FERMANTE (#6862).
-    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users', 'agent']);
+    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users', 'anonymous', 'agent']);
   });
 
   /**

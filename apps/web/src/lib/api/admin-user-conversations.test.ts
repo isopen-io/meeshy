@@ -123,6 +123,15 @@ describe('loadAdminUserConversations — l’adresse et le filtre', () => {
     expect(appels[1]?.path).toContain('type=group');
   });
 
+  test('transmet le tri et son ordre quand ils sont demandés (#7845)', async () => {
+    const { transport, appels } = transportEspion({ data: [] });
+
+    await loadAdminUserConversations({ ...deps(transport), userId: 'u-1', offset: 0, sortBy: 'createdAt', sortOrder: 'asc' });
+
+    expect(appels[0]?.path).toContain('sortBy=createdAt');
+    expect(appels[0]?.path).toContain('sortOrder=asc');
+  });
+
   test('propage un refus TEL QUEL', async () => {
     const { transport } = transportEspion({ ok: false as const, status: 403, error: 'Forbidden' }, false);
 

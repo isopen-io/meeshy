@@ -2,7 +2,7 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
-import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
+import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -18,7 +18,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
-import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
+import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
@@ -295,6 +295,7 @@ export function Bubble({
   const badges = badgesOf(message);
   const isEdited = editedOf(badges);
   const storyCitation = storyCitationOf(message);
+  const moodCitation = moodCitationOf(message);
   const sharedPlace = placeOf(message);
   const body = bodyKindOf(message);
   const bareBody = body.kind === 'sticker' || body.kind === 'emoji-only';
@@ -315,7 +316,10 @@ export function Bubble({
       {/* La story citée REMPLACE la citation ordinaire — « une scène ne
           tient pas dans une bulle » : elle vit HORS de la boîte (voir plus
           bas, juste sous les badges), donc ni l'une ni l'autre ici. */}
-      {storyCitation === null && message.replyTo ? (
+      {moodCitation !== null ? (
+        <MoodQuote citation={moodCitation} isMine={isMine} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
+      ) : null}
+      {storyCitation === null && moodCitation === null && message.replyTo ? (
         <Quote
           quote={message.replyTo}
           isMine={isMine}
@@ -499,6 +503,7 @@ export function Bubble({
             <StoryCitationCard
               citation={storyCitation}
               accent="var(--accent)"
+              language={currentInterfaceLanguage()}
               now={new Date(nowMs)}
               {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
             />
@@ -560,7 +565,7 @@ export function Bubble({
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine
-                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white' }
+                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white', '--color-karaoke-ink': 'white' }
                 : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
               /* Mise en évidence temporaire après un saut de citation — un
                  anneau plutôt qu'un fond, pour ne jamais menacer le contraste

@@ -92,12 +92,12 @@ describe('le corpus c-states porte un message par état, RÉELLEMENT servi', () 
     expect(location?.name).toBe('Tour Eiffel');
   });
 
-  test('st-story a un id non vide, st-story-gone un id vide', () => {
+  test('st-story porte son instantané, st-story-gone n’en porte AUCUN (la forme servie d’une story disparue)', () => {
     const story = findOrThrow('st-story');
     expect(story.storyReplyToId).toBe('p-story-1');
     const gone = findOrThrow('st-story-gone');
     expect(gone.storyReplyToId).toBe('p-story-2');
-    expect((gone.metadata as { postReplyTo?: { id?: string } })?.postReplyTo?.id).toBe('');
+    expect((gone.metadata as { postReplyTo?: unknown } | undefined)?.postReplyTo).toBeUndefined();
   });
 
   /**

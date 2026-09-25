@@ -1,9 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
+import { backgroundMediaTimeline } from '@/lib/canvas/media-seek';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
 import { LETTERBOX_FILL_OPACITY } from '@/lib/stories/letterbox';
+
+import type { SceneClockHandle } from './scene-clock';
+import { useSceneMediaSync } from './scene-media-seek';
 
 export type SceneCallbacks = {
   readonly onContentReady: (() => void) | undefined;
@@ -39,6 +43,7 @@ export function BackgroundLayer({
   framing,
   letterboxFillSrc,
   callbacks,
+  seekClock,
 }: {
   readonly object: CanvasObject;
   readonly carrier: SceneCarrier;
@@ -53,6 +58,9 @@ export function BackgroundLayer({
    * letterbox — miroir `StoryBackgroundLayer+LetterboxFill.swift:54-56`). */
   readonly letterboxFillSrc: string | undefined;
   readonly callbacks: { readonly current: SceneCallbacks };
+  /** L'horloge du parcours au doigt (#7879) — la vidéo de fond (qui boucle)
+   * s'y recale à chaque `seek`. */
+  readonly seekClock: SceneClockHandle | null;
 }) {
   const { payload } = object;
   const mediaType = typeof payload.mediaType === 'string' ? payload.mediaType : undefined;
@@ -101,20 +109,20 @@ export function BackgroundLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
-  useEffect(() => {
-    const el = videoRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    // `muted` est une dépendance : un refus sonore rend la main à l'hôte, qui
-    // repasse en muet — et c'est CE rendu qui relance la lecture, muette.
-    void el.play().catch((error: unknown) => {
+  // LE FOND SUIT LA TIMELINE DE LA SCÈNE (#7879) : il boucle, donc son temps
+  // est le temps de scène modulo sa durée (miroir `loopedScrubTarget`), en
+  // lecture comme au seek. `muted` relance la lecture : un refus sonore rend la
+  // main à l'hôte, qui repasse en muet — et c'est CE rendu qui relance, muet.
+  useSceneMediaSync({
+    ref: videoRef,
+    clock: seekClock,
+    timeline: backgroundMediaTimeline(object),
+    playing,
+    restartKeys: [muted, src],
+    onPlayRefused: (error, el) => {
       if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked?.();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, muted, src]);
+    },
+  });
 
   // Peint AVANT le média (donc dessous, à défaut d'ordre-z explicite) —
   // « une SURFACE de composition, jamais un vide » (directive porteur

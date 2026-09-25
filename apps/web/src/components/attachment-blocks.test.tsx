@@ -39,6 +39,9 @@ const attachmentOf = (id: string): Attachment => {
   return attachment;
 };
 
+/** Le texte LU, balises retirées — le karaoké découpe la transcription en segments (#7911). */
+const textOf = (html: string): string => html.replace(/<[^>]+>/g, '');
+
 const renderOne = (attachment: Attachment, params: { readonly languages: readonly string[]; readonly displayLanguage?: string }) =>
   renderToStaticMarkup(
     <Attachments
@@ -101,6 +104,21 @@ describe('Attachments — l’image (#5805)', () => {
   });
 });
 
+describe('Attachments — le vocal suit sa lecture mot à mot (#7911)', () => {
+  const voiceEn = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
+
+  test('la transcription servie se découpe en segments, au repos tant que rien ne joue', () => {
+    const html = renderOne(voiceEn, { languages: ['de', 'fr'] });
+    expect(html).toContain('data-karaoke="idle"');
+    expect(html).not.toContain('data-karaoke="active"');
+  });
+
+  test('segmentée, le bloc ne porte plus l’opacité qui plafonnait le mot actif', () => {
+    const html = renderOne(voiceEn, { languages: ['de', 'fr'] });
+    expect(html).not.toMatch(/<p [^>]*data-transcript[^>]*style="[^"]*opacity/);
+  });
+});
+
 describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 128)', () => {
   const voiceEn = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
   const voiceDe = attachmentOf(MEDIA_VOICE_DE_WITNESS_ID);
@@ -110,7 +128,7 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
     expect(html).toContain('data-track-language="de"');
     expect(html).toContain(`src="${voiceEn.translations!.de!.url}"`);
     expect(html).toMatch(/<p [^>]*data-transcript[^>]*\slang="de"/);
-    expect(html).toContain('Hallo Team, das Deployment war um drei fertig, ich schicke den Bericht.');
+    expect(textOf(html)).toContain('Hallo Team, das Deployment war um drei fertig, ich schicke den Bericht.');
   });
 
   /**
@@ -160,7 +178,7 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
     const html = renderOne(voiceEn, { languages: ['en', 'fr'] });
     expect(html).toContain(`src="${voiceEn.fileUrl}"`);
     expect(html).toContain('data-track-language="en"');
-    expect(html).toContain('Hello team, the deploy finished at three, I am sending the report.');
+    expect(textOf(html)).toContain('Hello team, the deploy finished at three, I am sending the report.');
     expect(html).toContain('lang="en"');
   });
 
@@ -526,6 +544,44 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
     const bar = container.querySelector('[data-consumption]') as HTMLElement | null;
     expect(bar).not.toBeNull();
     expect(bar?.style.width).toBe('50%');
+  });
+
+  test('#7911 — en lecture, le mot prononcé passe en GRAS à l’encre primaire ; à la pause, le texte redevient uniforme', async () => {
+    const voice = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[voice]} languages={['en']} fallbackLanguage="en" mediaFrame="box" />);
+    });
+
+    const audio = container.querySelector('audio')!;
+    audio.play = () => {
+      audio.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    audio.pause = () => {
+      audio.dispatchEvent(new Event('pause'));
+    };
+    Object.defineProperty(audio, 'duration', { value: 12, configurable: true });
+    Object.defineProperty(audio, 'currentTime', { value: 11.9, configurable: true, writable: true });
+
+    await act(async () => {
+      (container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement).click();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+
+    const active = [...container.querySelectorAll<HTMLElement>('[data-karaoke="active"]')];
+    expect(active).toHaveLength(1);
+    expect(active[0]?.textContent).toBe('report.');
+    expect(active[0]?.style.fontWeight).toBe('700');
+    expect(active[0]?.style.color).toBe('var(--color-karaoke-ink)');
+    expect(container.querySelectorAll('[data-karaoke="past"]').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      (container.querySelector('button[aria-label="Mettre en pause"]') as HTMLButtonElement).click();
+    });
+    expect(container.querySelector('[data-karaoke="active"]')).toBeNull();
   });
 });
 

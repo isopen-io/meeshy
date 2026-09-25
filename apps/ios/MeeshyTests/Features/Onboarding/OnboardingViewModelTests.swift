@@ -79,7 +79,8 @@ final class OnboardingViewModelTests: XCTestCase {
             permission: notif,
             pickTemplate: { _ in 0 },
             applyUser: { applied.users.append($0) },
-            settled: settled
+            settled: settled,
+            pause: { _ in }
         )
         return SUT(model: model, service: service, messages: messages, friends: friends,
                    users: users, progress: progress, permission: notif, appliedUsers: applied,

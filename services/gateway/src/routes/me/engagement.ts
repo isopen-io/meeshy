@@ -160,6 +160,11 @@ const engagementResponseSchema = {
 const PLAFOND_PALIERS = maxEngagementMilestonesPerUser(ACHIEVEMENT_FAMILIES);
 
 export async function meEngagementRoutes(fastify: FastifyInstance) {
+  // UNE instance pour la vie du plugin (#7909) : son cache d'une heure ne sert
+  // que si elle survit à la requête. Construite par requête, elle rejouait
+  // trois `groupBy` sur des collections entières à chaque ouverture.
+  const reachService = new AchievementReachService(fastify.prisma);
+
   fastify.get(
     '/engagement',
     {
@@ -195,7 +200,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones, frappes, totauxMeesh] = await Promise.all([
+        const [user, counters, milestones, frappes, totauxMeesh, reach] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -241,6 +246,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           // LE SOLDE ET LES FRAPPES, lus au registre (#6428) — la même loi que
           // la frappe écrit, jamais la colonne qu'un incrément a pu laisser nulle.
           meeshTotalsFromLedger(fastify.prisma, userId),
+          // La carte d'atteignabilité — mise en cache une heure par l'instance
+          // du plugin : la plus grande conversation du produit ne bouge pas
+          // plus vite. Lue EN MÊME TEMPS que le reste, jamais après.
+          reachService.load(),
         ]);
 
         if (!user) {
@@ -254,9 +263,6 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // décider s'il montre le bouton. Le score TOTAL et le score DÉBITABLE
         // sont deux chiffres distincts : les conversations comptent dans le
         // niveau et ne se dépensent jamais (plancher inaliénable, #5743).
-        // La carte d'atteignabilité — mise en cache une heure côté service : la
-        // plus grande conversation du produit ne bouge pas plus vite.
-        const reach = await new AchievementReachService(fastify.prisma).load();
 
         // L'élan COURANT — ce que le PROCHAIN geste créditera. Dérivé des lignes
         // déjà lues, jamais relu : la route paierait deux fois la même

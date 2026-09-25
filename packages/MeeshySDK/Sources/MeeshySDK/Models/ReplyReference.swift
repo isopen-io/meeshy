@@ -117,6 +117,9 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
     /// `storyPublishedAt` porte alors la date de publication du mood.
     public var moodEmoji: String?
+    /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
+    /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
+    public var storyAuthorId: String?
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
@@ -163,7 +166,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     }
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
-                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil,
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
                 attachmentFacts: QuotedAttachmentFacts? = nil) {
         self.messageId = messageId
         self.authorName = authorName
@@ -189,6 +192,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.storyShareCount = storyShareCount
         self.storyThumbnailUrl = storyThumbnailUrl
         self.moodEmoji = moodEmoji
+        self.storyAuthorId = storyAuthorId
     }
 }
 

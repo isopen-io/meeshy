@@ -4,7 +4,6 @@ import {
   UserRoleEnum,
   UserAuditAction,
   PaginatedUsersResponse,
-  UserFilters,
   CreateUserDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
@@ -37,6 +36,10 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserProfileReadRoutes } from './user-profile-reads';
+import { registerUserMemberStatsRoutes } from './user-member-stats';
+import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
+import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -45,6 +48,11 @@ import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
+
+const userConversationSortSchema = z.object({
+  sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc')
+});
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -63,27 +71,6 @@ export {
   type PermissionReport,
   type SeuilReport
 } from './user-reports';
-
-// Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
-// ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
-// sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
-// silence (un 403 confirmerait l'existence du filtre) et le tri retombe sur
-// createdAt.
-const PRESENCE_SORT_KEYS: ReadonlySet<string> = new Set(['lastActiveAt', 'isOnline']);
-
-type PresenceGatedFilters = Pick<UserFilters, 'lastActiveAfter' | 'lastActiveBefore' | 'sortBy'>;
-
-function presenceGatedFilters(query: UserFilters, canViewPresence: boolean): PresenceGatedFilters {
-  const requestedSort = query.sortBy || 'createdAt';
-  if (!canViewPresence) {
-    return { sortBy: PRESENCE_SORT_KEYS.has(requestedSort) ? 'createdAt' : requestedSort };
-  }
-  return {
-    lastActiveAfter: query.lastActiveAfter ? new Date(query.lastActiveAfter) : undefined,
-    lastActiveBefore: query.lastActiveBefore ? new Date(query.lastActiveBefore) : undefined,
-    sortBy: requestedSort
-  };
-}
 
 // Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
 // chaque appel, pas capturé ici — il n'existe pas encore quand les routes
@@ -144,11 +131,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
 
+  // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
+  // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
+  registerUserProfileReadRoutes(fastify, { userAuditService });
+
+  // Page membre de l'administration web (#7845) : compteurs de la fiche, et
+  // préférences lues / écrites sous les gardes des écritures de compte.
+  registerUserMemberStatsRoutes(fastify);
+  registerUserMemberPreferencesRoutes(fastify, { userAuditService });
+
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
    */
   fastify.get<{
-    Querystring: UserFilters & { offset?: string; limit?: string };
+    Querystring: UserListQuery;
   }>('/admin/users', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
@@ -156,18 +152,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      const filters: UserFilters = {
-        search: request.query.search,
-        role: request.query.role,
-        isActive: request.query.isActive,
-        emailVerified: request.query.emailVerified,
-        phoneVerified: request.query.phoneVerified,
-        twoFactorEnabled: request.query.twoFactorEnabled,
-        createdAfter: request.query.createdAfter ? new Date(request.query.createdAfter) : undefined,
-        createdBefore: request.query.createdBefore ? new Date(request.query.createdBefore) : undefined,
-        ...presenceGatedFilters(request.query, permissionsService.canViewPresence(viewerRole)),
-        sortOrder: request.query.sortOrder || 'desc'
-      };
+      // #7873 — la querystring arrive en CHAÎNES : `userListFilters` traduit
+      // booléens, rôle, dates et tri, et porte la loi de présence (bornes
+      // `lastActive*` et tri par présence réservés à `canViewPresence`).
+      const filters = userListFilters(request.query, permissionsService.canViewPresence(viewerRole));
 
       const pagination = validatePagination(request.query.offset, request.query.limit);
 
@@ -661,16 +649,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
    * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
    * onto each conversation. Requires canViewUsers permission.
+   *
+   * #7845 — `sortBy` (lastMessageAt, par défaut, ou createdAt) et `sortOrder`
+   * (desc, par défaut, ou asc). `joinedAt` n'est pas offert : il vit sur la
+   * participation, et `conversation.findMany` ne trie pas par la colonne d'une
+   * relation filtrée. Validés par Zod dans le handler (400 hors liste).
    */
   fastify.get<{
     Params: { userId: string };
-    Querystring: { offset?: string; limit?: string; type?: string };
+    Querystring: { offset?: string; limit?: string; type?: string; sortBy?: string; sortOrder?: string };
   }>('/admin/users/:userId/conversations', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
       const { offset = '0', limit, type } = request.query;
+      const tri = userConversationSortSchema.safeParse(request.query);
+      if (!tri.success) {
+        return sendBadRequest(reply, 'VALIDATION_ERROR', {
+          message: 'sortBy must be lastMessageAt or createdAt, sortOrder asc or desc'
+        });
+      }
+      const { sortBy, sortOrder } = tri.data;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
 
       const userExists = await fastify.prisma.user.findUnique({
@@ -726,7 +726,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
               }
             }
           },
-          orderBy: { lastMessageAt: 'desc' },
+          orderBy: { [sortBy]: sortOrder },
           skip: offsetNum,
           take: limitNum
         }),

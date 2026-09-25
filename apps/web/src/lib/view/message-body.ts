@@ -191,6 +191,14 @@ export type StoryCitation = {
   readonly previewText: string;
   readonly thumbnailUrl: string | null;
   readonly createdAt: string;
+  /**
+   * La passerelle n'a servi AUCUN instantané : le message n'en gravait pas et
+   * le post cité n'existe plus (« post supprimé sans snapshot → citation
+   * absente », `enrichPostReplyMessagesForList`). Rien à montrer, rien à
+   * ouvrir — mais la réponse garde la trace de ce à quoi elle répondait
+   * (`MessageModels.swift:914-920`, #7881).
+   */
+  readonly unavailable: boolean;
 };
 
 /**
@@ -205,7 +213,9 @@ export function storyCitationOf(
 ): StoryCitation | null {
   if (message.storyReplyToId === undefined) return null;
   const raw = hoistedOf(message, 'postReplyTo');
-  if (raw === undefined || raw === null || typeof raw !== 'object') return null;
+  if (raw === undefined || raw === null || typeof raw !== 'object') {
+    return { id: message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+  }
 
   const obj = raw as MetadataRecord;
   if (obj.moodEmoji !== null && obj.moodEmoji !== undefined) return null;
@@ -216,6 +226,39 @@ export function storyCitationOf(
     previewText: typeof obj.previewText === 'string' ? obj.previewText : '',
     thumbnailUrl: typeof obj.thumbnailUrl === 'string' ? obj.thumbnailUrl : null,
     createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : new Date(0).toISOString(),
+    unavailable: false,
+  };
+}
+
+/**
+ * L'HUMEUR CITÉE (#7881) — la moitié que `storyCitationOf` écarte : un
+ * `postReplyTo` à `moodEmoji` non nul (`buildPostReplyTo`,
+ * `postReplySnapshot.ts`). Elle n'a pas de scène ; elle se rend DANS la
+ * citation, comme `BubbleMoodReplyPreview` (`BubbleQuotedReply.swift`) :
+ * emoji, contenu, auteur (vide sur un snapshot legacy), date.
+ */
+export type MoodCitation = {
+  readonly id: string;
+  readonly emoji: string;
+  readonly text: string;
+  readonly authorName: string;
+  readonly createdAt: string;
+};
+
+export function moodCitationOf(
+  message: Pick<Message, 'storyReplyToId' | 'metadata'> & HoistedFields,
+): MoodCitation | null {
+  if (message.storyReplyToId === undefined) return null;
+  const raw = hoistedOf(message, 'postReplyTo');
+  if (raw === undefined || raw === null || typeof raw !== 'object') return null;
+  const obj = raw as MetadataRecord;
+  if (typeof obj.moodEmoji !== 'string' || obj.moodEmoji === '') return null;
+  return {
+    id: typeof obj.id === 'string' ? obj.id : '',
+    emoji: obj.moodEmoji,
+    text: typeof obj.previewText === 'string' ? obj.previewText : '',
+    authorName: typeof obj.authorName === 'string' ? obj.authorName : '',
+    createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : '',
   };
 }
 

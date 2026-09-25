@@ -331,7 +331,20 @@ export const parseCatalogBlock = (blockLines) => {
 // générée depuis le manifeste quand la passerelle a monté la route. Son client
 // web (l'écran de détail d'un lien, développé en parallèle) écrit l'adresse en
 // littéral comme tout `apps/web` : morte ici au même titre, jusqu'à #7716.
-const BASELINE_DEAD_ENTRIES = 457;
+// 457 → 460 (#7873) : `admin.anonymousUsersByParticipantId`,
+// `admin.usersByUserIdCommunities` et `admin.usersByUserIdVoiceProfile`,
+// générées depuis `route-manifest.json`. L'espace d'administration web les
+// appelle par adresse écrite, comme toutes ses lectures admin voisines déjà au
+// compte (`admin.usersByUserIdActivity`, `admin.anonymousUsers`…) : ce lot
+// n'ouvre pas la migration du web vers le catalogue. Valeur MESURÉE sur la
+// branche du 2026-09-25.
+// 460 → 463 (#7845, 2026-09-25) : `admin.usersByUserIdStats`,
+// `admin.usersByUserIdPreferences` et `admin.usersByUserIdPreferencesByCategory`,
+// générées depuis `route-manifest.json`. La page membre de l'espace
+// d'administration web les appelle par adresse écrite, comme ses lectures
+// admin voisines déjà au compte ; aucun écran d'administration iOS ne les
+// appelle. Valeur MESURÉE sur la branche du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 463;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

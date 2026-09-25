@@ -296,3 +296,184 @@ describe('GET /anonymous-users — DB error', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+// ─── #7873 — tri et filtre de langue ─────────────────────────────────────────
+// Le tri est une LISTE BLANCHE lue par le handler (jamais la chaîne brute
+// passée à `orderBy`), et le tri par `lastActiveAt` est réservé à
+// `canViewPresence` : une SÉLECTION ou un ORDRE qui dépend de la présence
+// révèle autant que le champ masqué.
+
+async function buildAppCapturing(role: string, participant: Record<string, unknown> = {}) {
+  const findMany = jest.fn<any>().mockResolvedValue([]);
+  const count = jest.fn<any>().mockResolvedValue(0);
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('authenticate', async (req: any) => {
+    (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role } };
+  });
+  app.decorate('prisma', makePrisma({ participant: { findMany, count, ...participant } }) as any);
+  await app.register(anonymousUsersAdminRoutes);
+  await app.ready();
+  return { app, findMany, count };
+}
+
+describe('GET /anonymous-users — tri en liste blanche (#7873)', () => {
+  const orderByFor = async (role: string, query: string) => {
+    const { app, findMany } = await buildAppCapturing(role);
+    const res = await app.inject({ method: 'GET', url: `/anonymous-users${query}` });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    return (findMany.mock.calls[0][0] as { orderBy: unknown }).orderBy;
+  };
+
+  it('trie par joinedAt desc par défaut', async () => {
+    expect(await orderByFor('ADMIN', '')).toEqual({ joinedAt: 'desc' });
+  });
+
+  it('trie par displayName asc quand demandé', async () => {
+    expect(await orderByFor('ADMIN', '?sortBy=displayName&sortOrder=asc')).toEqual({ displayName: 'asc' });
+  });
+
+  it('retombe sur les défauts pour une clé ou un sens inconnus', async () => {
+    expect(await orderByFor('ADMIN', '?sortBy=sessionTokenHash&sortOrder=sideways')).toEqual({ joinedAt: 'desc' });
+  });
+
+  it('trie par lastActiveAt pour ADMIN (canViewPresence)', async () => {
+    expect(await orderByFor('ADMIN', '?sortBy=lastActiveAt&sortOrder=asc')).toEqual({ lastActiveAt: 'asc' });
+  });
+
+  it('retombe sur joinedAt quand un MODERATOR trie par lastActiveAt (l\'ORDRE révèle la présence)', async () => {
+    expect(await orderByFor('MODERATOR', '?sortBy=lastActiveAt&sortOrder=asc')).toEqual({ joinedAt: 'asc' });
+  });
+});
+
+describe('GET /anonymous-users — filtre de langue (#7873)', () => {
+  it('filtre exactement sur participant.language, sur la liste ET sur le compte', async () => {
+    const { app, findMany, count } = await buildAppCapturing('ADMIN');
+    await app.inject({ method: 'GET', url: '/anonymous-users?language=fr' });
+    await app.close();
+    expect((findMany.mock.calls[0][0] as { where: unknown }).where).toEqual({ type: 'anonymous', language: 'fr' });
+    expect((count.mock.calls[0][0] as { where: unknown }).where).toEqual({ type: 'anonymous', language: 'fr' });
+  });
+
+  it('n\'ajoute aucun filtre de langue quand il est absent', async () => {
+    const { app, findMany } = await buildAppCapturing('ADMIN');
+    await app.inject({ method: 'GET', url: '/anonymous-users' });
+    await app.close();
+    expect((findMany.mock.calls[0][0] as { where: Record<string, unknown> }).where).not.toHaveProperty('language');
+  });
+});
+
+// ─── #7873 — GET /anonymous-users/:participantId ────────────────────────────
+
+describe('GET /anonymous-users/:participantId', () => {
+  const PARTICIPANT_ID = '507f1f77bcf86cd799439aaa';
+  const SHARE_LINK_ID = '507f1f77bcf86cd799439bbb';
+  const row = {
+    id: PARTICIPANT_ID,
+    displayName: 'Anon',
+    avatar: null,
+    language: 'es',
+    isActive: true,
+    isOnline: true,
+    lastActiveAt: new Date('2026-09-20T10:00:00.000Z'),
+    joinedAt: new Date('2026-09-01T00:00:00.000Z'),
+    leftAt: null,
+    permissions: { canSendMessages: true },
+    conversationId: 'conv-1',
+    shareLinkId: SHARE_LINK_ID,
+    conversation: { id: 'conv-1', identifier: 'mshy_public', title: 'Public', type: 'public' },
+    _count: { sentMessages: 9 },
+  };
+  const link = { id: SHARE_LINK_ID, name: 'Lien presse', isActive: true, expiresAt: null, createdAt: new Date('2026-08-01T00:00:00.000Z') };
+
+  async function buildDetailApp(role: string, participant: unknown = row, shareLink: unknown = link) {
+    const findFirst = participant instanceof Error
+      ? jest.fn<any>().mockRejectedValue(participant)
+      : jest.fn<any>().mockResolvedValue(participant);
+    const findUnique = jest.fn<any>().mockResolvedValue(shareLink);
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any) => {
+      (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role } };
+    });
+    app.decorate('prisma', makePrisma({
+      participant: { findFirst },
+      conversationShareLink: { findUnique },
+    }) as any);
+    await app.register(anonymousUsersAdminRoutes);
+    await app.ready();
+    return { app, findFirst, findUnique };
+  }
+
+  const fetchDetail = async (role: string, id = PARTICIPANT_ID, participant: unknown = row, shareLink: unknown = link) => {
+    const built = await buildDetailApp(role, participant, shareLink);
+    const res = await built.app.inject({ method: 'GET', url: `/anonymous-users/${id}` });
+    await built.app.close();
+    return { res, ...built };
+  };
+
+  it('refuse USER (403)', async () => {
+    const { res } = await fetchDetail('USER');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('rend 400 pour un identifiant qui n\'est pas un ObjectId', async () => {
+    const { res, findFirst } = await fetchDetail('ADMIN', 'not-an-id');
+    expect(res.statusCode).toBe(400);
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it('ne cherche QUE parmi les participants anonymes, et rend 404 sinon', async () => {
+    const { res, findFirst } = await fetchDetail('ADMIN', PARTICIPANT_ID, null);
+    expect(res.statusCode).toBe(404);
+    expect((findFirst.mock.calls[0][0] as { where: unknown }).where).toEqual({ id: PARTICIPANT_ID, type: 'anonymous' });
+  });
+
+  it('sert le participant, sa conversation, son lien d\'arrivée et son nombre de messages', async () => {
+    const { res } = await fetchDetail('ADMIN');
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data).toEqual(expect.objectContaining({
+      id: PARTICIPANT_ID,
+      displayName: 'Anon',
+      language: 'es',
+      isOnline: true,
+      lastActiveAt: '2026-09-20T10:00:00.000Z',
+      conversation: { id: 'conv-1', identifier: 'mshy_public', title: 'Public', type: 'public' },
+      _count: { sentMessages: 9 },
+      shareLink: { id: SHARE_LINK_ID, name: 'Lien presse', isActive: true, expiresAt: null, createdAt: '2026-08-01T00:00:00.000Z' },
+    }));
+    expect(data).not.toHaveProperty('shareLinkId');
+  });
+
+  it('sert shareLink=null pour un participant ajouté hors lien, sans interroger les liens', async () => {
+    const { res, findUnique } = await fetchDetail('ADMIN', PARTICIPANT_ID, { ...row, shareLinkId: null });
+    expect(res.json().data.shareLink).toBeNull();
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('ne demande ni secret de session, ni session embarquée, ni clé de jointure du lien', async () => {
+    const { findFirst, findUnique } = await fetchDetail('BIGBOSS');
+    const { select } = findFirst.mock.calls[0][0] as { select: Record<string, unknown> };
+    expect(select).not.toHaveProperty('sessionTokenHash');
+    expect(select).not.toHaveProperty('anonymousSession');
+    expect(select).toHaveProperty('shareLinkId', true);
+    const linkSelect = (findUnique.mock.calls[0][0] as { select: Record<string, unknown> }).select;
+    expect(linkSelect).not.toHaveProperty('linkId');
+    expect(linkSelect).not.toHaveProperty('identifier');
+    expect(linkSelect).not.toHaveProperty('allowedIpRanges');
+  });
+
+  it('masque isOnline/lastActiveAt pour MODERATOR, comme la liste', async () => {
+    const { res } = await fetchDetail('MODERATOR');
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+    expect(data.id).toBe(PARTICIPANT_ID);
+  });
+
+  it('rend 500 quand la base lève', async () => {
+    const { res } = await fetchDetail('ADMIN', PARTICIPANT_ID, new Error('DB crash'));
+    expect(res.statusCode).toBe(500);
+  });
+});

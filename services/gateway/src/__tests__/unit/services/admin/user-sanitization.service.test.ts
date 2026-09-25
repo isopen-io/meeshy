@@ -34,6 +34,7 @@ function makeFullUser(overrides: Partial<FullUser> = {}): FullUser {
     email: 'john.doe@example.com',
     phoneNumber: '+33612345678',
     avatar: null,
+    banner: null,
     role: 'USER',
     isActive: true,
     isOnline: false,
@@ -173,6 +174,14 @@ describe('UserSanitizationService.sanitizeUser — non-sensitive viewer', () => 
     expect(result.firstName).toBe(user.firstName);
     expect(result.role).toBe(user.role);
     expect(result.isActive).toBe(user.isActive);
+  });
+
+  it('sert la bannière avec l’avatar, pour tout viewer admin (#7845)', () => {
+    const svc = makeService();
+    const user = makeFullUser({ avatar: '/a.jpg', banner: '/b.jpg' });
+    const masque = svc.sanitizeUser(user, UserRoleEnum.MODERATOR);
+    const complet = svc.sanitizeUser(user, UserRoleEnum.ADMIN);
+    expect([masque.avatar, masque.banner, complet.banner]).toEqual(['/a.jpg', '/b.jpg', '/b.jpg']);
   });
 });
 

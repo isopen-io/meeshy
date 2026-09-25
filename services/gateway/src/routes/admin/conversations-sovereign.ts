@@ -82,6 +82,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
       isActive?: string;
       search?: string;
       sort?: string;
+      order?: string;
       createdAfter?: string;
       createdBefore?: string;
     };
@@ -120,6 +121,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
           isActive: { type: 'string', description: '"true" / "false" — filtre sur l\'activité' },
           search: { type: 'string', description: 'Recherche sur le TITRE et l\'IDENTIFIANT, jamais sur le contenu' },
           sort: { type: 'string', enum: [...TRIS], description: 'lastMessageAt (défaut) ou createdAt' },
+          order: { type: 'string', enum: ['asc', 'desc'], description: 'desc (défaut) ou asc — #7873' },
           createdAfter: { type: 'string', format: 'date-time' },
           createdBefore: { type: 'string', format: 'date-time' }
         }
@@ -190,6 +192,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
         isActive,
         search,
         sort,
+        order,
         createdAfter,
         createdBefore,
       } = request.query as {
@@ -199,6 +202,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
         isActive?: string;
         search?: string;
         sort?: string;
+        order?: string;
         createdAfter?: string;
         createdBefore?: string;
       };
@@ -284,7 +288,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
               },
             },
           },
-          orderBy: { [triDemande]: 'desc' },
+          orderBy: { [triDemande]: order === 'asc' ? 'asc' : 'desc' },
           skip: offsetNum,
           take: limitNum,
         }),

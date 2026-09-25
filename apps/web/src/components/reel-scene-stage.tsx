@@ -3,6 +3,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { BackgroundTrackAudio } from './background-track-audio';
 import { Glyph } from './glyph';
 import { RAIL_DISC, ReelPoster } from './reel-poster';
+import type { SceneClockHandle } from './scene-clock';
+import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { fitScene, SCENE_RATIO } from '@/lib/canvas/fit';
@@ -43,6 +45,13 @@ const ScenePlayer = lazy(() => import('./scene-player'));
  * observé par la SEULE barre. Sans durée connue (`duration === null`),
  * AUCUNE barre : un contrôle qui ne bougerait jamais est un contrôle qui
  * ment (loi 4).
+ *
+ * **La scène se PARCOURT au doigt** (#7879, renverse « la scène se rejoue,
+ * elle ne se parcourt pas ») : la barre est un slider (`SceneScrubBar`). Le
+ * doigt posé SUSPEND la lecture (`scrubbing`, distinct de la pause du tap :
+ * relâcher ne défait jamais une pause choisie), chaque mouvement redessine la
+ * scène par l'horloge du moteur (`onClock` → `seek`) et recale la piste de
+ * fond ; relâcher reprend DEPUIS le temps pointé.
  *
  * **DEUX cadres, et il faut les distinguer** (revue-correction #6903) : la
  * BOÎTE (`[data-reel-scene-stage]`) est la scène ajustée 9:16, qui laisse des
@@ -98,17 +107,24 @@ export default function ReelSceneStage({
   const [hidden, setHidden] = useState(documentHiddenNow);
   const [knownMaxMs, setKnownMaxMs] = useState<number | null>(null);
   const [pass, setPass] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
+  /** La poignée de l'horloge du moteur — reçue UNE fois (`onClock`), remise
+   * aussi à la piste de fond pour qu'elle suive le temps pointé. */
+  const [clock, setClock] = useState<SceneClockHandle | null>(null);
+  const painterRef = useRef<SceneScrubPainter | null>(null);
   /** LE SON DE FOND PEUT ÊTRE DÉFINITIVEMENT INDISPONIBLE (revue-correction
    * #7015, défaut 2) — même dégradation dessinée que `story-scene-layer.tsx`,
    * pour la MÊME piste résolue par le MÊME `BackgroundTrackAudio`. */
   const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
-  const barRef = useRef<HTMLSpanElement | null>(null);
   const track = electBackgroundTrack({ document: scene.document, sceneIndex: 0, carrier: scene.carrier });
 
   // Quitter la page OUBLIE la pause (miroir `ReelsPlayerView+Scene.swift:111-115`) :
   // un retour ultérieur en `active` rejoue SANS tap.
   useEffect(() => {
-    if (mode !== 'active') setPaused(false);
+    if (mode !== 'active') {
+      setPaused(false);
+      setScrubbing(false);
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -130,16 +146,15 @@ export default function ReelSceneStage({
   const scene0 = scene.document.scenes[0];
   const declared = scene0 !== undefined ? sceneDurationSeconds(scene0) : null;
   const duration = reelSceneDuration({ declared, knownMs: knownMaxMs === null ? [] : [knownMaxMs] });
-  const playing = reelScenePlays({ active: mode === 'active', paused, documentHidden: hidden });
+  const playing = reelScenePlays({ active: mode === 'active', paused: paused || scrubbing, documentHidden: hidden });
   const muted = !soundOn;
 
   const box = fitScene({ viewport: outer, ratio: SCENE_RATIO });
   const placed = box.width > 0 && box.height > 0;
 
   const writeProgress = (t: number) => {
-    const el = barRef.current;
-    if (el === null || duration === null) return;
-    el.style.transform = `scaleX(${reelSceneProgress({ elapsed: t, duration })})`;
+    if (duration === null) return;
+    painterRef.current?.(reelSceneProgress({ elapsed: t, duration }));
   };
 
   return (
@@ -170,6 +185,7 @@ export default function ReelSceneStage({
             onPlaybackBlocked={onSoundBlocked}
             onTime={writeProgress}
             onLoop={() => setPass((p) => p + 1)}
+            onClock={setClock}
           />
         </Suspense>
         {mode === 'active' && track !== null ? (
@@ -180,6 +196,7 @@ export default function ReelSceneStage({
             muted={muted}
             onDurationKnown={noteDuration}
             onPlaybackBlocked={onSoundBlocked}
+            clock={clock}
             onUnavailable={(reason) => {
               setSoundUnavailable(reason);
               onSoundUnavailable?.(reason);
@@ -204,7 +221,7 @@ export default function ReelSceneStage({
         className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
         style={{ outlineColor: 'white', WebkitTapHighlightColor: 'transparent' }}
       >
-        {!playing ? (
+        {!playing && !scrubbing ? (
           <span aria-hidden="true" className="grid size-18 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
             <Glyph name="fillPlay" size={34} className="text-white" />
           </span>
@@ -215,24 +232,28 @@ export default function ReelSceneStage({
           sous la rangée auteur et le rail (`ReelsPlayerView.swift:656-664`),
           et le réel VIDÉO du web l'y pose déjà (`ReelPlayable`). Dans la
           boîte, elle atterrissait à 76 px du bas, contre la rangée auteur —
-          deux réels du même écran, deux places. `z-10` la fait passer
-          au-dessus du VOILE BAS, qui l'effaçait (mesuré : `rgb(15,15,36)`
-          contre `rgb(12,12,12)`) — même remède que `ReelPlayable`. */}
+          deux réels du même écran, deux places. `z-index: 10`
+          (`scene-scrub.css`) la fait passer au-dessus du VOILE BAS, qui
+          l'effaçait (mesuré : `rgb(15,15,36)` contre `rgb(12,12,12)`) —
+          même remède que `ReelPlayable`. Sa zone de frappe (44 px, #7879)
+          reste SOUS l'identité et le rail, peints après elle : ils gardent
+          leur geste. */}
       {duration !== null ? (
-        <>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px]"
-            style={{ backgroundColor: 'rgba(255,255,255,0.3)' }}
-          />
-          <span
-            aria-hidden="true"
-            data-reel-progress
-            ref={barRef}
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
-            style={{ backgroundColor: accent, transform: 'scaleX(0)' }}
-          />
-        </>
+        <SceneScrubBar
+          durationSeconds={duration}
+          language={language}
+          align="bottom"
+          fill={accent}
+          painterRef={painterRef}
+          onScrubStart={() => setScrubbing(true)}
+          onScrub={(seconds) => clock?.seek(seconds)}
+          onScrubEnd={(seconds) => {
+            clock?.seek(seconds);
+            setScrubbing(false);
+          }}
+          className="inset-x-0 bottom-0"
+          fillAttributes={{ 'data-reel-progress': '' }}
+        />
       ) : null}
     </div>
   );

@@ -860,6 +860,9 @@ struct StoryCardView: View {
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
+    /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
+    /// la story COURANTE s'y attache au montage.
+    @State private var sceneScrubber = ScenePlaybackScrubber()
 
     /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
     /// backdrop ThumbHash, elle, est rendue immédiatement (cache-first).
@@ -887,6 +890,8 @@ struct StoryCardView: View {
     /// Vrai pendant un scrub longpress→drag sur le rail (pause le timer,
     /// neutralise la navigation du canvas).
     let onScrubStateChanged: (Bool) -> Void
+    /// Recale le compte à rebours à la fraction choisie sur la barre (#7878).
+    let seekTimer: (Double) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
     /// Unified-timeline gate : the canvas reports whether its PRIMARY video is
@@ -1099,6 +1104,7 @@ struct StoryCardView: View {
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
                               servesLetterboxFill: false,
+                              scrubber: sceneScrubber,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1118,6 +1124,7 @@ struct StoryCardView: View {
                                      mute: isGlobalMuted,
                                      isPaused: isCanvasPlaybackPaused,
                                      servesLetterboxFill: false,
+                                     scrubber: sceneScrubber,
                                      onContentReady: { isContentReady = true },
                                      onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
                                      onPlaybackProgressing: { progressing in
@@ -1562,7 +1569,10 @@ struct StoryCardView: View {
                 StoryProgressBarsView(
                     group: currentGroup,
                     currentIndex: currentStoryIndex,
-                    progress: progress
+                    progress: progress,
+                    scrubber: sceneScrubber,
+                    onScrubStateChanged: onScrubStateChanged,
+                    onSeek: seekTimer
                 )
                     .padding(.horizontal, 12)
                     .padding(.top, topInset + 4)

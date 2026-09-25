@@ -18,6 +18,7 @@ import {
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
 import { READER_LOCALE } from '@/lib/reader';
 
+import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph } from './glyph';
 import { MaskedAttachment } from './masked-attachment';
 import { VideoTile } from './video-tile';
@@ -109,6 +110,7 @@ export function ImageTile({
       ) : (
         img
       )}
+      <AttachmentReactionBadge attachment={attachment} />
     </figure>
   );
 }
@@ -193,7 +195,13 @@ export const MediaGrid = memo(function MediaGrid({
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
     const overflowCount = slots[index]!.overflowCount;
-    if (maskedAttachment(attachment)) return <MaskedAttachment key={attachment.id} attachment={attachment} fill />;
+    if (maskedAttachment(attachment)) {
+      return (
+        <div key={attachment.id} className={CELL_CLASS[frame]}>
+          <MaskedAttachment attachment={attachment} fill />
+        </div>
+      );
+    }
     if (kindOf(attachment) === 'video') {
       return (
         <div key={attachment.id} className={CELL_CLASS[frame]} {...cellShape(index)}>
@@ -212,6 +220,7 @@ export const MediaGrid = memo(function MediaGrid({
           onOpen={() => onOpen(index)}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
+        <AttachmentReactionBadge attachment={attachment} />
         {overflowCount > 0 ? <OverflowVeil count={overflowCount} total={items.length} index={index} onOpen={onOpen} /> : null}
       </div>
     );

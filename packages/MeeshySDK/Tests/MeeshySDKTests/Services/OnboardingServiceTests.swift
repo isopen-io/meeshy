@@ -159,7 +159,67 @@ final class OnboardingServiceTests: XCTestCase {
         XCTAssertEqual(state.suggestions.count, 6)
     }
 
-    func test_stepOrder_isTheFiveCardsInContractOrder() {
-        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .global, .story, .friends, .notifications])
+    func test_stepOrder_isTheSixCardsInContractOrder() {
+        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .email, .global, .story, .friends, .notifications])
+    }
+
+    // MARK: - Vérification du courriel (#7907)
+
+    func test_decode_emailStep_isAKnownStep() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":["email"],"prefilledSteps":["email"],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[]}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.seenSteps, [.email])
+        XCTAssertEqual(state.prefilledSteps, [.email])
+    }
+
+    func test_decode_emailVerifiedAndCanPublishStory_areRead() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[],
+         "emailVerified":false,"canPublishStory":false}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.emailVerified, false)
+        XCTAssertEqual(state.canPublishStory, false)
+    }
+
+    func test_decode_stepRewards_areTheServedCreditsAtTheCurrentElan() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[],
+         "stepRewards":{"global":42,"story":30,"friendship":21},"pendingFriendRequests":2}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.stepRewards, APIOnboardingStepRewards(global: 42, story: 30, friendship: 21))
+    }
+
+    func test_decode_malformedStepRewards_isDroppedNeverAFailure() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[],
+         "stepRewards":{"global":"many"}}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertNil(state.stepRewards)
+        XCTAssertTrue(state.eligible)
+    }
+
+    func test_decode_olderGatewayWithoutVerificationFields_leavesThemUnknown() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[]}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertNil(state.emailVerified)
+        XCTAssertNil(state.canPublishStory)
+        XCTAssertNil(state.stepRewards)
     }
 }

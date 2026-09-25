@@ -54,6 +54,10 @@ export type AdminUserDetail = {
   readonly lastName: string;
   readonly bio: string;
   readonly avatar: string;
+  /** La bannière du profil — la chaîne vide quand il n'en a pas. */
+  readonly banner: string;
+  /** Le taux de complétion du profil (0–100) tel que servi, `null` s'il ne l'est pas. */
+  readonly profileCompletionRate: number | null;
   readonly email: string;
   readonly phoneNumber: string;
   readonly role: string;
@@ -129,6 +133,8 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     lastName: asText(charge.lastName),
     bio: asText(charge.bio),
     avatar: asText(charge.avatar),
+    banner: asText(charge.banner),
+    profileCompletionRate: typeof charge.profileCompletionRate === 'number' ? charge.profileCompletionRate : null,
     email: asText(charge.email),
     phoneNumber: asText(charge.phoneNumber),
     role: asText(charge.role) || 'USER',

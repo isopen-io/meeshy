@@ -1,7 +1,7 @@
 import { kindOf } from './message';
 import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
-import { bodyKindOf, placeOf, storyCitationOf } from './message-body';
+import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -271,8 +271,13 @@ export function composeMessageLabel({
      * de quelqu'un (`storyCitationOf`, miroir `BubbleStoryCitationCard`).
      */
     const storyCitation = storyCitationOf(message);
+    const moodCitation = moodCitationOf(message);
     if (storyCitation !== null) {
-      segments.push('réponse à sa story');
+      segments.push(translate(language, 'message.story.reply'));
+    } else if (moodCitation !== null) {
+      segments.push(
+        `${moodCitation.authorName !== '' ? moodCitation.authorName : translate(language, 'message.mood.label')}, ${moodCitation.emoji} ${moodCitation.text}`.trim(),
+      );
     } else if (message.replyTo) {
       const quotedAuthor = message.replyTo.sender?.displayName ?? 'expéditeur inconnu';
       segments.push(`réponse à ${quotedAuthor}`);
