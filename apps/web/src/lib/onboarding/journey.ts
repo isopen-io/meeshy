@@ -1,6 +1,6 @@
 import type { OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
 
-import { ONBOARDING_STEPS } from '@/lib/api/onboarding';
+import { ONBOARDING_COMPLETION_STEPS, ONBOARDING_STEPS } from '@/lib/api/onboarding';
 
 /**
  * **LA LOI DU PARCOURS D'ACCUEIL** (#7729) — pure : elle décide quelle carte
@@ -22,7 +22,16 @@ export type JourneyStep = OnboardingStepId | 'recap';
 export type JourneyProgress = {
   readonly done: readonly OnboardingStepId[];
   readonly friendRequests: readonly string[];
+  /**
+   * Le score d'engagement SERVI (`GET /me/engagement`) : `baseline` à la
+   * première lecture du parcours, `last` à la plus récente (#7908). Les points
+   * de la session sont leur écart — jamais une somme de barèmes locaux, que
+   * l'élan rend fausse.
+   */
+  readonly score?: ScoreMark;
 };
+
+export type ScoreMark = { readonly baseline: number; readonly last: number };
 
 export const EMPTY_PROGRESS: JourneyProgress = { done: [], friendRequests: [] };
 
@@ -38,6 +47,12 @@ export const withDone = (progress: JourneyProgress, step: OnboardingStepId): Jou
 
 export const withFriendRequest = (progress: JourneyProgress, userId: string): JourneyProgress =>
   progress.friendRequests.includes(userId) ? progress : { ...progress, friendRequests: [...progress.friendRequests, userId] };
+
+/** Une lecture du score servi : la première pose la base, les suivantes avancent `last`. */
+export const withScore = (progress: JourneyProgress, score: number): JourneyProgress => ({
+  ...progress,
+  score: { baseline: progress.score?.baseline ?? score, last: score },
+});
 
 /**
  * **L'ÉTAPE 5 N'EST PROPOSÉE QUE SI 2, 3 OU 4 A PRODUIT QUELQUE CHOSE** qui
@@ -66,8 +81,16 @@ export function producedSomething(context: Pick<JourneyContext, 'state' | 'progr
 const isSettled = (step: OnboardingStepId, context: JourneyContext): boolean =>
   context.state.seenSteps.includes(step) || context.state.prefilledSteps.includes(step) || context.progress.done.includes(step);
 
-const isOffered = (step: OnboardingStepId, context: JourneyContext): boolean =>
-  step !== 'notifications' || (context.notificationsAskable && producedSomething(context));
+/**
+ * Une étape est-elle PROPOSÉE à ce compte ? Les notifications, seulement si
+ * quelque chose appelle une réponse ; le courriel (#7907), seulement si le
+ * serveur dit l'adresse NON vérifiée — un serveur muet ne la propose pas.
+ */
+export const isOffered = (step: OnboardingStepId, context: Pick<JourneyContext, 'state' | 'progress' | 'notificationsAskable'>): boolean => {
+  if (step === 'email') return context.state.emailVerified === false;
+  if (step === 'notifications') return context.notificationsAskable && producedSomething(context);
+  return true;
+};
 
 const firstOpenFrom = (index: number, context: JourneyContext): JourneyStep =>
   ONBOARDING_STEPS.slice(index).find((step) => !isSettled(step, context) && isOffered(step, context)) ?? 'recap';
@@ -99,7 +122,7 @@ export function replayServedState(input: {
   const { context, step, ownSteps } = input;
   const { state } = context;
   const closed = !state.eligible || state.completedAt !== null;
-  const closedHere = ownSteps.size > 0 && ONBOARDING_STEPS.every((id) => state.seenSteps.includes(id));
+  const closedHere = ownSteps.size > 0 && ONBOARDING_COMPLETION_STEPS.every((id) => state.seenSteps.includes(id));
   if (closed) return closedHere ? 'stay' : 'closed';
   const settledElsewhere =
     (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ownSteps.has(step) && !context.progress.done.includes(step);
@@ -107,39 +130,38 @@ export function replayServedState(input: {
 }
 
 /**
- * **CE QUE LES RÈGLES DU SERVEUR CRÉDITENT** (§ 1 du parcours) — un premier
- * message dans une conversation : `content.text_message` (9) +
- * `recordConversationActivity` (5) ; une story : `content.story` (9) +
- * `tool.direct_publish` (1). Une demande d'ami ne crédite rien tant qu'elle
- * n'est pas acceptée (+7 à chacun, alors). Le premier niveau est à 10.
+ * **LE BARÈME NU** (§ 1 du parcours) — un premier message dans une
+ * conversation : `content.text_message` (9) + `conversation.public` (5) ; une
+ * story : `content.story` (9) + `tool.direct_publish` (1) ; une amitié
+ * acceptée : `social.friendship` (7) à chacun. Le serveur les MULTIPLIE par
+ * l'élan (#7908) : ce barème n'est qu'un PLANCHER, servi quand la passerelle
+ * ne dit pas `stepRewards`, et jamais la mesure d'un gain.
  */
-const STEP_POINTS: Readonly<Partial<Record<OnboardingStepId, number>>> = { global: 14, story: 10 };
+const BASE_POINTS = { global: 14, story: 10 } as const;
 
 export const FRIENDSHIP_POINTS = 7;
 export const LEVEL_ONE_POINTS = 10;
 
-export const stepPoints = (step: OnboardingStepId): number => STEP_POINTS[step] ?? 0;
+/** Ce que la carte ANNONCE avant le geste : la valeur servie à l'élan courant. */
+export const announcedPoints = (step: 'global' | 'story', state: OnboardingState): number =>
+  state.stepRewards?.[step] ?? BASE_POINTS[step];
 
-export const pointsOf = (progress: JourneyProgress): number => progress.done.reduce((sum, step) => sum + stepPoints(step), 0);
+/** Les points de la session : l'écart entre le score servi le plus récent et celui du départ. */
+export const pointsOf = (progress: JourneyProgress): number =>
+  progress.score === undefined ? 0 : Math.max(0, progress.score.last - progress.score.baseline);
 
+/**
+ * Le récapitulatif de REPLI, quand `GET /me/engagement` n'a pas répondu : les
+ * points de la session et les demandes que le SERVEUR dit en attente (#7910)
+ * — jamais une série, un niveau ou des badges déduits ici (#7909).
+ */
 export type JourneyRecap = {
   readonly points: number;
-  readonly levelReached: boolean;
-  readonly streakDays: number;
-  readonly badges: number;
   readonly pendingFriends: number;
 };
 
-export function recapOf(progress: JourneyProgress): JourneyRecap {
-  const points = pointsOf(progress);
-  const contents = progress.done.filter((step) => step === 'global' || step === 'story').length;
-  return {
-    points,
-    levelReached: points >= LEVEL_ONE_POINTS,
-    streakDays: contents > 0 ? 1 : 0,
-    badges: contents,
-    pendingFriends: progress.friendRequests.length,
-  };
+export function recapOf(progress: JourneyProgress, state: OnboardingState): JourneyRecap {
+  return { points: pointsOf(progress), pendingFriends: state.pendingFriendRequests ?? 0 };
 }
 
 export type GreetingDraft = { readonly text: string; readonly holeStart: number; readonly holeEnd: number };

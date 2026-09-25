@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
+import { requireEmailVerificationUnlessFirstStory } from '../../middleware/email-verification-first-story';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -370,7 +371,8 @@ export function registerCoreRoutes(
   fastify.post('/posts', {
     // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
     // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
-    preValidation: [requiredAuth, requireEmailVerification],
+    // #7907 — sauf la PREMIÈRE story d'un compte au courriel non vérifié.
+    preValidation: [requiredAuth, requireEmailVerificationUnlessFirstStory(prisma)],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {

@@ -10,7 +10,16 @@ import { z } from 'zod';
  * jumeau) et `onboardingSteps String[]` (les étapes VUES, faites ou passées).
  */
 
-export const ONBOARDING_STEP_IDS = ['languages', 'global', 'story', 'friends', 'notifications'] as const;
+export const ONBOARDING_STEP_IDS = ['languages', 'email', 'global', 'story', 'friends', 'notifications'] as const;
+
+/**
+ * Les étapes dont la VUE clôt le parcours — celles proposées à tout compte.
+ * `email` (#7907) n'en est pas : elle n'est proposée qu'à un courriel NON
+ * vérifié, et le serveur la pré-coche dès que l'adresse l'est. Elle vient
+ * juste après les langues : la vérification rend la story publiable, donc
+ * elle doit précéder le salut et la story.
+ */
+export const ONBOARDING_COMPLETION_STEP_IDS = ['languages', 'global', 'story', 'friends', 'notifications'] as const;
 
 export const OnboardingStepIdSchema = z.enum(ONBOARDING_STEP_IDS);
 export type OnboardingStepId = z.infer<typeof OnboardingStepIdSchema>;
@@ -42,6 +51,32 @@ export const OnboardingSuggestionSchema = z
   .strict();
 export type OnboardingSuggestion = z.infer<typeof OnboardingSuggestionSchema>;
 
+/**
+ * Les points qu'un geste de l'onboarding créditera MAINTENANT (#7908) —
+ * barème × élan COURANT du compte, calculé par la même loi que le crédit
+ * (`computeEngagementElan`). `friendship` est la part du LECTEUR : l'autre
+ * personne est créditée à son propre élan, jamais moins que le barème.
+ */
+export const OnboardingStepRewardsSchema = z
+  .object({
+    global: z.number().int().nonnegative(),
+    story: z.number().int().nonnegative(),
+    friendship: z.number().int().nonnegative(),
+  })
+  .strict();
+export type OnboardingStepRewards = z.infer<typeof OnboardingStepRewardsSchema>;
+
+/**
+ * Les quatre derniers champs sont OPTIONNELS pour le client (rétrocompatibles :
+ * un serveur antérieur ne les sert pas) ; la passerelle les sert toujours.
+ * - `emailVerified` (#7907) — l'adresse du compte est vérifiée ;
+ * - `canPublishStory` (#7907) — `POST /posts { type: 'STORY' }` passera la
+ *   garde du courriel : vérifié, OU aucune story encore jamais écrite
+ *   (l'exception « première story ») ;
+ * - `pendingFriendRequests` (#7910) — demandes d'ami ENVOYÉES par le compte
+ *   et toujours en attente (ni acceptées, ni refusées, ni annulées) ;
+ * - `stepRewards` (#7908) — ce que chaque geste créditera à l'élan courant.
+ */
 export const OnboardingStateSchema = z
   .object({
     eligible: z.boolean(),
@@ -52,6 +87,10 @@ export const OnboardingStateSchema = z
     protectedRegime: z.boolean(),
     storyDefaultVisibility: StoryDefaultVisibilitySchema,
     suggestions: z.array(OnboardingSuggestionSchema).max(ONBOARDING_MAX_SUGGESTIONS),
+    emailVerified: z.boolean().optional(),
+    canPublishStory: z.boolean().optional(),
+    pendingFriendRequests: z.number().int().nonnegative().optional(),
+    stepRewards: OnboardingStepRewardsSchema.optional(),
   })
   .strict();
 export type OnboardingState = z.infer<typeof OnboardingStateSchema>;
