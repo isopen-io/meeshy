@@ -175,6 +175,10 @@ const fr = {
   'admin.anonymous.left': 'Parti',
   'admin.anonymous.permissions': 'Permissions',
   'admin.anonymous.openConversation': 'Lire la conversation',
+  'admin.col.type': 'Type',
+  'admin.col.members': 'Membres',
+  'admin.col.createdOn': 'Création',
+  'admin.col.lastMessage': 'Dernier message',
 } as const;
 
 export default fr;

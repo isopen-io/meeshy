@@ -148,6 +148,10 @@ const de = {
   'admin.anonymous.left': 'Verlassen',
   'admin.anonymous.permissions': 'Berechtigungen',
   'admin.anonymous.openConversation': 'Unterhaltung lesen',
+  'admin.col.type': 'Typ',
+  'admin.col.members': 'Mitglieder',
+  'admin.col.createdOn': 'Erstellt',
+  'admin.col.lastMessage': 'Letzte Nachricht',
 } satisfies AdminInterfaceCatalog;
 
 export default de;

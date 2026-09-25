@@ -1,26 +1,41 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 
+import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import {
-  ADMIN_CONVERSATIONS_PAGE_SIZE,
   adminConversationsQueryKey,
   loadAdminInstanceConversations,
   type AdminInstanceConversation,
 } from '@/lib/api/admin-conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { CONVERSATION_LIST_SPEC, CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
+import { adminMoment } from '@/lib/admin/format';
+import { toggleSort, withFilter, withPage, type ListState } from '@/lib/admin/list-state';
 import { visibleAdminSections } from '@/lib/admin/sections';
+import { useAdminListState } from '@/lib/admin/use-list-state';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
+import { initialsOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
-/** `Link` vient de la TABLE, pas du module générique : `createRouter(table)` le
- * fabrique typé sur elle, de sorte que `to` n'accepte qu'une clé réelle et
- * `params` la forme exacte du motif. Même import que `admin-users`. */
+import {
+  AdminFilterBar,
+  AdminPager,
+  AdminResetButton,
+  AdminSearchField,
+  AdminSelect,
+  AdminTable,
+  PlainTh,
+  SortableTh,
+  Td,
+} from '@/routes/admin-table';
+/** `Link` vient de la TABLE, pas du module générique : `to` n'accepte qu'une clé réelle. */
 import { Link } from '@/routes/route-table';
 
 /**
- * **L'INVENTAIRE DES CONVERSATIONS** (#6862) — la première moitié de la lecture
+ * **L'INVENTAIRE DES CONVERSATIONS** (#6862, #7873) — en tableau, trié par
+ * dernier message ou par création, dans les deux ordres, filtré par type et
+ * par état ; l'état de la liste vit dans l'adresse (`list-state.ts`). C'est la première moitié de la lecture
  * souveraine : on part d'une conversation, au lieu de devoir deviner un membre
  * qui y participe.
  *
@@ -54,27 +69,18 @@ import { Link } from '@/routes/route-table';
  * une clé de ce domaine à la main.
  */
 
-const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
+
+type ConversationListState = ListState<
+  (typeof CONVERSATION_LIST_SPEC.sortKeys)[number],
+  keyof typeof CONVERSATION_LIST_SPEC.filters
+>;
 
 /**
  * **LA LIGNE OUVRE LA CONVERSATION** — sans ce lien, l'écran de lecture est
- * INATTEIGNABLE autrement qu'en tapant son adresse à la main.
- *
- * C'est le défaut que ce composant a porté à sa première livraison : une liste
- * dont les lignes ne mènent nulle part, au-dessus d'un écran de détail écrit,
- * testé et branché. Ni `tsc`, ni les 4449 témoins, ni le gate de poids ne
- * pouvaient le voir — un maillon manquant ne casse rien, il ne relie
- * simplement pas.
- *
- * `cible` vient de l'écran et vaut `admConversation` ou `adminConversation`
- * selon l'espace d'où l'on parcourt la liste : D-76 tient les deux
- * administrations séparées, et mélanger les deux ferait sauter
- * l'administrateur de l'une à l'autre au premier tap.
- *
- * Le lien porte la mise en page, pas le `<li>` : une cible tactile doit être
- * l'élément CLIQUABLE lui-même, sinon le pouce touche la carte sans rien
- * ouvrir sur ses bords. `minHeight: 44` est le plancher du dépôt.
+ * INATTEIGNABLE autrement qu'en tapant son adresse à la main (#6862). `cible`
+ * vaut `admConversation` ou `adminConversation` selon l'espace d'où l'on
+ * parcourt la liste (D-76).
  */
 function ConversationRow({
   conversation,
@@ -85,42 +91,63 @@ function ConversationRow({
   readonly language: InterfaceLanguage;
   readonly cible: 'adminConversation' | 'admConversation';
 }) {
+  /* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de l'autre,
+     que cette route ne sert pas. On montre son identifiant plutôt qu'une
+     ligne vide. */
+  const nom = conversation.title ?? conversation.identifier ?? conversation.id;
   return (
-    <li data-admin-conversation={conversation.id}>
-      <Link
-        to={cible}
-        params={{ conversation: conversation.id }}
-        className="flex items-center gap-3 rounded-card px-4 py-3"
-        style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-      >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-body" style={{ color: INK }}>
-            {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
-                l'autre, que cette route ne sert pas. On montre son identifiant
-                plutôt qu'une ligne vide. */}
-            {conversation.title ?? conversation.identifier ?? conversation.id}
-          </p>
-          <p className="truncate text-caption" style={{ color: INK2 }}>
-            {conversation.type}
-            {' · '}
+    <tr data-admin-conversation={conversation.id}>
+      <Td>
+        <Link to={cible} params={{ conversation: conversation.id }} className="flex min-w-0 items-center" style={{ minHeight: 44 }}>
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{nom}</span>
+            {conversation.identifier === null || conversation.identifier === nom ? null : (
+              <span className="block truncate text-caption" style={{ color: INK2 }}>
+                {conversation.identifier}
+              </span>
+            )}
+          </span>
+        </Link>
+      </Td>
+      <Td className="text-caption">{conversation.type}</Td>
+      <Td>
+        <span className="flex items-center gap-2">
+          <span className="flex -space-x-2" aria-hidden="true">
+            {conversation.participants.slice(0, 4).map((participant) => (
+              <Avatar
+                key={participant.userId}
+                initials={initialsOf(participant.displayName)}
+                color="var(--color-ios-brand)"
+                size={24}
+                name={participant.displayName}
+                {...(participant.avatar === null ? {} : { src: participant.avatar })}
+              />
+            ))}
+          </span>
+          <span className="text-caption tabular-nums" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.convList.members', { count: String(conversation.memberCount) })}
-          </p>
-        </div>
-      </Link>
-    </li>
+          </span>
+        </span>
+      </Td>
+      <Td className="text-caption">
+        {conversation.isActive ? (
+          <span style={{ color: 'var(--color-success, #34D399)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
+        ) : (
+          <span style={{ color: 'var(--color-danger)' }}>{translateAdmin(language, 'admin.users.inactive')}</span>
+        )}
+      </Td>
+      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(conversation.createdAt, language)}</Td>
+      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(conversation.lastMessageAt, language)}</Td>
+    </tr>
   );
 }
 
 export default function AdminConversationsScreen() {
   const language = currentInterfaceLanguage();
   const { key } = useRoute();
-  /** On reste dans l'espace d'où l'on vient : `/adm/conversations` ouvre
-   * `/adm/conversations/$conversation`, `/admin/…` son jumeau. Mélanger les
-   * deux ferait sauter l'administrateur d'une administration à l'autre au
-   * premier tap (D-76). */
+  /** On reste dans l'espace d'où l'on vient (D-76). */
   const cible = key === 'admConversations' ? ('admConversation' as const) : ('adminConversation' as const);
-  const [offset, setOffset] = useState(0);
-  const [recherche, setRecherche] = useState('');
+  const { state, write, draft, setDraft, address } = useAdminListState(CONVERSATION_LIST_SPEC);
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
 
@@ -132,14 +159,24 @@ export default function AdminConversationsScreen() {
   const dansLEspace = visibleAdminSections(identite.data?.permissions ?? null).length > 0;
 
   const liste = useQuery({
-    queryKey: adminConversationsQueryKey(offset, recherche, ''),
+    queryKey: adminConversationsQueryKey(address),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminInstanceConversations({ ...apiDeps, offset, search: recherche, signal });
+      const resultat = await loadAdminInstanceConversations({
+        ...apiDeps,
+        offset: state.offset,
+        limit: state.limit,
+        search: state.q,
+        sort: state.sort,
+        order: state.order,
+        filters: state.filters,
+        signal,
+      });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
     enabled: autorise,
     retry: false,
+    placeholderData: (precedent) => precedent,
     // Rien de souverain ne se garde : ni sur le disque (le filtre de
     // déshydratation l'exclut), ni en mémoire au-delà de l'écran.
     gcTime: 0,
@@ -170,33 +207,55 @@ export default function AdminConversationsScreen() {
   }
 
   const page = liste.data;
+  const tous = { value: '', label: translateAdmin(language, 'admin.list.all') };
+  const entete = (colonne: ConversationListState['sort'], libelle: string) => (
+    <SortableTh
+      language={language}
+      label={libelle}
+      column={colonne}
+      sort={state.sort}
+      order={state.order}
+      onSort={() => write(toggleSort(state, colonne, CONVERSATION_LIST_SPEC))}
+    />
+  );
 
   return (
     <AdminScreenFrame language={language} title={titre} back="admin">
-      <label className="grid gap-1 pb-4">
-        <span className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.convList.search')}
-        </span>
-        <input
-          type="search"
-          value={recherche}
-          data-admin-conversations-search
-          onChange={(event) => {
-            setRecherche(event.target.value);
-            // Toute nouvelle recherche repart de la PREMIÈRE page : garder
-            // l'offset rendrait une liste vide sur un filtre qui a pourtant
-            // des résultats — un « aucune conversation » qui ment.
-            setOffset(0);
-          }}
-          className="rounded-chip px-4 text-body"
-          style={{
-            minHeight: 44,
-            backgroundColor: 'var(--color-ios-surface)',
-            border: '1px solid var(--color-edge)',
-            color: INK,
-          }}
+      <AdminFilterBar>
+        <AdminSearchField
+          label={translateAdmin(language, 'admin.convList.search')}
+          value={draft}
+          onChange={setDraft}
+          anchor="admin-conversations-search"
         />
-      </label>
+        <AdminSelect
+          label={translateAdmin(language, 'admin.col.type')}
+          value={state.filters.type ?? ''}
+          options={[tous, ...CONVERSATION_TYPES.map((type) => ({ value: type, label: type }))]}
+          onChange={(valeur) => write(withFilter(state, 'type', valeur, CONVERSATION_LIST_SPEC))}
+          anchor="admin-filter-type"
+        />
+        <AdminSelect
+          label={translateAdmin(language, 'admin.col.status')}
+          value={state.filters.isActive ?? ''}
+          options={[
+            tous,
+            { value: 'true', label: translateAdmin(language, 'admin.filter.active') },
+            { value: 'false', label: translateAdmin(language, 'admin.filter.inactive') },
+          ]}
+          onChange={(valeur) => write(withFilter(state, 'isActive', valeur, CONVERSATION_LIST_SPEC))}
+          anchor="admin-filter-active"
+        />
+        {Object.keys(state.filters).length > 0 || state.q !== '' ? (
+          <AdminResetButton
+            language={language}
+            onReset={() => {
+              setDraft('');
+              write({ ...state, filters: {}, q: '', offset: 0 });
+            }}
+          />
+        ) : null}
+      </AdminFilterBar>
 
       {liste.isPending ? (
         <AdminSkeleton rows={6} />
@@ -210,41 +269,33 @@ export default function AdminConversationsScreen() {
         </p>
       ) : (
         <>
-          <p className="pb-2 text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.convList.count', { count: String(page.total) })}
-          </p>
-          <ul className="grid gap-2">
-            {page.conversations.map((conversation) => (
-              <ConversationRow
-                key={conversation.id}
-                conversation={conversation}
-                language={language}
-                cible={cible}
-              />
-            ))}
-          </ul>
-          <div className="flex justify-between gap-2 pt-4">
-            <button
-              type="button"
-              data-admin-conversations-prev
-              disabled={offset === 0}
-              onClick={() => setOffset((valeur) => Math.max(0, valeur - ADMIN_CONVERSATIONS_PAGE_SIZE))}
-              className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-              style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
-            >
-              {translateAdmin(language, 'admin.users.previous')}
-            </button>
-            <button
-              type="button"
-              data-admin-conversations-next
-              disabled={!page.hasMore}
-              onClick={() => setOffset((valeur) => valeur + ADMIN_CONVERSATIONS_PAGE_SIZE)}
-              className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-              style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
-            >
-              {translateAdmin(language, 'admin.users.next')}
-            </button>
-          </div>
+          <AdminTable>
+            <thead>
+              <tr>
+                <PlainTh>{translateAdmin(language, 'admin.col.conversation')}</PlainTh>
+                <PlainTh>{translateAdmin(language, 'admin.col.type')}</PlainTh>
+                <PlainTh>{translateAdmin(language, 'admin.col.members')}</PlainTh>
+                <PlainTh>{translateAdmin(language, 'admin.col.status')}</PlainTh>
+                {entete('createdAt', translateAdmin(language, 'admin.col.createdOn'))}
+                {entete('lastMessageAt', translateAdmin(language, 'admin.col.lastMessage'))}
+              </tr>
+            </thead>
+            <tbody style={{ opacity: liste.isPlaceholderData ? 0.6 : 1 }}>
+              {page.conversations.map((conversation) => (
+                <ConversationRow key={conversation.id} conversation={conversation} language={language} cible={cible} />
+              ))}
+            </tbody>
+          </AdminTable>
+          <AdminPager
+            language={language}
+            offset={state.offset}
+            limit={state.limit}
+            count={page.conversations.length}
+            total={page.total}
+            hasMore={page.hasMore}
+            pageSizes={CONVERSATION_LIST_SPEC.pageSizes}
+            onPage={(demande) => write(withPage(state, demande, CONVERSATION_LIST_SPEC))}
+          />
         </>
       )}
     </AdminScreenFrame>

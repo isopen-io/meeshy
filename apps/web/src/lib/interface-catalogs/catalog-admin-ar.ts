@@ -148,6 +148,10 @@ const ar = {
   'admin.anonymous.left': 'غادر',
   'admin.anonymous.permissions': 'الأذونات',
   'admin.anonymous.openConversation': 'قراءة المحادثة',
+  'admin.col.type': 'النوع',
+  'admin.col.members': 'الأعضاء',
+  'admin.col.createdOn': 'الإنشاء',
+  'admin.col.lastMessage': 'آخر رسالة',
 } satisfies AdminInterfaceCatalog;
 
 export default ar;
