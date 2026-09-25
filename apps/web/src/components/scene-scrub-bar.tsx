@@ -4,7 +4,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent a
 import { sceneSeekStep } from '@/lib/canvas/media-seek';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { formatMediaTime, keyboardSeekTarget, seekFraction } from '@/lib/view/media-transport';
+import { formatMediaTime, keyboardSeekTarget, seekFraction } from '@/lib/view/seek-track';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 
 import '@/styles/scene-scrub.css';
