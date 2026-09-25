@@ -11,7 +11,7 @@ import { ADMIN_ROLES, USER_LIST_SPEC } from '@/lib/admin/user-list';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 import {
   AdminFilterBar,
@@ -60,12 +60,19 @@ function UserRow({
   readonly language: InterfaceLanguage;
   readonly cible: 'adminUser' | 'admUser';
 }) {
+  const photo = participantAvatarOf({ avatar: compte.avatar });
   return (
     <tr data-admin-user={compte.id}>
       <Td>
         <Link to={cible} params={{ user: compte.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
           <span className="relative shrink-0">
-            <Avatar initials={initialsOf(compte.displayName)} color="var(--color-ios-brand)" size={36} name={compte.displayName} />
+            <Avatar
+              initials={initialsOf(compte.displayName)}
+              color="var(--color-ios-brand)"
+              size={36}
+              name={compte.displayName}
+              {...(photo === undefined ? {} : { src: photo })}
+            />
             {compte.isOnline ? (
               <span
                 aria-hidden="true"

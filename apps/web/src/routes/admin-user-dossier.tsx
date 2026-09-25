@@ -19,6 +19,7 @@ import {
   loadAdminUserSessions,
   loadAdminUserVoice,
   type AdminDossierPage,
+  type AdminCommunity,
   type AdminReport,
 } from '@/lib/api/admin-user-dossier';
 import { apiDeps } from '@/lib/api/deps';
@@ -27,11 +28,12 @@ import { adminMoment } from '@/lib/admin/format';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 
 import { AdminLine, AdminSection, AdminSkeleton } from './admin-parts';
 import { AdminPager, AdminTable, PlainTh, Td } from './admin-table';
 import { Link } from './route-table';
+
 
 /**
  * **LE DOSSIER D'UN MEMBRE, ONGLET PAR ONGLET** (#7845, #7873) — contacts,
@@ -183,34 +185,37 @@ export function AdminUserContactsTab({
             </tr>
           </thead>
           <tbody>
-            {contacts.map((contact) => (
-              <tr key={contact.id} data-admin-contact={contact.id}>
-                <Td>
-                  <Link to={cible} params={{ user: contact.other.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
-                    <Avatar
-                      initials={initialsOf(contact.other.displayName)}
-                      color="var(--color-ios-brand)"
-                      size={32}
-                      name={contact.other.displayName}
-                      {...(contact.other.avatar === '' ? {} : { src: contact.other.avatar })}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{contact.other.displayName}</span>
-                      <span className="block truncate text-caption" style={{ color: INK2 }}>
-                        @{contact.other.username}
+            {contacts.map((contact) => {
+              const photo = participantAvatarOf({ avatar: contact.other.avatar });
+              return (
+                <tr key={contact.id} data-admin-contact={contact.id}>
+                  <Td>
+                    <Link to={cible} params={{ user: contact.other.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
+                      <Avatar
+                        initials={initialsOf(contact.other.displayName)}
+                        color="var(--color-ios-brand)"
+                        size={32}
+                        name={contact.other.displayName}
+                        {...(photo === undefined ? {} : { src: photo })}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{contact.other.displayName}</span>
+                        <span className="block truncate text-caption" style={{ color: INK2 }}>
+                          @{contact.other.username}
+                        </span>
                       </span>
-                    </span>
-                  </Link>
-                </Td>
-                <Td className="text-caption">
-                  {translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received')}
-                </Td>
-                <Td className="text-caption">
-                  <Statut ton={contact.status === 'accepted' ? 'ok' : contact.status === 'pending' ? 'neutre' : 'ko'}>{contact.status}</Statut>
-                </Td>
-                <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(contact.createdAt, language)}</Td>
-              </tr>
-            ))}
+                    </Link>
+                  </Td>
+                  <Td className="text-caption">
+                    {translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received')}
+                  </Td>
+                  <Td className="text-caption">
+                    <Statut ton={contact.status === 'accepted' ? 'ok' : contact.status === 'pending' ? 'neutre' : 'ko'}>{contact.status}</Statut>
+                  </Td>
+                  <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(contact.createdAt, language)}</Td>
+                </tr>
+              );
+            })}
           </tbody>
         </AdminTable>
       )}
@@ -240,43 +245,48 @@ export function AdminUserCommunitiesTab({ userId, language }: { readonly userId:
           translateAdmin(language, 'admin.col.status'),
           translateAdmin(language, 'admin.col.joined'),
         ]}
-        ligne={(communaute) => (
-          <tr key={communaute.id} data-admin-community={communaute.id}>
-            <Td>
-              <span className="flex min-w-0 items-center gap-3">
-                <Avatar
-                  initials={initialsOf(communaute.name)}
-                  color="var(--color-ios-brand)"
-                  size={32}
-                  name={communaute.name}
-                  {...(communaute.avatar === '' ? {} : { src: communaute.avatar })}
-                />
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{communaute.name}</span>
-                  <span className="block truncate text-caption" style={{ color: INK2 }}>
-                    {communaute.identifier}
-                    {communaute.isPrivate ? ` · ${translateAdmin(language, 'admin.communities.private')}` : ''}
-                  </span>
-                </span>
-              </span>
-            </Td>
-            <Td className="text-caption">
-              {communaute.role}
-              {communaute.isCreator ? ` · ${translateAdmin(language, 'admin.communities.creator')}` : ''}
-            </Td>
-            <Td className="text-caption tabular-nums">{communaute.memberCount}</Td>
-            <Td className="text-caption">
-              {communaute.isActive ? (
-                <Statut ton="ok">{translateAdmin(language, 'admin.filter.active')}</Statut>
-              ) : (
-                <Statut ton="neutre">{translateAdmin(language, 'admin.anonymous.left')}</Statut>
-              )}
-            </Td>
-            <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(communaute.joinedAt, language)}</Td>
-          </tr>
-        )}
+        ligne={(communaute) => <LigneCommunaute key={communaute.id} communaute={communaute} language={language} />}
       />
     </div>
+  );
+}
+
+function LigneCommunaute({ communaute, language }: { readonly communaute: AdminCommunity; readonly language: InterfaceLanguage }) {
+  const photo = participantAvatarOf({ avatar: communaute.avatar });
+  return (
+    <tr data-admin-community={communaute.id}>
+      <Td>
+        <span className="flex min-w-0 items-center gap-3">
+          <Avatar
+            initials={initialsOf(communaute.name)}
+            color="var(--color-ios-brand)"
+            size={32}
+            name={communaute.name}
+            {...(photo === undefined ? {} : { src: photo })}
+          />
+          <span className="min-w-0">
+            <span className="block truncate font-medium">{communaute.name}</span>
+            <span className="block truncate text-caption" style={{ color: INK2 }}>
+              {communaute.identifier}
+              {communaute.isPrivate ? ` · ${translateAdmin(language, 'admin.communities.private')}` : ''}
+            </span>
+          </span>
+        </span>
+      </Td>
+      <Td className="text-caption">
+        {communaute.role}
+        {communaute.isCreator ? ` · ${translateAdmin(language, 'admin.communities.creator')}` : ''}
+      </Td>
+      <Td className="text-caption tabular-nums">{communaute.memberCount}</Td>
+      <Td className="text-caption">
+        {communaute.isActive ? (
+          <Statut ton="ok">{translateAdmin(language, 'admin.filter.active')}</Statut>
+        ) : (
+          <Statut ton="neutre">{translateAdmin(language, 'admin.anonymous.left')}</Statut>
+        )}
+      </Td>
+      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(communaute.joinedAt, language)}</Td>
+    </tr>
   );
 }
 

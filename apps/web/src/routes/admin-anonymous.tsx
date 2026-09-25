@@ -12,7 +12,7 @@ import { useAdminListState } from '@/lib/admin/use-list-state';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 import {
   AdminFilterBar,
@@ -26,6 +26,7 @@ import {
   Td,
 } from '@/routes/admin-table';
 import { Link } from '@/routes/route-table';
+
 
 /**
  * **LES ANONYMES** (#7873) — les personnes entrées par un lien de partage,
@@ -51,6 +52,7 @@ function AnonymousRow({
   readonly language: InterfaceLanguage;
   readonly cible: 'adminAnonymousOne' | 'admAnonymousOne';
 }) {
+  const photo = participantAvatarOf({ avatar: ligne.avatar });
   return (
     <tr data-admin-anonymous={ligne.id}>
       <Td>
@@ -61,7 +63,7 @@ function AnonymousRow({
               color="var(--color-ios-ink-3)"
               size={36}
               name={ligne.displayName}
-              {...(ligne.avatar === '' ? {} : { src: ligne.avatar })}
+              {...(photo === undefined ? {} : { src: photo })}
             />
             {ligne.isOnline ? (
               <span

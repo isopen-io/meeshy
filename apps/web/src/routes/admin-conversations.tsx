@@ -16,7 +16,7 @@ import { useAdminListState } from '@/lib/admin/use-list-state';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 import {
   AdminFilterBar,
@@ -113,16 +113,19 @@ function ConversationRow({
       <Td>
         <span className="flex items-center gap-2">
           <span className="flex -space-x-2" aria-hidden="true">
-            {conversation.participants.slice(0, 4).map((participant) => (
-              <Avatar
-                key={participant.userId}
-                initials={initialsOf(participant.displayName)}
-                color="var(--color-ios-brand)"
-                size={24}
-                name={participant.displayName}
-                {...(participant.avatar === null ? {} : { src: participant.avatar })}
-              />
-            ))}
+            {conversation.participants.slice(0, 4).map((participant) => {
+              const photo = participantAvatarOf({ avatar: participant.avatar });
+              return (
+                <Avatar
+                  key={participant.userId}
+                  initials={initialsOf(participant.displayName)}
+                  color="var(--color-ios-brand)"
+                  size={24}
+                  name={participant.displayName}
+                  {...(photo === undefined ? {} : { src: photo })}
+                />
+              );
+            })}
           </span>
           <span className="text-caption tabular-nums" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.convList.members', { count: String(conversation.memberCount) })}

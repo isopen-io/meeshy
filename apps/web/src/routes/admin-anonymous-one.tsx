@@ -10,9 +10,10 @@ import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useParams, useRoute } from '@/lib/router';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { AdminDenied, AdminLine, AdminScreenFrame, AdminSection, AdminSkeleton } from '@/routes/admin-parts';
 import { Link } from '@/routes/route-table';
+
 
 /**
  * **LA FICHE D'UN ANONYME** (#7873) — `/adm/anonymous/$participant`.
@@ -32,6 +33,7 @@ const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
 function Entete({ fiche, language }: { readonly fiche: AdminAnonymousOne; readonly language: InterfaceLanguage }) {
+  const photo = participantAvatarOf({ avatar: fiche.avatar });
   const etat = fiche.leftAt !== null ? 'admin.anonymous.left' : fiche.isActive ? 'admin.filter.active' : 'admin.users.inactive';
   return (
     <div className="flex items-center gap-3">
@@ -40,7 +42,7 @@ function Entete({ fiche, language }: { readonly fiche: AdminAnonymousOne; readon
         color="var(--color-ios-ink-3)"
         size={56}
         name={fiche.displayName}
-        {...(fiche.avatar === '' ? {} : { src: fiche.avatar })}
+        {...(photo === undefined ? {} : { src: photo })}
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-title font-semibold" style={{ color: INK }}>

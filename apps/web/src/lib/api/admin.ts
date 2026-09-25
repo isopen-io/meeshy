@@ -61,6 +61,7 @@ export type AdminUserRow = {
   readonly isActive: boolean;
   readonly isOnline: boolean;
   readonly createdAt: string | null;
+  readonly avatar: string;
   /** Masquée par la passerelle sous `canViewPresence` — `null` n'y veut pas dire « jamais ». */
   readonly lastActiveAt: string | null;
   readonly emailVerified: boolean;
@@ -264,6 +265,7 @@ export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
         isActive: ligne.isActive !== false,
         isOnline: ligne.isOnline === true,
         createdAt: typeof ligne.createdAt === 'string' ? ligne.createdAt : null,
+        avatar: asText(ligne.avatar),
         lastActiveAt: typeof ligne.lastActiveAt === 'string' ? ligne.lastActiveAt : null,
         emailVerified: typeof ligne.emailVerifiedAt === 'string' || ligne.emailVerified === true,
         twoFactorEnabled: typeof ligne.twoFactorEnabledAt === 'string' || ligne.twoFactorEnabled === true,
