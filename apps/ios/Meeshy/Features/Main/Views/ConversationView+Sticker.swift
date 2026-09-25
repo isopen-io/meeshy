@@ -108,12 +108,10 @@ extension ConversationView {
         // octets — il est amorcé à la suite de l'encodage.
         DiskCacheStore.cacheImageForPreview(image, key: localKey)
 
-        let pendingRef = composerState.pendingReplyReference
-        let isStory = pendingRef?.isStoryReply == true
-        let refId = pendingRef?.messageId.isEmpty == false ? pendingRef?.messageId : nil
-        let replyId = isStory ? nil : refId
-        let storyReplyId = isStory ? refId : nil
-        let storyRef = isStory ? pendingRef : nil
+        let route = outgoingReplyRoute
+        let replyId = route.replyToId
+        let storyReplyId = route.storyReplyToId
+        let storyRef = route.storyReference
         let lang = composerState.selectedLanguage
         let tempId = ClientMessageId.generate()
         // Un sticker est un ENVOI comme un autre : la protection armée le suit
