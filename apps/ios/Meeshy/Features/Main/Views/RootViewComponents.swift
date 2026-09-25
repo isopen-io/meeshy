@@ -126,7 +126,7 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
     /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
     /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».

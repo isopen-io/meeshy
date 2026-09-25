@@ -122,7 +122,7 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
 
     // MARK: - Les hôtes qui ne font que RETRANSMETTRE le modèle
 
-    /// Huit vues déclaraient `@EnvironmentObject ConversationListViewModel` pour
+    /// Neuf vues déclaraient `@EnvironmentObject ConversationListViewModel` pour
     /// une seule raison : le remettre à une feuille ou à un cover
     /// (`SharePickerView`, les portes de composition) — ou, pour la recherche,
     /// retrouver un DM hors `body`. Aucune ne lit un `@Published` de la liste ;
@@ -135,6 +135,7 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
         let hosts = [
             "Views/StoryViewerView.swift", "Views/MyStoriesView.swift", "Views/BookmarksView.swift",
             "Views/LinksHubView.swift", "Views/ShareLinksView.swift", "Views/GlobalSearchView.swift",
+            "Views/RootViewComponents.swift",
             "Composer/StoryEditComposer.swift", "Composer/StoryRepublishComposer.swift",
         ]
         for host in hosts {
