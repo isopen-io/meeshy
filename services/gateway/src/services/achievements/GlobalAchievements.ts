@@ -34,6 +34,30 @@ export type GlobalAchievementEvent =
 
 const famille = (id: string) => ACHIEVEMENT_FAMILIES.find((f) => familyId(f) === id);
 
+/**
+ * Ce qu'un balayage lit UNE fois et partage entre ses quatorze comptes
+ * (#7909) : les Participants du compte — toutes ses identités de
+ * conversation — et les clés de succès déjà gravées.
+ *
+ * Les comptes filtrent sur des champs SCALAIRES indexés (`senderId`,
+ * `participantId`, `uploadedBy`), jamais par relation : sur MongoDB, Prisma
+ * traduit `sender: { userId }` en un `$lookup` par document de la collection
+ * ENTIÈRE — 1 265 ms mesurés sur staging pour le seul `message.send`, contre
+ * 9 ms par `senderId: { in }`.
+ */
+type SweepScope = {
+  readonly participantIds: readonly string[];
+  readonly dejaGraves?: ReadonlySet<string>;
+};
+
+/**
+ * Seul un message ÉCRIT par l'utilisateur compte (#7916). L'avis d'arrivée de
+ * Meeshy Global (`globalArrivalsNotice.ts`), les résumés d'appel et les autres
+ * messages `system` portent le Participant du compte en `senderId` : les
+ * compter gravait « premier message » dès l'inscription.
+ */
+const AUTHORED = { messageSource: 'user' } as const;
+
 export class GlobalAchievements {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -46,10 +70,27 @@ export class GlobalAchievements {
     id: string,
     valeur: number,
     origin: AchievementOrigin,
+    dejaGraves?: ReadonlySet<string>,
   ): Promise<void> {
     const f = famille(id);
     if (!f) return;
-    await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin });
+    await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin, dejaGraves });
+  }
+
+  private async participantIdsOf(userId: string): Promise<string[]> {
+    const rows = await this.prisma.participant.findMany({ where: { userId }, select: { id: true } });
+    return rows.map((row) => row.id);
+  }
+
+  private async sweepScope(userId: string): Promise<SweepScope> {
+    const [participantIds, graves] = await Promise.all([
+      this.participantIdsOf(userId),
+      this.prisma.engagementMilestone.findMany({
+        where: { userId, milestoneType: 'achievement' },
+        select: { milestoneKey: true },
+      }),
+    ]);
+    return { participantIds, dejaGraves: new Set(graves.map((row) => row.milestoneKey)) };
   }
 
   /**
@@ -92,19 +133,29 @@ export class GlobalAchievements {
    */
   async sweep(userId: string): Promise<void> {
     const origin: AchievementOrigin = 'balayage';
+    let scope: SweepScope;
+    try {
+      scope = await this.sweepScope(userId);
+    } catch (err) {
+      log.warn('balayage des succès impossible — lecture du périmètre échouée', {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
     await Promise.all([
-      this.recordEvent({ kind: 'message.send', userId }, origin),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'audio/' }, origin),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'image/' }, origin),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'video/' }, origin),
-      this.recordEvent({ kind: 'message.edit', userId }, origin),
-      this.recordEvent({ kind: 'message.delete', userId }, origin),
-      this.recordEvent({ kind: 'message.react', userId }, origin),
-      this.recordEvent({ kind: 'call.join', userId }, origin),
-      this.recordEvent({ kind: 'referral.complete', userId }, origin),
-      this.recordEvent({ kind: 'link.click', userId }, origin),
-      this.sweepCallStart(userId, origin),
-      this.sweepUserScalars(userId, origin),
+      this.recordEvent({ kind: 'message.send', userId }, origin, scope),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'audio/' }, origin, scope),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'image/' }, origin, scope),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'video/' }, origin, scope),
+      this.recordEvent({ kind: 'message.edit', userId }, origin, scope),
+      this.recordEvent({ kind: 'message.delete', userId }, origin, scope),
+      this.recordEvent({ kind: 'message.react', userId }, origin, scope),
+      this.recordEvent({ kind: 'call.join', userId }, origin, scope),
+      this.recordEvent({ kind: 'referral.complete', userId }, origin, scope),
+      this.recordEvent({ kind: 'link.click', userId }, origin, scope),
+      this.sweepCallStart(userId, origin, scope.dejaGraves),
+      this.sweepUserScalars(userId, origin, scope.dejaGraves),
     ]);
   }
 
@@ -113,13 +164,17 @@ export class GlobalAchievements {
    * plus grand. Le balayage prend le plus grand jamais tenu — un record ne
    * redescend pas.
    */
-  private async sweepCallStart(userId: string, origin: AchievementOrigin): Promise<void> {
+  private async sweepCallStart(
+    userId: string,
+    origin: AchievementOrigin,
+    dejaGraves: ReadonlySet<string> | undefined,
+  ): Promise<void> {
     try {
       const sessions = await this.prisma.callSession.findMany({
         where: { initiatorId: userId },
         select: { id: true },
       });
-      await this.graveTiers(userId, 'call.start.count', sessions.length, origin);
+      await this.graveTiers(userId, 'call.start.count', sessions.length, origin, dejaGraves);
       if (sessions.length === 0) return;
       const tailles = await this.prisma.callParticipant.groupBy({
         by: ['callSessionId'],
@@ -127,7 +182,7 @@ export class GlobalAchievements {
         _count: { _all: true },
       });
       const plusGrand = tailles.reduce((max, t) => Math.max(max, t._count._all), 0);
-      await this.graveTiers(userId, 'call.start.size', plusGrand, origin);
+      await this.graveTiers(userId, 'call.start.size', plusGrand, origin, dejaGraves);
     } catch (err) {
       log.warn('balayage call.start échoué', {
         userId,
@@ -137,15 +192,19 @@ export class GlobalAchievements {
   }
 
   /** Série et Meeshes vivent sur `User` — une seule lecture pour les deux. */
-  private async sweepUserScalars(userId: string, origin: AchievementOrigin): Promise<void> {
+  private async sweepUserScalars(
+    userId: string,
+    origin: AchievementOrigin,
+    dejaGraves: ReadonlySet<string> | undefined,
+  ): Promise<void> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { longestStreakDays: true, meeshMintedLifetime: true },
       });
       if (!user) return;
-      await this.graveTiers(userId, 'streak.hold.count', user.longestStreakDays ?? 0, origin);
-      await this.graveTiers(userId, 'meesh.mint.count', user.meeshMintedLifetime ?? 0, origin);
+      await this.graveTiers(userId, 'streak.hold.count', user.longestStreakDays ?? 0, origin, dejaGraves);
+      await this.graveTiers(userId, 'meesh.mint.count', user.meeshMintedLifetime ?? 0, origin, dejaGraves);
     } catch (err) {
       log.warn('balayage des scalaires utilisateur échoué', {
         userId,
@@ -154,58 +213,70 @@ export class GlobalAchievements {
     }
   }
 
-  async recordEvent(event: GlobalAchievementEvent, origin: AchievementOrigin = 'geste'): Promise<void> {
+  async recordEvent(
+    event: GlobalAchievementEvent,
+    origin: AchievementOrigin = 'geste',
+    scope?: SweepScope,
+  ): Promise<void> {
     try {
+      const grave = (id: string, valeur: number) =>
+        this.graveTiers(event.userId, id, valeur, origin, scope?.dejaGraves);
+      const participantIds = async (): Promise<string[]> =>
+        scope ? [...scope.participantIds] : this.participantIdsOf(event.userId);
       switch (event.kind) {
         case 'message.send': {
           const n = await this.prisma.message.count({
-            where: { sender: { userId: event.userId }, deletedAt: null },
+            where: { senderId: { in: await participantIds() }, ...AUTHORED, deletedAt: null },
           });
-          return this.graveTiers(event.userId, 'message.send.count', n, origin);
+          return grave('message.send.count', n);
         }
         case 'attachment.send': {
           const id = this.familyForMime(event.mimeType);
           if (!id) return;
           const prefixe = event.mimeType.split('/')[0];
+          // `uploadedBy` (indexé) plutôt que `message.sender.userId` : deux
+          // `$lookup` imbriqués par pièce jointe. `messageId` posé = une pièce
+          // jointe réellement ENVOYÉE, pas un téléversement abandonné.
           const n = await this.prisma.messageAttachment.count({
             where: {
+              uploadedBy: event.userId,
+              messageId: { not: null },
               mimeType: { startsWith: `${prefixe}/` },
-              message: { sender: { userId: event.userId } },
             },
           });
-          return this.graveTiers(event.userId, id, n, origin);
+          return grave(id, n);
         }
         case 'message.edit': {
           const n = await this.prisma.message.count({
-            where: { sender: { userId: event.userId }, isEdited: true },
+            where: { senderId: { in: await participantIds() }, ...AUTHORED, isEdited: true },
           });
-          return this.graveTiers(event.userId, 'message.edit.count', n, origin);
+          return grave('message.edit.count', n);
         }
         case 'message.delete': {
           const n = await this.prisma.message.count({
-            where: { sender: { userId: event.userId }, deletedAt: { not: null } },
+            where: { senderId: { in: await participantIds() }, ...AUTHORED, deletedAt: { not: null } },
           });
-          return this.graveTiers(event.userId, 'message.delete.count', n, origin);
+          return grave('message.delete.count', n);
         }
         case 'message.react': {
           const n = await this.prisma.reaction.count({
-            where: { participant: { userId: event.userId } },
+            where: { participantId: { in: await participantIds() } },
           });
-          return this.graveTiers(event.userId, 'message.react.count', n, origin);
+          return grave('message.react.count', n);
         }
         case 'call.start': {
           const [n, taille] = await Promise.all([
             this.prisma.callSession.count({ where: { initiatorId: event.userId } }),
             this.prisma.callParticipant.count({ where: { callSessionId: event.callSessionId } }),
           ]);
-          await this.graveTiers(event.userId, 'call.start.count', n, origin);
-          return this.graveTiers(event.userId, 'call.start.size', taille, origin);
+          await grave('call.start.count', n);
+          return grave('call.start.size', taille);
         }
         case 'call.join': {
           const n = await this.prisma.callParticipant.count({
-            where: { participant: { userId: event.userId } },
+            where: { participantId: { in: await participantIds() } },
           });
-          return this.graveTiers(event.userId, 'call.join.count', n, origin);
+          return grave('call.join.count', n);
         }
         case 'referral.complete': {
           // ACHEVÉES seulement : une invitation envoyée n'est pas une
@@ -214,20 +285,27 @@ export class GlobalAchievements {
           const n = await this.prisma.affiliateRelation.count({
             where: { affiliateUserId: event.userId, status: 'completed' },
           });
-          return this.graveTiers(event.userId, 'referral.complete.count', n, origin);
+          return grave('referral.complete.count', n);
         }
         case 'link.click': {
-          const n = await this.prisma.trackingLinkClick.count({
-            where: { trackingLink: { createdBy: event.userId } },
+          const liens = await this.prisma.trackingLink.findMany({
+            where: { createdBy: event.userId },
+            select: { id: true },
           });
-          return this.graveTiers(event.userId, 'link.click.count', n, origin);
+          const n =
+            liens.length === 0
+              ? 0
+              : await this.prisma.trackingLinkClick.count({
+                  where: { trackingLinkId: { in: liens.map((lien) => lien.id) } },
+                });
+          return grave('link.click.count', n);
         }
         case 'streak.hold':
           // Le RECORD, jamais la série courante : une série rompue ne retire
           // pas un succès (« un succès atteint reste à vie »).
-          return this.graveTiers(event.userId, 'streak.hold.count', event.days, origin);
+          return grave('streak.hold.count', event.days);
         case 'meesh.mint':
-          return this.graveTiers(event.userId, 'meesh.mint.count', event.minted, origin);
+          return grave('meesh.mint.count', event.minted);
       }
     } catch (err) {
       log.warn('évaluation de succès échouée — le geste métier reste acquis', {
