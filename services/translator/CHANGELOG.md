@@ -1,5 +1,39 @@
 # @meeshy/translator
 
+## 1.68.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la recherche @ trouve toutes les personnes mentionnables, et aucune que l'envoi refuserait
+  - taper @ montre d'abord ses contacts depuis le cache, puis cherche les autres dès la 2e lettre — dans tous les champs qui mentionnent, run test
+  - toucher un participant actif de l'en-tête ouvre sa story non vue, sinon son profil — run test
+  - dev repasse sous ses gardes — racine iPad à 24 niveaux, glyphe du lien en attente relatif, cliquet du catalogue à 262 — run test (Refs #7808 #7811 #7797)
+  - le cliquet du catalogue Swift descend à 262, run test (Refs #7797)
+  - la route des statistiques d'un lien passe par le catalogue généré — run test (Refs #7797)
+  - l'arabe garde ses ligatures dans les titres espacés de l'invitation et de la fiche — run test (Refs #7795, #7797)
+  - « Prénom, nom et pseudo » en une phrase, dates grégoriennes dans toutes les locales — run test (Refs #7795, #7797)
+  - la légende des langues ne coupe plus ni ne mélange les écritures ; « Nom complet » — run test (Refs #7795, #7797)
+  - le lien résolu du choix d'invitation quitte la valeur de la vue racine — run test (Refs #7795)
+  - page d'invitation avec un compte et fiche détails + édition d'un lien — run test (Closes #7795, Refs #7797)
+  - la page d'invitation remplace l'aperçu du lien — qui invite, le groupe, ses langues, les droits en anonyme, les choix (Refs #7795)
+  - modèle de l'invitation et de la fiche d'un lien — droits invités, réglages, statistiques d'arrivée (Refs #7795, #7797)
+  - « Mes stories » livrée — la pastille « moi » du rail ouvre le listing, chaque story active se retire
+  - une seule déclaration ACCESS_NETWORK_STATE dans la coque Android (Refs #7844)
+  - la pastille « moi » du rail de stories ouvre « Mes stories », où chaque story active se retire
+  - tous les champs qui mentionnent passent par le même mécanisme — commentaire, modification, texte de la scène, note d'humeur
+  - un mécanisme unique de champ qui mentionne ; le composeur du fil s'y branche, matrice @ / 1 / 2 lettres témoignée (Refs #7846)
+  - les mentions proposent les contacts du cache d'abord, puis les participants, puis les autres (Refs #7846)
+  - la coque Android declare ACCESS_NETWORK_STATE (#7844)
+  - toucher une identité ouvre la story NON VUE, sinon le profil — partout
+  - taper @ dans le composeur propose les personnes à mentionner
+  - l'en-tête d'un groupe montre ses trois participants les plus actifs
+  - toucher le titre d'une conversation ouvre ses détails — identité, membres, lien de partage
+  - un lien de suivi s'ouvre par /l/:token et compte son clic
+  - un appui long sur l'avatar d'un auteur ouvre son menu, plus celui du message
+  - lois pures de la mention au composeur et port des suggestions (#7826)
+
 ## 1.67.0
 
 ### Minor Changes
