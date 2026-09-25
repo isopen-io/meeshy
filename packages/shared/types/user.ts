@@ -424,7 +424,14 @@ export enum UserAuditAction {
    * (#6821) — distincte de `RESET_PASSWORD`, qui invalide TOUTES les
    * sessions comme effet de bord d'un autre geste.
    */
-  REVOKE_SESSION = 'REVOKE_SESSION'
+  REVOKE_SESSION = 'REVOKE_SESSION',
+
+  /**
+   * Écriture, par un administrateur, d'une catégorie de préférences d'un
+   * tiers (#7845). La ligne porte la catégorie et les clés changées ; la
+   * valeur avant/après de chaque clé voyage dans `changes`.
+   */
+  UPDATE_PREFERENCES = 'UPDATE_PREFERENCES'
 }
 
 /**

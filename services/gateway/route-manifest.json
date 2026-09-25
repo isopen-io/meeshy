@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 581,
+  "routeCount": 584,
   "routes": [
     {
       "method": "DELETE",
@@ -2003,6 +2003,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/users/:userId/preferences",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/users/:userId/reported-messages",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -2046,6 +2060,20 @@
     {
       "method": "GET",
       "path": "/api/v1/admin/users/:userId/sessions",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/:userId/stats",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -4762,6 +4790,20 @@
     {
       "method": "PATCH",
       "path": "/api/v1/admin/users/:userId/consents",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/users/:userId/preferences/:category",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

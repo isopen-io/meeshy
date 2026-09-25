@@ -106,6 +106,7 @@ const ROUTE_SURFACES: Record<string, Classification> = {
 
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'attachments/metadata.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-list-views.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
