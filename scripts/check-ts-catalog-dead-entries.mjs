@@ -344,7 +344,14 @@ export const parseCatalogBlock = (blockLines) => {
 // d'administration web les appelle par adresse écrite, comme ses lectures
 // admin voisines déjà au compte ; aucun écran d'administration iOS ne les
 // appelle. Valeur MESURÉE sur la branche du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 463;
+// 460 → 461 (#6937) : `app.shellVersion`, générée depuis `route-manifest.json`
+// quand la passerelle a monté `GET /app/shell-version`. Son client
+// (`apps/web/src/lib/app-update/shell-update.ts`) écrit l'adresse en littéral
+// comme tout `apps/web`, et comme sa jumelle `app.minVersion`, déjà au compte :
+// morte ici au même titre, jusqu'à #7716. Valeur MESURÉE sur la branche du
+// 2026-09-25.
+// Fusion #6937 + #7845 : les deux ajouts se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 464;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
