@@ -114,7 +114,6 @@ final class SignupViewModelTests: XCTestCase {
         // dérivé de l'adresse, et modifiable — donc il part, et la passerelle
         // n'a plus rien à générer. Depuis #7897 il vient de l'ADRESSE.
         XCTAssertEqual(registrar.lastRegisterRequest?.username, "awa")
-        XCTAssertEqual(registrar.lastRegisterRequest?.firstName, "Awa")
     }
 
     // MARK: - Table code → champ
@@ -347,12 +346,13 @@ final class SignupViewModelTests: XCTestCase {
 
     // MARK: - La table, éprouvée sur elle-même
 
-    /// Chaque champ d'identité a sa saisie depuis #7897 : un refus se pose
-    /// sous celle qu'il vise.
-    func test_serverFieldNames_identity_landOnTheirOwnField() {
-        XCTAssertEqual(SignupViewModel.field(forServerName: "displayName"), .displayName)
-        XCTAssertEqual(SignupViewModel.field(forServerName: "firstName"), .firstName)
-        XCTAssertEqual(SignupViewModel.field(forServerName: "lastName"), .lastName)
+    /// LA TABLE A CHANGÉ (#6479) : `username` a sa propre saisie et ne se replie
+    /// plus. Les deux noms d'état civil, eux, restent dérivés du nom affiché —
+    /// c'est la seule saisie qui permet de les changer.
+    func test_serverFieldNames_civilNames_landOnDisplayName() {
+        for name in ["displayName", "firstName", "lastName"] {
+            XCTAssertEqual(SignupViewModel.field(forServerName: name), .displayName, name)
+        }
     }
 
     func test_serverFieldName_username_landsOnItsOwnField() {

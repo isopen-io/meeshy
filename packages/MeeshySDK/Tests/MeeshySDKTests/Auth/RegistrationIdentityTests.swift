@@ -56,14 +56,4 @@ final class RegistrationIdentityTests: XCTestCase {
         XCTAssertEqual(RegistrationIdentity.capitalizeName("jean-pierre"), "Jean-Pierre")
         XCTAssertEqual(RegistrationIdentity.capitalizeName("o'brien"), "O'Brien")
     }
-
-    /// Miroir de `derivedNames` (TS) — un mononyme n'invente pas de nom (#7897).
-    func test_derivedNames_splitsFirstAndLast_andLeavesAMononymAlone() {
-        let jean = RegistrationIdentity.derivedNames("jean  pierre dupont")
-        XCTAssertEqual(jean.firstName, "Jean")
-        XCTAssertEqual(jean.lastName, "Pierre Dupont")
-        let prince = RegistrationIdentity.derivedNames("Prince")
-        XCTAssertEqual(prince.firstName, "Prince")
-        XCTAssertEqual(prince.lastName, "")
-    }
 }

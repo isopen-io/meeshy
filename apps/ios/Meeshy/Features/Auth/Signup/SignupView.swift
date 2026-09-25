@@ -38,6 +38,8 @@ struct SignupView: View {
     @State private var expandedHint: SignupField?
     /// Le bloc d'identité est-il ouvert à la saisie (#6479) ? Fermé par défaut :
     /// le chemin nominal ne demande AUCUN geste.
+    @State private var isPasswordWhyExpanded = false
+    @State private var isPasswordRevealed = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
 
@@ -55,7 +57,10 @@ struct SignupView: View {
                     phoneField
                     emailField
                     derivedIdentityBlock
-                    passwordField
+                    if isPasswordRevealed {
+                        passwordField
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     languageChip
                     submitSection
                     switchToLoginRow
@@ -71,6 +76,13 @@ struct SignupView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .safeAreaInset(edge: .top) { closeBar }
+        // Le mot de passe paraît quand l'identité est DÉFINIE (#7897) et ne se
+        // referme plus : corriger son adresse ne fait pas disparaître ce
+        // qu'on y a tapé.
+        .adaptiveOnChange(of: viewModel.form.isIdentityDefined, initial: true) { _, defini in
+            guard defini, !isPasswordRevealed else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { isPasswordRevealed = true }
+        }
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
@@ -110,7 +122,7 @@ struct SignupView: View {
         }
     }
 
-    // MARK: - Identité
+    // MARK: - Nom affiché
 
     /// CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ (#6479).
     ///
@@ -119,47 +131,29 @@ struct SignupView: View {
     /// l'utilisateur de modifier ou non ». Puis, sur relecture : « dès qu'un
     /// champ username est rempli la passerelle n'a plus rien à créer ».
     ///
-    /// Refait par #7897 (directive porteur 2026-09-25 : « ne plus avoir un
-    /// éditer […] modifiables directement par simple touché ») : prénom et nom
-    /// tirés de l'adresse, nom affiché composé d'eux, pseudo tiré de
-    /// l'adresse — quatre SAISIES déjà remplies, qui suivent la dérivation en
-    /// direct tant qu'on ne les touche pas. Les valeurs viennent de
-    /// `SignupForm.effective*`, miroir de la loi que la passerelle applique.
+    /// Refait par #7897 (retour porteur 2026-09-25 : « si on peut modifier le
+    /// display name [et] le pseudo directement sans action supplémentaire
+    /// c'est ok ») : deux SAISIES déjà remplies depuis l'adresse, qui la
+    /// suivent en direct tant qu'on ne les touche pas. Prénom et nom restent
+    /// dérivés par la passerelle et se changent depuis l'espace de compte.
     /// Le chemin nominal reste ZÉRO geste.
     private var derivedIdentityBlock: some View {
         let form = viewModel.form
-        let derive = SignupIdentityDerivation(form: form)
+        var sansNom = form
+        sansNom.displayName = nil
+        var sansPseudo = form
+        sansPseudo.username = nil
 
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "auth.signup.identity.title", defaultValue: "Votre identité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                identityInput(
-                    field: .firstName,
-                    label: String(localized: "auth.signup.identity.firstName", defaultValue: "Prénom", bundle: .main),
-                    placeholder: derive.firstName,
-                    text: Binding(
-                        get: { viewModel.form.firstName ?? viewModel.form.effectiveFirstName },
-                        set: { viewModel.form.firstName = $0 }
-                    )
-                )
-                identityInput(
-                    field: .lastName,
-                    label: String(localized: "auth.signup.identity.lastName", defaultValue: "Nom", bundle: .main),
-                    placeholder: derive.lastName,
-                    text: Binding(
-                        get: { viewModel.form.lastName ?? viewModel.form.effectiveLastName },
-                        set: { viewModel.form.lastName = $0 }
-                    )
-                )
-            }
-
             identityInput(
                 field: .displayName,
                 label: String(localized: "auth.signup.identity.displayName", defaultValue: "Nom affiché", bundle: .main),
-                placeholder: derive.displayName,
+                prefix: nil,
+                placeholder: sansNom.effectiveDisplayName,
                 text: Binding(
                     get: { viewModel.form.displayName ?? viewModel.form.effectiveDisplayName },
                     set: { viewModel.form.displayName = $0 }
@@ -170,7 +164,7 @@ struct SignupView: View {
                 field: .username,
                 label: String(localized: "auth.signup.identity.username", defaultValue: "Pseudo", bundle: .main),
                 prefix: "@",
-                placeholder: derive.username,
+                placeholder: sansPseudo.effectiveUsername,
                 text: Binding(
                     get: { viewModel.form.username ?? viewModel.form.effectiveUsername },
                     set: { viewModel.form.username = $0 }
@@ -200,12 +194,12 @@ struct SignupView: View {
         .background(inputSurface(isFocused: false))
     }
 
-    /// Une saisie d'identité, TOUJOURS ouverte (#7897) : un toucher suffit pour
-    /// modifier. Le filigrane rend la dérivation quand le champ est vidé.
+    /// Une saisie d'identité, TOUJOURS ouverte (#7897) : un toucher suffit
+    /// pour modifier. Le filigrane rend la dérivation quand le champ est vidé.
     private func identityInput(
         field: SignupField,
         label: String,
-        prefix: String? = nil,
+        prefix: String?,
         placeholder: String,
         text: Binding<String>
     ) -> some View {
@@ -222,29 +216,18 @@ struct SignupView: View {
                         .accessibilityHidden(true)
                 }
                 TextField(placeholder.isEmpty ? label : placeholder, text: text)
-                    .textContentType(identityContentType(field))
+                    .textContentType(prefix == nil ? .nickname : .username)
                     .textInputAutocapitalization(prefix == nil ? .words : .never)
                     .autocorrectionDisabled()
                     .focused($focusedField, equals: field)
                     .foregroundColor(theme.textPrimary)
                     .accessibilityLabel(label)
             }
-            .padding(.horizontal, MeeshySpacing.md)
-            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .frame(minHeight: 48)
             .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func identityContentType(_ field: SignupField) -> UITextContentType? {
-        switch field {
-        case .firstName: return .givenName
-        case .lastName: return .familyName
-        case .displayName: return .nickname
-        case .username: return .username
-        default: return nil
         }
     }
 
@@ -407,42 +390,70 @@ struct SignupView: View {
     // `SignupForm.passwordMinLength`, seule source du minimum.
 
     //
-    // FACULTATIF depuis #6424. Le libellé le DIT, et la note en dessous dit ce
-    // qui se passe sans lui — sans quoi laisser le champ vide serait un geste
-    // qu'on ose seulement par accident. La note n'apparaît QUE tant que le
-    // champ est vide : une fois un mot de passe tapé, elle décrit un état qui
-    // n'est plus celui du formulaire.
+    // FACULTATIF depuis #6424, sans le dire (#6582 web, #7897) : le bouton
+    // actif sans lui le prouve. Il paraît quand l'identité est DÉFINIE, et sa
+    // conséquence se déplie à la demande sous « Pourquoi mettre un mot de
+    // passe maintenant ? » (directive porteur 2026-09-25).
+
+    private var passwordWhyDetail: String {
+        String(
+            localized: "auth.signup.password.why.detail",
+            defaultValue: "Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous connecterez toujours à partir d’un e-mail reçu dans votre boîte.",
+            bundle: .main
+        )
+    }
 
     private var passwordField: some View {
-        fieldBlock(
-            field: .password,
-            label: String(
-                localized: "auth.signup.password.label",
-                defaultValue: "Mot de passe (facultatif)",
-                bundle: .main
-            ),
-            hint: AuthInfoHint(
-                text: String(
-                    localized: "auth.signup.password.magicLinkNote",
-                    defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
-                    bundle: .main
-                ),
-                buttonLabel: String(
-                    localized: "auth.signup.password.hintLabel",
-                    defaultValue: "Que se passe-t-il sans mot de passe",
-                    bundle: .main
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            fieldBlock(
+                field: .password,
+                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
+            ) {
+                SecureField(
+                    String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
+                    text: $viewModel.form.password
                 )
-            )
-        ) {
-            SecureField(
-                String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                text: $viewModel.form.password
-            )
-            .textContentType(.newPassword)
-            .submitLabel(.go)
-            .focused($focusedField, equals: .password)
-            .onSubmit { attemptSubmit() }
-            .foregroundColor(theme.textPrimary)
+                .textContentType(.newPassword)
+                .submitLabel(.go)
+                .focused($focusedField, equals: .password)
+                .onSubmit { attemptSubmit() }
+                .foregroundColor(theme.textPrimary)
+            }
+
+            // « POURQUOI METTRE UN MOT DE PASSE MAINTENANT ? » (#7897) — une
+            // ligne discrète qui se déplie sur la conséquence.
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    isPasswordWhyExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Text(String(
+                        localized: "auth.signup.password.why",
+                        defaultValue: "Pourquoi mettre un mot de passe maintenant ?",
+                        bundle: .main
+                    ))
+                    Image(systemName: "chevron.down")
+                        .rotationEffect(.degrees(isPasswordWhyExpanded ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            // Replié n'est pas perdu (#6441) : VoiceOver énonce le détail sans
+            // qu'il faille déplier.
+            .accessibilityHint(passwordWhyDetail)
+
+            if isPasswordWhyExpanded {
+                Text(passwordWhyDetail)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -758,30 +769,5 @@ struct SignupCountrySheet: View {
                 }
             }
         }
-    }
-}
-
-
-/// Ce que la dérivation proposerait pour chaque champ d'identité, champ par
-/// champ — le filigrane d'une saisie qu'on a vidée (#7897).
-struct SignupIdentityDerivation {
-    let firstName: String
-    let lastName: String
-    let displayName: String
-    let username: String
-
-    init(form: SignupForm) {
-        var sansPrenom = form
-        sansPrenom.firstName = nil
-        var sansNom = form
-        sansNom.lastName = nil
-        var sansNomAffiche = form
-        sansNomAffiche.displayName = nil
-        var sansPseudo = form
-        sansPseudo.username = nil
-        firstName = sansPrenom.effectiveFirstName
-        lastName = sansNom.effectiveLastName
-        displayName = sansNomAffiche.effectiveDisplayName
-        username = sansPseudo.effectiveUsername
     }
 }

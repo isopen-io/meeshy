@@ -25,17 +25,13 @@ public struct SignupForm: Equatable {
 
     // MARK: - Saisies
 
-    /// LES QUATRE CHAMPS D'IDENTITÉ (#6479, refaits par #7897).
+    /// Le pseudo et le nom affiché TAPÉS (#6479, refaits par #7897).
     ///
-    /// `nil` = jamais touché : le champ SUIT la dérivation en direct — prénom
-    /// et nom tirés de l'adresse, nom affiché composé d'eux, pseudo tiré de
-    /// l'adresse. Une chaîne = la saisie de l'utilisateur, qui gagne — même
-    /// vide pour le prénom et le nom (un mononyme vide son nom de famille).
-    /// L'écran montre les valeurs `effective*` et écrit ici. Miroir de
-    /// `SignupFormState` (`apps/web/src/lib/signup-form.ts`).
+    /// `nil` = jamais touché : le champ SUIT l'adresse en direct. Une chaîne =
+    /// la saisie, qui gagne ; vidée, la dérivation reparaît en filigrane et
+    /// repart. L'écran montre `effectiveUsername` / `effectiveDisplayName` et
+    /// écrit ici. Miroir de `SignupFormState` (`apps/web/src/lib/signup-form.ts`).
     public var username: String?
-    public var firstName: String?
-    public var lastName: String?
     public var displayName: String?
     public var email: String
     /// Les chiffres SEULS, sans indicatif : l'indicatif vient de `country`.
@@ -135,19 +131,7 @@ public struct SignupForm: Equatable {
         !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Prénom ou nom : même alphabet que le nom affiché, borne de 50
-    /// (`firstNameProperty` / `lastNameProperty`, #7897).
-    public static let personNameMaxLength = 50
-
-    public static func isPersonNameValid(_ value: String) -> Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).count <= personNameMaxLength
-            && isDisplayNameValid(value)
-    }
-
     public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName ?? "") }
-    public var areNamesValid: Bool {
-        Self.isPersonNameValid(firstName ?? "") && Self.isPersonNameValid(lastName ?? "")
-    }
     public var isEmailValid: Bool { Self.isEmailValid(email) }
     public var isPasswordValid: Bool { Self.isPasswordValid(password) }
     public var hasPassword: Bool { Self.hasPassword(password) }
@@ -166,34 +150,20 @@ public struct SignupForm: Equatable {
         return derive == RegistrationIdentity.pseudoDeSecours ? "" : derive
     }
 
-    /// Une dérivation qui ne tiendrait pas la loi des noms ne part pas.
-    private static func recevable(_ value: String) -> String {
-        !value.isEmpty && isPersonNameValid(value) ? value : ""
-    }
-
-    private var namesFromEmail: (firstName: String, lastName: String) {
-        RegistrationIdentity.derivedNames(RegistrationIdentity.displayNameDepuisEmail(email))
-    }
-
-    /// Le prénom qui partira — tapé (même vide), tiré de l'adresse sinon.
-    public var effectiveFirstName: String {
-        if let firstName { return firstName.trimmingCharacters(in: .whitespacesAndNewlines) }
-        return Self.recevable(namesFromEmail.firstName)
-    }
-
-    /// Le nom qui partira — tapé (même vide), tiré de l'adresse sinon.
-    public var effectiveLastName: String {
-        if let lastName { return lastName.trimmingCharacters(in: .whitespacesAndNewlines) }
-        return Self.recevable(namesFromEmail.lastName)
-    }
-
-    /// Le nom affiché qui partira — tapé s'il l'a été, COMPOSÉ du prénom et
-    /// du nom sinon, en direct (#7897).
+    /// Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon.
     public var effectiveDisplayName: String {
         let tape = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tape.isEmpty { return tape }
-        let compose = "\(effectiveFirstName) \(effectiveLastName)".trimmingCharacters(in: .whitespaces)
-        return Self.isDisplayNameValid(compose) ? compose : ""
+        return tape.isEmpty ? RegistrationIdentity.displayNameDepuisEmail(email) : tape
+    }
+
+    /// L'IDENTITÉ EST DÉFINIE (#7897) — nom affiché ET pseudo existent et
+    /// tiennent leurs bornes. Directive porteur : « c'est quand tout est
+    /// défini qu'on active le champ mot de passe ».
+    public var isIdentityDefined: Bool {
+        isEmailValid
+            && !effectiveDisplayName.isEmpty
+            && Self.isDisplayNameValid(effectiveDisplayName)
+            && !effectiveUsername.isEmpty
     }
 
     /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
@@ -214,7 +184,7 @@ public struct SignupForm: Equatable {
     /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
     /// réseau — aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
-        isDisplayNameValid && areNamesValid && isEmailValid && isPasswordValid && isPhoneValid
+        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid
     }
 
     // MARK: - Téléphone
@@ -231,8 +201,8 @@ public struct SignupForm: Equatable {
 
     /// La charge exacte de `POST /auth/register`.
     ///
-    /// Depuis #7897 l'écran SAISIT prénom, nom, nom affiché et pseudo : les
-    /// quatre partent quand ils existent. Le couple téléphone est TOUT ou
+    /// Sept clés au plus, et jamais `username` / `firstName` / `lastName` : la
+    /// passerelle les dérive de `displayName`. Le couple téléphone est TOUT ou
     /// RIEN — un `phoneCountryCode` sans numéro décrirait un pays qui ne
     /// qualifie rien.
     ///
@@ -264,12 +234,7 @@ public struct SignupForm: Equatable {
             phoneCountryCode: phone == nil ? nil : country.id,
             systemLanguage: systemLanguage,
             regionalLanguage: regionalLanguage,
-            username: effectiveUsername.isEmpty ? nil : effectiveUsername,
-            // Saisis à l'écran depuis #7897. `lastName` ne part qu'avec un
-            // prénom (la passerelle lit le couple à partir du prénom), et
-            // jamais vide (`minLength: 1`).
-            firstName: effectiveFirstName.isEmpty ? nil : effectiveFirstName,
-            lastName: effectiveFirstName.isEmpty || effectiveLastName.isEmpty ? nil : effectiveLastName
+            username: effectiveUsername.isEmpty ? nil : effectiveUsername
         )
     }
 
@@ -338,8 +303,6 @@ public struct SignupForm: Equatable {
     public init(locale: Locale = .current) {
         let system = Self.defaultSystemLanguage(for: locale)
         self.username = nil
-        self.firstName = nil
-        self.lastName = nil
         self.displayName = nil
         self.email = ""
         self.phoneDigits = ""
@@ -353,8 +316,6 @@ public struct SignupForm: Equatable {
     /// rejouer la saisie champ par champ.
     public init(
         username: String? = nil,
-        firstName: String? = nil,
-        lastName: String? = nil,
         displayName: String?,
         email: String,
         phoneDigits: String = "",
@@ -364,8 +325,6 @@ public struct SignupForm: Equatable {
         regionalLanguage: String
     ) {
         self.username = username
-        self.firstName = firstName
-        self.lastName = lastName
         self.displayName = displayName
         self.email = email
         self.phoneDigits = phoneDigits
