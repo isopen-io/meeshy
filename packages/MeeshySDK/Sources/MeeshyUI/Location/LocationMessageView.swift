@@ -221,7 +221,7 @@ private struct LocationMapThumbnailView: View {
 
 // MARK: - Shared Pin View
 
-enum LocationPinSize {
+nonisolated enum LocationPinSize {
     case small
     case large
 
