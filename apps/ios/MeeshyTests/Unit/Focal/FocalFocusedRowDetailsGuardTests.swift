@@ -105,7 +105,10 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(row.contains(".opacity(input.isFocused ? 0 : 1)"), "la ligne drapeau+réactions garde sa place, elle s'efface")
         // La carte est le FOND du bloc (même repère que ses chips) — plus une
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
-        XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground } }"), "carte = fond SwiftUI du contenu")
+        // #7953 : la carte s'allonge, en RENDU, sous le contenu d'une suite
+        // descendu et sous la bande basse — jamais une hauteur de rangée.
+        XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground.padding(.bottom, -focusDrop) } }"), "carte = fond SwiftUI du contenu")
+        XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
         // La colonne est MONTÉE en focus comme hors focus — elle s'efface par
         // opacité (voir le compte ci-dessus), jamais par démontage : c'est ce
@@ -136,7 +139,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition SUR la ligne basse, la date à sa droite")
-        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.overhang)"))
+        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)"))
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")

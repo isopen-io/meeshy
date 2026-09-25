@@ -293,7 +293,16 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'une conversation et le rôle / le retrait d'un de ses membres, écrits depuis la
 // fiche d'administration WEB par adresse écrite, comme ses lectures admin
 // voisines déjà au compte. Valeur MESURÉE sur l'arbre fusionné avec dev du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 272;
+// 269 → 272 (#7938) : `MeEndpoint.stickers`, `.stickersByStickerId`,
+// `.stickersByStickerIdUse` — la bibliothèque SERVEUR « Mes stickers »
+// (`GET/POST /me/stickers`, `DELETE /me/stickers/:id`, `POST …/:id/use`).
+// Mortes à la naissance PAR CONSTRUCTION : l'entrée est GÉNÉRÉE depuis
+// `route-manifest.json`, et l'appelant iOS est le lot suivant de #7938
+// (synchroniser `StickerLibraryStore`, aujourd'hui local, avec ces routes).
+// Leur appelant actuel est TS (`apps/web/src/lib/api/stickers.ts`). Valeur
+// MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
+// Fusion #7845 + #7938 : les deux ajouts (+3 chacun) se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 275;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

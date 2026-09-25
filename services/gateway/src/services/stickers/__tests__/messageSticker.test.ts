@@ -22,6 +22,16 @@ describe('parseMessageSticker', () => {
     });
   });
 
+  it('accepte un sticker de bibliothèque seul, désigné par son identifiant (#7938)', () => {
+    expect(parseMessageSticker({ stickerId: ' 65f0c0ffee0000000000abcd ' })).toEqual({ stickerId: '65f0c0ffee0000000000abcd' });
+  });
+
+  it('rejette un stickerId qui n’est pas un ObjectId', () => {
+    expect(parseMessageSticker({ stickerId: 'not-an-id' })).toBeNull();
+    expect(parseMessageSticker({ stickerId: 42 })).toBeNull();
+    expect(parseMessageSticker({ emoji: '🎉', stickerId: '65f0c0ffee0000000000abc' })).toBeNull();
+  });
+
   it('accepte un emoji seul', () => {
     expect(parseMessageSticker({ emoji: ' 🎉 ' })).toEqual({ emoji: '🎉' });
   });

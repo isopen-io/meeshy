@@ -2,7 +2,9 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState, type ReactNode } from 'react';
 
 import { Avatar } from './avatar';
+import { FeedActionsRow, type CommentHandler, type GestureHandler, type RepostHandler, type ShareHandler } from './feed-actions-row';
 import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
+import { FeedRepostEmbed } from './feed-repost-embed';
 import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
@@ -10,17 +12,14 @@ import { FeedMediaSurface } from './feed-media-surface';
 import { FeedSceneCarousel } from './feed-scene-carousel';
 import { FeedSceneMosaic } from './feed-scene-mosaic';
 import { FeedSceneSurface } from './feed-scene-surface';
-import { GlyphSvg } from './glyph';
-import { FEED_GLYPHS } from './glyphs-feed';
 import { RichText } from './rich-text';
 import { PrismPastille } from './message-blocks';
-import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
-import type { PostToggleKind } from '@/lib/feed/interactions';
+import { feedCardBody, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
@@ -45,148 +44,12 @@ import { Link } from '@/routes/route-table';
  * Le compteur était un `<span>` INERTE, et c'est le défaut nommé par la loi
  * 4 — « cliquer une traduction change-t-il le texte lu ? » posé à un chiffre.
  *
- * **`repostCount` RESTE INERTE, ET C'EST ÉCRIT.** La republication ouvre un
- * composeur prérempli côté iOS (`StoryViewerView+Sidebar.swift:686-706`,
- * `republishStorySource`) ; le web n'a pas ce composeur. Tant qu'il n'existe
- * pas, ce chiffre est une STATISTIQUE, pas un contrôle — son témoin
- * (`feed-post-card-gestures.test.tsx`) mesure l'ABSENCE de rôle bouton,
- * pour qu'un futur lot ne le rende pas cliquable sans lui donner d'effet.
+ * **`repostCount` EST UN BOUTON DÈS QU'UN HÔTE SAIT REPARTAGER** (#6278,
+ * dernière action de la rangée) — le repost SIMPLE, même hôte que le rail des
+ * Réels (`usePostGesture().onRepost`) ; « citer » reste hors tranche (#7463).
+ * Sans hôte, statistique inerte (loi 4) ; un repost posé (`viewer.reposted`)
+ * ne se défait jamais au clic (append-only, miroir `ReelsViewModel.repostedIds`).
  */
-
-type GestureHandler = (postId: string, kind: PostToggleKind) => void;
-
-type ShareHandler = (postId: string) => void;
-
-type CommentHandler = (postId: string) => void;
-
-const GESTURE_OF_STAT: Partial<Record<keyof FeedCardStats, PostToggleKind>> = {
-  likeCount: 'like',
-  bookmarkCount: 'bookmark',
-};
-
-const FILLED_GLYPH: Partial<Record<keyof typeof FEED_GLYPHS, keyof typeof FEED_GLYPHS>> = {
-  heart: 'heartFill',
-  bookmark: 'bookmarkFill',
-};
-
-/* `as const satisfies` plutôt qu'une annotation `InterfaceCatalogKey` large
-   (revue-correction #6488) : une clé de catalogue TYPÉE LARGE force
-   `translate()` à exiger des paramètres pour CHAQUE clé possible du
-   catalogue, y compris celles qui en portent — `as const` garde le type
-   LITTÉRAL de chacune des cinq clés ci-dessous, aucune desquelles n'en prend. */
-const STAT_ITEMS = [
-  { key: 'likeCount', glyph: 'heart', labelKey: 'feed.post.action.like' },
-  { key: 'commentCount', glyph: 'chatCircle', labelKey: 'feed.post.action.comment' },
-  { key: 'repostCount', glyph: 'arrowsClockwise', labelKey: 'feed.post.action.repost' },
-  { key: 'bookmarkCount', glyph: 'bookmark', labelKey: 'feed.post.action.bookmark' },
-  { key: 'shareCount', glyph: 'shareNetwork', labelKey: 'feed.post.action.share' },
-] as const satisfies readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly labelKey: InterfaceCatalogKey }[];
-
-/**
- * La rangée des cinq statistiques — `tone` bascule l'encre entre la carte
- * (POST, en-dessous du média) et le scrim d'un RÉEL (blanc, sur le média).
- *
- * LE NOM ACCESSIBLE VIT SUR LE GLYPHE, PAS SUR L'ENVELOPPE (revue-correction
- * #5893) : un `aria-label` posé sur un `<span>` NU n'est jamais exposé — un
- * élément de rôle `generic` n'admet pas de nom accessible (ARIA 1.2, § name
- * from author prohibited). La première forme nommait l'enveloppe et masquait
- * le compte (`aria-hidden`) : les cinq chiffres étaient donc INAUDIBLES, la
- * rangée entière absente de l'arbre. `GlyphSvg` porte déjà le contrat
- * (`title` ⇒ `role="img" aria-label`), et le compte redevient du TEXTE lu —
- * « Aimer 14 », comme iOS l'énonce (`feed.post.a11y.like`).
- */
-function FeedActionsRow({
-  postId,
-  stats,
-  viewer,
-  tone,
-  onGesture,
-  onShare,
-  onComment,
-}: {
-  readonly postId: string;
-  readonly stats: FeedCardStats;
-  readonly viewer: FeedCardViewer;
-  readonly tone: 'onLight' | 'onDark';
-  readonly onGesture?: GestureHandler;
-  readonly onShare?: ShareHandler;
-  readonly onComment?: CommentHandler;
-}) {
-  const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
-  const language = currentInterfaceLanguage();
-  return (
-    <div className="flex items-center justify-between" data-feed-actions>
-      {STAT_ITEMS.map((item) => {
-        const label = translate(language, item.labelKey);
-        /* « Partager » est un geste PONCTUEL, pas une bascule : un bouton
-           simple, sans `aria-pressed` — et seulement si l'hôte sait partager. */
-        if (item.key === 'shareCount' && onShare !== undefined) {
-          return (
-            <button
-              key={item.key}
-              type="button"
-              data-feed-gesture="share"
-              onClick={() => onShare(postId)}
-              className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
-            >
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
-            </button>
-          );
-        }
-        /* COMMENTER — un geste PONCTUEL comme « Partager » : il CONDUIT au
-           fil, il ne bascule rien. Pas d'`aria-pressed` : un état enfoncé
-           annoncerait une opinion que commenter n'exprime pas. */
-        if (item.key === 'commentCount' && onComment !== undefined) {
-          return (
-            <button
-              key={item.key}
-              type="button"
-              data-feed-gesture="comment"
-              onClick={() => onComment(postId)}
-              className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
-            >
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
-            </button>
-          );
-        }
-        const kind = GESTURE_OF_STAT[item.key];
-        if (kind === undefined || onGesture === undefined) {
-          return (
-            <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
-              <span className="text-check font-medium">{stats[item.key]}</span>
-            </span>
-          );
-        }
-        const pressed = kind === 'like' ? viewer.liked : viewer.bookmarked;
-        /* Le cœur aimé se peint dans la couleur d'erreur, le signet dans la
-           marque (sur un réel, en blanc) — miroir `FeedPostCard.swift:946`,
-           rouge seulement quand LE LECTEUR a aimé. */
-        const pressedInk = kind === 'like' ? 'var(--color-error)' : tone === 'onDark' ? 'white' : 'var(--color-ios-brand)';
-        return (
-          <button
-            key={item.key}
-            type="button"
-            data-feed-gesture={kind}
-            aria-pressed={pressed}
-            onClick={() => onGesture(postId, kind)}
-            className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ color: pressed ? pressedInk : ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
-          >
-            <span className="grid place-items-center" {...(pressed ? { 'data-feed-glyph-filled': '' } : {})}>
-              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={label} />
-            </span>
-            <span className="text-check font-medium">{stats[item.key]}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /**
  * LE CARROUSEL — vue 3f de la planche : « un lot de médias se PARCOURT, il
@@ -308,11 +171,6 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly 
             </Link>
           )}
         </div>
-        {model.repostOfHandle !== undefined ? (
-          <span className="text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-            ↻ @{model.repostOfHandle}
-          </span>
-        ) : null}
       </div>
       {/* LE « ⋯ » EN HAUT À DROITE (#7533) — miroir
           `FeedPostCard+Header.swift:164-241`, après le `Spacer()`. */}
@@ -412,16 +270,18 @@ type CardHosts = {
   readonly onGesture?: GestureHandler;
   readonly onShare?: ShareHandler;
   readonly onComment?: CommentHandler;
+  readonly onRepost?: RepostHandler;
   /** Le menu « ⋯ » (#7533) — absent, le bouton ne se monte pas (loi 4). */
   readonly menu?: PostMenuHost;
 };
 
 /** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
  * refuse de poser une clé optionnelle à `undefined`. */
-const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): Omit<CardHosts, 'menu'> => ({
+const hostsOf = ({ onGesture, onShare, onComment, onRepost }: CardHosts): Omit<CardHosts, 'menu'> => ({
   ...(onGesture !== undefined ? { onGesture } : {}),
   ...(onShare !== undefined ? { onShare } : {}),
   ...(onComment !== undefined ? { onComment } : {}),
+  ...(onRepost !== undefined ? { onRepost } : {}),
 });
 
 /** LE « ⋯ » D'UNE CARTE (#7533) — la MÊME pose pour les deux natures, seul le
@@ -748,7 +608,11 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // — le répéter ici peindrait deux fois la même phrase sur la même carte.
   // Une carte à SCÈNE ne monte pas `FeedMediaCarousel` et ne descend jamais le
   // texte du post en légende (`resolveSceneCaption`) : son texte reste ICI.
-  const soleMedia = model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
+  // La PRÉSÉANCE iOS du corps (`feedCardBody`) : la scène, le média et la
+  // carte citée ne se peignent jamais en doublon. Le repli de légende ne vaut
+  // que si le média est effectivement PEINT.
+  const body = feedCardBody(model);
+  const soleMedia = body.visual && model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
   const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
 
   return (
@@ -770,9 +634,9 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
         </FeedPostOpenZone>
       ) : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
-          doit plus rester nu sous son texte (D-78) : la condition porte donc
+          doit plus rester nu sous son texte (D-78) : `body.visual` porte donc
           sur `model.scene` autant que sur `model.media.length`. */}
-      {model.scene !== undefined || model.media.length > 0 ? (
+      {body.visual ? (
         <div className="px-3">
           <FeedPostVisual
             model={model}
@@ -781,6 +645,15 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
             {...(onOpenScene !== undefined ? { onOpenScene } : {})}
             {...(registerScene !== undefined ? { registerScene } : {})}
           />
+        </div>
+      ) : null}
+      {/* LA PUBLICATION CITÉE (#6278 c) — miroir `FeedPostCard.swift:822-910`,
+          APRÈS le visuel (`:668-678`). Sa propre porte (`/post/<original>`)
+          reste HORS de `FeedPostOpenZone` : deux `<a>` de destinations
+          différentes ne s'imbriquent pas. */}
+      {body.repostOf !== undefined ? (
+        <div className="px-3">
+          <FeedRepostEmbed repost={body.repostOf} />
         </div>
       ) : null}
       <div className="px-3">

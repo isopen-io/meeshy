@@ -44,6 +44,13 @@ public enum LastMessageIdentity: Sendable, Hashable {
     case unchanged
     /// Clé présente. `nil` = plus AUCUN message visible pour ce lecteur.
     case replaced(String?)
+
+    /// L'identifiant NOMMÉ, quand il y en a un — `nil` pour une clé absente
+    /// comme pour « plus aucun message ».
+    public var messageId: String? {
+        guard case .replaced(let id) = self else { return nil }
+        return id
+    }
 }
 
 /// L'AUTEUR du dernier message, tel que la ligne de liste le préfixe
@@ -96,6 +103,10 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let lastMessagePreview: String?
     /// L'auteur du dernier message, pour le préfixe de la ligne de liste.
     public let lastMessageSenderName: LastMessageSenderName
+    /// Le `User.id` de l'auteur du message nommé, servi par la passerelle sur
+    /// chaque chemin qui compose l'aperçu (#7978). `nil` : clé absente
+    /// (passerelle antérieure), auteur sans compte, ou forme inattendue.
+    public let lastMessageSenderUserId: String?
     /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
     /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
     /// résolveur PRÉFÈRE la traduction hydratée par `GET /conversations` à
@@ -155,7 +166,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
-        case lastMessageSenderName
+        case lastMessageSenderName, lastMessageSenderUserId
         case location
         case lastMessageTranslations, lastMessageOriginalLanguage
         case previewRecalculated
@@ -196,6 +207,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         } else {
             lastMessageSenderName = .unchanged
         }
+        lastMessageSenderUserId = try? container.decodeIfPresent(String.self, forKey: .lastMessageSenderUserId)
         // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
         // distingue « cet événement ne parle pas d'aperçu » de « la carte est
         // périmée ». `decodeIfPresent` rend `nil` dans les deux cas et perdrait
@@ -254,6 +266,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         lastMessageSenderName: LastMessageSenderName = .unchanged,
+        lastMessageSenderUserId: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
         location: SharedPlace? = nil,
@@ -283,6 +296,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageSenderName = lastMessageSenderName
+        self.lastMessageSenderUserId = lastMessageSenderUserId
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.location = location
@@ -312,16 +326,20 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     }
 
     /// Le `User.id` de l'auteur du message NOMMÉ, quand l'événement le dit
-    /// (#7612).
+    /// (#7612, #7978).
     ///
     /// `senderId` est un `Participant.id` ; comparé à l'id UTILISATEUR du
-    /// lecteur, il ne reconnaît jamais « moi ». Les deux émetteurs
-    /// message-driven posent `updatedBy.id` = l'auteur du message. Un recalcul
+    /// lecteur, il ne reconnaît jamais « moi ». La source est
+    /// `lastMessageSenderUserId`, que la passerelle sert sur TOUS ses chemins,
+    /// recalculs compris. Repli pour une passerelle antérieure : les émetteurs
+    /// message-driven posent `updatedBy.id` = l'auteur du message ; un recalcul
     /// (`previewRecalculated`) y met l'ACTEUR — qui a supprimé ou masqué —, et
     /// une mise à jour de métadonnées ou d'activité ne nomme aucun message :
     /// dans ces deux cas, rien n'est affirmé.
     public var messageSenderUserId: String? {
-        guard !previewRecalculated, case .replaced(.some) = lastMessage else { return nil }
+        guard case .replaced(.some) = lastMessage else { return nil }
+        if let lastMessageSenderUserId, !lastMessageSenderUserId.isEmpty { return lastMessageSenderUserId }
+        guard !previewRecalculated else { return nil }
         return updatedBy?.id
     }
 }

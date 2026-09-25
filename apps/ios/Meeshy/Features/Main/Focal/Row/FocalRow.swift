@@ -183,6 +183,8 @@ struct FocalRow: View {
             .equatable()
             .opacity(input.isFocused ? 0 : 1)
         }
+        // #7953 — une SUITE magnifiée descend sous sa pastille, en rendu seul.
+        .offset(y: focusLift)
         // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
         // que ses chips, toujours consolidés quelle que soit la hauteur
         // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
@@ -191,7 +193,7 @@ struct FocalRow: View {
         // AVEC la carte, au tick d'élection.
         .background {
             if input.isFocused {
-                focusCardBackground
+                focusCardBackground.padding(.bottom, -focusDrop)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -209,7 +211,7 @@ struct FocalRow: View {
                     focusStampChip
                 }
                 .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                .offset(y: FocalMetrics.FocusStrip.overhang)
+                .offset(y: FocalMetrics.FocusStrip.overhang + focusDrop)
             }
         }
         // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
@@ -223,6 +225,11 @@ struct FocalRow: View {
         // colonne détachée au bord opposé, et l'inclure était la cause.
         
     }
+
+    private var focusLift: CGFloat {
+        input.isFocused ? FocalMetrics.FocusStrip.contentLift(isFirstInGroup: input.isFirstInGroup) : 0
+    }
+    private var focusDrop: CGFloat { input.isFocused ? focusLift + FocalMetrics.FocusStrip.stripDrop : 0 }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
     /// d'un espace avec #5135 : seule la méta l'a quittée, et la ligne basse
@@ -480,14 +487,12 @@ struct FocalRow: View {
             // que deux `if` — les deux rendus s'excluent par CONSTRUCTION, pas
             // par la coïncidence de deux prédicats qui pourraient diverger.
             if let storyCitation = content.flatRowStoryCitation {
-                BubbleStoryCitationCard(
+                FocalStoryCitationQuote(
                     reply: storyCitation,
                     isDark: input.isDark,
                     accentHex: input.accentHex,
                     onOpen: storyCitationOpenTap
                 )
-                .equatable()
-                .padding(.leading, FocalMetrics.Quote.indent)
             } else if showsQuotedReply, let reply = content.reply {
                 FocalQuotedReplyView(
                     reply: reply,

@@ -324,7 +324,7 @@ export default function FeedScreen() {
      autres gestes de la rangée (`use-post-gesture.ts`) : l'adresse du fil
      s'écrit une seule fois pour les quatre écrans qui montent la carte. Elle
      était recopiée ici, et deux de ces écrans l'avaient oubliée. */
-  const { announcement, onGesture, onShare, onComment, menu } = usePostGesture();
+  const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
   // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
@@ -403,6 +403,7 @@ export default function FeedScreen() {
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={onComment}
+                  onRepost={onRepost}
                   menu={menu}
                   preferredLanguages={readerLanguages}
                   onOpenScene={sceneGallery.onOpenScene}
@@ -427,6 +428,7 @@ export default function FeedScreen() {
         preferredLanguages={readerLanguages}
         onClose={sceneGallery.close}
       />
+      {repostConfirm}
     </div>
   );
 }

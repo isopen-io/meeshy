@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 
 /// Garde de forme pour #3927 : le bouton d'envoi apparaît/disparaît en
 /// tourbillon (grossit+tourne à l'arrivée, rétrécit+tourne en sens inverse
@@ -66,7 +67,7 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
     /// la dimension 5 sans une nouvelle directive.
     func test_quickEmojiButtons_areAGridOfFive_andLongPressOpensTheSheet() throws {
         let block = try Self.propertyBlock(anchor: "var quickEmojiButtons: some View {")
-        XCTAssertTrue(block.contains("QuickEmojiGrid.rows("), "les emojis se rangent par la règle pure de la grille")
+        XCTAssertTrue(block.contains("QuickEmojiGrid.row("), "les emojis se rangent par la règle pure de la grille")
         XCTAssertTrue(block.contains("LongPressGesture"), "l'appui long sur un emoji ouvre la feuille des emojis")
         XCTAssertTrue(block.contains("showQuickEmojiPicker = true"), "l'appui long ouvre la feuille")
         XCTAssertTrue(block.contains("accessibilityAction(named:"), "VoiceOver atteint la feuille par une action nommée")
@@ -146,9 +147,24 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
         XCTAssertTrue(block.contains("insertion:"), "insertion manquante")
         XCTAssertTrue(block.contains("removal:"), "removal manquante")
         XCTAssertTrue(
-            block.contains("-250") || block.contains("-260") || block.contains("-270") || block.contains("-240"),
-            "l'insertion doit tourner dans un sens (rotation négative) — tourbillon qui apparaît en grossissant"
+            block.contains("rotation: .degrees(-ComposerSlotMotion.rotationDegrees)"),
+            "l'insertion tourne dans un sens (rotation négative), l'amplitude venant de la règle adoucie"
         )
+        XCTAssertTrue(
+            block.contains("rotation: .degrees(ComposerSlotMotion.rotationDegrees)"),
+            "le départ tourne dans l'autre sens"
+        )
+    }
+
+    /// **Le retour après envoi est ADOUCI** (#7985, directive porteur
+    /// 2026-09-25 : « l'effet de retour après l'envoi du message doit être
+    /// moins accentué »). Il se rejoue à chaque envoi : il pivote peu, part
+    /// d'une taille proche, et son ressort ne rebondit presque pas.
+    func test_returnAfterSend_isSoftened() {
+        XCTAssertLessThanOrEqual(ComposerSlotMotion.rotationDegrees, 45)
+        XCTAssertGreaterThanOrEqual(ComposerSlotMotion.startScale, 0.5)
+        XCTAssertGreaterThanOrEqual(ComposerSlotMotion.damping, 0.8)
+        XCTAssertLessThanOrEqual(ComposerSlotMotion.sendBounceScale, 1.1)
     }
 
     func test_tourbillonEffect_scalesRotatesAndFadesTheContent() throws {

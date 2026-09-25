@@ -188,7 +188,7 @@ export function registerSendMessageRoute(
           sticker: {
             type: 'object',
             additionalProperties: true,
-            description: 'Sticker (templateId?, slots?, animation?, emoji?) — validé serveur (parseMessageSticker), servi hissé depuis metadata.sticker',
+            description: 'Sticker (templateId?, slots?, animation?, emoji?, stickerId?) — validé serveur (parseMessageSticker), servi hissé depuis metadata.sticker',
           }
         }
       },

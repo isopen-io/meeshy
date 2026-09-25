@@ -179,7 +179,20 @@ extension MessageListViewController {
         // 2026-09-15) — lui seul grandit, ses voisins restent à plat.
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
-        for cell in cells { FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && focalGeometry(of: cell)?.id == focused, animated: electionChanged) }
+        // #7953 — la rangée qui PORTE ses pastilles ouvre un passage : ses
+        // voisines s'écartent du pas que les pastilles mordent, par transform
+        // seul — aucune hauteur ne change. Lue sur la CELLULE (ce qu'elle
+        // rend), jamais sur `focalDetailedLocalId`, qui change avant que la
+        // reconfiguration n'ait posé les pastilles sur la nouvelle rangée.
+        let anchor = cells.first { FocalScrollPerspective.showsFocusDetails(cellTag: $0.tag) }
+        let anchorMidY = anchor.flatMap { focalGeometry(of: $0)?.visualMidY }
+        let clearance = FocalScrollPerspective.electionClearance(isFirstInGroup: anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false)
+        let growth = anchor.map { FocalScrollPerspective.loupeGrowth(of: $0.contentView.layer) } ?? 0
+        for cell in cells {
+            let geometry = focalGeometry(of: cell)
+            let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance, loupeGrowth: growth) } ?? 0
+            FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && geometry?.id == focused, shift: shift, animated: electionChanged)
+        }
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au
         // posé (directive 2026-08-22) : la reconfiguration ne change aucune

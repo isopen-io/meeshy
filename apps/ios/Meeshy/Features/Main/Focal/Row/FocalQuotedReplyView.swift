@@ -112,7 +112,7 @@ struct FocalQuotedReplyView: View, Equatable {
     /// « couleur de l'auteur cité »).
     ///
     private var authorHex: String {
-        reference.isMe ? accentHex : reference.authorColor
+        FocalQuoteRail.colorHex(for: reference, accentHex: accentHex)
     }
 
     private var railColor: Color {
@@ -244,10 +244,8 @@ struct FocalQuotedReplyView: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: FocalMetrics.Quote.railWidth / 2)
-                .fill(railColor)
-                .frame(width: FocalMetrics.Quote.railWidth)
+        HStack(spacing: FocalQuoteRail.spacing) {
+            FocalQuoteRail(colorHex: authorHex)
 
             VStack(alignment: .leading, spacing: 2) {
                 // **Le texte part du deux-points de l'auteur** (#5103). Le nom

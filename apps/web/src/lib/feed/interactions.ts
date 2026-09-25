@@ -87,9 +87,9 @@ export function dropCardPost<T extends CardPages>(data: T | undefined, postId: s
  * rend sur `POST|DELETE /posts/:id/bookmark` et le diffuse sur `post:liked` /
  * `post:unliked` / `post:bookmarked` : un compte servi fait foi, un ±1 local
  * n'est qu'une avance. */
-const SERVED_COUNT_FIELD = { like: 'likeCount', bookmark: 'bookmarkCount', share: 'shareCount' } as const;
+const SERVED_COUNT_FIELD = { like: 'likeCount', bookmark: 'bookmarkCount', share: 'shareCount', repost: 'repostCount' } as const;
 
-export type ServedCount = { readonly postId: string; readonly kind: PostToggleKind | 'share'; readonly count: number };
+export type ServedCount = { readonly postId: string; readonly kind: PostToggleKind | 'share' | 'repost'; readonly count: number };
 
 export function withServedCount(post: FeedPost, served: ServedCount): FeedPost {
   const field = SERVED_COUNT_FIELD[served.kind];

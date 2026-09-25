@@ -130,6 +130,31 @@ describe('MessageValidator.validateRequest', () => {
     expect(result.isValid).toBe(true);
   });
 
+  // #7954 — un sticker SEUL est un contenu, comme un lieu seul. Le refine Zod
+  // de `messages-send.ts` l'admettait déjà ; cette porte le refusait en
+  // CONTENT_EMPTY. Seul un sticker VALIDE (`parseMessageSticker`) ouvre la porte.
+  it.each([
+    [{ emoji: '🎉' }],
+    [{ templateId: 'party.confetti', slots: { title: 'Bravo' }, animation: 'pulse' }],
+  ])('allows empty content when a valid sticker is present (sticker-only: %p)', async (sticker) => {
+    const result = await validator.validateRequest(makeRequest({ content: '', sticker }));
+    expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
+  it.each([
+    [{}],
+    [{ emoji: '' }],
+    [{ templateId: '../../etc' }],
+    [{ emoji: '🎉', animation: 'explode-the-server' }],
+    ['🎉'],
+    [true],
+  ])('still rejects empty content with an INVALID sticker alone (%p)', async (sticker) => {
+    const result = await validator.validateRequest(makeRequest({ content: '', sticker }));
+    expect(result.errors.some(e => e.code === 'CONTENT_EMPTY')).toBe(true);
+    expect(result.isValid).toBe(false);
+  });
+
   it('errors when content exceeds MAX_MESSAGE_LENGTH (4000)', async () => {
     const result = await validator.validateRequest(makeRequest({ content: 'x'.repeat(4001) }));
     expect(result.errors.some(e => e.code === 'CONTENT_TOO_LONG')).toBe(true);

@@ -5,6 +5,7 @@ import type { SentMessageAck } from '@/lib/api/messages';
 import { attachmentPreviewOf, type PendingAttachment } from './attachments';
 import { protectionFieldsOf, type ComposeProtection } from './compose-protection';
 import type { SharedPlace } from './shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 /**
  * LE MESSAGE LOCAL (#5813, étape 3) — la forme optimiste, avant confirmation.
@@ -43,6 +44,12 @@ export type LocalMessage = Message & {
    * (`bodyOf`, `perform-send.ts`, le relit plutôt que de recomposer).
    */
   readonly location?: SharedPlace;
+  /**
+   * LE STICKER, SUR LE MESSAGE (#7938) — même statut que `location` : le fil
+   * le hisse à la racine, `stickerOf` (`lib/view/message-body.ts`) l'y lit
+   * pour les deux peaux, et `bodyOf` le relit pour le corps du POST.
+   */
+  readonly sticker?: MessageSticker;
 };
 
 export function localMessageOf(input: {
@@ -95,6 +102,7 @@ export function localMessageOf(input: {
    * `null` posé (`exactOptionalPropertyTypes`, même discipline que
    * `replyToId`). */
   readonly place?: SharedPlace;
+  readonly sticker?: MessageSticker;
   readonly now: Date;
 }): LocalMessage {
   const protection = protectionFieldsOf(input.protection ?? {}, input.now.getTime());
@@ -127,6 +135,7 @@ export function localMessageOf(input: {
       ? {}
       : { attachments: input.attachments.map(attachmentPreviewOf) }),
     ...(input.place === undefined ? {} : { location: input.place }),
+    ...(input.sticker === undefined ? {} : { sticker: input.sticker }),
     createdAt: input.now,
     timestamp: input.now,
   };

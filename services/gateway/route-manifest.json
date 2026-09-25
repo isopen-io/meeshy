@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 588,
+  "routeCount": 592,
   "routes": [
     {
       "method": "DELETE",
@@ -645,6 +645,20 @@
       "method": "DELETE",
       "path": "/api/v1/me/starred-messages/:messageId",
       "module": "meStarredMessagesRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/me/stickers/:stickerId",
+      "module": "meStickersRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -3445,6 +3459,20 @@
       "method": "GET",
       "path": "/api/v1/me/starred-messages",
       "module": "meStarredMessagesRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/stickers",
+      "module": "meStickersRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -7016,6 +7044,34 @@
       "path": "/api/v1/me/preferences/categories/reorder",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/categories",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/stickers",
+      "module": "meStickersRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/stickers/:stickerId/use",
+      "module": "meStickersRoutes",
+      "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

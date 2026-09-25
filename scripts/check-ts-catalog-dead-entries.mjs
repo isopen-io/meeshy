@@ -357,7 +357,14 @@ export const parseCatalogBlock = (blockLines) => {
 // d'une conversation et le rôle / le retrait d'un de ses membres, écrits depuis la
 // fiche d'administration WEB par adresse écrite, comme ses lectures admin
 // voisines déjà au compte. Valeur MESURÉE sur l'arbre fusionné avec dev du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 467;
+// 464 → 467 (#7938) : `me.stickers`, `me.stickersByStickerId`,
+// `me.stickersByStickerIdUse` — la bibliothèque « Mes stickers », entrées
+// GÉNÉRÉES depuis `route-manifest.json`. Leur client
+// (`apps/web/src/lib/api/stickers.ts`) écrit l'adresse en littéral comme tout
+// `apps/web` : mortes ici au même titre que `me.starredMessages`, jusqu'à
+// #7716. Valeur MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
+// Fusion #7845 + #7938 : les deux ajouts (+3 chacun) se cumulent. Valeur MESURÉE sur l'arbre fusionné du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 470;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

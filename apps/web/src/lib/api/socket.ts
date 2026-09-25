@@ -34,6 +34,7 @@ import {
   applyPostUpdated,
   applyServedBookmark,
   applyServedLike,
+  applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -668,6 +669,17 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `post:reposted` (#6278 c) — LE COMPTE DE L'ORIGINAL SUIT le repost d'un
+   * AUTRE lecteur ; le mien est déjà posé par l'optimiste. La loi (extraction
+   * de `repost.repostOf.repostCount`, garde de forme) vit dans
+   * `feed-realtime.ts#applyServedRepost` — cet écouteur ne tient que le
+   * branchement (D-98).
+   */
+  const onPostReposted = (payload: unknown): void => {
+    applyServedRepost(deps.queryClient, payload);
+  };
+
+  /**
    * `message:starred` (#7378) — LE FAVORI D'UN MESSAGE, posé ou retiré sur un
    * AUTRE appareil (ou l'écho de ce geste-ci). PERSONNEL : la passerelle
    * n'émet que vers `user:<id>`. La loi (l'étoile du fil, la ligne de l'écran
@@ -897,6 +909,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
@@ -977,6 +990,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);

@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 
 import ptMentions from './catalog-pt-mentions';
@@ -127,9 +128,13 @@ const pt = {
   'feed.post.repost.offline': 'Offline — a republicação não pôde ser enviada.',
   'feed.post.repost.unconfirmed': 'Republicação não confirmada — tente novamente',
   'feed.post.repost.audience': 'Esse público ampliaria o alcance da publicação original',
+  'feed.post.repost.confirm.title': 'Republicar esta publicação?',
+  'feed.post.repost.confirm.body': 'Ela aparecerá no seu feed, visível para seus seguidores. Esta ação não pode ser desfeita.',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel de {author}',
   'feed.post.open': 'Abrir a publicação de {author}',
+  'feed.post.original.open': 'Publicação original de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publicações salvas',
   'bookmarks.back': 'Voltar às configurações',
@@ -1029,28 +1034,7 @@ const pt = {
   'download.otherPlatforms': 'No Android e no computador, o Meeshy funciona direto no navegador.',
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
-  'composer.attach.group': 'Tipos de anexo',
-  'composer.attach.handle': 'Alça do painel',
-  'composer.attach.photo': 'Fotos',
-  'composer.attach.photo.action': 'Escolher fotos',
-  'composer.attach.camera': 'Câmera',
-  'composer.attach.camera.action': 'Tirar uma foto',
-  'composer.attach.file': 'Arquivo',
-  'composer.attach.file.action': 'Escolher um arquivo',
-  'composer.attach.location': 'Localização',
-  'composer.attach.location.action': 'Compartilhar minha localização',
-  'composer.attach.voice': 'Voz',
-  'composer.attach.voice.action': 'Gravar uma mensagem de voz',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Inserir um emoji',
-  'composer.emoji.title': 'Inserir um emoji',
-  'composer.location.locating': 'Procurando sua localização…',
-  'composer.location.denied': 'Localização negada — permita nos ajustes',
-  'composer.location.unavailable': 'Localização indisponível neste navegador',
-  'composer.location.failed': 'Localização não encontrada — tente novamente',
-  'composer.location.chip': 'LOCAL',
-  'composer.location.unknown': 'Local desconhecido',
-  'composer.location.remove': 'Remover a localização',
+  ...ptComposerAttach,
   'composer.viewOnce.activate': 'Ativar o modo de visualização única',
   'composer.viewOnce.active': 'Modo de visualização única ativo',
   'composer.viewOnce.label': 'Visualização única',

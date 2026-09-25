@@ -28,6 +28,7 @@ import type {
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
 import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
+import { carriesNonTextBody } from './nonTextBody';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'MessageValidator' });
@@ -46,39 +47,17 @@ export class MessageValidator {
     const hasAttachments = (request.attachments && request.attachments.length > 0) ||
                           (request.attachmentIds && request.attachmentIds.length > 0);
 
-    // Un transfert rend aussi le corps non-vide : ses attachments sont copiés
-    // CÔTÉ SERVEUR (MessageProcessor.copyForwardedAttachments), le client
-    // n'envoie ni content ni attachmentIds pour un forward de média. Même
-    // exemption que le refine Zod de la route REST — sans elle, tout transfert
-    // de média mourait ici en CONTENT_EMPTY après avoir passé la route.
-    //
-    // RÈGLE JUMELLE, trois portes pour un seul envoi : le refine Zod de
-    // `routes/conversations/messages.ts`, la garde de longueur de
-    // `MessageHandler.handleMessageSend` (transport socket) et celle-ci. Toute
-    // évolution de l'exemption touche les trois — une seule porte restée
-    // fermée refuse le transfert de média que les deux autres laissent passer.
-    // Ce que l'exemption ouvre ici, `admitMessageForward` le referme plus bas
-    // (`bodyOnlyFromSource`) : un corps entièrement emprunté à une source
-    // muette ne doit rien faire naître.
-    //
-    // `copyAttachmentsFromMessageId` porte la MÊME exemption pour la MÊME
-    // raison : une diffusion à plusieurs destinataires copie aussi ses pièces
-    // jointes côté serveur (`copyAttachments.ts`), sans jamais poser
-    // `forwardedFromId` — ce n'est pas un transfert. Sans cette ligne, une
-    // diffusion de média sans texte mourrait ici en CONTENT_EMPTY.
-    //
-    // Sur le transport socket, ce champ doit d'abord SURVIVRE au schéma :
-    // `SocketMessageSendSchema` est un `z.object`, qui strippe en silence tout
-    // champ non déclaré. Il y est déclaré, et la garde de
-    // `MessageHandler.handleMessageSend` l'exempte comme ici — les trois portes
-    // ne s'ouvrent qu'ensemble.
-    //
-    // `location` porte la MÊME exemption : une géolocalisation partagée SEULE
-    // (ni texte, ni pièce jointe) est un contenu à part entière. Sans cette
-    // ligne, ce message meurt ici en CONTENT_EMPTY sur CHAQUE tentative — une
-    // erreur de validation permanente, jamais transitoire — et reste bloqué
-    // pour toujours dans la file de retentative côté client (#4039).
-    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId && !request.copyAttachmentsFromMessageId && !request.location) {
+    // Ce qui rend un corps non vide sans texte : UNE loi, partagée avec la
+    // garde socket (`nonTextBody.ts`, qui dit chaque porteur et pourquoi).
+    const bodyWithoutText = carriesNonTextBody({
+      hasAttachments,
+      encryptedPayload: request.encryptedPayload,
+      forwardedFromId: request.forwardedFromId,
+      copyAttachmentsFromMessageId: request.copyAttachmentsFromMessageId,
+      location: request.location,
+      sticker: request.sticker,
+    });
+    if ((!request.content || request.content.trim().length === 0) && !bodyWithoutText) {
       errors.push({
         field: 'content',
         message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',

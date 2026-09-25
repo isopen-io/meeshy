@@ -167,8 +167,9 @@ struct UniversalComposerBar: View {
     /// éphémère). ⚠️ Ne JAMAIS passer `ConversationViewModel.isSending` : il
     /// couvre tout le cycle REST+fallback (~22s en réseau dégradé) et gèlerait
     /// le composer pendant qu'un message est sur l'horloge ⏳ — les envois de
-    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), le dedup double-tap
-    /// vit dans le ViewModel (`duplicateSendDebounce`).
+    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), un double-tap ne
+    /// renvoie rien (le champ est vidé au premier), et la seule
+    /// déduplication est celle du MESSAGE, par `clientMessageId` (#7985).
     var externalIsSending: Bool = false
 
     // MARK: - Attachment ladder callbacks
@@ -267,8 +268,6 @@ struct UniversalComposerBar: View {
     /// Binding to pending effects. Parent owns the state.
     var pendingEffects: Binding<MessageEffects> = .constant(.none)
 
-    /// Called when user taps effects button — parent should show EffectsPickerView
-    var onRequestEffectsPicker: (() -> Void)? = nil
 
     /// When true, the effects button is hidden (e.g. in edit mode)
     var hideEffects: Bool = false
@@ -312,9 +311,6 @@ struct UniversalComposerBar: View {
     /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
     /// (#7931).
     @State var showQuickEmojiPicker = false
-    /// La hauteur de la barre d'outils, que le cadre des emojis rapides
-    /// recouvre à droite pour prendre tout le côté droit du composeur.
-    @State var topToolbarHeight: CGFloat = 0
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false
@@ -341,6 +337,8 @@ struct UniversalComposerBar: View {
 
     // Ephemeral picker
     @State var showEphemeralPicker = false
+    /// Le petit panneau des effets du message, ouvert par la baguette (#7967).
+    @State var showEffectsPanel = false
     // Permanent effects inline picker (for comments)
     @State var showPermanentEffectsPicker = false
 

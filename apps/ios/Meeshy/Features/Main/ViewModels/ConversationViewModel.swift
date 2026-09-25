@@ -85,14 +85,8 @@ class ConversationViewModel: ObservableObject {
     @Published var isSending = false
     /// Number of sends currently awaiting their network round-trip. Backs
     /// `isSending` (true ⇔ ≥1 in flight) WITHOUT gating new sends — DISTINCT
-    /// messages send concurrently (2026-06-09). See `sendMessage`'s dedup.
+    /// messages send concurrently (2026-06-09), identical ones too (#7985).
     var inFlightSendCount = 0
-    /// Last (dedupKey, timestamp) accepted by `sendMessage`. Guards against an
-    /// accidental double-tap of the SAME logical message within
-    /// `Self.duplicateSendDebounce`; DISTINCT messages are never blocked.
-    var lastAcceptedSend: (key: String, at: Date)?
-    /// Window within which an identical re-send is treated as a double-tap.
-    static let duplicateSendDebounce: TimeInterval = 0.6
     @Published var error: String?
 
     /// Maps a raw error to a string safe to show verbatim in the conversation
@@ -313,9 +307,6 @@ class ConversationViewModel: ObservableObject {
 
     /// Pending message effects selected via the effects picker
     @Published var pendingEffects: MessageEffects = .none
-
-    /// When true, the effects picker sheet is presented
-    @Published var showEffectsPicker: Bool = false
 
     /// True when the current user has not yet granted voice-cloning consent.
     /// Drives the in-bubble `AudioConsentNotice` nudge on outgoing audio
