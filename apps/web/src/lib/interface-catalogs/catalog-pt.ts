@@ -128,6 +128,8 @@ const pt = {
   'feed.post.repost.offline': 'Offline — a republicação não pôde ser enviada.',
   'feed.post.repost.unconfirmed': 'Republicação não confirmada — tente novamente',
   'feed.post.repost.audience': 'Esse público ampliaria o alcance da publicação original',
+  'feed.post.repost.confirm.title': 'Republicar esta publicação?',
+  'feed.post.repost.confirm.body': 'Ela aparecerá no seu feed, visível para seus seguidores. Esta ação não pode ser desfeita.',
   'feed.post.reel.chip': 'Reel',
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel de {author}',

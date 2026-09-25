@@ -124,6 +124,8 @@ const de = {
   'feed.post.repost.offline': 'Offline — der Repost konnte nicht gesendet werden.',
   'feed.post.repost.unconfirmed': 'Repost nicht bestätigt — bitte erneut versuchen',
   'feed.post.repost.audience': 'Diese Zielgruppe würde die Reichweite des Originalbeitrags erweitern',
+  'feed.post.repost.confirm.title': 'Diesen Beitrag erneut teilen?',
+  'feed.post.repost.confirm.body': 'Er erscheint in deinem Feed, sichtbar für deine Follower. Diese Aktion kann nicht rückgängig gemacht werden.',
   'feed.post.reel.chip': 'Reel',
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel von {author}',

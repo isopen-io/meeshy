@@ -180,7 +180,7 @@ export default function ReelsScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare, onRepost } = usePostGesture();
+  const { announcement, onGesture, onShare, onRepost, repostConfirm } = usePostGesture();
   const [soundOn, setSoundOn] = useState(hasUserActivation);
 
   /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
@@ -354,6 +354,7 @@ export default function ReelsScreen() {
   return (
     <ReelsFrame language={language} onBack={close} announcement={announcement}>
       {body}
+      {repostConfirm}
     </ReelsFrame>
   );
 }

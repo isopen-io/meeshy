@@ -124,6 +124,8 @@ const en = {
   'feed.post.repost.offline': 'Offline — the repost couldn’t go out.',
   'feed.post.repost.unconfirmed': 'Repost not confirmed — try again',
   'feed.post.repost.audience': 'That audience would widen the original post’s reach',
+  'feed.post.repost.confirm.title': 'Repost this post?',
+  'feed.post.repost.confirm.body': 'It will appear in your feed, visible to your followers. This action can’t be undone.',
   'feed.post.reel.chip': 'Reel',
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel by {author}',

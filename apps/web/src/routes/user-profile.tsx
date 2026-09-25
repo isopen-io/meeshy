@@ -116,7 +116,15 @@ export function UserProfileView({ username }: { readonly username: string }) {
      le Flux, jamais une seconde mécanique : `onComment` conduit à la page de
      la publication, à son ancre de commentaires. L'adresse vivait ici en
      copie ; elle vit désormais avec les deux autres gestes de la rangée. */
-  const { announcement: gestureAnnouncement, onGesture, onShare, onComment, onRepost, menu } = usePostGesture();
+  const {
+    announcement: gestureAnnouncement,
+    onGesture,
+    onShare,
+    onComment,
+    onRepost,
+    repostConfirm,
+    menu,
+  } = usePostGesture();
   const {
     view,
     person,
@@ -377,6 +385,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
       {reporting && person !== undefined ? (
         <ReportSheet name={name} busy={busy} onPick={onPickReason} onClose={closeReport} />
       ) : null}
+      {repostConfirm}
     </div>
   );
 }

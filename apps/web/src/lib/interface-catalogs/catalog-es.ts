@@ -124,6 +124,8 @@ const es = {
   'feed.post.repost.offline': 'Sin conexión — la republicación no pudo salir.',
   'feed.post.repost.unconfirmed': 'Republicación no confirmada — inténtalo de nuevo',
   'feed.post.repost.audience': 'Esa audiencia ampliaría el alcance de la publicación original',
+  'feed.post.repost.confirm.title': '¿Republicar esta publicación?',
+  'feed.post.repost.confirm.body': 'Aparecerá en tu feed, visible para tus seguidores. Esta acción no se puede deshacer.',
   'feed.post.reel.chip': 'Reel',
   'feed.post.repost.embed.story': 'Historia',
   'feed.post.reel.of': 'Reel de {author}',

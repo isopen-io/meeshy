@@ -124,6 +124,8 @@ const it = {
   'feed.post.repost.offline': 'Offline — la ripubblicazione non è partita.',
   'feed.post.repost.unconfirmed': 'Ripubblicazione non confermata — riprova',
   'feed.post.repost.audience': 'Questo pubblico amplierebbe la portata del post originale',
+  'feed.post.repost.confirm.title': 'Ripubblicare questo post?',
+  'feed.post.repost.confirm.body': 'Apparirà nel tuo feed, visibile ai tuoi follower. Questa azione non può essere annullata.',
   'feed.post.reel.chip': 'Reel',
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel di {author}',

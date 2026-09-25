@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
+import { PostRepostConfirm } from '@/components/post-repost-confirm';
 import { deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { sessionStore } from '@/lib/api/session';
@@ -46,6 +47,25 @@ import { useLiveAnnouncer } from './use-live-announcer';
  * (`ReelActionRail`) le porte à côté de « J'aime » et « Commenter ». `onRepost`
  * ANNONCE son issue exactement comme `onGesture` — succès, refus ou geste déjà
  * posé (`feed.post.repost.already`, append-only, iOS `ReelsViewModel.repost`).
+ *
+ * **`onRepost` DEMANDE, IL N'ENVOIE PAS** (revue-correction #6278 — le repost
+ * est APPEND-ONLY, sans « annuler » nulle part dans l'interface : iOS ne
+ * l'envoie jamais depuis le seul tap du bouton, il ouvre une alerte
+ * Repartager / Citer / Annuler, `FeedPostCard.swift:1049-1053`). Ce hook pose
+ * `pendingRepostId` et attend `confirmRepost()` — le SEUL chemin vers
+ * `repostAction` — ou `cancelRepost()`, qui referme sans effet. Site UNIQUE :
+ * `repostConfirm` est l'ÉLÉMENT déjà construit (`createElement`, ce fichier
+ * reste `.ts`) — les six hôtes qui déstructurent `onRepost` (Flux, détail,
+ * signets, hashtag, profil, Réels) n'ont plus qu'à le PEINDRE (`{repostConfirm}`),
+ * jamais réassembler `<PostRepostConfirm pendingRepostId=… onConfirm=… …>`
+ * chacun de son côté. Deux raisons, pas une seule esthétique : la divergence
+ * qui a coûté trois cycles au Prisme (§ CLAUDE.md) est le même risque ici
+ * avec six appelants, ET Rollup regroupe déjà ce hook et `PostRepostConfirm`
+ * dans le MÊME chunk partagé (même six importeurs) — leur assemblage y coûte
+ * une fois ; le répéter dans chaque route (trois props nommées + la
+ * référence au composant) le payait SIX fois, jusqu'à faire déborder le
+ * chunk `reels`, dont le plafond est VERROUILLÉ par le porteur (#6484,
+ * `budgets.json`).
  */
 /** Une UNION LITTÉRALE, jamais le catalogue entier — voir `PostGestureMessageKey`. */
 type MenuNotice =
@@ -77,6 +97,14 @@ export function usePostGesture(options?: {
   readonly onShare: (postId: string) => void;
   readonly onComment: (postId: string) => void;
   readonly onRepost: (postId: string) => void;
+  /** L'identifiant en attente de confirmation, `null` si aucune demande n'est ouverte. */
+  readonly pendingRepostId: string | null;
+  /** Le SEUL chemin vers `repostAction` — jamais `onRepost` seul. */
+  readonly confirmRepost: () => void;
+  /** Referme la demande sans effet : ni réseau, ni cache, ni annonce. */
+  readonly cancelRepost: () => void;
+  /** La modale déjà assemblée — l'hôte la peint (`{repostConfirm}`), jamais ne la reconstruit. */
+  readonly repostConfirm: ReactElement;
   readonly menu: PostMenuHost;
 } {
   const { text: announcement, announce } = useLiveAnnouncer();
@@ -109,15 +137,28 @@ export function usePostGesture(options?: {
     navigate(withCommentsAnchor(href('post', { post: postId })));
   }, []);
 
-  const onRepost = useCallback(
-    (postId: string) => {
-      void repostAction(postId).then((result) => {
-        if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
-        else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
-      });
-    },
-    [announce],
-  );
+  const [pendingRepostId, setPendingRepostId] = useState<string | null>(null);
+
+  /* OUVRE LA DEMANDE, N'ENVOIE RIEN — voir le doc-comment ci-dessus. */
+  const onRepost = useCallback((postId: string) => {
+    setPendingRepostId(postId);
+  }, []);
+
+  const cancelRepost = useCallback(() => setPendingRepostId(null), []);
+
+  const confirmRepost = useCallback(() => {
+    const postId = pendingRepostId;
+    setPendingRepostId(null);
+    if (postId === null) return;
+    void repostAction(postId).then((result) => {
+      if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
+      else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
+    });
+  }, [pendingRepostId, announce]);
+
+  /* ASSEMBLÉ ICI, PEINT LÀ-BAS — voir le doc-comment du fichier : ni JSX
+     (fichier `.ts`) ni props reconstruites par chacun des six hôtes. */
+  const repostConfirm = createElement(PostRepostConfirm, { pendingRepostId, onConfirm: confirmRepost, onCancel: cancelRepost });
 
   /**
    * LE MENU « ⋯ » (#7533) — ses gestes vivent ICI pour la raison même des
@@ -167,5 +208,5 @@ export function usePostGesture(options?: {
     };
   }, [viewerId, announce]);
 
-  return { announcement, onGesture, onShare, onComment, onRepost, menu };
+  return { announcement, onGesture, onShare, onComment, onRepost, pendingRepostId, confirmRepost, cancelRepost, repostConfirm, menu };
 }

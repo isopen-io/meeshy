@@ -124,6 +124,8 @@ const ar = {
   'feed.post.repost.offline': 'غير متصل — تعذّر إرسال إعادة النشر.',
   'feed.post.repost.unconfirmed': 'لم تُؤكَّد إعادة النشر — أعد المحاولة',
   'feed.post.repost.audience': 'سيؤدي هذا الجمهور إلى توسيع نطاق المنشور الأصلي',
+  'feed.post.repost.confirm.title': 'إعادة نشر هذا المنشور؟',
+  'feed.post.repost.confirm.body': 'سيظهر في خلاصتك، مرئيًا لمتابعيك. لا يمكن التراجع عن هذا الإجراء.',
   'feed.post.reel.chip': 'ريل',
   'feed.post.repost.embed.story': 'قصة',
   'feed.post.reel.of': 'ريل {author}',
