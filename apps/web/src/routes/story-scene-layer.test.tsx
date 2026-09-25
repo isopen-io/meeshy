@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { SceneClockHandle } from '@/components/scene-clock';
 import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { SceneFootprintParams } from '@/lib/stories/footprint';
@@ -342,5 +343,28 @@ describe('StorySceneLayer — le son de fond', () => {
     );
     await waitForElement(el, '[data-scene-sound-unavailable]');
     expect(heard.at(-1)).toBe(true);
+  });
+});
+
+describe('StorySceneLayer — le parcours au doigt (#7879)', () => {
+  test('l’hôte reçoit l’horloge du moteur, et un seek recale AUSSI la piste de fond', async () => {
+    let clock: SceneClockHandle | null = null;
+    const el = await mount(
+      layer({
+        document: documentOf([
+          fitBackground,
+          text(0.92),
+          { id: 'a', kind: 'audio', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { isBackground: true, postMediaId: 'track' } },
+        ]),
+        onClock: (c) => (clock = c),
+      }),
+    );
+    await waitForElement(el, '[data-scene-player]');
+    const audio = el.querySelector('[data-scene-sound-track]') as HTMLAudioElement;
+    Object.defineProperty(audio, 'duration', { value: 20, configurable: true });
+    if (clock === null) throw new Error('horloge jamais remise');
+    const held: SceneClockHandle = clock;
+    act(() => held.seek(4));
+    expect(audio.currentTime).toBeCloseTo(4, 5);
   });
 });

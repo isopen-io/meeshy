@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { BackgroundTrackAudio } from '@/components/background-track-audio';
+import type { SceneClockHandle } from '@/components/scene-clock';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { objectMediaIdentity, objectMediaSrc } from '@/lib/canvas/carrier';
 import { electBackgroundTrack, sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
@@ -85,6 +86,9 @@ export type StorySceneLayerProps = {
    * telle quelle. Sans elle, « la piste protégée est refusée » ne s'éprouve
    * qu'en laissant partir un vrai `fetch`. */
   readonly mediaDeps?: ProtectedMediaDeps;
+  /** L'horloge du moteur, relayée au lecteur qui porte le segment qu'on
+   * parcourt au doigt (#7879) — la piste de fond l'écoute aussi. */
+  readonly onClock?: (clock: SceneClockHandle) => void;
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -113,6 +117,7 @@ export function StorySceneLayer({
   onSoundAvailability,
   measure = sceneFootprint,
   mediaDeps,
+  onClock,
 }: StorySceneLayerProps) {
   const storyId = story.id;
   const carrier = useMemo(() => storyCarrier(story), [story]);
@@ -121,6 +126,13 @@ export function StorySceneLayer({
   const readyRef = useRef(false);
   const durationsRef = useRef<{ video: number; track: number }>({ video: 0, track: 0 });
   const [ready, setReady] = useState(false);
+  /** La poignée de l'horloge (#7879) — tenue ICI pour la piste de fond, qui
+   * vit hors du moteur ; relayée au lecteur. */
+  const [clock, setClock] = useState<SceneClockHandle | null>(null);
+  const receiveClock = (next: SceneClockHandle) => {
+    setClock(next);
+    onClock?.(next);
+  };
   /**
    * LE SON DE FOND PEUT ÊTRE DÉFINITIVEMENT INDISPONIBLE (revue-correction
    * #7015, défaut 2) — un refus, une absence, une coupure réseau et un rendu
@@ -278,6 +290,7 @@ export function StorySceneLayer({
           onContentReady={markReady}
           onDurationKnown={(ms) => reportDuration('video', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
+          onClock={receiveClock}
         />
       </Suspense>
     );
@@ -341,6 +354,7 @@ export function StorySceneLayer({
           muted={muted}
           onDurationKnown={(ms) => reportDuration('track', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
+          clock={clock}
           onUnavailable={setSoundUnavailable}
           {...(mediaDeps !== undefined ? { mediaDeps } : {})}
         />

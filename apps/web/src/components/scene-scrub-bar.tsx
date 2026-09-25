@@ -21,6 +21,9 @@ export type SceneScrubBarProps = {
   readonly align: 'bottom' | 'center';
   /** Le fond CSS du rempli — l'accent du réel, le dégradé de la story. */
   readonly fill: string;
+  /** Le fond CSS de la piste — blanc 30 % par défaut ; la story garde le
+   * blanc 20 % de ses autres segments. */
+  readonly rail?: string;
   readonly painterRef: { current: SceneScrubPainter | null };
   /** Le doigt se pose : l'hôte suspend la lecture (et l'avance de story). */
   readonly onScrubStart: () => void;
@@ -55,6 +58,7 @@ export function SceneScrubBar({
   language,
   align,
   fill,
+  rail,
   painterRef,
   onScrubStart,
   onScrub,
@@ -174,7 +178,7 @@ export function SceneScrubBar({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={onKeyDown}
     >
-      <span className="scene-scrub-rail" aria-hidden="true" />
+      <span className="scene-scrub-rail" aria-hidden="true" {...(rail !== undefined ? { style: { background: rail } } : {})} />
       <span
         ref={fillRef}
         className="scene-scrub-fill"
