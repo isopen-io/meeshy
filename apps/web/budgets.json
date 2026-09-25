@@ -442,9 +442,9 @@
     "onboarding": {
       "pattern": "^assets/onboarding-[A-Za-z0-9_-]{8}\\.js$",
       "kb": {
-        "value": 10,
+        "value": 12,
         "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
-        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9) : 8,70 Ko gzip -9 pour les deux fichiers `assets/onboarding-<hash>.js` -- l ECRAN des cinq cartes et du recapitulatif (`routes/onboarding*.tsx`, 7,80 Ko) et son PORT (`lib/api/onboarding.ts` + la loi `lib/onboarding/*`, 0,90 Ko). Hors chunk : `onboarding-<hash>.css` (4,22 Ko, la peau), `fixtures-onboarding-` (0,65 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`), et les partages (`avatar-`, `language-sheet`, `zod-`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge. Remesure du 2026-09-25 (#7907, #7908, #7909, #7910) : 10,43 Ko -- la carte du courriel et son renvoi de lien, la relecture du credit (`lib/onboarding/credit.ts`), l emplacement stable du recapitulatif ; arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
       }
     },
     "chat_join": {

@@ -18,6 +18,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import {
   BellIllustration,
   Chip,
+  EnvelopeIllustration,
   flagOf,
   FriendsIllustration,
   GlobalIllustration,
@@ -197,6 +198,69 @@ export function LanguagesCard({
   );
 }
 
+// --- 1 bis. Le courriel (#7907) ----------------------------------------------
+
+/** Renvoie le lien de vérification à l'adresse du compte — `true` quand il est parti. */
+export type ResendLink = () => Promise<boolean>;
+
+type ResendPhase = 'idle' | 'sending' | 'sent' | 'failed';
+
+/**
+ * « Renvoyer le lien », et ce qu'il est advenu — partagé par la carte du
+ * courriel et par la carte Story quand la publication attend la vérification.
+ * Un lien parti ne se renvoie pas depuis la même carte : la boîte en a un.
+ */
+function ResendButton({ host, resend }: { readonly host: CardHost; readonly resend: ResendLink }) {
+  const lang = host.lang;
+  const [phase, setPhase] = useState<ResendPhase>('idle');
+  const send = async () => {
+    if (phase === 'sending' || phase === 'sent') return;
+    setPhase('sending');
+    setPhase((await resend()) ? 'sent' : 'failed');
+  };
+  return (
+    <>
+      <PrimaryButton id="email.resend" onClick={() => void send()} busy={phase === 'sending'} disabled={!host.online || phase === 'sent'}>
+        {phase === 'sending' ? translateOnboarding(lang, 'onboarding.email.sending') : translateOnboarding(lang, 'onboarding.email.resend')}
+      </PrimaryButton>
+      {phase === 'sent' || phase === 'failed' ? (
+        <p role={phase === 'failed' ? 'alert' : 'status'} className={phase === 'failed' ? 'onb-error' : 'onb-note'} data-onb-resend-status>
+          {phase === 'failed' ? translateOnboarding(lang, 'onboarding.email.failed') : translateOnboarding(lang, 'onboarding.email.sent')}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * **LA CARTE DU COURRIEL** — proposée au seul compte dont l'adresse n'est pas
+ * vérifiée (`journey.ts § isOffered`). Elle ne bloque rien : « Plus tard »
+ * passe, et la première story reste publiable sans vérification (#7907). Le
+ * clic sur le lien se fait AILLEURS (la boîte, un autre onglet) : l'écran
+ * relit l'état au retour et cède la carte dès que l'adresse est vérifiée.
+ */
+export function EmailCard({ host, resend, onLater }: { readonly host: CardHost; readonly resend: ResendLink; readonly onLater: () => void }) {
+  const lang = host.lang;
+  return (
+    <CardFrame
+      step="email"
+      title={translateOnboarding(lang, 'onboarding.email.title')}
+      body={translateOnboarding(lang, 'onboarding.email.body')}
+      illustration={<EnvelopeIllustration />}
+      actions={
+        <>
+          <ResendButton host={host} resend={resend} />
+          <SecondaryButton id="email.later" onClick={onLater}>
+            {translateOnboarding(lang, 'onboarding.later')}
+          </SecondaryButton>
+        </>
+      }
+    >
+      {!host.online ? <p className="onb-note">{translateOnboarding(lang, 'onboarding.offline')}</p> : null}
+    </CardFrame>
+  );
+}
+
 // --- 2. Meeshy Global ---------------------------------------------------------
 
 export type GreetingSend = GreetingOutcome;
@@ -207,6 +271,7 @@ export function GlobalCard({
   host,
   available,
   alreadySent,
+  reward,
   name,
   languagesLabel,
   pick,
@@ -219,6 +284,8 @@ export function GlobalCard({
   readonly available: boolean;
   /** Le salut s'est déjà confirmé — sur cet appareil, ou ailleurs (pré-coché par le serveur) : la carte se montre ENVOYÉE, jamais sur un composeur neuf. */
   readonly alreadySent: boolean;
+  /** Ce que le salut créditera, servi à l'élan courant (#7908). */
+  readonly reward: number;
   readonly name: string;
   readonly languagesLabel: string;
   readonly pick: (count: number) => number;
@@ -337,7 +404,7 @@ export function GlobalCard({
             <button type="button" className="onb-link" data-onb-action="global.shuffle" onClick={shuffle} disabled={phase === 'sending'}>
               ↻ {translateOnboarding(lang, 'onboarding.global.shuffle')}
             </button>
-            <span className="onb-reward-hint">{translateOnboarding(lang, 'onboarding.global.reward')}</span>
+            <span className="onb-reward-hint">{translateOnboarding(lang, 'onboarding.global.reward', { points: String(reward) })}</span>
           </div>
           {!host.online ? <p className="onb-note">{translateOnboarding(lang, 'onboarding.offline')}</p> : null}
           {phase === 'failed' ? (
@@ -359,6 +426,9 @@ export function StoryCard({
   name,
   avatar,
   published,
+  reward,
+  canPublish,
+  resend,
   onOpen,
   onDone,
   onLater,
@@ -368,11 +438,40 @@ export function StoryCard({
   readonly name: string;
   readonly avatar: string | undefined;
   readonly published: boolean;
+  /** Ce que la story créditera, servi à l'élan courant (#7908). */
+  readonly reward: number;
+  /** La passerelle laissera-t-elle passer la story (`canPublishStory`, #7907) ? */
+  readonly canPublish: boolean;
+  readonly resend: ResendLink;
   readonly onOpen: () => void;
   readonly onDone: () => void;
   readonly onLater: () => void;
 }) {
   const lang = host.lang;
+  /* La publication attend la vérification : la carte ne promet ni studio ni
+     points, elle dit ce qui débloque — et le propose. */
+  if (!published && !canPublish) {
+    return (
+      <CardFrame
+        step="story"
+        title={translateOnboarding(lang, 'onboarding.story.title')}
+        body={translateOnboarding(lang, 'onboarding.story.body')}
+        illustration={<StoryIllustration name={name} avatar={avatar} published={false} />}
+        actions={
+          <>
+            <ResendButton host={host} resend={resend} />
+            <SecondaryButton id="story.later" onClick={onLater}>
+              {translateOnboarding(lang, 'onboarding.later')}
+            </SecondaryButton>
+          </>
+        }
+      >
+        <p className="onb-note" data-onb-story-verify>
+          {translateOnboarding(lang, 'onboarding.story.verify')}
+        </p>
+      </CardFrame>
+    );
+  }
   return (
     <CardFrame
       step="story"
@@ -406,7 +505,9 @@ export function StoryCard({
           <span>{audience === 'public' ? translateOnboarding(lang, 'onboarding.story.audience.public') : translateOnboarding(lang, 'onboarding.story.audience.friends')}</span>
         </div>
       )}
-      {published ? null : <span className="onb-reward-hint onb-reward-hint-center">{translateOnboarding(lang, 'onboarding.story.reward')}</span>}
+      {published ? null : (
+        <span className="onb-reward-hint onb-reward-hint-center">{translateOnboarding(lang, 'onboarding.story.reward', { points: String(reward) })}</span>
+      )}
       {!host.online && !published ? <p className="onb-note">{translateOnboarding(lang, 'onboarding.offline')}</p> : null}
       <LevelGauge points={host.points} target={LEVEL_ONE_POINTS} lang={host.lang} />
     </CardFrame>
@@ -423,6 +524,7 @@ export function FriendsCard({
   host,
   suggestions,
   alreadySent,
+  reward,
   add,
   onSent,
   onDone,
@@ -431,6 +533,8 @@ export function FriendsCard({
   readonly host: CardHost;
   readonly suggestions: readonly OnboardingSuggestion[];
   readonly alreadySent: readonly string[];
+  /** Le PLANCHER d'une amitié acceptée : chacun crédite à son propre élan (#7908). */
+  readonly reward: number;
   readonly add: (suggestion: OnboardingSuggestion) => Promise<FriendActionOutcome>;
   readonly onSent: (userId: string) => void;
   readonly onDone: () => void;
@@ -458,7 +562,7 @@ export function FriendsCard({
     <CardFrame
       step="friends"
       title={translateOnboarding(lang, 'onboarding.friends.title')}
-      body={translateOnboarding(lang, 'onboarding.friends.body')}
+      body={translateOnboarding(lang, 'onboarding.friends.body', { points: String(reward) })}
       illustration={<FriendsIllustration />}
       actions={
         <>
@@ -481,7 +585,7 @@ export function FriendsCard({
             <span className="onb-friends-count" aria-live="polite">
               {translateOnboarding(lang, 'onboarding.friends.count', { count: String(Math.min(sentCount, FRIENDS_GOAL)) })}
             </span>
-            <span className="onb-reward-hint">{translateOnboarding(lang, 'onboarding.friends.reward')}</span>
+            <span className="onb-reward-hint">{translateOnboarding(lang, 'onboarding.friends.reward', { points: String(reward) })}</span>
           </div>
           <ul className="onb-people">
             {suggestions.map((suggestion) => {
