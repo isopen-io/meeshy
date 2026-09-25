@@ -18,6 +18,8 @@ import { ActionButton } from '@/routes/link-page-parts';
 import { AdminAnnouncement, AdminDenied, AdminLine as Ligne, AdminScreenFrame, AdminSection as Section, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
+import { AdminUserGallery } from './admin-user-gallery';
+import { AdminUserPreferencesTab, AdminUserStatsSection } from './admin-user-member';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 import {
@@ -63,7 +65,9 @@ export default function AdminUserScreen() {
   const onglet = adminUserTabOf(search);
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-  const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((section) => section.id === 'users');
+  const sections = visibleAdminSections(identite.data?.permissions ?? null, identite.data?.role);
+  const autorise = sections.some((section) => section.id === 'users');
+  const gererConversation = sections.some((section) => section.id === 'conversations') ? (key === 'admUser' ? 'admConversation' : 'adminConversation') : null;
 
   const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
 
@@ -118,6 +122,12 @@ export default function AdminUserScreen() {
         <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
           {onglet === 'profile' ? (
             <div className="grid gap-5 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <AdminUserGallery membre={membre} language={language} />
+              </div>
+              <div className="lg:col-span-2">
+                <AdminUserStatsSection userId={membre.id} language={language} />
+              </div>
               <Section titre={translateAdmin(language, 'admin.user.identity')}>
                 <Ligne label="@" valeur={membre.username} />
                 <Ligne label="✉" valeur={membre.email} />
@@ -139,6 +149,7 @@ export default function AdminUserScreen() {
                   valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
                 />
               </Section>
+              <Metadonnees membre={membre} language={language} />
 
               <div className="grid gap-2">
                 <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
@@ -158,11 +169,12 @@ export default function AdminUserScreen() {
               sont servies jusqu'à AUDIT, plus largement que les gestes
               d'écriture du profil qui exigent ADMIN+. La modale de lecture
               rend le fil dans le Prisme DU MEMBRE (#6862). */}
-          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} /> : null}
+          {onglet === 'conversations' ? <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} /> : null}
           {onglet === 'media' ? <AdminUserMediaSection userId={membre.id} language={language} /> : null}
           {onglet === 'contacts' ? <AdminUserContactsTab userId={membre.id} language={language} cible={cibleMembre} /> : null}
           {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} /> : null}
           {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} /> : null}
+          {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} /> : null}
           {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} /> : null}
           {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} /> : null}
         </div>
@@ -214,6 +226,7 @@ const LIBELLES_ONGLETS = {
   contacts: 'admin.tab.contacts',
   communities: 'admin.tab.communities',
   voice: 'admin.tab.voice',
+  preferences: 'admin.tab.preferences',
   security: 'admin.tab.security',
   reports: 'admin.tab.reports',
 } as const satisfies Readonly<Record<AdminUserTab, string>>;
@@ -328,5 +341,39 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * TOUTES LES MÉTADONNÉES SERVIES (#7845) — langues du Prisme, fuseau,
+ * vérifications, verrouillage, complétion. Une ligne sans valeur ne
+ * s'affiche pas : « — » répété dix fois ne dit rien de plus qu'une absence.
+ */
+function Metadonnees({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
+  const date = (valeur: string | null) => (valeur === null ? '' : adminMoment(valeur, language));
+  const lignes: readonly (readonly [string, string])[] = [
+    [translateAdmin(language, 'admin.meta.name'), [membre.firstName, membre.lastName].filter((part) => part !== '').join(' ')],
+    [translateAdmin(language, 'admin.meta.systemLanguage'), membre.systemLanguage],
+    [translateAdmin(language, 'admin.meta.regionalLanguage'), membre.regionalLanguage],
+    [translateAdmin(language, 'admin.meta.customLanguage'), membre.customDestinationLanguage],
+    [translateAdmin(language, 'admin.meta.timezone'), membre.timezone],
+    [translateAdmin(language, 'admin.meta.emailVerified'), date(membre.emailVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.phoneVerified'), date(membre.phoneVerifiedAt)],
+    [translateAdmin(language, 'admin.meta.completion'), membre.profileCompletionRate === null ? '' : `${Math.round(membre.profileCompletionRate)} %`],
+    [translateAdmin(language, 'admin.meta.passwordChanged'), date(membre.lastPasswordChange)],
+    [translateAdmin(language, 'admin.meta.failedLogins'), membre.failedLoginAttempts === 0 ? '' : String(membre.failedLoginAttempts)],
+    [translateAdmin(language, 'admin.meta.lockedUntil'), date(membre.lockedUntil)],
+    [translateAdmin(language, 'admin.meta.lockedReason'), membre.lockedReason ?? ''],
+    [translateAdmin(language, 'admin.meta.deactivated'), date(membre.deactivatedAt)],
+    [translateAdmin(language, 'admin.meta.updated'), date(membre.updatedAt)],
+  ];
+  return (
+    <Section titre={translateAdmin(language, 'admin.meta.title')}>
+      {lignes
+        .filter(([, valeur]) => valeur !== '')
+        .map(([label, valeur]) => (
+          <Ligne key={label} label={label} valeur={valeur} />
+        ))}
+    </Section>
   );
 }

@@ -10,6 +10,7 @@ describe('l’onglet de la fiche d’un membre vit dans l’adresse', () => {
 
   test('un onglet connu se relit', () => {
     expect(adminUserTabOf(new URLSearchParams('tab=voice'))).toBe('voice');
+    expect(adminUserTabOf(new URLSearchParams('tab=preferences'))).toBe('preferences');
   });
 
   test('choisir un onglet garde le reste de l’adresse, et le profil n’écrit rien', () => {

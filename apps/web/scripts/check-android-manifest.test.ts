@@ -57,6 +57,13 @@ describe('auditManifestPermissions — chaque permission consommée, déclarée 
     );
   });
 
+  test('la permission de notification est requise : sans elle, aucune bannière FCM sur Android 13+ (#7307)', () => {
+    const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS';
+    expect(auditManifestPermissions({ manifest: manifestWith(othersThan(POST_NOTIFICATIONS)) })).toEqual([
+      { permission: POST_NOTIFICATIONS, count: 0 },
+    ]);
+  });
+
   test('une permission déclarée DEUX fois → une violation qui la nomme, compte 2', () => {
     const manifest = manifestWith([...REQUIRED_PERMISSIONS.map(declaration), declaration(ACCESS_NETWORK_STATE)]);
     expect(auditManifestPermissions({ manifest })).toEqual([{ permission: ACCESS_NETWORK_STATE, count: 2 }]);

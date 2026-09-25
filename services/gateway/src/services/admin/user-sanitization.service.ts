@@ -60,6 +60,7 @@ export class UserSanitizationService {
       displayName: user.displayName,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner ?? null,
       role: user.role,
       isActive: user.isActive,
       isOnline: user.isOnline,

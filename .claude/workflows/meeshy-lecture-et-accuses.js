@@ -201,7 +201,7 @@ SOURCES DE VÉRITÉ, dans cet ordre :
 4. CLAUDE.md (injecté) : TDD non négociable, TypeScript strict sans any, immutabilité, budget 1000-1200
    lignes par fichier (un fichier déjà hors budget : extraire d'abord, ajouter ensuite), UNE source de
    vérité, Prisme Linguistique, Instant App (optimistic update, cache-first), treize dimensions.
-5. tasks/lessons.md (tail -300) : le dépôt a déjà payé ces erreurs.
+5. tasks/lessons/ (ls tasks/lessons | grep <mot>, sur ton domaine) : le dépôt a déjà payé ces erreurs.
 
 RÈGLES DE FORME DU DÉPÔT :
 - Commits : titre en français qui dit le RÉSULTAT (\`feat(web): …\`, \`fix(gateway): …\`, \`feat(ios): …\`,

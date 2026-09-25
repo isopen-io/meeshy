@@ -60,7 +60,7 @@ Meeshy is a high-performance real-time messaging platform with multi-language tr
 **Les artifacts (`claude.ai/code/artifact/…`) servent à TROIS choses, et trois seulement : les BROUILLONS (draft d'un doc, d'une spec, d'une analyse à faire valider), le DESIGN (planches, maquettes, vues cibles, iconographie, prototypes visuels) et les COMPTES RENDUS de communication (bilan de session, rapport d'audit, compte rendu de revue, note au porteur).** Un artifact n'est jamais un tableau de bord d'avancement, une liste de tâches à cocher ni une source d'état : s'il montre l'état d'une tâche, c'est au titre d'un compte rendu DATÉ, et l'issue GitHub a raison en cas d'écart. Ne pas ouvrir de page « progress », « suivi », « todo » ou « pilotage » — ouvrir des issues.
 
 Corollaires :
-- `tasks/*.md` sont des JOURNAUX et des SOURCES : on y lit l'histoire et on y renvoie depuis les issues ; on ne s'en sert plus pour piloter. `tasks/lessons.md` reste vivant (leçons) — c'est le seul tracker de fichier maintenu.
+- `tasks/*.md` sont des JOURNAUX et des SOURCES : on y lit l'histoire et on y renvoie depuis les issues ; on ne s'en sert plus pour piloter. les leçons restent vivantes, une par fichier sous `tasks/lessons/` (#7711) — c'est le seul tracker de fichier maintenu ; `tasks/lessons.md` n'en est plus que la carte.
 - Une session qui démarre un chantier commence par lire ses issues (`gh issue list --milestone "<nom>" --state open`, `gh project item-list 1 --owner isopen-io`) et pose `Status = In Progress` ; une session qui livre ferme ses issues et dit, dans le commentaire de clôture, ce qui est mûr et ce qui reste (voir les treize dimensions ci-dessous). Le scope `project` du token est requis pour les champs (`gh auth refresh -s project,read:project`).
 - Les documents de design du dépôt (`docs/product/*.html`, `docs/product/*.md`) gardent leur rendu publié en artifact — c'est du design, autorisé — mais l'ÉTAT des tâches qu'ils décrivent vit dans les issues, jamais dans le document.
 
@@ -359,10 +359,10 @@ Response format: sendSuccess()/sendError() from utils/response.ts.
 - One task per subagent for focused execution
 
 ### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- After ANY correction from the user: write the pattern as a new file `tasks/lessons/<AAAA-MM-JJ>-<slug>.md` (never in `tasks/lessons.md`, which is only the map)
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+- At session start, grep `tasks/lessons/` for your domain (`ls tasks/lessons | grep <mot>`), never read it all
 
 ### 4. Verification Before Done
 - Never mark a task complete without proving it works
@@ -415,7 +415,7 @@ Le pilotage est sur GitHub (§ « Pilotage du développement ») — aucun `task
 3. **Track Progress**: `Status` du projet posé au démarrage (`In Progress`) ; une issue livrée est fermée par son commit (`Closes #n`)
 4. **Explain Changes**: résumé de haut niveau à chaque étape, dans un commentaire de l'issue — pas dans un fichier
 5. **Document Results**: commentaire de clôture = preuve (commit, gate, mesure) + dimensions mûres / restantes
-6. **Capture Lessons**: `tasks/lessons.md` après toute correction — seul tracker de fichier maintenu
+6. **Capture Lessons**: un fichier `tasks/lessons/<AAAA-MM-JJ>-<slug>.md` après toute correction — seul tracker de fichier maintenu
 
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Minimal code impact.
@@ -601,7 +601,7 @@ Each major directory has its own CLAUDE.md with domain-specific conventions:
 - `infrastructure/CLAUDE.md` - Docker & deployment
 
 ## Architectural Decision Records
-Each active development directory has a `decisions.md` file documenting key architectural choices:
+Each active development directory has a `decisions.md` file documenting key architectural choices (one file per decision under the sibling `decisions/` folder, #7711 — `decisions.md` keeps the map; `apps/web` still in one file):
 - `apps/web/decisions.md` - le registre D-n du web (Vite + Preact + Capacitor) : état, routage, auth, i18n, build, coque Android
 - `apps/ios/decisions.md` - MVVM, navigation, singletons, cache, security decisions
 - `services/gateway/decisions.md` - Framework, WebSocket, ZMQ, encryption, rate limiting decisions

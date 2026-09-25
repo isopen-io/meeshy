@@ -54,6 +54,12 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     public var replyAuthorName: String?
     public var replyPreviewText: String?
     public var replyIsMe: Bool
+    /// Non-nil ⇒ la citation est une réponse à une story ou à une humeur de cet
+    /// auteur (#7883) : sans elle, `replyToId` — l'id d'un POST — revenait en
+    /// réponse à un message, et la restauration ne pouvait pas borner la
+    /// citation au DM de l'auteur.
+    public var replyStoryAuthorId: String?
+    public var replyMoodEmoji: String?
     public var selectedLanguage: String?
     /// Raw rawValue of `MessageEffects.flags` so we don't have to import the
     /// app-only type here (the SDK-free DraftStore lives in the app target).
@@ -72,6 +78,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         replyAuthorName: String? = nil,
         replyPreviewText: String? = nil,
         replyIsMe: Bool = false,
+        replyStoryAuthorId: String? = nil,
+        replyMoodEmoji: String? = nil,
         selectedLanguage: String? = nil,
         effectFlags: UInt32 = 0,
         isBlurEnabled: Bool = false,
@@ -84,6 +92,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         self.replyAuthorName = replyAuthorName
         self.replyPreviewText = replyPreviewText
         self.replyIsMe = replyIsMe
+        self.replyStoryAuthorId = replyStoryAuthorId
+        self.replyMoodEmoji = replyMoodEmoji
         self.selectedLanguage = selectedLanguage
         self.effectFlags = effectFlags
         self.isBlurEnabled = isBlurEnabled
@@ -112,6 +122,55 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     /// would point the user at a draft message that doesn't exist.
     public var hasDraftText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Le brouillon du composeur, citation en attente APLATIE — y compris la
+    /// marque de story, pour qu'elle revienne story et non message.
+    static func composing(
+        text: String,
+        reply: ReplyReference?,
+        selectedLanguage: String? = nil,
+        effectFlags: UInt32 = 0,
+        isBlurEnabled: Bool = false,
+        ephemeralDurationRawValue: Int? = nil,
+        attachments: [DraftAttachmentRef]? = nil
+    ) -> MessageDraft {
+        MessageDraft(
+            text: text,
+            replyToId: reply?.messageId,
+            replyAuthorName: reply?.authorName,
+            replyPreviewText: reply?.previewText,
+            replyIsMe: reply?.isMe ?? false,
+            replyStoryAuthorId: reply?.isStoryReply == true ? reply?.storyAuthorId : nil,
+            replyMoodEmoji: reply?.isStoryReply == true ? reply?.moodEmoji : nil,
+            selectedLanguage: selectedLanguage,
+            effectFlags: effectFlags,
+            isBlurEnabled: isBlurEnabled,
+            ephemeralDurationRawValue: ephemeralDurationRawValue,
+            attachments: attachments
+        )
+    }
+
+    /// La citation à restituer au composeur de CETTE conversation, ou `nil`.
+    /// Une citation de story ou d'humeur n'est rendue que dans le DM de son
+    /// auteur (`StoryReplyAdmission`, #7883).
+    ///
+    /// `authorAvatarUrl` reste nil, et c'est sans conséquence : cette
+    /// référence n'alimente que la BANNIÈRE du composeur, qui ne dessine aucun
+    /// avatar ; à l'envoi, la citation rendue est reconstruite depuis le
+    /// message cité en mémoire.
+    func restoredReply(conversationIsDirect: Bool, participantUserId: String?) -> ReplyReference? {
+        guard let replyToId, let replyAuthorName else { return nil }
+        let reference = ReplyReference(
+            messageId: replyToId,
+            authorName: replyAuthorName,
+            previewText: replyPreviewText ?? "",
+            isMe: replyIsMe,
+            isStoryReply: replyStoryAuthorId != nil,
+            moodEmoji: replyMoodEmoji,
+            storyAuthorId: replyStoryAuthorId
+        )
+        return reference.isAdmissible(conversationIsDirect: conversationIsDirect, participantUserId: participantUserId) ? reference : nil
     }
 }
 
@@ -272,6 +331,8 @@ final class DraftStore: @unchecked Sendable {
         draft.replyAuthorName = nil
         draft.replyPreviewText = nil
         draft.replyIsMe = false
+        draft.replyStoryAuthorId = nil
+        draft.replyMoodEmoji = nil
         save(draft, for: conversationId)
     }
 

@@ -272,7 +272,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'administration iOS n'appelle aucune des lectures admin voisines
 // (`usersByUserIdActivity`, `usersByUserIdSessions`… sont déjà au compte).
 // Valeur MESURÉE en CI sur la branche du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 265;
+// 265 → 268 (#7845) : `AdminEndpoint.usersByUserIdStats`,
+// `AdminEndpoint.usersByUserIdPreferences` et
+// `AdminEndpoint.usersByUserIdPreferencesByCategory` — les compteurs et les
+// préférences (lecture, écriture) d'un membre, lus par la page membre de
+// l'espace d'administration WEB. Mortes à la naissance PAR CONSTRUCTION, même
+// raison que #7873 : l'entrée est GÉNÉRÉE depuis `route-manifest.json`, et
+// l'espace d'administration iOS n'appelle aucune des lectures admin voisines.
+// Valeur MESURÉE sur la branche du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 268;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

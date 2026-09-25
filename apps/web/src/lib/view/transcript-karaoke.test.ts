@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { activeSegmentIndex, segmentSeekTarget, type TimedSegment } from './transcript-karaoke';
+import {
+  activeSegmentIndex,
+  karaokeSegments,
+  karaokeTone,
+  segmentSeekTarget,
+  type TimedSegment,
+} from './transcript-karaoke';
 
 /**
  * LE SUIVI DE LA TRANSCRIPTION PAR LA LECTURE (#6306) — la loi PURE, testée
@@ -104,5 +110,72 @@ describe('segmentSeekTarget — toucher un segment y déplace la lecture', () =>
   test('un index hors bornes ne déplace rien', () => {
     expect(segmentSeekTarget(contigus, 9)).toBeNull();
     expect(segmentSeekTarget(contigus, -1)).toBeNull();
+  });
+});
+
+/**
+ * LES SEGMENTS DE LA PISTE JOUÉE (#7911) — le karaoké suit ce qu'on ENTEND,
+ * pas seulement l'original. Miroir de `resolveDisplaySegments` d'iOS
+ * (`AudioPlayerView+Transcription.swift:37`) : segments de la traduction
+ * quand la piste traduite joue, repli proportionnel quand rien n'est horodaté.
+ */
+describe('karaokeSegments — les bornes du texte servi, dans la langue de la piste', () => {
+  const original = {
+    language: 'en',
+    segments: [seg(0, 1_000, 'Hello'), seg(1_000, 2_000, 'team')],
+  };
+  const translations = {
+    fr: { transcription: 'Bonjour équipe', url: '/fr.mp3', segments: [seg(0, 1_200, 'Bonjour'), seg(1_200, 2_400, 'équipe')] },
+    de: { transcription: 'Hallo Team', url: '/de.mp3' },
+  };
+
+  test('texte original + piste originale ⇒ les segments de la transcription', () => {
+    expect(
+      karaokeSegments({ transcription: original, translations, servedText: 'Hello team', servedLanguage: 'en', trackLanguage: 'en', durationMs: 2_000 }),
+    ).toEqual(original.segments);
+  });
+
+  test('traduction servie + piste traduite horodatée ⇒ les segments de la TRADUCTION', () => {
+    expect(
+      karaokeSegments({ transcription: original, translations, servedText: 'Bonjour équipe', servedLanguage: 'fr', trackLanguage: 'fr', durationMs: 2_400 }),
+    ).toEqual(translations.fr.segments);
+  });
+
+  test('traduction sans horodatage ⇒ les MOTS répartis sur la durée, au prorata de leur longueur', () => {
+    const segments = karaokeSegments({ transcription: original, translations, servedText: 'Hallo Team', servedLanguage: 'de', trackLanguage: 'de', durationMs: 2_000 });
+    expect(segments?.map((s) => s.text)).toEqual(['Hallo', 'Team']);
+    expect(segments?.[0]?.startMs).toBe(0);
+    expect(segments?.[1]?.endMs).toBe(2_000);
+    // « Hallo » (5 lettres) dure plus que « Team » (4) : la frontière passe après la moitié.
+    expect(segments?.[0]?.endMs).toBeGreaterThan(1_000);
+    expect(segments?.[0]?.endMs).toBe(segments?.[1]?.startMs);
+  });
+
+  test('texte et piste dans deux langues ⇒ AUCUN karaoké — il affirmerait suivre une voix qui dit autre chose', () => {
+    expect(
+      karaokeSegments({ transcription: original, translations, servedText: 'Hola equipo', servedLanguage: 'es', trackLanguage: 'en', durationMs: 2_000 }),
+    ).toBeUndefined();
+  });
+
+  test('aucune durée connue et rien d’horodaté ⇒ aucun karaoké plutôt qu’un karaoké inventé', () => {
+    expect(
+      karaokeSegments({ transcription: { language: 'en' }, translations: undefined, servedText: 'Hello team', servedLanguage: 'en', trackLanguage: 'en', durationMs: 0 }),
+    ).toBeUndefined();
+  });
+
+  test('texte vide ⇒ rien à surligner', () => {
+    expect(
+      karaokeSegments({ transcription: original, translations, servedText: '', servedLanguage: 'en', trackLanguage: 'en', durationMs: 2_000 }),
+    ).toBeUndefined();
+  });
+});
+
+describe('karaokeTone — le rôle de chaque segment pendant l’écoute', () => {
+  test('à l’arrêt, tout est au repos : le texte ne garde aucune trace d’un surlignage', () => {
+    expect([0, 1, 2].map((i) => karaokeTone(i, null))).toEqual(['idle', 'idle', 'idle']);
+  });
+
+  test('en lecture : passés pleins, le prononcé ACTIF, les suivants à venir', () => {
+    expect([0, 1, 2].map((i) => karaokeTone(i, 1))).toEqual(['past', 'active', 'upcoming']);
   });
 });

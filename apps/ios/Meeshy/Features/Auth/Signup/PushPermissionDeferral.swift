@@ -99,29 +99,74 @@ enum PushPermissionPrompt {
     ///
     /// - `.registration` : on REPORTE. L'alerte système tomberait sur un écran
     ///   sans conversation ni contact, et un refus posé là est définitif.
-    /// - `.login` / `.restored` / `nil` : comportement d'avant #5218 — le compte
-    ///   a déjà des conversations, donc de quoi notifier.
+    /// - `.login` / `.restored` / `nil` : le compte a déjà de quoi notifier —
+    ///   SAUF si l'onboarding garde la fenêtre pour sa carte 5 (#7915) : on
+    ///   reporte alors aussi, au lieu de la tirer par-dessus la carte Langues.
     static func onSessionOpened(
         origin: SessionOrigin?,
-        deferral: any PushPermissionDeferring = PushPermissionDeferral.shared
+        deferral: any PushPermissionDeferring = PushPermissionDeferral.shared,
+        gate: (any OnboardingPushPermissionGating)? = nil,
+        request: (() async -> Void)? = nil
     ) async {
         guard origin == .registration else {
-            await requestIfNeeded()
+            await requestUnlessHeld(
+                reportPending: origin == .login ? false : deferral.isPending,
+                deferral: deferral,
+                gate: gate ?? OnboardingPushPermissionGate(),
+                request: request ?? { await requestIfNeeded() }
+            )
             return
         }
         deferral.postpone()
     }
 
-    /// Honore un report en attente, une fois et une seule.
+    /// Le démarrage à froid avec une session restaurée (#7915). Il ignorait le
+    /// report posé à l'inscription : relancer l'app entre l'inscription et le
+    /// premier message tirait la fenêtre hors contexte.
+    static func onColdStart(
+        deferral: any PushPermissionDeferring = PushPermissionDeferral.shared,
+        gate: (any OnboardingPushPermissionGating)? = nil,
+        request: @escaping () async -> Void
+    ) async {
+        await requestUnlessHeld(
+            reportPending: deferral.isPending,
+            deferral: deferral,
+            gate: gate ?? OnboardingPushPermissionGate(),
+            request: request
+        )
+    }
+
+    private static func requestUnlessHeld(
+        reportPending: Bool,
+        deferral: any PushPermissionDeferring,
+        gate: any OnboardingPushPermissionGating,
+        request: () async -> Void
+    ) async {
+        guard !(await gate.holdsPushPermission(reportPending: reportPending)) else {
+            deferral.postpone()
+            return
+        }
+        await request()
+    }
+
+    /// Honore un report en attente, une fois et une seule — et jamais tant que
+    /// l'onboarding garde la fenêtre pour sa carte 5 (#7915).
     ///
     /// Le marqueur est effacé AVANT l'attente : l'app autorise plusieurs envois
     /// en vol, et deux qui se croisent verraient sinon tous deux le marqueur
-    /// posé — donc empileraient deux alertes système.
+    /// posé — donc empileraient deux alertes système. S'il s'avère gardé, il
+    /// est reposé.
     static func honourDeferredRequest(
-        _ deferral: any PushPermissionDeferring = PushPermissionDeferral.shared
+        _ deferral: any PushPermissionDeferring = PushPermissionDeferral.shared,
+        gate: (any OnboardingPushPermissionGating)? = nil,
+        request: (() async -> Void)? = nil
     ) async {
         guard deferral.isPending else { return }
         deferral.resolve()
-        await requestIfNeeded()
+        guard !(await (gate ?? OnboardingPushPermissionGate()).holdsPushPermission(reportPending: false)) else {
+            deferral.postpone()
+            return
+        }
+        await (request ?? { await requestIfNeeded() })()
     }
 }

@@ -68,6 +68,10 @@ struct StoryViewerContainer: View {
     /// STABLE du cover, et non dans l'en-tête qui porte l'entrée de menu — voir
     /// la remarque au site de présentation, plus bas.
     @State private var composeSeedTarget: ComposerSeedTarget?
+    /// L'instant d'ouverture, figé : une story qui expire PENDANT qu'on la
+    /// regarde garde sa barre, sinon l'index courant glisserait sur sa voisine
+    /// (#7887).
+    @State private var presentedAt = Date()
 
     private var uid: String { userId ?? "" }
 
@@ -94,10 +98,20 @@ struct StoryViewerContainer: View {
                 postId: postId,
                 freshnessCheckedPostId: freshnessCheckedPostId
             ), let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
-                let resolvedStoryIndex = StoryIndexResolver.index(
-                    forPostId: postId,
-                    in: viewModel.storyGroups[resolvedIndex],
-                    fallback: initialStoryIndex
+                let liveGroups = StoryViewerScope.liveOnly(
+                    viewModel.storyGroups,
+                    authorId: AuthManager.shared.currentUser?.id,
+                    keeping: postId,
+                    now: presentedAt
+                )
+                let resolvedStoryIndex = StoryViewerScope.storyIndex(
+                    StoryIndexResolver.index(
+                        forPostId: postId,
+                        in: viewModel.storyGroups[resolvedIndex],
+                        fallback: initialStoryIndex
+                    ),
+                    from: viewModel.storyGroups[resolvedIndex],
+                    into: liveGroups[resolvedIndex]
                 )
                 // UN SEUL site de présentation. Les deux branches d'avant
                 // (mono-auteur / inter-auteurs) répétaient dix arguments et
@@ -106,7 +120,7 @@ struct StoryViewerContainer: View {
                 // conversation — qui passe pourtant le callback — n'affichait
                 // aucun bouton « Répondre ». Seule la PORTÉE change désormais.
                 let scope = StoryViewerScope.resolve(
-                    all: viewModel.storyGroups,
+                    all: liveGroups,
                     resolvedIndex: resolvedIndex,
                     singleGroup: singleGroup
                 )

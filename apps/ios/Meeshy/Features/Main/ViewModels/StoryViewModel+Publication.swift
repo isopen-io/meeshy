@@ -85,16 +85,24 @@ extension StoryViewModel {
             targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story
         )
 
-        let ids = try await runStoryUpload(
-            upload,
-            onProgress: { _ in },
-            onPhase: { _ in },
-            // Réconcilie le tray : retire le placeholder optimiste hors-ligne et
-            // insère la vraie story serveur dès qu'une slide est publiée.
-            onPublishedSlide: { [weak self] published in
-                self?.reconcilePublishedQueueSlide(tempStoryId: item.tempStoryId, published: published)
-            }
-        )
+        let ids: [String]
+        do {
+            ids = try await runStoryUpload(
+                upload,
+                onProgress: { _ in },
+                onPhase: { _ in },
+                // Réconcilie le tray : retire le placeholder optimiste hors-ligne et
+                // insère la vraie story serveur dès qu'une slide est publiée.
+                onPublishedSlide: { [weak self] published in
+                    self?.reconcilePublishedQueueSlide(tempStoryId: item.tempStoryId, published: published)
+                }
+            )
+        } catch {
+            // Un refus définitif (#7907) ne se rejoue pas : la file le classe
+            // en échec au lieu de brûler son budget de réessai.
+            guard StoryPublishRetryPolicy.isPermanent(error) else { throw error }
+            throw StoryPublishUnrecoverableError(error.localizedDescription)
+        }
 
         cleanupUploadTempFiles(upload)
 
@@ -953,14 +961,40 @@ extension StoryViewModel {
                 self.releaseUploadSlot(after: id)
             } catch {
                 if !Task.isCancelled {
-                    self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
-                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
-                    // Don't cleanup temp files on failure — retry may need them
-                    self.releaseQueueClaimIfNothingCommitted(uploadId: id)
+                    let committed = self.activeUploads.first(where: { $0.id == id })?.publishedPostIds.isEmpty == false
+                    switch StoryUploadFailureDisposition.of(error, hasCommittedSlides: committed) {
+                    case .rejected(let code):
+                        self.rejectUpload(id: id, message: error.localizedDescription, code: code)
+                    case .retryable:
+                        self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
+                        FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
+                        // Don't cleanup temp files on failure — retry may need them
+                        self.releaseQueueClaimIfNothingCommitted(uploadId: id)
+                    }
                 }
                 self.releaseUploadSlot(after: id)
             }
         }
+    }
+
+    /// Un refus DÉFINITIF de la passerelle (#7907) : rejouer rendrait le même
+    /// verdict. L'intent write-ahead quitte la file d'ATTENTE (« publication au
+    /// retour en ligne ») pour l'historique d'échecs — que « Mes stories »
+    /// montre avec reprise et abandon —, et la ligne en vol disparaît : sinon
+    /// la reconnexion la relancerait sans fin. `StoryPublishService` en fait
+    /// l'annonce (toast, brouillon rendu éditable). Sans intent persisté, la
+    /// ligne reste en échec, seule trace de la story.
+    func rejectUpload(id: String, message: String, code: String?) {
+        guard let upload = activeUploads.first(where: { $0.id == id }) else { return }
+        storyUploadRejected.send(StoryUploadRejection(id: id, code: code))
+        guard let queueId = upload.queueId else {
+            mutateUpload(id: id) { $0.phase = .failed(message) }
+            FeedbackToastManager.shared.showError(message)
+            return
+        }
+        cleanupUploadTempFiles(upload)
+        activeUploads.removeAll { $0.id == id }
+        Task { await StoryPublishQueue.shared.failPermanently(queueId, message: message) }
     }
 
     /// Rend le créneau d'upload à la file — mais UNIQUEMENT s'il nous

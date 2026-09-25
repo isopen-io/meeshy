@@ -161,6 +161,16 @@ if (__SHELL__) {
 }
 
 /**
+ * LA COQUE ANDROID REÇOIT SES PUSHS PAR FCM NATIF (#7307). La WebView n'a ni
+ * Push API ni service worker : le jeton vient de `@capacitor/push-notifications`
+ * et s'enregistre par le même port qu'iOS. Derrière `__SHELL__`, ce module et
+ * le plugin quittent le build web ; `import()` le tient hors de `first_paint`.
+ */
+if (__SHELL__) {
+  void import('@/lib/push/shell-push-runtime').then(({ startShellPushInShell }) => startShellPushInShell());
+}
+
+/**
  * LE SERVICE WORKER S'INSCRIT APRÈS LA PREMIÈRE PEINTURE, ET SUR LE `load`
  * (#6936) — l'installation précache tout le bundle : la lancer pendant le
  * premier rendu ferait concurrence, sur la 3G visée, au rendu lui-même. C'est

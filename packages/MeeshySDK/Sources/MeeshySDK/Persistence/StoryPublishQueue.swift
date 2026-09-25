@@ -484,6 +484,26 @@ public actor StoryPublishQueue {
         Task { await self.processNext() }
     }
 
+    /// Classe un item EN ATTENTE comme échec définitif, sans le rejouer : le
+    /// chemin en ligne a reçu un refus que la passerelle rendra à chaque
+    /// tentative (#7907). L'item rejoint l'historique d'échecs, médias gardés
+    /// pour une reprise manuelle, et `publishFailed` l'annonce comme tout échec
+    /// définitif du drain. No-op si l'id n'est plus en attente.
+    public func failPermanently(_ itemId: String, message: String) {
+        inFlightIds.remove(itemId)
+        guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
+        var item = items.remove(at: idx)
+        item.lastError = message
+        addToFailedItems(item)
+        saveToDisk()
+        publishFailed.send(StoryPublishFailure(
+            queueId: item.id,
+            tempStoryId: item.tempStoryId,
+            reason: .unrecoverable(message: message),
+            draftId: item.draftId
+        ))
+    }
+
     /// Permanently abandons a failed item : removes it from history and
     /// deletes its local media. The caller is responsible for clearing any
     /// optimistic UI row still referencing the item's `tempStoryId`.

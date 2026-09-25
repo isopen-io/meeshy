@@ -12,6 +12,8 @@ import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { hashtagQueryKey } from './hashtag-posts';
+import { messagesQueryKey } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
 import { commentsQueryKey } from './publication-comments';
 import { postQueryKey } from './publication-detail';
 import { reelsQueryKey } from './reels';
@@ -585,5 +587,58 @@ describe('`post:liked` / `post:bookmarked` atteignent un HASHTAG et un PROFIL (#
 
     expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.isLikedByMe).toBe(false);
     expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.likeCount).toBe(2);
+  });
+});
+
+/**
+ * `attachment:reaction-added` / `attachment:reaction-removed` (#7894) — la
+ * réaction posée sur une PIÈCE atteint le cache du fil en direct. L'épreuve
+ * de ce témoin est sa MUTATION : retirer l'un des deux `socket.on` le fait
+ * tomber.
+ */
+describe('les réactions d’une PIÈCE sont écoutées (#7894)', () => {
+  const seed = (queryClient: QueryClient): void => {
+    const attachment = { id: 'a-1', messageId: 'm-1', mimeType: 'image/png', fileUrl: 'https://cdn/p.png' };
+    queryClient.setQueryData(messagesQueryKey('c-a'), {
+      pages: [{ messages: [{ id: 'm-1', conversationId: 'c-a', attachments: [attachment] }], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+  };
+
+  const summaryOf = (queryClient: QueryClient): unknown =>
+    queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey('c-a'))?.pages[0]?.messages[0]?.attachments?.[0]
+      ?.reactionSummary;
+
+  const payload = (action: 'add' | 'remove', reactionSummary: Record<string, number>) => ({
+    attachmentId: 'a-1',
+    messageId: 'm-1',
+    conversationId: 'c-a',
+    participantId: 'p-other',
+    emoji: '🔥',
+    action,
+    reactionSummary,
+    timestamp: '2026-09-25T10:00:00.000Z',
+  });
+
+  test('ajout puis retrait : le résumé servi remplace celui de la pièce', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    seed(queryClient);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, payload('add', { '🔥': 2 }));
+    expect(summaryOf(queryClient)).toEqual({ '🔥': 2 });
+
+    socket.fire(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, payload('remove', { '🔥': 1 }));
+    expect(summaryOf(queryClient)).toEqual({ '🔥': 1 });
+  });
+
+  test('`destroy` démonte les deux écouteurs', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    seed(queryClient);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps).destroy();
+
+    socket.fire(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, payload('add', { '🔥': 2 }));
+    socket.fire(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, payload('remove', { '🔥': 1 }));
+    expect(summaryOf(queryClient)).toBe(undefined);
   });
 });

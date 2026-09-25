@@ -84,12 +84,20 @@ export async function graveEtAnnonce(params: {
   readonly family: AchievementFamily;
   readonly valeur: number;
   readonly origin: AchievementOrigin;
+  /**
+   * Les clés DÉJÀ gravées, quand l'appelant les a lues (le balayage, #7909) :
+   * un palier connu ne repart pas en écriture pour se faire refuser par
+   * `P2002` — un aller-retour par palier et par ouverture de l'écran. Absent,
+   * l'anti-rejeu reste celui de la base, seul juge en cas de course.
+   */
+  readonly dejaGraves?: ReadonlySet<string>;
 }): Promise<void> {
-  const { prisma, userId, family, valeur, origin } = params;
+  const { prisma, userId, family, valeur, origin, dejaGraves } = params;
 
   let plusHautNeuf: number | null = null;
   for (const palier of tiersOf(family)) {
     if (valeur < palier) continue;
+    if (dejaGraves?.has(achievementKey(family, palier))) continue;
     try {
       await prisma.engagementMilestone.create({
         data: { userId, milestoneType: 'achievement', milestoneKey: achievementKey(family, palier) },
