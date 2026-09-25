@@ -185,7 +185,13 @@ final class RenderedScreen {
     /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
     /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
     /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
-    func frame(of identifier: String, borne: TimeInterval = 5) -> CGRect? {
+    ///
+    /// La borne est un PLAFOND, jamais une durée : l'attente s'arrête dès que
+    /// le nœud est posé. 5 s ne suffisaient pas sur un runner CI chargé — la
+    /// configuration 2FA y a rendu « non posé » puis posé au run suivant, sur
+    /// le même code (#7940). Tous les appelants cherchent une PRÉSENCE : un
+    /// plafond haut ne coûte rien à un écran juste.
+    func frame(of identifier: String, borne: TimeInterval = 20) -> CGRect? {
         var pose: CGRect?
         _ = RenderedScreen.attendre(borne: borne) {
             pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
