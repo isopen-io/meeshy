@@ -518,6 +518,32 @@ par ce commentaire. La piste structurelle (un TROISIÈME catalogue à la
 demande, sur le patron de `interface_catalogs_admin`) reste ouverte à
 **#7121** — elle ne paie qu'à l'échelle d'une FAMILLE de clés, pas à cinq.
 
+### Relevé du 2026-09-24 (`bun run gate`, segment `measure-weight.mjs`)
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+**52,84 Ko gzip avant le premier pixel · 7 requêtes · 2,29 s de téléchargement
+Fast 3G (préréglage Chrome DevTools)** ; **776,18 Ko** à la demande hors
+première peinture, répartis en ~55 chunks nommés (`interface_catalogs`
+100,66 Ko/7 fichiers, `thread-modes` 78,09 Ko, `story_studio` 15,97 Ko,
+`feed` 14,06 Ko, `notifications` 8,4 Ko, `communities` 8,54 Ko,
+`interface_catalogs_invite` 18,75 Ko). Les sept pages institutionnelles :
+**57,04 Ko** gzip pour les sept (`/about`, `/contact`, `/faq`, `/help`,
+`/partners`, `/privacy`, `/terms`). Précache PWA : **348 entrées**
+(2687,01 KiB). Aucun dépassement de `budgets.json` — le segment reste **vert**
+sur les 59 du gate composite.
+
+Hors ligne (`node scripts/check-offline.mjs`, variante A) : visite froide
+**105 requêtes / 233,5 Ko** réseau ; visite avec service worker installé
+**89 requêtes / 121,4 Ko** réseau + **7 requêtes / 7,7 Ko** de cache SW ;
+troisième visite hors ligne : le fil s'ouvre, titre inchangé
+(« Meeshy Chats »).
+
+`bun test` : **8456 pass / 0 fail / 51 498 `expect()`** sur 642 fichiers en
+90,28 s.
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des
