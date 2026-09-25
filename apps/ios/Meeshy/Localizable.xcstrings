@@ -15175,43 +15175,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld."
+            "value": "أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld على الأقل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide +%lld."
+            "value": "Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide mindestens +%lld."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add 3 people who vibe like you. When they accept, you both get +%lld."
+            "value": "Add 3 people who vibe like you. When they accept, you both get at least +%lld."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Añade a 3 personas afines a ti. Cuando acepten, ganan +%lld los dos."
+            "value": "Añade a 3 personas afines a ti. Cuando acepten, ganan al menos +%lld los dos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez +%lld tous les deux."
+            "value": "Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez au moins +%lld tous les deux."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate +%lld entrambi."
+            "value": "Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate almeno +%lld entrambi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham +%lld."
+            "value": "Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham pelo menos +%lld."
           }
         }
       }
@@ -15316,43 +15316,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld لكلٍّ منكما عند القبول"
+            "value": "+%lld على الأقل لكلٍّ منكما عند القبول"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Je +%lld, sobald die Person annimmt"
+            "value": "Je mindestens +%lld, sobald die Person annimmt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld each once they accept"
+            "value": "At least +%lld each once they accept"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld cada uno cuando la persona acepte"
+            "value": "Al menos +%lld cada uno cuando la persona acepte"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld chacun quand la personne accepte"
+            "value": "Au moins +%lld chacun quand la personne accepte"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld a testa quando la persona accetta"
+            "value": "Almeno +%lld a testa quando la persona accetta"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld para cada um quando a pessoa aceitar"
+            "value": "Pelo menos +%lld para cada um quando a pessoa aceitar"
           }
         }
       }
@@ -194551,6 +194551,523 @@
           "stringUnit": {
             "state": "translated",
             "value": "sobrenome"
+          }
+        }
+      }
+    },
+    "onboarding.email.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أكّد بريدك الإلكتروني"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätige deine E-Mail-Adresse"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm your email address"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirma tu correo electrónico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valide ton adresse e-mail"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conferma il tuo indirizzo e-mail"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirme seu endereço de e-mail"
+          }
+        }
+      }
+    },
+    "onboarding.email.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أرسلنا إليك رابطًا. المسه في بريدك: يتأكّد حسابك وينفتح لك Meeshy بالكامل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wir haben dir einen Link geschickt. Tippe ihn in deinem Postfach an: Dein Konto ist bestätigt und ganz Meeshy steht dir offen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We sent you a link. Tap it in your inbox: your account is confirmed and all of Meeshy opens up."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te enviamos un enlace. Tócalo en tu correo: tu cuenta queda confirmada y todo Meeshy se abre para ti."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On t'a envoyé un lien. Touche-le dans ton courriel : ton compte est confirmé et tout Meeshy s'ouvre à toi."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti abbiamo inviato un link. Toccalo nella tua casella: il tuo account è confermato e tutto Meeshy si apre per te."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviamos um link para você. Toque nele no seu e-mail: sua conta fica confirmada e todo o Meeshy se abre para você."
+          }
+        }
+      }
+    },
+    "onboarding.email.address": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل إلى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesendet an %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado a %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé à %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviato a %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado para %@"
+          }
+        }
+      }
+    },
+    "onboarding.email.resend": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أعد إرسال الرابط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link erneut senden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resend the link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reenviar el enlace"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renvoyer le lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia di nuovo il link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reenviar o link"
+          }
+        }
+      }
+    },
+    "onboarding.email.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُعيد إرسال الرابط — تحقّق من بريدك الوارد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link erneut gesendet — schau in dein Postfach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link sent again — check your inbox"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlace reenviado: revisa tu bandeja de entrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lien renvoyé — regarde ta boîte de réception"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link inviato di nuovo: controlla la tua casella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link reenviado — confira sua caixa de entrada"
+          }
+        }
+      }
+    },
+    "onboarding.email.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال الرابط. حاول مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Link konnte nicht gesendet werden. Versuch es noch einmal."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The link couldn't be sent. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar el enlace. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le lien n'a pas pu partir. Réessaie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare il link. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar o link. Tente de novo."
+          }
+        }
+      }
+    },
+    "onboarding.email.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ننتقل إلى التالي فور تأكيد عنوانك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es geht weiter, sobald deine Adresse bestätigt ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We'll move on as soon as your address is confirmed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguimos en cuanto tu dirección esté confirmada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On passe à la suite dès que ton adresse est validée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si prosegue appena il tuo indirizzo è confermato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguimos assim que seu endereço for confirmado."
+          }
+        }
+      }
+    },
+    "onboarding.story.verify": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أكّد بريدك الإلكتروني لنشر قصتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätige deine E-Mail, um deine Story zu posten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm your email to post your story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirma tu correo para publicar tu historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifie ton courriel pour publier ta story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conferma la tua e-mail per pubblicare la tua storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirme seu e-mail para publicar seu story"
+          }
+        }
+      }
+    },
+    "onboarding.story.verify.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المس الرابط الذي وصلك بالبريد: ستنطلق قصتك بعده مباشرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf den Link in der E-Mail: Danach kann deine Story sofort raus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the link we emailed you: your story can go out right after."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca el enlace del correo: tu historia podrá salir justo después."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche le lien reçu par e-mail : ta story pourra partir tout de suite après."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca il link ricevuto per e-mail: subito dopo la tua storia potrà partire."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque no link recebido por e-mail: seu story poderá sair logo em seguida."
+          }
+        }
+      }
+    },
+    "onboarding.story.rejected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر نشر قصتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Story konnte nicht gepostet werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your story couldn't be posted"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo publicar tu historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta story n'a pas pu être publiée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile pubblicare la tua storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível publicar seu story"
+          }
+        }
+      }
+    },
+    "onboarding.story.rejected.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رُفض النشر. ستجدها في مسوّداتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Veröffentlichung wurde abgelehnt. Du findest sie in deinen Entwürfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The post was declined. You'll find it in your drafts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La publicación fue rechazada. La encontrarás en tus borradores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La publication a été refusée. Tu la retrouves dans tes brouillons."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pubblicazione è stata rifiutata. La trovi nelle tue bozze."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A publicação foi recusada. Você a encontra nos seus rascunhos."
           }
         }
       }

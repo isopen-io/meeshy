@@ -39,6 +39,14 @@ final class OnboardingViewModel: ObservableObject {
     @Published private(set) var suggestions: [APIOnboardingSuggestion] = []
     @Published private(set) var recap: OnboardingRecap?
     @Published private(set) var plannedSteps: [OnboardingStepId] = []
+    /// La carte Story ne peut pas publier : adresse non vérifiée et exception
+    /// « première story » consommée (servi par `canPublishStory`), ou refus
+    /// `EMAIL_NOT_VERIFIED` reçu à l'upload (#7907).
+    @Published private(set) var storyNeedsEmailVerification = false
+    @Published private(set) var verificationLinkState: OnboardingSendState = .idle
+    /// Ce que le serveur a VRAIMENT crédité pour le salut et la story (#7908).
+    @Published private(set) var greetingReward: Int?
+    @Published private(set) var storyReward: Int?
 
     private(set) var storyDefaultVisibility: OnboardingStoryVisibility = .friends
     private(set) var globalConversationId: String?
@@ -55,6 +63,8 @@ final class OnboardingViewModel: ObservableObject {
     private let pickTemplate: (Int) -> Int
     private let applyUser: (MeeshyUser) -> Void
     private let settled: any OnboardingSettledStoring
+    private let auth: any AuthServiceProviding
+    private let pause: (Duration) async -> Void
 
     private var queue: [OnboardingStepId] = []
     private var producedSomething = false
@@ -66,6 +76,18 @@ final class OnboardingViewModel: ObservableObject {
     private var storyUploadIdsAtOpen: Set<String>?
     private var isRoutingElsewhere = false
     private var awaitsRoute = false
+    /// Le score serveur relu en dernier : un gain affiché est une DIFFÉRENCE
+    /// entre deux lectures, jamais un barème recopié (#7908).
+    private var knownScore: Int?
+    private var servedElanFactor = 1
+    /// Ce que la passerelle annonce pour chaque geste à l'élan courant (#7908).
+    private var servedStepRewards: APIOnboardingStepRewards?
+
+    /// Le crédit d'un geste peut n'être visible qu'un instant après l'accusé :
+    /// on relit quelques fois avant de retomber sur l'estimation.
+    static let creditReadAttempts = 3
+    static let creditReadDelay: Duration = .milliseconds(600)
+    static let emailNotVerifiedCode = "EMAIL_NOT_VERIFIED"
 
     init(
         service: any OnboardingServiceProviding = OnboardingService.shared,
@@ -76,7 +98,9 @@ final class OnboardingViewModel: ObservableObject {
         permission: (any OnboardingNotificationPermitting)? = nil,
         pickTemplate: ((Int) -> Int)? = nil,
         applyUser: ((MeeshyUser) -> Void)? = nil,
-        settled: any OnboardingSettledStoring = UserDefaultsOnboardingSettledStore()
+        settled: any OnboardingSettledStoring = UserDefaultsOnboardingSettledStore(),
+        auth: any AuthServiceProviding = AuthService.shared,
+        pause: ((Duration) async -> Void)? = nil
     ) {
         self.service = service
         self.messages = messages
@@ -87,6 +111,8 @@ final class OnboardingViewModel: ObservableObject {
         self.pickTemplate = pickTemplate ?? { Int.random(in: 0..<$0) }
         self.applyUser = applyUser ?? { AuthManager.shared.currentUser = $0 }
         self.settled = settled
+        self.auth = auth
+        self.pause = pause ?? { try? await Task.sleep(for: $0) }
     }
 
     // MARK: - Lecture
@@ -106,6 +132,12 @@ final class OnboardingViewModel: ObservableObject {
     /// Le prénom affiché (anneau de story) — celui du profil lu au démarrage.
     var userDisplayName: String {
         user.map { $0.displayName ?? $0.username } ?? ""
+    }
+
+    /// L'adresse à laquelle le lien de vérification part — celle du compte.
+    var accountEmail: String? {
+        guard let email = user?.email, !email.isEmpty else { return nil }
+        return email
     }
 
     var greetingLanguageNames: [String] {
@@ -167,10 +199,12 @@ final class OnboardingViewModel: ObservableObject {
         switch card {
         case .step(.global):
             greetingState = .sent
+            greetingReward = OnboardingRewards.greeting
             reward(OnboardingRewards.greeting)
         case .step(.story):
             sessionPoints = OnboardingRewards.greeting
             storyState = .published
+            storyReward = OnboardingRewards.story
             reward(OnboardingRewards.story)
         case .step(.friends):
             sessionPoints = OnboardingRewards.greeting + OnboardingRewards.story
@@ -185,6 +219,8 @@ final class OnboardingViewModel: ObservableObject {
         storyDefaultVisibility = state.storyDefaultVisibility
         globalConversationId = state.globalConversationId
         suggestions = state.suggestions
+        storyNeedsEmailVerification = state.canPublishStory == false
+        servedStepRewards = state.stepRewards
         queue = OnboardingFlow.pendingGestureSteps(for: state)
         producedSomething = OnboardingFlow.alreadyProduced(state)
         let notificationsUnseen = !state.seenSteps.contains(.notifications)
@@ -196,6 +232,7 @@ final class OnboardingViewModel: ObservableObject {
             isPresented = true
         }
         await showNext()
+        await readScoreBaseline()
     }
 
     /// Les défauts justes, posés AVANT la lecture réseau : la langue du profil
@@ -336,6 +373,42 @@ final class OnboardingViewModel: ObservableObject {
         await record(.languages, .done)
     }
 
+    // MARK: - Carte « valide ton adresse » (#7907)
+
+    /// « Renvoyer le lien » — la route existante, vers l'adresse du compte.
+    func resendVerificationLink() async {
+        guard verificationLinkState != .sending else { return }
+        guard let email = user?.email, !email.isEmpty else {
+            verificationLinkState = .failed
+            return
+        }
+        verificationLinkState = .sending
+        do {
+            try await auth.resendVerificationEmail(email: email)
+            verificationLinkState = .sent
+        } catch {
+            Self.logger.error("onboarding resend verification failed: \(error.localizedDescription, privacy: .public)")
+            verificationLinkState = .failed
+        }
+    }
+
+    /// Relit l'état serveur — au retour au premier plan, et tant qu'une carte
+    /// attend la vérification. Une adresse vérifiée ailleurs (le lien touché
+    /// dans le courriel) règle la carte email et rend la story publiable.
+    func refreshVerification() async {
+        guard isPresented || awaitsRoute, let state = try? await service.fetchState() else { return }
+        storyNeedsEmailVerification = state.canPublishStory == false
+        guard state.emailVerified == true else { return }
+        if card == .step(.email) {
+            await showNext()
+            await record(.email, .done)
+            return
+        }
+        guard queue.contains(.email) else { return }
+        queue.removeAll { $0 == .email }
+        plannedSteps.removeAll { $0 == .email }
+    }
+
     // MARK: - Carte 2 — salut dans Meeshy Global
 
     func sendGreeting() async {
@@ -354,7 +427,9 @@ final class OnboardingViewModel: ObservableObject {
             )
             greetingState = .sent
             producedSomething = true
-            reward(OnboardingRewards.greeting)
+            let points = await creditedPoints(weight: OnboardingRewards.greeting, served: servedStepRewards?.global)
+            greetingReward = points
+            reward(points)
             await record(.global, .done)
         } catch {
             Self.logger.error("onboarding greeting failed: \(error.localizedDescription, privacy: .public)")
@@ -405,8 +480,27 @@ final class OnboardingViewModel: ObservableObject {
         trackedStoryUploadId = nil
         storyState = .published
         producedSomething = true
-        reward(OnboardingRewards.story)
-        return Task { await record(.story, .done) }
+        return Task {
+            let points = await creditedPoints(weight: OnboardingRewards.story, served: servedStepRewards?.story)
+            storyReward = points
+            reward(points)
+            await record(.story, .done)
+        }
+    }
+
+    /// L'upload suivi est REFUSÉ pour de bon par la passerelle (#7907) : il ne
+    /// se réessaie plus. Un refus faute d'adresse vérifiée ramène la carte à
+    /// l'invitation « vérifie ton courriel » ; tout autre refus s'affiche comme
+    /// un échec définitif. Rien n'est crédité, aucune étape n'est écrite.
+    func storyUploadRejected(_ rejection: StoryUploadRejection) {
+        guard rejection.id == trackedStoryUploadId, !storyPublished else { return }
+        trackedStoryUploadId = nil
+        if rejection.code == Self.emailNotVerifiedCode {
+            storyNeedsEmailVerification = true
+            storyState = .idle
+        } else {
+            storyState = .rejected
+        }
     }
 
     // MARK: - Carte 4 — trouve ta bande
@@ -440,6 +534,39 @@ final class OnboardingViewModel: ObservableObject {
         _ = await permission.request()
         await showNext()
         await record(.notifications, .done)
+    }
+
+    // MARK: - Le crédit réel (#7908)
+
+    private func readScoreBaseline() async {
+        guard let current = try? await progress.fetchProgress() else { return }
+        knownScore = current.level.engagementScore
+        servedElanFactor = Self.factor(current.elan)
+    }
+
+    /// Ce que le serveur a crédité pour un geste : l'écart entre deux lectures
+    /// de la progression, élan compris. Tant que le crédit n'est pas visible,
+    /// l'annonce retombe sur ce que `/me/onboarding` a SERVI pour ce geste
+    /// (`stepRewards`), sinon sur le barème multiplié par l'élan servi — jamais
+    /// le barème nu.
+    private func creditedPoints(weight: Int, served: Int?) async -> Int {
+        let estimate = served ?? weight * servedElanFactor
+        guard let before = knownScore else { return estimate }
+        for attempt in 0..<Self.creditReadAttempts {
+            if attempt > 0 { await pause(Self.creditReadDelay) }
+            guard let current = try? await progress.fetchProgress() else { continue }
+            let score = current.level.engagementScore
+            guard score > before else { continue }
+            knownScore = score
+            servedElanFactor = Self.factor(current.elan)
+            return score - before
+        }
+        knownScore = before + estimate
+        return estimate
+    }
+
+    private static func factor(_ elan: APIEngagementProgress.Elan?) -> Int {
+        max(1, Int((elan?.factor ?? 1).rounded()))
     }
 
     // MARK: - Récapitulatif

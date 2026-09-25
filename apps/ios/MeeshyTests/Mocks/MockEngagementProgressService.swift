@@ -4,10 +4,14 @@ import MeeshySDK
 
 final class MockEngagementProgressService: EngagementProgressProviding, @unchecked Sendable {
     var fetchProgressResult: Result<APIEngagementProgress, Error> = .success(.empty)
+    /// Des lectures SUCCESSIVES, servies dans l'ordre avant `fetchProgressResult`
+    /// — pour qu'un témoin décrive « avant le geste » puis « après le geste ».
+    var fetchProgressSequence: [Result<APIEngagementProgress, Error>] = []
     var fetchProgressCallCount = 0
 
     func fetchProgress() async throws -> APIEngagementProgress {
         fetchProgressCallCount += 1
+        guard fetchProgressSequence.isEmpty else { return try fetchProgressSequence.removeFirst().get() }
         return try fetchProgressResult.get()
     }
 
@@ -27,6 +31,7 @@ final class MockEngagementProgressService: EngagementProgressProviding, @uncheck
 
     func reset() {
         fetchProgressResult = .success(.empty)
+        fetchProgressSequence = []
         fetchProgressCallCount = 0
         mintResult = .success(APIMeeshMintResult(status: "minted", balance: 1, mintedLifetime: 1))
         mintRequestIds = []

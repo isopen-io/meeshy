@@ -74,6 +74,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// abandon par la file et succès vident la ligne pareil. Qui doit créditer
     /// une publication (l'onboarding, #7729) écoute ce signal, jamais la file.
     let storyUploadSucceeded = PassthroughSubject<String, Never>()
+    /// Un upload REFUSÉ pour de bon (#7907), annoncé juste AVANT son retrait de
+    /// `activeUploads` — même contrat que le succès.
+    let storyUploadRejected = PassthroughSubject<StoryUploadRejection, Never>()
     /// Vue de compatibilité : l'upload que les surfaces d'avatar mettent en
     /// avant (un échec l'emporte, sinon la tête de file). `activeUploads` étant
     /// `@Published`, toutes les vues qui lisent cette propriété calculée
