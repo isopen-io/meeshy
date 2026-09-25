@@ -13,6 +13,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { coldStateOf } from '@/lib/view/cold-state';
 import { initialsOf } from '@/lib/view/conversation';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -135,6 +136,7 @@ function ViewersBody({
             <Link
               to="userProfile"
               params={{ username: viewer.username }}
+              onClick={peekProfileOnClick(viewer.username)}
               className="flex items-center gap-3 px-4"
               style={{ minHeight: 56, color: 'var(--color-ios-ink)' }}
             >

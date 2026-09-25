@@ -6,6 +6,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { AvatarMenuEntry } from '@/lib/view/avatar-menu';
 import { isContextMenuKey, useLongPress } from '@/lib/view/long-press';
+import { peekProfile } from '@/lib/view/profile-peek';
 import { placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { href, navigate } from '@/routes/route-table';
@@ -103,7 +104,7 @@ export function AvatarMenu({
   const run = (entry: AvatarMenuEntry) => {
     switch (entry.kind) {
       case 'profile':
-        navigate(href('userProfile', { username: entry.username }));
+        if (!peekProfile(entry.username)) navigate(href('userProfile', { username: entry.username }));
         return;
       case 'story':
         navigate(href('story', { post: entry.post }));

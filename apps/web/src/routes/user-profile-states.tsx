@@ -5,6 +5,7 @@ import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { failureMayRetry, type ProfileFailure } from '@/lib/profile/failure';
 import type { ProfilePostsFilter, ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
 import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-style';
 
@@ -208,3 +209,36 @@ export function ProfilePostsMore({
   );
 }
 
+/** Le rendu d'un échec, par sa NATURE — la loi vit dans `lib/profile/failure.ts`,
+ * pure, parce que « 403 et 404 rendent le même texte » ne se mesure qu'en
+ * comparant deux chaînes. */
+const FAILURE_NOTICE = {
+  refused: { glyph: 'lock', tone: 'var(--color-ios-ink-3)', alert: false, title: 'userProfile.refused.title', body: 'userProfile.refused.body' },
+  throttled: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: true, title: 'userProfile.throttled.title', body: 'userProfile.throttled.body' },
+  offline: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: false, title: 'profile.offline.title', body: 'userProfile.offline.body' },
+  error: { glyph: 'warningCircle', tone: 'var(--color-error)', alert: true, title: 'userProfile.error.title', body: 'userProfile.error.body' },
+} as const satisfies Readonly<
+  Record<ProfileFailure, { readonly glyph: 'lock' | 'warningCircle'; readonly tone: string; readonly alert: boolean; readonly title: InterfaceCatalogKey; readonly body: InterfaceCatalogKey }>
+>;
+
+export function ProfileFailureNotice({
+  language,
+  failure,
+  onRetry,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly failure: ProfileFailure;
+  readonly onRetry: () => void;
+}) {
+  const notice = FAILURE_NOTICE[failure];
+  return (
+    <ProfileNotice
+      glyph={notice.glyph}
+      tone={notice.tone}
+      alert={notice.alert}
+      title={translate(language, notice.title)}
+      detail={translate(language, notice.body)}
+      {...(failureMayRetry(failure) ? { action: { label: translate(language, 'profile.retry'), onAction: onRetry } } : {})}
+    />
+  );
+}
