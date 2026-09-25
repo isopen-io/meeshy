@@ -89,4 +89,15 @@
          rend « denied » sans dialogue. Le manifeste du plugin ne la fournit
          pas (il ne déclare que son MessagingService). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
+         passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
+         IMAGE_CAPTURE que si resolveActivity trouve une application photo.
+         Depuis l'API 30, la visibilité des paquets la cache sans cette
+         requête : le pont retombait sur le sélecteur de fichiers. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
 </manifest>
