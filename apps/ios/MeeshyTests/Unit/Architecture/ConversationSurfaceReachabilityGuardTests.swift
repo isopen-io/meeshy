@@ -620,23 +620,26 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
         XCTAssertEqual(MessageProtectionSymbols.blurred, "eye.slash")
     }
 
-    /// Les DEUX surfaces de CHOIX lisent la table, plutôt que de la recopier.
-    /// Un littéral y reviendrait sans rien faire rougir — c'est exactement
-    /// ainsi que la barre et la feuille ont divergé.
+    /// La surface de CHOIX lit la table, plutôt que de la recopier. Un
+    /// littéral y reviendrait sans rien faire rougir — c'est exactement ainsi
+    /// que la barre et la feuille ont divergé. Depuis #7967, le comportement
+    /// (éphémère, flou, vue unique) ne se choisit PLUS que dans la barre :
+    /// le panneau des effets ne l'offre plus, mais il reste interdit d'y
+    /// peindre un pictogramme de protection à la main.
     func test_lesSurfacesDeChoix_lisentLaTableEtNePeignentAucunLittéral() throws {
-        let surfaces = [
-            "Features/Main/Components/EffectsPickerView.swift",
-            "Features/Main/Components/UniversalComposerBar+Protections.swift",
-        ]
+        let choiceSurfaces = ["Features/Main/Components/UniversalComposerBar+Protections.swift"]
+        let surfaces = choiceSurfaces + ["Features/Main/Components/EffectsPickerView.swift"]
         let bannedLiterals = ["\"flame\"", "\"flame.fill\"", "\"1.circle\"", "\"1.circle.fill\"",
                               "\"eye.slash\"", "\"eye.slash.fill\"", "\"hourglass\"", "\"timer.circle\""]
         for path in surfaces {
             let code = try source(at: path)
-            XCTAssertTrue(
-                code.contains("MessageProtectionSymbols."),
-                "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
-                    + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
-            )
+            if choiceSurfaces.contains(path) {
+                XCTAssertTrue(
+                    code.contains("MessageProtectionSymbols."),
+                    "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
+                        + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
+                )
+            }
             for literal in bannedLiterals {
                 XCTAssertFalse(
                     code.contains(literal),
