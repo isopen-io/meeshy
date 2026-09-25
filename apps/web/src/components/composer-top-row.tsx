@@ -80,19 +80,20 @@ export function ComposerTopRow({
   ephemeralSeconds,
   ephemeralPickerOpen,
   onToggleEphemeral,
-  onSelectEphemeral,
   blurred,
   onToggleBlur,
   viewOnce,
   onToggleViewOnce,
   effectCount,
-  onOpenEffects,
+  effectsPanelOpen,
+  onToggleEffects,
   sentiment,
   languageCode,
   onOpenLanguage,
   languagePillRef,
   text,
   maxLength,
+  reserveEnd = 0,
 }: {
   /** `undefined` = désactivé. */
   readonly ephemeralSeconds?: number;
@@ -100,8 +101,6 @@ export function ComposerTopRow({
   /** Tap sur la bascule : ARME/désarme si déjà armé, sinon ouvre/ferme le
    * sélecteur (miroir `ephemeralToggleButton`, `+Protections.swift:26-42`). */
   readonly onToggleEphemeral: () => void;
-  /** Choix d'une capsule du sélecteur — `undefined` = « Désactivé ». */
-  readonly onSelectEphemeral: (seconds: number | undefined) => void;
   readonly blurred: boolean;
   readonly onToggleBlur: () => void;
   readonly viewOnce: boolean;
@@ -109,7 +108,10 @@ export function ComposerTopRow({
   /** Nombre d'effets décoratifs actifs — la capsule affiche ce compte,
    * jamais un booléen (miroir `effectsToggleButton`, `+Toolbar.swift`). */
   readonly effectCount: number;
-  readonly onOpenEffects: () => void;
+  /** Le panneau d'effets inline est ouvert (#7980) — la baguette le dit. */
+  readonly effectsPanelOpen: boolean;
+  /** Tap sur la baguette : ouvre/ferme le panneau d'effets (#7980). */
+  readonly onToggleEffects: () => void;
   readonly sentiment: SentimentLevel;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
@@ -120,6 +122,10 @@ export function ComposerTopRow({
    * appelant ne le fournit cette itération, faute de source honnête de la
    * limite serveur. */
   readonly maxLength?: number;
+  /** LA DROITE RÉSERVÉE AU CADRE DES EMOJIS RAPIDES (#7980, miroir
+   * `quickEmojiCoversToolbar`) — en px, `0` quand le cadre ne monte pas sur
+   * la barre (champ focalisé ou non vide) : rien ne glisse dessous. */
+  readonly reserveEnd?: number;
 }) {
   const counter = characterCounterOf({ text, ...(maxLength === undefined ? {} : { maxLength }) });
   /** LIBELLÉS DE LA BASCULE « VUE UNIQUE » (#7354) — SEUL occupant de cette
@@ -127,62 +133,27 @@ export function ComposerTopRow({
    * racine) : les autres bascules restent en français en dur, dette
    * antérieure (#6310) que ce lot n'étend pas mais ne répand pas non plus. */
   const language = currentInterfaceLanguage();
+  /**
+   * LA BARRE PARTAGE SA LIGNE AVEC LE CADRE DES EMOJIS RAPIDES (#7980).
+   *
+   * Sous 400 px de pont, quatre cibles de 44 + la pastille + le cadre ne
+   * tiennent pas : les bascules y passent à 36 × 44 (au-dessus du plancher AA
+   * de 24 px, WCAG 2.5.8 ; iOS pose 30 pt), sans gouttière — et seulement
+   * tant que le cadre est là : au focus, la barre retrouve ses 44 × 44.
+   *
+   * La TONALITÉ s'efface dans ce même état : il n'existe que champ VIDE, où
+   * elle vaut toujours « neutre » — elle n'y dit rien, et sa place rend la
+   * pastille de langue entière.
+   */
+  const reserved = reserveEnd > 0;
+  const compact = reserved ? ' @max-[400px]:min-w-9' : '';
 
   return (
-    <>
-      {ephemeralPickerOpen ? (
-        <div
-          data-composer-ephemeral-picker
-          role="group"
-          aria-label="Durée avant disparition du message"
-          className="mx-2 mb-1 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
-        >
-          {/* CIBLES ≥ 44 (dimension 5, revue-correction #6175) — `min-h-11`
-              sur chaque capsule : la première forme mesurait 32 px de haut au
-              navigateur, sous la barre, alors que la rangée voisine venait de
-              la tenir. */}
-          <button
-            type="button"
-            onClick={() => onSelectEphemeral(undefined)}
-            aria-pressed={ephemeralSeconds === undefined}
-            className="min-h-11 shrink-0 rounded-full px-3.5 text-title font-semibold"
-            style={
-              ephemeralSeconds === undefined
-                ? { backgroundColor: 'var(--accent)', color: 'var(--accent-ink)' }
-                : { color: 'var(--color-ios-ink-2)' }
-            }
-          >
-            Désactivé
-          </button>
-          {EPHEMERAL_DURATIONS.map((d) => {
-            const active = ephemeralSeconds === d.seconds;
-            return (
-              <button
-                key={d.seconds}
-                type="button"
-                onClick={() => onSelectEphemeral(d.seconds)}
-                aria-pressed={active}
-                aria-label={d.displayLabel}
-                className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
-                style={
-                  active
-                    ? armedStyle('var(--color-error)', 32, 100)
-                    : {
-                        backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-                        color: 'var(--color-ios-ink)',
-                      }
-                }
-              >
-                <Glyph name="flameFill" size={12} />
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
+    <div
+      data-composer-toolbar
+      className={`flex items-center justify-start gap-1 px-3 pt-1.5${reserved ? ' @max-[400px]:gap-0' : ''}`}
+      style={reserveEnd > 0 ? { paddingInlineEnd: reserveEnd } : undefined}
+    >
         {/* CIBLES ≥ 44×44 (dimension 5, revue-correction #6175) — `min-w-11`
             AUTANT que `min-h-11`, motif `composer-language-pill.tsx:69`. La
             première forme ne posait que la HAUTEUR : mesurée 32×44 au
@@ -195,7 +166,7 @@ export function ComposerTopRow({
           aria-pressed={ephemeralSeconds !== undefined}
           aria-expanded={ephemeralPickerOpen}
           data-composer-ephemeral
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
           style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={
             ephemeralSeconds === undefined
@@ -216,7 +187,7 @@ export function ComposerTopRow({
           onClick={onToggleBlur}
           aria-pressed={blurred}
           data-composer-blur
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
           style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
         >
@@ -235,7 +206,7 @@ export function ComposerTopRow({
           aria-pressed={viewOnce}
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
           style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
@@ -245,10 +216,10 @@ export function ComposerTopRow({
 
         <button
           type="button"
-          onClick={onOpenEffects}
-          aria-haspopup="dialog"
+          onClick={onToggleEffects}
+          aria-expanded={effectsPanelOpen}
           data-composer-effects
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2${compact}`}
           style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
@@ -258,13 +229,15 @@ export function ComposerTopRow({
 
         {/* TONALITÉ — LECTURE SEULE (§ 1.1 : « c'était un Button dont
             l'action se limitait à un retour haptique… rendu passif »). */}
-        <span
-          role="img"
-          aria-label={`Tonalité du message : ${SENTIMENT_LABEL_FR[sentiment]}`}
-          className="grid size-11 shrink-0 place-items-center text-[17px]"
-        >
-          {SENTIMENT_EMOJI[sentiment]}
-        </span>
+        {reserved ? null : (
+          <span
+            role="img"
+            aria-label={`Tonalité du message : ${SENTIMENT_LABEL_FR[sentiment]}`}
+            className="grid size-11 shrink-0 place-items-center text-[17px]"
+          >
+            {SENTIMENT_EMOJI[sentiment]}
+          </span>
+        )}
 
         <ComposerLanguagePill code={languageCode} onOpen={onOpenLanguage} {...(languagePillRef ? { buttonRef: languagePillRef } : {})} />
 
@@ -279,7 +252,77 @@ export function ComposerTopRow({
             {counter.text}
           </span>
         ) : null}
-      </div>
-    </>
+    </div>
+  );
+}
+
+/**
+ * LE RAIL DE DURÉE ÉPHÉMÈRE (#6175) — sorti de la rangée haute (#7980) pour
+ * que le COMPOSEUR le pose au-dessus de la barre d'outils ET du cadre des
+ * emojis rapides, qui ne couvre que la barre et la ligne de saisie. Il
+ * partage cette place avec le panneau d'effets, les deux s'excluant.
+ *
+ * 8 px avec le bord haut du verre et sur les côtés (`mt-2 mx-2`, miroir
+ * `railTopInset` + `.padding(.horizontal, 8)`, #7966).
+ */
+export function ComposerEphemeralRail({
+  ephemeralSeconds,
+  onSelectEphemeral,
+}: {
+  /** `undefined` = désactivé. */
+  readonly ephemeralSeconds?: number;
+  /** Choix d'une capsule du sélecteur — `undefined` = « Désactivé ». */
+  readonly onSelectEphemeral: (seconds: number | undefined) => void;
+}) {
+  return (
+    <div
+      data-composer-ephemeral-picker
+      role="group"
+      aria-label="Durée avant disparition du message"
+      className="mx-2 mt-2 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
+    >
+      {/* CIBLES ≥ 44 (dimension 5, revue-correction #6175) — `min-h-11`
+          sur chaque capsule : la première forme mesurait 32 px de haut au
+          navigateur, sous la barre, alors que la rangée voisine venait de
+          la tenir. */}
+      <button
+        type="button"
+        onClick={() => onSelectEphemeral(undefined)}
+        aria-pressed={ephemeralSeconds === undefined}
+        className="min-h-11 shrink-0 rounded-full px-3.5 text-title font-semibold"
+        style={
+          ephemeralSeconds === undefined
+            ? { backgroundColor: 'var(--accent)', color: 'var(--accent-ink)' }
+            : { color: 'var(--color-ios-ink-2)' }
+        }
+      >
+        Désactivé
+      </button>
+      {EPHEMERAL_DURATIONS.map((d) => {
+        const active = ephemeralSeconds === d.seconds;
+        return (
+          <button
+            key={d.seconds}
+            type="button"
+            onClick={() => onSelectEphemeral(d.seconds)}
+            aria-pressed={active}
+            aria-label={d.displayLabel}
+            className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
+            style={
+              active
+                ? armedStyle('var(--color-error)', 32, 100)
+                : {
+                    backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
+                    color: 'var(--color-ios-ink)',
+                  }
+            }
+          >
+            <Glyph name="flameFill" size={12} />
+            {d.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

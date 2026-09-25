@@ -88,4 +88,12 @@ describe('GET /conversations — la nature du dernier message survit au sériali
     expect(conv.lastReaction).toBeNull();
     expect(conv.activeCall).toBeNull();
   });
+
+  it("#7978 — l'identité UTILISATEUR de l'auteur survit au sérialiseur (`lastMessage.sender.userId`)", async () => {
+    const conv = await servi({
+      lastMessage: lastMessage({ sender: { id: 'p1', userId: 'u1', displayName: 'Demo', type: 'user' } }),
+    });
+    expect(conv.lastMessage.senderId).toBe('p1');
+    expect(conv.lastMessage.sender.userId).toBe('u1');
+  });
 });

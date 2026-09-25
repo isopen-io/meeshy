@@ -42,6 +42,12 @@ const arComposerAttach = {
   'composer.sticker.error.tooLarge': 'الصورة كبيرة جدًا لملصق',
   'composer.sticker.error.full': 'المكتبة ممتلئة — أزل ملصقًا لإضافة آخر',
   'composer.sticker.error.failed': 'تعذّر إنشاء الملصق',
+  'composer.quickEmoji.label': 'إرسال مباشرة',
+  'composer.quickEmoji.group': 'رموز تعبيرية سريعة',
+  'composer.effects.panel': 'تأثيرات الرسالة',
+  'composer.effects.entrance': 'حركة الدخول',
+  'composer.effects.permanent': 'تأثير دائم',
+  'composer.effects.clearAll': 'مسح الكل',
 } satisfies ComposerAttachCatalogSlice;
 
 export default arComposerAttach;

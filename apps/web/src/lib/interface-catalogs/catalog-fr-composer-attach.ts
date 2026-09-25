@@ -45,6 +45,12 @@ const frComposerAttach = {
   'composer.sticker.error.tooLarge': 'Image trop lourde pour un sticker',
   'composer.sticker.error.full': 'Bibliothèque pleine — retirez un sticker pour en ajouter un',
   'composer.sticker.error.failed': 'Le sticker n’a pas pu être créé',
+  'composer.quickEmoji.label': 'Envoyer directement',
+  'composer.quickEmoji.group': 'Emojis rapides',
+  'composer.effects.panel': 'Effets du message',
+  'composer.effects.entrance': "Animation d'entrée",
+  'composer.effects.permanent': 'Effet permanent',
+  'composer.effects.clearAll': 'Tout effacer',
 } as const;
 
 export type ComposerAttachCatalogSlice = Readonly<Record<keyof typeof frComposerAttach, string>>;

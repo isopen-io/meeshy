@@ -397,6 +397,15 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     return payload as Record<string, unknown>;
   }
 
+  it("#7978 — les DEUX producteurs nomment l'auteur par son User.id (`lastMessageSenderUserId`)", async () => {
+    const message = makeContractMessage();
+
+    for (const payload of [await updatedFromSocketPath(message), await updatedFromRestPath(message)]) {
+      expect(payload.senderId).toBe('sender-participantId');
+      expect(payload.lastMessageSenderUserId).toBe('sender-userId');
+    }
+  });
+
   it('les DEUX producteurs émettent `lastMessageAt` comme une CHAÎNE ISO', async () => {
     const message = makeContractMessage();
 

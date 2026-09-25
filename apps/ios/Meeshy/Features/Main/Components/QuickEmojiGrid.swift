@@ -1,63 +1,49 @@
 import CoreGraphics
 
-/// **Les emojis rapides de l'emplacement d'action** (#7931, directive porteur
-/// 2026-09-25 : « diminue la taille des emoji qu'on peut envoyer rapidement
-/// pour avoir 5 emoji 2 par rangée »).
+/// **Les emojis rapides de l'emplacement d'action** (#7931, #7985).
 ///
-/// Cinq emojis sur deux rangées — trois puis deux. Le cadre qui les porte
-/// prend TOUT le côté droit du composeur (directive porteur 2026-09-25 :
-/// « fais en sorte que le cadre prenne tout le côté droit ») : il monte du bas
-/// de la ligne de saisie jusqu'au haut de la barre d'outils, dont la droite
-/// est vide tant que le champ l'est. Chaque cellule reste sous la cible
-/// tactile de 44 pt ; l'appui long vers la feuille des emojis en est le
-/// recours.
-///
-/// **Au focus, le cadre se REPLIE** (#7966) : la barre d'outils redevient
-/// entière — sa pastille de langue montre son contenu normal — et le cadre ne
-/// garde que les trois emojis les plus employés, sur UNE rangée, à la hauteur
-/// de la ligne de saisie.
+/// Trois emojis, les plus employés, sur UNE rangée à la hauteur de la ligne de
+/// saisie — EN PERMANENCE, focus ou non (directive porteur 2026-09-25 : « on
+/// doit maintenir le composant des emojis à 3 tout le temps »). La barre
+/// d'outils garde toute sa largeur. Chaque cellule reste sous la cible tactile
+/// de 44 pt (décision ouverte #7979) ; l'appui long vers la feuille des emojis
+/// en est le recours.
 nonisolated enum QuickEmojiGrid {
 
-    static let count = 5
-    static let focusedCount = 3
+    static let count = 3
     static let cell: CGFloat = 32
     static let spacing: CGFloat = 3
     static let inset: CGFloat = 4
     static let emojiSize: CGFloat = 24
-    static let firstRowCount = 3
-    /// La hauteur de la ligne de saisie, où le cadre prend pied.
+    /// La hauteur de la ligne de saisie, sur laquelle le cadre s'aligne.
     static let rowHeight: CGFloat = 44
-    /// Ce qui sépare la barre d'outils de la ligne de saisie : le bas de l'une
-    /// (2) et le haut de l'autre (10).
-    static let toolbarGap: CGFloat = 12
 
-    /// La largeur de la rangée la plus longue.
+    /// La largeur de la rangée.
     static var width: CGFloat {
-        CGFloat(firstRowCount) * cell + CGFloat(firstRowCount - 1) * spacing
+        CGFloat(count) * cell + CGFloat(count - 1) * spacing
     }
 
     /// La largeur du cadre de verre, et donc celle que la ligne lui réserve.
     static var frameWidth: CGFloat { width + 2 * inset }
 
-    /// La hauteur des deux rangées.
-    static var contentHeight: CGFloat { 2 * cell + spacing }
-
-    /// Le cadre couvre la ligne de saisie ET la barre d'outils mesurée ; sans
-    /// barre, il ne descend jamais sous la ligne ni sous ses deux rangées.
-    static func frameHeight(toolbarHeight: CGFloat, focused: Bool = false) -> CGFloat {
-        if focused { return rowHeight }
-        guard toolbarHeight > 0 else { return max(rowHeight, contentHeight + 2 * inset) }
-        return max(rowHeight + toolbarGap + toolbarHeight, contentHeight + 2 * inset)
+    /// Les trois premiers, jamais plus.
+    static func row(_ emojis: [String]) -> [String] {
+        Array(emojis.prefix(count))
     }
+}
 
-    /// Le cadre ne monte sur la barre d'outils que hors focus.
-    static func coversToolbar(focused: Bool) -> Bool { !focused }
-
-    /// Hors focus, trois puis deux ; au focus, les trois premiers sur une
-    /// rangée. Jamais de rangée vide.
-    static func rows(_ emojis: [String], focused: Bool = false) -> [[String]] {
-        let servis = Array(emojis.prefix(focused ? focusedCount : count))
-        return [Array(servis.prefix(firstRowCount)), Array(servis.dropFirst(firstRowCount))]
-            .filter { !$0.isEmpty }
-    }
+/// **Le retour après envoi, adouci** (#7985, directive porteur 2026-09-25 :
+/// « l'effet de retour après l'envoi du message doit être moins accentué »).
+///
+/// Le bouton d'envoi part et les emojis rapides reviennent dans le même
+/// emplacement. Le tourbillon d'origine (#3927) les faisait tourner de 250° en
+/// partant d'un vingtième de leur taille, sur un ressort qui rebondissait : un
+/// effet plus fort que l'acte qu'il accompagne, rejoué à CHAQUE envoi. Il en
+/// reste un léger pivot, un léger grossissement et un ressort presque amorti.
+nonisolated enum ComposerSlotMotion {
+    static let rotationDegrees: Double = 40
+    static let startScale: CGFloat = 0.6
+    static let response: Double = 0.3
+    static let damping: Double = 0.86
+    static let sendBounceScale: CGFloat = 1.08
 }
