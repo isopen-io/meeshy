@@ -376,6 +376,53 @@ export const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
    */
   ...liveMediaArrival({ id: 'live-ordinaire', atMs: 30000, isViewOnce: false }),
   ...liveMediaArrival({ id: 'live-protege', atMs: 31000, isViewOnce: true }),
+
+  /**
+   * LA RÉACTION D'UN AUTRE, L'ÉDITION ET LA SUPPRESSION EN DIRECT (#5863,
+   * #7926) — aux formes que la passerelle émet (`ReactionService.
+   * createUpdateEvent`, `buildMessageEditedCore`, `MessageDeletedEventData`).
+   * APRÈS tout ce que `check-realtime-events.mjs` mesure (≤ 31 s) : aucune
+   * assertion existante ne lit un fil que ces trois faits auraient déplacé.
+   */
+  {
+    kind: 'once',
+    atMs: 45000,
+    event: SERVER_EVENTS.REACTION_ADDED,
+    payload: {
+      messageId: 'live-2',
+      conversationId: LIVE_CONVERSATION_ID,
+      participantId: 'p-kwame',
+      userId: 'u-kwame',
+      emoji: '👍',
+      action: 'add',
+      aggregation: { emoji: '👍', count: 1, participantIds: ['p-kwame'] },
+      timestamp: new Date(LIVE_1.createdAt.getTime() + 45000).toISOString(),
+    },
+  },
+  {
+    kind: 'once',
+    atMs: 46000,
+    event: SERVER_EVENTS.MESSAGE_EDITED,
+    payload: {
+      id: 'live-2',
+      conversationId: LIVE_CONVERSATION_ID,
+      senderId: VIEWER_ID,
+      content: 'Oui, vendredi 14h.',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: new Date(LIVE_1.createdAt.getTime() + 10 * 60_000).toISOString(),
+      updatedAt: new Date(LIVE_1.createdAt.getTime() + 46000).toISOString(),
+      isEdited: true,
+      editedAt: new Date(LIVE_1.createdAt.getTime() + 46000).toISOString(),
+      translations: [],
+    },
+  },
+  {
+    kind: 'once',
+    atMs: 47000,
+    event: SERVER_EVENTS.MESSAGE_DELETED,
+    payload: { messageId: LIVE_1.id, conversationId: LIVE_CONVERSATION_ID },
+  },
 ];
 
 const SCHEDULE: readonly ScheduledFixtureEvent[] = [

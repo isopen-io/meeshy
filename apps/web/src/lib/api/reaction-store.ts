@@ -1,15 +1,12 @@
 import { createStore } from 'zustand/vanilla';
 
 /**
- * « MES RÉACTIONS » DE LA SESSION (#5814, § 3 conséquence 1) — la passerelle
- * ne sert PAS « les miennes » sur `GET …/messages`
- * (`packages/shared/types/conversation.ts:174-175` : `reactionSummary` est
- * un COMPTE `{emoji: n}`, jamais une liste de participants). Ce magasin
- * mémorise donc, pour la SEULE session courante, quels emojis CE lecteur a
- * posés sur quel message — seedé à VIDE, jamais deviné depuis un compte
- * (un compte de 2 ne dit pas qui). Issue compagnon (§ 3) : lire
- * `GET /reactions/:messageId` (`userReactions`) au chargement du fil pour ne
- * plus repartir de zéro à chaque session.
+ * « MES RÉACTIONS » (#5814, § 3 conséquence 1 ; #5863) — quels emojis CE
+ * lecteur a posés sur quel message, jamais deviné depuis un compte (un compte
+ * de 2 ne dit pas qui). Trois écrivains : la page servie par
+ * `GET …/messages` (`currentUserReactions`, `seedMineFromServed` ci-dessous),
+ * le geste local (`performReaction`) et l'écho temps réel de MES réactions
+ * posées ailleurs (`realtime-message-reactions.ts`).
  *
  * `zustand/vanilla`, motif `conversation-store.ts` : hors de tout composant,
  * observable par `subscribe()` et par `useStore(reactionStore, selector)`.
@@ -41,4 +38,27 @@ export const reactionStore = createStore<ReactionStoreState>((set) => ({
 const EMPTY: readonly string[] = [];
 export function mineOf(messageId: string): readonly string[] {
   return reactionStore.getState().mine[messageId] ?? EMPTY;
+}
+
+/**
+ * « MA RÉACTION » DÈS LE CHARGEMENT DU FIL (#5863, seconde moitié) — la page
+ * servie par `GET /conversations/:id/messages` porte `currentUserReactions`
+ * (les emojis que CE lecteur a posés, résolus par la passerelle en UNE
+ * requête par page). Le serveur fait foi pour les messages qu'il décrit ; une
+ * clé ABSENTE (passerelle antérieure) n'efface rien — l'absence n'est pas un
+ * « aucune réaction ». Le magasin n'est réécrit que si quelque chose change.
+ */
+export type ServedMine = { readonly id: string; readonly currentUserReactions?: readonly string[] | null };
+
+const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((emoji) => b.includes(emoji));
+
+export function seedMineFromServed(messages: readonly ServedMine[]): void {
+  const current = reactionStore.getState().mine;
+  const changed = messages.filter(
+    (m) => Array.isArray(m.currentUserReactions) && !sameSet(current[m.id] ?? [], m.currentUserReactions),
+  );
+  if (changed.length === 0) return;
+  const patch = Object.fromEntries(changed.map((m) => [m.id, [...(m.currentUserReactions ?? [])]]));
+  reactionStore.setState({ mine: { ...current, ...patch } });
 }
