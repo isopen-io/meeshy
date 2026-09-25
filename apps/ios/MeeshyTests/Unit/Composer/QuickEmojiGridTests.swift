@@ -47,4 +47,20 @@ final class QuickEmojiGridTests: XCTestCase {
     func test_lesEmojisSontAgrandis() {
         XCTAssertGreaterThan(QuickEmojiGrid.cell, 21, "le cadre agrandi porte des emojis plus grands qu'en #7931")
     }
+
+    // MARK: - Au focus (#7966)
+
+    func test_auFocus_troisEmojisSurUneRangee() {
+        XCTAssertEqual(QuickEmojiGrid.rows(cinq, focused: true), [["😂", "❤️", "👍"]])
+    }
+
+    func test_auFocus_leCadreSAligneSurLaLigneDeSaisie() {
+        XCTAssertEqual(QuickEmojiGrid.frameHeight(toolbarHeight: 30, focused: true), QuickEmojiGrid.rowHeight)
+        XCTAssertLessThanOrEqual(QuickEmojiGrid.cell + 2 * QuickEmojiGrid.inset, QuickEmojiGrid.rowHeight)
+    }
+
+    func test_auFocus_laBarreDOutilsEstLiberee() {
+        XCTAssertFalse(QuickEmojiGrid.coversToolbar(focused: true))
+        XCTAssertTrue(QuickEmojiGrid.coversToolbar(focused: false))
+    }
 }

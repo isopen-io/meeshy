@@ -217,7 +217,6 @@ enum ConversationFirstRenderWarmup {
         _ = vm.scrollAnchorId
         _ = vm.searchHasMore
         _ = vm.searchResults
-        _ = vm.showEffectsPicker
         _ = vm.translatingAudioLanguages
         _ = vm.translatingTextLanguages
         _ = vm.unreadSeparatorCount

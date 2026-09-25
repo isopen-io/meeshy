@@ -219,7 +219,6 @@ extension ConversationView {
             isViewOnceEnabled: $viewModel.isViewOnceEnabled,
             hideViewOnce: composerState.editingMessageId != nil,
             pendingEffects: $viewModel.pendingEffects,
-            onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
             focusTrigger: $composerState.focusRequested
@@ -235,9 +234,6 @@ extension ConversationView {
     /// pickers, sheets légers et l'unique fullScreenCover caméra.
     private func composerPickersAndSheets(_ content: AnyView) -> AnyView {
         AnyView(content
-        .sheet(isPresented: $viewModel.showEffectsPicker) {
-            EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
-        }
         // `photoLibrary: .shared()` est requis pour la présélection : les
         // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
         // matchent les assets du picker que sur la photothèque partagée.
