@@ -953,7 +953,9 @@ final class ConversationSocketHandler {
                             localId: event.messageId,
                             emoji: event.emoji,
                             participantId: event.participantId,
-                            ownerUserId: event.userId
+                            ownerUserId: event.userId,
+                            aggregateCount: event.aggregation?.count,
+                            aggregateParticipantIds: event.aggregation?.participantIds
                         )
                     } catch {
                         Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")

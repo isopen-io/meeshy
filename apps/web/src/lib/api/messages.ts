@@ -10,6 +10,7 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
+import { refreshMineForPage } from './reactions-mine';
 import { sealedIfOpened } from './view-once-seal';
 
 /**
@@ -86,6 +87,9 @@ export async function loadMessages(
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
+  /* « MA RÉACTION » DÈS LE CHARGEMENT (#5863) — en arrière-plan, sans
+     retarder la page : `reactions-mine.ts`. */
+  void refreshMineForPage(params, result.data);
   return {
     ok: true,
     data: {

@@ -84,6 +84,16 @@ nonisolated public enum FocalMetrics {
         /// aussi les groupes entre eux, or ce sont eux qui doivent rester
         /// distincts. La respiration quitte l'intérieur pour la frontière.
         public static let groupTopPadding: CGFloat = 8
+
+        /// **Le CONTENU PROPRE d'un message s'aligne sous l'AVATAR, sur son
+        /// bord gauche** (directive porteur 2026-09-25, #7928) : texte,
+        /// drapeaux, médias, vocal, lieu, sticker, réactions. Zéro, parce que
+        /// l'avatar est posé au bord de la colonne de contenu.
+        ///
+        /// Seules les CITATIONS se décalent — `Quote.indent`. Un retrait
+        /// propre à chaque section avait laissé la carte de story sous
+        /// l'avatar pendant que le texte partait 41 pt plus loin.
+        public static let contentIndent: CGFloat = 0
     }
 
     // MARK: - Avatar (pastille)
@@ -215,6 +225,12 @@ nonisolated public enum FocalMetrics {
     /// `thread.quote` — filet `2.5`, couleur de l'auteur cité.
     nonisolated public enum Quote {
         public static let railWidth: CGFloat = 2.5
+
+        /// Le retrait de TOUTE citation — message, média, vocal, humeur,
+        /// story (carte de scène comprise) : le même pour tous les types
+        /// (#7928). C'est celui de la citation de message à filet, que le
+        /// porteur désigne comme juste.
+        public static let indent: CGFloat = Text.indent
     }
 
     // MARK: - Médias

@@ -37,7 +37,7 @@ struct FocalDeletedRow: View, Equatable {
             .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
             .italic()
             .foregroundColor(ThemeManager.shared.textMuted)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, FocalMetrics.Row.contentIndent)
             .accessibilityElement(children: .combine)
     }
 }

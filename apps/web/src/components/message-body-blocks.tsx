@@ -15,11 +15,12 @@ import {
   type StoryCitation,
 } from '@/lib/view/message-body';
 import { shortRelativeTime } from '@/lib/relative-time';
-import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
+import { META_TEXT_OPACITY, QUOTED_CARD_WIDTH } from '@/lib/reading-mode/metrics';
 
 import { GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 import { MediaUnavailable } from './media-unavailable';
+import { QuoteRail } from './message-blocks';
 
 /**
  * LE CORPS D'UN MESSAGE — sticker, emoji seul, lieu, story citée (#5936).
@@ -206,7 +207,6 @@ export function LocationCard({
  * 3. le fond de secours de la scène est une teinte PÂLE (`.story-scene-
  *    fallback`, `thread-system.css`), pas un mélange avec `black`.
  */
-const STORY_CARD_WIDTH = 132;
 const STORY_SCENE_ASPECT_RATIO = 9 / 16;
 
 /** « réponse à sa story[, <aperçu | indisponible>] » — le libellé UNIQUE de
@@ -265,8 +265,8 @@ export function StoryCitationCard({
       data-story-scene
       className="story-scene-fallback block"
       style={{
-        width: STORY_CARD_WIDTH,
-        aspectRatio: `${STORY_CARD_WIDTH} / ${Math.round(STORY_CARD_WIDTH / STORY_SCENE_ASPECT_RATIO)}`,
+        width: QUOTED_CARD_WIDTH,
+        aspectRatio: `${QUOTED_CARD_WIDTH} / ${Math.round(QUOTED_CARD_WIDTH / STORY_SCENE_ASPECT_RATIO)}`,
         /* Le fond TEINTÉ est celui d'une carte SANS scène — une vignette
            morte en est une, au même titre qu'une citation qui n'en a jamais
            porté (#7022). */
@@ -314,14 +314,14 @@ export function StoryCitationCard({
   const card = (
     <span
       className="block overflow-hidden"
-      style={{ width: STORY_CARD_WIDTH, borderRadius: 'var(--ios-radius-lg)' }}
+      style={{ width: QUOTED_CARD_WIDTH, borderRadius: 'var(--ios-radius-lg)' }}
       aria-hidden
     >
       {scene}
       <span
         className="flex items-center gap-1 text-mini"
         style={{
-          width: STORY_CARD_WIDTH,
+          width: QUOTED_CARD_WIDTH,
           color: 'var(--color-ios-ink-2)',
           opacity: META_TEXT_OPACITY,
           backgroundColor: `color-mix(in srgb, ${accent} var(--ios-bubble-other-opacity), transparent)`,
@@ -392,11 +392,7 @@ export function MoodQuote({
       className="mb-1.5 flex w-full rounded-quote text-left"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
     >
-      <span
-        className="w-1 shrink-0 rounded-full"
-        style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)' }}
-        aria-hidden
-      />
+      <QuoteRail isMine={isMine} />
       <span className="min-w-0 py-2 pr-2.5 pl-2 text-title" aria-hidden>
         <span className="flex items-baseline gap-1.5">
           <span className="truncate font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>

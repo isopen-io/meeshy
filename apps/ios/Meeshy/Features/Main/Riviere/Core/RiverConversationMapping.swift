@@ -236,7 +236,7 @@ nonisolated enum RiverConversationMapping {
                 timeString: resolvedTime,
                 text: displayedText(of: message, text: text),
                 layout: geometry.layout,
-                replyPreview: message.sealedForDisplay.replyTo.map {
+                replyPreview: message.sealedForDisplay.replyTo.map(QuotedReplyPresentation.displayed).map {
                     RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),

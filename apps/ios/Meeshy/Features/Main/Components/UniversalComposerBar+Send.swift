@@ -51,7 +51,7 @@ extension UniversalComposerBar {
     /// l'état où le champ n'a rien à montrer.
     static let sendSlotWidth: CGFloat = 44
     /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
-    static let quickEmojiSlotWidth: CGFloat = 96
+    static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.width
 
     /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
     /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
@@ -96,6 +96,17 @@ extension UniversalComposerBar {
         .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+        // La feuille vit sur l'EMPLACEMENT, toujours monté, et pas sur la
+        // grille : envoyer vide le champ puis remplit l'emplacement d'autre
+        // chose — une feuille posée sur la grille disparaîtrait avec elle.
+        .sheet(isPresented: $showQuickEmojiPicker) {
+            EmojiKeyboardPanel(style: isDark ? .dark : .light) { emoji in
+                showQuickEmojiPicker = false
+                sendQuickEmoji(emoji)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // ========================================================================
@@ -173,27 +184,48 @@ extension UniversalComposerBar {
     private static let quickSendDefaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
 
     private var quickSendEmojis: [String] {
-        EmojiUsageTracker.topEmojis(count: 2, defaults: Self.quickSendDefaultEmojis)
+        EmojiUsageTracker.topEmojis(count: QuickEmojiGrid.count, defaults: Self.quickSendDefaultEmojis)
     }
 
     @ViewBuilder
     private var quickEmojiButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(quickSendEmojis, id: \.self) { emoji in
-                Button {
-                    sendQuickEmoji(emoji)
-                } label: {
-                    Text(emoji)
-                        .font(.system(size: 24))
-                        .frame(width: 44, height: 44)
-                        .adaptiveLiquidGlass(in: Circle(), interactive: true)
+        VStack(spacing: QuickEmojiGrid.spacing) {
+            ForEach(Array(QuickEmojiGrid.rows(quickSendEmojis).enumerated()), id: \.offset) { _, rangée in
+                HStack(spacing: QuickEmojiGrid.spacing) {
+                    ForEach(rangée, id: \.self) { emoji in
+                        Button {
+                            sendQuickEmoji(emoji)
+                        } label: {
+                            Text(emoji)
+                                .font(.system(size: 15))
+                                .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        // L'appui long ouvre la feuille des emojis : l'emoji
+                        // choisi part directement (#7931). En
+                        // `simultaneousGesture` pour ne pas manger le tap.
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                                HapticFeedback.medium()
+                                showQuickEmojiPicker = true
+                            }
+                        )
+                        .accessibilityLabel(
+                            String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
+                        )
+                        .accessibilityAction(named: Text(String(localized: "composer.quickEmoji.more",
+                                                                defaultValue: "Choisir un autre emoji",
+                                                                bundle: .main))) {
+                            showQuickEmojiPicker = true
+                        }
+                        .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
+                    }
                 }
-                .accessibilityLabel(
-                    String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
-                )
-                .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
             }
         }
+        .frame(width: QuickEmojiGrid.width, height: 44)
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —

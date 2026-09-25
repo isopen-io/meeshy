@@ -2447,7 +2447,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — all tests assert HTTP status codes and/or response body fields via inject(); factory functions; all services mocked at module boundaries; no shared mutable state; fire-and-forget .catch paths covered via setImmediate flush; dead-code branches confirmed structurally unreachable
 - coverageThreshold ratcheted: lines:67→79 / branches:63→72 / statements:67→78 / functions:67→77 (8-9pp below CI bun estimate)
 - Notes / where the next run resumes: routes/posts/* ☑ (all 7 files). Next slice: continue gateway manifest gap-fill — pick next low-coverage batch from manifests/gateway.md (routes/tracking-links/, routes/users/, routes/auth/login+register, or routes/anonymous.ts)
-- Commit: b1c99a3 (pending PR → main)
+- Commit: cfa669a (squash-merged PR #1049 → main 2026-06-30T02:35Z)
 
 ## 2026-06-30T — gateway-services-gap1 (routes/auth/login.ts + routes/auth/register.ts)
 - Targeted:
@@ -2583,7 +2583,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — behavioral assertions via HTTP inject(); no production logic changed; all 478 suites pass
 - coverageThreshold ratcheted: lines:86→87 / branches:79→80 / statements:85→86 / functions:82→83 (CI-bun-calibrated; local-node 96.4/89.88/95.61/93.08 − 9.5pp = 86.9/80.4/86.1/83.6)
 - Manifest ticked: routes/users/blocking.ts☑ contact-change.ts☑ devices.ts☑ index.ts☑ preferences.ts☑ presence.ts☑ profile.ts☑
-- Commit: a782ddc (PR #1130 → squash-merge pending CI + merge)
+- Commit: 1111688 (merge commit, PR #1130 → main 2026-07-01T01:20Z)
 
 ## 2026-07-01T01:31Z — gateway-fix-profile-extended-mock (hotfix, PR #1173)
 - Context: PR #1130 (gateway-routes-users, above) was merged to `main` by a human (merge commit
@@ -2611,7 +2611,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Notes / where the next run resumes: `main`'s gateway suite is green again once this merges.
   Continue with the next ☐ feature×app cell per PROGRESS.md (Sprint 0 complete; scan the matrix
   top-to-bottom for the next `☐`).
-- Commit: df18b8843 (PR #1173, pending CI + merge)
+- Commit: 65c6007 (squash-merged PR #1173 → main 2026-07-01T01:58Z)
 
 ## 2026-07-01T~06:35Z — gateway-manifest-gap9-communities (routes/communities.ts + routes/communities/*)
 

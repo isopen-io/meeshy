@@ -224,7 +224,7 @@ public extension MeeshyConversation {
     /// - Parameter aliases: les autres noms du message en place — l'identifiant
     ///   `cid_…` d'un envoi optimiste, que l'accusé remplace par l'identifiant
     ///   serveur sous une horloge serveur qui peut précéder celle de l'appareil.
-    public func admitsLastMessage(id: String?, at date: Date, aliases: [String] = []) -> Bool {
+    func admitsLastMessage(id: String?, at date: Date, aliases: [String] = []) -> Bool {
         if let id, id == lastMessageId { return true }
         if let current = lastMessageId, aliases.contains(current) { return true }
         return date > lastMessageAt

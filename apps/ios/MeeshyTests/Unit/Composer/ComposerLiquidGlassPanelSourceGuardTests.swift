@@ -34,7 +34,7 @@ final class ComposerLiquidGlassPanelSourceGuardTests: XCTestCase {
             ("var textInputField: some View {", "adaptiveLiquidGlass(in: Self.fieldShape"),
             ("var attachButton: some View {", "adaptiveLiquidGlass(in: Circle()"),
             ("var recordingBar: some View {", "adaptiveLiquidGlass(in: Self.fieldShape"),
-            ("var quickEmojiButtons: some View {", "adaptiveLiquidGlass(in: Circle()"),
+            ("var quickEmojiButtons: some View {", "adaptiveLiquidGlass(in: RoundedRectangle("),
         ]
         for expectation in expectations {
             let block = try Self.block(named: expectation.anchor, in: source)
