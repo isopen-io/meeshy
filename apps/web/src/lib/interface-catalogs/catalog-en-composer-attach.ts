@@ -42,6 +42,12 @@ const enComposerAttach = {
   'composer.sticker.error.tooLarge': 'Image too large for a sticker',
   'composer.sticker.error.full': 'Library full — remove a sticker to add another',
   'composer.sticker.error.failed': 'The sticker could not be created',
+  'composer.quickEmoji.label': 'Send directly',
+  'composer.quickEmoji.group': 'Quick emojis',
+  'composer.effects.panel': 'Message effects',
+  'composer.effects.entrance': 'Entrance animation',
+  'composer.effects.permanent': 'Permanent effect',
+  'composer.effects.clearAll': 'Clear all',
 } satisfies ComposerAttachCatalogSlice;
 
 export default enComposerAttach;

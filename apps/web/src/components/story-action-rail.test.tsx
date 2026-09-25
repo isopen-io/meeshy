@@ -146,6 +146,63 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: {} });
     expect(host.querySelector('[data-story-action-rail]')).toBeNull();
   });
+
+  test('badges={{ translations: "FR" }} => une capsule data-story-action-badge, texte "FR", aria-hidden', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs()),
+      language: 'fr',
+      handlers: TOUS,
+      badges: { translations: 'FR' },
+    });
+    const badge = host.querySelector('[data-story-action="translations"] [data-story-action-badge]');
+    expect(badge?.textContent).toBe('FR');
+    expect(badge?.getAttribute('aria-hidden')).toBe('true');
+    expect(host.querySelector('[data-story-action="react"] [data-story-action-badge]')).toBeNull();
+  });
+
+  test('sans badge, rien ; un badge sur un bouton ABSENT du rail ne rend rien', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })),
+      language: 'fr',
+      handlers: TOUS,
+      badges: { react: 'EN', translations: null },
+    });
+    /* `react` n'est PAS dans le rail de MA story (la loi le retire) — le
+       badge ne rend rien, quoi qu'il porte. */
+    expect(host.querySelector('[data-story-action-badge]')).toBeNull();
+  });
+
+  test('anchored={{ action: "translations", node }} => node est rendu dans l’enveloppe du bouton', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs()),
+      language: 'fr',
+      handlers: TOUS,
+      anchored: { action: 'translations', node: <div data-la-barre>barre</div> },
+    });
+    const anchor = host.querySelector('[data-story-action-anchor="translations"]');
+    expect(anchor).not.toBeNull();
+    expect(anchor?.querySelector('[data-la-barre]')).not.toBeNull();
+    expect(anchor?.querySelector('[data-story-action="translations"]')).not.toBeNull();
+  });
+
+  test('anchored sur un bouton ABSENT du rail ne rend jamais la surface', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })),
+      language: 'fr',
+      handlers: TOUS,
+      anchored: { action: 'react', node: <div data-la-barre>barre</div> },
+    });
+    expect(host.querySelector('[data-la-barre]')).toBeNull();
+  });
+
+  test('le bouton Traductions est dans le DOM quand les trois gardes sont vraies (contre-épreuve retournée)', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs({ hasTranslatableContent: true })),
+      language: 'fr',
+      handlers: TOUS,
+    });
+    expect(host.querySelector('[data-story-action="translations"]')).not.toBeNull();
+  });
 });
 
 describe('ce que chaque bouton ANNONCE et FAIT', () => {

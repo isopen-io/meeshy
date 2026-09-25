@@ -658,15 +658,29 @@ for (const scheme of ['light', 'dark']) {
         return { width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
       }, sel);
 
+    /* DEUX ÉTATS DE LA BARRE (#7980). Champ vide hors focus, le cadre des
+       emojis rapides lui prend sa droite : sous 400 px, les bascules y
+       tiennent 36×44 (plancher AA 24 px, WCAG 2.5.8 ; iOS 30 pt). Au focus,
+       le cadre se replie et la barre retrouve ses 44×44. */
     for (const [sel, name] of TOGGLES) {
       const box = await boxOf(sel);
       if (expect(box !== null, `${scheme} · la bascule « ${name} » existe dans la rangée haute`)) {
         expect(
-          box.width >= 44 && box.height >= 44,
-          `${scheme} · « ${name} » tient la cible 44×44 (${box.width}×${box.height})`,
+          box.width >= 36 && box.height >= 44,
+          `${scheme} · « ${name} » tient 36×44 à côté du cadre des emojis (${box.width}×${box.height})`,
         );
       }
     }
+    await page.locator('[aria-label="Écrire un message"]').focus();
+    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="false"]');
+    for (const [sel, name] of TOGGLES) {
+      const box = await boxOf(sel);
+      expect(
+        box !== null && box.width >= 44 && box.height >= 44,
+        `${scheme} · champ focalisé, « ${name} » tient la cible 44×44 (${box?.width}×${box?.height})`,
+      );
+    }
+    await page.locator('[aria-label="Écrire un message"]').blur();
 
     /* L'ÉTAT ARMÉ, PAS SEULEMENT L'ÉTAT AU REPOS — c'est l'armé qui peint un
        lavis sous son encre, donc lui seul peut tomber sous AA. On ARME par
@@ -700,25 +714,152 @@ for (const scheme of ['light', 'dark']) {
       expect(ratio !== null && ratio >= 4.5, `${scheme} · « ${name} » ARMÉE tient la barre AA (${ratio}:1)`);
     }
 
-    /* LA FEUILLE D'EFFETS — ses puces sont des cibles au même titre. */
+    /* LE RAIL ÉPHÉMÈRE GARDE 8 PX AVEC LE BORD DU VERRE (#7980, miroir
+       #7966) — en haut et sur les côtés. On le rouvre (le choix l'a fermé). */
+    const railInset = async (sel) =>
+      page.evaluate((s) => {
+        const rail = document.querySelector(s);
+        const glass = document.querySelector('[data-composer]');
+        if (rail === null || glass === null) return null;
+        const r = rail.getBoundingClientRect();
+        const g = glass.getBoundingClientRect();
+        return { top: Math.round(r.top - g.top), start: Math.round(r.left - g.left), end: Math.round(g.right - r.right) };
+      }, sel);
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.waitForSelector('[data-composer-ephemeral-picker]');
+    const ephemeralInset = await railInset('[data-composer-ephemeral-picker]');
+    expect(
+      ephemeralInset !== null && ephemeralInset.top === 8 && ephemeralInset.start === 8 && ephemeralInset.end === 8,
+      `${scheme} · le rail éphémère garde 8 px avec le bord du verre (${JSON.stringify(ephemeralInset)})`,
+    );
+
+    /* LE PANNEAU D'EFFETS (#7980) — INLINE, jamais une feuille : il prend la
+       place du rail éphémère (les deux s'excluent), garde les mêmes 8 px, et
+       ses capsules sont des cibles au même titre. */
     await page.locator('[data-composer-effects]').click();
-    await page.waitForSelector('dialog[open]');
+    await page.waitForSelector('[data-composer-effects-panel]');
+    expect((await page.locator('dialog[open]').count()) === 0, `${scheme} · la baguette n'ouvre AUCUNE feuille`);
+    expect(
+      (await page.locator('[data-composer-ephemeral-picker]').count()) === 0,
+      `${scheme} · le panneau d'effets FERME le rail éphémère`,
+    );
+    const effectsInset = await railInset('[data-composer-effects-panel]');
+    expect(
+      effectsInset !== null && effectsInset.top === 8 && effectsInset.start === 8 && effectsInset.end === 8,
+      `${scheme} · le panneau d'effets garde 8 px avec le bord du verre (${JSON.stringify(effectsInset)})`,
+    );
     const chips = await page.evaluate(() =>
-      [...document.querySelectorAll('dialog[open] button')].map((b) => {
+      [...document.querySelectorAll('[data-composer-effects-panel] button[aria-pressed]')].map((b) => {
         const r = b.getBoundingClientRect();
         return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
       }),
     );
     const shortChips = chips.filter((c) => c.height < 44);
     expect(
-      chips.length > 0 && shortChips.length === 0,
-      `${scheme} · les ${chips.length} puces de la feuille d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+      chips.length === 10 && shortChips.length === 0,
+      `${scheme} · les ${chips.length} capsules du panneau d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
     );
 
-    await page.locator('dialog[open] button', { hasText: 'Confettis' }).first().click();
-    await page.waitForTimeout(100);
-    const chipRatio = await contrastOf(page, 'dialog[open] button[aria-pressed="true"]');
-    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une puce d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+    await page.locator('[data-composer-effects-panel] button', { hasText: 'Confettis' }).first().click();
+    await page.waitForSelector('[data-composer-effects-panel] button[aria-pressed="true"]');
+    const chipRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="true"]');
+    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une capsule d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+    const idleRatio = await contrastOf(page, '[data-composer-effects-panel] button[aria-pressed="false"]');
+    expect(idleRatio !== null && idleRatio >= 4.5, `${scheme} · une capsule d'effet au repos tient la barre AA (${idleRatio}:1)`);
+    const clearBox = await page.evaluate(() => {
+      const b = document.querySelector('[data-composer-effects-panel] [data-effects-clear-all]');
+      if (b === null) return null;
+      const r = b.getBoundingClientRect();
+      return { height: Math.round(r.height) };
+    });
+    expect(clearBox !== null && clearBox.height >= 44, `${scheme} · « Tout effacer » paraît, cible ≥ 44 px (${JSON.stringify(clearBox)})`);
+    const clearRatio = await contrastOf(page, '[data-composer-effects-panel] [data-effects-clear-all]');
+    expect(clearRatio !== null && clearRatio >= 4.5, `${scheme} · « Tout effacer » tient la barre AA (${clearRatio}:1)`);
+    await page.screenshot({ path: join(CAPTURES, `thread-composer-effects-panel.${scheme}.png`) });
+
+    await context.close();
+  }
+
+  // ---------------------------------------------------------------------- 8
+  /**
+   * LE CADRE DES EMOJIS RAPIDES (#7980, jumelle de #7961/#7966) — champ vide
+   * hors focus : cinq emojis en 3 + 2 dans un cadre qui couvre TOUT le côté
+   * droit, du haut de la barre d'outils au bas de la ligne de saisie, sans
+   * que la barre ne glisse dessous. Au focus : une rangée de trois, à la
+   * hauteur du champ, et la barre retrouve sa largeur.
+   */
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="true"]');
+
+    const measure = () =>
+      page.evaluate(() => {
+        const box = (el) => {
+          if (el === null) return null;
+          const r = el.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height };
+        };
+        const frame = document.querySelector('[data-composer-quick-emoji]');
+        const toolbar = document.querySelector('[data-composer-toolbar]');
+        const field = document.querySelector('[aria-label="Écrire un message"]')?.parentElement ?? null;
+        const toolbarControls = [...(toolbar?.children ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const rightmost = Math.max(...toolbarControls.map((c) => c.getBoundingClientRect().right));
+        const rows = [...document.querySelectorAll('[data-composer-quick-emoji] [data-quick-emoji-row]')].map((r) => r.querySelectorAll('button').length);
+        const buttons = [...document.querySelectorAll('[data-composer-quick-emoji] button')].map((b) => {
+          const r = b.getBoundingClientRect();
+          return { w: Math.round(r.width), h: Math.round(r.height) };
+        });
+        return {
+          frame: box(frame),
+          toolbar: box(toolbar),
+          field: box(field),
+          toolbarRight: rightmost,
+          toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
+          rows,
+          buttons,
+        };
+      });
+
+    const rest = await measure();
+    expect(JSON.stringify(rest.rows) === '[3,2]', `${scheme} · hors focus, cinq emojis en 3 + 2 (${JSON.stringify(rest.rows)})`);
+    if (expect(rest.frame !== null && rest.toolbar !== null && rest.field !== null, `${scheme} · cadre, barre et champ sont rendus`)) {
+      expect(
+        Math.abs(rest.frame.top - (rest.toolbar.top + 6)) <= 1 && Math.abs(rest.frame.bottom - rest.field.bottom) <= 1,
+        `${scheme} · le cadre va du haut de la barre d'outils au bas de la ligne de saisie (cadre ${Math.round(rest.frame.top)}→${Math.round(rest.frame.bottom)}, barre ${Math.round(rest.toolbar.top)}, champ ↓${Math.round(rest.field.bottom)})`,
+      );
+      expect(
+        rest.toolbarRight <= rest.frame.left && !rest.toolbarScrolls,
+        `${scheme} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(rest.toolbarRight)}, cadre ←${Math.round(rest.frame.left)})`,
+      );
+    }
+    const tiny = rest.buttons.filter((b) => b.w < 24 || b.h < 24);
+    expect(tiny.length === 0, `${scheme} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(rest.buttons)})`);
+    await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.rest.${scheme}.png`) });
+
+    await page.locator('[aria-label="Écrire un message"]').focus();
+    await page.waitForSelector('[data-composer-quick-emoji][data-covers-toolbar="false"]');
+    const focusedState = await measure();
+    expect(JSON.stringify(focusedState.rows) === '[3]', `${scheme} · au focus, trois emojis sur une rangée (${JSON.stringify(focusedState.rows)})`);
+    if (focusedState.frame !== null && focusedState.field !== null && focusedState.toolbar !== null) {
+      expect(
+        Math.round(focusedState.frame.height) === 44 && focusedState.frame.top >= focusedState.toolbar.bottom,
+        `${scheme} · au focus, le cadre se replie à la hauteur de la ligne (${Math.round(focusedState.frame.height)} px)`,
+      );
+    }
+    await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.focused.${scheme}.png`) });
 
     await context.close();
   }

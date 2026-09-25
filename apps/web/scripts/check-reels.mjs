@@ -41,8 +41,11 @@
  *     l'ordre d'iOS ; « Commenter » ouvre la feuille PARTAGÉE avec le lecteur
  *     de stories (D-89), pager inerte, focus dedans, une flèche n'y fait pas
  *     défiler le pager, un envoi fait monter le compteur du rail, Échap la
- *     referme et rend le focus ; « Repartager » est optimiste, annoncé,
- *     append-only ; hors ligne, les deux disent leur refus SUR PLACE.
+ *     referme et rend le focus ; « Repartager » OUVRE une confirmation avant
+ *     d'envoyer (#6278, défaut majeur 1 — append-only, sans annuler possible
+ *     une fois parti), « Annuler » ne laisse aucun effet, confirmer est
+ *     optimiste, annoncé, append-only ; hors ligne, les deux disent leur
+ *     refus SUR PLACE.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -463,9 +466,38 @@ try {
         `${label} : les six gestes, dans l'ordre iOS, tous atteignables et ≥ 44 (${JSON.stringify(railOrder)})`,
       );
 
-      // HORS LIGNE — repartager refuse SUR PLACE (aucun optimiste), le dit.
-      await context.setOffline(true);
+      // LA CONFIRMATION AVANT L'ENVOI (revue-correction #6278, défaut majeur
+      // 1) — le repost est APPEND-ONLY, sans « annuler » possible UNE FOIS
+      // parti : le seul tap ouvre `ConfirmDialog` (nommée « post-repost »),
+      // et RIEN ne part — ni réseau, ni compte, ni annonce — tant qu'elle
+      // n'est pas confirmée. `tapRepost` porte les DEUX gestes désormais
+      // nécessaires pour que les scénarios suivants gardent leur sens.
+      const repostConfirmSel = '[data-confirm-dialog="post-repost"] [data-confirm="confirm"]';
+      const repostCancelSel = '[data-confirm-dialog="post-repost"] [data-confirm="cancel"]';
+      const tapRepost = async () => {
+        await page.click(repostSel);
+        await page.waitForSelector(repostConfirmSel, { timeout: 1500 });
+        await page.click(repostConfirmSel);
+      };
+
+      const beforeAnyTap = Number(await page.textContent(`${repostSel} .tabular-nums`));
       await page.click(repostSel);
+      const dialogOpened = await page.waitForSelector(repostConfirmSel, { timeout: 1500 }).then(() => true, () => false);
+      const pressedBeforeConfirm = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-pressed'), repostSel);
+      await page.click(repostCancelSel);
+      const dialogClosedAfterCancel = await page
+        .waitForSelector(repostConfirmSel, { state: 'detached', timeout: 1500 })
+        .then(() => true, () => false);
+      const countAfterCancel = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      check(
+        dialogOpened && pressedBeforeConfirm === 'false' && dialogClosedAfterCancel && countAfterCancel === beforeAnyTap,
+        `${label} : « Repartager » ouvre une confirmation avant d'envoyer — « Annuler » ne laisse aucun effet (ouverte ${dialogOpened}, pressé ${pressedBeforeConfirm}, fermée ${dialogClosedAfterCancel}, compte ${beforeAnyTap}→${countAfterCancel})`,
+      );
+
+      // HORS LIGNE — repartager refuse SUR PLACE (aucun optimiste), le dit,
+      // UNE FOIS la confirmation posée.
+      await context.setOffline(true);
+      await tapRepost();
       // Le TEXTE du refus, jamais « une annonce quelconque » : la région
       // garde la dernière annonce, et un témoin qui n'attend qu'une chaîne
       // non vide passe sur celle d'un geste précédent (revue-correction #6484).
@@ -601,9 +633,10 @@ try {
       );
 
       // REPARTAGER — optimiste, compte +1, teinte posée, jamais défait par un
-      // second tap (append-only, miroir `ReelsViewModel.repost`).
+      // second tap (append-only, miroir `ReelsViewModel.repost`) — CONFIRMÉ,
+      // comme chaque tap depuis le défaut majeur 1 (#6278).
       const repostBefore = Number(await page.textContent(`${repostSel} .tabular-nums`));
-      await page.click(repostSel);
+      await tapRepost();
       const reposted = await page
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', repostSel, { timeout: 1500 })
         .then(() => true, () => false);
@@ -616,7 +649,7 @@ try {
         `${label} : « Repartager » bascule au geste, compte +1, teinte posée, succès annoncé (${repostColor})`,
       );
       await capture(page, `reels-repartage-${slug}`);
-      await page.click(repostSel);
+      await tapRepost();
       // « Déjà repartagé » (feed.post.repost.already) est l'annonce PROPRE au
       // second tap — attendre CE texte précis, jamais un délai fixe, prouve
       // que le second appel a bien été traité (pas seulement que le premier

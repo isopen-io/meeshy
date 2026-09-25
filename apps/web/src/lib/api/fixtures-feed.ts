@@ -253,7 +253,12 @@ export const POST_MINE: FeedPost = {
   commentCount: 1,
 };
 
-/** `POST_REPOST` — attribution de republication, `repostOf.author.username`. */
+/**
+ * `POST_REPOST` — un repost SIMPLE, sa carte citée à la forme RÉELLE de
+ * `repostOfInclude` (#6278 c, G3/T3b) : original écrit en espagnol, traduit
+ * en ANGLAIS seulement (rang 2 possible, jamais le rang 1 — leçon 261/276) et
+ * UNE image dimensionnée avec sa propre vignette (pas de « +N »).
+ */
 export const POST_REPOST: FeedPost = {
   ...feedPostDefaults,
   id: 'post-repost',
@@ -262,7 +267,26 @@ export const POST_REPOST: FeedPost = {
   author: LEA,
   content: 'Tout à fait d’accord avec ça.',
   originalLanguage: 'fr',
-  repostOf: { author: { username: 'yann.petit' } },
+  repostOf: {
+    id: 'post-repost-original',
+    type: 'POST',
+    content: 'Nuestras ventas crecieron un 12 % este trimestre.',
+    originalLanguage: 'es',
+    translations: { en: { text: 'Our sales grew 12% this quarter.' } },
+    author: { id: YANN.id, displayName: 'Yann Petit', username: 'yann.petit' },
+    media: [
+      {
+        id: 'm-post-repost-original',
+        fileUrl: feedPhotoStandIn('#F59E0B', '#B45309', 'square'),
+        thumbnailUrl: feedPhotoStandIn('#F59E0B', '#B45309', 'square'),
+        mimeType: 'image/jpeg',
+        width: 800,
+        height: 800,
+      },
+    ],
+    likeCount: 24,
+    createdAt: minutesAgo(180),
+  },
   likeCount: 5,
 };
 

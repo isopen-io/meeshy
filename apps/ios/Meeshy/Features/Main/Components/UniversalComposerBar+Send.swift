@@ -53,12 +53,6 @@ extension UniversalComposerBar {
     /// La largeur du cadre des emojis rapides, que la ligne lui réserve.
     static let quickEmojiSlotWidth: CGFloat = QuickEmojiGrid.frameWidth
 
-    /// Le cadre des emojis rapides occupe la droite de la barre d'outils —
-    /// hors focus seulement (#7966) : au focus, la barre redevient entière.
-    var quickEmojiCoversToolbar: Bool {
-        actionSlot == .quickEmoji && QuickEmojiGrid.coversToolbar(focused: isFocused)
-    }
-
     /// **L'hôte sait envoyer un cadre à mots** — sans lui, l'appui long du
     /// bouton d'envoi n'ouvrirait rien, et un geste qui ne fait rien ne se
     /// pose pas (loi 4).
@@ -98,13 +92,10 @@ extension UniversalComposerBar {
                     .transition(tourbillonTransition)
             }
         }
-        // Aligné en BAS : le cadre des emojis, plus haut que la ligne, monte
-        // par-dessus la droite vide de la barre d'outils (directive porteur
-        // 2026-09-25) sans pousser la ligne.
-        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44, alignment: .bottom)
-        .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
-        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44)
+        .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: showsQuickEmoji)
+        .animation(.spring(response: ComposerSlotMotion.response, dampingFraction: ComposerSlotMotion.damping), value: hasContent)
+        .animation(.spring(response: 0.25, dampingFraction: ComposerSlotMotion.damping), value: sendBounce)
         // La feuille vit sur l'EMPLACEMENT, toujours monté, et pas sur la
         // grille : envoyer vide le champ puis remplit l'emplacement d'autre
         // chose — une feuille posée sur la grille disparaîtrait avec elle.
@@ -159,11 +150,11 @@ extension UniversalComposerBar {
     private var tourbillonTransition: AnyTransition {
         .asymmetric(
             insertion: .modifier(
-                active: TourbillonEffect(scale: 0.05, rotation: .degrees(-250), opacity: 0),
+                active: TourbillonEffect(scale: ComposerSlotMotion.startScale, rotation: .degrees(-ComposerSlotMotion.rotationDegrees), opacity: 0),
                 identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
             ),
             removal: .modifier(
-                active: TourbillonEffect(scale: 0.05, rotation: .degrees(250), opacity: 0),
+                active: TourbillonEffect(scale: ComposerSlotMotion.startScale, rotation: .degrees(ComposerSlotMotion.rotationDegrees), opacity: 0),
                 identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
             )
         )
@@ -198,43 +189,38 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     private var quickEmojiButtons: some View {
-        VStack(spacing: QuickEmojiGrid.spacing) {
-            ForEach(Array(QuickEmojiGrid.rows(quickSendEmojis, focused: isFocused).enumerated()), id: \.offset) { _, rangée in
-                HStack(spacing: QuickEmojiGrid.spacing) {
-                    ForEach(rangée, id: \.self) { emoji in
-                        Button {
-                            sendQuickEmoji(emoji)
-                        } label: {
-                            Text(emoji)
-                                .font(.system(size: QuickEmojiGrid.emojiSize))
-                                .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        // L'appui long ouvre la feuille des emojis : l'emoji
-                        // choisi part directement (#7931). En
-                        // `simultaneousGesture` pour ne pas manger le tap.
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                                HapticFeedback.medium()
-                                showQuickEmojiPicker = true
-                            }
-                        )
-                        .accessibilityLabel(
-                            String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
-                        )
-                        .accessibilityAction(named: Text(String(localized: "composer.quickEmoji.more",
-                                                                defaultValue: "Choisir un autre emoji",
-                                                                bundle: .main))) {
-                            showQuickEmojiPicker = true
-                        }
-                        .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
-                    }
+        HStack(spacing: QuickEmojiGrid.spacing) {
+            ForEach(QuickEmojiGrid.row(quickSendEmojis), id: \.self) { emoji in
+                Button {
+                    sendQuickEmoji(emoji)
+                } label: {
+                    Text(emoji)
+                        .font(.system(size: QuickEmojiGrid.emojiSize))
+                        .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                // L'appui long ouvre la feuille des emojis : l'emoji
+                // choisi part directement (#7931). En
+                // `simultaneousGesture` pour ne pas manger le tap.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.45).onEnded { _ in
+                        HapticFeedback.medium()
+                        showQuickEmojiPicker = true
+                    }
+                )
+                .accessibilityLabel(
+                    String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
+                )
+                .accessibilityAction(named: Text(String(localized: "composer.quickEmoji.more",
+                                                        defaultValue: "Choisir un autre emoji",
+                                                        bundle: .main))) {
+                    showQuickEmojiPicker = true
+                }
+                .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
             }
         }
-        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.frameHeight(toolbarHeight: topToolbarHeight, focused: isFocused))
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
+        .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight)
         .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
@@ -315,7 +301,7 @@ extension UniversalComposerBar {
                         y: isEditMode ? 0 : (sendBounce ? -2 : 1)
                     )
             }
-            .scaleEffect(sendBounce ? 1.2 : 1)
+            .scaleEffect(sendBounce ? ComposerSlotMotion.sendBounceScale : 1)
         }
         .frame(width: 44, height: 44)
         // Les cadres à mots de #5326, à un appui long du bouton d'envoi

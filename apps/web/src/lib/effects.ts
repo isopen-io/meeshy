@@ -42,3 +42,16 @@ export function activeDecorativeEffects(effectFlags: number | undefined): readon
   const flags = effectFlags ?? 0;
   return DECORATIVE_EFFECTS.filter((effect) => (flags & effect.flag) !== 0);
 }
+
+/** Les dix bits du panneau d'effets, réunis — ce que « Tout effacer » retire. */
+const DECORATIVE_EFFECTS_MASK = DECORATIVE_EFFECTS.reduce((mask, effect) => mask | effect.flag, 0);
+
+/**
+ * « TOUT EFFACER » (#7980, miroir `EffectsPickerView.panelFlags`, #7967) —
+ * retire les dix effets du panneau, JAMAIS un bit de cycle de vie
+ * (éphémère, flou, vue unique) : la barre d'outils les règle, et le panneau
+ * n'a pas à défaire ce qu'il n'a pas armé.
+ */
+export function withoutDecorativeEffects(effectFlags: number): number {
+  return effectFlags & ~DECORATIVE_EFFECTS_MASK;
+}

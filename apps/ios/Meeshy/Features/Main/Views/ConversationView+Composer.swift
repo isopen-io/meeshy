@@ -170,8 +170,8 @@ extension ConversationView {
             // (bug « ⏳ bloque le composer », 2026-07-02). Un vrai messenger
             // enchaîne les envois : chaque message a sa bulle + horloge, l'outbox
             // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
-            // synchrone (hasContent), guard isUploading (attachments), et le
-            // dedup par contenu du VM (duplicateSendDebounce).
+            // synchrone (hasContent) et guard isUploading (attachments). Aucun
+            // dedup par CONTENU : des emojis identiques partent en série (#7985).
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
