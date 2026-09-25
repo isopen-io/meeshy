@@ -16,7 +16,9 @@ import MeeshySDK
 // - chaque mouvement re-rend la slide en `.play` à ce temps (`rebuildLayers`) ;
 // - les vidéos restent EN PAUSE, calées par seek tolérant
 //   (`alignPausedToSlidePlayhead`) : un seek frame-accurate à la cadence du
-//   doigt gèle sur la décompression GOP.
+//   doigt gèle sur la décompression GOP. Un fond BOUCLÉ, que la preview laisse
+//   tourner, est ici calé sur son tour en cours (`alignPausedForReaderScrub`) :
+//   l'utilisateur demande l'image d'un instant.
 //
 // La preview composer vit en `.edit` et son audio appartient au moteur de
 // timeline ; ici le canvas est en `.play` et possède son mixer. Au relâcher, la
@@ -51,7 +53,7 @@ extension StoryCanvasUIView {
                                    rootLayer: rootLayer,
                                    elapsed: seconds,
                                    totalDuration: duration)
-        backgroundLayer.alignPausedToSlidePlayhead()
+        backgroundLayer.alignPausedForReaderScrub()
         forEachMediaLayer { $0.alignPausedToSlidePlayhead() }
         StoryReaderPlayheadState.shared.publish(seconds)
     }
