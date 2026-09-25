@@ -194,6 +194,68 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
         }
     }
 
+    // MARK: - Le texte atténué suit le thème de la RANGÉE
+
+    /// Recette sombre du 2026-09-25 (#7881) : « Message supprimé », dans la
+    /// rangée comme dans une citation, s'écrivait en indigo foncé sur le fond
+    /// sombre. Les deux vues lisaient `ThemeManager.shared.textMuted`, un
+    /// singleton qui n'invalide pas la cellule, au lieu du `isDark` qu'elles
+    /// reçoivent. Le témoin désaccorde exprès le singleton de la rangée.
+    func test_mutedTexts_followTheRowTheme_notTheThemeSingleton() throws {
+        let theme = ThemeManager.shared
+        let saved = theme.mode
+        theme.mode = .light
+        defer { theme.mode = saved }
+
+        let deletedQuote = ReplyReference(messageId: "m0", authorName: "", previewText: "Message supprimé Message supprimé Message supprimé")
+        // L'aperçu se mesure à DROITE du filet et du titre (tous deux clairs
+        // par construction) : seul le texte atténué y encre.
+        let views: [(String, AnyView, Int)] = [
+            ("la rangée « Message supprimé »", AnyView(FocalDeletedRow(isDark: true)), 0),
+            ("l'aperçu d'une citation", AnyView(FocalQuotedReplyView(
+                reply: BubbleContent.Reply(reference: deletedQuote, isStory: false),
+                accentHex: "#31B6BA", isDark: true, mentionDisplayNames: [:]
+            )), 180),
+        ]
+        for (label, view, fromColumn) in views {
+            let brightest = try brightestLuminance(of: view, fromColumn: fromColumn)
+            XCTAssertGreaterThan(brightest, 100, "\(label) en sombre culmine à \(brightest) : illisible sur le fond sombre.")
+        }
+    }
+
+    private func brightestLuminance(of view: some View, fromColumn: Int) throws -> Int {
+        let renderer = ImageRenderer(
+            content: view
+                .frame(width: Self.rowWidth)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+                .environmentObject(FocalTimestampRevealState())
+        )
+        renderer.scale = 1
+        guard let image = renderer.cgImage, image.width > 0, image.height > 0 else {
+            XCTFail("le rendu n'a produit aucune image")
+            return 0
+        }
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixels, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            XCTFail("contexte bitmap indisponible")
+            return 0
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return stride(from: 0, to: pixels.count, by: 4)
+            .filter { ($0 / 4) % width >= fromColumn }
+            .map { offset in
+                (299 * Int(pixels[offset]) + 587 * Int(pixels[offset + 1]) + 114 * Int(pixels[offset + 2])) / 1000
+            }
+            .max() ?? 0
+    }
+
     // MARK: - Les citations, toutes au même retrait
 
     func test_everyCitation_startsOnTheCitationIndent_inScriptAndFocal() throws {
