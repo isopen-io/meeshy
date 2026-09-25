@@ -269,6 +269,30 @@ final class FocalRowColumnAlignmentTests: XCTestCase {
         }
     }
 
+    /// **Toutes les citations portent la MÊME barre que « Vous : … »**
+    /// (porteur, 2026-09-25, #7881). La carte de story était au bon retrait
+    /// mais SANS filet : collée au retrait, elle encrait les colonnes où la
+    /// citation de message laisse le blanc entre son filet et son texte.
+    ///
+    /// Mesure : un filet encré sur `Quote.railWidth` colonnes au retrait de
+    /// citation, puis une bande BLANCHE sur la hauteur de la citation, puis la
+    /// carte, qui garde sa largeur de 132 pt.
+    func test_everyCitation_carriesTheSameRail_inScriptAndFocal() throws {
+        let edge = Int(FocalMetrics.Row.paddingHorizontal + FocalMetrics.Quote.indent)
+        let rail = edge..<(edge + Int(FocalMetrics.Quote.railWidth.rounded(.down)))
+        let gap = (edge + Int(FocalMetrics.Quote.railWidth.rounded(.up)) + 1)..<(edge + Int(FocalMetrics.Quote.railWidth) + Int(FocalQuoteRail.spacing) - 1)
+        let quotes = [Self.citations[0], Self.citations[5], Self.citations[6]]
+        for density in [FocalRowInput.Density.script, .focal] {
+            for (label, reference) in quotes {
+                let ink = try render(row(content(text: nil, reply: reference), density: density))
+                XCTAssertTrue(ink.hasInk(columns: rail), "\(label) (\(density)) n'a pas de filet au retrait de citation.")
+                XCTAssertFalse(ink.hasInk(columns: gap),
+                               "\(label) (\(density)) encre l'écart entre le filet et son contenu : la barre manque ou n'est pas celle de « Vous : … ».")
+            }
+        }
+        XCTAssertEqual(BubbleStoryCitationCard.cardWidth, 132, "la carte de story garde sa taille")
+    }
+
     // MARK: - Un message MÉDIA qui répond garde sa citation (#7928)
 
     private func image(id: String = "i1") -> MeeshyMessageAttachment {

@@ -104,6 +104,7 @@ jest.mock('../../../utils/etag', () => ({
   sendWithETag: (...args: any[]) => mockSendWithETag(...args),
 }));
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   resolveUserLanguage: (...args: any[]) => mockResolveUserLanguage(...args),
 }));
 jest.mock('../../../utils/pagination', () => ({
@@ -121,6 +122,7 @@ jest.mock('../../../socketio/serializeAttachmentForSocket', () => ({
   aggregateAttachmentReactions: (...args: any[]) => mockAggregateAttachmentReactions(...args),
 }));
 jest.mock('../../../services/messaging/postReplySnapshot', () => ({
+  ...(jest.requireActual('../../../services/messaging/postReplySnapshot') as object),
   buildPostReplyTo: (...args: any[]) => mockBuildPostReplyTo(...args),
   postReplyToFromMetadata: (...args: any[]) => mockPostReplyToFromMetadata(...args),
   POST_REPLY_SNAPSHOT_SELECT: { id: true, content: true, type: true },
@@ -1028,9 +1030,9 @@ describe('GET /conversations/:id/messages', () => {
 
   it('storyReplyToId without metadata snapshot falls back to prisma.post.findMany', async () => {
     mockPostReplyToFromMetadata.mockReturnValue(null);
-    const post = { id: 'post-123', content: 'post content', type: 'status' };
+    const post = { id: '507f1f77bcf86cd799439b23', content: 'post content', type: 'status' };
     prisma.post.findMany.mockResolvedValue([post]);
-    const msg = makeMessage({ storyReplyToId: 'post-123', metadata: null });
+    const msg = makeMessage({ storyReplyToId: '507f1f77bcf86cd799439b23', metadata: null });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
     const reply = makeReply();

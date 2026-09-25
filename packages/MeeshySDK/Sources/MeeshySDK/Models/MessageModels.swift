@@ -381,9 +381,14 @@ public struct APIPostReplyTarget: Decodable, Sendable {
     /// `nil` sur un snapshot antérieur au 2026-08-10 — le rendu retombe alors
     /// sur le libellé générique de la citation.
     public let authorName: String?
+    /// #7950 — le post cité a été SUPPRIMÉ par son auteur : la passerelle a
+    /// vidé l'instantané et pose ce marqueur (même nom que `replyTo.deletedAt`).
+    /// La citation devient « Story indisponible », sans porte. `nil` ⇒
+    /// disponible — une story seulement EXPIRÉE garde son instantané.
+    public let deletedAt: Date?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji, authorName
+        case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji, authorName, deletedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -397,6 +402,7 @@ public struct APIPostReplyTarget: Decodable, Sendable {
         previewText = try c.decode(String.self, forKey: .previewText)
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         authorName = try c.decodeIfPresent(String.self, forKey: .authorName)
+        deletedAt = (try? c.decodeIfPresent(String.self, forKey: .deletedAt)).flatMap { WireDate.date(from: $0) }
         // `createdAt` est décodé depuis une String puis parsé ici — agnostique
         // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
@@ -880,6 +886,8 @@ extension APIMessage {
             // partage + date, ou emoji+contenu+date pour un mood) — la citation
             // affiche le vrai aperçu et survit à l'expiration du post.
             if let target = postReplyTo {
+                // #7950 — retirée par son auteur : plus rien à montrer ni à ouvrir.
+                if target.deletedAt != nil { return .unavailableStory(storyId: target.id) }
                 // Réponse à un mood : rendu dédié (emoji + contenu + date).
                 if let emoji = target.moodEmoji {
                     // `authorAvatarUrl` reste nil, DELIBEREMENT : le snapshot

@@ -44,6 +44,13 @@ public enum LastMessageIdentity: Sendable, Hashable {
     case unchanged
     /// Clé présente. `nil` = plus AUCUN message visible pour ce lecteur.
     case replaced(String?)
+
+    /// L'identifiant NOMMÉ, quand il y en a un — `nil` pour une clé absente
+    /// comme pour « plus aucun message ».
+    public var messageId: String? {
+        guard case .replaced(let id) = self else { return nil }
+        return id
+    }
 }
 
 /// L'AUTEUR du dernier message, tel que la ligne de liste le préfixe
