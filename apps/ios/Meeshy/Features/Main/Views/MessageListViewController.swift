@@ -1653,7 +1653,7 @@ final class MessageListViewController: UIViewController {
                         )
                     )
                 }()
-                cell.tag = isFirstInGroup ? FocalScrollPerspective.groupHeadCellTag : 0
+                cell.tag = FocalScrollPerspective.cellTag(isFirstInGroup: isFirstInGroup, showsFocusDetails: self.focalDetailedLocalId == localId)
                 let focalInput = FocalRowInput(
                     localId: localId,
                     serverId: record?.serverId,

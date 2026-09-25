@@ -40,11 +40,13 @@ const objectOf = (value: unknown): Record<string, unknown> | null =>
  * dépendent — un id utilisable. Un id vide passerait les vérifications de type
  * et rendrait la carte indédoublonnable ET irretirable, d'où la longueur.
  */
-const postOf = (payload: unknown): FeedPost | null => {
-  const post = objectOf(objectOf(payload)?.post);
+const feedPostOf = (value: unknown): FeedPost | null => {
+  const post = objectOf(value);
   if (post === null) return null;
   return typeof post.id === 'string' && post.id.length > 0 ? (post as unknown as FeedPost) : null;
 };
+
+const postOf = (payload: unknown): FeedPost | null => feedPostOf(objectOf(payload)?.post);
 
 const mutationIdOf = (payload: unknown): string | null => {
   const cmid = objectOf(payload)?.clientMutationId;
@@ -73,6 +75,16 @@ const mapPosts = (
     : { ...data, pages: data.pages.map((page, index) => ({ ...page, posts: update(page.posts, index) })) };
 
 const idsOf = (data: FeedInfiniteData): readonly string[] => data.pages.flatMap((page) => page.posts.map((p) => p.id));
+
+/** Le TROISIÈME temps, partagé par `post:created` et `post:reposted` : la
+ *  carte entre en tête de la première page, et la bannière la compte. */
+const prependAndCount = (queryClient: QueryClient, data: FeedInfiniteData, incoming: FeedPost): void => {
+  queryClient.setQueryData<FeedInfiniteData>(
+    FEED_QUERY_KEY,
+    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
+  );
+  bumpNewPostCount(queryClient);
+};
 
 /**
  * `post:created` — TROIS TEMPS, dans cet ordre (`FeedViewModel.swift:1470`).
@@ -109,11 +121,7 @@ export function applyPostCreated(queryClient: QueryClient, payload: unknown): vo
     return;
   }
 
-  queryClient.setQueryData<FeedInfiniteData>(
-    FEED_QUERY_KEY,
-    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
-  );
-  bumpNewPostCount(queryClient);
+  prependAndCount(queryClient, data, incoming);
 }
 
 /**
@@ -264,6 +272,79 @@ export function applyServedBookmark(
     return;
   }
   writeCardCache<FeedInfiniteData>(queryClient, BOOKMARKS_QUERY_KEY, (data) => withoutBookmark(data, postId));
+}
+
+/**
+ * `post:reposted` (#6278 c) — LE COMPTE ABSOLU DE L'ORIGINAL SUIT LE REPOST
+ * D'UN AUTRE, sur TOUTES les caisses qui montrent sa carte (registre
+ * `card-caches.ts`, comme `post:liked`) : sans lui, l'auteur d'un original
+ * repartagé par un autre lecteur voyait un compte figé jusqu'au prochain
+ * rechargement, pendant que son PROPRE repost se reflétait déjà par
+ * l'optimiste (`performRepost#markReposted`).
+ *
+ * **`isRepostedByMe` NE BASCULE JAMAIS ICI, ET C'EST DÉLIBÉRÉ.** Le repost
+ * DU LECTEUR est déjà posé par son geste optimiste (`markReposted`, avant même
+ * que la passerelle réponde) ; le repost D'UN AUTRE ne doit jamais remplir
+ * mon propre cœur — exactement la garde que `applyServedLike` pose avec
+ * `byViewer` sur le cœur, ici plus simple : cet écho ne touche QUE le compte.
+ *
+ * **LE COMPTE VOYAGE AVEC `repost.repostOf`** (`PostRepostedEventData.repost`,
+ * `packages/shared/types/post.ts`) : la charge ne porte AUCUN champ
+ * `originalRepostCount` de premier niveau — la passerelle diffuse le REPOST
+ * fraîchement créé, qui embarque une PROJECTION de son original
+ * (`repostOfInclude`, `services/gateway/src/services/posts/postIncludes.ts`)
+ * dont `repostCount` EST celui, déjà incrémenté, de la publication citée. Un
+ * repost dont l'original n'a pas cette projection (repost d'un repost, type
+ * hors `postInclude`…) ne pose rien plutôt que de deviner un chiffre.
+ */
+type RepostedEvent = { readonly originalPostId: string; readonly repostCount: number };
+
+function repostedEventOf(payload: unknown): RepostedEvent | null {
+  const originalPostId = objectOf(payload)?.originalPostId;
+  if (typeof originalPostId !== 'string' || originalPostId.length === 0) return null;
+  const repostOf = objectOf(objectOf(payload)?.repost)?.repostOf;
+  const repostCount = objectOf(repostOf)?.repostCount;
+  return typeof repostCount === 'number' && Number.isFinite(repostCount) ? { originalPostId, repostCount } : null;
+}
+
+/**
+ * **LE REPOST LUI-MÊME ENTRE EN TÊTE DU FIL** (#6278 c, miroir
+ * `FeedViewModel.swift:1565-1578`) — SECOND effet de `post:reposted`,
+ * DISTINCT du compte ci-dessus : la passerelle diffuse aux amis du reposteur
+ * le repost FRAÎCHEMENT créé (`PostRepostedEventData.repost`, un `Post`
+ * complet), et iOS l'insère en tête de son propre fil, exactement comme
+ * `post:created`.
+ *
+ * **`STORY`/`STATUS` N'ENTRENT JAMAIS** (`PostModels.swift:508-511`,
+ * `belongsToStoryTray`) : le fil GELÉ (`[POST, REEL]`) ne montre ni l'un ni
+ * l'autre, un médium sans type reconnu non plus (fail-closed plutôt que
+ * deviner). Un id déjà tenu (rejeu, double abonnement) ne s'insère pas deux
+ * fois — même garde que `applyPostCreated`. Un fil ABSENT du cache ne se
+ * fabrique pas non plus.
+ */
+const INSERTABLE_REPOST_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL']);
+
+function insertableRepostOf(payload: unknown): FeedPost | null {
+  const repost = feedPostOf(objectOf(payload)?.repost);
+  return repost !== null && typeof repost.type === 'string' && INSERTABLE_REPOST_TYPES.has(repost.type) ? repost : null;
+}
+
+export function applyServedRepost(queryClient: QueryClient, payload: unknown): void {
+  const event = repostedEventOf(payload);
+  if (event !== null) {
+    updateCardPost(queryClient, event.originalPostId, (post) =>
+      withServedCount(post, { postId: event.originalPostId, kind: 'repost', count: event.repostCount }),
+    );
+  }
+
+  const incoming = insertableRepostOf(payload);
+  if (incoming === null) return;
+
+  const data = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY);
+  if (data === undefined) return;
+  if (idsOf(data).includes(incoming.id)) return;
+
+  prependAndCount(queryClient, data, incoming);
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

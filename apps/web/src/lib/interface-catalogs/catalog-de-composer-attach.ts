@@ -42,6 +42,12 @@ const deComposerAttach = {
   'composer.sticker.error.tooLarge': 'Bild zu groß für einen Sticker',
   'composer.sticker.error.full': 'Bibliothek voll — entferne einen Sticker, um einen neuen hinzuzufügen',
   'composer.sticker.error.failed': 'Der Sticker konnte nicht erstellt werden',
+  'composer.quickEmoji.label': 'Direkt senden',
+  'composer.quickEmoji.group': 'Schnell-Emojis',
+  'composer.effects.panel': 'Nachrichteneffekte',
+  'composer.effects.entrance': 'Eingangsanimation',
+  'composer.effects.permanent': 'Dauerhafter Effekt',
+  'composer.effects.clearAll': 'Alles löschen',
 } satisfies ComposerAttachCatalogSlice;
 
 export default deComposerAttach;

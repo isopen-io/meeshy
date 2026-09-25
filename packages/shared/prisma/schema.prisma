@@ -1006,6 +1006,7 @@ model Message {
   @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
   @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
   @@index([forwardedFromId]) // Forwarded messages lookup in broadcastNewMessage
+  @@index([storyReplyToId]) // Retrait d'un post cité : conversations à prévenir, en une requête (#7969)
   @@index([createdAt])
   @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
 }

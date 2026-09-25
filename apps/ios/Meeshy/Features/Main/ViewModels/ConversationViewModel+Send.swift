@@ -121,31 +121,6 @@ extension ConversationViewModel {
             ?? preferred.first ?? "fr"
     }
 
-    /// Stable identity of a logical message, used to dedup an accidental
-    /// double-tap. Two taps producing the same key within
-    /// `duplicateSendDebounce` are the same message fired twice; distinct
-    /// messages produce distinct keys and never block each other.
-    private static func sendDedupKey(
-        content: String,
-        replyToId: String?,
-        storyReplyToId: String?,
-        forwardedFromId: String?,
-        attachmentIds: [String]?,
-        location: SharedPlace? = nil
-    ) -> String {
-        [
-            content,
-            replyToId ?? "",
-            storyReplyToId ?? "",
-            forwardedFromId ?? "",
-            (attachmentIds ?? []).sorted().joined(separator: ","),
-            // Deux messages « lieu seul » rapprochés ont le MÊME texte (vide) :
-            // sans les coordonnées dans la clé, l'envoi de deux lieux distincts
-            // coup sur coup serait dédupliqué à tort.
-            location.map { "\($0.latitude),\($0.longitude)" } ?? ""
-        ].joined(separator: "\u{1F}")
-    }
-
     /// Shared post-ACK finalization for a successful send, used by BOTH the
     /// socket-first fast path and the REST path so the two stay in lockstep:
     /// records the tempId→serverId mapping, drives the `.serverAck` state
@@ -283,32 +258,12 @@ extension ConversationViewModel {
         // second one could be lost when the actor's pending-state machine
         // observed a duplicate `clientMessageId` mid-enqueue. The guard
         // now serializes both paths and the offline enqueue is awaited.
-        // Double-tap dedup — replaces the old global `isSending` mutex.
-        //
-        // The legacy `guard !isSending` serialized ALL sends: while one send
-        // held the lock (the whole REST POST `await`, up to ~30 s on a slow
-        // network), every subsequent tap returned false silently — the
-        // "impossible d'envoyer plusieurs messages à la suite quand le 1er est
-        // sur l'horloge" bug (root-caused 2026-06-09, trace in
-        // apps/ios/logs/sendflow-pending-lock-2026-06-09.log).
-        //
-        // A real messenger lets DISTINCT messages fly concurrently, each with
-        // its own optimistic bubble + clock. We keep the guard's original
-        // intent — kill accidental double-taps of the SAME message — by deduping
-        // on message identity within a short window instead of locking the whole
-        // send path. The check-and-set runs BEFORE the first `await`, so the
-        // @MainActor serialization of the synchronous prefix makes it atomic
-        // against a concurrent burst (no duplicate optimistic row). Retries
-        // (`existingTempId != nil`) are a deliberate re-send and bypass the
-        // debounce (the gateway dedups them by clientMessageId).
-        if existingTempId == nil {
-            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds, location: location)
-            if let last = lastAcceptedSend, last.key == dedupKey, Date().timeIntervalSince(last.at) < Self.duplicateSendDebounce {
-                Logger.messages.error("SendFlow BLOCKED guard=duplicate-debounce convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — identical message re-fired within \(Self.duplicateSendDebounce, privacy: .public)s; deduped")
-                return false
-            }
-            lastAcceptedSend = (dedupKey, Date())
-        }
+        // No content dedup (#7985, directive porteur 2026-09-25): two
+        // identical sends in a row are two MESSAGES — 😂😂😂 tapped in series
+        // must all leave. Each send carries its own `clientMessageId`, the
+        // ONLY dedup key: the gateway collapses a replayed message on it.
+        // An accidental double-tap of the send button cannot resend either —
+        // the composer clears its field synchronously on the first tap.
         inFlightSendCount += 1
         isSending = true
         Logger.messages.info("SendFlow LOCK inFlight=\(self.inFlightSendCount, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public)")

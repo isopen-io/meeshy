@@ -154,6 +154,7 @@ import type {
   MessageDeletedEventData,
   MessageEditData,
   MessageExpiredEventData,
+  MessageCitedPostWithdrawnEventData,
   MessageHiddenForMeEventData,
   MessagePinnedEventData,
   MessageRestoredForMeEventData,
@@ -219,6 +220,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;
+  [SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN]: (data: MessageCitedPostWithdrawnEventData) => void;
   [SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED]: (data: MessageCountdownStartedEventData) => void;
   [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;

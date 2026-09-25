@@ -142,6 +142,7 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 7, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */

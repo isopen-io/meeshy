@@ -18,6 +18,7 @@ import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
+import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
 import {
   applyMessageDeleted,
   applyMessageEdited,
@@ -34,6 +35,7 @@ import {
   applyPostUpdated,
   applyServedBookmark,
   applyServedLike,
+  applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -411,6 +413,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyMessageDeleted(deps.queryClient, payload);
   };
 
+  /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
+  const onCitedPostWithdrawn = (payload: unknown): void => {
+    if (!isCitedPostWithdrawnEvent(payload)) return;
+    applyCitedPostWithdrawn(deps.queryClient, payload);
+  };
+
   /**
    * `read-status:updated` (#7223, #7348) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
    * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle (cible le
@@ -668,6 +676,17 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `post:reposted` (#6278 c) — LE COMPTE DE L'ORIGINAL SUIT le repost d'un
+   * AUTRE lecteur ; le mien est déjà posé par l'optimiste. La loi (extraction
+   * de `repost.repostOf.repostCount`, garde de forme) vit dans
+   * `feed-realtime.ts#applyServedRepost` — cet écouteur ne tient que le
+   * branchement (D-98).
+   */
+  const onPostReposted = (payload: unknown): void => {
+    applyServedRepost(deps.queryClient, payload);
+  };
+
+  /**
    * `message:starred` (#7378) — LE FAVORI D'UN MESSAGE, posé ou retiré sur un
    * AUTRE appareil (ou l'écho de ce geste-ci). PERSONNEL : la passerelle
    * n'émet que vers `user:<id>`. La loi (l'étoile du fil, la ligne de l'écran
@@ -873,6 +892,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -897,6 +917,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
@@ -953,6 +974,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -977,6 +999,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.POST_REPOSTED, onPostReposted);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);

@@ -70,6 +70,23 @@ class MessageListCell: UICollectionViewCell {
         return UIEdgeInsets(top: 0, left: inherited.left, bottom: 0, right: inherited.right)
     }
 
+    /// **La pose Focal survit à la mise en page** (#7953).
+    ///
+    /// La passe Focal pose sur `contentView.layer` la loupe de l'élu et le
+    /// passage de ses voisines. `UICollectionViewCell` recale son
+    /// `contentView` par son `frame` à chaque mise en page ; sur une vue
+    /// transformée, ce `frame` recentre la vue pour ANNULER la translation —
+    /// mesuré au simulateur : le passage calculé (+46 pt) n'était pas rendu.
+    /// La mise en page se fait donc sur une vue non transformée, et la pose
+    /// est rendue telle quelle ensuite.
+    override func layoutSubviews() {
+        let pose = contentView.layer.transform
+        guard !CATransform3DIsIdentity(pose) else { return super.layoutSubviews() }
+        contentView.layer.transform = CATransform3DIdentity
+        super.layoutSubviews()
+        contentView.layer.transform = pose
+    }
+
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: UICollectionViewLayoutAttributes
     ) -> UICollectionViewLayoutAttributes {

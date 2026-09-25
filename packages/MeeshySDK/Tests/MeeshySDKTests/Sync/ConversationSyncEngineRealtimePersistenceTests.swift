@@ -545,6 +545,111 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertEqual(event.messageId, "m-vu")
         XCTAssertEqual(event.conversationId, "c1")
     }
+
+    // MARK: - #7960 — l'éphémère échu, conversation FERMÉE
+
+    /// `message:expired` reçu conversation fermée : le relais porte
+    /// l'expiration jusqu'à l'hôte (GRDB, favoris), vide le contenu en cache
+    /// et recalcule l'aperçu de liste quand le message échu en était le texte.
+    func test_expiredRelay_carriesExpiryAndRecomputesPreview() async throws {
+        let (engine, socket, cache) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        let survivor = TestFactories.makeMessage(id: "m-keep", conversationId: "c-exp", content: "reste",
+                                                 createdAt: Date(timeIntervalSince1970: 100))
+        let doomed = TestFactories.makeMessage(id: "m-exp", conversationId: "c-exp", content: "secret",
+                                               createdAt: Date(timeIntervalSince1970: 200))
+        try await cache.messages.save([survivor, doomed], for: "c-exp")
+        try await cache.conversations.save([MeeshyConversation(
+            id: "c-exp", identifier: "c-exp", type: .direct,
+            lastMessagePreview: "secret", lastMessageId: "m-exp"
+        )], for: "list")
+        await engine.startSocketRelay()
+
+        socket.messageExpired.send(MessageExpiredEvent(messageId: "m-exp", conversationId: "c-exp"))
+
+        let carried = await waitUntil { await collector.mutations.contains {
+            if case let .expired(messageId, _) = $0 { return messageId == "m-exp" }
+            return false
+        } }
+        XCTAssertTrue(carried, "message:expired doit atteindre la table canonique conversation fermée")
+        let emptied = await waitUntil {
+            await cache.messages.load(for: "c-exp").snapshot()?.first { $0.id == "m-exp" }?.content == ""
+        }
+        XCTAssertTrue(emptied, "le contenu échu ne doit plus se lire dans le cache")
+        let recomputed = await waitUntil {
+            let row = await cache.conversations.load(for: "list").snapshot()?.first { $0.id == "c-exp" }
+            return row?.lastMessageId == "m-keep" && row?.lastMessagePreview == "reste"
+        }
+        XCTAssertTrue(recomputed, "l'aperçu ne doit plus décrire le message échu")
+        let deleted = await collector.mutations.contains {
+            if case .deleted = $0 { return true }
+            return false
+        }
+        XCTAssertFalse(deleted, "une expiration n'est pas une suppression : l'hôte ne l'applique pas pareil")
+    }
+
+    // MARK: - #7969 — la story citée retirée
+
+    func test_citedPostWithdrawnRelay_carriesWithdrawalAndPatchesCache() async throws {
+        let (engine, socket, cache) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        var reply = TestFactories.makeMessage(id: "m-story", conversationId: "c-dm", content: "trop bien")
+        reply.storyReplyToId = "post-1"
+        reply.replyTo = ReplyReference(messageId: "post-1", authorName: "", previewText: "Plage",
+                                       isStoryReply: true, storyThumbnailUrl: "https://cdn/t.jpg")
+        try await cache.messages.save([reply], for: "c-dm")
+        await engine.startSocketRelay()
+        let deletedAt = Date(timeIntervalSince1970: 1_790_000_000)
+
+        socket.messageCitedPostWithdrawn.send(MessageCitedPostWithdrawnEvent(
+            conversationId: "c-dm", postId: "post-1", deletedAt: deletedAt
+        ))
+
+        let carried = await waitUntil { await collector.mutations.contains(
+            .citedPostWithdrawn(postId: "post-1", conversationId: "c-dm", deletedAt: deletedAt)
+        ) }
+        XCTAssertTrue(carried)
+        let patched = await waitUntil {
+            await cache.messages.load(for: "c-dm").snapshot()?.first { $0.id == "m-story" }?
+                .replyTo?.isUnavailableStory == true
+        }
+        XCTAssertTrue(patched, "la carte doit passer « Story indisponible » sans relecture")
+    }
+
+    func test_withdrawingCitedPost_touchesOnlyCitationsOfThatPost() {
+        var cites = TestFactories.makeMessage(id: "a", conversationId: "c")
+        cites.replyTo = ReplyReference(messageId: "post-1", authorName: "", previewText: "x", isStoryReply: true)
+        var other = TestFactories.makeMessage(id: "b", conversationId: "c")
+        other.replyTo = ReplyReference(messageId: "post-2", authorName: "", previewText: "y", isStoryReply: true)
+        var messageQuote = TestFactories.makeMessage(id: "c", conversationId: "c")
+        messageQuote.replyTo = ReplyReference(messageId: "post-1", authorName: "Bob", previewText: "z")
+
+        let next = ConversationSyncEngine.withdrawingCitedPost("post-1", in: [cites, other, messageQuote])
+
+        XCTAssertEqual(next?.map { $0.replyTo?.isUnavailableStory }, [true, false, false])
+        XCTAssertEqual(next?[2].replyTo?.previewText, "z", "une citation de MESSAGE n'est pas une story")
+        XCTAssertNil(ConversationSyncEngine.withdrawingCitedPost("post-9", in: [cites, other]),
+                     "aucun changement ⇒ aucune écriture cache")
+    }
+
+    func test_citedPostWithdrawnEvent_decodesTheServerPayload() throws {
+        let json = #"{"conversationId":"c1","postId":"p1","deletedAt":"2026-09-25T10:00:00.000Z"}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            guard let date = WireDate.date(from: raw) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: raw)
+            }
+            return date
+        }
+        let event = try decoder.decode(MessageCitedPostWithdrawnEvent.self, from: Data(json.utf8))
+        XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.postId, "p1")
+        XCTAssertEqual(event.deletedAt, WireDate.date(from: "2026-09-25T10:00:00.000Z"))
+    }
 }
 
 /// Collecteur thread-safe du hook `realtimeMessagePersistor` (`@Sendable`

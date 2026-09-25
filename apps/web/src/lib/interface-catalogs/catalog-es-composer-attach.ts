@@ -42,6 +42,12 @@ const esComposerAttach = {
   'composer.sticker.error.tooLarge': 'Imagen demasiado pesada para un sticker',
   'composer.sticker.error.full': 'Biblioteca llena — quita un sticker para añadir otro',
   'composer.sticker.error.failed': 'No se pudo crear el sticker',
+  'composer.quickEmoji.label': 'Enviar directamente',
+  'composer.quickEmoji.group': 'Emojis rápidos',
+  'composer.effects.panel': 'Efectos del mensaje',
+  'composer.effects.entrance': 'Animación de entrada',
+  'composer.effects.permanent': 'Efecto permanente',
+  'composer.effects.clearAll': 'Borrar todo',
 } satisfies ComposerAttachCatalogSlice;
 
 export default esComposerAttach;

@@ -218,10 +218,6 @@ extension UniversalComposerBar {
                 // Hidden during recording for a clean, iMessage-like full-width bar
                 if !effectiveIsRecording {
                     topToolbar
-                        // La droite de la barre appartient au cadre des emojis
-                        // rapides tant qu'il est là : rien ne glisse dessous.
-                        .padding(.trailing, quickEmojiCoversToolbar ? Self.quickEmojiSlotWidth + 4 : 0)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topToolbarHeight = $0 }
                         .padding(.horizontal, 8)
                         .padding(.top, 6)
                         .padding(.bottom, 2)
