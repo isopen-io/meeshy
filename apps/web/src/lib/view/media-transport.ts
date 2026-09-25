@@ -52,17 +52,20 @@ export function keyboardSeekTarget(params: {
   readonly key: string;
   readonly position: number;
   readonly duration: number;
+  /** Le pas des flèches — `SEEK_STEP_SECONDS` par défaut ; une scène passe
+   * le sien (`sceneSeekStep`, #7879). */
+  readonly step?: number;
 }): number | null {
-  const { key, position, duration } = params;
+  const { key, position, duration, step = SEEK_STEP_SECONDS } = params;
   if (!Number.isFinite(duration) || duration <= 0) return null;
   const clamp = (seconds: number): number => Math.min(duration, Math.max(0, seconds));
   switch (key) {
     case 'ArrowRight':
     case 'ArrowUp':
-      return clamp(position + SEEK_STEP_SECONDS);
+      return clamp(position + step);
     case 'ArrowLeft':
     case 'ArrowDown':
-      return clamp(position - SEEK_STEP_SECONDS);
+      return clamp(position - step);
     case 'Home':
       return 0;
     case 'End':
