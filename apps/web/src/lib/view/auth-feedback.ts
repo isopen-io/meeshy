@@ -13,7 +13,7 @@ import type { ApiFailure, ApiResult } from '../api/http';
  * phrase destinée à un lecteur.
  */
 
-export type SignupField = 'username' | 'firstName' | 'lastName' | 'displayName' | 'email' | 'phoneNumber' | 'password';
+export type SignupField = 'username' | 'displayName' | 'email' | 'phoneNumber' | 'password';
 
 export type SignupFeedback = {
   readonly fieldErrors: Partial<Record<SignupField, string>>;
@@ -51,8 +51,9 @@ const AUTH_GENERIC_FAILURE_MESSAGE = 'Une erreur est survenue. Veuillez réessay
 
 /**
  * Le champ SERVEUR → la saisie qui le porte à l'écran — miroir EXACT de
- * `SignupViewModel.field(forServerName:)`. Depuis #7897 chaque champ
- * d'identité a sa saisie : un refus se pose sous celle qu'il vise.
+ * `SignupViewModel.field(forServerName:)`. `username`/`firstName`/`lastName`
+ * atterrissent tous sous le NOM AFFICHÉ : depuis #5218 le client ne les
+ * envoie plus, la passerelle les DÉRIVE de `displayName`.
  */
 function fieldForServerName(name: string): SignupField | null {
   switch (name) {
@@ -64,11 +65,9 @@ function fieldForServerName(name: string): SignupField | null {
      */
     case 'username':
       return 'username';
-    case 'firstName':
-      return 'firstName';
-    case 'lastName':
-      return 'lastName';
     case 'displayName':
+    case 'firstName':
+    case 'lastName':
       return 'displayName';
     case 'email':
       return 'email';

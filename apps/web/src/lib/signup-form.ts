@@ -3,7 +3,6 @@ import { isSupportedLanguage } from '@meeshy/shared/utils/languages';
 import { phoneImplausibility, type PhoneImplausibility } from '@meeshy/shared/utils/phone-plausibility';
 import {
   PSEUDO_DE_SECOURS,
-  derivedNames,
   displayNameDepuisEmail,
   pseudoRacine,
 } from '@meeshy/shared/utils/registration-identity';
@@ -26,18 +25,15 @@ import { countryOf, type Country } from './countries';
 
 export type SignupFormState = {
   /**
-   * LES QUATRE CHAMPS D'IDENTITÉ (#6479, refaits par #7897).
+   * Le pseudo et le nom affiché TAPÉS (#6479, refaits par #7897).
    *
-   * `null` = jamais touché : le champ SUIT la dérivation en direct (prénom et
-   * nom tirés de l'adresse, nom affiché composé d'eux, pseudo tiré de
-   * l'adresse). Une chaîne = la saisie de l'utilisateur, qui gagne — même
-   * vide pour le prénom et le nom : un mononyme vide son nom de famille, et
-   * rien ne doit le lui réimposer. L'écran montre les valeurs `effective*` et
-   * écrit ici.
+   * `null` = jamais touché : le champ SUIT l'adresse en direct. Une chaîne =
+   * la saisie, qui gagne ; vidée, la dérivation reparaît en filigrane et
+   * repart. L'écran montre `effectiveUsername` / `effectiveDisplayName` et
+   * écrit ici : sans cette séparation, taper une lettre dans l'adresse
+   * écraserait un pseudo choisi à la main.
    */
   readonly username: string | null;
-  readonly firstName: string | null;
-  readonly lastName: string | null;
   readonly displayName: string | null;
   readonly email: string;
   /** Les chiffres SEULS, sans indicatif — l'indicatif vient de `country`. */
@@ -53,9 +49,6 @@ export type SignupFormState = {
 /** Longueur maximale d'un nom affiché — miroir de `displayNameProperty`
  * (`registerRequestSchema`, `types/api-schemas/auth.ts`). */
 export const DISPLAY_NAME_MAX = registerRequestSchema.properties.displayName.maxLength;
-
-/** Longueur maximale d'un prénom ou d'un nom — `firstNameProperty` / `lastNameProperty`. */
-export const PERSON_NAME_MAX = registerRequestSchema.properties.firstName.maxLength;
 
 /** Longueur minimale du mot de passe — LA source, jamais un littéral local
  * (#3629 : la borne serveur est passée de 6 à 12 sans que le miroir iOS le
@@ -83,14 +76,6 @@ export function isDisplayNameValid(value: string | null): boolean {
   const trimmed = (value ?? '').trim();
   if (trimmed.length === 0) return true;
   if (trimmed.length > DISPLAY_NAME_MAX) return false;
-  return PERSON_NAME_PATTERN.test(trimmed);
-}
-
-/** Prénom ou nom : même loi que le nom affiché, borne de 50 (#7897). */
-export function isPersonNameValid(value: string | null): boolean {
-  const trimmed = (value ?? '').trim();
-  if (trimmed.length === 0) return true;
-  if (trimmed.length > PERSON_NAME_MAX) return false;
   return PERSON_NAME_PATTERN.test(trimmed);
 }
 
@@ -137,8 +122,6 @@ export function hasPassword(value: string): boolean {
 export function canSubmit(form: SignupFormState): boolean {
   return (
     isDisplayNameValid(form.displayName) &&
-    isPersonNameValid(form.firstName) &&
-    isPersonNameValid(form.lastName) &&
     isEmailValid(form.email) &&
     isPasswordValid(form.password) &&
     isPhoneValid(form.phoneDigits)
@@ -182,38 +165,24 @@ export function effectiveUsername(form: SignupFormState): string {
   return derive === PSEUDO_DE_SECOURS ? '' : derive;
 }
 
-/** Une dérivation qui ne tiendrait pas le pattern ne part pas : elle vaut `''`
- * (« 1234@… » ne donne pas un prénom « 1234 » que la passerelle refuserait). */
-function recevable(value: string): string {
-  return value !== '' && isPersonNameValid(value) ? value : '';
-}
-
-function namesFromEmail(email: string) {
-  return derivedNames(displayNameDepuisEmail(email));
-}
-
-/** Le prénom qui partira — tapé (même vide), tiré de l'adresse sinon (#7897). */
-export function effectiveFirstName(form: SignupFormState): string {
-  if (form.firstName !== null) return form.firstName.trim();
-  return recevable(namesFromEmail(form.email).firstName);
-}
-
-/** Le nom qui partira — tapé (même vide), tiré de l'adresse sinon (#7897). */
-export function effectiveLastName(form: SignupFormState): string {
-  if (form.lastName !== null) return form.lastName.trim();
-  return recevable(namesFromEmail(form.email).lastName);
+/** Le nom affiché qui partira — tapé s'il l'a été, tiré de l'adresse sinon. */
+export function effectiveDisplayName(form: SignupFormState): string {
+  const tape = (form.displayName ?? '').trim();
+  return tape !== '' ? tape : displayNameDepuisEmail(form.email);
 }
 
 /**
- * Le nom affiché qui partira — tapé s'il l'a été, COMPOSÉ du prénom et du nom
- * sinon, en direct (#7897). Un champ vidé retombe sur la composition : c'est
- * ce que le champ montre alors en filigrane.
+ * L'IDENTITÉ EST DÉFINIE (#7897) — nom affiché ET pseudo existent et tiennent
+ * leurs bornes. Directive porteur : « c'est quand tout est défini qu'on active
+ * le champ mot de passe ».
  */
-export function effectiveDisplayName(form: SignupFormState): string {
-  const tape = (form.displayName ?? '').trim();
-  if (tape !== '') return tape;
-  const compose = `${effectiveFirstName(form)} ${effectiveLastName(form)}`.trim();
-  return isDisplayNameValid(compose) ? compose : '';
+export function isIdentityDefined(form: SignupFormState): boolean {
+  return (
+    isEmailValid(form.email) &&
+    effectiveDisplayName(form) !== '' &&
+    isDisplayNameValid(effectiveDisplayName(form)) &&
+    effectiveUsername(form) !== ''
+  );
 }
 
 /** Les chiffres saisis, débarrassés de tout ce qui n'en est pas. */
@@ -222,11 +191,10 @@ export function normalizedPhoneDigits(phoneDigits: string): string {
 }
 
 /**
- * La charge EXACTE de `POST /auth/register` (`register.ts:133`). Depuis #7897
- * l'écran SAISIT prénom et nom : ils partent avec le nom affiché et le pseudo.
- * `lastName` ne part qu'avec un `firstName` (la passerelle lit le couple à
- * partir du prénom), et jamais vide (`minLength: 1`). Le couple téléphone est
- * TOUT ou RIEN : un numéro sans pays ne qualifierait rien.
+ * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — sept clés
+ * au plus, jamais `username` / `firstName` / `lastName` (la passerelle les
+ * dérive de `displayName`, #5218). Le couple téléphone est TOUT ou RIEN : un
+ * numéro sans pays ne qualifierait rien.
  */
 export function composeRegisterBody(form: SignupFormState): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
@@ -240,8 +208,6 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
     // une. Les deux clés restent OMISES quand il n'y a réellement rien.
     ...(effectiveUsername(form) !== '' ? { username: effectiveUsername(form) } : {}),
     ...(effectiveDisplayName(form) !== '' ? { displayName: effectiveDisplayName(form) } : {}),
-    ...(effectiveFirstName(form) !== '' ? { firstName: effectiveFirstName(form) } : {}),
-    ...(effectiveFirstName(form) !== '' && effectiveLastName(form) !== '' ? { lastName: effectiveLastName(form) } : {}),
     email: form.email.trim().toLowerCase(),
     // `undefined` par OMISSION, jamais `''` (#6424) — même raison que le couple
     // téléphone une ligne plus bas : une clé présente à valeur vide décrit
@@ -321,8 +287,6 @@ export function emptySignupForm(locale: string): SignupFormState {
   const { systemLanguage, regionalLanguage } = defaultLanguages(locale);
   return {
     username: null,
-    firstName: null,
-    lastName: null,
     displayName: null,
     email: '',
     phoneDigits: '',

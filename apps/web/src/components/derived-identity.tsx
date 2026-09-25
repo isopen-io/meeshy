@@ -1,78 +1,90 @@
 /**
- * CE QUE L'INSCRIPTION VA CRÉER, EN SAISIE DIRECTE (#6479, refait par #7897).
+ * CE QUE L'INSCRIPTION VA CRÉER, MONTRÉ ET ENVOYÉ (#6479).
  *
- * Directive porteur 2026-09-25 : « ne plus avoir un éditer mais directement
- * avoir un prénom nom rempli automatiquement et le displayname rempli à partir
- * de là, le pseudo rempli à partir de l'email et les autres champs sont
- * modifiables directement par simple touché […] Tout se met à jour en direct. »
+ * Directive porteur, en deux temps. D'abord : « montre comment le display name
+ * sera dérivé et comment le pseudo sera dérivé et laisse le soin à
+ * l'utilisateur de modifier ou non ». Puis, sur relecture : « dès qu'un champ
+ * username est rempli la passerelle n'a plus rien à créer — ici on a des
+ * données et la passerelle doit utiliser ces données ».
  *
- * Les quatre valeurs viennent de `lib/signup-form.ts` (`effective*`), qui lit
- * `@meeshy/shared/utils/registration-identity` — LA loi que la passerelle
- * applique. Ce composant ne décide rien : il rend des saisies déjà remplies.
- * Un toucher suffit pour modifier ; le chemin nominal reste ZÉRO geste
- * (dimension 12 : la complexité se paie dans le code).
+ * Les deux valeurs viennent de `@meeshy/shared/utils/registration-identity`,
+ * LA loi que la passerelle applique. L'hôte les calcule et les ENVOIE ; ce
+ * composant ne fait que les rendre et ouvrir la saisie.
+ *
+ * ## Deux saisies déjà remplies, aucun bouton « Modifier » (#7897)
+ *
+ * Directive porteur 2026-09-25 : « si on peut modifier le display name [et]
+ * le pseudo directement sans action supplémentaire c'est ok ». Les deux
+ * champs arrivent REMPLIS depuis l'adresse et se modifient d'un toucher ; tant
+ * qu'on ne les touche pas, ils suivent l'adresse en direct. Prénom et nom
+ * restent dérivés du nom affiché par la passerelle, et se changent depuis
+ * l'espace de compte. Le chemin nominal reste ZÉRO geste (dimension 12).
  */
-export type IdentityField = 'firstName' | 'lastName' | 'displayName' | 'username';
-
-type IdentityValues = Readonly<Record<IdentityField, string>>;
-
-const FIELDS: Readonly<Record<IdentityField, { id: string; label: string; autoComplete: string; prefix?: string }>> = {
-  firstName: { id: 'signup-first-name', label: 'Prénom', autoComplete: 'given-name' },
-  lastName: { id: 'signup-last-name', label: 'Nom', autoComplete: 'family-name' },
-  displayName: { id: 'signup-display-name', label: 'Nom affiché', autoComplete: 'nickname' },
-  username: { id: 'signup-username', label: 'Pseudo', autoComplete: 'username', prefix: '@' },
-};
-
 export function DerivedIdentity({
-  values,
-  placeholders,
-  onChange,
+  username,
+  displayName,
+  onUsernameChange,
+  onDisplayNameChange,
   tint,
   focusedField,
   onFocus,
   onBlur,
-  errors,
+  usernameError,
+  displayNameError,
   suggestions,
+  usernamePlaceholder,
+  displayNamePlaceholder,
 }: {
-  /** Ce que chaque saisie AFFICHE — la frappe, ou la dérivation tant qu'on n'a pas touché. */
-  values: IdentityValues;
-  /** La dérivation, montrée en filigrane quand un champ est vidé. */
-  placeholders: IdentityValues;
-  onChange: (field: IdentityField, value: string) => void;
+  /** Ce que la saisie du pseudo AFFICHE — la frappe, ou l'adresse tant qu'on n'a pas touché. */
+  username: string;
+  /** Ce que la saisie du nom affiché AFFICHE — même règle. */
+  displayName: string;
+  /** La dérivation, en filigrane quand un champ est vidé. */
+  usernamePlaceholder: string;
+  displayNamePlaceholder: string;
+  onUsernameChange: (value: string) => void;
+  onDisplayNameChange: (value: string) => void;
   tint: string;
-  focusedField: IdentityField | null;
-  onFocus: (field: IdentityField) => void;
+  focusedField: 'username' | 'displayName' | null;
+  onFocus: (field: 'username' | 'displayName') => void;
   onBlur: () => void;
-  errors: Readonly<Partial<Record<IdentityField, string | undefined>>>;
+  usernameError?: string | undefined;
+  displayNameError?: string | undefined;
   /** Les pseudos libres servis avec un refus `USERNAME_TAKEN`. */
   suggestions: readonly string[];
 }) {
-  const input = (field: IdentityField) => (
-    <IdentityInput
-      field={field}
-      value={values[field]}
-      placeholder={placeholders[field]}
-      onChange={(value) => onChange(field, value)}
-      onFocus={() => onFocus(field)}
-      onBlur={onBlur}
-      focused={focusedField === field}
-      tint={tint}
-      error={errors[field]}
-    />
-  );
-
   return (
     <div className="grid gap-3 rounded-[14px] px-4 py-3" style={{ backgroundColor: 'var(--color-ios-card)' }} data-derived-identity>
       <p className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
         Votre identité
       </p>
 
-      <div className="grid grid-cols-2 gap-2">
-        {input('firstName')}
-        {input('lastName')}
-      </div>
-      {input('displayName')}
-      {input('username')}
+      <IdentityInput
+        id="signup-display-name"
+        label="Nom affiché"
+        value={displayName}
+        placeholder={displayNamePlaceholder}
+        onChange={onDisplayNameChange}
+        onFocus={() => onFocus('displayName')}
+        onBlur={onBlur}
+        focused={focusedField === 'displayName'}
+        tint={tint}
+        error={displayNameError}
+      />
+
+      <IdentityInput
+        id="signup-username"
+        label="Pseudo"
+        prefix="@"
+        value={username}
+        placeholder={usernamePlaceholder}
+        onChange={onUsernameChange}
+        onFocus={() => onFocus('username')}
+        onBlur={onBlur}
+        focused={focusedField === 'username'}
+        tint={tint}
+        error={usernameError}
+      />
 
       {suggestions.length > 0 ? (
         <div className="flex flex-wrap gap-2" data-username-suggestions>
@@ -80,7 +92,7 @@ export function DerivedIdentity({
             <button
               key={candidat}
               type="button"
-              onClick={() => onChange('username', candidat)}
+              onClick={() => onUsernameChange(candidat)}
               className="rounded-chip px-3 text-caption font-semibold"
               style={{ minHeight: 44, color: tint, backgroundColor: `color-mix(in srgb, ${tint} 12%, transparent)` }}
             >
@@ -93,8 +105,11 @@ export function DerivedIdentity({
   );
 }
 
+/** Une saisie du bloc, toujours ouverte : un toucher suffit pour modifier. */
 function IdentityInput({
-  field,
+  id,
+  label,
+  prefix,
   value,
   placeholder,
   onChange,
@@ -104,7 +119,9 @@ function IdentityInput({
   tint,
   error,
 }: {
-  field: IdentityField;
+  id: string;
+  label: string;
+  prefix?: string;
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
@@ -114,18 +131,16 @@ function IdentityInput({
   tint: string;
   error?: string | undefined;
 }) {
-  const { id, label, autoComplete, prefix } = FIELDS[field];
   const errorId = `${id}-error`;
-  const isName = field !== 'username';
   return (
-    <div className="grid min-w-0 gap-1">
+    <div className="grid gap-1">
       <label htmlFor={id} className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
         {label}
       </label>
       <div
-        className="flex min-w-0 items-center gap-1 rounded-[12px] px-3"
+        className="flex items-center gap-1 rounded-[14px] px-4"
         style={{
-          minHeight: 44,
+          minHeight: 48,
           border: `${focused ? '2px' : '1px'} solid ${
             focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,
@@ -139,8 +154,8 @@ function IdentityInput({
         <input
           id={id}
           type="text"
-          autoComplete={autoComplete}
-          autoCapitalize={isName ? 'words' : 'none'}
+          autoComplete={prefix === undefined ? 'name' : 'username'}
+          autoCapitalize={prefix === undefined ? 'words' : 'none'}
           autoCorrect="off"
           spellCheck={false}
           value={value}
@@ -148,7 +163,7 @@ function IdentityInput({
           onInput={(event) => onChange(event.currentTarget.value)}
           onFocus={onFocus}
           onBlur={onBlur}
-          className="w-full min-w-0 bg-transparent py-2 text-input outline-none"
+          className="w-full bg-transparent py-3 text-input outline-none"
           style={{ color: 'var(--color-ios-ink)' }}
           aria-describedby={error !== undefined ? errorId : undefined}
           aria-invalid={error !== undefined}

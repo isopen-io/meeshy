@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
 import { CountrySheet } from '@/components/country-sheet';
-import { DerivedIdentity, type IdentityField } from '@/components/derived-identity';
+import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
@@ -22,13 +22,12 @@ import {
   PASSWORD_MIN,
   canSubmit,
   effectiveDisplayName,
-  effectiveFirstName,
-  effectiveLastName,
   effectiveUsername,
   composeRegisterBody,
   emptySignupForm,
   hasPassword,
   isEmailValid,
+  isIdentityDefined,
   isPasswordValid,
   type SignupFormState,
 } from '@/lib/signup-form';
@@ -173,33 +172,32 @@ function nextFromLocation(): string | null {
   return new URLSearchParams(window.location.search).get('next');
 }
 
-const IDENTITY_FIELDS: readonly IdentityField[] = ['firstName', 'lastName', 'displayName', 'username'];
-
-function isIdentityField(field: FocusedField): field is IdentityField {
-  return IDENTITY_FIELDS.some((candidate) => candidate === field);
-}
-
 /**
- * CE QUE LES QUATRE SAISIES D'IDENTITÉ MONTRENT (#7897). Un champ jamais
- * touché affiche la dérivation EN DIRECT ; un champ touché affiche la frappe,
- * même vide — la dérivation passe alors en filigrane.
+ * « POURQUOI METTRE UN MOT DE PASSE MAINTENANT ? » (#7897) — une ligne
+ * discrète qui se déplie. Le détail reste dans le DOM replié (`hidden`) : il
+ * ne se lit qu'à la demande, sans surcharger l'écran (#6441).
  */
-function identityView(form: SignupFormState) {
-  const placeholders = {
-    firstName: effectiveFirstName({ ...form, firstName: null }),
-    lastName: effectiveLastName({ ...form, lastName: null }),
-    displayName: effectiveDisplayName({ ...form, displayName: null }),
-    username: effectiveUsername({ ...form, username: null }),
-  };
-  return {
-    placeholders,
-    values: {
-      firstName: form.firstName ?? placeholders.firstName,
-      lastName: form.lastName ?? placeholders.lastName,
-      displayName: form.displayName ?? placeholders.displayName,
-      username: form.username ?? placeholders.username,
-    },
-  };
+function PasswordWhy() {
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <div className="grid" data-signup-password-why>
+      <button
+        type="button"
+        onClick={() => setOpen((open) => !open)}
+        aria-expanded={isOpen}
+        aria-controls="signup-password-why"
+        className={`inline-flex items-center gap-1 justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
+        style={{ minHeight: 44 }}
+      >
+        Pourquoi mettre un mot de passe maintenant ?
+        <Glyph name="caretDown" size={12} style={{ transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }} />
+      </button>
+      <p id="signup-password-why" hidden={!isOpen} className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous
+        connecterez toujours à partir d’un e-mail reçu dans votre boîte.
+      </p>
+    </div>
+  );
 }
 
 export default function SignupScreen({
@@ -243,6 +241,10 @@ export default function SignupScreen({
   const [reveal, setReveal] = useState<SignupReveal>(INITIAL_SIGNUP_REVEAL);
   const nextReveal = nextSignupReveal(reveal, { emailValid: isEmailValid(form.email) });
   if (nextReveal !== reveal) setReveal(nextReveal);
+  /** Le mot de passe paru ne se REFERME pas non plus (#6405, #7897) :
+   * corriger son adresse ne doit pas faire disparaître ce qu'on y a tapé. */
+  const [isPasswordRevealed, setPasswordRevealed] = useState(false);
+  if (!isPasswordRevealed && isIdentityDefined(form)) setPasswordRevealed(true);
 
   /**
    * LE PARRAINAGE (#6584) — l'adresse D'ABORD, la MÉMOIRE ensuite.
@@ -356,7 +358,6 @@ export default function SignupScreen({
    * dessous. */
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
-  const identity = identityView(form);
 
   return (
     /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
@@ -484,88 +485,68 @@ export default function SignupScreen({
               (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
               qu'elle n'est pas tapée, il n'y a rien à montrer. */}
           <DerivedIdentity
-            values={identity.values}
-            placeholders={identity.placeholders}
-            onChange={(field, value) => patch({ [field]: value })}
+            username={form.username ?? effectiveUsername(form)}
+            displayName={form.displayName ?? effectiveDisplayName(form)}
+            usernamePlaceholder={effectiveUsername({ ...form, username: null })}
+            displayNamePlaceholder={effectiveDisplayName({ ...form, displayName: null })}
+            onUsernameChange={(username) => patch({ username })}
+            onDisplayNameChange={(displayName) => patch({ displayName })}
             tint={INDIGO_TINT}
-            focusedField={isIdentityField(focused) ? focused : null}
+            focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
             onFocus={(field) => setFocused(field)}
             onBlur={() => setFocused(null)}
-            errors={{
-              firstName: feedback.fieldErrors.firstName,
-              lastName: feedback.fieldErrors.lastName,
-              displayName: feedback.fieldErrors.displayName,
-              username: feedback.fieldErrors.username,
-            }}
+            usernameError={feedback.fieldErrors.username}
+            displayNameError={feedback.fieldErrors.displayName}
             suggestions={feedback.usernameSuggestions}
           />
 
-          {/* LE MOT DE PASSE NE S'ANNONCE PLUS FACULTATIF — IL SE PROUVE
-              (#6582, directive porteur 2026-09-14 : « le champ mot de passe,
-              sans le (facultatif) : le fait que le bouton créer mon compte
-              fonctionne est suffisant pour dire qu'on peut créer le compte
-              sans mot de passe »).
+          {/* LE MOT DE PASSE S'ACTIVE QUAND L'IDENTITÉ EST DÉFINIE (#7897).
+              Directive porteur 2026-09-25 : « c'est quand tout est défini
+              qu'on active le champ mot de passe en mode vous pouvez activer
+              votre mot de passe dès maintenant si vous le souhaitez […]
+              Indiquer l'information discrètement, moderne mais visible, à
+              partir d'une ligne « Pourquoi mettre un mot de passe
+              maintenant ? » qui se déplie ».
 
-              L'étiquette « (facultatif) » de #6424 DISAIT ce que le bouton
-              actif MONTRE déjà. Elle disparaît, et ce qui la remplace n'est
-              pas une mention mais une CONSÉQUENCE : la ligne ci-dessous dit
-              ce que le compte devient dans chacun des deux cas, parce que
-              c'est cela que l'utilisateur ne peut pas deviner. Elle est
-              VISIBLE et non derrière un (i) — le retour porteur « la page est
-              trop surchargée » (#6441) visait trois notes permanentes sous
-              trois champs ; ici il n'en reste qu'une, et elle CHANGE, donc
-              elle se lit.
-
-              Le gabarit lit `PASSWORD_MIN`, jamais un littéral : celui qui
-              vivait ici annonçait « 12 caractères minimum » alors que la borne
-              était passée à 6 — exactement le défaut que le doc-comment de
-              `PASSWORD_MIN` dit vouloir empêcher. */}
-          <Field
-            id="signup-password"
-            label="Mot de passe"
-            tint={INDIGO_TINT}
-            focused={focused === 'password'}
-            valid={isPasswordStrong}
-            error={feedback.fieldErrors.password}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="password"
-                autoComplete="new-password"
-                value={form.password}
-                onInput={(e) => patch({ password: e.currentTarget.value })}
-                onFocus={() => setFocused('password')}
-                onBlur={() => setFocused(null)}
-                placeholder={`${PASSWORD_MIN} caractères minimum`}
-                className="w-full bg-transparent py-3 text-input outline-none"
-                aria-describedby={describedBy}
-                aria-invalid={feedback.fieldErrors.password !== undefined}
-                style={{ color: 'var(--color-ios-ink)' }}
-              />
-            )}
-          </Field>
-
-          {/* CE QUE LE MOT DE PASSE CHANGE, DIT EN TOUTES LETTRES (#6582).
-              Directive porteur : « si le mot de passe est entré et est OK […]
-              le compte sera actif directement avec e-mail à valider seulement.
-              Si absence de mot de passe, le compte reste à configurer et
-              activer. »
-
-              C'est aussi ce qui rend le bord vert LISIBLE sans la couleur
-              (règle 17) : le vert et cette phrase paraissent ensemble, et un
-              lecteur d'écran entend la seconde. `role="status"` et non
-              `alert` : ce n'est pas un refus, c'est l'état du formulaire. */}
-          <p
-            data-signup-password-effect={isPasswordStrong ? 'actif' : 'a-configurer'}
-            role="status"
-            className="text-caption"
-            style={{ color: isPasswordStrong ? 'var(--color-success)' : 'var(--color-ios-ink-2)' }}
-          >
-            {isPasswordStrong
-              ? 'Votre compte sera actif immédiatement : il restera seulement à valider votre adresse e-mail.'
-              : 'Sans mot de passe, votre compte restera à configurer : vous vous connecterez par un lien envoyé à votre adresse, et pourrez en définir un quand vous voudrez.'}
-          </p>
+              Il ne s'annonce toujours pas « facultatif » (#6582) : le bouton
+              actif sans lui le prouve. Le bord vert d'un mot de passe qui
+              tient la borne garde sa phrase (règle 17 : jamais la couleur
+              seule). */}
+          {isPasswordRevealed ? (
+            <div className="grid gap-1" data-signup-password-block>
+              <Field
+                id="signup-password"
+                label="Mot de passe"
+                tint={INDIGO_TINT}
+                focused={focused === 'password'}
+                valid={isPasswordStrong}
+                error={feedback.fieldErrors.password}
+              >
+                {({ id, describedBy }) => (
+                  <input
+                    id={id}
+                    type="password"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onInput={(e) => patch({ password: e.currentTarget.value })}
+                    onFocus={() => setFocused('password')}
+                    onBlur={() => setFocused(null)}
+                    placeholder={`${PASSWORD_MIN} caractères minimum`}
+                    className="w-full bg-transparent py-3 text-input outline-none"
+                    aria-describedby={describedBy}
+                    aria-invalid={feedback.fieldErrors.password !== undefined}
+                    style={{ color: 'var(--color-ios-ink)' }}
+                  />
+                )}
+              </Field>
+              {isPasswordStrong ? (
+                <p role="status" className="text-caption" style={{ color: 'var(--color-success)' }}>
+                  Votre compte sera actif immédiatement.
+                </p>
+              ) : null}
+              <PasswordWhy />
+            </div>
+          ) : null}
 
           {/* LA PASTILLE LIT LE MÊME CATALOGUE QUE LA FEUILLE (correction de
               revue, défaut 2) : `getLanguageInfo` (`@meeshy/shared`), les 83
