@@ -290,6 +290,7 @@
 		22F5694D5990F2274FA5145C /* MentionComposerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8C235F369843E99EF9B6DB /* MentionComposerController.swift */; };
 		2300AAC86DAA90E4935AC7FC /* StreakReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A425348D9511F85E5EEE7E /* StreakReminderScheduler.swift */; };
 		236A1F46F8B7383E34B3F416 /* ComposerFirstView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C517426B90406005648F8DAF /* ComposerFirstView.swift */; };
+		23773DCC723F3086658FFF3D /* StickerPlaceExactPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E137A3DC891F7C5255656E48 /* StickerPlaceExactPositionTests.swift */; };
 		237896B0490F4D0F8298D491 /* CallsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E73B031A938E56B2406390 /* CallsTab.swift */; };
 		23976951DB60260D9BE8F4A8 /* MediaReplyKeyboardInset.swift in Sources */ = {isa = PBXBuildFile; fileRef = F877BB1BA425CDB7F1E69805 /* MediaReplyKeyboardInset.swift */; };
 		2432C8F0C48956EB96D78A9B /* ComposerShutterGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB38AB7EDF07BA65B324276 /* ComposerShutterGesture.swift */; };
@@ -3940,6 +3941,7 @@
 		E0C0ABE31FC653BEEB2A3B08 /* ReadingModeLensCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingModeLensCatalogTests.swift; sourceTree = "<group>"; };
 		E0E3933177A6534B6797293D /* StuckPublicationRetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StuckPublicationRetry.swift; sourceTree = "<group>"; };
 		E119CFE923F772150F33D972 /* ProfileActionBarWiringGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileActionBarWiringGuardTests.swift; sourceTree = "<group>"; };
+		E137A3DC891F7C5255656E48 /* StickerPlaceExactPositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerPlaceExactPositionTests.swift; sourceTree = "<group>"; };
 		E15E54B8E196CF7E43B34F7A /* StoryEditComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryEditComposer.swift; sourceTree = "<group>"; };
 		E21947B5B7F1E6FA3D89EA6D /* RootMenuLadderGlowGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootMenuLadderGlowGuardTests.swift; sourceTree = "<group>"; };
 		E247FF9F4232CE6A8D7A1CC4 /* DeviceLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLayout.swift; sourceTree = "<group>"; };
@@ -5715,6 +5717,7 @@
 				0A36F39E12141695837389D0 /* StickerLibraryArtworkTests.swift */,
 				D6AC8DD8A8034CF9DFB4AE7A /* StickerLibraryPasteTests.swift */,
 				51ADEFC80AD395FE32153464 /* StickerLibraryStoreTests.swift */,
+				E137A3DC891F7C5255656E48 /* StickerPlaceExactPositionTests.swift */,
 				520F326CDB7A81A77A3B3A62 /* StickerSubjectLiftTests.swift */,
 				053E9E2330224DA95F5AA17B /* StoryAudioAddressUploadTests.swift */,
 				3D4BD8F38609622337908AC0 /* StoryPastePolicyTests.swift */,
@@ -9233,6 +9236,7 @@
 				143F3E57403828EA7A62121F /* StickerLibraryArtworkTests.swift in Sources */,
 				79B8D00B9E022D652AC755A2 /* StickerLibraryPasteTests.swift in Sources */,
 				29C95628F142A3F8D7CD602A /* StickerLibraryStoreTests.swift in Sources */,
+				23773DCC723F3086658FFF3D /* StickerPlaceExactPositionTests.swift in Sources */,
 				C56CB3C31F74D90F20F91B6E /* StickerSendPipelineTests.swift in Sources */,
 				D7D301B0F5CC897B0E38B53C /* StickerSubjectLiftTests.swift in Sources */,
 				C7A192EAEBFEA6D92476309F /* StickySectionStructureTests.swift in Sources */,

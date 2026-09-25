@@ -46,7 +46,7 @@ extension StickerPickerView {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
                 case .recents:   usageSections(usage.recents, vide: .recents)
-                case .dynamic:   paletteSections(for: .dynamic)
+                case .custom:    paletteSections(for: .custom)
                 case .smileys:   smileySections
                 }
             }
