@@ -546,7 +546,8 @@ struct FocalRow: View {
                 accentHex: input.accentHex,
                 messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
                 onMediaTap: actions.onMediaTap,
-                onConsumeViewOnce: actions.onConsumeViewOnce
+                onConsumeViewOnce: actions.onConsumeViewOnce,
+                maxWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
             )
         }
     }
