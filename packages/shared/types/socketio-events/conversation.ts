@@ -312,6 +312,16 @@ export interface ConversationUpdatedEventData {
    * diffusion temps réel.
    */
   readonly lastMessageSenderName?: string | null;
+  /**
+   * `User.id` de l'auteur du message nommé par `lastMessageId` (#7978) —
+   * jumeau de `lastMessage.sender.userId` en REST. C'est SUR CE CHAMP que les
+   * clients décident « Vous : » : `senderId` est un `Participant.id` sur le
+   * chemin REST/ZMQ et sur le recalcul, et `updatedBy` nomme l'ACTEUR d'un
+   * recalcul (qui a supprimé, qui a masqué), pas l'auteur. `null` : auteur sans
+   * compte, ou plus aucun message. Porté aussi sous protection — l'auteur
+   * qualifie le placeholder.
+   */
+  readonly lastMessageSenderUserId?: string | null;
   /** Plafonnée à la première pièce jointe — même plafond que `GET /conversations`. */
   readonly lastMessageAttachments?: readonly LastMessagePreviewAttachment[];
   /**
