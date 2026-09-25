@@ -43,4 +43,28 @@ nonisolated enum StoryViewerScope {
         }
         return Resolved(groups: [all[resolvedIndex]], currentIndex: 0)
     }
+
+    /// **Mes stories : seules les barres des stories EN COURS** (#7887,
+    /// directive porteur 2026-09-25). Le groupe de l'auteur garde ses archives
+    /// dans le modèle ; le lecteur n'en reçoit que la story qu'on a ouverte
+    /// explicitement. Sans story en cours, le groupe reste entier : le lecteur
+    /// ne s'ouvre jamais vide.
+    static func liveOnly(_ groups: [StoryGroup],
+                         authorId: String?,
+                         keeping storyId: String?,
+                         now: Date) -> [StoryGroup] {
+        groups.map { group in
+            guard let authorId, group.id == authorId else { return group }
+            let live = group.stories.filter { !$0.isExpired(at: now) || $0.id == storyId }
+            return live.isEmpty ? group : group.with(stories: live)
+        }
+    }
+
+    /// La même story, retrouvée dans le groupe filtré ; une archive écartée
+    /// retombe sur la première story en cours.
+    static func storyIndex(_ index: Int, from original: StoryGroup, into scoped: StoryGroup) -> Int {
+        guard original.stories.indices.contains(index) else { return 0 }
+        let id = original.stories[index].id
+        return scoped.stories.firstIndex(where: { $0.id == id }) ?? 0
+    }
 }
