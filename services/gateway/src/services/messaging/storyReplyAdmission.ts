@@ -1,5 +1,6 @@
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { canUserConsumePost, type PostAclPrisma, type PostVisibilityRecord } from '../posts/postVisibility';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { canUserConsumePost, type PostAclPrisma } from '../posts/postVisibility';
 
 /**
  * RÉPONDRE À UNE STORY OU À UN MOOD, C'EST LE CITER — ET UNE CITATION SE BORNE
@@ -46,8 +47,19 @@ import { canUserConsumePost, type PostAclPrisma, type PostVisibilityRecord } fro
  * lui-même. Cette borne passe AVANT l'appartenance de l'auteur : qui ne voit
  * pas la story n'apprend rien de la conversation.
  *
+ * TROISIÈME BORNE (#7951) — la conversation est DIRECTE, et l'AUTRE
+ * participant est l'auteur. La règle de #7882 (« l'auteur est membre ») admettait
+ * encore un GROUPE où l'auteur siège : l'instantané y partait à tous les
+ * membres. C'est la loi iOS `StoryReplyAdmission.admits` (SDK) : direct ET
+ * interlocuteur = auteur. Un DM compte deux participants ; l'auteur y est
+ * membre actif et l'expéditeur n'est pas l'auteur ⇒ l'autre est l'auteur.
+ * Le type se lit AVANT l'appartenance : un refus de type ne révèle rien de la
+ * composition du groupe. Conversation introuvable ⇒ refusée (fail-closed).
+ *
  * Un envoi qui ne cite aucune story ne coûte AUCUNE requête.
  */
+
+export type StoryReplyPrisma = PostAclPrisma & Pick<PrismaClient, 'conversation'>;
 
 /** PLAT, pour la même raison qu'`AttachmentReplyAdmission` : `strictNullChecks: false`. */
 export type StoryReplyAdmission = {
@@ -58,9 +70,11 @@ export type StoryReplyAdmission = {
 const STORY_NOT_FOUND = 'La lecture n’a pas confirmé la story citée';
 const NOT_VISIBLE_TO_SENDER = 'La story citée n’est pas visible par l’expéditeur';
 const AUTHOR_NOT_MEMBER = 'L’auteur de la story citée n’est pas membre de cette conversation';
+const NOT_A_DIRECT_CONVERSATION = 'Une réponse à une story ne vit que dans la conversation directe de son auteur';
+const PEER_IS_NOT_AUTHOR = 'L’interlocuteur de cette conversation n’est pas l’auteur de la story citée';
 
 export async function admitStoryReply(
-  prisma: PostAclPrisma,
+  prisma: StoryReplyPrisma,
   params: {
     readonly conversationId: string;
     readonly senderParticipantId: string;
@@ -85,8 +99,17 @@ export async function admitStoryReply(
     return { ok: false, reason: STORY_NOT_FOUND };
   }
 
-  if (!(await senderMayViewStory(prisma, params.senderParticipantId, story))) {
+  const senderUserId = await senderUserIdOf(prisma, params.senderParticipantId);
+  if (!senderUserId || !(await canUserConsumePost(prisma, story, senderUserId))) {
     return { ok: false, reason: NOT_VISIBLE_TO_SENDER };
+  }
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: params.conversationId },
+    select: { type: true },
+  });
+  if (conversation?.type !== 'direct') {
+    return { ok: false, reason: NOT_A_DIRECT_CONVERSATION };
   }
 
   const authorMembership = await prisma.participant.findFirst({
@@ -97,19 +120,20 @@ export async function admitStoryReply(
     return { ok: false, reason: AUTHOR_NOT_MEMBER };
   }
 
+  if (senderUserId === story.authorId) {
+    return { ok: false, reason: PEER_IS_NOT_AUTHOR };
+  }
+
   return { ok: true };
 }
 
-async function senderMayViewStory(
+async function senderUserIdOf(
   prisma: PostAclPrisma,
   senderParticipantId: string,
-  story: PostVisibilityRecord,
-): Promise<boolean> {
+): Promise<string | null> {
   const sender = await prisma.participant.findUnique({
     where: { id: senderParticipantId },
     select: { userId: true },
   });
-  const senderUserId = sender?.userId;
-  if (!senderUserId) return false;
-  return canUserConsumePost(prisma, story, senderUserId);
+  return sender?.userId ?? null;
 }
