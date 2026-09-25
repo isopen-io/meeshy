@@ -1371,6 +1371,8 @@ public protocol MessageSocketProviding: Sendable {
     /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
+    /// `message:cited-post-withdrawn` (#7969) — voir `MessageSocketManager+CitedPost.swift`.
+    var messageCitedPostWithdrawn: PassthroughSubject<MessageCitedPostWithdrawnEvent, Never> { get }
     /// `message:countdown-started` — l'échéance SERVIE d'un éphémère, résolue
     /// pour CE lecteur. Dans le protocole pour la même raison que ses voisins :
     /// le consommateur (`ConversationSocketHandler`) ne détient qu'un
@@ -1698,6 +1700,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    public let messageCitedPostWithdrawn = PassthroughSubject<MessageCitedPostWithdrawnEvent, Never>()
     public let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
@@ -3216,6 +3219,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         registerViewOnceHandlers(on: socket)
+        registerCitedPostHandlers(on: socket)
 
         // --- Conversation participation events ---
 

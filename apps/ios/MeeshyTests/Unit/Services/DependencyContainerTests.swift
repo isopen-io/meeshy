@@ -1,5 +1,6 @@
 import XCTest
 import GRDB
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -494,5 +495,77 @@ extension DependencyContainerTests {
             between.contains("} catch"),
             "le do/catch de la purge messages doit se FERMER avant feed.clearAllForLogout() — les deux purges doivent être indépendantes"
         )
+    }
+    // MARK: - Relais temps réel → table canonique (#7960, #7969)
+
+    private func realtimeRecord(id: String, conversationId: String = "c-closed",
+                                storyReplyToId: String? = nil, replyToJson: Data? = nil) -> MessageRecord {
+        MessageRecord(
+            localId: id, serverId: id,
+            conversationId: conversationId, senderId: "participant-bob",
+            content: "le code est 4271", originalLanguage: "fr",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: storyReplyToId,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: replyToJson, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Bob", senderUsername: "bob",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(timeIntervalSince1970: 1_000), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil,
+            reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+    }
+
+    private func realtimeStore() throws -> (MessagePersistenceActor, DatabaseQueue) {
+        let queue = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: queue)
+        return (MessagePersistenceActor(dbWriter: queue), queue)
+    }
+
+    /// #7960 — `message:expired` reçu conversation FERMÉE : le contenu échu
+    /// ne reste pas lisible hors ligne dans GRDB.
+    func test_persist_expired_emptiesTheMessageInTheCanonicalTable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-exp"))
+
+        await DependencyContainer.persist(.expired(messageId: "m-exp", expiredAt: Date()), into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-exp").fetchOne(db) }
+        XCTAssertNil(row?.content)
+        XCTAssertNotNil(row?.deletedAt)
+    }
+
+    /// #7969 — la story citée retirée : la citation gravée devient « Story
+    /// indisponible », conversation ouverte (le fil observe GRDB) ou fermée.
+    func test_persist_citedPostWithdrawn_rendersTheStoryCitationUnavailable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        let quote = ReplyReference(messageId: "post-1", authorName: "", previewText: "Plage",
+                                   isStoryReply: true, storyThumbnailUrl: "https://cdn/t.jpg")
+        try await persistence.insertOptimistic(realtimeRecord(
+            id: "m-reply", storyReplyToId: "post-1", replyToJson: try JSONEncoder().encode(quote)))
+
+        await DependencyContainer.persist(
+            .citedPostWithdrawn(postId: "post-1", conversationId: "c-closed", deletedAt: Date()), into: persistence)
+
+        let blob = try await queue.read { db in
+            try MessageRecord.filter(Column("localId") == "m-reply").fetchOne(db)?.replyToJson
+        }
+        let sealed = try XCTUnwrap(blob.map { try JSONDecoder().decode(ReplyReference.self, from: $0) })
+        XCTAssertTrue(sealed.isUnavailableStory)
     }
 }

@@ -215,11 +215,11 @@ extension StarredMessagesStore {
                     conversationName: conversation?.name, conversationAccentColor: conversation?.accentColor
                 )
             }
-        case let .unstarred(messageId), let .deleted(messageId, _):
+        case let .unstarred(messageId), let .deleted(messageId, _), let .expired(messageId, _):
             await MainActor.run { (store ?? .shared).remove(messageId: messageId) }
         case let .edited(messageId, content, _):
             await MainActor.run { (store ?? .shared).updatePreview(messageId: messageId, contentPreview: content) }
-        case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened:
+        case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened, .citedPostWithdrawn:
             return
         }
     }

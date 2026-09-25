@@ -47,6 +47,26 @@ extension ConversationSyncEngine {
             }
             .store(in: &socketSubscriptions)
 
+        // `message:expired` (#7960) reçu conversation FERMÉE : sans ce relais,
+        // seul `ConversationSocketHandler` (conversation ouverte) vidait le
+        // message — son contenu restait lisible hors ligne, et dans l'aperçu.
+        messageSocket.messageExpired
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleExpiredMessage(event) }
+            }
+            .store(in: &socketSubscriptions)
+
+        // `message:cited-post-withdrawn` (#7969) : la story citée a été
+        // retirée. Un seul site, conversation ouverte ou fermée — le fil
+        // ouvert observe la table que le relais écrit.
+        messageSocket.messageCitedPostWithdrawn
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleCitedPostWithdrawn(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         messageSocket.reactionAdded
             .sink { [weak self] event in
                 guard let self else { return }
@@ -452,6 +472,49 @@ extension ConversationSyncEngine {
         // recent surviving message, mirroring the gateway's `deletedAt: null` REST list.
         await recomputeLastMessagePreviewAfterDeletion(
             conversationId: event.conversationId, deletedMessageId: event.messageId)
+    }
+
+    /// `message:expired` — même effet local que la suppression : contenu vidé,
+    /// aperçu recalculé. La table canonique reçoit `.expired`, que l'hôte
+    /// applique comme la conversation ouverte (citations scellées, favori
+    /// retiré). La mort se GRAVE au registre de réception (#7552).
+    private func handleExpiredMessage(_ event: MessageExpiredEvent) async {
+        let expiredAt = Date()
+        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
+            msg.deletedAt = expiredAt
+            msg.content = ""
+        }
+        await realtimeMessagePersistor?(.expired(messageId: event.messageId, expiredAt: expiredAt))
+        EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
+        _messagesDidChange.send(event.conversationId)
+        await recomputeLastMessagePreviewAfterDeletion(
+            conversationId: event.conversationId, deletedMessageId: event.messageId)
+    }
+
+    private func handleCitedPostWithdrawn(_ event: MessageCitedPostWithdrawnEvent) async {
+        await cache.messages.update(for: event.conversationId) { messages in
+            Self.withdrawingCitedPost(event.postId, in: messages) ?? messages
+        }
+        await realtimeMessagePersistor?(.citedPostWithdrawn(
+            postId: event.postId, conversationId: event.conversationId, deletedAt: event.deletedAt))
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    /// Les messages dont la citation désigne le post retiré, rendus « Story
+    /// indisponible » ; `nil` quand aucun ne change (aucune écriture cache).
+    nonisolated static func withdrawingCitedPost(_ postId: String, in messages: [MeeshyMessage]) -> [MeeshyMessage]? {
+        let unavailable = ReplyReference.unavailableStory(storyId: postId)
+        var changed = false
+        let next = messages.map { message -> MeeshyMessage in
+            let cites = message.storyReplyToId == postId
+                || (message.replyTo?.isStoryReply == true && message.replyTo?.messageId == postId)
+            guard cites, message.replyTo != unavailable else { return message }
+            var copy = message
+            copy.replyTo = unavailable
+            changed = true
+            return copy
+        }
+        return changed ? next : nil
     }
 
     /// Updates a conversation row's `lastMessagePreview` when the edited message
