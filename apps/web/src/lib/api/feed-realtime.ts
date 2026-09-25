@@ -299,13 +299,51 @@ function repostedEventOf(payload: unknown): RepostedEvent | null {
   return typeof repostCount === 'number' && Number.isFinite(repostCount) ? { originalPostId, repostCount } : null;
 }
 
+/**
+ * **LE REPOST LUI-MÊME ENTRE EN TÊTE DU FIL** (#6278 c, miroir
+ * `FeedViewModel.swift:1565-1578`) — SECOND effet de `post:reposted`,
+ * DISTINCT du compte ci-dessus : la passerelle diffuse aux amis du reposteur
+ * le repost FRAÎCHEMENT créé (`PostRepostedEventData.repost`, un `Post`
+ * complet), et iOS l'insère en tête de son propre fil, exactement comme
+ * `post:created`.
+ *
+ * **`STORY`/`STATUS` N'ENTRENT JAMAIS** (`PostModels.swift:508-511`,
+ * `belongsToStoryTray`) : le fil GELÉ (`[POST, REEL]`) ne montre ni l'un ni
+ * l'autre, un médium sans type reconnu non plus (fail-closed plutôt que
+ * deviner). Un id déjà tenu (rejeu, double abonnement) ne s'insère pas deux
+ * fois — même garde que `applyPostCreated`. Un fil ABSENT du cache ne se
+ * fabrique pas non plus.
+ */
+const INSERTABLE_REPOST_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL']);
+
+function insertableRepostOf(payload: unknown): FeedPost | null {
+  const repost = objectOf(objectOf(payload)?.repost);
+  if (repost === null) return null;
+  if (typeof repost.id !== 'string' || repost.id.length === 0) return null;
+  if (typeof repost.type !== 'string' || !INSERTABLE_REPOST_TYPES.has(repost.type)) return null;
+  return repost as unknown as FeedPost;
+}
+
 export function applyServedRepost(queryClient: QueryClient, payload: unknown): void {
   const event = repostedEventOf(payload);
-  if (event === null) return;
+  if (event !== null) {
+    updateCardPost(queryClient, event.originalPostId, (post) =>
+      withServedCount(post, { postId: event.originalPostId, kind: 'repost', count: event.repostCount }),
+    );
+  }
 
-  updateCardPost(queryClient, event.originalPostId, (post) =>
-    withServedCount(post, { postId: event.originalPostId, kind: 'repost', count: event.repostCount }),
+  const incoming = insertableRepostOf(payload);
+  if (incoming === null) return;
+
+  const data = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY);
+  if (data === undefined) return;
+  if (idsOf(data).includes(incoming.id)) return;
+
+  queryClient.setQueryData<FeedInfiniteData>(
+    FEED_QUERY_KEY,
+    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
   );
+  bumpNewPostCount(queryClient);
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

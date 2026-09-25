@@ -3,7 +3,7 @@ import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { attachmentSrc } from '@/lib/api/media-url';
-import type { FeedPost } from '@/lib/api/feed-pages';
+import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
@@ -176,6 +176,10 @@ export type FeedCardRepostEmbed = {
   readonly text?: FeedCardText;
   readonly moodEmoji?: string;
   readonly thumbnailSrc?: string;
+  /** LE COMPTE DES MÉDIAS QUI NE TIENNENT PAS DANS LA VIGNETTE (#6278 c, G10)
+   * — miroir `FeedPostCard.swift:131-134` (`repostMediaPreviewModel`) : « +N »
+   * quand l'original en porte plusieurs, jamais posé pour un seul. */
+  readonly moreCount?: number;
   readonly likeCount: number;
 };
 
@@ -191,7 +195,6 @@ export type FeedCardModel = {
    * (`CarrierFooter`, miroir `bottomMetadataOverlay`) a besoin de la date BRUTE
    * pour son propre format (`toLocaleString`), comme `MediaCarrier.sentAt`. */
   readonly createdAt: string;
-  readonly repostOfHandle?: string;
   /** LA CARTE CITÉE, voir `FeedCardRepostEmbed` — absente quand ce post n'est
    * pas un repost, OU quand `repostOf` n'a pas été chargé par la source. */
   readonly repostOf?: FeedCardRepostEmbed;
@@ -342,6 +345,30 @@ function resolveMedia(
 }
 
 /**
+ * LA VIGNETTE DE LA CARTE CITÉE (#6278 c, G10) — miroir
+ * `FeedPostCard.swift:131-134` (`repostMediaPreviewModel`) : le PREMIER média
+ * de l'original, jamais celui qui porte une miniature par hasard. Une
+ * vignette DÉDIÉE (`thumbnailUrl`) gagne toujours ; à défaut, une IMAGE peut
+ * servir SA PROPRE source — jamais une vidéo, dont `fileUrl` n'est pas une
+ * image (T7). `moreCount` compte ce que la vignette ne montre pas.
+ */
+function resolveRepostThumbnail(
+  media: readonly FeedMedia[] | null | undefined,
+): { readonly thumbnailSrc?: string; readonly moreCount?: number } {
+  const list = media ?? [];
+  const first = list[0];
+  if (first === undefined) return {};
+  const dedicated = textOrUndefined(first.thumbnailUrl);
+  const mimeType = textOrUndefined(first.mimeType);
+  const ownSource = mimeType?.startsWith('image/') === true ? textOrUndefined(first.fileUrl) : undefined;
+  const url = dedicated ?? ownSource;
+  return {
+    ...(url !== undefined ? { thumbnailSrc: attachmentSrc(url) } : {}),
+    ...(list.length > 1 ? { moreCount: list.length - 1 } : {}),
+  };
+}
+
+/**
  * `resolveFeedRepostEmbed` — LA CARTE CITÉE, résolue UNE fois avec le RESTE
  * du modèle (jamais relue par le composant, D-14). `undefined` sans relation
  * chargée ; un `repostOf` sans auteur ni contenu ni média reste malgré tout
@@ -371,8 +398,7 @@ function resolveFeedRepostEmbed(
           });
           return { full: resolved.text, language: resolved.language, translated: resolved.translated, original: content, originalLanguage: repostOf.originalLanguage ?? '' };
         })();
-  const firstMedia = (repostOf.media ?? [])[0];
-  const thumbnailSrc = textOrUndefined(firstMedia?.thumbnailUrl) !== undefined ? attachmentSrc(firstMedia!.thumbnailUrl!) : undefined;
+  const { thumbnailSrc, moreCount } = resolveRepostThumbnail(repostOf.media);
   const moodEmoji = textOrUndefined(repostOf.moodEmoji);
 
   return {
@@ -391,6 +417,7 @@ function resolveFeedRepostEmbed(
     ...(text !== undefined ? { text } : {}),
     ...(moodEmoji !== undefined ? { moodEmoji } : {}),
     ...(thumbnailSrc !== undefined ? { thumbnailSrc } : {}),
+    ...(moreCount !== undefined ? { moreCount } : {}),
     likeCount: numberOrUndefined(repostOf.likeCount) ?? 0,
   };
 }
@@ -432,7 +459,6 @@ export function resolveFeedCardModel(
         })();
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);
-  const repostOfHandle = textOrUndefined(post.repostOf?.author?.username);
   const repostEmbed = resolveFeedRepostEmbed(post.repostOf, params.preferredLanguages, params.now);
   const media = resolveMedia(post, isReel, params.preferredLanguages, text);
   const document = parseCanvasDocument(post.storyEffects);
@@ -488,7 +514,6 @@ export function resolveFeedCardModel(
     },
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     createdAt: new Date(post.createdAt).toISOString(),
-    ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(repostEmbed !== undefined ? { repostOf: repostEmbed } : {}),
     ...(text !== undefined ? { text } : {}),
     // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas

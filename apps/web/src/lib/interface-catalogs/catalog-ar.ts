@@ -127,6 +127,7 @@ const ar = {
   'feed.post.repost.embed.story': 'قصة',
   'feed.post.reel.of': 'ريل {author}',
   'feed.post.open': 'فتح منشور {author}',
+  'feed.post.original.open': 'المنشور الأصلي لـ {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'المنشورات المحفوظة',
   'bookmarks.back': 'العودة إلى الإعدادات',

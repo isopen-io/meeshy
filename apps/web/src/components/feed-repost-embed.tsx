@@ -1,5 +1,6 @@
 import type { FeedCardRepostEmbed } from '@/lib/feed/card-model';
 import { Avatar } from './avatar';
+import { PrismPastille } from './message-blocks';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -19,9 +20,24 @@ import { Link } from '@/routes/route-table';
  * **REMPLACE LA LIGNE « ↻ @handle »** (`FeedPostHeader`, #6484) : cette ligne
  * ne disait RIEN du contenu cité — un repost affichait sa propre carte VIDE
  * (aucun texte, aucun média propres à un repost simple) surmontée d'un handle
- * en petit texte. `repostOfHandle` reste au modèle pour l'ANNONCE d'écran
- * (« republication de @x », plus riche à dire qu'à lire) mais ne peint plus
- * rien seul.
+ * en petit texte. `repostOfHandle` a été RETIRÉ du modèle (#6278 c, Q3) :
+ * `repost.author` porte désormais tout ce que l'ancien champ portait, et cette
+ * carte l'affiche pour de bon plutôt que de le réserver à une annonce.
+ *
+ * **SON NOM ACCESSIBLE EST DISTINCT DE LA PORTE EXTÉRIEURE** (#6278 c, G8) —
+ * `feed.post.original.open` (« Publication originale de X »), jamais
+ * `feed.post.open` (« Ouvrir la publication de X ») que la carte englobante
+ * porte déjà : les deux mènent à des adresses DIFFÉRENTES depuis deux cartes
+ * IMBRIQUÉES, et un lecteur d'écran qui les annoncerait pareil ne saurait pas
+ * laquelle est laquelle — miroir `FeedPostCard.swift:905-906`.
+ *
+ * **LE CORPS CITÉ PORTE SA PROPRE PASTILLE DE PRISME** (#6278 c, G6, D-99) —
+ * une surface de contenu SANS elle est un défaut : le corps de la carte
+ * EXTÉRIEURE en porte une (`FeedPostText`), et le contenu cité, résolu par le
+ * MÊME Prisme (`resolveFeedText`, D-14), n'a pas moins besoin d'annoncer sa
+ * traduction. Sans `onToggle` (l'exploration de l'original reste HORS
+ * tranche ici, #7463) : un indicateur SEUL, jamais un bouton qui promettrait
+ * un geste que cette carte n'offre pas encore.
  */
 export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmbed }) {
   const language = currentInterfaceLanguage();
@@ -33,8 +49,12 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
 
   const body = (
     <div
-      className="flex flex-col gap-2 rounded-2xl px-3 py-2.5"
-      style={{ border: '1px solid var(--color-edge)', backgroundColor: 'rgba(120,120,128,0.08)' }}
+      className="flex flex-col gap-2 px-3 py-2.5"
+      style={{
+        border: `1px solid color-mix(in srgb, ${repost.author.accentColor} 20%, transparent)`,
+        backgroundColor: 'var(--ios-repost-embed-fill)',
+        borderRadius: 'var(--ios-radius-repost-embed)',
+      }}
       data-feed-repost-embed
     >
       <div className="flex items-center gap-2">
@@ -62,23 +82,43 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
         ) : null}
       </div>
       {repost.text !== undefined ? (
-        <p
-          className="text-check"
-          style={{ color: 'var(--color-ios-ink-2)', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-          {...(repost.text.language !== '' ? { lang: repost.text.language } : {})}
-        >
-          {repost.moodEmoji !== undefined ? <span aria-hidden="true">{repost.moodEmoji} </span> : null}
-          {repost.text.full}
-        </p>
+        <div className="flex items-start gap-1">
+          <p
+            className="min-w-0 flex-1 text-check"
+            style={{ color: 'var(--color-ios-ink-2)', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            {...(repost.text.language !== '' ? { lang: repost.text.language } : {})}
+          >
+            {repost.moodEmoji !== undefined ? <span aria-hidden="true">{repost.moodEmoji} </span> : null}
+            {repost.text.full}
+          </p>
+          <PrismPastille
+            servedLanguage={repost.text.language}
+            originalLanguage={repost.text.originalLanguage}
+            active={null}
+            language={language}
+            subject="post"
+          />
+        </div>
       ) : null}
       {repost.thumbnailSrc !== undefined ? (
-        <img
-          src={repost.thumbnailSrc}
-          alt=""
-          className="h-40 w-full object-cover"
-          style={{ borderRadius: 10 }}
-          data-feed-repost-embed-thumbnail
-        />
+        <div className="relative">
+          <img
+            src={repost.thumbnailSrc}
+            alt=""
+            className="h-40 w-full object-cover"
+            style={{ borderRadius: 10 }}
+            data-feed-repost-embed-thumbnail
+          />
+          {repost.moreCount !== undefined ? (
+            <span
+              data-feed-repost-embed-more
+              className="absolute bottom-1.5 right-1.5 rounded-chip px-1.5 py-0.5 text-check font-semibold text-white"
+              style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+            >
+              +{repost.moreCount}
+            </span>
+          ) : null}
+        </div>
       ) : null}
       <span className="text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
         {translate(language, 'feed.post.action.like')} {repost.likeCount}
@@ -92,11 +132,11 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
     <Link
       to="post"
       params={{ post: repost.id }}
-      aria-label={translate(language, 'feed.post.open', { author: repost.author.name })}
+      aria-label={translate(language, 'feed.post.original.open', { author: repost.author.name })}
       draggable={false}
       data-feed-repost-embed-open
       className="block focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ borderRadius: 16, outlineColor: 'var(--color-ios-brand)' }}
+      style={{ borderRadius: 'var(--ios-radius-repost-embed)', outlineColor: 'var(--color-ios-brand)' }}
     >
       {body}
     </Link>

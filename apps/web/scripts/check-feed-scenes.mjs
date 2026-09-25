@@ -322,6 +322,52 @@ async function runScheme(colorScheme) {
   check(clipB.enLecture === 1, `[${colorScheme}] clip-b centré : ${clipB.enLecture} vidéo(s) en lecture (attendu 1)`);
   check(clipB.dansB, `[${colorScheme}] clip-b centré : la vidéo en lecture n'est pas dans la carte -b`);
 
+  /* ── post-repost : la carte CITÉE d'un repost simple (#6278 c) ───────── */
+  // `POST_REPOST.repostOf` — original en espagnol, traduit en ANGLAIS
+  // seulement : sous le prisme du lecteur (['fr','en'], `fr` en rang 1 sans
+  // traduction disponible, `en` en rang 4 servi par la locale du navigateur
+  // ici en 'en-US') le corps cité sert le rang 2, jamais l'espagnol.
+  await page.waitForSelector('[data-feed-card-id="post-repost"] [data-feed-repost-embed]');
+  const repostEmbed = await page.evaluate(() => {
+    const carte = document.querySelector('[data-feed-card-id="post-repost"]');
+    const embed = carte?.querySelector('[data-feed-repost-embed]');
+    const texte = embed?.querySelector('[lang]');
+    const open = carte?.querySelector('a[data-feed-repost-embed-open]');
+    return {
+      texte: texte?.textContent ?? null,
+      lang: texte?.getAttribute('lang') ?? null,
+      thumbnailSrc: embed?.querySelector('img[data-feed-repost-embed-thumbnail]')?.getAttribute('src') ?? null,
+      more: embed?.querySelector('[data-feed-repost-embed-more]') !== null,
+      pastille: embed?.querySelector('[data-prism-indicator]') !== null,
+      openHref: open?.getAttribute('href') ?? null,
+      openLabel: open?.getAttribute('aria-label') ?? null,
+      radius: embed === null ? null : getComputedStyle(embed).borderRadius,
+    };
+  });
+  check(
+    repostEmbed.texte?.includes('Our sales grew 12% this quarter.') === true,
+    `[${colorScheme}] post-repost : corps cité attendu au rang 2 (en) — reçu « ${repostEmbed.texte} »`,
+  );
+  check(repostEmbed.lang === 'en', `[${colorScheme}] post-repost : lang attendu "en" — reçu "${repostEmbed.lang}"`);
+  check(
+    repostEmbed.thumbnailSrc?.startsWith('data:image/svg+xml') === true,
+    `[${colorScheme}] post-repost : vignette citée absente ou d'une source inattendue`,
+  );
+  check(!repostEmbed.more, `[${colorScheme}] post-repost : « +N » posé alors que l'original ne porte qu'UN média`);
+  check(repostEmbed.pastille, `[${colorScheme}] post-repost : la pastille du Prisme (D-99) est absente du corps cité TRADUIT`);
+  check(
+    repostEmbed.openHref?.includes('post-repost-original') === true,
+    `[${colorScheme}] post-repost : la porte de la carte citée ne mène pas à l'original — reçu "${repostEmbed.openHref}"`,
+  );
+  // L'INTERFACE de ce gate résout en anglais (locale du navigateur 'en-US',
+  // même preuve que « Previous scene »/« Next scene » plus haut) — DISTINCTE
+  // du Prisme de CONTENU vérifié ci-dessus (qui sert le rang 2 « fr, en »).
+  check(
+    repostEmbed.openLabel === 'Original post by Yann Petit',
+    `[${colorScheme}] post-repost : nom accessible attendu « Original post by Yann Petit » — reçu « ${repostEmbed.openLabel} »`,
+  );
+  check(repostEmbed.radius === '14px', `[${colorScheme}] post-repost : rayon attendu 14px (--ios-radius-repost-embed) — reçu "${repostEmbed.radius}"`);
+
   /* ── Contre-épreuve : prefers-reduced-motion ⇒ aucune lecture ────────── */
   await context.close();
   const reducedContext = await browser.newContext({ colorScheme, locale: 'en-US', viewport: { width: 420, height: 900 }, reducedMotion: 'reduce' });

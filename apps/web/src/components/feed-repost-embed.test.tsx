@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { FeedPost } from '@/lib/api/feed-pages';
+import { POST_REPOST } from '@/lib/api/fixtures-feed';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 
 import { FeedPostCard } from './feed-post-card';
@@ -36,12 +37,12 @@ describe('FeedPostCard — la publication citée d’un repost simple', () => {
 
   const NOW = new Date('2026-09-25T12:00:00.000Z');
 
-  const mount = (post: FeedPost) => {
+  const mount = (post: FeedPost, preferredLanguages: readonly string[] = ['fr', 'es']) => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root.render(<FeedPostCard model={resolveFeedCardModel(post, { preferredLanguages: ['fr', 'es'], now: NOW })} />);
+      root.render(<FeedPostCard model={resolveFeedCardModel(post, { preferredLanguages, now: NOW })} />);
     });
   };
 
@@ -100,5 +101,82 @@ describe('FeedPostCard — la publication citée d’un repost simple', () => {
   test('sans republication, aucune carte citée dans le DOM', () => {
     mount(post({ content: 'Un post ordinaire', originalLanguage: 'fr' }));
     expect(container.querySelector('[data-feed-repost-embed]')).toBeNull();
+  });
+
+  /**
+   * `POST_REPOST` — LA FIXTURE À LA FORME RÉELLE de `repostOfInclude` (G3,
+   * T3) : original écrit en espagnol, traduit en ANGLAIS seulement (rang 2
+   * possible sous `['fr','en']`, jamais le rang 1 — leçon 261/276).
+   */
+  test('la fixture `POST_REPOST` rend l’original : Yann Petit, corps servi au rang 2, vignette, porte, pastille', () => {
+    mount(POST_REPOST, ['fr', 'en']);
+
+    const embed = container.querySelector('[data-feed-repost-embed]');
+    expect(embed).not.toBeNull();
+    expect(embed?.textContent).toContain('Yann Petit');
+    expect(embed?.textContent).toContain('Our sales grew 12% this quarter.');
+    expect(embed?.textContent).not.toContain('Nuestras ventas');
+    const texte = embed?.querySelector('[lang]');
+    expect(texte?.getAttribute('lang')).toBe('en');
+    const thumbnail = embed?.querySelector('img[data-feed-repost-embed-thumbnail]');
+    expect(thumbnail?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+    const open = container.querySelector('a[data-feed-repost-embed-open]');
+    expect(open?.getAttribute('href')).toContain('post-repost-original');
+    expect(embed?.querySelector('[data-prism-indicator]')).not.toBeNull();
+    expect(embed?.querySelector('[data-feed-repost-embed-more]')).toBeNull();
+  });
+
+  /**
+   * D-99 — une surface de contenu SANS pastille de Prisme est un défaut : le
+   * corps cité, résolu par le MÊME Prisme que le corps extérieur, l'annonce
+   * exactement comme lui — un `<span>` (jamais un bouton, l'exploration de
+   * l'original restant hors tranche).
+   */
+  test('D-99 — le corps cité TRADUIT porte la pastille du Prisme, en `<span>` jamais un bouton', () => {
+    mount(post({ repostOf: { id: 'o1', type: 'POST', content: 'Bonjour', originalLanguage: 'en', translations: { fr: { text: 'Bonjour' } }, author: { id: 'u1' } } }));
+    const pastille = container.querySelector('[data-feed-repost-embed] [data-prism-indicator]');
+    expect(pastille).not.toBeNull();
+    expect(pastille?.tagName).toBe('SPAN');
+  });
+
+  test('D-99 — un corps cité dans sa langue d’origine ne porte AUCUNE pastille', () => {
+    mount(post({ repostOf: { id: 'o2', type: 'POST', content: 'Bonjour', originalLanguage: 'fr', author: { id: 'u1' } } }));
+    expect(container.querySelector('[data-feed-repost-embed] [data-prism-indicator]')).toBeNull();
+  });
+
+  /** G8 — la porte de la carte CITÉE se nomme distinctement de la porte de la
+   * carte EXTÉRIEURE : un lecteur d'écran ne peut pas les confondre. */
+  test('la porte de la carte citée se nomme « Publication originale de X », distincte de la porte extérieure', () => {
+    mount(post({ author: { id: 'u-outer', displayName: 'Léa Dupont' }, content: 'Regardez', originalLanguage: 'fr', repostOf: { id: 'orig-9', type: 'POST', author: { id: 'u9', displayName: 'Yann Petit' } } }));
+
+    const outerOpen = container.querySelector('a[data-feed-post-open="heure"], a[data-feed-post-open="corps"]');
+    const embedOpen = container.querySelector('a[data-feed-repost-embed-open]');
+    expect(embedOpen?.getAttribute('aria-label')).toBe('Publication originale de Yann Petit');
+    expect(outerOpen?.getAttribute('aria-label')).not.toBe(embedOpen?.getAttribute('aria-label'));
+  });
+
+  /** G10 — la vignette vient de `thumbnailUrl`, sinon d'une IMAGE, jamais
+   * d'une vidéo ; « +N » compte ce qui ne tient pas dans la vignette. */
+  test('« +N » apparaît sur la vignette dès que l’original porte plusieurs médias', () => {
+    mount(
+      post({
+        repostOf: {
+          id: 'orig-multi',
+          type: 'POST',
+          author: { id: 'u1' },
+          media: [
+            { id: 'm1', fileUrl: 'a.jpg', thumbnailUrl: 'a-thumb.jpg', mimeType: 'image/jpeg' },
+            { id: 'm2', fileUrl: 'b.jpg', mimeType: 'image/jpeg' },
+            { id: 'm3', fileUrl: 'c.jpg', mimeType: 'image/jpeg' },
+          ],
+        },
+      }),
+    );
+    expect(container.querySelector('[data-feed-repost-embed-more]')?.textContent).toBe('+2');
+  });
+
+  test('sans vignette dédiée, une vidéo SEULE ne rend aucune image', () => {
+    mount(post({ repostOf: { id: 'orig-video', type: 'POST', author: { id: 'u1' }, media: [{ id: 'm1', fileUrl: 'v.mp4', mimeType: 'video/mp4' }] } }));
+    expect(container.querySelector('img[data-feed-repost-embed-thumbnail]')).toBeNull();
   });
 });

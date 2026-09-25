@@ -127,6 +127,7 @@ const de = {
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel von {author}',
   'feed.post.open': 'Beitrag von {author} öffnen',
+  'feed.post.original.open': 'Ursprünglicher Beitrag von {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Gespeicherte Beiträge',
   'bookmarks.back': 'Zurück zu den Einstellungen',

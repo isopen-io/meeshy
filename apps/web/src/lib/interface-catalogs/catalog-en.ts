@@ -127,6 +127,7 @@ const en = {
   'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel by {author}',
   'feed.post.open': 'Open {author}’s post',
+  'feed.post.original.open': 'Original post by {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Saved posts',
   'bookmarks.back': 'Back to settings',

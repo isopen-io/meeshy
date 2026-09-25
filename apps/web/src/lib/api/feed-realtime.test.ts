@@ -474,4 +474,45 @@ describe('`post:reposted` — le compte de l’original suit le repost D’UN AU
     expect(() => applyServedRepost(queryClient, { repost: {} })).not.toThrow();
     expect(() => applyServedRepost(queryClient, null)).not.toThrow();
   });
+
+  /**
+   * LE REPOST LUI-MÊME (#6278 c, T2b) — SECOND effet de `post:reposted`,
+   * miroir `FeedViewModel.swift:1565-1578` : il entre en tête du fil de
+   * l'AMI qui le reçoit, jamais deux fois, jamais pour une STORY ni un
+   * STATUS (`belongsToStoryTray`).
+   */
+  test('le repost d’un AUTRE entre en TÊTE du fil et compte pour la bannière — jamais deux fois, jamais une story ni un statut', () => {
+    const queryClient = clientAvec([post({ id: 'p-ancien' })]);
+    const payload = {
+      originalPostId: 'p-original',
+      repost: { id: 'repost-1', type: 'POST', author: { id: 'u-other' }, repostOf: { id: 'p-original', repostCount: 1 } },
+    };
+
+    applyServedRepost(queryClient, payload);
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['repost-1', 'p-ancien']);
+    expect(compte(queryClient)).toBe(1);
+
+    // Rejoué (reconnexion, double abonnement) — jamais une seconde carte,
+    // jamais un second coup de compteur.
+    applyServedRepost(queryClient, payload);
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['repost-1', 'p-ancien']);
+    expect(compte(queryClient)).toBe(1);
+
+    // STORY / STATUS — le fil GELÉ ne les montre jamais.
+    const queryClientTray = clientAvec([post({ id: 'p-ancien' })]);
+    for (const type of ['STORY', 'STATUS']) {
+      applyServedRepost(queryClientTray, { originalPostId: 'p-original', repost: { id: `repost-${type}`, type, author: { id: 'u-other' } } });
+    }
+    expect(cartes(queryClientTray).map((p) => p.id)).toEqual(['p-ancien']);
+    expect(compte(queryClientTray)).toBe(0);
+  });
+
+  test('un fil ABSENT du cache ne se fabrique pas — même loi que `post:created`', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    applyServedRepost(queryClient, { originalPostId: 'p-original', repost: { id: 'repost-1', type: 'POST', author: { id: 'u-other' } } });
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBeUndefined();
+    expect(compte(queryClient)).toBe(0);
+  });
 });

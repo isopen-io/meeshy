@@ -1,54 +1,26 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { cachedOn, gatewayDeps, pageOf, scripted, seededOn } from '@/test-support/feed-cache-kit';
+
 import { FEED_QUERY_KEY } from './feed';
-import type { FeedInfiniteData, FeedPost } from './feed-pages';
-import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import type { FeedPost } from './feed-pages';
+import type { ApiResult } from './http';
 import { reelsQueryKey } from './reels';
-import { performRepost, type RepostDeps } from './publication-repost';
+import { performRepost } from './publication-repost';
 
 /**
  * `performRepost` (#6484) — MÊME forme que `feed-gestures.test.ts` :
- * plan → optimiste → appel → issue.
+ * plan → optimiste → appel → issue. L'outillage (`seededOn`, `scripted`,
+ * `gatewayDeps`, `cachedOn`) vit dans `@/test-support/feed-cache-kit`
+ * (#6278 c) — `feed-post-card-repost.test.tsx` le PARTAGE plutôt que de le
+ * recopier.
  */
 const post = (partial: Partial<FeedPost>): FeedPost => ({
   id: 'p1',
   type: 'REEL',
   createdAt: '2026-09-24T11:55:00.000Z',
   ...partial,
-});
-
-const pageOf = (posts: readonly FeedPost[]): FeedInfiniteData => ({
-  pages: [{ posts, pagination: { limit: 20, hasMore: false, nextCursor: null } }],
-  pageParams: [undefined],
-});
-
-const seededOn = (queryKey: readonly string[], posts: readonly FeedPost[]): QueryClient => {
-  const queryClient = new QueryClient();
-  queryClient.setQueryData(queryKey as unknown as readonly unknown[], pageOf(posts));
-  return queryClient;
-};
-
-const cachedOn = (queryClient: QueryClient, queryKey: readonly string[], id = 'p1'): FeedPost | undefined =>
-  queryClient
-    .getQueryData<FeedInfiniteData>(queryKey as unknown as readonly unknown[])
-    ?.pages[0]?.posts.find((p) => p.id === id);
-
-const scripted = (respond: (req: HttpRequest) => Promise<ApiResult<unknown>>) => {
-  const requests: HttpRequest[] = [];
-  const transport = {
-    request: (req: HttpRequest) => {
-      requests.push(req);
-      return respond(req);
-    },
-  } as unknown as HttpTransport;
-  return { requests, transport };
-};
-
-const gatewayDeps = (queryClient: QueryClient, transport: HttpTransport): RepostDeps => ({
-  source: 'gateway',
-  transport,
-  queryClient,
 });
 
 let restoreOnline: (() => void) | null = null;

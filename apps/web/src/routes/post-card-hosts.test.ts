@@ -91,6 +91,23 @@ describe('le compteur de commentaires est offert partout où la carte est monté
 });
 
 /**
+ * **TOUT ÉCRAN QUI MONTE LA CARTE OFFRE LE BOUTON QUI REPARTAGE** (#6278 c,
+ * T11) — même motif que `onComment` ci-dessus : `repostCount` ne devient un
+ * bouton que si son hôte porte `onRepost` (loi 4), et l'oubli ne rougirait
+ * nulle part sans cette garde d'INVENTAIRE.
+ */
+describe('le bouton de repartage est offert partout où la carte est montée', () => {
+  test('chaque hôte de `FeedPostCard` câble `onRepost` — aucun chiffre inerte', () => {
+    const manquants = handWrittenSources()
+      .map((path) => ({ path, source: readFileSync(path, 'utf8') }))
+      .filter(({ source }) => MOUNTS_CARD.test(source) && !source.includes('onRepost'))
+      .map(({ path }) => path.slice(SRC.length + 1));
+
+    expect(manquants).toEqual([]);
+  });
+});
+
+/**
  * **TOUT ÉCRAN QUI MONTE LA CARTE OUVRE LA PUBLICATION** (#7284), second
  * inventaire, même motif — et la raison pour laquelle il a une autre FORME que
  * celui du compteur mérite d'être dite, parce que c'est elle qui supprime le

@@ -184,6 +184,7 @@ const HORS_TABLE_IOS = [
   ['--ios-radius-bubble', '18px', 'Bubble/BubbleBackground.swift — cornerRadius: 18, littéral'],
   ['--ios-radius-field', '22px', 'UniversalComposerBar+Recording.swift — RoundedRectangle(cornerRadius: 22)'],
   ['--ios-radius-quote', '12px', 'Bubble/BubbleQuotedReply.swift — style .card'],
+  ['--ios-radius-repost-embed', '14px', 'FeedPostCard.swift:893 — RoundedRectangle(14) autour de repostView (#6278 c)'],
   ['--ios-text-time', '12px', 'BubbleFooter.swift — .caption de SwiftUI, hors MeeshyFont'],
   ['--ios-text-input', '16px', 'UniversalComposerBar — .callout de SwiftUI'],
   ['--ios-text-large-title', '28px', 'ConversationListView+Overlays.swift — .system(size: 28, weight: .bold)'],
@@ -252,6 +253,12 @@ const HORS_TABLE_PAR_SCHEMA = [
     'color-mix(in srgb, white 15%, transparent)',
     'color-mix(in srgb, white 15%, transparent)',
     'BubbleQuotedReply.swift — style .card, hôte isMe',
+  ],
+  [
+    '--ios-repost-embed-fill',
+    'color-mix(in srgb, white 5%, transparent)',
+    'color-mix(in srgb, black 3%, transparent)',
+    'FeedPostCard.swift:892-901 — repostView, fond de la carte citée (#6278 c)',
   ],
   [
     '--ios-edge',
