@@ -188,6 +188,9 @@ extension StoryViewerView {
                 // insubordonnable par priorité — la barre ne peut gagner que
                 // s'il CÈDE, et il ne le sait qu'en lisant cet état.
                 guard !reactionStripOwnsDrag else { return }
+                // CESSION AU GLISSÉ DE LA BARRE (#7878) et du rail : pendant un
+                // parcours au doigt, ni cube ni fermeture.
+                guard !isScrubbingRail else { return }
                 // GARDE DE POINT DE DÉPART — ce drag est monté sur un ANCÊTRE de
                 // tout le contenu du lecteur, donc aussi des `ScrollView` que
                 // portent certaines surfaces (liste de commentaires, sélecteurs
@@ -2998,63 +3001,5 @@ extension StoryCommentRowView {
     /// cette extrémité. Pure + testable.
     static func legibleOverlayColor(for scheme: ColorScheme) -> Color {
         scheme == .dark ? .white : MeeshyColors.indigo950
-    }
-}
-
-// MARK: - Story Progress Bars
-
-/// Segmented progress indicator for the story viewer's current group.
-/// Extracted from `StoryViewerView.progressBars` so the header layer no
-/// longer inlines a `ForEach` / `GeometryReader` subtree into the viewer's
-/// opaque type.
-struct StoryProgressBarsView: View {
-    let group: StoryGroup?
-    let currentIndex: Int
-    let progress: CGFloat
-
-    var body: some View {
-        HStack(spacing: 3) {
-            if let group {
-                ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
-                    GeometryReader { barGeo in
-                        let w = width(for: index, totalWidth: barGeo.size.width)
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.2))
-                            Capsule()
-                                .fill(
-                                    index == currentIndex ?
-                                    AnyShapeStyle(LinearGradient(
-                                        colors: [MeeshyColors.indigo500, MeeshyColors.error, MeeshyColors.indigo400],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )) :
-                                    AnyShapeStyle(Color.white)
-                                )
-                                .frame(width: w)
-                                .shadow(
-                                    color: index == currentIndex ? MeeshyColors.indigo500.opacity(0.6) : .clear,
-                                    radius: 4, y: 0
-                                )
-                        }
-                    }
-                    .frame(height: 3)
-                    .accessibilityHidden(true)
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "story.viewer.a11y.position", defaultValue: "Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)", bundle: .main))
-        .accessibilityValue(String(localized: "story.viewer.a11y.percent", defaultValue: "\(Int(progress * 100)) pourcent", bundle: .main))
-    }
-
-    private func width(for index: Int, totalWidth: CGFloat) -> CGFloat {
-        if index < currentIndex {
-            return totalWidth
-        } else if index == currentIndex {
-            return totalWidth * progress
-        } else {
-            return 0
-        }
     }
 }

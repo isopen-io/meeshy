@@ -1543,6 +1543,7 @@ struct StoryViewerView: View {
                 triggerStoryReaction(emoji, from: frame)
             },
             onScrubStateChanged: { isScrubbingRail = $0 },
+            seekTimer: { slideTimer.seek(toFraction: $0) },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
             onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
