@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { scriptedGateway, scriptedTransport } from '@/test-support/scripted-transport';
 
-import { downloadJsonFile, exportFileName, requestDataExport } from './data-export';
+import { deliverJsonFile, exportFileName, requestDataExport } from './data-export';
 
 beforeAll(() => {
   ensureHappyDomRegistered();
@@ -63,24 +64,28 @@ describe('exportFileName', () => {
   });
 });
 
-describe('downloadJsonFile', () => {
-  test('crée un lien de téléchargement, le déclenche, puis nettoie ses traces', () => {
-    const clicked: string[] = [];
-    const anchor = document.createElement('a');
-    const originalClick = anchor.click.bind(anchor);
-    anchor.click = () => {
-      clicked.push(anchor.download);
-      originalClick();
+/**
+ * L'export passe par le portail de livraison (#7864) : la coque Android n'a
+ * que le pont `MeeshyShare.shareFile`, et l'ancre `<a download>` n'y fait rien.
+ */
+describe('deliverJsonFile', () => {
+  test('une coque sans ancre livre le JSON par le partage de fichier', async () => {
+    const shared: File[] = [];
+    const host: FileDeliveryHost = {
+      canShareFiles: ({ files }) => files.length === 1,
+      shareFiles: async ({ files }) => {
+        shared.push(...files);
+      },
     };
-    const originalCreateElement = document.createElement.bind(document);
-    document.createElement = ((tag: string) => (tag === 'a' ? anchor : originalCreateElement(tag))) as typeof document.createElement;
 
-    try {
-      downloadJsonFile('meeshy-export-2026-09-16.json', '{"a":1}');
-      expect(clicked).toEqual(['meeshy-export-2026-09-16.json']);
-      expect(document.body.contains(anchor)).toBe(false);
-    } finally {
-      document.createElement = originalCreateElement;
-    }
+    const outcome = await deliverJsonFile('meeshy-export-2026-09-16.json', '{"a":1}', host);
+
+    expect(outcome).toBe('delivered');
+    expect(shared.map((file) => [file.name, file.type])).toEqual([['meeshy-export-2026-09-16.json', 'application/json']]);
+    expect(await shared[0]?.text()).toBe('{"a":1}');
+  });
+
+  test('un hôte sans porte rend « indisponible », jamais « livré »', async () => {
+    expect(await deliverJsonFile('meeshy-export-2026-09-16.json', '{"a":1}', {})).toBe('unavailable');
   });
 });
