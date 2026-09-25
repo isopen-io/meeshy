@@ -7,7 +7,6 @@ import { createHttpTransport, type HttpTransport } from './http';
 import { loadMessages, messagesQueryKey } from './messages';
 import { mineOf, reactionStore, seedMineFromServed } from './reaction-store';
 import { performReaction } from './reactions';
-import { refreshMineForPage } from './reactions-mine';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import type { Message } from './types';
 
@@ -217,44 +216,42 @@ const settle = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
-describe('refreshMineForPage — « ma réaction » juste dès le chargement du fil', () => {
-  test('un message RÉAGI demande `GET /reactions/:id` et pose `userReactions` ; un message sans réaction ne coûte aucune requête', async () => {
-    const calls: Call[] = [];
-    const transport = createHttpTransport({
+describe('loadMessages — « ma réaction » juste dès le chargement, lue sur la PAGE (#7936)', () => {
+  const pageWith = (messages: readonly unknown[], calls: Call[] = []): HttpTransport =>
+    createHttpTransport({
       base: '',
-      fetchImpl: gatewayFetch({ '/api/v1/reactions/m-1': { messageId: 'm-1', reactions: [], totalCount: 2, userReactions: ['👍'] } }, calls),
+      fetchImpl: gatewayFetch({ '/api/v1/conversations/c-a/messages': messages }, calls),
     });
 
-    await refreshMineForPage({ source: 'gateway', transport }, [
-      localMessage({ id: 'm-1', reactionSummary: { '👍': 2 } }),
-      localMessage({ id: 'm-2' }),
-    ]);
-
-    expect(mineOf('m-1')).toEqual(['👍']);
-    expect(calls.map((c) => c.url)).toEqual(['/api/v1/reactions/m-1']);
-  });
-
-  test('un message SANS réaction ne peut pas être « à moi » : un reste de session précédente est effacé', async () => {
-    reactionStore.getState().add('m-2', '🔥');
-    const transport = createHttpTransport({ base: '', fetchImpl: gatewayFetch({}) });
-
-    await refreshMineForPage({ source: 'gateway', transport }, [localMessage({ id: 'm-2' })]);
-
-    expect(mineOf('m-2')).toEqual([]);
-  });
-
-  test('la page qui sert déjà `currentUserReactions` ne coûte AUCUNE requête', async () => {
+  test('le `currentUserReactions` servi par la page pose « ma réaction », sans AUCUNE requête de plus', async () => {
     const calls: Call[] = [];
-    const transport = createHttpTransport({ base: '', fetchImpl: gatewayFetch({}, calls) });
-    const served = { ...localMessage({ id: 'm-1', reactionSummary: { '👍': 1 } }), currentUserReactions: ['👍'] } as Message;
+    const transport = pageWith(
+      [
+        { ...localMessage({ id: 'm-1', reactionSummary: { '👍': 2 } }), currentUserReactions: ['👍'] },
+        { ...localMessage({ id: 'm-2', reactionSummary: { '🔥': 1 } }), currentUserReactions: [] },
+      ],
+      calls,
+    );
 
-    await refreshMineForPage({ source: 'gateway', transport }, [served]);
+    const result = await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+    await settle();
 
+    expect(result.ok).toBe(true);
     expect(mineOf('m-1')).toEqual(['👍']);
-    expect(calls).toEqual([]);
+    expect(mineOf('m-2')).toEqual([]);
+    expect(calls.map((c) => c.url.split('?')[0])).toEqual(['/api/v1/conversations/c-a/messages']);
   });
 
-  test('un geste local pendant la requête GAGNE : la réponse, plus ancienne, ne l’écrase pas', async () => {
+  test('le serveur fait foi : une réaction retirée ailleurs quitte le magasin', async () => {
+    reactionStore.getState().add('m-1', '🔥');
+    const transport = pageWith([{ ...localMessage({ id: 'm-1' }), currentUserReactions: [] }]);
+
+    await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+
+    expect(mineOf('m-1')).toEqual([]);
+  });
+
+  test('un geste local pendant le chargement GAGNE : la page, plus ancienne, ne l’écrase pas', async () => {
     let release: (value: Response) => void = () => undefined;
     const fetchImpl = (() =>
       new Promise<Response>((resolve) => {
@@ -262,39 +259,40 @@ describe('refreshMineForPage — « ma réaction » juste dès le chargement du 
       })) as unknown as typeof fetch;
     const transport = createHttpTransport({ base: '', fetchImpl });
 
-    const pending = refreshMineForPage({ source: 'gateway', transport }, [localMessage({ id: 'm-1', reactionSummary: { '👍': 1 } })]);
+    const pending = loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
     await settle();
     reactionStore.getState().add('m-1', '🔥');
-    release(new Response(JSON.stringify({ success: true, data: { userReactions: [] } }), { status: 200 }));
+    release(
+      new Response(
+        JSON.stringify({ success: true, data: [{ ...localMessage({ id: 'm-1' }), currentUserReactions: [] }] }),
+        { status: 200 },
+      ),
+    );
     await pending;
 
     expect(mineOf('m-1')).toEqual(['🔥']);
   });
 
-  test('une réponse en échec ne touche à rien', async () => {
-    reactionStore.getState().add('m-1', '👍');
-    const transport = createHttpTransport({ base: '', fetchImpl: gatewayFetch({}) });
+  test('un message local non confirmé ne reçoit rien de la page', async () => {
+    reactionStore.getState().add('local-1', '🔥');
+    const transport = pageWith([
+      { ...localMessage({ id: 'local-1', clientMessageId: 'local-1' }), currentUserReactions: [] },
+    ]);
 
-    await refreshMineForPage({ source: 'gateway', transport }, [localMessage({ id: 'm-1', reactionSummary: { '👍': 1 } })]);
+    await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
 
-    expect(mineOf('m-1')).toEqual(['👍']);
+    expect(mineOf('local-1')).toEqual(['🔥']);
   });
-});
 
-describe('loadMessages — la page chargée déclenche le rafraîchissement de « ma réaction »', () => {
-  test('sans action locale, « ma réaction » est posée après le chargement', async () => {
-    const transport = createHttpTransport({
-      base: '',
-      fetchImpl: gatewayFetch({
-        '/api/v1/conversations/c-a/messages': [{ ...localMessage({ id: 'm-1', reactionSummary: { '👍': 1 } }) }],
-        '/api/v1/reactions/m-1': { messageId: 'm-1', reactions: [], totalCount: 1, userReactions: ['👍'] },
-      }),
-    });
+  test('une passerelle qui ne sert pas le champ ne vide rien, et ne coûte aucune requête', async () => {
+    reactionStore.getState().add('m-1', '👍');
+    const calls: Call[] = [];
+    const transport = pageWith([localMessage({ id: 'm-1', reactionSummary: { '👍': 1 } })], calls);
 
-    const result = await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+    await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
     await settle();
 
-    expect(result.ok).toBe(true);
     expect(mineOf('m-1')).toEqual(['👍']);
+    expect(calls).toHaveLength(1);
   });
 });

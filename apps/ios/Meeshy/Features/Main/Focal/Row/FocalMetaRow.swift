@@ -128,7 +128,11 @@ struct FocalMetaRow: View, Equatable {
     @ViewBuilder
     private var editedIndicator: some View {
         if editedAt != nil || isEditSaving {
-            BubbleEditedIndicator(isMe: isMe, isSaving: isEditSaving, hasEditHistory: hasEditHistory, isDark: isDark)
+            // `isMe: false` : ce badge teinte en BLANC le crayon de MA bulle,
+            // posée sur l'accent. La rangée plate n'a aucun fond — même règle
+            // que son texte (`FocalRow.textBlock`) : blanc sur blanc, le
+            // crayon de mes messages modifiés disparaissait en mode clair.
+            BubbleEditedIndicator(isMe: false, isSaving: isEditSaving, hasEditHistory: hasEditHistory, isDark: isDark)
         }
     }
 }

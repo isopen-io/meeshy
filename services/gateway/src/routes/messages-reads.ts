@@ -37,6 +37,7 @@ import { logger, type MessageParams, type MessagesRouteDeps } from './messages-s
 import { callerParticipantWhere } from './conversations/utils/access-control';
 import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
+import { servePostReplyCitations } from '../services/messaging/servedPostReply';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -377,8 +378,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         logger.warn('[MESSAGES] view-once reader state failed — served closed', err as Error)
       );
 
+      // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
+      const [citedMessage] = await servePostReplyCitations(prisma, [message]);
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
-        ...message,
+        ...citedMessage,
         sender: gatedSender,
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
         // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets

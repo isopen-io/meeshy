@@ -125,6 +125,34 @@ final class StarredMessagesStore: ObservableObject {
         persist()
     }
 
+    /// #7939 — une étoile posée depuis un AUTRE appareil. Idempotent : un
+    /// message déjà étoilé garde son instantané (jamais de bascule, contrairement
+    /// à `toggle`), puisque le même `message:starred` revient aussi à l'appareil
+    /// qui l'a posé.
+    func placeRemote(
+        _ source: StarredMessageSource, starredAt: Date,
+        conversationName: String?, conversationAccentColor: String?
+    ) {
+        guard !isStarred(messageId: source.messageId) else { return }
+        let preview: String = {
+            guard source.contentPreview.isEmpty else { return source.contentPreview }
+            guard let kind = source.attachmentKind.flatMap(MediaKindLabel.kind(forAttachmentRawValue:)) else { return "" }
+            return MediaKindLabel.summary(kind)
+        }()
+        toggle(StarredMessageSnapshot(
+            id: source.messageId,
+            conversationId: source.conversationId,
+            conversationName: conversationName,
+            conversationAccentColor: conversationAccentColor,
+            senderUserId: nil,
+            senderName: source.senderName,
+            contentPreview: String(preview.prefix(280)),
+            attachmentKind: source.attachmentKind,
+            starredAt: starredAt,
+            sentAt: source.sentAt
+        ))
+    }
+
     func snapshot(for messageId: String) -> StarredMessageSnapshot? {
         snapshots.first { $0.id == messageId }
     }
@@ -151,6 +179,53 @@ final class StarredMessagesStore: ObservableObject {
     private static func load(from defaults: UserDefaults, decoder: JSONDecoder) -> [StarredMessageSnapshot] {
         guard let data = defaults.data(forKey: "meeshy_starred_messages") else { return [] }
         return decoder.decodeOrLog([StarredMessageSnapshot].self, from: data, field: "starred messages", logger: Logger.starred) ?? []
+    }
+}
+
+// MARK: - Relais temps réel (#7939)
+
+extension StarredMessagesStore {
+    /// Ce qu'une mutation du relais de conversation FERMÉE fait aux favoris —
+    /// le pendant de `ConversationSocketHandler`, qui ne tient que la
+    /// conversation ouverte. Une étoile posée d'un autre appareil compose son
+    /// instantané depuis GRDB (le message absent du cache n'en compose aucun) ;
+    /// un message étoilé modifié met l'aperçu à jour ; supprimé ou désétoilé,
+    /// il quitte les favoris.
+    nonisolated static func follow(
+        _ mutation: RealtimeMessageMutation,
+        persistence: MessagePersistenceActor,
+        store: StarredMessagesStore? = nil,
+        conversationLookup: @escaping @Sendable (String) async -> MeeshyConversation? = { await cachedConversation(id: $0) }
+    ) async {
+        switch mutation {
+        case let .starred(messageId, conversationId, starredAt):
+            let languages = await MessagePersistenceActor.readerPrism()
+            let source: StarredMessageSource?
+            do {
+                source = try persistence.starredSource(messageId: messageId, preferredLanguages: languages)
+            } catch {
+                Logger.starred.error("starredSource failed \(messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                return
+            }
+            guard let source else { return }
+            let conversation = await conversationLookup(conversationId)
+            await MainActor.run {
+                (store ?? .shared).placeRemote(
+                    source, starredAt: starredAt,
+                    conversationName: conversation?.name, conversationAccentColor: conversation?.accentColor
+                )
+            }
+        case let .unstarred(messageId), let .deleted(messageId, _):
+            await MainActor.run { (store ?? .shared).remove(messageId: messageId) }
+        case let .edited(messageId, content, _):
+            await MainActor.run { (store ?? .shared).updatePreview(messageId: messageId, contentPreview: content) }
+        case .callNoticeUpdated, .reactionAdded, .reactionRemoved, .consumed, .viewOnceOpened:
+            return
+        }
+    }
+
+    nonisolated private static func cachedConversation(id: String) async -> MeeshyConversation? {
+        await CacheCoordinator.shared.conversations.load(for: "list").snapshot()?.first { $0.id == id }
     }
 }
 

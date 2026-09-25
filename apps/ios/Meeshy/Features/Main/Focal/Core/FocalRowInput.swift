@@ -177,6 +177,10 @@ struct FocalRowInput: Equatable {
     let focusTimestamp: String?
     /// Date d'envoi — affichée en clair (jour + heure) sur le message en focus.
     let sentAt: Date?
+    /// La largeur que la rangée REÇOIT dans le fil (écran moins les marges de
+    /// section), posée par l'hôte. Les blocs à largeur FIXE — la grille média —
+    /// s'y plient ; `nil` ⇒ leur gabarit nominal.
+    let availableWidth: CGFloat?
 
     init(
         localId: String,
@@ -216,7 +220,8 @@ struct FocalRowInput: Equatable {
         isLastReceivedMessage: Bool = false,
         isFocused: Bool = false,
         sentAt: Date? = nil,
-        focusTimestamp: String? = nil
+        focusTimestamp: String? = nil,
+        availableWidth: CGFloat? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -256,6 +261,7 @@ struct FocalRowInput: Equatable {
         self.isFocused = isFocused
         self.sentAt = sentAt
         self.focusTimestamp = focusTimestamp
+        self.availableWidth = availableWidth
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -309,6 +315,7 @@ struct FocalRowInput: Equatable {
             && lhs.isFocused == rhs.isFocused
             && lhs.sentAt == rhs.sentAt
             && lhs.focusTimestamp == rhs.focusTimestamp
+            && lhs.availableWidth == rhs.availableWidth
     }
 }
 

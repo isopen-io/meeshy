@@ -17,7 +17,11 @@ import { readFileSync } from 'node:fs';
  * `Color.black.opacity(0.5)` + `relative(24`, `solo ? 64 : 44`) sont lues par
  * une regex DÉDIÉE, ancrée sur le contexte qui les rend uniques dans le
  * fichier (le motif déjà employé par `emojiBoxSwift` dans `check-curve.mjs` pour une
- * formule sans nom).
+ * formule sans nom). Depuis #7881, `slots(for:maxWidth:)` est PARAMÉTRÉ par
+ * la largeur de la rangée (`maxWidth`, dont `gridMaxWidth` n'est plus que le
+ * défaut) : la case 1 et la colonne gauche de la case 3 s'écrivent sur
+ * `maxWidth`, et les deux regex acceptent l'un ou l'autre nom — la COTE
+ * lue (240, 0.6) est la même, seul le nom de la largeur a changé.
  *
  * EXTRAITE de `check-curve.mjs` (revue #6169) : l'hôte franchissait le seuil
  * de 1 000 lignes en l'accueillant. Elle REND ses défauts plutôt que de
@@ -79,7 +83,7 @@ export function mediaGridCurveFailures({ root, count }) {
   );
 
   const soloImageHeightSwift = (() => {
-    const m = /FocalMediaSlot\(width:\s*gridMaxWidth,\s*height:\s*(-?[0-9.]+)\)/.exec(focalAttachmentSwift);
+    const m = /FocalMediaSlot\(width:\s*(?:maxWidth|gridMaxWidth),\s*height:\s*(-?[0-9.]+)\)/.exec(focalAttachmentSwift);
     return m === null ? null : Number(m[1]);
   })();
   check(
@@ -99,7 +103,7 @@ export function mediaGridCurveFailures({ root, count }) {
   );
 
   const tripleLeftRatioSwift = (() => {
-    const m = /leftW\s*=\s*\(gridMaxWidth\s*-\s*gridSpacing\)\s*\*\s*(-?[0-9.]+)/.exec(focalAttachmentSwift);
+    const m = /leftW\s*=\s*\((?:maxWidth|gridMaxWidth)\s*-\s*gridSpacing\)\s*\*\s*(-?[0-9.]+)/.exec(focalAttachmentSwift);
     return m === null ? null : Number(m[1]);
   })();
   check(

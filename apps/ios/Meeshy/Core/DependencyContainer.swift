@@ -167,6 +167,7 @@ final class DependencyContainer {
         _ mutation: RealtimeMessageMutation,
         into persistence: MessagePersistenceActor
     ) async {
+        await StarredMessagesStore.follow(mutation, persistence: persistence)
         do {
             switch mutation {
             case let .edited(messageId, content, editedAt):
@@ -194,6 +195,8 @@ final class DependencyContainer {
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
             case let .viewOnceOpened(messageId):
                 try await persistence.markViewOnceOpened(localId: messageId)
+            case .starred, .unstarred:
+                break
             }
         } catch {
             containerLogger.error("Realtime message persistence failed: \(error.localizedDescription, privacy: .public)")

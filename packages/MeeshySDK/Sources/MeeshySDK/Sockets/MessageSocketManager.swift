@@ -126,30 +126,6 @@ public struct MessageRestoredForMeEvent: Decodable, Sendable {
     }
 }
 
-public struct MessagePinnedEvent: Decodable, Sendable {
-    public let messageId: String
-    public let conversationId: String
-    public let pinnedBy: String?
-    public let pinnedAt: String?
-
-    public init(messageId: String, conversationId: String, pinnedBy: String? = nil, pinnedAt: String? = nil) {
-        self.messageId = messageId
-        self.conversationId = conversationId
-        self.pinnedBy = pinnedBy
-        self.pinnedAt = pinnedAt
-    }
-}
-
-public struct MessageUnpinnedEvent: Decodable, Sendable {
-    public let messageId: String
-    public let conversationId: String
-
-    public init(messageId: String, conversationId: String) {
-        self.messageId = messageId
-        self.conversationId = conversationId
-    }
-}
-
 public struct ReactionAggregationEvent: Decodable, Sendable {
     public let emoji: String
     public let count: Int
@@ -1410,6 +1386,8 @@ public protocol MessageSocketProviding: Sendable {
     var messageRestoredForMe: PassthroughSubject<MessageRestoredForMeEvent, Never> { get }
     var messagePinned: PassthroughSubject<MessagePinnedEvent, Never> { get }
     var messageUnpinned: PassthroughSubject<MessageUnpinnedEvent, Never> { get }
+    /// `message:starred` — l'étoile PERSONNELLE, room `user:<id>` (#7939).
+    var messageStarred: PassthroughSubject<MessageStarredEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
     var reactionRemoved: PassthroughSubject<ReactionUpdateEvent, Never> { get }
     var attachmentReactionAdded: PassthroughSubject<AttachmentReactionUpdateEvent, Never> { get }
@@ -1725,6 +1703,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     public let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
+    public let messageStarred = PassthroughSubject<MessageStarredEvent, Never>()
 
     // Combine publishers — reactions
     public let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
@@ -3028,19 +3007,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        socket.on("message:pinned") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessagePinnedEvent.self, from: data) { [weak self] event in
-                self?.messagePinned.send(event)
-            }
-        }
-
-        socket.on("message:unpinned") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageUnpinnedEvent.self, from: data) { [weak self] event in
-                self?.messageUnpinned.send(event)
-            }
-        }
+        registerMessageMarkHandlers(on: socket)
 
         // --- Reaction events ---
 

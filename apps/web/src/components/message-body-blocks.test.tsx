@@ -5,10 +5,10 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
-import type { Attachment } from '@/lib/api/types';
+import type { Attachment, Message } from '@/lib/api/types';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { MEDIA_IMAGE_DATA_URI } from '@/lib/api/fixtures-media';
-import type { StoryCitation } from '@/lib/view/message-body';
+import { storyCitationOf, type StoryCitation } from '@/lib/view/message-body';
 
 import { LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 
@@ -219,6 +219,40 @@ describe('StoryCitationCard — fond pâle, bandeau dans la carte, texte centré
     expect(html).not.toContain('data-story-scene');
     expect(html).not.toContain('<button');
     expect(html).toContain('aria-label="réponse à sa story, Story indisponible"');
+  });
+});
+
+/**
+ * #7950 — DE LA CHARGE SERVIE AU PIXEL. La passerelle sert, pour une story
+ * que son auteur a supprimée, un `postReplyTo` vidé et marqué `deletedAt`. La
+ * loi (`storyCitationOf`) ET la carte doivent en faire « Story indisponible »,
+ * sans scène ni bouton — la vignette laissée par une charge plus ancienne ne
+ * doit ni se peindre ni rouvrir la story.
+ */
+describe('StoryCitationCard — story SUPPRIMÉE par son auteur (#7950)', () => {
+  const reponse = {
+    id: 'm1',
+    conversationId: 'c-a',
+    senderId: 'u-bruno',
+    content: 'Superbe !',
+    storyReplyToId: 'p1',
+    postReplyTo: {
+      id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Coucher de soleil',
+      thumbnailUrl: 'https://cdn.meeshy.me/soleil.jpg', createdAt: '2026-09-10T08:00:00.000Z',
+      deletedAt: '2026-09-10T09:00:00.000Z',
+    },
+  } as unknown as Message & { readonly postReplyTo: unknown };
+
+  test('la charge marquée deletedAt se rend « Story indisponible », sans vignette ni geste', () => {
+    const citation = storyCitationOf(reponse);
+    expect(citation).not.toBeNull();
+    const html = renderToStaticMarkup(
+      <StoryCitationCard citation={citation!} accent="#46bdca" language="fr" now={new Date('2026-09-10T12:00:00.000Z')} onOpen={() => {}} />,
+    );
+    expect(html).toContain('Story indisponible');
+    expect(html).not.toContain('soleil');
+    expect(html).not.toContain('data-story-scene');
+    expect(html).not.toContain('<button');
   });
 });
 
