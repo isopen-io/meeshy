@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { lazy, Suspense, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -16,6 +16,13 @@ import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { ReportSheet } from './report-sheet';
 
 /**
+ * LA FEUILLE D'ÉDITION, CHARGÉE À LA DEMANDE (#7534) — même discipline que ce
+ * panneau lui-même : « Modifier » est plus rare qu'un simple survol du menu,
+ * son chunk (`publication_edit_sheet`, `budgets.json`) n'arrive qu'au tap.
+ */
+const PublicationEditSheet = lazy(() => import('./publication-edit-sheet').then((m) => ({ default: m.PublicationEditSheet })));
+
+/**
  * **LE PANNEAU DU MENU « ⋯ », CHARGÉ À LA DEMANDE** (#7533) — même discipline
  * que les feuilles du composeur (`effects-sheet`, `language-sheet`) : le fil
  * ne paie que le BOUTON ; les entrées, leurs icônes et la feuille de motifs
@@ -31,6 +38,7 @@ export type PostMenuPanelProps = {
   readonly postId: string;
   readonly authorName: string;
   readonly text: string | undefined;
+  readonly originalText: string | undefined;
   readonly bookmarked: boolean;
   readonly menu: PostMenuHost;
   readonly onShare?: ((postId: string) => void) | undefined;
@@ -44,10 +52,34 @@ export type PostMenuPanelProps = {
   readonly closeAndFocusButton: () => void;
   readonly reporting: boolean;
   readonly setReporting: (value: boolean) => void;
+  readonly editing: boolean;
+  readonly setEditing: (value: boolean) => void;
 };
 
 export function PostMenuPanel(props: PostMenuPanelProps) {
-  const { open, entries, postId, authorName, text, bookmarked, menu, onShare, onGesture, box, label, activeIndex, menuRef, itemRefs, onMenuKeyDown, closeAndFocusButton, reporting, setReporting } = props;
+  const {
+    open,
+    entries,
+    postId,
+    authorName,
+    text,
+    originalText,
+    bookmarked,
+    menu,
+    onShare,
+    onGesture,
+    box,
+    label,
+    activeIndex,
+    menuRef,
+    itemRefs,
+    onMenuKeyDown,
+    closeAndFocusButton,
+    reporting,
+    setReporting,
+    editing,
+    setEditing,
+  } = props;
   const language = currentInterfaceLanguage();
 
   const items: readonly { readonly id: PostMenuEntry; readonly label: string; readonly icon: ReactNode; readonly run: () => void }[] = entries.map(
@@ -68,6 +100,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
           };
         case 'pin':
           return { id, label: translate(language, 'feed.post.menu.pin'), icon: <Glyph name="pushPin" size={16} />, run: () => menu.onPin(postId) };
+        case 'edit':
+          return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => setEditing(true) };
         case 'delete':
           return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
         case 'report':
@@ -139,6 +173,24 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
           }}
           onClose={() => setReporting(false)}
         />
+      ) : null}
+
+      {editing ? (
+        <Suspense fallback={null}>
+          <PublicationEditSheet
+            postId={postId}
+            original={originalText ?? text ?? ''}
+            onSave={menu.onEdit}
+            /* LE FOCUS REVIENT AU « ⋯ » — la feuille a démonté le bouton qui
+               vient de l'ouvrir (`closeAndFocusButton`, déjà appelé à
+               l'ouverture de la feuille, le referme une seconde fois sans
+               effet puisque `open` est déjà faux). */
+            onClose={() => {
+              setEditing(false);
+              closeAndFocusButton();
+            }}
+          />
+        </Suspense>
       ) : null}
     </>
   );

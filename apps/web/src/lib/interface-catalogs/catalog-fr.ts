@@ -136,11 +136,21 @@ const fr = {
   'feed.post.menu.unsave': 'Retirer des enregistrements',
   'feed.post.menu.pin': 'Épingler',
   'feed.post.menu.delete': 'Supprimer',
+  /* MODIFIER LE TEXTE (#7534) — miroir `FeedPostCard+Header.swift:213`
+     (`feed.post.edit` = « Modifier ») et `EditPostSheet.swift` pour les cinq
+     clés de la feuille. */
+  'feed.post.edit': 'Modifier',
+  'feed.post.edit.title': 'Modifier le post',
+  'feed.post.edit.body.a11y': 'Contenu de la publication',
+  'feed.post.edit.remaining.a11y': '{count} caractères restants',
+  'feed.post.edit.publish': 'Publier',
   'report.post.title': 'Signaler cette publication',
   'feed.post.copied': 'Texte copié',
   'feed.post.copy_failed': 'Impossible de copier le texte',
   'feed.post.pinned': 'Publication épinglée',
   'feed.post.pin_failed': 'Impossible d’épingler la publication',
+  'feed.post.edited': 'Publication modifiée',
+  'feed.post.edit_failed': 'La publication n’a pas pu être modifiée',
   'feed.post.deleted': 'Publication supprimée',
   'feed.post.delete_failed': 'Erreur lors de la suppression',
   /* REPARTAGER DEPUIS LE RAIL DES RÉELS (#6484) — miroir `ReelsViewModel.repost`

@@ -418,7 +418,16 @@
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #7533, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-23 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,24 Ko zlib -9 -- le PANNEAU du menu « ⋯ » des cartes du fil (`components/publication-menu-panel.tsx` : les sept entrees, leurs icones, la feuille de motifs `ReportSheet`), charge a la demande au premier toucher du bouton. Sorti du chunk `feed` AVANT la fusion : monte en ligne, il portait `feed` a 14,12 Ko, au-dessus de son plafond de 14 ; a la demande, `feed` mesure 13,80 et ne paie que le bouton (`feed-post-menu.tsx`). Le fichier s'appelle `publication-menu-panel` et non `feed-post-menu-panel` pour deux raisons : ne pas retomber dans le motif `^assets/feed-` de l'entree `feed`, et echapper a la regle `post-*` du `.gitignore` racine, qui ignore en silence tout fichier dont le nom commence par `post-`. Plafond : 1,24 arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "source": "Mesure de measure-weight.mjs le 2026-09-23 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,24 Ko zlib -9 -- le PANNEAU du menu « ⋯ » des cartes du fil (`components/publication-menu-panel.tsx` : les sept entrees, leurs icones, la feuille de motifs `ReportSheet`), charge a la demande au premier toucher du bouton. Sorti du chunk `feed` AVANT la fusion : monte en ligne, il portait `feed` a 14,12 Ko, au-dessus de son plafond de 14 ; a la demande, `feed` mesure 13,80 et ne paie que le bouton (`feed-post-menu.tsx`). Le fichier s'appelle `publication-menu-panel` et non `feed-post-menu-panel` pour deux raisons : ne pas retomber dans le motif `^assets/feed-` de l'entree `feed`, et echapper a la regle `post-*` du `.gitignore` racine, qui ignore en silence tout fichier dont le nom commence par `post-`. Plafond : 1,24 arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins. REMESURE le 2026-09-25 par #7534 (l'entree « Modifier », son icone `pencilSimple` et l'import differe de `publication-edit-sheet`) : 2,00 Ko gzip -9 -- toujours sous le plafond, qui ne bouge pas."
+      }
+    },
+    "publication_edit_sheet": {
+      "pattern": "^assets/publication-edit-sheet-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #7534, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-25 (`bun run build` puis gzip -9 du fichier bati) : 1,14 Ko gzip -9 -- la FEUILLE d'edition du texte d'une publication (`components/publication-edit-sheet.tsx` : le champ, le compteur de caracteres, Annuler/Publier, l'erreur avec Reessayer), chargee A LA DEMANDE depuis `publication-menu-panel.tsx` au tap de « Modifier » -- le fil ne paie l'editeur qu'a ce moment (motif D-54, meme discipline que `publication_comments_sheet` et `publication_viewers_sheet`, ses deux voisines directes). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
     "interface_catalogs_onboarding": {

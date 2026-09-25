@@ -1,5 +1,5 @@
 import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
-import { minutesAgo } from './fixtures-base';
+import { VIEWER_HANDLE, VIEWER_ID, minutesAgo } from './fixtures-base';
 import { REEL_CLIP_BARS, REEL_CLIP_RGB, REEL_CLIP_VOICE } from './fixtures-reel-clips';
 
 /**
@@ -230,6 +230,27 @@ export const POST_LONG_TEXT: FeedPost = {
     'Ce matin j’ai relu mes notes de la semaine dernière et je me rends compte que trois idées méritaient vraiment d’être creusées davantage avant la réunion.',
   originalLanguage: 'fr',
   likeCount: 8,
+};
+
+/**
+ * `POST_MINE` — LA SEULE publication du corpus dont l'auteur est
+ * `VIEWER_ID` (#7534) : sans elle, « Modifier » (menu « ⋯ », réservé à
+ * l'auteur par `postMenuEntries`) n'a de sujet sur AUCUNE fixture. Datée
+ * `minutesAgo(45)`, entre `POST_LONG_TEXT` (40) et `POST_REPOST` (48) — ni en
+ * tête ni en seconde position de la page 1 (`POST_SCENE_TEXT` à 3 minutes,
+ * `POST_IMAGE_FR` à 5 : les deux cartes de tête de la capture STANDING
+ * `feed` ne bougent pas).
+ */
+export const POST_MINE: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-mine',
+  type: 'POST',
+  createdAt: minutesAgo(45),
+  author: { id: VIEWER_ID, displayName: 'Vous', username: VIEWER_HANDLE },
+  content: 'Je viens de publier ceci — encore le temps de corriger une coquille.',
+  originalLanguage: 'fr',
+  likeCount: 3,
+  commentCount: 1,
 };
 
 /** `POST_REPOST` — attribution de republication, `repostOf.author.username`. */
@@ -889,6 +910,7 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_CAROUSEL,
   POST_HERO,
   POST_LONG_TEXT,
+  POST_MINE,
   POST_REPOST,
   REEL_PORTRAIT,
   POST_VIDEO,
@@ -906,11 +928,11 @@ const NAMED_POSTS: readonly FeedPost[] = [
 
 /**
  * DES POSTS DE REMPLISSAGE (#5893) — pour qu'une page 2 existe (limite 20) :
- * `NAMED_POSTS` (19, depuis #6901 — la scène décorée aux six couches
- * s'ajoute aux cinq scènes de #6898) + 18 remplissages = 37, strictement
- * plus vieux que le dernier des `NAMED_POSTS` (`minutesAgo(68)`,
- * `POST_LEGENDE_MIXTE` — les six scènes sont toutes datées entre 3 et 64
- * minutes, donc plus RÉCENTES, jamais en tête de ce calcul).
+ * `NAMED_POSTS` (20, depuis #7534 — `POST_MINE`, `minutesAgo(45)`, s'ajoute
+ * aux dix-neuf de #6901) + 18 remplissages = 38, strictement plus vieux que
+ * le dernier des `NAMED_POSTS` (`minutesAgo(68)`, `POST_LEGENDE_MIXTE` — les
+ * six scènes sont toutes datées entre 3 et 64 minutes, donc plus RÉCENTES,
+ * jamais en tête de ce calcul).
  *
  * Ces DEUX nombres avaient dérivé — la prose disait « (8) » et
  * « `minutesAgo(63)` » alors que le corpus portait déjà douze posts nommés

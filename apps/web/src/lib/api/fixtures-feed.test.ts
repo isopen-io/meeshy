@@ -21,6 +21,7 @@ import {
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
+import { VIEWER_ID } from './fixtures-base';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { feedMediaKindOf } from '@/lib/feed/layout';
@@ -35,6 +36,21 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
 
   test('chaque id est UNIQUE — un doublon casserait le dédoublonnage de flattenFeedPages', () => {
     expect(new Set(FEED_POSTS.map((p) => p.id)).size).toBe(FEED_POSTS.length);
+  });
+
+  /**
+   * **LE CORPUS PORTE UNE PUBLICATION À MOI** (#7534) — sans elle, « Modifier »
+   * (menu « ⋯ », `postMenuEntries` réservé à l'auteur) n'est visible sur AUCUNE
+   * fixture, et la capture de cet écran n'a pas de sujet. Ni en tête ni en
+   * seconde position : les deux cartes de tête de la capture STANDING `feed`
+   * (§ `scripts/capture.mjs`) ne bougent pas.
+   */
+  test('une publication est de VIEWER_ID, ni en tête ni en seconde position de la page 1', () => {
+    const mine = FEED_POSTS.find((p) => p.author?.id === VIEWER_ID);
+    expect(mine).toBeDefined();
+
+    const page = pageOfFeed(FEED_POSTS, { limit: 20 });
+    expect(page.posts.slice(0, 2).some((p) => p.author?.id === VIEWER_ID)).toBe(false);
   });
 
   test('POST_TEXT_RANK2 porte une traduction UNIQUEMENT pour un rang ≠ 1 (leçon 261)', () => {

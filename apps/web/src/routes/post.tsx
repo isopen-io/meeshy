@@ -50,10 +50,16 @@ import { FeedSkeleton } from './feed';
  * `lib/api/comment-gestures.ts`) : chaque geste a un effet immédiat, et le
  * refus du réseau le reprend sur SA rangée.
  *
- * CE QUI N'EST PAS REPRIS, ASSUMÉ : la republication, le menu « Plus
- * d'options », et dans le fil de commentaires lui-même RÉPONDRE (les réponses
- * imbriquées, le compteur `↰ N`), les médias d'un commentaire et les échos
- * socket — chacun à sa propre marche, toutes tenues par #7118.
+ * **LE MENU « ⋯ » DE LA CARTE EST CÂBLÉ** (#7534, suivi de #7533 — la fiche
+ * en manquait) : `usePostGesture().menu` est déstructuré ici comme sur les
+ * quatre autres hôtes (`feed.tsx`, `bookmarks.tsx`, `hashtag.tsx`,
+ * `user-profile.tsx`), et `isDetail` retire déjà l'entrée « Ouvrir »
+ * (`feed-post-card.tsx`, `postMenuEntries`).
+ *
+ * CE QUI N'EST PAS REPRIS, ASSUMÉ : la republication, et dans le fil de
+ * commentaires lui-même RÉPONDRE (les réponses imbriquées, le compteur
+ * `↰ N`), les médias d'un commentaire et les échos socket — chacun à sa
+ * propre marche, toutes tenues par #7118.
  */
 
 export function PostDetailHeader() {
@@ -135,7 +141,7 @@ export default function PostDetailScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare } = usePostGesture();
+  const { announcement, onGesture, onShare, menu } = usePostGesture();
   const frame = useRef<HTMLElement | null>(null);
   // MÊME élection que le fil (#6898 § 5.3) — un `IntersectionObserver`
   // dédié à ce scrollport.
@@ -200,6 +206,7 @@ export default function PostDetailScreen() {
             onGesture={onGesture}
             onShare={onShare}
             onComment={onComment}
+            menu={menu}
             preferredLanguages={readerLanguages}
             onOpenScene={sceneGallery.onOpenScene}
             registerScene={registerScene}

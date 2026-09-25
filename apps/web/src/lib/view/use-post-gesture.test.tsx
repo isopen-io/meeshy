@@ -170,6 +170,82 @@ describe('usePostGesture — commenter conduit au fil, à son ancre (#7113)', ()
  * toujours et rend `feed.post.repost.success`, que ce hook doit traduire
  * avant de l'`announce()`r — jamais la clé brute.
  */
+/**
+ * **MODIFIER LE TEXTE — L'ANNONCE, ET L'ISSUE RENDUE** (#7534) — la feuille
+ * d'édition attend l'issue de `menu.onEdit` pour se fermer (`'done'`) ou
+ * rester ouverte (`'offline'`/`'failed'`) ; ce hook doit donc RENDRE l'issue
+ * en plus de l'annoncer, contrairement aux trois autres gestes du menu qui
+ * n'ont pas de surface qui attend.
+ */
+describe('usePostGesture — modifier le texte annonce dans la langue d’interface, et rend l’issue (#7534)', () => {
+  function EditHarness({ postId }: { readonly postId: string }) {
+    const { announcement, menu } = usePostGesture();
+    return (
+      <div>
+        <span data-live>{announcement}</span>
+        <button type="button" data-edit onClick={() => void menu.onEdit(postId, 'Texte corrigé')} />
+      </div>
+    );
+  }
+
+  function montreEdit(postId: string): HTMLDivElement {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<EditHarness postId={postId} />);
+    });
+    return container;
+  }
+
+  /* Sous fixtures (`__FIXTURES__`), `editPostAction` rend `'failed'` pour une
+     publication ABSENTE du cache (`findCardPost` ne la trouve pas) — c'est le
+     seul chemin déterministe SANS seed de cache pour exercer une issue non
+     confirmée sous ce harnais, exactement comme `onGesture` ne peut exercer
+     `ok:false` que par une détection de fonctionnalité du navigateur (voir le
+     commentaire du fichier). */
+  test('fr : une publication introuvable annonce l’échec, jamais la clé brute', async () => {
+    document.documentElement.lang = 'fr';
+    const el = montreEdit('introuvable');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-edit]')!.click();
+    });
+    await laisserPasser();
+    const texte = liveOf(el);
+    expect(texte).not.toBe('feed.post.edit_failed');
+    expect(texte).toBe(translate('fr', 'feed.post.edit_failed'));
+  });
+
+  test('la promesse rendue porte l’issue', async () => {
+    let issue: string | undefined;
+    function CaptureHarness() {
+      const { menu } = usePostGesture();
+      return (
+        <button
+          type="button"
+          data-edit
+          onClick={() => {
+            void menu.onEdit('introuvable', 'Texte').then((outcome) => {
+              issue = outcome;
+            });
+          }}
+        />
+      );
+    }
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<CaptureHarness />);
+    });
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-edit]')!.click();
+    });
+    await laisserPasser();
+    expect(issue).toBe('failed');
+  });
+});
+
 describe('usePostGesture — repartager annonce dans la langue d’interface (#6484)', () => {
   function RepostHarness({ postId }: { readonly postId: string }) {
     const { announcement, onRepost } = usePostGesture();

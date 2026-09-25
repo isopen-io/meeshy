@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 
+import type { PostActionOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
@@ -37,6 +38,11 @@ export type PostMenuHost = {
   readonly viewerId: string | null;
   readonly onCopyText: (text: string) => void;
   readonly onPin: (postId: string) => void;
+  /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
+   * la feuille l'attend pour se fermer (`'done'`) ou rester ouverte
+   * (`'offline'`/`'failed'`), là où les autres gestes n'ont pas de surface
+   * qui attend. */
+  readonly onEdit: (postId: string, content: string) => Promise<PostActionOutcome>;
   readonly onDelete: (postId: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
 };
@@ -54,6 +60,7 @@ export function FeedPostMenu({
   authorId,
   authorName,
   text,
+  originalText,
   bookmarked,
   isDetail,
   tone,
@@ -65,6 +72,11 @@ export function FeedPostMenu({
   readonly authorId: string | undefined;
   readonly authorName: string;
   readonly text: string | undefined;
+  /** LE TEXTE TEL QUE L'AUTEUR L'A ÉCRIT (#7534, `card-model.ts#FeedCardText.original`)
+   * — ce que la feuille d'édition ouvre, JAMAIS `text` (la traduction servie
+   * par le Prisme) : `EditPostSheet.swift` hydrate depuis `post.content`,
+   * l'original, pas l'affiché. */
+  readonly originalText: string | undefined;
   readonly bookmarked: boolean;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
@@ -74,6 +86,7 @@ export function FeedPostMenu({
   readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
 }) {
   const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -144,7 +157,7 @@ export function FeedPostMenu({
         </span>
       </button>
 
-      {open || reporting ? (
+      {open || reporting || editing ? (
         <Suspense fallback={null}>
           <PostMenuPanel
             open={open}
@@ -152,6 +165,7 @@ export function FeedPostMenu({
             postId={postId}
             authorName={authorName}
             text={text}
+            originalText={originalText}
             bookmarked={bookmarked}
             menu={menu}
             onShare={onShare}
@@ -165,6 +179,8 @@ export function FeedPostMenu({
             closeAndFocusButton={closeAndFocusButton}
             reporting={reporting}
             setReporting={setReporting}
+            editing={editing}
+            setEditing={setEditing}
           />
         </Suspense>
       ) : null}
