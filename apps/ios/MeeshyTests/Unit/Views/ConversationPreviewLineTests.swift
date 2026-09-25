@@ -47,6 +47,7 @@ final class ConversationPreviewLineTests: XCTestCase {
 
     // MARK: - Ce que VoiceOver dit
 
+    @MainActor
     func test_spokenText_saysTheAuthorAndTheSegments_withoutAnyGlyph() {
         let preview = ConversationPreview(
             kind: .message, icon: .voice, author: .member(id: "p", label: "Alice"),
@@ -61,6 +62,7 @@ final class ConversationPreviewLineTests: XCTestCase {
 
     /// « 0:12 » lu tel quel par VoiceOver se dit comme une HEURE. La ligne
     /// visible garde l'horloge du composeur commun ; la ligne dite la convertit.
+    @MainActor
     func test_spokenText_saysAClockAsADuration_neverAsATimeOfDay() {
         let locale = Locale(identifier: "en_US")
         let preview = ConversationPreview(
@@ -75,6 +77,20 @@ final class ConversationPreviewLineTests: XCTestCase {
                 + LocalizedNumber.spokenDuration(seconds: 3725, locale: locale)
         )
         XCTAssertFalse(spoken.contains("0:12"))
+    }
+
+    /// #7871 — la ligne visible est sans notation depuis #7849 ; la ligne
+    /// DITE doit l'être aussi, sinon VoiceOver épelle les astérisques.
+    @MainActor
+    func test_spokenText_saysAFormattedMessage_withoutItsNotation() {
+        let preview = ConversationPreview(
+            kind: .message, author: .member(id: "p", label: "Alice"),
+            segments: [.label("un **mot** et [la doc](https://x.fr), `code`")]
+        )
+
+        let spoken = ConversationPreviewLine.spokenText(preview, strings: strings())
+
+        XCTAssertEqual(spoken, "Alice : un mot et la doc, code")
     }
 
     func test_clockSeconds_readsOnlyAClock() {
