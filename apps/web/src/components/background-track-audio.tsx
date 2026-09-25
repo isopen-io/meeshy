@@ -3,6 +3,10 @@ import { useEffect, useRef } from 'react';
 import { protectedMediaDeps, type ProtectedMediaDeps, type ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
+import { trackMediaTimeline } from '@/lib/canvas/media-seek';
+
+import type { SceneClockHandle } from './scene-clock';
+import { useSceneMediaSync } from './scene-media-seek';
 
 /**
  * `BackgroundTrackAudio` (#6899, extrait en site UNIQUE pour #6903) — LE SON
@@ -37,6 +41,9 @@ export type BackgroundTrackAudioProps = {
   /** Injectable pour les témoins UNIQUEMENT — la production prend
    * `defaultMediaDeps`, dont l'identité est gardée par un témoin. */
   readonly mediaDeps?: ProtectedMediaDeps;
+  /** L'horloge de la scène (`ScenePlayer.onClock`, #7879) — la piste se
+   * recale à chaque `seek` du parcours au doigt. Absente ⇒ inchangé. */
+  readonly clock?: SceneClockHandle | null;
 };
 
 /** `NotAllowedError` — le refus de la politique de lecture automatique. */
@@ -88,6 +95,7 @@ function BackgroundTrackElement({
   muted,
   onDurationKnown,
   onPlaybackBlocked,
+  clock = null,
   src,
 }: Omit<BackgroundTrackAudioProps, 'mediaDeps' | 'onUnavailable'> & { readonly src: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -101,27 +109,35 @@ function BackgroundTrackElement({
     if (el !== null) el.volume = track.volume;
   }, [track.volume]);
 
-  useEffect(() => {
-    const el = audioRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    const startedAt = performance.now();
-    const start = () => {
-      void el.play().catch((error: unknown) => {
-        if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked();
-      });
-    };
-    const remaining = Math.max(0, track.startOffsetMs - playedMsRef.current);
-    const timer = remaining > 0 ? window.setTimeout(start, remaining) : null;
-    if (timer === null) start();
-    return () => {
-      playedMsRef.current += performance.now() - startedAt;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [playing, muted, track.startOffsetMs]);
+  // LA PISTE SUIT LA TIMELINE DE LA SCÈNE (#7879) — la MÊME loi que les
+  // médias de la scène (`trackMediaTimeline` → `mediaTimeAt`) : départ
+  // différé, fenêtre source, boucle, en lecture comme au seek. Sans horloge
+  // qui mène (hôte sans moteur, scène sans durée), elle garde son départ
+  // différé compté en temps de LECTURE (la pause l'arrête), recompté depuis
+  // le temps pointé à chaque seek.
+  useSceneMediaSync({
+    ref: audioRef,
+    clock,
+    timeline: trackMediaTimeline(track),
+    playing,
+    restartKeys: [muted, track.startOffsetMs],
+    onPlayRefused: (error, el) => {
+      if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked();
+    },
+    freePlay: (_el, start) => {
+      const startedAt = performance.now();
+      const remaining = Math.max(0, track.startOffsetMs - playedMsRef.current);
+      const timer = remaining > 0 ? window.setTimeout(start, remaining) : null;
+      if (timer === null) start();
+      return () => {
+        playedMsRef.current += performance.now() - startedAt;
+        if (timer !== null) window.clearTimeout(timer);
+      };
+    },
+    onSeeked: (t) => {
+      playedMsRef.current = Math.max(0, t) * 1000;
+    },
+  });
 
   // Le DÉMONTAGE (un hôte qui REMONTE la piste à chaque tour de boucle,
   // #6903 — `key` changée — ou qui quitte l'écran) arrête le son : effet

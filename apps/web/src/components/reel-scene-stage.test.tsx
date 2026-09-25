@@ -266,10 +266,58 @@ describe('ReelSceneStage — un réel composé se rejoue comme sa scène (T6, #6
     await act(async () => {
       video.dispatchEvent(new window.Event('loadedmetadata'));
     });
+    // La barre est devenue un SLIDER (#7879) : sa zone de frappe est la
+    // sœur de la boîte, posée au bas du cadre, et le rempli y vit au ras.
     const bar = el.querySelector('[data-reel-progress]') as HTMLElement;
-    expect(bar.parentElement).toBe(frame);
+    const slider = bar.closest('[role="slider"]') as HTMLElement;
+    expect(slider.parentElement).toBe(frame);
     expect(stage.contains(bar)).toBe(false);
-    expect(bar.className).toContain('bottom-0');
+    expect(slider.className).toContain('bottom-0');
+    expect(slider.getAttribute('data-align')).toBe('bottom');
+  });
+
+  test('(n) #7879 — le doigt sur la barre MET EN PAUSE, cale la scène au temps pointé, et relâcher REPREND', async () => {
+    const el = await mount(<ReelSceneStage {...propsOf()} />);
+    const frame = el.querySelector('[data-reel-scene]') as HTMLElement;
+    const video = el.querySelector('[data-scene-player] video') as HTMLVideoElement;
+    Object.defineProperty(video, 'duration', { value: 8, configurable: true });
+    await act(async () => {
+      video.dispatchEvent(new window.Event('loadedmetadata'));
+    });
+    const slider = el.querySelector('[role="slider"]') as HTMLElement;
+    slider.getBoundingClientRect = () => ({ left: 0, width: 400, top: 800, height: 44, right: 400, bottom: 844, x: 0, y: 800, toJSON: () => ({}) });
+    const pointer = (type: string, clientX: number) => new PointerEvent(type, { bubbles: true, clientX, pointerId: 1 });
+    await act(async () => {
+      slider.dispatchEvent(pointer('pointerdown', 100));
+    });
+    expect(frame.getAttribute('data-reel-scene-playing')).toBe('false');
+    expect(video.currentTime).toBeCloseTo(2, 5);
+    await act(async () => {
+      slider.dispatchEvent(pointer('pointermove', 300));
+    });
+    expect(video.currentTime).toBeCloseTo(6, 5);
+    expect((el.querySelector('[data-reel-progress]') as HTMLElement).style.transform).toBe('scaleX(0.75)');
+    await act(async () => {
+      slider.dispatchEvent(pointer('pointerup', 300));
+    });
+    expect(frame.getAttribute('data-reel-scene-playing')).toBe('true');
+    expect(video.currentTime).toBeCloseTo(6, 5);
+  });
+
+  test('(o) #7879 — le glissé ne passe pas par le tap de pause : un réel en lecture le reste', async () => {
+    const el = await mount(<ReelSceneStage {...propsOf()} />);
+    const video = el.querySelector('[data-scene-player] video') as HTMLVideoElement;
+    Object.defineProperty(video, 'duration', { value: 8, configurable: true });
+    await act(async () => {
+      video.dispatchEvent(new window.Event('loadedmetadata'));
+    });
+    const slider = el.querySelector('[role="slider"]') as HTMLElement;
+    await act(async () => {
+      slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, pointerId: 1 }));
+      slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 10, pointerId: 1 }));
+      slider.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect((el.querySelector('[data-reel-scene]') as HTMLElement).getAttribute('data-reel-scene-playing')).toBe('true');
   });
 
   test('(f) refus de lecture sonore ⇒ onSoundBlocked appelé (moteur et/ou piste, le refus atteint l’écran)', async () => {
