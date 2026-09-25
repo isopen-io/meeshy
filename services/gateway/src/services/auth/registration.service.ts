@@ -196,12 +196,8 @@ function nomAfficheDeLInscription(data: RegisterData): string {
 
 /** Le nom affiché tel qu'il sera PERSISTÉ : la saisie normalisée, casse conservée. */
 function displayNamePersiste(data: RegisterData, firstName: string, lastName: string): string {
-  // La SAISIE gagne (#7897) : l'écran d'inscription envoie prénom, nom ET nom
-  // affiché, et ce dernier se modifie indépendamment — le recomposer depuis
-  // les deux premiers écraserait ce que l'utilisateur vient de taper.
-  const saisi = data.displayName?.trim();
   const nomComplet = `${firstName} ${lastName}`.trim();
-  const source = saisi ? saisi : nomComplet !== '' ? nomComplet : nomAfficheDeLInscription(data);
+  const source = nomComplet !== '' ? nomComplet : nomAfficheDeLInscription(data);
   return SecuritySanitizer.sanitizeText(normalizeDisplayName(source));
 }
 
@@ -214,12 +210,10 @@ function displayNamePersiste(data: RegisterData, firstName: string, lastName: st
  * le seul chemin dérivé ferait diverger deux portes du même produit.
  */
 function nomsDeLInscription(data: RegisterData): { firstName: string; lastName: string } {
-  // Un PRÉNOM seul suffit (#7897) : un mononyme n'a pas de nom de famille, et
-  // `lastNameProperty` (`minLength: 1`) interdit de l'envoyer vide.
-  if (data.firstName) {
+  if (data.firstName && data.lastName) {
     return {
       firstName: SecuritySanitizer.sanitizeText(capitalizeName(data.firstName)),
-      lastName: SecuritySanitizer.sanitizeText(capitalizeName(data.lastName ?? '')),
+      lastName: SecuritySanitizer.sanitizeText(capitalizeName(data.lastName)),
     };
   }
 
