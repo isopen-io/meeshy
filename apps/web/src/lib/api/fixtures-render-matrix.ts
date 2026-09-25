@@ -9,7 +9,8 @@ import { amina, attachmentDefaults, conversationDefaults, dayAt, kwame, message,
  * lecture (Focal, Script, Bulles) se vérifient sur un seul fil : réponse à un
  * MESSAGE texte, réponse à une PIÈCE (image, vocal, vidéo), réponse à une
  * HUMEUR, réactions sur un message ET sur une pièce, plusieurs vocaux,
- * plusieurs vidéos, texte long + images, lieu + texte.
+ * plusieurs vidéos, texte long + images, lieu + texte, et une image PORTRAIT
+ * seule citée par sa réponse (#7929, la miniature au rapport du média).
  *
  * HORS LISTE (motif `fixtures-rich-text.ts`) : le fil s'ouvre par son
  * adresse, `/c/c-matrice`, et les comptes des gates de la Lentille ne
@@ -379,6 +380,32 @@ const mxPlaceTextMine = matrixMessage({
   metadata: { location: { latitude: 48.8448, longitude: 2.3398, name: null, address: null, category: null } },
 });
 
+// ===== RÉPONSE À UNE IMAGE PORTRAIT SEULE (#7929) — la miniature au rapport du média =====
+const mxPortraitAt = dayAt(0, 10, 20);
+const mxPortrait = matrixMessage({
+  id: 'mx-portrait',
+  senderId: 'u-amina',
+  sender: amina,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  createdAt: mxPortraitAt,
+  attachments: [{ ...image('mx-portrait', 1, mxPortraitAt, 'u-amina'), width: 900, height: 1600 }],
+});
+
+const mxReplyPortrait = matrixMessage({
+  id: 'mx-reply-portrait',
+  senderId: VIEWER_ID,
+  sender: viewer,
+  content: 'La cage d’escalier, enfin dégagée.',
+  originalLanguage: 'fr',
+  translations: [],
+  createdAt: dayAt(0, 10, 21),
+  replyToId: mxPortrait.id,
+  replyTo: mxPortrait,
+});
+
 const mxLast = matrixMessage({
   id: 'mx-last',
   senderId: 'u-amina',
@@ -386,7 +413,7 @@ const mxLast = matrixMessage({
   content: 'Fin de la matrice.',
   originalLanguage: 'fr',
   translations: [],
-  createdAt: dayAt(0, 10, 19),
+  createdAt: dayAt(0, 10, 22),
 });
 
 export const RENDER_MATRIX_MESSAGES: readonly Message[] = [
@@ -409,6 +436,8 @@ export const RENDER_MATRIX_MESSAGES: readonly Message[] = [
   mxPieceReactions,
   mxPlaceText,
   mxPlaceTextMine,
+  mxPortrait,
+  mxReplyPortrait,
   mxLast,
 ];
 

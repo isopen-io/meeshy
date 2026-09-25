@@ -63,7 +63,10 @@ struct BubbleStoryCitationCard: View, Equatable {
 
     /// Largeur de la carte. Une citation n'est pas la bulle : elle occupe une
     /// colonne étroite au-dessus d'elle, comme sur la planche.
-    static let cardWidth: CGFloat = 132
+    ///
+    /// La MÊME que la miniature d'une image ou d'une vidéo citée (retour
+    /// porteur 2026-09-25) : une constante, lue ici, jamais recopiée.
+    static let cardWidth: CGFloat = QuotedReplyPresentation.citedSceneWidth
 
     /// Rapport de la SCÈNE — TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
     static let sceneAspectRatio: CGFloat = SceneShape.aspect
@@ -84,6 +87,7 @@ struct BubbleStoryCitationCard: View, Equatable {
         let previewText: String
         let thumbnailUrl: String?
         let publishedAt: Date?
+        let isUnavailable: Bool
     }
 
     private static func slice(_ reply: ReplyReference) -> CardSlice {
@@ -91,24 +95,45 @@ struct BubbleStoryCitationCard: View, Equatable {
             messageId: reply.messageId,
             previewText: reply.previewText,
             thumbnailUrl: reply.storyThumbnailUrl,
-            publishedAt: reply.storyPublishedAt
+            publishedAt: reply.storyPublishedAt,
+            isUnavailable: reply.isUnavailableStory
         )
     }
+
+    /// **La story DISPARUE (#7895)** — ni scène à montrer ni rien à ouvrir :
+    /// la carte se COMPACTE au seul bandeau, qui DIT « Story indisponible ».
+    /// Même carte que le web (#7893). Le prédicat est celui du SDK
+    /// (`ReplyReference.isUnavailableStory`), jamais réécrit ici.
+    var isUnavailable: Bool { reply.isUnavailableStory }
+
+    /// Le geste RÉELLEMENT armé : celui de l'hôte, sauf vers une story
+    /// disparue. Trait de bouton, indice et tap le lisent tous trois — une
+    /// carte qui s'annoncerait bouton sans rien ouvrir serait un contrôle qui
+    /// ment (loi 4).
+    private var armedOpen: (() -> Void)? {
+        reply.opensQuotedTarget ? onOpen : nil
+    }
+
+    /// `true` ⇒ VoiceOver annonce un bouton. Exposé pour le témoin : c'est la
+    /// seule façon de MESURER le trait sans monter la vue.
+    var announcesButton: Bool { armedOpen != nil }
 
     // MARK: - Corps
 
     var body: some View {
         VStack(spacing: 0) {
-            scene
+            if !isUnavailable {
+                scene
+            }
             strip
         }
         .frame(width: Self.cardWidth)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .contentShape(Rectangle())
-        .modifier(OpenGesture(action: onOpen))
+        .modifier(OpenGesture(action: armedOpen))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(onOpen == nil ? [] : .isButton)
+        .accessibilityAddTraits(armedOpen == nil ? [] : .isButton)
         .accessibilityHint(accessibilityHint)
     }
 
@@ -121,12 +146,23 @@ struct BubbleStoryCitationCard: View, Equatable {
         return raw
     }
 
-    /// Le texte de la story tel qu'il a été gravé. Le repli le plus pauvre du
-    /// producteur est le libellé « 📷 Story » — il DIT ce que la carte est, et
-    /// c'est mieux qu'une carte muette.
+    /// Le texte de la story tel qu'il a été gravé, ou « 📷 Story » quand elle
+    /// n'en portait aucun — une scène sans vignette ne reste jamais muette.
     private var sceneText: String {
-        reply.previewText
+        reply.previewText.isEmpty ? "\u{1F4F7} \(storyWord)" : reply.previewText
     }
+
+    private var storyWord: String {
+        String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main)
+    }
+
+    /// **Le texte ne se pose QUE sur une scène SANS vignette** (retour porteur
+    /// 2026-09-25). La vignette EST la scène, texte de la story compris : y
+    /// peindre l'aperçu par-dessus doublait ce texte et le faisait chevaucher
+    /// celui de l'image. Le libellé n'est qu'un remplaçant — comme sur le web.
+    var overlaysSceneText: Bool { thumbnailUrlString == nil }
+
+    private var unavailableLabel: String { QuotedStoryLabel.unavailable }
 
     private var sceneFallback: some View {
         Color(hex: reply.authorColor).opacity(isDark ? 0.32 : 0.24)
@@ -147,7 +183,7 @@ struct BubbleStoryCitationCard: View, Equatable {
                 sceneFallback
             }
 
-            if !sceneText.isEmpty {
+            if overlaysSceneText {
                 Text(sceneText)
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundStyle(.white)
@@ -215,7 +251,12 @@ struct BubbleStoryCitationCard: View, Equatable {
                     .minimumScaleFactor(0.7)
             }
 
-            if let date = reply.storyPublishedAt {
+            if isUnavailable {
+                Text(unavailableLabel)
+                    .font(MeeshyFont.relative(9, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            } else if let date = reply.storyPublishedAt {
                 // `RelativeTimeFormatter.shortString` — et non
                 // `Text(date, style: .relative)`, qui rend « 11 h et 11 min »
                 // là où une story se date « 11 h » partout ailleurs dans
@@ -244,14 +285,12 @@ struct BubbleStoryCitationCard: View, Equatable {
     /// d'une seule phrase. Sans `children: .ignore`, VoiceOver récitait le
     /// texte de la story puis « réponse à sa story » puis la date — trois
     /// arrêts pour une seule chose à comprendre.
-    private var accessibilityLabel: String {
-        let head = stripLabel
-        guard !sceneText.isEmpty else { return head }
-        return "\(head), \(sceneText)"
+    var accessibilityLabel: String {
+        "\(stripLabel), \(isUnavailable ? unavailableLabel : sceneText)"
     }
 
     private var accessibilityHint: String {
-        guard onOpen != nil else { return "" }
+        guard armedOpen != nil else { return "" }
         return String(localized: "bubble.reply.story.open_hint", defaultValue: "Ouvre la story citée", bundle: .main)
     }
 }
@@ -314,6 +353,24 @@ extension BubbleContent {
     /// PARTAGENT : la bulle et la rangée plate le reçoivent tel quel, et la
     /// rivière le compose depuis la même projection.
     var detachedStoryCitation: ReplyReference? {
+        storyCitation(visualHostsReply: visualHostsReply)
+    }
+
+    /// **La rangée plate (Script, Focal) n'a PAS de conteneur unifié média.**
+    /// `visualHostsReply` décrit la bulle, où la grille loge la citation ; le
+    /// bloc média nu de la rangée n'en loge aucune. Lire la règle de la bulle
+    /// là faisait disparaître la citation de tout message MÉDIA qui répond
+    /// (#7928). Seul le lecteur audio y héberge encore sa citation.
+    var flatRowStoryCitation: ReplyReference? {
+        storyCitation(visualHostsReply: false)
+    }
+
+    /// La rangée plate dessine elle-même la citation, sauf celle du vocal.
+    var flatRowDrawsQuote: Bool {
+        reply != nil && !audioHostsReply
+    }
+
+    private func storyCitation(visualHostsReply: Bool) -> ReplyReference? {
         guard let reply,
               StoryCitationPlacement.isDetached(
                 isStoryReply: reply.isStory,
@@ -323,6 +380,22 @@ extension BubbleContent {
               )
         else { return nil }
         return reply.reference
+    }
+}
+
+/// **Le mot d'une story citée À PLAT** — dans la citation que loge le
+/// conteneur média ou le lecteur audio, là où la carte de scène ne se détache
+/// pas. « Story » ou, si elle a disparu, « Story indisponible » (#7895) : le
+/// même libellé que la carte, tiré du même catalogue, pour les trois modes.
+nonisolated enum QuotedStoryLabel {
+    static var unavailable: String {
+        String(localized: "bubble.reply.story.unavailable", defaultValue: "Story indisponible", bundle: .main)
+    }
+
+    static func text(for reply: ReplyReference) -> String {
+        reply.isUnavailableStory
+            ? unavailable
+            : String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main)
     }
 }
 

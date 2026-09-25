@@ -42,12 +42,15 @@ public struct APIMessageReplyTo: Decodable, Sendable {
     /// le message entier — le repli est alors le média REPRÉSENTATIF, comme
     /// avant.
     public let attachmentReplyTo: APIQuotedAttachmentReference?
+    /// #7927 — le message cité est SUPPRIMÉ : la passerelle vide son texte et
+    /// le dit ici ; la citation composée ne porte alors plus rien de lui.
+    public let deletedAt: Date?
 
     private enum CodingKeys: String, CodingKey {
         case id, content, senderId, sender, attachments
         case originalLanguage, translations
         case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
-        case attachmentReplyTo
+        case attachmentReplyTo, deletedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +80,8 @@ public struct APIMessageReplyTo: Decodable, Sendable {
         // toutes les citations faisaient avant ce lot.
         attachmentReplyTo = (try? c.decodeIfPresent(APIQuotedAttachmentReference.self,
                                                     forKey: .attachmentReplyTo)) ?? nil
+        // `try?` : une date illisible ne fait pas tomber la citation entière.
+        deletedAt = (try? c.decodeIfPresent(Date.self, forKey: .deletedAt)) ?? nil
     }
 
     /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
@@ -170,6 +175,11 @@ public extension APIMessageReplyTo {
     /// jamais sur l'identifiant de participant seul : `replyTo.senderId` est
     /// l'appartenance à la conversation, pas la personne.
     func toReplyReference(currentUserId: String?, preferredLanguages: [String]) -> ReplyReference {
+        let reference = composedReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages)
+        return deletedAt.map { reference.tombstoned(at: $0) } ?? reference
+    }
+
+    private func composedReference(currentUserId: String?, preferredLanguages: [String]) -> ReplyReference {
         // La pièce NOMMÉE l'emporte sur le représentatif (#6164) — et quand
         // elle est nommée mais ABSENTE (supprimée, hors fenêtre), on ne
         // retombe sur RIEN : emprunter la vignette de la première montrerait

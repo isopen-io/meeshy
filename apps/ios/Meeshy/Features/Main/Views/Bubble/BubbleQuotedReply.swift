@@ -141,7 +141,8 @@ struct BubbleQuotedReply: View, Equatable {
             storyReactionCount: reply.storyReactionCount,
             storyCommentCount: reply.storyCommentCount,
             storyThumbnailUrl: reply.storyThumbnailUrl,
-            moodEmoji: reply.moodEmoji
+            moodEmoji: reply.moodEmoji,
+            storyUnavailable: reply.storyUnavailable
         )
     }
 
@@ -182,6 +183,7 @@ struct BubbleQuotedReply: View, Equatable {
         let storyCommentCount: Int?
         let storyThumbnailUrl: String?
         let moodEmoji: String?
+        let storyUnavailable: Bool?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -384,9 +386,12 @@ struct BubbleQuotedReply: View, Equatable {
     @ViewBuilder
     private var quotedThumbnail: some View {
         if let thumbUrl = thumbnailUrlString {
+            let size = QuotedReplyPresentation.mediaThumbnailSize(for: reply)
+                ?? CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize)
+            let radius: CGFloat = size.width > Self.thumbnailSize ? MeeshyRadius.lg : 6
             let thumbnail = CachedAsyncImage(
                 url: thumbUrl,
-                targetSize: CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize),
+                targetSize: size,
                 // Le flou instantané plutôt qu'un carré de couleur unie le
                 // temps du réseau. `nil` pour un média protégé — un flou EST
                 // une image (règle partagée, site unique).
@@ -395,8 +400,8 @@ struct BubbleQuotedReply: View, Equatable {
                 Color(hex: reply.authorColor).opacity(0.3)
             }
             .aspectRatio(contentMode: .fill)
-            .frame(width: Self.thumbnailSize, height: Self.thumbnailSize)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: radius))
             .overlay { playBadge }
 
             if let mediaGateTap {
@@ -667,6 +672,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
 
     private static func previewSlice(_ reply: ReplyReference) -> PreviewSlice {
         PreviewSlice(
+            isUnavailable: reply.isUnavailableStory,
             storyPublishedAt: reply.storyPublishedAt,
             storyReactionCount: reply.storyReactionCount,
             storyCommentCount: reply.storyCommentCount,
@@ -675,6 +681,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
     }
 
     fileprivate struct PreviewSlice: Equatable {
+        let isUnavailable: Bool
         let storyPublishedAt: Date?
         let storyReactionCount: Int?
         let storyCommentCount: Int?
@@ -690,7 +697,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
                 // Decorative glyph — the adjacent "Story" label conveys the
                 // reply kind, so hide the symbol from VoiceOver.
                 .accessibilityHidden(true)
-            Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
+            Text(QuotedStoryLabel.text(for: reply))
                 .font(.caption.weight(.medium))
                 .foregroundColor(previewColor)
 
