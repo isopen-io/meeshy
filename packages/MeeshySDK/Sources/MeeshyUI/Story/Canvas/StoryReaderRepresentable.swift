@@ -381,7 +381,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // Un glissé en cours tient la scène en pause : un rendu de l'hôte
         // pendant le geste ne doit pas la relancer sous le doigt (#7878).
         scrubber?.hostPaused = isPaused || isOutgoing
-        view.setPaused(isPaused || isOutgoing || scrubber?.isScrubbing == true)
+        guard scrubber?.isScrubbing != true else {
+            view.setPaused(true)
+            return
+        }
+        view.setPaused(isPaused || isOutgoing)
     }
 }
 
