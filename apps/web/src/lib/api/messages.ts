@@ -5,6 +5,7 @@ import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
@@ -402,6 +403,13 @@ export type SendMessageBody = {
    * ce port n'en produit que la forme acceptée (`send/shared-place.ts`).
    */
   readonly location?: SharedPlace;
+  /**
+   * LE STICKER (#7938) — champ DÉDIÉ, même doctrine que `location` : la
+   * passerelle seule le valide (`parseMessageSticker`) et l'écrit dans
+   * `metadata.sticker`. Le web n'en produit qu'une forme : `{ stickerId }`,
+   * un sticker de « Mes stickers » dont l'image part en pièce jointe.
+   */
+  readonly sticker?: MessageSticker;
 };
 
 /**

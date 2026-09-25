@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
 
 import itMentions from './catalog-it-mentions';
@@ -1025,28 +1026,7 @@ const it = {
   'download.otherPlatforms': 'Su Android e su computer, Meeshy funziona direttamente nel browser.',
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
-  'composer.attach.group': 'Tipi di allegato',
-  'composer.attach.handle': 'Maniglia del pannello',
-  'composer.attach.photo': 'Foto',
-  'composer.attach.photo.action': 'Scegli foto',
-  'composer.attach.camera': 'Fotocamera',
-  'composer.attach.camera.action': 'Scatta una foto',
-  'composer.attach.file': 'File',
-  'composer.attach.file.action': 'Scegli un file',
-  'composer.attach.location': 'Posizione',
-  'composer.attach.location.action': 'Condividi la mia posizione',
-  'composer.attach.voice': 'Voce',
-  'composer.attach.voice.action': 'Registra un messaggio vocale',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Inserisci un emoji',
-  'composer.emoji.title': 'Inserisci un emoji',
-  'composer.location.locating': 'Ricerca della tua posizione…',
-  'composer.location.denied': 'Posizione negata — consentila nelle impostazioni',
-  'composer.location.unavailable': 'Posizione non disponibile su questo browser',
-  'composer.location.failed': 'Posizione non trovata — riprova',
-  'composer.location.chip': 'LUOGO',
-  'composer.location.unknown': 'Luogo sconosciuto',
-  'composer.location.remove': 'Rimuovi la posizione',
+  ...itComposerAttach,
   'composer.viewOnce.activate': 'Attiva la modalità visione unica',
   'composer.viewOnce.active': 'Modalità visione unica attiva',
   'composer.viewOnce.label': 'Visione unica',

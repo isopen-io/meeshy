@@ -127,13 +127,19 @@ export function stickerOf(message: Pick<Message, 'metadata'> & HoistedFields): M
       ? (obj.slots as Record<string, string>)
       : undefined;
 
-  if (emoji === undefined && templateId === undefined) return null;
+  /* LE STICKER DE BIBLIOTHÈQUE (#7938) — ni gabarit ni emoji : son image
+     jointe EST le rendu (`StickerArtwork`, PNG joint), l'identifiant dit
+     seulement de quelle bibliothèque il vient. */
+  const stickerId = typeof obj.stickerId === 'string' && obj.stickerId !== '' ? obj.stickerId : undefined;
+
+  if (emoji === undefined && templateId === undefined && stickerId === undefined) return null;
 
   return {
     ...(templateId === undefined ? {} : { templateId }),
     ...(slots === undefined ? {} : { slots }),
     ...(animation === undefined ? {} : { animation: animation as MessageStickerAnimation }),
     ...(emoji === undefined ? {} : { emoji }),
+    ...(stickerId === undefined ? {} : { stickerId }),
   };
 }
 

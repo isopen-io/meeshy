@@ -83,6 +83,16 @@ describe('stickerOf — lit metadata.sticker comme la passerelle', () => {
     expect(stickerOf(message({ metadata: { sticker: {} } }))).toBeNull();
   });
 
+  test('un sticker de BIBLIOTHÈQUE (#7938) ⇒ {stickerId}, rendu par son image jointe', () => {
+    const sticker = message({
+      metadata: { sticker: { stickerId: '65f0c0ffee0000000000abcd' } },
+      attachments: [{ id: 'att', fileUrl: 'stickers/u/x.png', mimeType: 'image/png' } as never],
+    });
+
+    expect(stickerOf(sticker)).toEqual({ stickerId: '65f0c0ffee0000000000abcd' });
+    expect(bodyKindOf(sticker).kind).toBe('sticker');
+  });
+
   test('metadata absent ⇒ null', () => {
     expect(stickerOf(message())).toBeNull();
   });

@@ -18,10 +18,11 @@ import { mayAttach } from '@/lib/send/attachments';
  * `UniversalComposerBar+Attachments.swift:246-298` fait foi, et son ORDRE
  * avec lui (dimension 6, « est-ce à la place où l'utilisateur la
  * chercherait ») : photo · caméra · fichier · position · vocal · emoji ·
- * sticker. Le web servait photo, fichier, vocal ; ce lot ajoute caméra,
- * position et emoji. Le STICKER reste dehors — il n'est pas une tuile de
- * plus mais une palette de gabarits qui rend un PNG (`ConversationView+Sticker.swift`),
- * un lot à lui seul.
+ * sticker. Le web servait photo, fichier, vocal ; #7280 a ajouté caméra,
+ * position et emoji, et #7938 le STICKER : sa tuile ouvre « Mes stickers »
+ * (`composer-sticker-sheet.tsx`), la bibliothèque SERVEUR que l'on remplit
+ * depuis une image ou un collage, et dont un choix compose un message à lui
+ * seul. Elle est gardée par le droit « Photos » : un sticker part en image.
  *
  * ## LOI 4 — UNE TUILE N'EXISTE QUE SI SON GESTE A UN EFFET
  *
@@ -157,6 +158,9 @@ export type ComposerAttachmentPanelProps = {
   readonly onPickFile: (files: FileList | null) => void;
   readonly onRequestLocation: () => void;
   readonly onRequestEmoji: () => void;
+  /** ABSENT ⇒ PAS DE TUILE (loi 4) : un hôte qui ne monte pas « Mes stickers »
+   * ne montre pas une porte qui ne mène nulle part. */
+  readonly onRequestSticker?: () => void;
   readonly onStartVoice: () => void;
   readonly canRecord: boolean;
   /** `navigator.geolocation` existe DANS CE NAVIGATEUR — reçu, jamais lu ici :
@@ -172,6 +176,7 @@ export function ComposerAttachmentPanel({
   onPickFile,
   onRequestLocation,
   onRequestEmoji,
+  onRequestSticker,
   onStartVoice,
   canRecord,
   canLocate,
@@ -293,6 +298,18 @@ export function ComposerAttachmentPanel({
         >
           <Glyph name="smiley" size={26} />
         </GestureSource>
+
+        {canImages && onRequestSticker !== undefined ? (
+          <GestureSource
+            id="sticker"
+            label={translate(language, 'composer.attach.sticker')}
+            action={translate(language, 'composer.attach.sticker.action')}
+            color="var(--ios-tile-sticker)"
+            onTrigger={onRequestSticker}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={26} />
+          </GestureSource>
+        ) : null}
       </div>
     </div>
   );
