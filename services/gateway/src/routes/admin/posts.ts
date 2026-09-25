@@ -9,6 +9,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { requirePermission } from '../../middleware/authorize';
 
 /**
@@ -714,7 +715,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
+        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
       });
 
       if (!post) {
@@ -725,11 +726,10 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         return sendBadRequest(reply, 'Le post est deja supprime');
       }
 
+      const deletedAt = new Date();
       await fastify.prisma.post.update({
         where: { id: postId },
-        data: {
-          deletedAt: new Date()
-        }
+        data: { deletedAt }
       });
 
       // Deuxième dette du même raccourci : écrire `deletedAt` sans passer par
@@ -748,6 +748,11 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         post,
         (err) => logWarn(fastify.log, '[DELETE /admin/posts/:postId]: broadcast deletion failed', err)
       );
+      announceCitedPostWithdrawal({
+        prisma: fastify.prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: { ...post, deletedAt },
+      }).catch((err) => logWarn(fastify.log, '[DELETE /admin/posts/:postId]: cited-post announce failed', err));
 
       // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`.
       // Tout ce qu'un retrait doit écrire en base — ligne d'audit, coupure des

@@ -18,6 +18,7 @@ import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
+import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
 import {
   applyMessageDeleted,
   applyMessageEdited,
@@ -410,6 +411,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageDeleted = (payload: unknown): void => {
     if (!isMessageDeletedEvent(payload)) return;
     applyMessageDeleted(deps.queryClient, payload);
+  };
+
+  /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
+  const onCitedPostWithdrawn = (payload: unknown): void => {
+    if (!isCitedPostWithdrawnEvent(payload)) return;
+    applyCitedPostWithdrawn(deps.queryClient, payload);
   };
 
   /**
@@ -885,6 +892,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);
@@ -966,6 +974,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED, onMessageViewOncePurged);

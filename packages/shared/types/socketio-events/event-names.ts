@@ -42,6 +42,21 @@ export const SERVER_EVENTS = {
    */
   MESSAGE_EXPIRED: 'message:expired',
   /**
+   * LE POST CITÉ PAR DES MESSAGES DE CETTE CONVERSATION A ÉTÉ RETIRÉ par son
+   * auteur ou par la modération (#7969). Émis vers la room
+   * `conversation:<id>` de chaque conversation dont un message porte
+   * `storyReplyToId = postId`, une émission par conversation.
+   *
+   * Un événement DÉDIÉ plutôt que `message:edited` : l'édition transporte un
+   * `SocketIOMessage` ENTIER par message — il aurait fallu relire et
+   * resérialiser chaque réponse, et les clients y posent `isEdited`, alors que
+   * personne n'a modifié ces messages. Ici la charge ne dit que QUOI a disparu
+   * (`postId`) et QUAND (`deletedAt`) : rien du contenu retiré ne voyage. Le
+   * client rend chaque citation de ce post « Story indisponible », exactement
+   * comme le fait déjà la lecture REST (`servedPostReply.ts`, #7950).
+   */
+  MESSAGE_CITED_POST_WITHDRAWN: 'message:cited-post-withdrawn',
+  /**
    * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
    * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
    * `user:<destinataire>` (pour ses autres appareils) et vers

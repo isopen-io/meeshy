@@ -51,6 +51,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { logError, logWarn } from '../../utils/logger.js';
 
 /**
@@ -701,6 +702,13 @@ export function registerCoreRoutes(
         result,
         (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
+      // #7969 — les conversations qui CITENT ce post passent leur carte en
+      // « Story indisponible » sans relire ; best-effort, jamais attendu.
+      announceCitedPostWithdrawal({
+        prisma,
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        post: result,
+      }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: cited-post announce failed', err));
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
