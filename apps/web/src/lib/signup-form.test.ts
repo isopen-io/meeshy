@@ -14,6 +14,9 @@ import {
   isPasswordValid,
   hasPassword,
   canSubmit,
+  effectiveDisplayName,
+  effectiveUsername,
+  isIdentityDefined,
   type SignupFormState,
 } from './signup-form';
 import { countryOf } from './countries';
@@ -28,7 +31,7 @@ const FR = countryOf('FR')!;
 
 function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
   return {
-    username: '',
+    username: null,
     displayName: 'Ada Lovelace',
     email: 'ada@example.com',
     phoneDigits: '',
@@ -198,7 +201,7 @@ describe('composeRegisterBody — sans mot de passe (#6424)', () => {
   test('le reste de la charge est intact', () => {
     const body = composeRegisterBody(baseForm({ password: '' }));
     expect(body.email).toBe(baseForm().email.toLowerCase());
-    expect(body.displayName).toBe(baseForm().displayName.trim());
+    expect(body.displayName).toBe('Ada Lovelace');
   });
 
   test('un mot de passe TAPÉ voyage tel quel', () => {
@@ -217,8 +220,8 @@ describe('composeRegisterBody — la charge EXACTE de POST /auth/register (regis
    * restent DÉRIVÉS du nom affiché côté serveur : rien ne les saisit.
    */
   test('trim + minuscules l’e-mail ; username PART, firstName/lastName jamais', () => {
-    const body = composeRegisterBody(baseForm({ email: '  Ada@Example.COM  ' }));
-    expect(body.email).toBe('ada@example.com');
+    const body = composeRegisterBody(baseForm({ email: '  Ada.Lovelace@Example.COM  ' }));
+    expect(body.email).toBe('ada.lovelace@example.com');
     expect(body.username).toBe('ada-lovelace');
     expect('firstName' in body).toBe(false);
     expect('lastName' in body).toBe(false);
@@ -264,5 +267,35 @@ describe('défauts de locale (miroir SignupForm.swift:190-198, rang AUTRE que le
   test('locale non servie ("gd", gaélique écossais) ⇒ system fr', () => {
     const langs = defaultLanguages('gd-GB');
     expect(langs.systemLanguage).toBe('fr');
+  });
+});
+
+/**
+ * NOM AFFICHÉ ET PSEUDO EN DIRECT (#7897). `null` = jamais touché : le champ
+ * suit l'adresse ; une chaîne = la saisie, qui gagne.
+ */
+describe('identité dérivée en direct (#7897)', () => {
+  const vierge = baseForm({ displayName: null, email: 'jean.dupont@example.com' });
+
+  test('nom affiché et pseudo sont tirés de l’adresse', () => {
+    expect(effectiveDisplayName(vierge)).toBe('Jean Dupont');
+    expect(effectiveUsername(vierge)).toBe('jean-dupont');
+  });
+
+  test('le pseudo vient de l’ADRESSE, pas du nom affiché tapé', () =>
+    expect(effectiveUsername({ ...vierge, displayName: 'Johnny' })).toBe('jean-dupont'));
+
+  test('un nom affiché TAPÉ gagne ; vidé, la dérivation revient', () => {
+    expect(effectiveDisplayName({ ...vierge, displayName: 'JD' })).toBe('JD');
+    expect(effectiveDisplayName({ ...vierge, displayName: '  ' })).toBe('Jean Dupont');
+  });
+
+  test('l’identité est définie dès qu’une adresse nommante est tapée', () =>
+    expect(isIdentityDefined(vierge)).toBe(true));
+
+  test('une adresse non slugifiable ne définit rien tant qu’un pseudo n’est pas tapé', () => {
+    const muette = baseForm({ displayName: null, email: 'a@b.co' });
+    expect(isIdentityDefined(muette)).toBe(false);
+    expect(isIdentityDefined({ ...muette, username: 'awa', displayName: 'Awa' })).toBe(true);
   });
 });

@@ -359,7 +359,7 @@ emit({
  * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
  * qu'a un visiteur SANS session, un chemin rare compare au fil.
  */
-const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info', 'pencil-simple'];
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info'];
 
 emit({
   ids: AUTH,

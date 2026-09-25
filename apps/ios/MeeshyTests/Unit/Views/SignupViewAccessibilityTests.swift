@@ -306,25 +306,25 @@ final class SignupViewAccessibilityTests: XCTestCase {
                       "trois (i) sur un écran ne se distinguent que par ce qu'ils ANNONCENT")
     }
 
-    // MARK: - Le mot de passe, LUI, est annoncé facultatif — et sa conséquence dite
+    // MARK: - Le mot de passe dit sa conséquence, à la demande (#7897)
 
     /// Un compte peut naître sans mot de passe (#6424) : sa seule porte est
-    /// alors le lien magique. Laisser le champ vide est donc un CHOIX, et un
-    /// choix qu'on ne pose que par accident tant qu'on ignore ce qu'il fait.
-    ///
-    /// Deux exigences, et la seconde compte plus que la première : le libellé
-    /// dit « facultatif », et la note dit ce qui se passe SANS lui. Un champ
-    /// marqué facultatif sans sa conséquence est une case qu'on saute.
-    func test_passwordField_announcesItsOptionalityAndItsConsequence() throws {
+    /// alors le lien reçu par e-mail. Directive porteur 2026-09-25 : le dire
+    /// « discrètement, moderne mais visible, à partir d'une ligne « Pourquoi
+    /// mettre un mot de passe maintenant ? » qui se déplie ». Le libellé ne
+    /// se dit plus « facultatif » (#6582, comme le web) : le bouton actif
+    /// sans lui le prouve.
+    func test_passwordField_explainsItsConsequence_throughAnUnfoldingLine() throws {
         let body = try code(Self.signupView)
         let password = try fieldBody("passwordField", in: body)
 
-        XCTAssertTrue(password.lowercased().contains("facultatif"),
-                      "le mot de passe DOIT se dire facultatif — il l'est")
-        XCTAssertTrue(password.contains("magicLinkNote"),
-                      "et la conséquence de son absence DOIT être dite : la porte devient le lien magique")
-        XCTAssertTrue(password.contains("AuthInfoHint("),
-                      "la conséquence passe par le (i) (#6441) — c'est ce qui la garde REJOIGNABLE une fois repliée")
+        XCTAssertFalse(password.lowercased().contains("facultatif"))
+        XCTAssertTrue(body.contains("auth.signup.password.why.detail"),
+                      "la conséquence de son absence DOIT être dite : la porte devient l'e-mail")
+        XCTAssertTrue(password.contains("accessibilityHint(passwordWhyDetail)"),
+                      "et VoiceOver l'énonce sans dépliement (#6441)")
+        XCTAssertTrue(password.contains("isPasswordWhyExpanded"),
+                      "et elle se DÉPLIE sur demande")
     }
 
     // MARK: - Le nom affiché aussi : facultatif, et sa conséquence dite
@@ -348,28 +348,35 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// saisie que si on la demande. Une promesse RENDUE vaut mieux qu'une
     /// promesse ANNONCÉE.
     ///
-    /// Ce témoin garde donc ce qui reste vrai : le bloc existe, il rend les
-    /// deux valeurs, et il tient la saisie derrière un geste explicite.
-    func test_derivedIdentity_showsWhatWillBeCreated() throws {
+    /// #7897 va plus loin (retour porteur 2026-09-25 : « si on peut modifier
+    /// le display name [et] le pseudo directement sans action supplémentaire
+    /// c'est ok ») : deux SAISIES déjà remplies, sans bouton « Modifier ».
+    func test_derivedIdentity_showsWhatWillBeCreated_asDirectInputs() throws {
         let body = try code(Self.signupView)
         let bloc = try fieldBody("derivedIdentityBlock", in: body)
 
-        XCTAssertTrue(bloc.contains("effectiveUsername"),
-                      "le PSEUDO qui partira doit être rendu, pas un champ vide")
-        XCTAssertTrue(bloc.contains("effectiveDisplayName"),
-                      "le NOM AFFICHÉ qui partira aussi")
-        XCTAssertTrue(bloc.contains("isEditingIdentity"),
-                      "la saisie reste derrière un geste — le chemin nominal ne demande AUCUN geste")
+        XCTAssertTrue(bloc.contains("effectiveUsername"), "le PSEUDO qui partira, déjà rempli")
+        XCTAssertTrue(bloc.contains("effectiveDisplayName"), "le NOM AFFICHÉ qui partira, déjà rempli")
         XCTAssertTrue(bloc.contains("usernameSuggestions"),
-                      "et les pseudos libres d'un refus doivent atteindre un pixel, sinon le refus est un mur")
+                      "les pseudos libres d'un refus doivent atteindre un pixel, sinon le refus est un mur")
     }
 
-    /// Un refus qui vise l'identité OUVRE la saisie : laisser replié montrerait
-    /// un message sous un champ que rien ne permet d'atteindre.
-    func test_derivedIdentity_opensOnRefusal() throws {
-        let bloc = try fieldBody("derivedIdentityBlock", in: try code(Self.signupView))
-        XCTAssertTrue(bloc.contains("error(for: .username)"))
-        XCTAssertTrue(bloc.contains("isEditingIdentity || refus != nil"))
+    /// Aucun geste intermédiaire : ni état « en édition », ni bouton crayon,
+    /// ni prénom / nom (ils se changent depuis l'espace de compte).
+    func test_derivedIdentity_hasNoEditButton_andNoCivilNames() throws {
+        let body = try code(Self.signupView)
+        XCTAssertFalse(body.contains("isEditingIdentity"), "plus de bloc replié derrière « Modifier »")
+        let bloc = try fieldBody("derivedIdentityBlock", in: body)
+        XCTAssertFalse(bloc.contains("\"pencil\""), "plus de bouton crayon")
+        XCTAssertFalse(bloc.contains("firstName"), "le prénom n'est pas saisi à l'inscription")
+    }
+
+    /// Le mot de passe paraît quand l'identité est DÉFINIE, avec sa ligne
+    /// dépliable « Pourquoi mettre un mot de passe maintenant ? » (#7897).
+    func test_passwordField_waitsForTheIdentity_andExplainsItselfOnDemand() throws {
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains("isIdentityDefined"))
+        XCTAssertTrue(body.contains("auth.signup.password.why"))
     }
 
     /// L'AVERTISSEMENT DE VALIDATION passe derrière un (i) (#6626).
