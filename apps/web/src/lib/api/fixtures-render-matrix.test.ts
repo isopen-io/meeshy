@@ -29,6 +29,13 @@ describe('la matrice de rendu (#7881) — servie par son adresse, chaque combina
     }
   });
 
+  test('une image PORTRAIT seule, citée par sa réponse (#7929) — le cadre à son rapport', () => {
+    const [portrait] = findOrThrow('mx-portrait').attachments ?? [];
+    expect(findOrThrow('mx-portrait').attachments).toHaveLength(1);
+    expect((portrait?.height ?? 0) > (portrait?.width ?? 0)).toBe(true);
+    expect(findOrThrow('mx-reply-portrait').replyTo?.id).toBe('mx-portrait');
+  });
+
   test('plusieurs vocaux, plusieurs vidéos, texte long + images — des deux côtés', () => {
     expect(findOrThrow('mx-audios').attachments).toHaveLength(2);
     expect(findOrThrow('mx-audios-mine').attachments).toHaveLength(2);
