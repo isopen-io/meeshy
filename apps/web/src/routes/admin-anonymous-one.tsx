@@ -125,6 +125,9 @@ export default function AdminAnonymousOneScreen() {
         </AdminSection>
         <AdminSection titre={translateAdmin(language, 'admin.col.conversation')}>
           <AdminLine label="#" valeur={conversation?.title || conversation?.identifier || '—'} />
+          {donnees.shareLink === null ? null : (
+            <AdminLine label={translateAdmin(language, 'admin.anonymous.link')} valeur={donnees.shareLink.name} />
+          )}
           {conversation !== null && peutLire ? (
             <Link
               to={espace === 'adm' ? 'admConversation' : 'adminConversation'}
