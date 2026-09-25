@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frStoriesMine from './catalog-fr-stories-mine';
@@ -1081,28 +1082,7 @@ const fr = {
      (Photos / Fichier / Vocal) vivaient EN DUR dans `composer-tray.tsx` — ils
      sont remontés ici par le lot qui en ajoute quatre, plutôt que d'y répandre
      la dette (#6310). */
-  'composer.attach.group': 'Types de pièces jointes',
-  'composer.attach.handle': 'Poignée du panneau',
-  'composer.attach.photo': 'Photos',
-  'composer.attach.photo.action': 'Choisir des photos',
-  'composer.attach.camera': 'Caméra',
-  'composer.attach.camera.action': 'Prendre une photo',
-  'composer.attach.file': 'Fichier',
-  'composer.attach.file.action': 'Choisir un fichier',
-  'composer.attach.location': 'Position',
-  'composer.attach.location.action': 'Partager ma position',
-  'composer.attach.voice': 'Vocal',
-  'composer.attach.voice.action': 'Enregistrer un message vocal',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Insérer un emoji',
-  'composer.emoji.title': 'Insérer un emoji',
-  'composer.location.locating': 'Recherche de votre position…',
-  'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
-  'composer.location.unavailable': 'Position indisponible sur ce navigateur',
-  'composer.location.failed': 'Position introuvable — réessayez',
-  'composer.location.chip': 'LIEU',
-  'composer.location.unknown': 'Lieu inconnu',
-  'composer.location.remove': 'Retirer la position',
+  ...frComposerAttach,
 
   /* LA BASCULE « VUE UNIQUE » DE LA RANGÉE HAUTE (#7354, V6) — même famille
      que `composer.attach.*` ci-dessus. Libellés repris du catalogue iOS

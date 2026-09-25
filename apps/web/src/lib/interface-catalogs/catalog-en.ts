@@ -1,4 +1,5 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
+import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 
 import enMentions from './catalog-en-mentions';
@@ -1027,28 +1028,7 @@ const en = {
   'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
-  'composer.attach.group': 'Attachment types',
-  'composer.attach.handle': 'Panel handle',
-  'composer.attach.photo': 'Photos',
-  'composer.attach.photo.action': 'Choose photos',
-  'composer.attach.camera': 'Camera',
-  'composer.attach.camera.action': 'Take a photo',
-  'composer.attach.file': 'File',
-  'composer.attach.file.action': 'Choose a file',
-  'composer.attach.location': 'Location',
-  'composer.attach.location.action': 'Share my location',
-  'composer.attach.voice': 'Voice',
-  'composer.attach.voice.action': 'Record a voice message',
-  'composer.attach.emoji': 'Emoji',
-  'composer.attach.emoji.action': 'Insert an emoji',
-  'composer.emoji.title': 'Insert an emoji',
-  'composer.location.locating': 'Finding your location…',
-  'composer.location.denied': 'Location denied — allow it in settings',
-  'composer.location.unavailable': 'Location unavailable in this browser',
-  'composer.location.failed': 'Location not found — try again',
-  'composer.location.chip': 'PLACE',
-  'composer.location.unknown': 'Unknown place',
-  'composer.location.remove': 'Remove the location',
+  ...enComposerAttach,
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',

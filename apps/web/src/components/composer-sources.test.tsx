@@ -57,6 +57,7 @@ type Gestures = {
   file?: (files: FileList | null) => void;
   location?: () => void;
   emoji?: () => void;
+  sticker?: () => void;
   voice?: () => void;
 };
 
@@ -73,6 +74,7 @@ function mountPanel(gestures: Gestures = {}, options: { canLocate?: boolean } = 
         onPickFile={gestures.file ?? (() => {})}
         onRequestLocation={gestures.location ?? (() => {})}
         onRequestEmoji={gestures.emoji ?? (() => {})}
+        {...(gestures.sticker === undefined ? {} : { onRequestSticker: gestures.sticker })}
         onStartVoice={gestures.voice ?? (() => {})}
         canRecord
         canLocate={options.canLocate ?? true}
@@ -184,5 +186,23 @@ describe('les sept libellés viennent du CATALOGUE, aucun n’est en dur (#7280,
     expect(sourceOf(el, 'camera').querySelector('input')?.getAttribute('aria-label')).toBe('Foto aufnehmen');
     expect(sourceOf(el, 'location').getAttribute('aria-label')).toBe('Meinen Standort teilen');
     expect(el.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Anhangstypen');
+  });
+});
+
+describe('Sticker (#7938)', () => {
+  test('la tuile PRODUIT un effet : elle ouvre « Mes stickers », après l’emoji comme sur iOS', () => {
+    let calls = 0;
+    const el = mountPanel({ sticker: () => (calls += 1) });
+    act(() => {
+      sourceOf(el, 'sticker').click();
+    });
+    expect(calls).toBe(1);
+    const ids = [...el.querySelectorAll('[data-composer-source]')].map((tile) => tile.getAttribute('data-composer-source'));
+    expect(ids.slice(-2)).toEqual(['emoji', 'sticker']);
+  });
+
+  test('un hôte qui ne monte pas la bibliothèque ne montre pas la tuile', () => {
+    const el = mountPanel();
+    expect(el.querySelector('[data-composer-source="sticker"]')).toBeNull();
   });
 });

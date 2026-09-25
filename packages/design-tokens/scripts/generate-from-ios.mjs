@@ -214,6 +214,7 @@ const HORS_TABLE_IOS = [
   ['--ios-tile-location', '#2ECC71', 'UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color'],
   ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
   ['--ios-tile-emoji', '#FF9F43', 'UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color'],
+  ['--ios-tile-sticker', '#6C5CE7', 'UniversalComposerBar+Attachments.swift:295 — CarouselTile(id: "sticker").color'],
   /**
    * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
    * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose

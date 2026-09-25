@@ -113,6 +113,7 @@
   --ios-tile-location: #2ECC71; /* UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color */
   --ios-tile-voice: #E74C3C; /* UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color */
   --ios-tile-emoji: #FF9F43; /* UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color */
+  --ios-tile-sticker: #6C5CE7; /* UniversalComposerBar+Attachments.swift:295 — CarouselTile(id: "sticker").color */
   --ios-recording-ink-dark: #FFFFFF; /* UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor */
   --ios-bubble-other-opacity: 28%; /* BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16) */
   --ios-bubble-other-hairline-opacity: 34%; /* BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26) */

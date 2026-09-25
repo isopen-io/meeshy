@@ -98,12 +98,13 @@ export const anonymousSenderSchema = {
 export const messageStickerResponseSchema = {
   type: 'object',
   nullable: true,
-  description: 'Sticker (gabarit + slots + animation, ou emoji) — hissé depuis metadata.sticker, validé serveur ; null si absent',
+  description: 'Sticker (gabarit + slots + animation, emoji, ou sticker de bibliothèque) — hissé depuis metadata.sticker, validé serveur ; null si absent',
   properties: {
     templateId: { type: 'string' },
     slots: { type: 'object', additionalProperties: { type: 'string' } },
     animation: { type: 'string', enum: [...MESSAGE_STICKER_ANIMATIONS] },
-    emoji: { type: 'string' }
+    emoji: { type: 'string' },
+    stickerId: { type: 'string', description: 'Sticker de bibliothèque d’où vient l’image jointe (#7938)' }
   }
 } as const;
 
