@@ -194,6 +194,26 @@ describe('POST /register — trois champs suffisent, le serveur DÉRIVE le reste
     await app.close();
   });
 
+  it('persiste le nom affiché TAPÉ même quand prénom et nom l’accompagnent (#7897)', async () => {
+    const { app, create } = await monter();
+
+    const res = await inscrire(app, { ...CORPS, displayName: 'DJ Lena', firstName: 'Lena', lastName: 'Vogel' });
+
+    expect(res.statusCode).toBe(200);
+    expect(ligne(create)).toMatchObject({ firstName: 'Lena', lastName: 'Vogel', displayName: 'DJ Lena' });
+    await app.close();
+  });
+
+  it('accepte un PRÉNOM seul — un mononyme n’a pas de nom de famille à envoyer (#7897)', async () => {
+    const { app, create } = await monter();
+
+    const res = await inscrire(app, { ...CORPS, displayName: 'La Prince', firstName: 'Prince' });
+
+    expect(res.statusCode).toBe(200);
+    expect(ligne(create)).toMatchObject({ firstName: 'Prince', lastName: '', displayName: 'La Prince' });
+    await app.close();
+  });
+
   it('contourne un pseudo déjà pris SANS refuser — personne ne l’avait demandé', async () => {
     const { app, create } = await monter({ prisPseudos: ['lena-vogel'] });
 

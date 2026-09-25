@@ -91,76 +91,55 @@ describe('l’avertissement de validation d’adresse', () => {
   test('aucun libellé ne dit « magique »', () => expect(html).not.toMatch(/magi(que|c)/iu));
 });
 
-describe('DerivedIdentity — ce que la passerelle recevra, affiché', () => {
-  function rendu(username: string, displayName: string, suggestions: readonly string[] = []) {
+describe('DerivedIdentity — quatre champs en saisie directe, aucun bouton « Modifier » (#7897)', () => {
+  const VALEURS = { firstName: 'Jean', lastName: 'Dupont', displayName: 'Jean Dupont', username: 'jean-dupont' };
+
+  function rendu(options: { suggestions?: readonly string[]; errors?: Record<string, string> } = {}) {
     return renderToStaticMarkup(
       <DerivedIdentity
-        username={username}
-        displayName={displayName}
-        onUsernameChange={() => {}}
-        onDisplayNameChange={() => {}}
+        values={VALEURS}
+        placeholders={VALEURS}
+        onChange={() => {}}
         tint="var(--ios-indigo-500)"
         focusedField={null}
         onFocus={() => {}}
         onBlur={() => {}}
-        suggestions={suggestions}
+        errors={options.errors ?? {}}
+        suggestions={options.suggestions ?? []}
       />,
     );
   }
 
-  test('le pseudo et le nom affiché sont RENDUS', () => {
-    const html = rendu('jean-dupont', 'Jean Dupont');
-    expect(html).toContain('@jean-dupont');
-    expect(html).toContain('Jean Dupont');
+  test('prénom, nom, nom affiché et pseudo sont des saisies REMPLIES', () => {
+    const html = rendu();
+    expect(html).toMatch(/<input id="signup-first-name"[^>]*value="Jean"/u);
+    expect(html).toMatch(/<input id="signup-last-name"[^>]*value="Dupont"/u);
+    expect(html).toMatch(/<input id="signup-display-name"[^>]*value="Jean Dupont"/u);
+    expect(html).toMatch(/<input id="signup-username"[^>]*value="jean-dupont"/u);
   });
 
-  /**
-   * Le repli est le PSEUDO, jamais du blanc : une adresse dont rien n'est
-   * slugifiable ne donne aucun nom affiché, et laisser vide ferait croire que
-   * rien ne sera créé.
-   */
-  test('sans nom affiché, le pseudo tient la ligne du haut', () => {
-    const html = rendu('jean-dupont', '');
-    expect(html).toContain('jean-dupont');
-    expect(html).not.toContain('>' + '</span>');
+  test('aucun bouton Modifier, aucune saisie hors du parcours clavier', () => {
+    const html = rendu();
+    expect(html).not.toContain('Modifier');
+    expect(html).not.toContain('aria-expanded');
+    expect(html).not.toContain('tabindex="-1"');
   });
 
-  /**
-   * La contrepartie d'ENVOYER le pseudo : une collision est un refus. Les trois
-   * valeurs libres doivent atteindre un pixel, sinon le refus est un mur.
-   */
+  test('chaque saisie porte un libellé visible', () => {
+    const html = rendu();
+    for (const libelle of ['Prénom', 'Nom', 'Nom affiché', 'Pseudo']) expect(html).toContain(`>${libelle}</label>`);
+  });
+
   test('les pseudos de rechange sont proposés, et cliquables', () => {
-    const html = rendu('jean-dupont', 'Jean Dupont', ['jean-d', 'jean-dupont2']);
+    const html = rendu({ suggestions: ['jean-d', 'jean-dupont2'] });
     expect(html).toContain('data-username-suggestions');
     expect(html).toContain('@jean-d');
     expect(html).toContain('@jean-dupont2');
   });
 
-  test('replié, les saisies sortent du parcours clavier', () => {
-    const html = rendu('jean-dupont', 'Jean Dupont');
-    expect(html).toContain('tabindex="-1"');
-  });
-
-  /**
-   * Un refus qui vise le pseudo OUVRE le bloc : laisser replié montrerait un
-   * message d'erreur sous un champ que rien ne permet d'atteindre.
-   */
-  test('un refus rend la saisie atteignable', () => {
-    const html = renderToStaticMarkup(
-      <DerivedIdentity
-        username="jean-dupont"
-        displayName="Jean Dupont"
-        onUsernameChange={() => {}}
-        onDisplayNameChange={() => {}}
-        tint="var(--ios-indigo-500)"
-        focusedField={null}
-        onFocus={() => {}}
-        onBlur={() => {}}
-        usernameError="Ce pseudo est déjà pris."
-        suggestions={[]}
-      />,
-    );
+  test('un refus se pose sous le champ qu’il vise', () => {
+    const html = rendu({ errors: { username: 'Ce pseudo est déjà pris.' } });
     expect(html).toContain('Ce pseudo est déjà pris.');
-    expect(html).not.toContain('tabindex="-1"');
+    expect(html).toMatch(/<input id="signup-username"[^>]*aria-invalid="true"/u);
   });
 });

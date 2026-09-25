@@ -14,6 +14,10 @@ import {
   isPasswordValid,
   hasPassword,
   canSubmit,
+  effectiveDisplayName,
+  effectiveFirstName,
+  effectiveLastName,
+  effectiveUsername,
   type SignupFormState,
 } from './signup-form';
 import { countryOf } from './countries';
@@ -28,7 +32,9 @@ const FR = countryOf('FR')!;
 
 function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
   return {
-    username: '',
+    username: null,
+    firstName: null,
+    lastName: null,
     displayName: 'Ada Lovelace',
     email: 'ada@example.com',
     phoneDigits: '',
@@ -198,7 +204,7 @@ describe('composeRegisterBody — sans mot de passe (#6424)', () => {
   test('le reste de la charge est intact', () => {
     const body = composeRegisterBody(baseForm({ password: '' }));
     expect(body.email).toBe(baseForm().email.toLowerCase());
-    expect(body.displayName).toBe(baseForm().displayName.trim());
+    expect(body.displayName).toBe('Ada Lovelace');
   });
 
   test('un mot de passe TAPÉ voyage tel quel', () => {
@@ -216,12 +222,12 @@ describe('composeRegisterBody — la charge EXACTE de POST /auth/register (regis
    * `resoudreUsername` l'emploie tel quel. Les deux noms d'état civil, eux,
    * restent DÉRIVÉS du nom affiché côté serveur : rien ne les saisit.
    */
-  test('trim + minuscules l’e-mail ; username PART, firstName/lastName jamais', () => {
-    const body = composeRegisterBody(baseForm({ email: '  Ada@Example.COM  ' }));
-    expect(body.email).toBe('ada@example.com');
+  test('trim + minuscules l’e-mail ; username, firstName et lastName PARTENT (#7897)', () => {
+    const body = composeRegisterBody(baseForm({ email: '  Ada.Lovelace@Example.COM  ' }));
+    expect(body.email).toBe('ada.lovelace@example.com');
     expect(body.username).toBe('ada-lovelace');
-    expect('firstName' in body).toBe(false);
-    expect('lastName' in body).toBe(false);
+    expect(body.firstName).toBe('Ada');
+    expect(body.lastName).toBe('Lovelace');
   });
 
   test('téléphone renseigné ⇒ TOUT ou RIEN — chiffres tels quels + phoneCountryCode ISO', () => {
@@ -265,4 +271,60 @@ describe('défauts de locale (miroir SignupForm.swift:190-198, rang AUTRE que le
     const langs = defaultLanguages('gd-GB');
     expect(langs.systemLanguage).toBe('fr');
   });
+});
+
+/**
+ * L'IDENTITÉ EN QUATRE CHAMPS, SANS BOUTON « MODIFIER » (#7897).
+ *
+ * Directive porteur 2026-09-25 : « un prénom nom rempli automatiquement et le
+ * displayname rempli à partir de là, le pseudo rempli à partir de l'email […]
+ * Tout se met à jour en direct. » `null` = le champ n'a pas été touché et
+ * SUIT la dérivation ; une chaîne = la saisie de l'utilisateur, qui gagne.
+ */
+describe('identité dérivée en direct (#7897)', () => {
+  const vierge = baseForm({ displayName: null, email: 'jean.dupont@example.com' });
+
+  test('prénom et nom sont tirés de l’adresse', () => {
+    expect(effectiveFirstName(vierge)).toBe('Jean');
+    expect(effectiveLastName(vierge)).toBe('Dupont');
+  });
+
+  test('le nom affiché est composé du prénom et du nom', () =>
+    expect(effectiveDisplayName(vierge)).toBe('Jean Dupont'));
+
+  test('le pseudo vient de l’ADRESSE, pas du nom affiché', () =>
+    expect(effectiveUsername({ ...vierge, displayName: 'Johnny' })).toBe('jean-dupont'));
+
+  test('changer le prénom met le nom affiché à jour, pas le pseudo', () => {
+    const form = { ...vierge, firstName: 'Jean-Luc' };
+    expect(effectiveDisplayName(form)).toBe('Jean-Luc Dupont');
+    expect(effectiveUsername(form)).toBe('jean-dupont');
+  });
+
+  test('un nom affiché TAPÉ ne suit plus prénom et nom', () =>
+    expect(effectiveDisplayName({ ...vierge, displayName: 'JD', firstName: 'Paul' })).toBe('JD'));
+
+  test('un nom affiché vidé retombe sur prénom + nom', () =>
+    expect(effectiveDisplayName({ ...vierge, displayName: '  ' })).toBe('Jean Dupont'));
+
+  test('un NOM vidé reste vide — un mononyme ne se voit rien réimposer', () => {
+    const form = { ...vierge, lastName: '' };
+    expect(effectiveLastName(form)).toBe('');
+    expect(effectiveDisplayName(form)).toBe('Jean');
+    const body = composeRegisterBody(form);
+    expect(body.firstName).toBe('Jean');
+    expect('lastName' in body).toBe(false);
+  });
+
+  test('une adresse sans lettre ne fabrique aucun nom invalide', () => {
+    const form = baseForm({ displayName: null, email: '1234@example.com' });
+    expect(effectiveFirstName(form)).toBe('');
+    const body = composeRegisterBody(form);
+    expect('firstName' in body).toBe(false);
+    expect('displayName' in body).toBe(false);
+    expect(body.username).toBe('1234');
+  });
+
+  test('un prénom TAPÉ sans lettre éteint le bouton', () =>
+    expect(canSubmit({ ...vierge, firstName: '42' })).toBe(false));
 });

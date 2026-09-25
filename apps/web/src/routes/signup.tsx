@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
 import { CountrySheet } from '@/components/country-sheet';
-import { DerivedIdentity } from '@/components/derived-identity';
+import { DerivedIdentity, type IdentityField } from '@/components/derived-identity';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
@@ -22,6 +22,8 @@ import {
   PASSWORD_MIN,
   canSubmit,
   effectiveDisplayName,
+  effectiveFirstName,
+  effectiveLastName,
   effectiveUsername,
   composeRegisterBody,
   emptySignupForm,
@@ -169,6 +171,35 @@ export function landingAfterRegistration(input: { readonly next: string | null; 
 function nextFromLocation(): string | null {
   if (typeof window === 'undefined') return null;
   return new URLSearchParams(window.location.search).get('next');
+}
+
+const IDENTITY_FIELDS: readonly IdentityField[] = ['firstName', 'lastName', 'displayName', 'username'];
+
+function isIdentityField(field: FocusedField): field is IdentityField {
+  return IDENTITY_FIELDS.some((candidate) => candidate === field);
+}
+
+/**
+ * CE QUE LES QUATRE SAISIES D'IDENTITÉ MONTRENT (#7897). Un champ jamais
+ * touché affiche la dérivation EN DIRECT ; un champ touché affiche la frappe,
+ * même vide — la dérivation passe alors en filigrane.
+ */
+function identityView(form: SignupFormState) {
+  const placeholders = {
+    firstName: effectiveFirstName({ ...form, firstName: null }),
+    lastName: effectiveLastName({ ...form, lastName: null }),
+    displayName: effectiveDisplayName({ ...form, displayName: null }),
+    username: effectiveUsername({ ...form, username: null }),
+  };
+  return {
+    placeholders,
+    values: {
+      firstName: form.firstName ?? placeholders.firstName,
+      lastName: form.lastName ?? placeholders.lastName,
+      displayName: form.displayName ?? placeholders.displayName,
+      username: form.username ?? placeholders.username,
+    },
+  };
 }
 
 export default function SignupScreen({
@@ -325,6 +356,7 @@ export default function SignupScreen({
    * dessous. */
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
+  const identity = identityView(form);
 
   return (
     /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
@@ -452,16 +484,19 @@ export default function SignupScreen({
               (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
               qu'elle n'est pas tapée, il n'y a rien à montrer. */}
           <DerivedIdentity
-            username={effectiveUsername(form)}
-            displayName={effectiveDisplayName(form)}
-            onUsernameChange={(username) => patch({ username })}
-            onDisplayNameChange={(displayName) => patch({ displayName })}
+            values={identity.values}
+            placeholders={identity.placeholders}
+            onChange={(field, value) => patch({ [field]: value })}
             tint={INDIGO_TINT}
-            focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
+            focusedField={isIdentityField(focused) ? focused : null}
             onFocus={(field) => setFocused(field)}
             onBlur={() => setFocused(null)}
-            usernameError={feedback.fieldErrors.username}
-            displayNameError={feedback.fieldErrors.displayName}
+            errors={{
+              firstName: feedback.fieldErrors.firstName,
+              lastName: feedback.fieldErrors.lastName,
+              displayName: feedback.fieldErrors.displayName,
+              username: feedback.fieldErrors.username,
+            }}
             suggestions={feedback.usernameSuggestions}
           />
 

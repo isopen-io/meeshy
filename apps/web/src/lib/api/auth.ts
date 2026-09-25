@@ -65,6 +65,9 @@ export type RegisterBody = {
    */
   readonly username?: string;
   readonly displayName?: string;
+  /** Saisis à l’écran depuis #7897 ; `lastName` ne part qu’avec `firstName`. */
+  readonly firstName?: string;
+  readonly lastName?: string;
   readonly email: string;
   /**
    * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est

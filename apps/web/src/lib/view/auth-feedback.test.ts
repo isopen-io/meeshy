@@ -74,6 +74,13 @@ describe('placeSignupFailure — le champ vise directement une saisie', () => {
   });
 });
 
+describe('placeSignupFailure — prénom et nom ont leur propre saisie (#7897)', () => {
+  test('field:"firstName" ⇒ sous le prénom', () =>
+    expect(placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'firstName' })).fieldErrors.firstName).toBeDefined());
+  test('field:"lastName" ⇒ sous le nom', () =>
+    expect(placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'lastName' })).fieldErrors.lastName).toBeDefined());
+});
+
 describe('placeSignupFailure — le CODE vise un champ quand la charge n’en nomme aucun', () => {
   test('EMAIL_TAKEN sans field ⇒ e-mail + showSignIn', () => {
     const result = placeSignupFailure(failure({ status: 409, code: 'EMAIL_TAKEN' }));

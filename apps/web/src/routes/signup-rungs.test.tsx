@@ -131,10 +131,27 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
    * `signup.tsx` : `aria-invalid={feedback.fieldErrors.password !== undefined}`.
    */
 
-  test('l’identité dérivée montre ce qui PARTIRA, dès qu’elle paraît', () => {
+  const valeur = (el: HTMLDivElement, selector: string) => (el.querySelector(selector) as HTMLInputElement | null)?.value;
+
+  test('l’identité dérivée montre ce qui PARTIRA, dès qu’elle paraît — déjà en saisie (#7897)', () => {
     const el = mount();
     type(el, '#signup-email', 'ada.lovelace@meeshy.example');
-    expect((el.querySelector('[data-derived-identity]')?.textContent ?? '').toLowerCase()).toContain('ada');
+    expect(valeur(el, '#signup-first-name')).toBe('Ada');
+    expect(valeur(el, '#signup-last-name')).toBe('Lovelace');
+    expect(valeur(el, '#signup-display-name')).toBe('Ada Lovelace');
+    expect(valeur(el, '#signup-username')).toBe('ada-lovelace');
+  });
+
+  test('tout se met à jour EN DIRECT : le prénom touché recompose le nom affiché (#7897)', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada.lovelace@meeshy.example');
+    type(el, '#signup-first-name', 'Augusta');
+    expect(valeur(el, '#signup-display-name')).toBe('Augusta Lovelace');
+    type(el, '#signup-email', 'ada.byron@meeshy.example');
+    expect(valeur(el, '#signup-first-name')).toBe('Augusta');
+    expect(valeur(el, '#signup-last-name')).toBe('Byron');
+    expect(valeur(el, '#signup-display-name')).toBe('Augusta Byron');
+    expect(valeur(el, '#signup-username')).toBe('ada-byron');
   });
 
   test('un champ paru ne se REFERME jamais — corriger son adresse ne fait pas s’effondrer le formulaire', () => {
