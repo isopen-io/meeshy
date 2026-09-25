@@ -67,6 +67,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 to="userProfile"
                 params={{ username: person.username }}
                 data-profile-peek-open-page
+                onClick={onClose}
                 className="flex items-center justify-center gap-2 rounded-[14px] px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{
                   minHeight: 44,
