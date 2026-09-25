@@ -121,6 +121,7 @@ export interface FullUser {
   email: string;
   phoneNumber: string | null;
   avatar: string | null;
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
@@ -170,6 +171,7 @@ export interface PublicUser {
   displayName: string | null;
   bio: string;
   avatar: string | null;
+  banner: string | null;
   role: string;
   isActive: boolean;
   isOnline: boolean;
