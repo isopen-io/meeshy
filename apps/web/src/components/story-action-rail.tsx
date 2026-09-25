@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import { GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -204,6 +204,22 @@ export type StoryActionRailProps = {
   /** Le tap sur l'anneau ANNULABLE — absent, l'anneau ne se pose pas dans un
    * bouton (loi 4 : jamais de contrôle inerte). */
   readonly onCancelSave?: (() => void) | undefined;
+  /**
+   * **LE BADGE DE CHAQUE BOUTON** (#7114) — `null`/absent ⇒ aucune capsule.
+   * Miroir du badge de code-langue d'iOS (`displayedLanguageCode`,
+   * `StoryViewerView+Sidebar.swift:848-861`) : `aria-hidden`, il ne PORTE
+   * aucune information que le nom accessible du bouton n'a déjà — la vérité
+   * SERVIE reste celle de `PrismPastille` (D-99) et de `lang=`.
+   */
+  readonly badges?: Partial<Record<StoryActionRailButton, string | null>>;
+  /**
+   * **LA SURFACE ANCRÉE À UN BOUTON** (#7114) — la barre rapide des langues,
+   * ancrée au bouton « Traductions » comme le strip de réactions à SON bouton
+   * (`Sidebar.swift:862-903`, « À GAUCHE du bouton, EXACTEMENT comme le strip
+   * de réactions »). Un bouton ABSENT du rail n'ancre jamais rien : l'enveloppe
+   * ne se pose qu'autour d'un bouton RENDU.
+   */
+  readonly anchored?: { readonly action: StoryActionRailButton; readonly node: ReactNode };
 };
 
 function RailButton({
@@ -213,6 +229,7 @@ function RailButton({
   count,
   pressed,
   onPress,
+  badge,
 }: {
   readonly action: StoryActionRailButton;
   readonly label: string;
@@ -220,6 +237,9 @@ function RailButton({
   readonly count?: number | undefined;
   readonly pressed?: boolean | undefined;
   readonly onPress: () => void;
+  /** `null`/absent ⇒ aucune capsule — un badge SUR un bouton absent du rail
+   * ne rend jamais rien (le filtre `boutons` en amont l'exclut déjà). */
+  readonly badge?: string | null | undefined;
 }) {
   return (
     <button
@@ -245,8 +265,29 @@ function RailButton({
       className="pointer-events-auto flex flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ color: '#fff', outlineColor: '#fff', minWidth: 44 }}
     >
-      <span className="grid place-items-center rounded-full" style={{ width: 44, height: 44, background: RAIL_DISC }}>
+      <span className="relative grid place-items-center rounded-full" style={{ width: 44, height: 44, background: RAIL_DISC }}>
         <GlyphSvg glyph={glyph} size={22} />
+        {badge === undefined || badge === null ? null : (
+          <span
+            data-story-action-badge
+            aria-hidden="true"
+            className="absolute rounded-menu font-semibold"
+            style={{
+              top: -2,
+              insetInlineStart: -12,
+              padding: '1px 4px',
+              fontSize: 9,
+              fontFamily: 'monospace',
+              lineHeight: 1.3,
+              color: '#fff',
+              background: 'var(--ios-indigo-500)',
+              border: '0.5px solid rgba(255,255,255,0.5)',
+              pointerEvents: 'none',
+            }}
+          >
+            {badge}
+          </span>
+        )}
       </span>
       {count !== undefined ? (
         <span className="text-check font-semibold tabular-nums" style={{ textShadow: TEXT_SHADOW }}>
@@ -387,7 +428,18 @@ function SaveProgressRing({
 const usefulCount = (value: number | null | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 
-export function StoryActionRail({ plan, language, handlers, counts, pressed, hidden, saving, onCancelSave }: StoryActionRailProps) {
+export function StoryActionRail({
+  plan,
+  language,
+  handlers,
+  counts,
+  pressed,
+  hidden,
+  saving,
+  onCancelSave,
+  badges,
+  anchored,
+}: StoryActionRailProps) {
   /* La loi d'abord, le gestionnaire ensuite — dans CET ordre, pour qu'un
      bouton sans gestionnaire ne soit pas seulement invisible mais ABSENT du
      DOM : un `disabled` annoncerait une action que le produit ne rend pas. */
@@ -457,7 +509,7 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
            `aria-pressed` y dit « muet », donc le glyphe PLEIN (haut-parleur
            ouvert) correspond à `false`. Les autres suivent la règle usuelle. */
         const showsActive = action === 'sound' ? isPressed !== true : isPressed === true;
-        return (
+        const button = (
           <RailButton
             key={action}
             action={action}
@@ -465,10 +517,25 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
             glyph={showsActive && glyphs.active !== undefined ? glyphs.active : glyphs.idle}
             count={usefulCount(counts?.[action])}
             pressed={isPressed}
+            badge={badges?.[action]}
             /* Non-null : `boutons` ne garde que les actions dont le
                gestionnaire existe — le filtre ci-dessus EST la garde. */
             onPress={handlers[action] as () => void}
           />
+        );
+        /* **L'ENVELOPPE ANCRÉE** (#7114, § 5.3) — la surface ANCHORED surgit à
+           GAUCHE du bouton visé, `offset -56` d'iOS ≈ 44 (le bouton) + 12
+           (respiration). Elle ne change ni la taille ni l'ORDRE des boutons :
+           l'enveloppe remplace le `<RailButton>` NU au même index de la
+           liste, jamais un nœud de plus dans `boutons.map`. */
+        if (anchored?.action !== action) return button;
+        return (
+          <div key={action} className="relative" data-story-action-anchor={action}>
+            {button}
+            <div className="absolute end-full top-1/2 me-3" style={{ transform: 'translateY(-50%)', zIndex: 10 }}>
+              {anchored.node}
+            </div>
+          </div>
         );
       })}
     </div>
