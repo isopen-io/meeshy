@@ -25,7 +25,10 @@ import { Glyph } from './glyph';
  * `fill` (#6221) — DANS une grille, le substitut REMPLIT sa case (la cote
  * est celle de la MISE EN PAGE, pas de la pièce, D-41 tenu) ; HORS grille
  * (vocal/fichier masqué), il garde son côté FIXE historique
- * (`MASKED_TILE_SIZE`).
+ * (`MASKED_TILE_SIZE`). En grille il n'a AUCUN arrondi propre (#7896) : la
+ * case qui l'enveloppe (`media-grid.tsx`, `CELL_CLASS`) lui donne les coins
+ * de ses voisines — un `rounded-2xl` y laissait voir la boîte noire de la
+ * bulle dans ses quatre coins.
  *
  * PAS D'AFFORDANCE DE RÉVÉLATION dans ce lot : la fenêtre de 5 s d'iOS
  * (`FocalAttachmentBlock.swift`, `isRevealed`) suppose une consommation
@@ -63,7 +66,7 @@ export function MaskedAttachment({ attachment, fill = false }: { readonly attach
       data-protected-attachment="hidden"
       role="img"
       aria-label={libelle}
-      className={`flex items-center justify-center gap-2 rounded-2xl ${fill ? 'size-full' : ''}`}
+      className={`flex items-center justify-center gap-2 ${fill ? 'size-full' : 'rounded-2xl'}`}
       style={
         /* EN GRILLE, OPAQUE ET ENCRÉE (#7881) — la bulle pose une boîte
            NOIRE sous sa grille (`BubbleStandardLayout.swift:784-787`) : sur

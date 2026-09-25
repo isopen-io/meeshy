@@ -79,6 +79,11 @@ const frThreadStates = {
   'send.failure.tooMany': 'trop de messages d’un coup — réessayez dans un instant',
   'send.failure.rejected': 'message refusé',
   'send.failure.gatewayUnavailable': 'la passerelle est indisponible',
+
+  /* LA PASTILLE DES RÉACTIONS D'UNE PIÈCE (#7894) — valeurs du catalogue iOS
+     (`media.reactions.badge.a11y`, `media.reactions.badge.mine.a11y`). */
+  'media.reactions.badge.a11y': 'Réactions',
+  'media.reactions.badge.mine.a11y': 'dont la vôtre',
 } as const;
 
 export default frThreadStates;

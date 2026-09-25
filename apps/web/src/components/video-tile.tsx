@@ -8,6 +8,7 @@ import {
 } from '@/lib/view/media-grid-layout';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 
+import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
@@ -184,6 +185,8 @@ export function VideoTile({
           {durationLabel}
         </span>
       ) : null}
+
+      <AttachmentReactionBadge attachment={attachment} />
 
       {isPlaying || progress > 0 ? (
         <span

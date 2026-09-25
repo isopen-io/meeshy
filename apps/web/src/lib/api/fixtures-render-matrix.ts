@@ -37,8 +37,8 @@ const quotingPiece = (quoted: Message, piece: NamedPiece): Message => Object.ass
 /** Les réactions d'une pièce, à la forme de `aggregateAttachmentReactions`. */
 const withPieceReactions = (
   attachment: Attachment,
-  reactions: { readonly reactionSummary: Readonly<Record<string, number>>; readonly currentUserReactions: readonly string[] },
-): Attachment => Object.assign({}, attachment, reactions);
+  reactions: Required<Pick<Attachment, 'reactionSummary' | 'currentUserReactions'>>,
+): Attachment => ({ ...attachment, ...reactions });
 
 const image = (messageId: string, index: number, createdAt: Date, uploadedBy: string): Attachment => ({
   ...attachmentDefaults,
