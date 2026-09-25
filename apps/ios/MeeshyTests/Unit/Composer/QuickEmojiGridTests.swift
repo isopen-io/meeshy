@@ -20,10 +20,31 @@ final class QuickEmojiGridTests: XCTestCase {
         XCTAssertEqual(QuickEmojiGrid.rows([]), [])
     }
 
-    func test_laGrilleTientDansLEmplacementDe44Points() {
+    func test_leCadrePrendToutLeCoteDroit_ligneEtBarreDOutils() {
         XCTAssertEqual(QuickEmojiGrid.count, 5)
-        let hauteur = 2 * QuickEmojiGrid.cell + QuickEmojiGrid.spacing
-        XCTAssertLessThanOrEqual(hauteur, 44, "deux rangées tiennent dans la hauteur fixe du slot")
+        XCTAssertEqual(
+            QuickEmojiGrid.frameHeight(toolbarHeight: 30),
+            QuickEmojiGrid.rowHeight + QuickEmojiGrid.toolbarGap + 30,
+            "le cadre monte du bas de la ligne de saisie jusqu'au haut de la barre d'outils"
+        )
+        XCTAssertEqual(
+            QuickEmojiGrid.frameHeight(toolbarHeight: 44) - QuickEmojiGrid.frameHeight(toolbarHeight: 30), 14,
+            "une barre plus haute (Dynamic Type) agrandit le cadre d'autant"
+        )
+    }
+
+    func test_lesDeuxRangeesTiennentToujoursDansLeCadre() {
+        for toolbar: CGFloat in [0, 20, 30, 60] {
+            XCTAssertLessThanOrEqual(
+                QuickEmojiGrid.contentHeight + 2 * QuickEmojiGrid.inset,
+                QuickEmojiGrid.frameHeight(toolbarHeight: toolbar)
+            )
+        }
         XCTAssertEqual(QuickEmojiGrid.width, 3 * QuickEmojiGrid.cell + 2 * QuickEmojiGrid.spacing)
+        XCTAssertEqual(QuickEmojiGrid.frameWidth, QuickEmojiGrid.width + 2 * QuickEmojiGrid.inset)
+    }
+
+    func test_lesEmojisSontAgrandis() {
+        XCTAssertGreaterThan(QuickEmojiGrid.cell, 21, "le cadre agrandi porte des emojis plus grands qu'en #7931")
     }
 }

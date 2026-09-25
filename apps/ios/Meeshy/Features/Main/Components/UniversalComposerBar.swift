@@ -312,6 +312,9 @@ struct UniversalComposerBar: View {
     /// La feuille des emojis, ouverte par un appui long sur un emoji rapide
     /// (#7931).
     @State var showQuickEmojiPicker = false
+    /// La hauteur de la barre d'outils, que le cadre des emojis rapides
+    /// recouvre à droite pour prendre tout le côté droit du composeur.
+    @State var topToolbarHeight: CGFloat = 0
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false
