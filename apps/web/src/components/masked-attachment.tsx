@@ -65,8 +65,13 @@ export function MaskedAttachment({ attachment, fill = false }: { readonly attach
       aria-label={libelle}
       className={`flex items-center justify-center gap-2 rounded-2xl ${fill ? 'size-full' : ''}`}
       style={
+        /* EN GRILLE, OPAQUE ET ENCRÉE (#7881) — la bulle pose une boîte
+           NOIRE sous sa grille (`BubbleStandardLayout.swift:784-787`) : sur
+           transparent, la tuile y devenait sombre sur sombre. Mêlée à la
+           surface, elle se lit dans les trois modes, clair comme sombre, et
+           dans la bulle indigo « mine » comme ailleurs. */
         fill
-          ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)' }
+          ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, var(--ios-surface))', color: 'var(--color-ios-ink)' }
           : {
               width: MASKED_TILE_SIZE,
               height: MASKED_TILE_SIZE,

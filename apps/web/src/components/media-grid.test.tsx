@@ -401,3 +401,24 @@ describe('MediaGrid — la boîte ne déborde jamais de son porteur (#7018)', ()
     });
   });
 });
+
+/**
+ * LA TUILE PROTÉGÉE SE LIT SUR LA BOÎTE NOIRE (#7881) — la bulle pose UNE
+ * boîte noire sous sa grille (`BubbleStandardLayout.swift:784-787`,
+ * `.background(Color.black)`, gardé par `check-media-grid.mjs` G5). Le
+ * substitut d'une pièce protégée y était peint à 10 % d'accent sur
+ * TRANSPARENT : sombre sur sombre, libellé illisible en Bulles alors qu'il
+ * était clair en Focal. En grille, la tuile est OPAQUE et porte son encre.
+ */
+describe('MediaGrid — la tuile protégée reste lisible sur la boîte noire (#7881)', () => {
+  test('en grille, le substitut est opaque (mêlé à la surface) et porte l’encre du thème', () => {
+    const html = renderToStaticMarkup(
+      <MediaGrid items={attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID)} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={() => {}} />,
+    );
+    const masked = /data-protected-attachment="hidden"[^>]*style="([^"]*)"/.exec(html);
+    expect(masked).not.toBeNull();
+    expect(masked![1]).toContain('var(--accent) 10%, var(--ios-surface))');
+    expect(masked![1]).not.toContain('transparent');
+    expect(masked![1]).toContain('color:var(--color-ios-ink)');
+  });
+});
