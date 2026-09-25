@@ -148,6 +148,19 @@ createRoot(root).render(
 void import('@/lib/api/realtime');
 
 /**
+ * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque
+ * Android reçoit les App Links de `meeshy.me` et `meeshy://` ; le lien d'un
+ * lancement à froid attend, retenu par le pont natif, que cet écouteur
+ * s'abonne. Hors coque, rien ne se charge.
+ */
+if (__SHELL__) {
+  void Promise.all([import('@/lib/links/shell-deep-links'), import('@/lib/native-shell'), import('@/routes/app-paths')]).then(
+    ([{ ecouterLiensEntrants }, { coqueCourante }, { isAppPath }]) =>
+      ecouterLiensEntrants(coqueCourante(), { isAppPath, navigate: (chemin) => navigate(chemin) }),
+  );
+}
+
+/**
  * LE SERVICE WORKER S'INSCRIT APRÈS LA PREMIÈRE PEINTURE, ET SUR LE `load`
  * (#6936) — l'installation précache tout le bundle : la lancer pendant le
  * premier rendu ferait concurrence, sur la 3G visée, au rendu lui-même. C'est
