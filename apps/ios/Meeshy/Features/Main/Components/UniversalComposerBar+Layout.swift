@@ -268,7 +268,9 @@ extension UniversalComposerBar {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .background(composerBackground)
+            .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
@@ -449,14 +451,19 @@ extension UniversalComposerBar {
     }
 
     // ========================================================================
-    // MARK: - Background
+    // MARK: - Panneau de verre
     // ========================================================================
 
-    /// Transparent sans protection — l'hôte fournit son verre. Une protection
-    /// armée y pose un voile de SA teinte (#7667) : toute la barre dit l'état,
-    /// pas seulement la pastille qui l'a allumé.
-    private var composerBackground: some View {
-        (dominantProtection?.tint ?? Color.clear)
-            .opacity(isDark ? 0.10 : 0.06)
+    /// **Toute la barre repose sur UN panneau de verre** (#7884, directive
+    /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
+    /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
+    /// enregistrement, pastille de langue) sont du verre aussi.
+    static let panelShape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+    static let fieldShape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+
+    /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
+    /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
+    var panelGlassTint: Color? {
+        dominantProtection.map { $0.tint.opacity(isDark ? 0.30 : 0.22) }
     }
 }

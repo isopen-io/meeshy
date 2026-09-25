@@ -357,9 +357,7 @@ extension UniversalComposerBar {
     ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
         let accent = servedAccent
-        let iconColor = style == .dark ? Color.white.opacity(0.7) : accent
-        let bgFill = style == .dark ? Color.white.opacity(0.1) : accent.opacity(0.1)
-        let borderColor = style == .dark ? Color.white.opacity(0.2) : accent.opacity(0.2)
+        let iconColor = style == .dark ? Color.white.opacity(0.85) : accent
 
         return Button(action: {
             onAnyInteraction?()
@@ -376,14 +374,7 @@ extension UniversalComposerBar {
                 .foregroundColor(iconColor)
                 .rotationEffect(.degrees(showAttachOptions ? 0 : attachRotation))
                 .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(bgFill)
-                        .overlay(
-                            Circle()
-                                .stroke(borderColor, lineWidth: 1)
-                        )
-                )
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showAttachOptions)
         }
         .accessibilityLabel(showAttachOptions
