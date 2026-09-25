@@ -309,3 +309,40 @@ describe('les MÉDIAS aussi : un échec n’est pas « rien publié »', () => {
     expect(host.textContent ?? '').toContain(translateAdmin('fr', 'admin.media.empty'));
   });
 });
+
+describe('les conversations du membre se trient et se gèrent (#7845)', () => {
+  test('changer le tri relit la liste avec le tri demandé, depuis la première page', async () => {
+    const chemins: string[] = [];
+    const espion = transportListe();
+    const premier = espion.request;
+    espion.request = (async (req: HttpRequest) => {
+      chemins.push(req.path);
+      return premier(req);
+    }) as HttpTransport['request'];
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport: espion }} />
+      </QueryClientProvider>,
+    );
+    const choix = host.querySelector<HTMLSelectElement>('[data-admin-user-conv-order]');
+    if (choix === null) throw new Error('ordre absent');
+    choix.value = 'asc';
+    choix.dispatchEvent(new Event('change', { bubbles: true }));
+    await mounter.settle();
+    expect(chemins.at(-1)).toContain('sortOrder=asc');
+    expect(chemins.at(-1)).toContain('offset=0');
+  });
+
+  test('« Gérer » mène à la fiche de la conversation, et seulement pour qui a la section', async () => {
+    const sans = await monter();
+    expect(sans.querySelector('[data-admin-conversation-manage]')).toBeNull();
+    mounter.unmountAll();
+
+    const avec = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer="admConversation" deps={{ source: 'gateway', transport: transportListe() }} />
+      </QueryClientProvider>,
+    );
+    expect(avec.querySelector('[data-admin-conversation-manage="c-atelier"]')?.getAttribute('href')).toBe('/adm/conversations/c-atelier');
+  });
+});
