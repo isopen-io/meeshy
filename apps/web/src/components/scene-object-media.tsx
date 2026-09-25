@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { mediaCropStyle, readMediaCrop } from '@meeshy/shared/utils/media-crop';
 
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
 import { MEDIA_CORNER_FRACTION, placedMediaDesignSize } from '@/lib/canvas/media-size';
+import { objectMediaTimeline } from '@/lib/canvas/media-seek';
 import { cqw } from '@/lib/canvas/units';
 
 import type { SceneClockHandle } from './scene-clock';
+import { useSceneMediaSync } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
 
 const DESIGN_WIDTH = 1080;
@@ -21,12 +23,15 @@ export function SceneObjectMedia({
   playing,
   muted,
   clock,
+  seekClock,
 }: {
   readonly object: CanvasObject;
   readonly carrier: SceneCarrier;
   readonly playing: boolean;
   readonly muted: boolean;
   readonly clock: SceneClockHandle | null;
+  /** L'horloge du parcours au doigt (#7879) — la vidéo s'y recale à chaque `seek`. */
+  readonly seekClock: SceneClockHandle | null;
 }) {
   const src = objectMediaSrc(object, carrier);
   const [errored, setErrored] = useState(false);
@@ -35,16 +40,10 @@ export function SceneObjectMedia({
   // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901, même
   // raison que `scene-object-audio.tsx`) : `src` dépend du PORTEUR, qui
   // change au rafraîchissement du fil.
-  useEffect(() => {
-    const el = videoRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    void el.play().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, src]);
+  // LA VIDÉO POSÉE SUIT LA TIMELINE DE LA SCÈNE (#7879) : elle attend sa
+  // fenêtre (`timing`), lit sa coupe (`sourceStart`/`sourceEnd`), en lecture
+  // comme au seek — miroir `StoryMediaLayer.trimmedSeekTarget`.
+  useSceneMediaSync({ ref: videoRef, clock: seekClock, timeline: objectMediaTimeline(object), playing, restartKeys: [src] });
 
   if (src === undefined) return null;
   const { payload } = object;

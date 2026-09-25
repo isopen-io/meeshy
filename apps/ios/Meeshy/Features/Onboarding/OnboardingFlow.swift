@@ -25,8 +25,11 @@ enum OnboardingStoryState: Equatable {
     case idle
     case publishing
     case failed
+    /// Refus DÉFINITIF de la passerelle (#7907) : rien ne sert de réessayer.
+    case rejected
     case published
 }
+
 
 /// Ce que l'hôte relaie d'un upload de story : son identité et s'il a échoué.
 /// Le modèle n'a pas à connaître `StoryUploadState` ni ses médias.
@@ -84,7 +87,7 @@ enum OnboardingFlow {
     /// Les étapes « geste », dans l'ordre. La carte notifications n'en fait pas
     /// partie : elle n'est proposée qu'APRÈS, et seulement si un geste a produit
     /// de quoi être notifié (leçon du carrousel #5218).
-    static let gestureSteps: [OnboardingStepId] = [.languages, .global, .story, .friends]
+    static let gestureSteps: [OnboardingStepId] = [.languages, .email, .global, .story, .friends]
 
     /// Les étapes qui PEUVENT appeler une réponse — celles qui justifient de
     /// proposer les notifications.
@@ -97,6 +100,9 @@ enum OnboardingFlow {
             switch step {
             case .global: return state.globalConversationId != nil
             case .friends: return !state.suggestions.isEmpty
+            // Proposée au seul compte DÉCLARÉ non vérifié : une passerelle qui
+            // ne le dit pas (`nil`) ne fait naître aucune carte.
+            case .email: return state.emailVerified == false
             case .languages, .story, .notifications: return true
             }
         }

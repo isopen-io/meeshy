@@ -6,7 +6,7 @@ import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } fro
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
-import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
+import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
@@ -35,7 +35,7 @@ import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
-import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
+import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
@@ -483,6 +483,7 @@ export const FocalRow = memo(function FocalRow({
    * → texte, dans cet ordre.
    */
   const storyCitation = storyCitationOf(message);
+  const moodCitation = moodCitationOf(message);
   const sharedPlace = placeOf(message);
   const body = bodyKindOf(message);
 
@@ -499,9 +500,12 @@ export const FocalRow = memo(function FocalRow({
         <StoryCitationCard
           citation={storyCitation}
           accent="var(--accent)"
+          language={currentInterfaceLanguage()}
           now={new Date(nowMs)}
           {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
         />
+      ) : moodCitation !== null ? (
+        <MoodQuote citation={moodCitation} isMine={false} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
       ) : message.replyTo ? (
         <Quote
           quote={message.replyTo}

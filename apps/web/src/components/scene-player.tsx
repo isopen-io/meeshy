@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
 import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
@@ -95,6 +95,11 @@ export type ScenePlayerProps = {
    * `imageOnly` (#6636) : rogner un calque qu'on continue de peindre
    * paierait un flou que personne ne voit. */
   readonly servesLetterboxFill?: boolean;
+  /** LA POIGNÉE DE L'HORLOGE (#7879) — remise UNE fois (elle vit autant que
+   * le player) à l'hôte qui porte une barre qu'on parcourt au doigt : `seek`
+   * redessine la scène au temps pointé et recale ses médias, sans rouvrir le
+   * moteur. AJOUTÉ, jamais un renommage (D-11). */
+  readonly onClock?: (clock: SceneClockHandle) => void;
 };
 
 /** Le rappel le plus RÉCENT d'un hôte, sans en faire une dépendance d'effet :
@@ -115,6 +120,7 @@ function SceneCanvas({
   servesLetterboxFill,
   callbacks,
   clock,
+  seekClock,
 }: {
   readonly scene: CanvasScene;
   readonly carrier: SceneCarrier;
@@ -124,6 +130,10 @@ function SceneCanvas({
   readonly servesLetterboxFill: boolean;
   readonly callbacks: { readonly current: SceneCallbacks };
   readonly clock: SceneClockHandle | null;
+  /** L'horloge que les MÉDIAS écoutent pour se recaler (`useMediaSeek`) —
+   * toujours fournie, même sans objet temporisé : une vidéo de fond se
+   * parcourt aussi. */
+  readonly seekClock: SceneClockHandle;
 }) {
   // `SceneFraming.backgroundMedia` — le premier fond qui PORTE une image,
   // sinon le premier fond : la MÊME élection que la loi de cadrage, jamais
@@ -160,6 +170,7 @@ function SceneCanvas({
           framing={framing}
           letterboxFillSrc={letterboxFillSrc}
           callbacks={callbacks}
+          seekClock={seekClock}
         />
       ) : (
         <BlankBackground key={scene.id} callbacks={callbacks} />
@@ -170,7 +181,7 @@ function SceneCanvas({
           case 'text':
             return <SceneObjectText key={object.id} object={object} preferredLanguages={preferredLanguages} clock={clock} />;
           case 'media':
-            return <SceneObjectMedia key={object.id} object={object} carrier={carrier} playing={playing} muted={muted} clock={clock} />;
+            return <SceneObjectMedia key={object.id} object={object} carrier={carrier} playing={playing} muted={muted} clock={clock} seekClock={seekClock} />;
           case 'sticker':
             return <SceneObjectSticker key={object.id} object={object} carrier={carrier} clock={clock} />;
           case 'place':
@@ -186,6 +197,7 @@ function SceneCanvas({
                 playing={playing}
                 muted={muted}
                 clock={clock}
+                seekClock={seekClock}
                 onPlaybackBlocked={callbacks.current.onPlaybackBlocked}
               />
             );
@@ -214,6 +226,7 @@ export default function ScenePlayer({
   fallbackDurationSeconds,
   onLoop,
   servesLetterboxFill = true,
+  onClock,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
@@ -230,6 +243,11 @@ export default function ScenePlayer({
     declaredDurationSeconds ?? (config.showsChrome && fallbackDurationSeconds !== undefined ? fallbackDurationSeconds : null);
   const enabled = timed || (config.showsChrome && durationSeconds !== null);
   const clock = useSceneClock({ enabled, playing, loops: config.loops, durationSeconds, onTime, onEnded, onLoop });
+  const clockReceiver = useLatest(onClock);
+  useEffect(() => {
+    clockReceiver.current?.(clock);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock]);
 
   if (scene === undefined) return null;
 
@@ -243,6 +261,7 @@ export default function ScenePlayer({
       servesLetterboxFill={servesLetterboxFill}
       callbacks={callbacks}
       clock={timed ? clock : null}
+      seekClock={clock}
     />
   );
 

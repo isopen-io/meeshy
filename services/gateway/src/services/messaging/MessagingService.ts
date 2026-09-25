@@ -25,6 +25,7 @@ import {
   sanitizeForwardReferences
 } from './forwardAdmission';
 import { admitAttachmentReply } from './attachmentReplySnapshot';
+import { admitStoryReply } from './storyReplyAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
@@ -381,6 +382,22 @@ export class MessagingService {
       if (!citation.ok) {
         logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
         return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
+      }
+
+      // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
+      //      le second champ de citation. `storyReplyToId` gèle l'instantané du
+      //      post dans `metadata.postReplyTo` puis le diffuse aux membres :
+      //      l'expéditeur doit pouvoir VOIR la story, et son auteur être
+      //      membre ACTIF de CETTE conversation.
+      //      Même site, même raison : les trois transports convergent ici.
+      const storyCitation = await admitStoryReply(this.prisma, {
+        conversationId,
+        senderParticipantId: participant.id,
+        storyReplyToId: request.storyReplyToId
+      });
+      if (!storyCitation.ok) {
+        logger.info('story reply citation refused', { ...corr, conversationId, reason: storyCitation.reason });
+        return this.createErrorResponse(storyCitation.reason ?? 'Story citée invalide');
       }
 
       // 4.5. Admission du TRANSFERT — la dernière sortie de l'éphémère et de la

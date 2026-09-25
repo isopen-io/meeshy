@@ -42,6 +42,7 @@ export function AppUpdateBanner({
 }) {
   const online = useOnline();
   const pending = useStore(appUpdateStore, (state) => state.pending);
+  const store = useStore(appUpdateStore, (state) => state.store);
   const dismissed = useStore(appUpdateStore, (state) => state.dismissed);
   const applying = useStore(appUpdateStore, (state) => state.applying);
   const language = currentInterfaceLanguage();
@@ -49,12 +50,19 @@ export function AppUpdateBanner({
   /* LA COUPURE PASSE D'ABORD (legacy, `SystemStatusBanner` § « Priorité 1 ») —
      et elle n'est pas qu'une question de hiérarchie : un rechargement hors
      ligne rendrait la coquille du cache, pas la version neuve. */
-  if (!online || pending === null || dismissed) return null;
+  if (!online || (pending === null && store === null) || dismissed) return null;
 
   const onApply = (): void => {
-    if (applying) return;
+    if (applying || pending === null) return;
     appUpdateStore.getState().markApplying();
     apply(pending);
+  };
+
+  const actionClass =
+    'grid min-h-11 shrink-0 place-items-center rounded-chip px-3.5 text-title font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2';
+  const actionStyle = {
+    background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
+    outlineColor: 'var(--color-ios-brand)',
   };
 
   return (
@@ -85,25 +93,26 @@ export function AppUpdateBanner({
         <div className="min-w-0 flex-1">
           <p className="text-title font-semibold">{translate(language, 'appUpdate.available')}</p>
           <p className="text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'appUpdate.hint')}
+            {translate(language, store !== null && pending === null ? 'appUpdate.storeHint' : 'appUpdate.hint')}
           </p>
         </div>
 
         {/* CIBLES ≥ 44 px (dimension 5) — `min-h-11` sur les DEUX contrôles, et
             la croix aussi large que haute : une cible de 44 × 20 n'est pas une
             cible de 44. */}
-        <button
-          type="button"
-          onClick={onApply}
-          disabled={applying}
-          className="min-h-11 shrink-0 rounded-chip px-3.5 text-title font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{
-            background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
-            outlineColor: 'var(--color-ios-brand)',
-          }}
-        >
-          {translate(language, applying ? 'appUpdate.applying' : 'appUpdate.action')}
-        </button>
+        {/* LA COQUE (#6937) : sa version neuve vit sur le magasin, pas dans un
+            service worker — l'action OUVRE la fiche. Un lien externe : la
+            coque le confie au système (Play Store, App Store), comme les
+            liens d'un message. */}
+        {pending === null && store !== null ? (
+          <a href={store.storeUrl} target="_blank" rel="noopener noreferrer" className={actionClass} style={actionStyle}>
+            {translate(language, 'appUpdate.action')}
+          </a>
+        ) : (
+          <button type="button" onClick={onApply} disabled={applying} className={actionClass} style={actionStyle}>
+            {translate(language, applying ? 'appUpdate.applying' : 'appUpdate.action')}
+          </button>
+        )}
 
         <button
           type="button"

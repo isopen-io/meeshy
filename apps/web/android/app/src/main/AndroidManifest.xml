@@ -22,6 +22,41 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- #5819 — un lien meeshy.me ouvert sur Android ouvre la coque sur son
+                 écran, pas le navigateur. Les chemins suivent l'apple-app-site-association
+                 (public/.well-known/), limités à ceux que l'app SERT : un chemin réclamé
+                 sans écran ouvrirait l'app sur rien (garde : src/lib/links/app-links.test.ts).
+                 MeeshyLinksPlugin relaie l'intent au routeur (src/lib/links/shell-deep-links.ts). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="meeshy.me" />
+                <data android:host="www.meeshy.me" />
+                <data android:pathPrefix="/c/" />
+                <data android:pathPrefix="/chat/" />
+                <data android:pathPrefix="/l/" />
+                <data android:pathPrefix="/u/" />
+                <data android:pathPrefix="/feeds/post/" />
+                <data android:pathPrefix="/post/" />
+                <data android:pathPrefix="/story/" />
+                <data android:pathPrefix="/reel/" />
+                <data android:pathPrefix="/communities/" />
+                <data android:pathPrefix="/auth/magic-link" />
+                <data android:path="/me" />
+                <data android:path="/links" />
+                <data android:path="/reels" />
+            </intent-filter>
+
+            <!-- Le schéma court, miroir de CFBundleURLSchemes = meeshy côté iOS. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meeshy" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -49,4 +84,9 @@
          "requesting" (recette QEMU, socle du prompt). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- #7307 — Android 13+ (targetSdk 36) : sans elle, aucune bannière ne
+         s'affiche, et requestPermissions() de @capacitor/push-notifications
+         rend « denied » sans dialogue. Le manifeste du plugin ne la fournit
+         pas (il ne déclare que son MessagingService). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

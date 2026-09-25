@@ -62,8 +62,8 @@ import { logError } from '../../utils/logger.js';
 // le commentaire au site d'appel). Larges par rapport à un usage normal :
 // couvrent un compte qui aurait rejoint 2 000 conversations ou envoyé 20 000
 // messages, tout en éliminant le scan réellement illimité que l'audit signale.
-const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
-const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
+export const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
+export const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
 
 /**
  * Le seuil de CHAQUE porte de ce fichier qui lit `Report` (#4157, étendu par

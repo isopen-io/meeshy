@@ -581,3 +581,20 @@
     animation: none;
   }
 }
+
+/**
+ * L'ENCRE DU PASSAGE PRONONCÉ D'UN VOCAL (#7911) — la couleur primaire de
+ * l'application (indigo, `MeeshyColors.brandPrimary`), portée au cran qui
+ * tient le contraste AA sur le fond : indigo-600 sur clair (6,3:1 sur blanc),
+ * indigo-300 sur nuit — indigo-500 servi tel quel mesure 4,47:1 sur blanc,
+ * sous le seuil (même constat que `--ios-self-name-ink`, #5935). La bulle
+ * ENVOYÉE, peinte en indigo-500, la redéfinit en blanc (`bubble.tsx`).
+ */
+:root,
+:root.dark {
+  --color-karaoke-ink: var(--ios-indigo-300);
+}
+
+:root.light {
+  --color-karaoke-ink: var(--ios-indigo-600);
+}

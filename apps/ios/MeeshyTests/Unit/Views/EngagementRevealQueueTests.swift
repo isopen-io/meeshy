@@ -104,4 +104,52 @@ final class EngagementRevealQueueTests: XCTestCase {
         XCTAssertEqual(file.enAttente.count, EngagementRevealQueue.capacité - 1)
         XCTAssertFalse(file.enAttente.contains(.streak(days: 30)))
     }
+    // MARK: - #7914 — l'onboarding passe d'abord
+
+    /// Recette 2026-09-25 : « Succès débloqué — Premier pas » couvrait le calque
+    /// d'onboarding ET l'envolée « +14 » qui devait expliquer le gain.
+    func test_enfile_whileSuspendedByOnboarding_holdsTheRevealOffScreen() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+
+        file.enfile(volume)
+
+        XCTAssertNil(file.enCours, "rien ne recouvre le calque d'onboarding")
+        XCTAssertEqual(file.enAttente, [volume], "la célébration est gardée, pas perdue")
+    }
+
+    func test_suspends_false_afterOnboarding_playsTheHeldRevealsInOrder() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+        file.enfile(volume)
+        file.enfile(ampleur)
+
+        file.suspends(false)
+
+        XCTAssertEqual(file.enCours, volume)
+        XCTAssertEqual(file.enAttente, [ampleur])
+        file.termine()
+        XCTAssertEqual(file.enCours, ampleur)
+    }
+
+    func test_suspends_whileARevealIsAlreadyShowing_neverYanksIt() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+
+        file.suspends(true)
+
+        XCTAssertEqual(file.enCours, volume)
+    }
+
+    func test_termine_whileSuspended_keepsTheNextOneWaiting() {
+        var file = EngagementRevealQueue()
+        file.enfile(volume)
+        file.enfile(ampleur)
+        file.suspends(true)
+
+        file.termine()
+
+        XCTAssertNil(file.enCours)
+        XCTAssertEqual(file.enAttente, [ampleur])
+    }
 }
