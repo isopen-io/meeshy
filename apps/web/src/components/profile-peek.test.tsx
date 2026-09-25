@@ -145,6 +145,21 @@ describe('la feuille montre la personne, ses gestes, et la porte vers la page', 
     expect(window.location.pathname).toBe('/u/kwame-mensah');
   });
 
+  test('la porte vers la page referme la feuille DANS le geste, pas un effet plus tard', async () => {
+    unregister = registerProfilePeekHost();
+    peekProfile('kwame-mensah');
+    const el = await mount(
+      <>
+        <PeekProbe />
+        <ProfilePeekSheet username="kwame-mensah" onClose={closeProfilePeek} />
+      </>,
+    );
+    expect(seen).toBe('kwame-mensah');
+    tap(el.querySelector('[data-profile-peek-open-page]'));
+    expect(seen).toBeNull();
+    expect(window.location.pathname).toBe('/u/kwame-mensah');
+  });
+
   test('la fermeture passe par le dialogue', async () => {
     let closed = 0;
     const el = await mount(<ProfilePeekSheet username="kwame-mensah" onClose={() => (closed += 1)} />);
