@@ -387,10 +387,12 @@ export class MessagingService {
       // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
       //      le second champ de citation. `storyReplyToId` gèle l'instantané du
       //      post dans `metadata.postReplyTo` puis le diffuse aux membres :
-      //      l'auteur de la story doit être membre ACTIF de CETTE conversation.
+      //      l'expéditeur doit pouvoir VOIR la story, et son auteur être
+      //      membre ACTIF de CETTE conversation.
       //      Même site, même raison : les trois transports convergent ici.
       const storyCitation = await admitStoryReply(this.prisma, {
         conversationId,
+        senderParticipantId: participant.id,
         storyReplyToId: request.storyReplyToId
       });
       if (!storyCitation.ok) {

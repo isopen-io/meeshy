@@ -1,4 +1,5 @@
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { canUserConsumePost, type PostAclPrisma, type PostVisibilityRecord } from '../posts/postVisibility';
 
 /**
  * RÉPONDRE À UNE STORY OU À UN MOOD, C'EST LE CITER — ET UNE CITATION SE BORNE
@@ -34,6 +35,17 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
  * et « l'auteur n'est pas membre » (la preuve d'un rattachement fautif). Même
  * verdict — c'est une écriture — mais un `reason` propre à chacun.
  *
+ * SECONDE BORNE — l'EXPÉDITEUR doit avoir le droit de VOIR la story. Que
+ * l'auteur soit membre ne suffit pas : dans un groupe où il siège, un
+ * identifiant de story FRIENDS / PRIVATE connu diffuserait son instantané à
+ * des membres hors audience. Le verdict est `canUserConsumePost`
+ * (`services/posts/postVisibility.ts`), la loi d'audience de LECTURE — aucune
+ * règle n'est réécrite ici. Un expéditeur ANONYME (participant sans `userId`)
+ * est refusé d'office, même sur une story PUBLIC : répondre à une story est un
+ * geste de compte. L'auteur qui cite sa propre story est admis par le verdict
+ * lui-même. Cette borne passe AVANT l'appartenance de l'auteur : qui ne voit
+ * pas la story n'apprend rien de la conversation.
+ *
  * Un envoi qui ne cite aucune story ne coûte AUCUNE requête.
  */
 
@@ -43,28 +55,15 @@ export type StoryReplyAdmission = {
   readonly reason?: string;
 };
 
-type StoryReplyReader = {
-  readonly post: {
-    findUnique: (args: {
-      where: { id: string };
-      select: { id: true; authorId: true; deletedAt: true };
-    }) => Promise<{ id: string; authorId: string; deletedAt: Date | null } | null>;
-  };
-  readonly participant: {
-    findFirst: (args: {
-      where: { conversationId: string; userId: string; isActive: true };
-      select: { id: true; bannedAt: true };
-    }) => Promise<{ id: string; bannedAt: Date | null } | null>;
-  };
-};
-
 const STORY_NOT_FOUND = 'La lecture n’a pas confirmé la story citée';
+const NOT_VISIBLE_TO_SENDER = 'La story citée n’est pas visible par l’expéditeur';
 const AUTHOR_NOT_MEMBER = 'L’auteur de la story citée n’est pas membre de cette conversation';
 
 export async function admitStoryReply(
-  prisma: StoryReplyReader,
+  prisma: PostAclPrisma,
   params: {
     readonly conversationId: string;
+    readonly senderParticipantId: string;
     readonly storyReplyToId?: string | null;
   }
 ): Promise<StoryReplyAdmission> {
@@ -77,10 +76,17 @@ export async function admitStoryReply(
 
   const story = await prisma.post.findUnique({
     where: { id: storyReplyToId },
-    select: { id: true, authorId: true, deletedAt: true },
+    select: {
+      id: true, authorId: true, deletedAt: true,
+      visibility: true, visibilityUserIds: true, expiresAt: true,
+    },
   });
   if (!story || story.deletedAt) {
     return { ok: false, reason: STORY_NOT_FOUND };
+  }
+
+  if (!(await senderMayViewStory(prisma, params.senderParticipantId, story))) {
+    return { ok: false, reason: NOT_VISIBLE_TO_SENDER };
   }
 
   const authorMembership = await prisma.participant.findFirst({
@@ -92,4 +98,18 @@ export async function admitStoryReply(
   }
 
   return { ok: true };
+}
+
+async function senderMayViewStory(
+  prisma: PostAclPrisma,
+  senderParticipantId: string,
+  story: PostVisibilityRecord,
+): Promise<boolean> {
+  const sender = await prisma.participant.findUnique({
+    where: { id: senderParticipantId },
+    select: { userId: true },
+  });
+  const senderUserId = sender?.userId;
+  if (!senderUserId) return false;
+  return canUserConsumePost(prisma, story, senderUserId);
 }

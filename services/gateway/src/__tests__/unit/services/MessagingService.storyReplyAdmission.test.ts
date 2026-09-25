@@ -93,6 +93,7 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
   const senderParticipantId = '507f1f77bcf86cd799439014';
   const storyId = '507f1f77bcf86cd799439015';
   const authorUserId = '507f1f77bcf86cd799439016';
+  const senderUserId = '507f1f77bcf86cd799439018';
 
   const createdMessage = (overrides: Partial<Message> = {}): any => ({
     id: messageId,
@@ -117,7 +118,10 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
     storyReplyToId: storyId
   };
 
-  const story = { id: storyId, authorId: authorUserId, deletedAt: null };
+  const story = {
+    id: storyId, authorId: authorUserId, deletedAt: null,
+    visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null
+  };
 
   const authorMembership = (row: { id: string; bannedAt: Date | null } | null) =>
     mockPrisma.participant.findFirst.mockImplementation(async (args: { where: { userId?: string } }) =>
@@ -146,11 +150,14 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
         findUnique: jest.fn().mockResolvedValue({
           id: senderParticipantId,
           conversationId,
-          isActive: true
+          isActive: true,
+          userId: senderUserId
         }),
         findFirst: jest.fn(),
         findMany: jest.fn().mockResolvedValue([])
       },
+      friendRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      postMention: { findUnique: jest.fn().mockResolvedValue(null) },
       post: {
         findUnique: jest.fn().mockResolvedValue(story)
       },
@@ -216,6 +223,40 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
     expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
     const written = mockPrisma.message.create.mock.calls[0][0].data;
     expect(written.storyReplyToId).toBe(storyId);
+  });
+
+  it('refuse, sans rien écrire, la citation d’une story FRIENDS par un non-ami de l’auteur', async () => {
+    mockPrisma.post.findUnique.mockResolvedValue({ ...story, visibility: 'FRIENDS' });
+    authorMembership({ id: '507f1f77bcf86cd799439017', bannedAt: null });
+
+    const response = await service.handleMessage(storyReply, senderParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(response.error).toBe('La story citée n’est pas visible par l’expéditeur');
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('écrit la réponse d’un ami de l’auteur à sa story FRIENDS', async () => {
+    mockPrisma.post.findUnique.mockResolvedValue({ ...story, visibility: 'FRIENDS' });
+    mockPrisma.friendRequest.findFirst.mockResolvedValue({ id: '507f1f77bcf86cd799439019' });
+    authorMembership({ id: '507f1f77bcf86cd799439017', bannedAt: null });
+
+    const response = await service.handleMessage(storyReply, senderParticipantId);
+
+    expect(response.success).toBe(true);
+    expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuse, sans rien écrire, un expéditeur ANONYME qui cite une story', async () => {
+    mockPrisma.participant.findUnique.mockResolvedValue({
+      id: senderParticipantId, conversationId, isActive: true, userId: null
+    });
+    authorMembership({ id: '507f1f77bcf86cd799439017', bannedAt: null });
+
+    const response = await service.handleMessage(storyReply, senderParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
   it('un envoi sans storyReplyToId ne relit aucun post', async () => {
