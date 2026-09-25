@@ -133,9 +133,9 @@ export class StickerLibrary {
     if (count >= STICKER_LIMITS.maxCount) return { kind: 'library-full' };
 
     const outcome = await this.normalize(input.bytes);
-    if (!outcome.ok) return { kind: 'refused', reason: outcome.reason };
+    if ('reason' in outcome) return { kind: 'refused', reason: outcome.reason };
 
-    const { image } = outcome;
+    const { image } = outcome as Extract<StickerImageOutcome, { ok: true }>;
     const filePath = `stickers/${userId}/${this.newFileId()}.${EXTENSION[image.mimeType]}`;
     await this.files.write(filePath, image.bytes);
 
