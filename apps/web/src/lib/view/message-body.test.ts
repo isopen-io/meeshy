@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
 
-import { bodyKindOf, emojiOnlyOf, mapsUrlOf, placeOf, stickerOf, storyCitationOf } from './message-body';
+import { bodyKindOf, emojiOnlyOf, mapsUrlOf, moodCitationOf, placeOf, stickerOf, storyCitationOf } from './message-body';
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -138,7 +138,13 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
         metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'Coucher de soleil', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' } },
       }),
     );
-    expect(citation).toEqual({ id: 'p1', previewText: 'Coucher de soleil', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' });
+    expect(citation).toEqual({
+      id: 'p1',
+      previewText: 'Coucher de soleil',
+      thumbnailUrl: null,
+      createdAt: '2026-09-10T08:00:00.000Z',
+      unavailable: false,
+    });
   });
 
   test('une humeur (moodEmoji non nul) ⇒ null — pas de scène', () => {
@@ -150,6 +156,25 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
 
   test('sans storyReplyToId ⇒ null', () => {
     expect(storyCitationOf(message())).toBeNull();
+  });
+
+  /**
+   * LA STORY DISPARUE (#7881) — la passerelle ne sert AUCUN `postReplyTo`
+   * quand le message n'a pas d'instantané ET que le post n'existe plus
+   * (`enrichPostReplyMessagesForList` : « post supprimé sans snapshot →
+   * citation absente », `messages-list-query.ts`). iOS garde la carte
+   * (`MessageModels.swift:914-920`, « repli le plus pauvre ») ; la carte web
+   * DISPARAISSAIT, et la réponse perdait tout ce qui disait à quoi elle
+   * répondait.
+   */
+  test('storyReplyToId SANS instantané ⇒ une citation INDISPONIBLE, jamais null', () => {
+    expect(storyCitationOf(message({ storyReplyToId: 'p9' }))).toEqual({
+      id: 'p9',
+      previewText: '',
+      thumbnailUrl: null,
+      createdAt: '',
+      unavailable: true,
+    });
   });
 
   test('id vide ⇒ la carte se rend quand même', () => {
@@ -213,5 +238,35 @@ describe('les champs HISSÉS à la racine priment sur metadata', () => {
   test('`sticker: null` (la passerelle sert null quand il n’y en a pas) retombe sur metadata, jamais sur un sticker vide', () => {
     expect(stickerOf(wire({ sticker: null, metadata: { sticker: { emoji: '🎉' } } }))?.emoji).toBe('🎉');
     expect(stickerOf(wire({ sticker: null }))).toBeNull();
+  });
+});
+
+/**
+ * L'HUMEUR CITÉE (#7881) — `storyCitationOf` l'écarte (pas de scène) et
+ * RIEN ne la rendait : répondre à une humeur produisait une bulle sans aucune
+ * trace de ce à quoi elle répondait. iOS la rend dans la citation
+ * (`BubbleMoodReplyPreview`, `BubbleQuotedReply.swift:614-650`) : emoji,
+ * contenu, auteur, date.
+ */
+describe('moodCitationOf — l’humeur citée se lit', () => {
+  const mood = (postReplyTo: Record<string, unknown>) =>
+    message({ storyReplyToId: 'p1', metadata: { postReplyTo: { id: 'p1', type: 'STATUS', thumbnailUrl: null, ...postReplyTo } } });
+
+  test('emoji, contenu, auteur et date du snapshot', () => {
+    expect(
+      moodCitationOf(mood({ moodEmoji: '😴', previewText: 'Grosse fatigue', authorName: 'Amina Diallo', createdAt: '2026-09-10T08:30:00.000Z' })),
+    ).toEqual({ id: 'p1', emoji: '😴', text: 'Grosse fatigue', authorName: 'Amina Diallo', createdAt: '2026-09-10T08:30:00.000Z' });
+  });
+
+  test('snapshot legacy sans auteur ⇒ authorName vide (le composant retombe sur « Humeur »)', () => {
+    expect(moodCitationOf(mood({ moodEmoji: '☕', previewText: '', createdAt: '' }))?.authorName).toBe('');
+  });
+
+  test('une STORY (moodEmoji nul) n’est pas une humeur', () => {
+    expect(moodCitationOf(mood({ moodEmoji: null, previewText: 'Scène', createdAt: '' }))).toBeNull();
+  });
+
+  test('sans storyReplyToId ⇒ null', () => {
+    expect(moodCitationOf(message())).toBeNull();
   });
 });

@@ -259,3 +259,36 @@ describe('quotedPreviewOf — l’inventaire parlé vient du site unique (#7556)
     expect(preview(quoted({ content: '👁️ 🖼️', isViewOnce: true, attachments: [PHOTO] })).inventory).toEqual([]);
   });
 });
+
+/**
+ * LA PIÈCE NOMMÉE PRIME (#7881, #6164) — répondre au 2e vocal d'un message
+ * qui en porte deux : la passerelle sert `replyTo.attachmentReplyTo =
+ * { attachmentId, kind }` (`servedQuotedMessage.ts`), iOS l'élit
+ * (`citing` prime sur le représentatif). Le web citait la PREMIÈRE pièce :
+ * « Audio 0:09 » au-dessus d'une réponse au vocal de 0:12.
+ */
+describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
+  const twoPieces = (): Message =>
+    Object.assign(
+      quoted({
+        attachments: [
+          attachment({ id: 'a-1', mimeType: 'image/png', fileName: 'p.png', originalName: 'p.png' }),
+          attachment({ id: 'a-2', mimeType: 'audio/wav', fileName: 'v.wav', originalName: 'v.wav', duration: 12_000 }),
+        ],
+      }),
+      { attachmentReplyTo: { attachmentId: 'a-2', kind: 'audio' } },
+    );
+
+  test('la citation montre la pièce visée, pas la première', () => {
+    const preview = quotedPreviewOf({ quoted: twoPieces(), readerLanguages: ['fr'], interfaceLanguage: 'fr' });
+    expect(preview.media?.kind).toBe('audio');
+    expect(preview.media?.durationLabel).toBe('0:12');
+  });
+
+  test('une pièce nommée ABSENTE (retirée, masquée) retombe sur la première', () => {
+    const orphan = Object.assign(quoted({ attachments: [attachment({ id: 'a-1', mimeType: 'image/png' })] }), {
+      attachmentReplyTo: { attachmentId: 'a-9', kind: 'audio' },
+    });
+    expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media?.kind).toBe('image');
+  });
+});

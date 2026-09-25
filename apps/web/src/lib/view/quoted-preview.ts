@@ -125,13 +125,25 @@ export type QuotedPreview = {
  * (`message-body.ts`) — la première pièce EST donc la règle, et non une
  * simplification de celle d'iOS.
  *
- * La pièce NOMMÉE (`metadata.attachmentReplyTo`, #6164 — répondre à la
- * troisième photo d'un carrousel) n'est portée par AUCUN décodeur de web-v2
- * aujourd'hui : elle n'a donc rien à élire ici. Le jour où elle arrive, c'est
- * ICI qu'elle prime, comme `citing` prime sur le représentatif côté iOS.
+ * LA PIÈCE NOMMÉE PRIME (#6164, #7881) — répondre à la troisième photo
+ * d'un carrousel : la passerelle sert `replyTo.attachmentReplyTo =
+ * { attachmentId, kind }` (`servedQuotedMessage.ts`), que `decode.ts` laisse
+ * passer tel quel sur la citation. Elle prime ici comme `citing` prime sur le
+ * représentatif côté iOS ; une pièce nommée que la citation ne porte plus
+ * (retirée, masquée pièce par pièce) retombe sur la première.
  */
-const representativeOf = (attachments: readonly Attachment[] | undefined): Attachment | undefined =>
-  attachments?.[0];
+const namedPieceIdOf = (quoted: object): string | undefined => {
+  const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
+  if (named === null || typeof named !== 'object') return undefined;
+  const id: unknown = (named as { readonly attachmentId?: unknown }).attachmentId;
+  return typeof id === 'string' && id !== '' ? id : undefined;
+};
+
+const representativeOf = (quoted: Pick<Message, 'attachments'>): Attachment | undefined => {
+  const namedId = namedPieceIdOf(quoted);
+  const named = namedId === undefined ? undefined : quoted.attachments?.find((a) => a.id === namedId);
+  return named ?? quoted.attachments?.[0];
+};
 
 /**
  * `quotedThumbnailUrl` (`ConversationViewModel+ReplyReference.swift:171-173`) :
@@ -201,7 +213,7 @@ export function quotedPreviewOf(params: {
 }): QuotedPreview {
   const { quoted, readerLanguages, interfaceLanguage } = params;
   const messageIsProtected = quotedIsProtected(quoted);
-  const attachment = representativeOf(quoted.attachments);
+  const attachment = representativeOf(quoted);
   const media =
     attachment === undefined ? null : mediaOf({ attachment, messageIsProtected, interfaceLanguage });
 
