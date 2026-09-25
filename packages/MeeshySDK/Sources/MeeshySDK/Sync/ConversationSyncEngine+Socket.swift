@@ -237,6 +237,16 @@ extension ConversationSyncEngine {
             }
             .store(in: &socketSubscriptions)
 
+        // `message:starred` (#7939) : l'étoile PERSONNELLE posée ou retirée
+        // depuis un autre appareil. Émis vers la seule room `user:<id>`, donc
+        // reçu conversation ouverte OU fermée — un seul site, le relais.
+        messageSocket.messageStarred
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.realtimeMessagePersistor?(Self.starMutation(for: event, now: Date())) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Reconnect -> delta sync
         messageSocket.didReconnect
             .sink { [weak self] in
@@ -746,6 +756,14 @@ extension ConversationSyncEngine {
     /// `.edited` poserait « modifié » sur un avis d'appel et écraserait le
     /// résumé — même distinction que `ConversationSocketHandler` applique déjà
     /// sur la conversation ouverte. Pure + testable.
+    /// Une étoile posée sans date (charge dégradée) est datée à la RÉCEPTION :
+    /// elle ne se perd jamais faute d'instant. Pure + testable.
+    nonisolated static func starMutation(for event: MessageStarredEvent, now: Date) -> RealtimeMessageMutation {
+        guard event.starred else { return .unstarred(messageId: event.messageId) }
+        return .starred(messageId: event.messageId, conversationId: event.conversationId,
+                        starredAt: event.starredAt ?? now)
+    }
+
     nonisolated static func mutation(
         for apiMessage: APIMessage, content: String
     ) -> RealtimeMessageMutation {

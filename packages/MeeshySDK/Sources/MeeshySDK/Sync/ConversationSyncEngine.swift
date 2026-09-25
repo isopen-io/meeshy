@@ -33,6 +33,11 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// La vue unique est « déjà ouverte » pour CE lecteur, ou son contenu a été
     /// purgé par le serveur : vider le contenu local, garder la bulle (#7579).
     case viewOnceOpened(messageId: String)
+    /// `message:starred` (#7939) — l'étoile PERSONNELLE posée depuis un autre
+    /// appareil du lecteur. Hors de la table `messages` : l'hôte la range dans
+    /// son magasin de favoris, en composant l'instantané depuis GRDB.
+    case starred(messageId: String, conversationId: String, starredAt: Date)
+    case unstarred(messageId: String)
 }
 
 // MARK: - Protocol

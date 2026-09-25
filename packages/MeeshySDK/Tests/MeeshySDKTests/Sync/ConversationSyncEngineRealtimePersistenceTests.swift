@@ -351,6 +351,44 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertTrue(removed)
     }
 
+    /// #7939 — `message:starred` (room `user:<id>`) reçu conversation FERMÉE :
+    /// le relais porte l'étoile posée (avec l'instant SERVEUR) et l'étoile
+    /// retirée jusqu'à l'hôte, qui tient `StarredMessagesStore`.
+    func test_starRelay_carriesStarAndUnstar() async throws {
+        let (engine, socket, _) = try makeEngine()
+        let collector = RealtimeMutationCollector()
+        engine.realtimeMessagePersistor = { await collector.append($0) }
+        await engine.startSocketRelay()
+        let starredAt = Date(timeIntervalSince1970: 1_790_000_000)
+
+        socket.messageStarred.send(MessageStarredEvent(
+            messageId: "m-star", conversationId: "c-closed", starred: true, starredAt: starredAt
+        ))
+        socket.messageStarred.send(MessageStarredEvent(
+            messageId: "m-gone", conversationId: "c-closed", starred: false, starredAt: nil
+        ))
+
+        let starred = await waitUntil { await collector.mutations.contains {
+            $0 == .starred(messageId: "m-star", conversationId: "c-closed", starredAt: starredAt)
+        } }
+        let unstarred = await waitUntil { await collector.mutations.contains {
+            $0 == .unstarred(messageId: "m-gone")
+        } }
+        XCTAssertTrue(starred)
+        XCTAssertTrue(unstarred)
+    }
+
+    /// Une étoile posée sans date (charge dégradée) ne se perd pas : l'instant
+    /// de réception la date, jamais `nil`.
+    func test_starMutation_withoutServerDate_isDatedAtReception() {
+        let now = Date(timeIntervalSince1970: 42)
+        let mutation = ConversationSyncEngine.starMutation(
+            for: MessageStarredEvent(messageId: "m", conversationId: "c", starred: true, starredAt: nil),
+            now: now
+        )
+        XCTAssertEqual(mutation, .starred(messageId: "m", conversationId: "c", starredAt: now))
+    }
+
     /// #7927 — `message:edited` ne porte que le texte : remplacer le message
     /// en cache mémoire par la charge perdait ses réactions.
     func test_messageEditedRelay_keepsReactionsOfTheCachedMessage() async throws {
