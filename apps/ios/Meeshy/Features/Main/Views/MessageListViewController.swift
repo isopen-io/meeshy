@@ -591,18 +591,24 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
     }
 
+    /// Hauteur MESURÉE de la bande d'en-tête (grandit avec Dynamic Type) :
+    /// les pilules et la réserve de la rangée plate la suivent (#7998).
+    var headerBandHeight: CGFloat = 0 {
+        didSet { if oldValue != headerBandHeight { applyTopInsetToViews() } }
+    }
+
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
         // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
-        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow)
+        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow, headerBandHeight: headerBandHeight)
         if collectionView.contentInset.bottom != restTop {
             collectionView.contentInset.bottom = restTop
             collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
-        // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
-        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
+        // Garde source ConversationTopChromeFadeTests (#7998 : hauteur mesurée).
+        stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         // F-086bis (WS-2) : ancre de la pilule jour·heure, si montée.
-        scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top
+        scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
     }
 
     /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
@@ -612,7 +618,7 @@ final class MessageListViewController: UIViewController {
     private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
     /// Ancre verticale de la pill, recalculée par `applyTopInset` : la vue
     /// s'étendant sous la safe area haute, l'offset produit est
-    /// `topInset + MessageDayStickyPlacement.topOffset`.
+    /// `topInset + MessageDayStickyPlacement.topOffset(headerBandHeight:)`.
     private var stickyDayTopConstraint: NSLayoutConstraint?
     /// Défilement actif (drag OU décélération) — `store.isUserScrolling`,
     /// la garde des REPORTS de reconfigure (§4.7ter) : re-mesurer des
@@ -762,6 +768,8 @@ final class MessageListViewController: UIViewController {
         let host = UIHostingController(
             rootView: MessageDayStickyOverlay(state: stickyDayState)
         )
+        // #7998 : sans hauteur, la pill était CENTRÉE sur son ancre.
+        host.sizingOptions = .intrinsicContentSize
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
         addChild(host)
@@ -774,7 +782,7 @@ final class MessageListViewController: UIViewController {
         // SwiftUI propage comme safe area au contrôleur hébergé.
         let stickyTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + MessageDayStickyPlacement.topOffset
+            constant: topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             stickyTop,
@@ -843,7 +851,7 @@ final class MessageListViewController: UIViewController {
         host.view.translatesAutoresizingMaskIntoConstraints = false
         let pillTop = host.view.topAnchor.constraint(
             equalTo: view.topAnchor,
-            constant: topInset + FocalMetrics.Pill.top
+            constant: topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
         )
         NSLayoutConstraint.activate([
             pillTop,

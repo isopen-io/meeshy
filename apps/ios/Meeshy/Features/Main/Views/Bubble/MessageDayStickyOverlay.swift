@@ -15,8 +15,30 @@ import Combine
 /// 2026-08-14, retour à la gestion d'avant le 13/08 au soir). Seuls les
 /// BOUTONS D'ACTION du header s'effacent pendant le mouvement — loi commune
 /// `ScrollMotion`, cf. `ConversationView.hidesHeaderActions(...)`.
+///
+/// **La bande suit la hauteur MESURÉE de l'en-tête (#7998).** 60 n'est qu'un
+/// PLANCHER : en Dynamic Type AX1–AX5, la rangée (« AUTO Focal », retour,
+/// avatar) grandit avec le texte et recouvrait la pill posée à 60. Ce que
+/// l'en-tête gagne au-delà du plancher décale d'autant la pill de jour, la
+/// pilule jour·heure de Focal et la réserve de la rangée plate.
 enum MessageDayStickyPlacement {
     nonisolated static let topOffset: CGFloat = 60
+    /// Marge entre le bas de la bande d'en-tête et la pill.
+    nonisolated static let headerGap: CGFloat = 8
+
+    /// Ce que l'en-tête mesuré (padding haut compris) dépasse du plancher.
+    /// 0 tant qu'il n'est pas mesuré ou qu'il tient dans la bande historique.
+    nonisolated static func headerGrowth(headerBandHeight: CGFloat) -> CGFloat {
+        max(0, (headerBandHeight + headerGap - topOffset).rounded(.up))
+    }
+
+    nonisolated static func topOffset(headerBandHeight: CGFloat) -> CGFloat {
+        topOffset + headerGrowth(headerBandHeight: headerBandHeight)
+    }
+
+    nonisolated static func scrollTimePillTop(headerBandHeight: CGFloat) -> CGFloat {
+        FocalMetrics.Pill.top + headerGrowth(headerBandHeight: headerBandHeight)
+    }
 }
 
 /// État réactif qui pilote l'affichage de la pill flottante « Aujourd'hui /

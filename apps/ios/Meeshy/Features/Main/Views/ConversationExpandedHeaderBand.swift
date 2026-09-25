@@ -192,6 +192,10 @@ struct ConversationFloatingHeaderSection: View {
     let typingBar: () -> AnyView
     let expandedBand: () -> AnyView
     let searchBar: () -> AnyView
+    /// Hauteur de la bande REPLIÉE (#7998) : elle grandit avec Dynamic Type,
+    /// et la pill de jour doit démarrer sous elle. Dépliée, la pill se retire
+    /// — sa hauteur n'est pas publiée, pour ne pas faire sauter le fil.
+    let onBandHeightChange: (CGFloat) -> Void
 
     var body: some View {
         VStack {
@@ -201,6 +205,9 @@ struct ConversationFloatingHeaderSection: View {
                 typingBar()
             } else {
                 expandedBand()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if !showOptions { onBandHeightChange(height) }
+                    }
             }
 
             if showSearch {
@@ -217,4 +224,13 @@ struct ConversationFloatingHeaderSection: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSearch)
     }
+}
+
+struct ConversationHeaderState {
+    var showStoryViewerFromHeader = false
+    var storyUserIdForHeader: String?
+    var showSearch = false
+    var searchQuery = ""
+    /// Hauteur MESURÉE de la bande d'en-tête repliée (#7998).
+    var bandHeight: CGFloat = 0
 }
