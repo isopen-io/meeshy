@@ -56,9 +56,23 @@ final class RootViewTypeDepthGuardTests: XCTestCase {
         XCTAssertEqual(Self.genericDepth("Text"), 0)
     }
 
-    func test_rootBodies_typeDepth_isReported() {
-        let report = Self.measured.map { "\($0.0)=\($0.1)" }.joined(separator: " ")
-        print("ROOT_TYPE_DEPTH \(report)")
-        XCTAssertFalse(Self.measured.isEmpty)
+    /// Relevé du 2026-09-26 (build Debug, simulateur iOS 26.1) : RootView=20,
+    /// iPadRootView=21, iPadCoversAndChromeLayer=18, les autres ≤ 16. Les
+    /// corps de la racine ne portent donc PAS le type d'environ 150 niveaux
+    /// échantillonné pendant le gel — il vit plus bas dans l'arbre (issue
+    /// dédiée). Ce plafond empêche la racine de le devenir : une couche qui
+    /// l'atteint se découpe en vues nommées, elle ne monte pas le plafond.
+    static let ceiling = 24
+
+    func test_rootBodies_typeDepth_staysUnderCeiling() {
+        let measured = Self.measured
+        print("ROOT_TYPE_DEPTH " + measured.map { "\($0.0)=\($0.1)" }.joined(separator: " "))
+        for (name, depth) in measured {
+            XCTAssertLessThanOrEqual(
+                depth, Self.ceiling,
+                "Le type de `\(name).Body` est imbriqué sur \(depth) niveaux (plafond \(Self.ceiling)) : " +
+                "AttributeGraph paie une recherche de conformité par niveau au premier rendu (#7955)."
+            )
+        }
     }
 }
