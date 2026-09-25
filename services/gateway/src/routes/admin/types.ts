@@ -29,6 +29,9 @@ export interface UserListQuery extends PaginationParams {
 export interface AnonymousUserListQuery extends PaginationParams {
   search?: string;
   status?: 'active' | 'inactive';
+  sortBy?: string;
+  sortOrder?: string;
+  language?: string;
 }
 
 export interface MessageListQuery extends PaginationParams {

@@ -48,6 +48,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case analyticsUserDistribution
     case analyticsVolumeTimeline
     case anonymousUsers
+    case anonymousUsersByParticipantId(participantId: String)
     case broadcasts
     case broadcastsById(id: String)
     case broadcastsByIdPreview(id: String)
@@ -93,6 +94,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdBan(userId: String)
     case usersByUserIdBans(userId: String)
     case usersByUserIdBansByBanIdLift(userId: String, banId: String)
+    case usersByUserIdCommunities(userId: String)
     case usersByUserIdConsents(userId: String)
     case usersByUserIdConversations(userId: String)
     case usersByUserIdDisable2Fa(userId: String)
@@ -114,6 +116,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdVerifyEmail(userId: String)
     case usersByUserIdVerifyPhone(userId: String)
     case usersByUserIdVoiceConsent(userId: String)
+    case usersByUserIdVoiceProfile(userId: String)
 
     public var path: String {
         switch self {
@@ -153,6 +156,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .analyticsUserDistribution: return "/api/v1/admin/analytics/user-distribution"
         case .analyticsVolumeTimeline: return "/api/v1/admin/analytics/volume-timeline"
         case .anonymousUsers: return "/api/v1/admin/anonymous-users"
+        case .anonymousUsersByParticipantId(let participantId): return "/api/v1/admin/anonymous-users/\(participantId)"
         case .broadcasts: return "/api/v1/admin/broadcasts"
         case .broadcastsById(let id): return "/api/v1/admin/broadcasts/\(id)"
         case .broadcastsByIdPreview(let id): return "/api/v1/admin/broadcasts/\(id)/preview"
@@ -198,6 +202,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdBan(let userId): return "/api/v1/admin/users/\(userId)/ban"
         case .usersByUserIdBans(let userId): return "/api/v1/admin/users/\(userId)/bans"
         case .usersByUserIdBansByBanIdLift(let userId, let banId): return "/api/v1/admin/users/\(userId)/bans/\(banId)/lift"
+        case .usersByUserIdCommunities(let userId): return "/api/v1/admin/users/\(userId)/communities"
         case .usersByUserIdConsents(let userId): return "/api/v1/admin/users/\(userId)/consents"
         case .usersByUserIdConversations(let userId): return "/api/v1/admin/users/\(userId)/conversations"
         case .usersByUserIdDisable2Fa(let userId): return "/api/v1/admin/users/\(userId)/disable-2fa"
@@ -219,6 +224,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdVerifyEmail(let userId): return "/api/v1/admin/users/\(userId)/verify-email"
         case .usersByUserIdVerifyPhone(let userId): return "/api/v1/admin/users/\(userId)/verify-phone"
         case .usersByUserIdVoiceConsent(let userId): return "/api/v1/admin/users/\(userId)/voice-consent"
+        case .usersByUserIdVoiceProfile(let userId): return "/api/v1/admin/users/\(userId)/voice-profile"
         }
     }
 }
