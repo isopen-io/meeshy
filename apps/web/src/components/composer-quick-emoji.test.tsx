@@ -1,10 +1,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { Composer } from './composer';
+import { QUICK_EMOJI_ARRIVAL_MS } from './composer-quick-emoji';
 
 /**
  * LES EMOJIS RAPIDES DU COMPOSEUR (#7980, jumelle web de #7961 et #7966).
@@ -51,7 +55,7 @@ describe('Composer — le cadre des emojis rapides', () => {
 
   const frameOf = (el: HTMLElement) => el.querySelector<HTMLElement>('[data-composer-quick-emoji]');
   const rowsOf = (el: HTMLElement) =>
-    [...el.querySelectorAll<HTMLElement>('[data-composer-quick-emoji] [data-quick-emoji-row]')].map((row) =>
+    [...el.querySelectorAll<HTMLElement>('[data-composer-quick-emoji]')].map((row) =>
       [...row.querySelectorAll('button')].map((b) => b.getAttribute('aria-label')),
     );
   const fieldOf = (el: HTMLElement) => el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
@@ -141,6 +145,27 @@ describe('Composer — le cadre des emojis rapides', () => {
     expect(sent).toEqual(['bonjour']);
   });
 
+  /** LE SECOND CLIC D'UN DOUBLE CLIC TOMBE SUR UN EMOJI (#7985, mesuré au
+   * navigateur) — le bouton d'envoi part, le cadre revient À LA MÊME PLACE,
+   * et le second clic envoyait l'emoji sous le pointeur. Le cadre qui revient
+   * n'est vivant qu'après le temps d'un double clic. */
+  test('le cadre qui revient après un envoi ignore le second clic du double clic, puis redevient vivant', async () => {
+    const sent: string[] = [];
+    const el = mount((p) => sent.push(p.text));
+    act(() => {
+      const field = fieldOf(el);
+      field.value = 'bonjour';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click());
+    const emoji = () => el.querySelector<HTMLButtonElement>(`[aria-label="${label(QUICK_REACTIONS[2])}"]`)!;
+    act(() => emoji().click());
+    expect(sent).toEqual(['bonjour']);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, QUICK_EMOJI_ARRIVAL_MS + 30)));
+    act(() => emoji().click());
+    expect(sent).toEqual(['bonjour', QUICK_REACTIONS[2]]);
+  });
+
   test('chaque emoji est un vrai bouton, atteignable au clavier', () => {
     const el = mount();
     const buttons = [...el.querySelectorAll<HTMLButtonElement>('[data-composer-quick-emoji] button')];
@@ -150,5 +175,78 @@ describe('Composer — le cadre des emojis rapides', () => {
       expect(button.getAttribute('type')).toBe('button');
       expect(button.tabIndex).not.toBe(-1);
     }
+  });
+});
+
+/**
+ * LE RETOUR APRÈS ENVOI, ADOUCI (#7985) — iOS fait revenir les emojis (et
+ * partir le bouton d'envoi) par un « tourbillon » ; la directive porteur le
+ * veut nettement moins accentué : environ ±40° et une échelle de départ de
+ * 0,6 (au lieu de ±250° et 0,05), un ressort presque sans rebond. Le web
+ * n'avait AUCUNE transition — une bascule sèche : il reçoit la forme douce.
+ */
+describe('Composer — le retour après envoi', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const mountComposer = () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(<Composer onSend={() => {}} preferred={['fr']} />);
+    });
+    return {
+      el: container,
+      dispose: () => {
+        act(() => root.unmount());
+        container.remove();
+      },
+    };
+  };
+
+  test('à l’ouverture, les emojis sont LÀ, sans entrée animée', () => {
+    const { el, dispose } = mountComposer();
+    expect(el.querySelector('[data-composer-quick-emoji]')?.classList.contains('composer-slot-in')).toBe(false);
+    dispose();
+  });
+
+  test('après un envoi, les emojis REVIENNENT par l’entrée douce ; le bouton d’envoi arrive de même', () => {
+    const { el, dispose } = mountComposer();
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    act(() => {
+      field.value = 'bonjour';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('[aria-label="Envoyer"]')?.classList.contains('composer-slot-in')).toBe(true);
+    act(() => el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click());
+    expect(el.querySelector('[data-composer-quick-emoji]')?.classList.contains('composer-slot-in')).toBe(true);
+    dispose();
+  });
+
+  const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'styles', 'app.css'), 'utf8');
+  const keyframes = css.slice(css.indexOf('@keyframes composerSlotIn'));
+  const from = keyframes.slice(0, keyframes.indexOf('}'));
+
+  test('l’entrée tourne d’au plus 40° et part d’au moins 0,6', () => {
+    const rotation = Math.abs(Number.parseFloat(/rotate\((-?[\d.]+)deg\)/.exec(from)?.[1] ?? 'NaN'));
+    const scale = Number.parseFloat(/scale\(([\d.]+)\)/.exec(from)?.[1] ?? 'NaN');
+    expect(rotation).toBeGreaterThan(0);
+    expect(rotation).toBeLessThanOrEqual(40);
+    expect(scale).toBeGreaterThanOrEqual(0.6);
+  });
+
+  test('prefers-reduced-motion coupe l’entrée', () => {
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.composer-slot-in\s*\{\s*animation: none;/);
   });
 });
