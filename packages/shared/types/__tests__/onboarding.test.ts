@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_STEP_IDS,
   OnboardingPatchBodySchema,
   OnboardingStateSchema,
@@ -20,12 +21,31 @@ const state = {
 };
 
 describe('le contrat d\'onboarding (#7729)', () => {
-  it('déclare les cinq étapes dans l\'ordre du parcours', () => {
-    expect(ONBOARDING_STEP_IDS).toEqual(['languages', 'global', 'story', 'friends', 'notifications']);
+  it('déclare les six étapes dans l\'ordre du parcours — le courriel juste après les langues (#7907)', () => {
+    expect(ONBOARDING_STEP_IDS).toEqual(['languages', 'email', 'global', 'story', 'friends', 'notifications']);
+  });
+
+  it('seules les cinq étapes proposées à TOUS closent le parcours ; le courriel, conditionnel, n\'en fait pas partie', () => {
+    expect(ONBOARDING_COMPLETION_STEP_IDS).toEqual(['languages', 'global', 'story', 'friends', 'notifications']);
   });
 
   it('accepte un état complet', () => {
     expect(OnboardingStateSchema.safeParse(state).success).toBe(true);
+  });
+
+  it('accepte les champs servis depuis #7907/#7908/#7910 — et un état qui ne les porte pas encore', () => {
+    const served = {
+      ...state,
+      prefilledSteps: ['email'],
+      emailVerified: true,
+      canPublishStory: true,
+      pendingFriendRequests: 2,
+      stepRewards: { global: 28, story: 20, friendship: 14 },
+    };
+    expect(OnboardingStateSchema.safeParse(served).success).toBe(true);
+    expect(OnboardingStateSchema.safeParse(state).success).toBe(true);
+    expect(OnboardingStateSchema.safeParse({ ...served, pendingFriendRequests: -1 }).success).toBe(false);
+    expect(OnboardingStateSchema.safeParse({ ...served, stepRewards: { global: 1, story: 1 } }).success).toBe(false);
   });
 
   it('refuse une étape inconnue et plus de six suggestions', () => {
@@ -42,6 +62,7 @@ describe('le contrat d\'onboarding (#7729)', () => {
   it('accepte { step, outcome } et { finish: true }, rien d\'autre', () => {
     expect(OnboardingPatchBodySchema.safeParse({ step: 'global', outcome: 'done' }).success).toBe(true);
     expect(OnboardingPatchBodySchema.safeParse({ step: 'story', outcome: 'skipped' }).success).toBe(true);
+    expect(OnboardingPatchBodySchema.safeParse({ step: 'email', outcome: 'skipped' }).success).toBe(true);
     expect(OnboardingPatchBodySchema.safeParse({ finish: true }).success).toBe(true);
     expect(OnboardingPatchBodySchema.safeParse({ finish: false }).success).toBe(false);
     expect(OnboardingPatchBodySchema.safeParse({ step: 'global', outcome: 'maybe' }).success).toBe(false);

@@ -947,6 +947,8 @@ export async function requireEmailVerification(request: FastifyRequest, reply: F
  * inviter par e-mail, créer un lien de partage. Tout le reste (lecture,
  * messagerie privée, réglages, rejoindre une conversation existante) reste
  * accessible à un compte non confirmé — la décision complète est sur #6437.
+ * UNE exception (#7907) : la PREMIÈRE story d'un compte passe `POST /posts`
+ * (`email-verification-first-story.ts`) ; tout le reste de cette liste est inchangé.
  */
 export const EMAIL_VERIFICATION_GATED_ROUTES = [
   'POST /posts',

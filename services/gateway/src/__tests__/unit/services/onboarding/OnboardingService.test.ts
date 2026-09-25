@@ -35,6 +35,7 @@ type UserRow = {
   createdAt: Date;
   onboardingCompletedAt: Date | null;
   onboardingSteps: string[];
+  emailVerifiedAt: Date | null;
 };
 
 function makeUser(overrides: Partial<UserRow> = {}): UserRow {
@@ -52,6 +53,7 @@ function makeUser(overrides: Partial<UserRow> = {}): UserRow {
     createdAt: new Date('2026-09-25T09:00:00.000Z'),
     onboardingCompletedAt: null,
     onboardingSteps: [],
+    emailVerifiedAt: null,
     ...overrides,
   };
 }
@@ -70,6 +72,11 @@ type World = {
   storyCount?: number;
   globalCredit?: boolean;
   globalConversation?: boolean;
+  /** Stories jamais écrites par le lecteur — `deletedAt` posé = supprimée. */
+  authoredStories?: Array<{ deletedAt: Date | null }>;
+  /** Compteurs d'engagement du lecteur (axe, dernier geste) — l'élan en dérive. */
+  counters?: Array<{ axisKey: string; updatedAt: Date }>;
+  milestones?: Array<{ milestoneType: string; milestoneKey: string }>;
 };
 
 function makePrisma(world: World = {}) {
@@ -102,9 +109,27 @@ function makePrisma(world: World = {}) {
         ) ?? null,
       ),
       findMany: jest.fn<any>(async () => friendRequests),
+      count: jest.fn<any>(async (args: any) =>
+        friendRequests.filter((fr) => fr.senderId === args.where.senderId && fr.status === args.where.status).length,
+      ),
+    },
+    post: {
+      findFirst: jest.fn<any>(async (args: any) => {
+        const where = args.where;
+        const stories = (world.authoredStories ?? []).filter(
+          (story) => where.deletedAt === undefined || story.deletedAt === where.deletedAt,
+        );
+        return where.authorId === VIEWER && where.type === 'STORY' && stories.length > 0 ? { id: 'story-0' } : null;
+      }),
     },
     engagementCounter: {
       findUnique: jest.fn<any>(async () => (world.storyCount ? { count: world.storyCount } : null)),
+      findMany: jest.fn<any>(async (args: any) =>
+        (world.counters ?? []).filter((row) => row.updatedAt >= args.where.updatedAt.gte),
+      ),
+    },
+    engagementMilestone: {
+      findMany: jest.fn<any>(async () => world.milestones ?? []),
     },
     engagementConversationCredit: {
       findFirst: jest.fn<any>(async () => (world.globalCredit ? { id: 'c1' } : null)),
@@ -377,6 +402,87 @@ describe('selectOnboardingSuggestions — la loi pure', () => {
   });
 });
 
+describe('OnboardingService.getState — le courriel et la story (#7907)', () => {
+  it('courriel non vérifié : `emailVerified` faux, étape `email` NON pré-cochée', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(state?.emailVerified).toBe(false);
+    expect(state?.prefilledSteps).not.toContain('email');
+  });
+
+  it('courriel vérifié : `emailVerified` vrai, étape `email` pré-cochée, à son rang', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ emailVerifiedAt: new Date('2026-09-25T10:00:00.000Z') }), storyCount: 1 });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.emailVerified).toBe(true);
+    expect(state?.prefilledSteps).toEqual(['email', 'story']);
+  });
+
+  it('non vérifié, aucune story jamais écrite : la première story est publiable', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(state?.canPublishStory).toBe(true);
+  });
+
+  it('non vérifié, une story déjà écrite — même supprimée : plus publiable', async () => {
+    const live = await new OnboardingService(makePrisma({ authoredStories: [{ deletedAt: null }] })).getState(VIEWER, NOW);
+    const deleted = await new OnboardingService(
+      makePrisma({ authoredStories: [{ deletedAt: new Date('2026-09-25T11:00:00.000Z') }] }),
+    ).getState(VIEWER, NOW);
+    expect(live?.canPublishStory).toBe(false);
+    expect(deleted?.canPublishStory).toBe(false);
+  });
+
+  it('vérifié : toujours publiable, quelles que soient ses stories', async () => {
+    const prisma = makePrisma({
+      viewer: makeUser({ emailVerifiedAt: new Date('2026-09-25T10:00:00.000Z') }),
+      authoredStories: [{ deletedAt: null }],
+    });
+    expect((await new OnboardingService(prisma).getState(VIEWER, NOW))?.canPublishStory).toBe(true);
+  });
+});
+
+describe('OnboardingService.getState — demandes en attente (#7910)', () => {
+  it('ne compte que les demandes ENVOYÉES par le lecteur et toujours en attente', async () => {
+    const prisma = makePrisma({
+      friendRequests: [
+        { senderId: VIEWER, receiverId: 'a', status: 'pending' },
+        { senderId: VIEWER, receiverId: 'b', status: 'accepted' },
+        { senderId: 'c', receiverId: VIEWER, status: 'pending' },
+      ],
+    });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    expect(state?.pendingFriendRequests).toBe(1);
+  });
+});
+
+describe('OnboardingService.getState — les points à l’élan courant (#7908)', () => {
+  it('compte neuf, aucun élan : le barème nu (14 · 10 · 7)', async () => {
+    const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
+    expect(state?.stepRewards).toEqual({ global: 14, story: 10, friendship: 7 });
+  });
+
+  it('actif dans deux familles cette semaine : chaque axe crédite à l’élan de SA famille ajoutée', async () => {
+    const recent = new Date('2026-09-25T09:00:00.000Z');
+    const prisma = makePrisma({
+      counters: [
+        { axisKey: 'content.story', updatedAt: recent },
+        { axisKey: 'social.friendship', updatedAt: recent },
+        { axisKey: 'comment.text', updatedAt: new Date('2026-09-01T00:00:00.000Z') },
+      ],
+    });
+    const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
+    // content + social actives (le commentaire est hors fenêtre) :
+    // global = texte 9 × 2 (content) + conversation 5 × 3 (+conversation) = 33
+    // story  = story 9 × 2 (content) + outil 1 × 3 (+tool) = 21
+    // amitié = 7 × 2 (social déjà active) = 14
+    expect(state?.stepRewards).toEqual({ global: 33, story: 21, friendship: 14 });
+  });
+
+  it('l’assise permanente (dix succès) ajoute un cran à chaque geste', async () => {
+    const milestones = Array.from({ length: 10 }, (_, n) => ({ milestoneType: 'achievement', milestoneKey: `a:${n}` }));
+    const state = await new OnboardingService(makePrisma({ milestones })).getState(VIEWER, NOW);
+    expect(state?.stepRewards).toEqual({ global: 28, story: 20, friendship: 14 });
+  });
+});
+
 describe('OnboardingService.recordStep', () => {
   it('ajoute l\'étape vue, sans doublon, et rend le nouvel état', async () => {
     const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages'] }) });
@@ -427,5 +533,19 @@ describe('OnboardingService.recordStep', () => {
     expect(
       await new OnboardingService(makePrisma({ viewer: null })).recordStep(VIEWER, { finish: true }, NOW),
     ).toBeNull();
+  });
+
+  it('enregistre l’étape `email` passée, à son rang (#7907)', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages'] }) });
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'email', outcome: 'skipped' }, NOW);
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: VIEWER }, data: { onboardingSteps: ['languages', 'email'] } });
+  });
+
+  it('l’étape `email`, conditionnelle, ne retient pas la clôture : les cinq autres suffisent', async () => {
+    const prisma = makePrisma({ viewer: makeUser({ onboardingSteps: ['languages', 'global', 'story', 'friends'] }) });
+    await new OnboardingService(prisma).recordStep(VIEWER, { step: 'notifications', outcome: 'done' }, NOW);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ onboardingCompletedAt: NOW }) }),
+    );
   });
 });
