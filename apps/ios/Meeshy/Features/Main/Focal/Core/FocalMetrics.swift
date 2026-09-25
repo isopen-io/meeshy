@@ -85,15 +85,19 @@ nonisolated public enum FocalMetrics {
         /// distincts. La respiration quitte l'intérieur pour la frontière.
         public static let groupTopPadding: CGFloat = 8
 
-        /// **Le CONTENU PROPRE d'un message s'aligne sous l'AVATAR, sur son
-        /// bord gauche** (directive porteur 2026-09-25, #7928) : texte,
-        /// drapeaux, médias, vocal, lieu, sticker, réactions. Zéro, parce que
-        /// l'avatar est posé au bord de la colonne de contenu.
+        /// **L'ORIGINE du contenu : la COLONNE DU NOM** (directive porteur
+        /// 2026-09-26, #7995 : « texte aligné au niveau des citations
+        /// toujours, permettant de distinguer avatar et auteur puis son
+        /// contenu ; la citation est déjà identifiable avec la barre puis le
+        /// fond teinté »). L'avatar occupe SEUL sa marge ; « auteur · heure »,
+        /// le contenu propre (texte, drapeaux, médias, vocal, lieu, sticker,
+        /// réactions) ET toutes les citations (message, story, humeur, pièce)
+        /// partent de cette cote — la pastille plus la gouttière de l'en-tête.
         ///
-        /// Seules les CITATIONS se décalent — `Quote.indent`. Un retrait
-        /// propre à chaque section avait laissé la carte de story sous
-        /// l'avatar pendant que le texte partait 41 pt plus loin.
-        public static let contentIndent: CGFloat = 0
+        /// UNE cote, pas deux : aucune citation n'a de retrait propre. Elle
+        /// supplante la règle du 2026-09-25 (#7928 : contenu sous l'avatar,
+        /// citations décalées), dont la cote `Quote.indent` a disparu.
+        public static let contentIndent: CGFloat = Text.indent
     }
 
     // MARK: - Avatar (pastille)
@@ -225,12 +229,6 @@ nonisolated public enum FocalMetrics {
     /// `thread.quote` — filet `2.5`, couleur de l'auteur cité.
     nonisolated public enum Quote {
         public static let railWidth: CGFloat = 2.5
-
-        /// Le retrait de TOUTE citation — message, média, vocal, humeur,
-        /// story (carte de scène comprise) : le même pour tous les types
-        /// (#7928). C'est celui de la citation de message à filet, que le
-        /// porteur désigne comme juste.
-        public static let indent: CGFloat = Text.indent
     }
 
     // MARK: - Médias

@@ -125,13 +125,16 @@ extension FocalMediaGridLayoutTests {
     // MARK: - La grille tient dans la colonne de contenu (#7881)
 
     /// iPhone 16 Pro : 402 − 2 × 12 de section = 378 pour la rangée ;
-    /// − 2 × 16 de marge − 62 de colonne d'heure − 6 d'espacement = 278.
+    /// − 2 × 16 de marge − 29 de colonne du nom (le média part de la colonne
+    /// du nom, #7995) − 62 de colonne d'heure − 6 d'espacement = 249.
     func test_gridWidth_onAnIPhone16ProRow_fitsTheContentColumn() {
-        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 378), 278)
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 378), 249)
     }
 
+    /// 300 + 2 × 16 + 29 + 62 + 6 = 429 : la première rangée où le gabarit tient.
     func test_gridWidth_onAWideRow_keepsTheNominalWidth() {
-        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 416), gridMaxWidth)
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 429), gridMaxWidth)
+        XCTAssertEqual(FocalMediaGridLayout.gridWidth(rowWidth: 428), gridMaxWidth - 1)
     }
 
     func test_gridWidth_withoutAKnownRowWidth_keepsTheNominalWidth() {
