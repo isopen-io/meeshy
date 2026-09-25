@@ -23,7 +23,7 @@ extension UniversalComposerBar {
     // ========================================================================
 
     var topToolbar: some View {
-        HStack(spacing: 6) {
+        ComposerToolbarStrip {
             // Ephemeral mode toggle (hidden for comments)
             if !resolvedHideEphemeral {
                 ephemeralToggleButton
@@ -66,9 +66,7 @@ extension UniversalComposerBar {
 
             // Language selector
             languageSelectorPill
-
-            Spacer()
-
+        } trailing: {
             // Character counter
             if let maxLen = maxLength {
                 let count = text.count
@@ -158,5 +156,18 @@ extension UniversalComposerBar {
         }
         .padding(.top, 8)
         .padding(.bottom, 2)
+    }
+}
+
+struct ComposerToolbarStrip<Leading: View, Trailing: View>: View {
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 6) {
+            leading
+            Spacer()
+            trailing
+        }
     }
 }
