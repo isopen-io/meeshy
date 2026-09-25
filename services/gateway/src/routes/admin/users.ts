@@ -37,6 +37,8 @@ import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
+import { registerUserMemberStatsRoutes } from './user-member-stats';
+import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
 import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -46,6 +48,11 @@ import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
+
+const userConversationSortSchema = z.object({
+  sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc')
+});
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -127,6 +134,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
   // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
   registerUserProfileReadRoutes(fastify, { userAuditService });
+
+  // Page membre de l'administration web (#7845) : compteurs de la fiche, et
+  // préférences lues / écrites sous les gardes des écritures de compte.
+  registerUserMemberStatsRoutes(fastify);
+  registerUserMemberPreferencesRoutes(fastify, { userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -637,16 +649,28 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    * GET /admin/users/:userId/conversations - List conversations a user participates in (admin view).
    * Metadata only (no message content); the target user's membership (role/joinedAt) is flattened
    * onto each conversation. Requires canViewUsers permission.
+   *
+   * #7845 — `sortBy` (lastMessageAt, par défaut, ou createdAt) et `sortOrder`
+   * (desc, par défaut, ou asc). `joinedAt` n'est pas offert : il vit sur la
+   * participation, et `conversation.findMany` ne trie pas par la colonne d'une
+   * relation filtrée. Validés par Zod dans le handler (400 hors liste).
    */
   fastify.get<{
     Params: { userId: string };
-    Querystring: { offset?: string; limit?: string; type?: string };
+    Querystring: { offset?: string; limit?: string; type?: string; sortBy?: string; sortOrder?: string };
   }>('/admin/users/:userId/conversations', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
       const { offset = '0', limit, type } = request.query;
+      const tri = userConversationSortSchema.safeParse(request.query);
+      if (!tri.success) {
+        return sendBadRequest(reply, 'VALIDATION_ERROR', {
+          message: 'sortBy must be lastMessageAt or createdAt, sortOrder asc or desc'
+        });
+      }
+      const { sortBy, sortOrder } = tri.data;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
 
       const userExists = await fastify.prisma.user.findUnique({
@@ -702,7 +726,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
               }
             }
           },
-          orderBy: { lastMessageAt: 'desc' },
+          orderBy: { [sortBy]: sortOrder },
           skip: offsetNum,
           take: limitNum
         }),

@@ -78,7 +78,7 @@ public extension View {
 /// `ViewModifier` ci-dessous — la contrainte est la même, la localisation a
 /// changé.
 @available(iOS 26.0, *)
-private func makeMeeshyGlass(tint: Color?, interactive: Bool) -> Glass {
+func makeMeeshyGlass(tint: Color?, interactive: Bool) -> Glass {
     var glass: Glass = .regular
     if let tint { glass = glass.tint(tint) }
     if interactive { glass = glass.interactive() }

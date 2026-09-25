@@ -288,6 +288,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   },
   { method: 'GET', url: '/api/v1/languages', why: 'liste statique de langues supportées' },
   { method: 'GET', url: '/api/v1/app/min-version', why: 'plancher de version applicative pour le bootstrap de la porte cliente (spec R6) — config statique lue avant toute session, aucune donnée utilisateur' },
+  { method: 'GET', url: '/api/v1/app/shell-version', why: 'version publiée de la coque de apps/web et fiche du magasin (#6937) — config statique lue avant toute session, aucune donnée utilisateur, jumelle de min-version' },
 
   // --- Entrée du flux d'authentification (translation.ts a réparé /test,
   //     ce qui reste ici est volontairement sans session : on n'a pas

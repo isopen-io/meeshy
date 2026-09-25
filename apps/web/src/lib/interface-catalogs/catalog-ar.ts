@@ -911,6 +911,7 @@ const ar = {
 
   'appUpdate.available': 'يتوفر إصدار جديد من Meeshy!',
   'appUpdate.hint': 'أعد التحميل للحصول على أحدث المزايا.',
+  'appUpdate.storeHint': 'ثبّتها من متجر التطبيقات.',
   'appUpdate.action': 'تحديث',
   'appUpdate.dismiss': 'انتظار',
   'appUpdate.applying': 'جارٍ التحديث…',
@@ -1094,6 +1095,8 @@ const ar = {
   'attachment.protected.video': 'فيديو محمي',
   'attachment.protected.audio': 'رسالة صوتية محمية',
   'attachment.protected.file': 'مرفق محمي',
+  'media.reactions.badge.a11y': 'التفاعلات',
+  'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',

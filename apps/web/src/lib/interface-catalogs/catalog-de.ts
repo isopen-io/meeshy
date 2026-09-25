@@ -914,6 +914,7 @@ const de = {
 
   'appUpdate.available': 'Eine neue Version von Meeshy ist verfügbar!',
   'appUpdate.hint': 'Neu laden, um die neuesten Funktionen zu erhalten.',
+  'appUpdate.storeHint': 'Über den App-Store installieren.',
   'appUpdate.action': 'Aktualisieren',
   'appUpdate.dismiss': 'Warten',
   'appUpdate.applying': 'Wird aktualisiert…',
@@ -1097,6 +1098,8 @@ const de = {
   'attachment.protected.video': 'Geschütztes Video',
   'attachment.protected.audio': 'Geschützte Sprachnachricht',
   'attachment.protected.file': 'Geschützter Anhang',
+  'media.reactions.badge.a11y': 'Reaktionen',
+  'media.reactions.badge.mine.a11y': 'darunter Ihre',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

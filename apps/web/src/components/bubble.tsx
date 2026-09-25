@@ -565,7 +565,7 @@ export function Bubble({
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine
-                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white' }
+                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white', '--color-karaoke-ink': 'white' }
                 : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
               /* Mise en évidence temporaire après un saut de citation — un
                  anneau plutôt qu'un fond, pour ne jamais menacer le contraste

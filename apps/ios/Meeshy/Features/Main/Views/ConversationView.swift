@@ -330,12 +330,9 @@ struct ConversationView: View {
         // brouillon persisté.
         let refs = attachmentRefs
             ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
-        let draft = MessageDraft(
+        let draft = MessageDraft.composing(
             text: text,
-            replyToId: ref?.messageId,
-            replyAuthorName: ref?.authorName,
-            replyPreviewText: ref?.previewText,
-            replyIsMe: ref?.isMe ?? false,
+            reply: ref,
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
@@ -1181,24 +1178,11 @@ struct ConversationView: View {
                 }
                 if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     composerText.text = draft.text
-                    // Restore inline reply context from the draft so the user
-                    // sees the same compose chip they left — no hidden state
-                    // transitions on app reopen.
-                    if let replyId = draft.replyToId,
-                       let authorName = draft.replyAuthorName {
-                        // `authorAvatarUrl` reste nil, et c'est SANS
-                        // CONSEQUENCE : `MessageDraft` aplatit la citation en
-                        // quatre champs, et cette reference n'alimente que la
-                        // BANNIERE du composeur, qui ne dessine aucun avatar.
-                        // A l'envoi, seul `messageId` survit — la citation
-                        // rendue est reconstruite par `makeReplyReference`
-                        // depuis le message cite en memoire, avatar compris.
-                        composerState.pendingReplyReference = ReplyReference(
-                            messageId: replyId,
-                            authorName: authorName,
-                            previewText: draft.replyPreviewText ?? "",
-                            isMe: draft.replyIsMe
-                        )
+                    // La citation du brouillon revient telle qu'on l'a laissée —
+                    // sans écraser une réponse à une story qui vient d'ouvrir la
+                    // conversation, et jamais une story hors du DM de son auteur (#7883).
+                    if composerState.pendingReplyReference == nil {
+                        composerState.pendingReplyReference = draft.restoredReply(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
                     }
                     if let lang = draft.selectedLanguage {
                         composerState.selectedLanguage = lang
@@ -1234,12 +1218,10 @@ struct ConversationView: View {
             }
             .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
                 // Réponse à un mood affiché dans la barre directe courante : la vue
-                // est déjà à l'écran, `onAppear` ne se redéclenche pas. On applique
-                // le contexte au composer ssi il cible CETTE conversation directe.
-                guard isDirect,
-                      let ctx = router.pendingReplyContext,
-                      ctx.authorId == conversation?.participantUserId else { return }
-                applyReplyContext(ctx, openingConversation: false)
+                // est déjà à l'écran, `onAppear` ne se redéclenche pas. Un contexte
+                // refusé ici (autre conversation) reste en attente pour SON DM.
+                guard let ctx = router.pendingReplyContext,
+                      applyReplyContext(ctx, openingConversation: false) else { return }
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }

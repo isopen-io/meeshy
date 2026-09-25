@@ -43,9 +43,23 @@ extension ConversationView {
     /// statut — et lève le clavier comme un geste de réponse (#6003).
     /// `openingConversation` : la conversation vient d'être poussée pour
     /// répondre, et non déjà à l'écran.
-    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) {
+    ///
+    /// Seule porte d'entrée d'un `ReplyContext` dans le composeur : le contexte
+    /// n'y entre que dans le DM de son auteur (`StoryReplyAdmission`, #7883).
+    /// Rend `false` sans rien toucher sinon — ni citation, ni clavier, ni
+    /// brouillon.
+    @discardableResult
+    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) -> Bool {
+        guard context.isAdmissible(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId) else { return false }
         composerState.pendingReplyReference = context.toReplyReference
         requestReplyFocus(openingConversation: openingConversation)
+        return true
+    }
+
+    /// Ce que l'envoi transmet de la citation en attente, bornée à CETTE
+    /// conversation (#7883) — le site unique des chemins texte, média et sticker.
+    var outgoingReplyRoute: OutgoingReplyRoute {
+        OutgoingReplyRoute(pending: composerState.pendingReplyReference, conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
     }
 
     /// Demande le focus du composer par un FRONT bas → haut (#6003).

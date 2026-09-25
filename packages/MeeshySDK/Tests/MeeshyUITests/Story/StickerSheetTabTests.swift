@@ -50,13 +50,23 @@ final class StickerSheetTabTests: XCTestCase {
 
     // MARK: - Ce que chaque onglet contient
 
-    /// **DYNAMIQUE porte les quatre familles à donnée VIVANTE, et elles
-    /// seules.** C'est la définition de l'onglet : leur contenu n'existe pas
-    /// avant l'ouverture — il vient de l'horloge, du GPS, du service météo ou
-    /// du clavier.
-    func test_dynamique_porteLesQuatreFamillesVivantes() {
-        XCTAssertEqual(StickerSheetTab.sections(of: .dynamic, offered: toutesServies),
-                       [.text, .place, .time, .weather])
+    /// **PERSONNALISÉS porte ce que l'auteur fait sien** (directive porteur
+    /// 2026-09-25 : « une tab customisée plutôt que dynamique ») : ses propres
+    /// stickers d'abord, puis les quatre familles qui se remplissent de SES
+    /// données — ses mots, son lieu, son heure, sa météo.
+    func test_personnalises_porteMesStickersPuisLesQuatreFamillesVivantes() {
+        XCTAssertEqual(StickerSheetTab.sections(of: .custom, offered: toutesServies),
+                       [.library, .text, .place, .time, .weather])
+    }
+
+    func test_personnalises_seNommeAinsi() {
+        XCTAssertEqual(StickerSheetTab.custom.rawValue, "custom")
+        XCTAssertEqual(StickerSheetTab.custom.symbolName, "paintbrush.pointed.fill")
+    }
+
+    /// « Mes stickers » a quitté la RECHERCHE, qui garde les catalogues figés.
+    func test_recherche_neCompteplusMesStickers() {
+        XCTAssertFalse(StickerSheetTab.sections(of: .search, offered: toutesServies).contains(.library))
     }
 
     /// **Le LIEU reste servi SANS fournisseur de position** (directive porteur
@@ -75,11 +85,11 @@ final class StickerSheetTabTests: XCTestCase {
     ///
     /// Le témoin est conservé plutôt que supprimé, et retourné : c'est lui qui
     /// empêchera qu'on rétablisse le gate au nom de la même loi mal appliquée.
-    func test_dynamique_gardeLeLieu_memeSansFournisseurDePosition() {
+    func test_personnalises_gardeLeLieu_memeSansFournisseurDePosition() {
         let sansLieu = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: false)
-        XCTAssertTrue(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.place),
+        XCTAssertTrue(StickerSheetTab.sections(of: .custom, offered: sansLieu).contains(.place),
                       "les dix styles de lieu ne dépendent pas du GPS — seule leur donnée en dépend")
-        XCTAssertTrue(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.text))
+        XCTAssertTrue(StickerSheetTab.sections(of: .custom, offered: sansLieu).contains(.text))
     }
 
     /// **Une entrée de « Mes stickers » est une TROISIÈME nature.**

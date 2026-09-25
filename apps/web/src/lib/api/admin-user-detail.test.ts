@@ -35,6 +35,8 @@ const CHARGE_COMPLETE = {
   displayName: 'Amina Diallo',
   bio: 'Traductrice',
   avatar: 'https://example.test/a.png',
+  banner: 'https://example.test/b.png',
+  profileCompletionRate: 80,
   role: 'MODERATOR',
   isActive: true,
   isOnline: true,
@@ -109,6 +111,14 @@ describe('decodeAdminUserDetail — ce qu’il sert', () => {
     expect(membre?.role).toBe('MODERATOR');
     expect(membre?.isActive).toBe(true);
     expect(membre?.isOnline).toBe(true);
+  });
+
+  test('décode la bannière et le taux de complétion du profil (#7845)', () => {
+    const membre = decodeAdminUserDetail(CHARGE_COMPLETE);
+    const nu = decodeAdminUserDetail({ id: 'u-2', username: 'bob' });
+
+    expect([membre?.banner, membre?.profileCompletionRate]).toEqual(['https://example.test/b.png', 80]);
+    expect([nu?.banner, nu?.profileCompletionRate]).toEqual(['', null]);
   });
 
   test('décode ce qui dit l’ÉTAT d’un compte — supprimé, désactivé, verrouillé', () => {

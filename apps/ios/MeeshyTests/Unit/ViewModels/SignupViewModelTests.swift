@@ -112,8 +112,8 @@ final class SignupViewModelTests: XCTestCase {
         // LA LOI A CHANGÉ (#6479). #5218 retirait le pseudo pour ne pas le faire
         // INVENTER à l'utilisateur. Il n'est plus inventé : il est MONTRÉ,
         // dérivé de l'adresse, et modifiable — donc il part, et la passerelle
-        // n'a plus rien à générer.
-        XCTAssertEqual(registrar.lastRegisterRequest?.username, "awa-ndiaye")
+        // n'a plus rien à générer. Depuis #7897 il vient de l'ADRESSE.
+        XCTAssertEqual(registrar.lastRegisterRequest?.username, "awa")
     }
 
     // MARK: - Table code → champ

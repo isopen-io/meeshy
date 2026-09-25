@@ -14323,6 +14323,100 @@
         }
       }
     },
+    "location.nearby": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حولي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In meiner Nähe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Near me"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca de mí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autour de moi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vicino a me"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perto de mim"
+          }
+        }
+      }
+    },
+    "location.nearby.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض الأماكن المسماة من حولك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt benannte Orte in deiner Nähe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lists named places around you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra los lugares con nombre a tu alrededor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liste les lieux nommés autour de vous"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elenca i luoghi con nome intorno a te"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista os locais nomeados ao seu redor"
+          }
+        }
+      }
+    },
     "message-detail.views.downloaded.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -15175,43 +15269,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld."
+            "value": "أضف ٣ أشخاص يشبهونك. عندما يقبلون، يربح كلٌّ منكما +%lld على الأقل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide +%lld."
+            "value": "Füge 3 Leute hinzu, die zu dir passen. Wenn sie annehmen, bekommt ihr beide mindestens +%lld."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add 3 people who vibe like you. When they accept, you both get +%lld."
+            "value": "Add 3 people who vibe like you. When they accept, you both get at least +%lld."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Añade a 3 personas afines a ti. Cuando acepten, ganan +%lld los dos."
+            "value": "Añade a 3 personas afines a ti. Cuando acepten, ganan al menos +%lld los dos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez +%lld tous les deux."
+            "value": "Ajoute 3 personnes qui te ressemblent. Quand elles acceptent, vous gagnez au moins +%lld tous les deux."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate +%lld entrambi."
+            "value": "Aggiungi 3 persone che ti somigliano. Quando accettano, guadagnate almeno +%lld entrambi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham +%lld."
+            "value": "Adicione 3 pessoas com a sua vibe. Quando aceitarem, vocês dois ganham pelo menos +%lld."
           }
         }
       }
@@ -15316,43 +15410,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld لكلٍّ منكما عند القبول"
+            "value": "+%lld على الأقل لكلٍّ منكما عند القبول"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Je +%lld, sobald die Person annimmt"
+            "value": "Je mindestens +%lld, sobald die Person annimmt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld each once they accept"
+            "value": "At least +%lld each once they accept"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld cada uno cuando la persona acepte"
+            "value": "Al menos +%lld cada uno cuando la persona acepte"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld chacun quand la personne accepte"
+            "value": "Au moins +%lld chacun quand la personne accepte"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld a testa quando la persona accetta"
+            "value": "Almeno +%lld a testa quando la persona accetta"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld para cada um quando a pessoa aceitar"
+            "value": "Pelo menos +%lld para cada um quando a pessoa aceitar"
           }
         }
       }
@@ -41067,53 +41161,6 @@
         }
       }
     },
-    "auth.signup.identity.close": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fermer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiudi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fechar"
-          }
-        }
-      }
-    },
     "auth.signup.identity.displayName": {
       "extractionState": "manual",
       "localizations": {
@@ -41157,100 +41204,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nome de exibição"
-          }
-        }
-      }
-    },
-    "auth.signup.identity.edit": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعديل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ändern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifier"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar"
-          }
-        }
-      }
-    },
-    "auth.signup.identity.editLabel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعديل الاسم المستعار والاسم المعروض"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Benutzernamen und Anzeigenamen ändern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit username and display name"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar usuario y nombre visible"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifier le pseudo et le nom affiché"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifica nome utente e nome visualizzato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar usuário e nome de exibição"
           }
         }
       }
@@ -41584,143 +41537,49 @@
         }
       }
     },
-    "auth.signup.password.hintLabel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ماذا يحدث بدون كلمة مرور"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was ohne Passwort passiert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What happens without a password"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qué pasa sin contraseña"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Que se passe-t-il sans mot de passe"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cosa succede senza password"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O que acontece sem senha"
-          }
-        }
-      }
-    },
     "auth.signup.password.label": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كلمة المرور (اختياري)"
+            "value": "كلمة المرور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passwort (optional)"
+            "value": "Passwort"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password (optional)"
+            "value": "Password"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contraseña (opcional)"
+            "value": "Contraseña"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mot de passe (facultatif)"
+            "value": "Mot de passe"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password (facoltativa)"
+            "value": "Password"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Senha (opcional)"
-          }
-        }
-      }
-    },
-    "auth.signup.password.magicLinkNote": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بدون كلمة مرور، ستسجّل الدخول عبر رابط يُرسل إلى عنوانك. يمكنك تعيين واحدة لاحقًا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ohne Passwort meldest du dich über einen Link an, der an deine Adresse geht. Du kannst später eines festlegen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Without a password, you will sign in with a link sent to your address. You can set one later."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sin contraseña, iniciarás sesión con un enlace enviado a tu dirección. Podrás definir una más tarde."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Senza password, accederai con un link inviato al tuo indirizzo. Potrai impostarne una in seguito."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sem senha, você entrará com um link enviado para o seu endereço. Você poderá definir uma depois."
+            "value": "Senha"
           }
         }
       }
@@ -41768,6 +41627,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mínimo de 6 caracteres"
+          }
+        }
+      }
+    },
+    "auth.signup.password.why": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا تضع كلمة مرور الآن؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum jetzt ein Passwort festlegen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why set a password now?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué poner una contraseña ahora?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi mettre un mot de passe maintenant ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché impostare una password adesso?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que definir uma senha agora?"
+          }
+        }
+      }
+    },
+    "auth.signup.password.why.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك تفعيل كلمة المرور الآن إذا أردت. بدون كلمة مرور، ستسجّل الدخول دائمًا عبر رسالة تصلك إلى بريدك الإلكتروني."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie können Ihr Passwort schon jetzt aktivieren, wenn Sie möchten. Ohne Passwort melden Sie sich immer über eine E-Mail an, die Sie in Ihrem Postfach erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can set your password now if you like. Without a password, you will always sign in from an email sent to your inbox."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes activar tu contraseña ahora si lo deseas. Sin contraseña, siempre iniciarás sesión desde un correo recibido en tu bandeja de entrada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous connecterez toujours à partir d’un e-mail reçu dans votre boîte."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puoi attivare la password subito, se vuoi. Senza password, accederai sempre da un’e-mail ricevuta nella tua casella."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você pode ativar sua senha agora, se quiser. Sem senha, você sempre entrará a partir de um e-mail recebido na sua caixa de entrada."
           }
         }
       }
@@ -160767,6 +160720,53 @@
         }
       }
     },
+    "sticker.place.exact": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقعي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mein Standort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My location"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mi ubicación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ma position"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La mia posizione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minha localização"
+          }
+        }
+      }
+    },
     "story.caption.scroll_to_top": {
       "extractionState": "manual",
       "localizations": {
@@ -194692,6 +194692,523 @@
           "stringUnit": {
             "state": "translated",
             "value": "sobrenome"
+          }
+        }
+      }
+    },
+    "onboarding.email.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أكّد بريدك الإلكتروني"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätige deine E-Mail-Adresse"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm your email address"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirma tu correo electrónico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valide ton adresse e-mail"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conferma il tuo indirizzo e-mail"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirme seu endereço de e-mail"
+          }
+        }
+      }
+    },
+    "onboarding.email.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أرسلنا إليك رابطًا. المسه في بريدك: يتأكّد حسابك وينفتح لك Meeshy بالكامل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wir haben dir einen Link geschickt. Tippe ihn in deinem Postfach an: Dein Konto ist bestätigt und ganz Meeshy steht dir offen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We sent you a link. Tap it in your inbox: your account is confirmed and all of Meeshy opens up."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te enviamos un enlace. Tócalo en tu correo: tu cuenta queda confirmada y todo Meeshy se abre para ti."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On t'a envoyé un lien. Touche-le dans ton courriel : ton compte est confirmé et tout Meeshy s'ouvre à toi."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti abbiamo inviato un link. Toccalo nella tua casella: il tuo account è confermato e tutto Meeshy si apre per te."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviamos um link para você. Toque nele no seu e-mail: sua conta fica confirmada e todo o Meeshy se abre para você."
+          }
+        }
+      }
+    },
+    "onboarding.email.address": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل إلى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesendet an %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado a %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé à %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviato a %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado para %@"
+          }
+        }
+      }
+    },
+    "onboarding.email.resend": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أعد إرسال الرابط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link erneut senden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resend the link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reenviar el enlace"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renvoyer le lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia di nuovo il link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reenviar o link"
+          }
+        }
+      }
+    },
+    "onboarding.email.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُعيد إرسال الرابط — تحقّق من بريدك الوارد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link erneut gesendet — schau in dein Postfach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link sent again — check your inbox"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlace reenviado: revisa tu bandeja de entrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lien renvoyé — regarde ta boîte de réception"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link inviato di nuovo: controlla la tua casella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link reenviado — confira sua caixa de entrada"
+          }
+        }
+      }
+    },
+    "onboarding.email.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال الرابط. حاول مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Link konnte nicht gesendet werden. Versuch es noch einmal."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The link couldn't be sent. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar el enlace. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le lien n'a pas pu partir. Réessaie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare il link. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar o link. Tente de novo."
+          }
+        }
+      }
+    },
+    "onboarding.email.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ننتقل إلى التالي فور تأكيد عنوانك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es geht weiter, sobald deine Adresse bestätigt ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We'll move on as soon as your address is confirmed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguimos en cuanto tu dirección esté confirmada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On passe à la suite dès que ton adresse est validée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si prosegue appena il tuo indirizzo è confermato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguimos assim que seu endereço for confirmado."
+          }
+        }
+      }
+    },
+    "onboarding.story.verify": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أكّد بريدك الإلكتروني لنشر قصتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätige deine E-Mail, um deine Story zu posten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm your email to post your story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirma tu correo para publicar tu historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifie ton courriel pour publier ta story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conferma la tua e-mail per pubblicare la tua storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirme seu e-mail para publicar seu story"
+          }
+        }
+      }
+    },
+    "onboarding.story.verify.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المس الرابط الذي وصلك بالبريد: ستنطلق قصتك بعده مباشرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf den Link in der E-Mail: Danach kann deine Story sofort raus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the link we emailed you: your story can go out right after."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca el enlace del correo: tu historia podrá salir justo después."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche le lien reçu par e-mail : ta story pourra partir tout de suite après."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca il link ricevuto per e-mail: subito dopo la tua storia potrà partire."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque no link recebido por e-mail: seu story poderá sair logo em seguida."
+          }
+        }
+      }
+    },
+    "onboarding.story.rejected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر نشر قصتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Story konnte nicht gepostet werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your story couldn't be posted"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo publicar tu historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta story n'a pas pu être publiée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile pubblicare la tua storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível publicar seu story"
+          }
+        }
+      }
+    },
+    "onboarding.story.rejected.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رُفض النشر. ستجدها في مسوّداتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Veröffentlichung wurde abgelehnt. Du findest sie in deinen Entwürfen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The post was declined. You'll find it in your drafts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La publicación fue rechazada. La encontrarás en tus borradores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La publication a été refusée. Tu la retrouves dans tes brouillons."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pubblicazione è stata rifiutata. La trovi nelle tue bozze."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A publicação foi recusada. Você a encontra nos seus rascunhos."
           }
         }
       }

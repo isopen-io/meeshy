@@ -247,6 +247,23 @@ struct OnboardingFriendsIllustration: View {
     }
 }
 
+// MARK: - L'enveloppe (#7907)
+
+struct OnboardingEmailIllustration: View {
+    let isDark: Bool
+
+    @ScaledMetric(relativeTo: .largeTitle) private var envelopeSize: CGFloat = 72
+
+    var body: some View {
+        Image(systemName: "envelope.badge.fill")
+            .resizable()
+            .scaledToFit()
+            .frame(width: min(envelopeSize, 110), height: min(envelopeSize, 110))
+            .foregroundStyle(MeeshyColors.brandGradient)
+            .accessibilityHidden(true)
+    }
+}
+
 // MARK: - 5. La cloche
 
 struct OnboardingNotificationIllustration: View {

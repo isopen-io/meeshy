@@ -131,10 +131,35 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
    * `signup.tsx` : `aria-invalid={feedback.fieldErrors.password !== undefined}`.
    */
 
-  test('l’identité dérivée montre ce qui PARTIRA, dès qu’elle paraît', () => {
+  const valeur = (el: HTMLDivElement, selector: string) => (el.querySelector(selector) as HTMLInputElement | null)?.value;
+
+  test('nom affiché et pseudo arrivent REMPLIS, déjà en saisie — aucun bouton « Modifier » (#7897)', () => {
     const el = mount();
     type(el, '#signup-email', 'ada.lovelace@meeshy.example');
-    expect((el.querySelector('[data-derived-identity]')?.textContent ?? '').toLowerCase()).toContain('ada');
+    expect(valeur(el, '#signup-display-name')).toBe('Ada Lovelace');
+    expect(valeur(el, '#signup-username')).toBe('ada-lovelace');
+    expect(text(el)).not.toContain('Modifier');
+    expect(has(el, '#signup-first-name')).toBe(false);
+  });
+
+  test('ils suivent l’adresse EN DIRECT tant qu’on ne les touche pas, et la saisie gagne ensuite (#7897)', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada.lovelace@meeshy.example');
+    type(el, '#signup-display-name', 'Countess Ada');
+    type(el, '#signup-email', 'ada.byron@meeshy.example');
+    expect(valeur(el, '#signup-display-name')).toBe('Countess Ada');
+    expect(valeur(el, '#signup-username')).toBe('ada-byron');
+  });
+
+  test('le mot de passe attend que l’identité soit DÉFINIE (#7897)', () => {
+    const el = mount();
+    type(el, '#signup-email', 'a@b.co');
+    expect(has(el, '[data-derived-identity]')).toBe(true);
+    expect(has(el, '#signup-password')).toBe(false);
+    type(el, '#signup-username', 'awa');
+    expect(has(el, '#signup-password')).toBe(false);
+    type(el, '#signup-display-name', 'Awa');
+    expect(has(el, '#signup-password')).toBe(true);
   });
 
   test('un champ paru ne se REFERME jamais — corriger son adresse ne fait pas s’effondrer le formulaire', () => {
@@ -197,7 +222,15 @@ describe('le mot de passe ne s’annonce pas facultatif — il se PROUVE', () =>
     expect(text(el)).toContain('actif');
   });
 
-  test('sans mot de passe, l’écran dit que le compte restera à configurer', () => {
-    expect(text(openIdentity())).toContain('à configurer');
+  test('« Pourquoi mettre un mot de passe maintenant ? » se déplie sur ses détails (#7897)', () => {
+    const el = openIdentity();
+    const ligne = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Pourquoi mettre un mot de passe maintenant')) as HTMLButtonElement;
+    const detail = el.querySelector('#signup-password-why') as HTMLElement;
+    expect(ligne.getAttribute('aria-expanded')).toBe('false');
+    expect(detail.hidden).toBe(true);
+    act(() => ligne.click());
+    expect(ligne.getAttribute('aria-expanded')).toBe('true');
+    expect(detail.hidden).toBe(false);
+    expect(detail.textContent).toContain('e-mail reçu dans votre boîte');
   });
 });

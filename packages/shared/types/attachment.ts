@@ -269,6 +269,17 @@ export interface Attachment {
    */
   readonly currentUserConsumption?: CurrentUserAttachmentConsumption | null;
 
+  // ===== PER-ATTACHMENT REACTIONS (aggregated, per-request) =====
+  /**
+   * `emoji → count` for the reactions placed on THIS attachment, aggregated by
+   * `aggregateAttachmentReactions` (gateway) and served by the thread list AND
+   * the socket serializer. `attachment:reaction-added|removed` carry the same
+   * absolute map. @see messageAttachmentSchema
+   */
+  readonly reactionSummary?: Readonly<Record<string, number>>;
+  /** Emojis the requesting participant placed on this attachment. Never on a broadcast. */
+  readonly currentUserReactions?: readonly string[];
+
   // ===== ENCRYPTION =====
   // Note: encryptionMode is only on Conversation, not Attachment
   readonly isEncrypted: boolean;
