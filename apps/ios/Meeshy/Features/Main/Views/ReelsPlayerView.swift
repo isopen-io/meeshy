@@ -191,7 +191,7 @@ struct ReelsPlayerView: View {
         // ici dès la transition inactif→actif. La garde `!isCallActive` dans `drive`
         // empêche le redémarrage tant que l'appel dure.
         .onReceive(
-            CallManager.shared.$callState
+            CallManagerHost.shared.callStatePublisher
                 .map(\.isActive)
                 .removeDuplicates()
                 .receive(on: DispatchQueue.main)
@@ -698,7 +698,7 @@ struct ReelPageView: View {
         // so `MediaSessionCoordinator.isCallActive` is already cleared (set in
         // `callState.didSet`) by the time the gate re-checks it.
         .onReceive(
-            CallManager.shared.$callState
+            CallManagerHost.shared.callStatePublisher
                 .map(\.isActive)
                 .removeDuplicates()
                 .receive(on: DispatchQueue.main)
