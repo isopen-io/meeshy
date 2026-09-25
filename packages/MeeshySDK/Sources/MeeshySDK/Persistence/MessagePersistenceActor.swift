@@ -1714,7 +1714,7 @@ public actor MessagePersistenceActor {
                 )
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : encoder.encodeOrLog(uiReactions, field: "reactionsJson", id: api.id)
 
-                let replyToJson: Data? = Self.replyToJson(
+                let ingestedReply = Self.ingestedReply(
                     for: api, currentUserId: currentUserId,
                     preferredLanguages: preferredLanguages, encoder: encoder
                 )
@@ -1984,7 +1984,7 @@ public actor MessagePersistenceActor {
                     // payload serveur ne porte aucune réponse — même garde que
                     // `attachmentsJson`. Couvre la phase optimiste avant le 1er
                     // refresh enrichi.
-                    existing.replyToJson = replyToJson ?? existing.replyToJson
+                    existing.replyToJson = ingestedReply.persisted(over: existing.replyToJson)
                     existing.forwardedFromJson = forwardedFromJson
                     // Backfill forwarded-from IDs (bug user 2026-05-29) :
                     // l'optimistic row inséré localement quand le user appuie
@@ -2087,7 +2087,7 @@ public actor MessagePersistenceActor {
                         storyReplyToId: api.storyReplyToId,
                         forwardedFromId: api.forwardedFromId,
                         forwardedFromConversationId: api.forwardedFromConversationId,
-                        replyToJson: replyToJson,
+                        replyToJson: ingestedReply.persisted(over: nil),
                         forwardedFromJson: forwardedFromJson,
                         expiresAt: api.expiresAt,
                         effectFlags: effectFlags,
