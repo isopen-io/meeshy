@@ -134,7 +134,7 @@ extension UniversalComposerBar {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
         .frame(minHeight: 44)
-        .adaptiveLiquidGlass(in: Self.fieldShape, tint: fieldTint, interactive: true)
+        .adaptiveLiquidGlass(in: Self.fieldShape, tint: fieldTint)
         .overlay(
             Self.fieldShape
                 .stroke(
