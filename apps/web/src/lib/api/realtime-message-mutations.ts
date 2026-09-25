@@ -81,6 +81,23 @@ const tombstone = (message: Message, deletedAt: string): Message => {
 const quotes = (message: Message, quotedId: string): boolean =>
   message.replyTo !== undefined && message.replyTo !== null && message.replyTo.id === quotedId;
 
+/**
+ * Les citations (`replyTo`) d'un message DÉTRUIT deviennent des pierres
+ * tombales dans le fil de sa conversation — sa suppression (#7926) comme son
+ * expiration (#7960) : plus rien de lui ne se lit dans les réponses.
+ */
+export function tombstoneQuotesOf(
+  queryClient: QueryClient,
+  params: { readonly conversationId: string; readonly messageId: string; readonly deletedAt: string },
+): void {
+  const citing = (m: Message): boolean => quotes(m, params.messageId) && belongsTo(m, params.conversationId);
+  patchThreadMessages(queryClient, params.conversationId, (messages) =>
+    messages.some(citing)
+      ? messages.map((m) => (citing(m) ? { ...m, replyTo: tombstone(m.replyTo as Message, params.deletedAt) } : m))
+      : messages,
+  );
+}
+
 export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessage): void {
   const known = findCachedThreadMessage(queryClient, data.conversationId, data.id);
   const rowMayChange = known !== undefined && belongsTo(known, data.conversationId) && !isStaleEdit(known, data.editedAt);

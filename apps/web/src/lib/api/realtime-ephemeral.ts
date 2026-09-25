@@ -11,6 +11,7 @@ import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/l
 
 import { expireLastMessage } from './list-preview';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
+import { tombstoneQuotesOf } from './realtime-message-mutations';
 import { sealViewOnceIn } from './view-once-seal';
 
 /**
@@ -64,6 +65,7 @@ export function applyMessageExpired(
   schedule: (fn: () => void, ms: number) => void = (fn, ms) => {
     setTimeout(fn, ms);
   },
+  now: Date = new Date(),
 ): void {
   /**
    * **L'ANNONCE D'ABORD, LE RETRAIT ENSUITE** (#7468, travail 2). Retirer la
@@ -97,6 +99,10 @@ export function applyMessageExpired(
      regarde brûler la bulle, et son texte n'a plus le droit de rester dans
      le cache de liste, qui est persisté. */
   expireLastMessage(queryClient, data.conversationId, data.messageId);
+  /* LES CITATIONS SONT SCELLÉES SUR-LE-CHAMP (#7960) — une réponse gardait
+     dans son `replyTo` embarqué le texte du message détruit ; même règle que
+     `message:deleted` et que le relais iOS (`markDeleted` suit les citations). */
+  tombstoneQuotesOf(queryClient, { conversationId: data.conversationId, messageId: data.messageId, deletedAt: now.toISOString() });
   schedule(() => {
     forgetEphemeral(data.messageId);
     patchThreadMessages(queryClient, data.conversationId, (messages) =>
