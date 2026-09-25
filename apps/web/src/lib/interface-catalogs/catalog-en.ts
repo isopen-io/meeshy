@@ -125,8 +125,10 @@ const en = {
   'feed.post.repost.unconfirmed': 'Repost not confirmed — try again',
   'feed.post.repost.audience': 'That audience would widen the original post’s reach',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel by {author}',
   'feed.post.open': 'Open {author}’s post',
+  'feed.post.original.open': 'Original post by {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Saved posts',
   'bookmarks.back': 'Back to settings',

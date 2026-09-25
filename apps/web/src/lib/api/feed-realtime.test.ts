@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { FEED_NEW_COUNT_KEY } from './feed-new-count';
-import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated } from './feed-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedRepost } from './feed-realtime';
 import { postQueryKey } from './publication-detail';
 import { REELS_QUERY_ROOT, reelsQueryKey } from './reels';
 
@@ -424,5 +424,95 @@ describe('les graines de Réels que rien ne touche gardent leur IDENTITÉ (#7227
     );
 
     expect(queryClient.getQueryData(reelsQueryKey('graine'))).toBe(reels);
+  });
+});
+
+/**
+ * `post:reposted` (#6278 c) — LE COMPTE ABSOLU, jamais `isRepostedByMe`. Le
+ * repost du LECTEUR est déjà posé par l'optimiste (`performRepost`) ; cet
+ * écho ne fait que remplacer l'estimation par le chiffre servi, EXACTEMENT
+ * comme `post:liked` pour le cœur — sauf que rien ici ne bascule jamais l'état
+ * « par moi », posture délibérée (voir le doc-comment d'`applyServedRepost`).
+ */
+describe('`post:reposted` — le compte de l’original suit le repost D’UN AUTRE', () => {
+  const reposted = (originalPostId: string, repostCount: number, patch: Record<string, unknown> = {}) => ({
+    originalPostId,
+    repost: { id: 'repost-1', author: { id: 'u-other' }, repostOf: { id: originalPostId, repostCount }, ...patch },
+  });
+
+  test('pose le compte ABSOLU servi, sans jamais toucher `isRepostedByMe`', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3, isRepostedByMe: false })]);
+
+    applyServedRepost(queryClient, reposted('p-original', 4));
+
+    const carte = cartes(queryClient)[0]!;
+    expect(carte.repostCount).toBe(4);
+    expect(carte.isRepostedByMe).toBe(false);
+  });
+
+  test('mon PROPRE repost — le compte se confirme, `isRepostedByMe` reste tel que l’optimiste l’a posé', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 4, isRepostedByMe: true })]);
+
+    applyServedRepost(queryClient, reposted('p-original', 4, { author: { id: 'u-viewer' } }));
+
+    const carte = cartes(queryClient)[0]!;
+    expect(carte.repostCount).toBe(4);
+    expect(carte.isRepostedByMe).toBe(true);
+  });
+
+  test('une charge sans `repost.repostOf.repostCount` ne pose rien', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3 })]);
+    const flux = queryClient.getQueryData(FEED_QUERY_KEY);
+
+    applyServedRepost(queryClient, { originalPostId: 'p-original', repost: { author: { id: 'u-other' } } });
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(flux);
+  });
+
+  test('une charge MALFORMÉE (originalPostId absent) ne lève pas', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3 })]);
+    expect(() => applyServedRepost(queryClient, { repost: {} })).not.toThrow();
+    expect(() => applyServedRepost(queryClient, null)).not.toThrow();
+  });
+
+  /**
+   * LE REPOST LUI-MÊME (#6278 c, T2b) — SECOND effet de `post:reposted`,
+   * miroir `FeedViewModel.swift:1565-1578` : il entre en tête du fil de
+   * l'AMI qui le reçoit, jamais deux fois, jamais pour une STORY ni un
+   * STATUS (`belongsToStoryTray`).
+   */
+  test('le repost d’un AUTRE entre en TÊTE du fil et compte pour la bannière — jamais deux fois, jamais une story ni un statut', () => {
+    const queryClient = clientAvec([post({ id: 'p-ancien' })]);
+    const payload = {
+      originalPostId: 'p-original',
+      repost: { id: 'repost-1', type: 'POST', author: { id: 'u-other' }, repostOf: { id: 'p-original', repostCount: 1 } },
+    };
+
+    applyServedRepost(queryClient, payload);
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['repost-1', 'p-ancien']);
+    expect(compte(queryClient)).toBe(1);
+
+    // Rejoué (reconnexion, double abonnement) — jamais une seconde carte,
+    // jamais un second coup de compteur.
+    applyServedRepost(queryClient, payload);
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['repost-1', 'p-ancien']);
+    expect(compte(queryClient)).toBe(1);
+
+    // STORY / STATUS — le fil GELÉ ne les montre jamais.
+    const queryClientTray = clientAvec([post({ id: 'p-ancien' })]);
+    for (const type of ['STORY', 'STATUS']) {
+      applyServedRepost(queryClientTray, { originalPostId: 'p-original', repost: { id: `repost-${type}`, type, author: { id: 'u-other' } } });
+    }
+    expect(cartes(queryClientTray).map((p) => p.id)).toEqual(['p-ancien']);
+    expect(compte(queryClientTray)).toBe(0);
+  });
+
+  test('un fil ABSENT du cache ne se fabrique pas — même loi que `post:created`', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    applyServedRepost(queryClient, { originalPostId: 'p-original', repost: { id: 'repost-1', type: 'POST', author: { id: 'u-other' } } });
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBeUndefined();
+    expect(compte(queryClient)).toBe(0);
   });
 });

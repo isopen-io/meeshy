@@ -1,54 +1,26 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { cachedOn, gatewayDeps, pageOf, scripted, seededOn } from '@/test-support/feed-cache-kit';
+
 import { FEED_QUERY_KEY } from './feed';
-import type { FeedInfiniteData, FeedPost } from './feed-pages';
-import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import type { FeedPost } from './feed-pages';
+import type { ApiResult } from './http';
 import { reelsQueryKey } from './reels';
-import { performRepost, type RepostDeps } from './publication-repost';
+import { performRepost } from './publication-repost';
 
 /**
  * `performRepost` (#6484) — MÊME forme que `feed-gestures.test.ts` :
- * plan → optimiste → appel → issue.
+ * plan → optimiste → appel → issue. L'outillage (`seededOn`, `scripted`,
+ * `gatewayDeps`, `cachedOn`) vit dans `@/test-support/feed-cache-kit`
+ * (#6278 c) — `feed-post-card-repost.test.tsx` le PARTAGE plutôt que de le
+ * recopier.
  */
 const post = (partial: Partial<FeedPost>): FeedPost => ({
   id: 'p1',
   type: 'REEL',
   createdAt: '2026-09-24T11:55:00.000Z',
   ...partial,
-});
-
-const pageOf = (posts: readonly FeedPost[]): FeedInfiniteData => ({
-  pages: [{ posts, pagination: { limit: 20, hasMore: false, nextCursor: null } }],
-  pageParams: [undefined],
-});
-
-const seededOn = (queryKey: readonly string[], posts: readonly FeedPost[]): QueryClient => {
-  const queryClient = new QueryClient();
-  queryClient.setQueryData(queryKey as unknown as readonly unknown[], pageOf(posts));
-  return queryClient;
-};
-
-const cachedOn = (queryClient: QueryClient, queryKey: readonly string[], id = 'p1'): FeedPost | undefined =>
-  queryClient
-    .getQueryData<FeedInfiniteData>(queryKey as unknown as readonly unknown[])
-    ?.pages[0]?.posts.find((p) => p.id === id);
-
-const scripted = (respond: (req: HttpRequest) => Promise<ApiResult<unknown>>) => {
-  const requests: HttpRequest[] = [];
-  const transport = {
-    request: (req: HttpRequest) => {
-      requests.push(req);
-      return respond(req);
-    },
-  } as unknown as HttpTransport;
-  return { requests, transport };
-};
-
-const gatewayDeps = (queryClient: QueryClient, transport: HttpTransport): RepostDeps => ({
-  source: 'gateway',
-  transport,
-  queryClient,
 });
 
 let restoreOnline: (() => void) | null = null;
@@ -75,10 +47,10 @@ describe('performRepost — optimiste, puis la passerelle', () => {
     const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
 
     const pending = performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
-    const onFeed = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+    const onFeed = cachedOn(queryClient, FEED_QUERY_KEY);
     expect(onFeed?.isRepostedByMe).toBe(true);
     expect(onFeed?.repostCount).toBe(3);
-    const onReels = cachedOn(queryClient, reelsQueryKey('seed') as unknown as string[]);
+    const onReels = cachedOn(queryClient, reelsQueryKey('seed'));
     expect(onReels?.isRepostedByMe).toBe(true);
     expect(onReels?.repostCount).toBe(3);
 
@@ -142,7 +114,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
     const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
     expect(result).toEqual({ ok: true, notice: 'feed.post.repost.success' });
-    expect(cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[])?.repostCount).toBe(1);
+    expect(cachedOn(queryClient, FEED_QUERY_KEY)?.repostCount).toBe(1);
   });
 
   test('refus PERMANENT (403 puis 404) ⇒ rollback + issue "error"/"refused"', async () => {
@@ -153,7 +125,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: false, message: 'feed.post.repost.error', issue: 'refused' });
-      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(rolledBack?.isRepostedByMe).toBe(false);
       expect(rolledBack?.repostCount).toBe(0);
     }
@@ -172,7 +144,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: false, message: 'feed.post.repost.unconfirmed', issue: 'unconfirmed' });
-      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(rolledBack?.isRepostedByMe).toBe(false);
       expect(rolledBack?.repostCount).toBe(0);
     }
@@ -186,7 +158,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: true });
-      const kept = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const kept = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(kept?.isRepostedByMe).toBe(true);
       expect(kept?.repostCount).toBe(1);
     }
@@ -223,7 +195,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
 
     expect(result).toEqual({ ok: true, notice: 'feed.post.repost.success' });
     expect(requests).toHaveLength(0);
-    expect(cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[])?.isRepostedByMe).toBe(true);
+    expect(cachedOn(queryClient, FEED_QUERY_KEY)?.isRepostedByMe).toBe(true);
   });
 });
 
@@ -237,7 +209,7 @@ describe('performRepost — hors ligne et audience', () => {
 
     expect(result).toEqual({ ok: false, message: 'feed.post.repost.offline', issue: 'refused' });
     expect(requests).toHaveLength(0);
-    const untouched = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+    const untouched = cachedOn(queryClient, FEED_QUERY_KEY);
     expect(untouched?.isRepostedByMe).toBe(false);
     expect(untouched?.repostCount).toBe(0);
   });
