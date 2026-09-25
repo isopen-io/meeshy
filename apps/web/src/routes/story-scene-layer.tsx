@@ -89,6 +89,11 @@ export type StorySceneLayerProps = {
   /** L'horloge du moteur, relayée au lecteur qui porte le segment qu'on
    * parcourt au doigt (#7879) — la piste de fond l'écoute aussi. */
   readonly onClock?: (clock: SceneClockHandle) => void;
+  /** La durée de la DIAPOSITIVE (celle de la barre et de l'avance) — remise
+   * au moteur comme durée de repli (`fallbackDurationSeconds`) : même sans
+   * objet temporisé, l'horloge MÈNE alors la scène et ses vidéos et sons
+   * suivent sa timeline (#7879, retour porteur). */
+  readonly durationSeconds?: number;
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -118,6 +123,7 @@ export function StorySceneLayer({
   measure = sceneFootprint,
   mediaDeps,
   onClock,
+  durationSeconds,
 }: StorySceneLayerProps) {
   const storyId = story.id;
   const carrier = useMemo(() => storyCarrier(story), [story]);
@@ -291,6 +297,7 @@ export function StorySceneLayer({
           onDurationKnown={(ms) => reportDuration('video', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
           onClock={receiveClock}
+          {...(durationSeconds !== undefined ? { fallbackDurationSeconds: durationSeconds } : {})}
         />
       </Suspense>
     );

@@ -368,3 +368,14 @@ describe('StorySceneLayer — le parcours au doigt (#7879)', () => {
     expect(audio.currentTime).toBeCloseTo(4, 5);
   });
 });
+
+describe('StorySceneLayer — la durée de la diapositive fait MENER l’horloge (#7879, retour porteur)', () => {
+  test('sans objet temporisé, la durée remise par le lecteur fait suivre la timeline à ses médias', async () => {
+    let clock: SceneClockHandle | null = null;
+    const el = await mount(layer({ document: documentOf([fitBackground, text(0.92)]), durationSeconds: 6, onClock: (c) => (clock = c) }));
+    await waitForElement(el, '[data-scene-player]');
+    if (clock === null) throw new Error('horloge jamais remise');
+    const held: SceneClockHandle = clock;
+    expect(held.isDriving()).toBe(true);
+  });
+});

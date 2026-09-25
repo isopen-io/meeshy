@@ -159,6 +159,13 @@ describe('useSceneClock — seek (#7879)', () => {
     expect(clock().now()).toBeCloseTo(1, 5);
   });
 
+  test('isDriving dit si l’horloge MÈNE la scène — les médias ne la suivent que dans ce cas', () => {
+    const { clock, rerender } = mountClock(paramsOf({ enabled: false }));
+    expect(clock().isDriving()).toBe(false);
+    rerender(paramsOf({ enabled: true }));
+    expect(clock().isDriving()).toBe(true);
+  });
+
   test('sans durée connue, seek pose le temps sans plafond', () => {
     const { clock } = mountClock(paramsOf({ durationSeconds: null }));
     clock().seek(12);

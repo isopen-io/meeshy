@@ -3,10 +3,10 @@ import { useEffect, useRef } from 'react';
 import { protectedMediaDeps, type ProtectedMediaDeps, type ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
-import { trackSeekPlan } from '@/lib/canvas/media-seek';
+import { trackMediaTimeline } from '@/lib/canvas/media-seek';
 
 import type { SceneClockHandle } from './scene-clock';
-import { alignMediaElement } from './scene-media-seek';
+import { useSceneMediaSync } from './scene-media-seek';
 
 /**
  * `BackgroundTrackAudio` (#6899, extrait en site UNIQUE pour #6903) — LE SON
@@ -104,51 +104,40 @@ function BackgroundTrackElement({
   callbacks.current = { onDurationKnown, onPlaybackBlocked };
   const { bounds } = track;
 
-  // LE PARCOURS AU DOIGT (#7879) — la piste suit le temps pointé : le délai
-  // de départ se recompte depuis lui (`playedMsRef`), et la position tombe
-  // dans la fenêtre (`trackSeekPlan`). Avant le départ, elle attend au début.
-  // La piste derrière une ref : l'hôte la ré-élit à chaque rendu (objet
-  // neuf), ce qui ne doit pas désabonner puis réabonner l'écoute.
-  const trackRef = useRef(track);
-  trackRef.current = track;
-  useEffect(() => {
-    if (clock === null) return;
-    return clock.subscribeSeek((t) => {
-      const el = audioRef.current;
-      if (el === null) return;
-      const current = trackRef.current;
-      const plan = trackSeekPlan({ t, track: current, mediaDuration: el.duration });
-      playedMsRef.current = plan.playedMs;
-      alignMediaElement(el, plan.position ?? (current.bounds !== undefined ? current.bounds.startMs / 1000 : 0));
-    });
-  }, [clock]);
-
   useEffect(() => {
     const el = audioRef.current;
     if (el !== null) el.volume = track.volume;
   }, [track.volume]);
 
-  useEffect(() => {
-    const el = audioRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    const startedAt = performance.now();
-    const start = () => {
-      void el.play().catch((error: unknown) => {
-        if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked();
-      });
-    };
-    const remaining = Math.max(0, track.startOffsetMs - playedMsRef.current);
-    const timer = remaining > 0 ? window.setTimeout(start, remaining) : null;
-    if (timer === null) start();
-    return () => {
-      playedMsRef.current += performance.now() - startedAt;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [playing, muted, track.startOffsetMs]);
+  // LA PISTE SUIT LA TIMELINE DE LA SCÈNE (#7879) — la MÊME loi que les
+  // médias de la scène (`trackMediaTimeline` → `mediaTimeAt`) : départ
+  // différé, fenêtre source, boucle, en lecture comme au seek. Sans horloge
+  // qui mène (hôte sans moteur, scène sans durée), elle garde son départ
+  // différé compté en temps de LECTURE (la pause l'arrête), recompté depuis
+  // le temps pointé à chaque seek.
+  useSceneMediaSync({
+    ref: audioRef,
+    clock,
+    timeline: trackMediaTimeline(track),
+    playing,
+    restartKeys: [muted, track.startOffsetMs],
+    onPlayRefused: (error, el) => {
+      if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked();
+    },
+    freePlay: (_el, start) => {
+      const startedAt = performance.now();
+      const remaining = Math.max(0, track.startOffsetMs - playedMsRef.current);
+      const timer = remaining > 0 ? window.setTimeout(start, remaining) : null;
+      if (timer === null) start();
+      return () => {
+        playedMsRef.current += performance.now() - startedAt;
+        if (timer !== null) window.clearTimeout(timer);
+      };
+    },
+    onSeeked: (t) => {
+      playedMsRef.current = Math.max(0, t) * 1000;
+    },
+  });
 
   // Le DÉMONTAGE (un hôte qui REMONTE la piste à chaque tour de boucle,
   // #6903 — `key` changée — ou qui quitte l'écran) arrête le son : effet

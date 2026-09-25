@@ -48,6 +48,10 @@ export type SceneClockHandle = {
   readonly subscribeSeek: (listener: (t: number) => void) => () => void;
   /** Le temps courant, en secondes — le point de départ d'un pas clavier. */
   readonly now: () => number;
+  /** L'horloge MÈNE-t-elle la scène (`enabled`) ? Les `<video>`/`<audio>`
+   * ne suivent sa timeline que dans ce cas ; sinon ils jouent librement et ne
+   * se recalent qu'aux seeks. Lu au RENDU, jamais en retard d'un effet. */
+  readonly isDriving: () => boolean;
 };
 
 const ON_TIME_INTERVAL_MS = 100;
@@ -72,6 +76,8 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
   const loop = useRef<((now: number) => void) | null>(null);
   const duration = useRef(durationSeconds);
   duration.current = durationSeconds;
+  const driving = useRef(enabled);
+  driving.current = enabled;
   const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded, onLoop: params.onLoop });
 
   useEffect(() => {
@@ -158,6 +164,7 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
         if (tick !== null && rafId.current === null && !ended.current) rafId.current = requestAnimationFrame(tick);
       },
       now: () => elapsed.current,
+      isDriving: () => driving.current,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],

@@ -789,6 +789,7 @@ export default function StoryScreen() {
                 playing={!paused && !scrub.scrubbing}
                 muted={storySoundMuted}
                 onClock={scrub.onClock}
+                durationSeconds={dureeMs / 1000}
                 onReady={() => setReadyStoryId(currentStory.id)}
                 onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
                 onPlaybackBlocked={muteBlockedPlayback}

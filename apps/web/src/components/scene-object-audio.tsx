@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
+import { objectMediaTimeline } from '@/lib/canvas/media-seek';
 
 import type { SceneClockHandle } from './scene-clock';
-import { useMediaSeek } from './scene-media-seek';
+import { useSceneMediaSync } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
 
 const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error && error.name === 'NotAllowedError';
@@ -68,7 +69,6 @@ export function SceneObjectAudio({
   const { src } = useProtectedMediaSrc(posee ?? '', mediaDeps);
   const ref = useRef<HTMLAudioElement | null>(null);
   const loop = object.payload.loop === true;
-  useMediaSeek({ ref, clock: seekClock, loop });
 
   // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901) : `src`
   // dépend du PORTEUR (`carrier.media`), qui change quand le fil se
@@ -77,18 +77,18 @@ export function SceneObjectAudio({
   // une exception (« Rendered fewer hooks than expected »), sous Preact un
   // effet qui ne se rejoue ni ne se nettoie plus. Aucun lint ne le garde ici :
   // web-v2 n'a pas de configuration eslint.
-  useEffect(() => {
-    const el = ref.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    void el.play().catch((error: unknown) => {
+  // LE SON POSÉ SUIT LA TIMELINE DE LA SCÈNE (#7879) : sa fenêtre, sa coupe,
+  // sa boucle — la même loi que les vidéos, en lecture comme au seek.
+  useSceneMediaSync({
+    ref,
+    clock: seekClock,
+    timeline: objectMediaTimeline(object),
+    playing,
+    restartKeys: [muted, src],
+    onPlayRefused: (error, el) => {
       if (!el.muted && isAutoplayRefusal(error)) onPlaybackBlocked?.();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, muted, src]);
+    },
+  });
 
   // `null` — la piste PROTÉGÉE que la passerelle refuse, qui a disparu, que la
   // modération a coupée, ou que le réseau n'a pas rendue ; `''` — l'objet qui
