@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { INLINE_SCHEME_BOOTSTRAP, SCHEME_KEY } from './inline-scheme-bootstrap.js';
+import { INLINE_APP_SCHEME_BOOTSTRAP, INLINE_SCHEME_BOOTSTRAP, SCHEME_KEY } from './inline-scheme-bootstrap.js';
 
 /**
  * Ce témoin EXÉCUTE le texte du script — il ne compare aucune chaîne — pour
@@ -35,7 +35,12 @@ function themeColorMeta(scheme: 'light' | 'dark') {
   };
 }
 
-function run(options: { stored: string | null | 'DENIED'; prefersLight: boolean; initialClasses?: string[] }) {
+function run(options: {
+  stored: string | null | 'DENIED';
+  prefersLight: boolean;
+  initialClasses?: string[];
+  script?: string;
+}) {
   const html = classList(new Set(options.initialClasses ?? ['dark']));
   const metas = [themeColorMeta('dark'), themeColorMeta('light')];
   const fakeDocument = {
@@ -51,7 +56,7 @@ function run(options: { stored: string | null | 'DENIED'; prefersLight: boolean;
   };
   const fakeWindow = { matchMedia: (_query: string) => ({ matches: options.prefersLight }) };
 
-  const bootstrap = new Function('document', 'localStorage', 'window', INLINE_SCHEME_BOOTSTRAP);
+  const bootstrap = new Function('document', 'localStorage', 'window', options.script ?? INLINE_APP_SCHEME_BOOTSTRAP);
   bootstrap(fakeDocument, fakeLocalStorage, fakeWindow);
   return Object.assign(html.classes, {
     barre: Object.fromEntries(metas.map((meta) => [meta.getAttribute('data-scheme'), meta.media])),
@@ -99,6 +104,12 @@ test('un stockage refuse (mode prive) ne leve pas et laisse le schema du HTML', 
 test('un schema clair choisi sur un systeme sombre allume la barre claire des la premiere image', () => {
   const { barre } = run({ stored: 'light', prefersLight: false });
   expect(barre).toEqual({ light: 'all', dark: 'not all' });
+});
+
+test('le script des pages institutionnelles peint le meme schema sans toucher a leurs metas', () => {
+  const peint = run({ stored: 'light', prefersLight: false, script: INLINE_SCHEME_BOOTSTRAP });
+  expect(peint.has('light')).toBeTruthy();
+  expect(peint.barre).toEqual({ light: '(prefers-color-scheme: light)', dark: '(prefers-color-scheme: dark)' });
 });
 
 test('un schema sombre choisi sur un systeme clair allume la barre sombre des la premiere image', () => {

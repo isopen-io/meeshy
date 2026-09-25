@@ -23,25 +23,35 @@
 
 export const SCHEME_KEY = 'meeshy.scheme';
 
+const PAINT_SCHEME =
+  `var c=localStorage.getItem('${SCHEME_KEY}');` +
+  `var l=c?c==='light':window.matchMedia('(prefers-color-scheme: light)').matches;` +
+  `document.documentElement.classList.toggle('light',l);` +
+  `document.documentElement.classList.toggle('dark',!l);`;
+
+const SYNC_BROWSER_BAR =
+  `var s=l?'light':'dark';` +
+  `document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach(function(m){` +
+  `m.media=m.getAttribute('data-scheme')===s?'all':'not all';});`;
+
+const bootstrap = (body) => `(function(){try{${body}}catch(e){}})();`;
+
 /**
  * Le script bloquant : lit `SCHEME_KEY`, retombe sur `prefers-color-scheme`
  * si rien n'est stocké, et ne lève jamais (mode privé, stockage refusé — le
  * schéma sombre du HTML reste alors, sans qu'aucun consommateur ait à le
- * savoir).
- *
- * Il allume aussi la meta `theme-color` du schéma peint et éteint l'autre,
- * même règle que `syncBrowserBar` (scheme.ts) : sans cela, la barre du
- * navigateur suit le SYSTÈME jusqu'à l'arrivée de `main.tsx`, plusieurs
- * secondes en 3G, là où la coque Android règle la sienne presque aussitôt
- * (#7970).
+ * savoir). C'est celui des pages institutionnelles préchauffées, dont les
+ * metas `theme-color` ne portent pas de `data-scheme`.
  */
-export const INLINE_SCHEME_BOOTSTRAP =
-  `(function(){try{` +
-  `var c=localStorage.getItem('${SCHEME_KEY}');` +
-  `var l=c?c==='light':window.matchMedia('(prefers-color-scheme: light)').matches;` +
-  `document.documentElement.classList.toggle('light',l);` +
-  `document.documentElement.classList.toggle('dark',!l);` +
-  `var s=l?'light':'dark';` +
-  `document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach(function(m){` +
-  `m.media=m.getAttribute('data-scheme')===s?'all':'not all';});` +
-  `}catch(e){}})();`;
+export const INLINE_SCHEME_BOOTSTRAP = bootstrap(PAINT_SCHEME);
+
+/**
+ * Celui de l'application (`index.html`) : le même, qui allume en plus la meta
+ * `theme-color` du schéma peint et éteint l'autre, même règle que
+ * `syncBrowserBar` (scheme.ts). Sans cela, la barre du navigateur suit le
+ * SYSTÈME jusqu'à l'arrivée de `main.tsx`, plusieurs secondes en 3G, là où
+ * la coque Android règle la sienne presque aussitôt (#7970). Les pages
+ * institutionnelles n'en reçoivent pas les octets : elles tiennent sous un
+ * plafond de poids (budgets.json → institutional_page.kb).
+ */
+export const INLINE_APP_SCHEME_BOOTSTRAP = bootstrap(PAINT_SCHEME + SYNC_BROWSER_BAR);
