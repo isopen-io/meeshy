@@ -1,4 +1,4 @@
-import { appelNatif, coqueCourante, type CoqueNative } from '@/lib/native-shell';
+import { annulationDuPont, appelNatif, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /**
  * **Partager Meeshy — le seul démarrage que la v3.1 sache VRAIMENT offrir.**
@@ -43,18 +43,6 @@ type NavigateurPartage = {
  * le web mobile et iOS ouvrent la feuille du système.
  */
 const PONT_PARTAGE = 'MeeshyShare';
-
-/**
- * La feuille Android fermée sans choix (#7822) : le pont rejette avec le code
- * `CANCELED`. Traduit en `AbortError`, il prend le chemin d'une annulation
- * web — ni copie, ni partage compté, ni annonce.
- */
-const ANNULATION_PONT = 'CANCELED';
-
-function annulationDuPont(erreur: unknown): unknown {
-  const code = (erreur as { readonly code?: unknown } | null)?.code;
-  return code === ANNULATION_PONT ? new DOMException('Partage annulé', 'AbortError') : erreur;
-}
 
 /**
  * Le portail se COMPOSE de ce que l'hôte offre : `navigator.share` d'abord,

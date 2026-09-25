@@ -327,6 +327,10 @@ const en = {
   'dataExport.action.again': 'Export again',
   'dataExport.done.title': 'Export complete',
   'dataExport.done.body': 'The file was downloaded to this device.',
+  'dataExport.ready.title': 'Export ready',
+  'dataExport.ready.body': 'The file is ready. Tap to save it to this device.',
+  'dataExport.action.deliver': 'Save the file',
+  'dataExport.undelivered.body': 'This device could not receive the file.',
 
   'profile.title': 'Profile',
   'profile.edit': 'Edit',

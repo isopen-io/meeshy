@@ -326,6 +326,10 @@ const ar = {
   'dataExport.action.again': 'تصدير مرة أخرى',
   'dataExport.done.title': 'اكتمل التصدير',
   'dataExport.done.body': 'تم تنزيل الملف على هذا الجهاز.',
+  'dataExport.ready.title': 'التصدير جاهز',
+  'dataExport.ready.body': 'الملف جاهز. اضغط لحفظه على هذا الجهاز.',
+  'dataExport.action.deliver': 'حفظ الملف',
+  'dataExport.undelivered.body': 'تعذّر على هذا الجهاز استلام الملف.',
 
   'profile.title': 'الملف الشخصي',
   'profile.edit': 'تعديل',

@@ -1,5 +1,8 @@
 import * as z from 'zod/mini';
 
+import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
+import { browserFileDeliveryHost, type FileDeliveryHost } from '@/lib/media/file-delivery-host';
+
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 import { unreadableFailure } from './link-failure';
@@ -59,19 +62,26 @@ export function exportFileName(exportDate: string): string {
   return `meeshy-export-${day}.json`;
 }
 
+const JSON_TYPE = 'application/json';
+
 /**
- * Le déclenchement du téléchargement — la seule partie de ce port qui touche
- * le DOM, séparée pour rester injectable (`DataExportPageDeps.download`) : un
- * témoin de comportement de l'écran n'a pas à fabriquer un vrai `Blob`.
+ * La livraison du fichier (#7864) — par le PORTAIL, jamais par une ancre en
+ * dur : ni `@capacitor/android` ni `@capacitor/ios` 8.5.1 ne branchent le
+ * téléchargement de leur WebView, et l'ancre y était un clic sans effet
+ * suivi d'un « Export terminé ». Le portail tente le partage de fichier
+ * (feuille du système, pont `MeeshyShare.shareFile` sur Android), puis
+ * l'ancre quand l'hôte en a une, et dit ce qui s'est réellement passé.
+ * Le portail vit dans le chunk à la demande `story_export` : il se charge au
+ * geste, jamais avec l'écran. Séparée de l'écran pour rester injectable
+ * (`DataExportPageDeps.download`).
  */
-export function downloadJsonFile(fileName: string, jsonText: string): void {
-  const blob = new Blob([jsonText], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+export async function deliverJsonFile(
+  fileName: string,
+  jsonText: string,
+  host: FileDeliveryHost = browserFileDeliveryHost(),
+): Promise<DeliverFileOutcome> {
+  const { fileDeliveryPortal } = await import('@/lib/media/deliver-file');
+  const portal = fileDeliveryPortal(host);
+  if (portal === null) return 'unavailable';
+  return portal.deliver(new Blob([jsonText], { type: JSON_TYPE }), fileName, JSON_TYPE);
 }
