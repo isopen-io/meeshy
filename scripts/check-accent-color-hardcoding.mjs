@@ -137,7 +137,7 @@
 // mentirait sur la moitié des cas. Même raisonnement que #6793 ci-dessus :
 // relever plutôt que déplacer l'appel. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 434;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 431;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
