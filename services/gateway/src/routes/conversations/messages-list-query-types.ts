@@ -236,6 +236,8 @@ export type MappedMessageRow = MessageProtectionRow & {
   recipientCount: number;
   reactionSummary?: unknown;
   reactionCount?: number | null;
+  /** #7936 — les emojis que le LECTEUR a posés sur ce message. */
+  currentUserReactions: readonly string[];
   isEncrypted?: boolean | null;
   encryptionMode?: string | null;
   createdAt: Date;

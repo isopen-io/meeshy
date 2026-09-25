@@ -1143,22 +1143,18 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].recipientCount).toBe(0);
   });
 
-  // #4177 — ce témoin prouvait que `reaction.findMany` alimentait
-  // `currentUserReactions` (message-level) — vrai, et c'est justement le
-  // travail mort de l'issue : `messageSchema` ne déclare PAS ce champ au
-  // niveau message (son miroir PAR PIÈCE JOINTE, lui, est déclaré et reste
-  // servi), donc fast-json-stringify le retirait avant tout client depuis
-  // toujours. Le calcul est retiré ; ce témoin prouve maintenant qu'il ne se
-  // produit plus, plutôt que de continuer à attester un contrat que personne
-  // ne respectait.
-  it("sans consommateur possible, reaction.findMany n'est plus appelé pour le message-level currentUserReactions", async () => {
+  // #7936 — `currentUserReactions` revient, DÉCLARÉ au `messageSchema` cette
+  // fois (#4177 l'avait retiré parce qu'il mourait à la sérialisation) : UNE
+  // requête pour la page, scopée au participant du lecteur.
+  it('reaction.findMany alimente currentUserReactions en UNE requête scopée au lecteur (#7936)', async () => {
     const msg = makeMessage();
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
+    prisma.reaction.findMany.mockResolvedValue([{ messageId: msg.id, emoji: '❤️' }]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(prisma.reaction.findMany).not.toHaveBeenCalled();
-    expect(reply._body.data[0].currentUserReactions).toBeUndefined();
+    expect(prisma.reaction.findMany).toHaveBeenCalledTimes(1);
+    expect(reply._body.data[0].currentUserReactions).toEqual(['❤️']);
   });
 
   it('before cursor: hasMore=true when findMany returns more than limit', async () => {
@@ -3259,18 +3255,17 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     expect(seg?.voiceSimilarityScore).toBeNull();
   });
 
-  // #4177 — la branche que ce témoin ciblait (`currentParticipantId` falsy →
-  // `userReactionsMap` reste vide → `.get(...) || []`) n'existe plus : tout
-  // le calcul de `currentUserReactions` message-level est retiré. Le champ
-  // est désormais absent INCONDITIONNELLEMENT, participant résolu ou non.
-  it('authenticated user with participant not found: currentUserReactions reste absent', async () => {
+  // #7936 — sans participant résolu, aucun lecteur à qui attribuer une
+  // réaction : `[]`, et aucune requête.
+  it('authenticated user with participant not found: currentUserReactions vaut [] sans requête', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const msg = makeMessage();
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(reply._body.data[0].currentUserReactions).toBeUndefined();
+    expect(prisma.reaction.findMany).not.toHaveBeenCalled();
+    expect(reply._body.data[0].currentUserReactions).toEqual([]);
   });
 
   // #4177 — le témoin `watchedComplete=null: ?? false fallback` qui vivait
