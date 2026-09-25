@@ -60,8 +60,17 @@ export type AdminConversationPage = {
 
 export const ADMIN_CONVERSATIONS_PAGE_SIZE = 20;
 
-export const adminUserConversationsQueryKey = (userId: string, offset: number, type: string) =>
-  ['admin', 'user', userId, 'conversations', offset, type] as const;
+/** Les tris que la passerelle sert (#7845) — `joinedAt` n'en est pas : Prisma ne trie pas une conversation par une colonne de la participation. */
+export const ADMIN_USER_CONVERSATION_SORTS = ['lastMessageAt', 'createdAt'] as const;
+export type AdminUserConversationSort = (typeof ADMIN_USER_CONVERSATION_SORTS)[number];
+
+export const adminUserConversationsQueryKey = (
+  userId: string,
+  offset: number,
+  type: string,
+  sortBy: AdminUserConversationSort = 'lastMessageAt',
+  sortOrder: 'asc' | 'desc' = 'desc',
+) => ['admin', 'user', userId, 'conversations', offset, type, sortBy, sortOrder] as const;
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
@@ -116,6 +125,8 @@ export async function loadAdminUserConversations(
     readonly userId: string;
     readonly offset: number;
     readonly type?: string;
+    readonly sortBy?: AdminUserConversationSort;
+    readonly sortOrder?: 'asc' | 'desc';
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminConversationPage>> {
@@ -125,6 +136,8 @@ export async function loadAdminUserConversations(
     // Un filtre VIDE n'est pas un filtre : `where.type = ''` ne rendrait
     // aucune conversation, alors que l'appelant en voulait toutes.
     ...(params.type === undefined || params.type === '' ? {} : { type: params.type }),
+    ...(params.sortBy === undefined ? {} : { sortBy: params.sortBy }),
+    ...(params.sortOrder === undefined ? {} : { sortOrder: params.sortOrder }),
   });
 
   const result = await params.transport.request<unknown>({

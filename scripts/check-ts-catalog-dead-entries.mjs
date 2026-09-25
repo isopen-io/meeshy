@@ -338,7 +338,13 @@ export const parseCatalogBlock = (blockLines) => {
 // compte (`admin.usersByUserIdActivity`, `admin.anonymousUsers`…) : ce lot
 // n'ouvre pas la migration du web vers le catalogue. Valeur MESURÉE sur la
 // branche du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 460;
+// 460 → 463 (#7845, 2026-09-25) : `admin.usersByUserIdStats`,
+// `admin.usersByUserIdPreferences` et `admin.usersByUserIdPreferencesByCategory`,
+// générées depuis `route-manifest.json`. La page membre de l'espace
+// d'administration web les appelle par adresse écrite, comme ses lectures
+// admin voisines déjà au compte ; aucun écran d'administration iOS ne les
+// appelle. Valeur MESURÉE sur la branche du 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 463;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
