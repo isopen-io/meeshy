@@ -34,6 +34,7 @@ final class ComposerLiquidGlassPanelSourceGuardTests: XCTestCase {
             ("var textInputField: some View {", "adaptiveLiquidGlass(in: Self.fieldShape"),
             ("var attachButton: some View {", "adaptiveLiquidGlass(in: Circle()"),
             ("var recordingBar: some View {", "adaptiveLiquidGlass(in: Self.fieldShape"),
+            ("var quickEmojiButtons: some View {", "adaptiveLiquidGlass(in: Circle()"),
         ]
         for expectation in expectations {
             let block = try Self.block(named: expectation.anchor, in: source)
@@ -52,6 +53,22 @@ final class ComposerLiquidGlassPanelSourceGuardTests: XCTestCase {
         let source = try Self.source()
         XCTAssertFalse(source.contains(".glassEffect("),
                        "le verre passe par l'atome adaptatif du SDK, jamais par `glassEffect` en direct")
+    }
+
+    /// Directive porteur 2026-09-25 : le bouton d'envoi revient dès qu'il y a
+    /// du texte. Les cadres à mots ne disparaissent pas pour autant : un appui
+    /// long sur ce bouton les ouvre, et VoiceOver reçoit une action nommée.
+    func test_sendButton_opensTheTextStickersOnLongPress() throws {
+        let block = try Self.block(named: "var sendButton: some View {", in: try Self.source())
+        XCTAssertTrue(block.contains("LongPressGesture"), "l'appui long sur le bouton d'envoi ouvre les cadres à mots")
+        XCTAssertTrue(block.contains("showTextStickerSheet = true"), "l'appui long ouvre la feuille des cadres à mots")
+        XCTAssertTrue(block.contains("accessibilityAction(named:"), "VoiceOver atteint les cadres à mots par une action nommée")
+    }
+
+    func test_textStickerPastille_isGone() throws {
+        let source = try Self.source()
+        XCTAssertFalse(source.contains("ComposerTextStickerButton("),
+                       "la pastille qui remplaçait le bouton d'envoi est retirée (directive 2026-09-25)")
     }
 
     // MARK: - Extraction
