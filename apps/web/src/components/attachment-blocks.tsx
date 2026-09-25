@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useMemo, useState } from 'react';
 
 
 import type { Attachment } from '@/lib/api/types';
@@ -12,7 +12,13 @@ import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
-import { activeSegmentIndex, segmentSeekTarget } from '@/lib/view/transcript-karaoke';
+import {
+  karaokeSegments,
+  karaokeTone,
+  segmentSeekTarget,
+  type KaraokeTone,
+} from '@/lib/view/transcript-karaoke';
+import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -56,6 +62,31 @@ const MediaViewer = lazy(() => import('./media-viewer'));
 
 /** [0..1] → pourcentage arrondi au DIXIÈME — `MediaConsumptionProgressBar.swift:23-41`. */
 const consumptionPercentOf = (fraction: number): number => Math.round(fraction * 1000) / 10;
+
+/**
+ * LE PASSAGE PRONONCÉ, GRAS ET À L'ENCRE PRIMAIRE (#7911) — miroir de
+ * `inlineSegmentColor` (`AudioPlayerView+Transcription.swift:562`) : l'actif
+ * ressort en gras et en couleur de marque sur un voile léger, les passés
+ * restent pleins, les suivants gardent l'opacité de la transcription.
+ *
+ * L'encre SUIT LE FOND : `--color-karaoke-ink` vaut indigo-600 en clair,
+ * indigo-300 en sombre (`app.css`), et BLANC dans la bulle envoyée, peinte en
+ * indigo-500 (`bubble.tsx`) — l'indigo y disparaîtrait sur lui-même. Le voile
+ * se dérive de l'encre, jamais d'une seconde couleur.
+ */
+const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string | number>>>> = {
+  idle: { opacity: TRANSCRIPT_TEXT_OPACITY },
+  upcoming: { opacity: TRANSCRIPT_TEXT_OPACITY },
+  past: { opacity: 1 },
+  active: {
+    opacity: 1,
+    fontWeight: 700,
+    color: 'var(--color-karaoke-ink)',
+    backgroundColor: 'color-mix(in srgb, var(--color-karaoke-ink) 14%, transparent)',
+    boxDecorationBreak: 'clone',
+    WebkitBoxDecorationBreak: 'clone',
+  },
+};
 
 function VoiceAttachment({
   attachment,
@@ -104,32 +135,46 @@ function VoiceAttachment({
   const uiLanguage = currentInterfaceLanguage();
 
   /*
-   LE KARAOKÉ NE S'ALLUME QUE SUR LA LANGUE D'ORIGINE (#6306).
+   LE KARAOKÉ SUIT LA PISTE QU'ON ENTEND (#6306, #7911).
 
-   `Attachment.transcription.segments` horodate le texte ORIGINAL. Quand le
-   Prisme sert une TRADUCTION, les bornes ne décrivent plus le texte affiché :
-   surligner « segment 2 » y désignerait des mots qui ne correspondent à rien.
-   Un karaoké faux est pire qu'aucun karaoké — il affirme suivre la voix.
+   Les bornes viennent de la piste JOUÉE : la transcription pour l'original,
+   `AttachmentTranslation.segments` pour une piste traduite, et à défaut les
+   mots répartis sur la durée. `karaokeSegments` refuse tout karaoké quand le
+   texte servi et la piste ne parlent pas la même langue — un karaoké faux est
+   pire qu'aucun karaoké, il affirme suivre la voix.
 
-   La garde compare donc la langue SERVIE à celle de la transcription. Le jour
-   où la passerelle horodatera aussi les traductions, c'est cette comparaison
-   qui s'ouvrira, pas le rendu.
-  */
-  /*
    `AttachmentTranscription` est une UNION — audio, vidéo, document, image — et
-   seules les deux premières horodatent. Le typecheck l'a dit avant le rendu :
-   `Property 'segments' does not exist on type 'DocumentTranscription'`. On
-   n'élargit donc pas le type de la charge ; on interroge la forme, une fois,
-   à l'endroit qui en a besoin.
+   seules les deux premières horodatent : la loi interroge la forme, elle
+   n'élargit pas le type de la charge.
+
+   La durée vient de l'élément dès qu'il la connaît (la piste traduite n'a pas
+   la durée de l'original), sinon de celle que la piste déclare.
   */
-  const transcription = attachment.transcription;
-  const timed =
-    transcription !== undefined && 'segments' in transcription ? transcription.segments : undefined;
-  const segments =
-    timed !== undefined && timed.length > 0 && transcript.language === transcription?.language
-      ? timed
-      : undefined;
-  const activeSegment = segments === undefined ? null : activeSegmentIndex(segments, position);
+  const declaredMs = track.durationMs ?? (track.translated ? undefined : attachment.duration) ?? 0;
+  const durationMs = duration > 0 ? duration * 1000 : declaredMs;
+  const segments = useMemo(
+    () =>
+      karaokeSegments({
+        transcription: attachment.transcription,
+        translations: attachment.translations,
+        servedText: transcript.text,
+        servedLanguage: transcript.language,
+        trackLanguage: track.language,
+        durationMs,
+      }),
+    [attachment.transcription, attachment.translations, transcript.text, transcript.language, track.language, durationMs],
+  );
+  // L'élément en ÉTAT, pas en ref : le hook du karaoké doit se réabonner quand
+  // `key={track.url}` remonte un `<audio>` neuf.
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const bindAudio = useCallback(
+    (element: HTMLAudioElement | null) => {
+      bind(element);
+      setAudioElement(element);
+    },
+    [bind],
+  );
+  const activeSegment = useKaraokeIndex(audioElement, segments, status === 'playing');
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -205,7 +250,7 @@ function VoiceAttachment({
           et joue la piste NEUVE. */}
       <audio
         key={track.url}
-        ref={bind}
+        ref={bindAudio}
         preload="none"
         data-track-language={track.language}
         className="hidden"
@@ -298,29 +343,33 @@ function VoiceAttachment({
           className="text-title"
           /* `TRANSCRIPT_TEXT_OPACITY`, jamais `META_TEXT_OPACITY` (revue
              #5805) : la transcription est le CONTENU servi par le Prisme, et
-             l'opacité de l'heure la faisait tomber à 3,74:1 en schéma clair. */
-          style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}
+             l'opacité de l'heure la faisait tomber à 3,74:1 en schéma clair.
+             Segmentée, l'opacité descend sur CHAQUE mot (#7911) : posée sur
+             le bloc, elle plafonnait le segment actif — une opacité se
+             multiplie, un enfant ne peut pas être plus opaque que son parent. */
+          {...(segments === undefined ? { style: { opacity: TRANSCRIPT_TEXT_OPACITY } } : {})}
           {...(lang !== undefined ? { lang } : {})}
         >
           {segments === undefined
             ? transcript.text
-            : segments.map((segment, i) => (
-                <span
-                  key={`${segment.startMs}-${i}`}
-                  onClick={() => {
-                    const target = segmentSeekTarget(segments, i);
-                    if (target !== null) seek(target);
-                  }}
-                  className="cursor-pointer"
-                  /* Le segment prononcé reprend sa pleine opacité ; les autres
-                     gardent celle du bloc. On ne CHANGE pas la couleur — un
-                     surlignage teinté rendrait la transcription illisible en
-                     schéma clair, où l'opacité fait déjà tout le contraste. */
-                  style={i === activeSegment ? { opacity: 1, fontWeight: 500 } : undefined}
-                >
-                  {segment.text}{' '}
-                </span>
-              ))}
+            : segments.map((segment, i) => {
+                const tone = karaokeTone(i, activeSegment);
+                return (
+                  <Fragment key={`${segment.startMs}-${i}`}>
+                    <span
+                      data-karaoke={tone}
+                      onClick={() => {
+                        const target = segmentSeekTarget(segments, i);
+                        if (target !== null) seek(target);
+                      }}
+                      className="cursor-pointer rounded-[4px] transition-[color,background-color,opacity] duration-150"
+                      style={KARAOKE_STYLE[tone]}
+                    >
+                      {segment.text}
+                    </span>{' '}
+                  </Fragment>
+                );
+              })}
         </p>
       ) : null}
 
