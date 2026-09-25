@@ -192,6 +192,15 @@ export function useRoute(): RouteContext {
   return context;
 }
 
+/**
+ * La route COURANTE si l'on est sous `<Routeur>`, `null` sinon — pour une pièce
+ * partagée (le cadre d'administration) qui SURLIGNE la section active quand
+ * elle le peut, et qu'un témoin monte aussi hors routeur.
+ */
+export function useOptionalRoute(): RouteContext | null {
+  return useContext(Context);
+}
+
 export function useParams<T extends string>(): ParamsOf<T> {
   return useRoute().params as ParamsOf<T>;
 }

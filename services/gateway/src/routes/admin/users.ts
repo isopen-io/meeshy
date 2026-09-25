@@ -4,7 +4,6 @@ import {
   UserRoleEnum,
   UserAuditAction,
   PaginatedUsersResponse,
-  UserFilters,
   CreateUserDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
@@ -37,6 +36,8 @@ import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
+import { registerUserProfileReadRoutes } from './user-profile-reads';
+import { userListFilters, type UserListQuery } from './user-list-filters';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -63,27 +64,6 @@ export {
   type PermissionReport,
   type SeuilReport
 } from './user-reports';
-
-// Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
-// ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
-// sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
-// silence (un 403 confirmerait l'existence du filtre) et le tri retombe sur
-// createdAt.
-const PRESENCE_SORT_KEYS: ReadonlySet<string> = new Set(['lastActiveAt', 'isOnline']);
-
-type PresenceGatedFilters = Pick<UserFilters, 'lastActiveAfter' | 'lastActiveBefore' | 'sortBy'>;
-
-function presenceGatedFilters(query: UserFilters, canViewPresence: boolean): PresenceGatedFilters {
-  const requestedSort = query.sortBy || 'createdAt';
-  if (!canViewPresence) {
-    return { sortBy: PRESENCE_SORT_KEYS.has(requestedSort) ? 'createdAt' : requestedSort };
-  }
-  return {
-    lastActiveAfter: query.lastActiveAfter ? new Date(query.lastActiveAfter) : undefined,
-    lastActiveBefore: query.lastActiveBefore ? new Date(query.lastActiveBefore) : undefined,
-    sortBy: requestedSort
-  };
-}
 
 // Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
 // chaque appel, pas capturé ici — il n'existe pas encore quand les routes
@@ -144,11 +124,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
   registerUserSessionRoutes(fastify, { userAuditService });
 
+  // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
+  // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
+  registerUserProfileReadRoutes(fastify, { userAuditService });
+
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
    */
   fastify.get<{
-    Querystring: UserFilters & { offset?: string; limit?: string };
+    Querystring: UserListQuery;
   }>('/admin/users', {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
@@ -156,18 +140,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
       const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
 
-      const filters: UserFilters = {
-        search: request.query.search,
-        role: request.query.role,
-        isActive: request.query.isActive,
-        emailVerified: request.query.emailVerified,
-        phoneVerified: request.query.phoneVerified,
-        twoFactorEnabled: request.query.twoFactorEnabled,
-        createdAfter: request.query.createdAfter ? new Date(request.query.createdAfter) : undefined,
-        createdBefore: request.query.createdBefore ? new Date(request.query.createdBefore) : undefined,
-        ...presenceGatedFilters(request.query, permissionsService.canViewPresence(viewerRole)),
-        sortOrder: request.query.sortOrder || 'desc'
-      };
+      // #7873 — la querystring arrive en CHAÎNES : `userListFilters` traduit
+      // booléens, rôle, dates et tri, et porte la loi de présence (bornes
+      // `lastActive*` et tri par présence réservés à `canViewPresence`).
+      const filters = userListFilters(request.query, permissionsService.canViewPresence(viewerRole));
 
       const pagination = validatePagination(request.query.offset, request.query.limit);
 

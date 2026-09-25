@@ -53,6 +53,12 @@ export const AnonymousUsersQuerySchema = z.object({
   limit: paginationLimit(20),
   search: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  // #7873 — une clé ou un sens inconnus retombent sur le défaut au lieu d'un
+  // 400 : le handler rejoue de toute façon la liste blanche (et la loi de
+  // présence sur `lastActiveAt`), jamais la chaîne brute vers `orderBy`.
+  sortBy: z.enum(['joinedAt', 'lastActiveAt', 'displayName']).catch('joinedAt'),
+  sortOrder: z.enum(['asc', 'desc']).catch('desc'),
+  language: z.string().trim().min(2).max(16).optional().catch(undefined),
 });
 
 export type AnonymousUsersQuery = z.infer<typeof AnonymousUsersQuerySchema>;
