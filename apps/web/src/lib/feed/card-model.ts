@@ -535,3 +535,31 @@ export function resolveFeedCardModel(
     },
   };
 }
+
+/**
+ * LA PRÉSÉANCE DU CORPS D'UNE CARTE (#6278 c, revue-correction) — miroir de
+ * l'échelle `if … else if …` de `FeedPostCard.swift:560-678`, qui ne rend
+ * JAMAIS la carte citée À CÔTÉ d'un visuel qui la répète :
+ *
+ * 1. la carte porte sa PROPRE scène ⇒ la scène SEULE (`:560`, « priorité sur
+ *    les branches repost ») — cas nominal d'une STORY repartagée, dont la
+ *    passerelle RECOPIE le document dans le repost (`PostService.repostPost`,
+ *    `isEphemeralSourceRepost`) : la carte citée peindrait la même story une
+ *    seconde fois, en vignette, juste au-dessus ;
+ * 2. elle cite une STORY ou un RÉEL ⇒ la carte citée SEULE (`:636-667`) — le
+ *    média de la carte n'est alors que la COPIE de celui de l'original ;
+ * 3. sinon ⇒ le visuel PUIS la carte citée (`:668-678`, `mediaPreview` avant
+ *    `repostView`).
+ *
+ * Une DONNÉE résolue une fois, jamais trois branches recopiées dans la vue :
+ * `media` et `scene` restent intacts au modèle (la galerie plein écran et le
+ * lecteur de réels les lisent), seule leur PEINTURE sur la carte en dépend.
+ */
+export type FeedCardBody = { readonly visual: boolean; readonly repostOf?: FeedCardRepostEmbed };
+
+export function feedCardBody(model: Pick<FeedCardModel, 'scene' | 'media' | 'repostOf'>): FeedCardBody {
+  const hasVisual = model.scene !== undefined || model.media.length > 0;
+  if (model.scene !== undefined || model.repostOf === undefined) return { visual: hasVisual };
+  if (model.repostOf.isStory || model.repostOf.isReel) return { visual: false, repostOf: model.repostOf };
+  return { visual: hasVisual, repostOf: model.repostOf };
+}

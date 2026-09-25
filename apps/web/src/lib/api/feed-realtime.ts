@@ -40,11 +40,13 @@ const objectOf = (value: unknown): Record<string, unknown> | null =>
  * dépendent — un id utilisable. Un id vide passerait les vérifications de type
  * et rendrait la carte indédoublonnable ET irretirable, d'où la longueur.
  */
-const postOf = (payload: unknown): FeedPost | null => {
-  const post = objectOf(objectOf(payload)?.post);
+const feedPostOf = (value: unknown): FeedPost | null => {
+  const post = objectOf(value);
   if (post === null) return null;
   return typeof post.id === 'string' && post.id.length > 0 ? (post as unknown as FeedPost) : null;
 };
+
+const postOf = (payload: unknown): FeedPost | null => feedPostOf(objectOf(payload)?.post);
 
 const mutationIdOf = (payload: unknown): string | null => {
   const cmid = objectOf(payload)?.clientMutationId;
@@ -73,6 +75,16 @@ const mapPosts = (
     : { ...data, pages: data.pages.map((page, index) => ({ ...page, posts: update(page.posts, index) })) };
 
 const idsOf = (data: FeedInfiniteData): readonly string[] => data.pages.flatMap((page) => page.posts.map((p) => p.id));
+
+/** Le TROISIÈME temps, partagé par `post:created` et `post:reposted` : la
+ *  carte entre en tête de la première page, et la bannière la compte. */
+const prependAndCount = (queryClient: QueryClient, data: FeedInfiniteData, incoming: FeedPost): void => {
+  queryClient.setQueryData<FeedInfiniteData>(
+    FEED_QUERY_KEY,
+    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
+  );
+  bumpNewPostCount(queryClient);
+};
 
 /**
  * `post:created` — TROIS TEMPS, dans cet ordre (`FeedViewModel.swift:1470`).
@@ -109,11 +121,7 @@ export function applyPostCreated(queryClient: QueryClient, payload: unknown): vo
     return;
   }
 
-  queryClient.setQueryData<FeedInfiniteData>(
-    FEED_QUERY_KEY,
-    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
-  );
-  bumpNewPostCount(queryClient);
+  prependAndCount(queryClient, data, incoming);
 }
 
 /**
@@ -317,11 +325,8 @@ function repostedEventOf(payload: unknown): RepostedEvent | null {
 const INSERTABLE_REPOST_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL']);
 
 function insertableRepostOf(payload: unknown): FeedPost | null {
-  const repost = objectOf(objectOf(payload)?.repost);
-  if (repost === null) return null;
-  if (typeof repost.id !== 'string' || repost.id.length === 0) return null;
-  if (typeof repost.type !== 'string' || !INSERTABLE_REPOST_TYPES.has(repost.type)) return null;
-  return repost as unknown as FeedPost;
+  const repost = feedPostOf(objectOf(payload)?.repost);
+  return repost !== null && typeof repost.type === 'string' && INSERTABLE_REPOST_TYPES.has(repost.type) ? repost : null;
 }
 
 export function applyServedRepost(queryClient: QueryClient, payload: unknown): void {
@@ -339,11 +344,7 @@ export function applyServedRepost(queryClient: QueryClient, payload: unknown): v
   if (data === undefined) return;
   if (idsOf(data).includes(incoming.id)) return;
 
-  queryClient.setQueryData<FeedInfiniteData>(
-    FEED_QUERY_KEY,
-    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
-  );
-  bumpNewPostCount(queryClient);
+  prependAndCount(queryClient, data, incoming);
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

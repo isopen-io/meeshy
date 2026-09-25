@@ -47,10 +47,10 @@ describe('performRepost — optimiste, puis la passerelle', () => {
     const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
 
     const pending = performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
-    const onFeed = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+    const onFeed = cachedOn(queryClient, FEED_QUERY_KEY);
     expect(onFeed?.isRepostedByMe).toBe(true);
     expect(onFeed?.repostCount).toBe(3);
-    const onReels = cachedOn(queryClient, reelsQueryKey('seed') as unknown as string[]);
+    const onReels = cachedOn(queryClient, reelsQueryKey('seed'));
     expect(onReels?.isRepostedByMe).toBe(true);
     expect(onReels?.repostCount).toBe(3);
 
@@ -114,7 +114,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
     const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
     expect(result).toEqual({ ok: true, notice: 'feed.post.repost.success' });
-    expect(cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[])?.repostCount).toBe(1);
+    expect(cachedOn(queryClient, FEED_QUERY_KEY)?.repostCount).toBe(1);
   });
 
   test('refus PERMANENT (403 puis 404) ⇒ rollback + issue "error"/"refused"', async () => {
@@ -125,7 +125,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: false, message: 'feed.post.repost.error', issue: 'refused' });
-      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(rolledBack?.isRepostedByMe).toBe(false);
       expect(rolledBack?.repostCount).toBe(0);
     }
@@ -144,7 +144,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: false, message: 'feed.post.repost.unconfirmed', issue: 'unconfirmed' });
-      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const rolledBack = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(rolledBack?.isRepostedByMe).toBe(false);
       expect(rolledBack?.repostCount).toBe(0);
     }
@@ -158,7 +158,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
       const result = await performRepost({ postId: 'p1', deps: gatewayDeps(queryClient, transport) });
 
       expect(result).toEqual({ ok: true });
-      const kept = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+      const kept = cachedOn(queryClient, FEED_QUERY_KEY);
       expect(kept?.isRepostedByMe).toBe(true);
       expect(kept?.repostCount).toBe(1);
     }
@@ -195,7 +195,7 @@ describe('performRepost — optimiste, puis la passerelle', () => {
 
     expect(result).toEqual({ ok: true, notice: 'feed.post.repost.success' });
     expect(requests).toHaveLength(0);
-    expect(cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[])?.isRepostedByMe).toBe(true);
+    expect(cachedOn(queryClient, FEED_QUERY_KEY)?.isRepostedByMe).toBe(true);
   });
 });
 
@@ -209,7 +209,7 @@ describe('performRepost — hors ligne et audience', () => {
 
     expect(result).toEqual({ ok: false, message: 'feed.post.repost.offline', issue: 'refused' });
     expect(requests).toHaveLength(0);
-    const untouched = cachedOn(queryClient, FEED_QUERY_KEY as unknown as string[]);
+    const untouched = cachedOn(queryClient, FEED_QUERY_KEY);
     expect(untouched?.isRepostedByMe).toBe(false);
     expect(untouched?.repostCount).toBe(0);
   });

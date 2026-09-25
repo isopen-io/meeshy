@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { DataSource } from '@/lib/api/config';
@@ -19,16 +19,14 @@ export const pageOf = (posts: readonly FeedPost[]): FeedInfiniteData => ({
   pageParams: [undefined],
 });
 
-export const seededOn = (queryKey: readonly string[], posts: readonly FeedPost[]): QueryClient => {
+export const seededOn = (queryKey: QueryKey, posts: readonly FeedPost[]): QueryClient => {
   const queryClient = new QueryClient();
-  queryClient.setQueryData(queryKey as unknown as readonly unknown[], pageOf(posts));
+  queryClient.setQueryData(queryKey, pageOf(posts));
   return queryClient;
 };
 
-export const cachedOn = (queryClient: QueryClient, queryKey: readonly string[], id = 'p1'): FeedPost | undefined =>
-  queryClient
-    .getQueryData<FeedInfiniteData>(queryKey as unknown as readonly unknown[])
-    ?.pages[0]?.posts.find((p) => p.id === id);
+export const cachedOn = (queryClient: QueryClient, queryKey: QueryKey, id = 'p1'): FeedPost | undefined =>
+  queryClient.getQueryData<FeedInfiniteData>(queryKey)?.pages[0]?.posts.find((p) => p.id === id);
 
 export const scripted = (
   respond: (req: HttpRequest) => Promise<ApiResult<unknown>>,

@@ -14,7 +14,7 @@ import { FeedSceneMosaic } from './feed-scene-mosaic';
 import { FeedSceneSurface } from './feed-scene-surface';
 import { RichText } from './rich-text';
 import { PrismPastille } from './message-blocks';
-import type { FeedCardMedia, FeedCardModel, FeedCardText } from '@/lib/feed/card-model';
+import { feedCardBody, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
@@ -608,7 +608,11 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // — le répéter ici peindrait deux fois la même phrase sur la même carte.
   // Une carte à SCÈNE ne monte pas `FeedMediaCarousel` et ne descend jamais le
   // texte du post en légende (`resolveSceneCaption`) : son texte reste ICI.
-  const soleMedia = model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
+  // La PRÉSÉANCE iOS du corps (`feedCardBody`) : la scène, le média et la
+  // carte citée ne se peignent jamais en doublon. Le repli de légende ne vaut
+  // que si le média est effectivement PEINT.
+  const body = feedCardBody(model);
+  const soleMedia = body.visual && model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
   const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
 
   return (
@@ -629,18 +633,10 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
           <FeedPostText text={bodyText} mentions={model.validatedMentions} />
         </FeedPostOpenZone>
       ) : null}
-      {/* LA PUBLICATION CITÉE (#6278 c) — miroir `FeedPostCard.swift:822-910`.
-          Sa propre porte (`/post/<original>`) reste HORS de `FeedPostOpenZone`
-          : deux `<a>` de destinations différentes ne s'imbriquent pas. */}
-      {model.repostOf !== undefined ? (
-        <div className="px-3">
-          <FeedRepostEmbed repost={model.repostOf} />
-        </div>
-      ) : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
-          doit plus rester nu sous son texte (D-78) : la condition porte donc
+          doit plus rester nu sous son texte (D-78) : `body.visual` porte donc
           sur `model.scene` autant que sur `model.media.length`. */}
-      {model.scene !== undefined || model.media.length > 0 ? (
+      {body.visual ? (
         <div className="px-3">
           <FeedPostVisual
             model={model}
@@ -649,6 +645,15 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
             {...(onOpenScene !== undefined ? { onOpenScene } : {})}
             {...(registerScene !== undefined ? { registerScene } : {})}
           />
+        </div>
+      ) : null}
+      {/* LA PUBLICATION CITÉE (#6278 c) — miroir `FeedPostCard.swift:822-910`,
+          APRÈS le visuel (`:668-678`). Sa propre porte (`/post/<original>`)
+          reste HORS de `FeedPostOpenZone` : deux `<a>` de destinations
+          différentes ne s'imbriquent pas. */}
+      {body.repostOf !== undefined ? (
+        <div className="px-3">
+          <FeedRepostEmbed repost={body.repostOf} />
         </div>
       ) : null}
       <div className="px-3">

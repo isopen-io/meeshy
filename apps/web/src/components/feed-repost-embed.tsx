@@ -1,5 +1,7 @@
 import type { FeedCardRepostEmbed } from '@/lib/feed/card-model';
 import { Avatar } from './avatar';
+import { GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import { PrismPastille } from './message-blocks';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -100,8 +102,11 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
           />
         </div>
       ) : null}
+      {/* La vignette est DÉCORATIVE (`repostMediaPreview`, `.accessibilityHidden(true)`,
+          `FeedPostCard+Media.swift:77-95`) : la porte annonce déjà l'original.
+          « +N » : capsule noire à 60 %, décalée de 8 — mêmes valeurs qu'iOS. */}
       {repost.thumbnailSrc !== undefined ? (
-        <div className="relative">
+        <div className="relative" aria-hidden="true">
           <img
             src={repost.thumbnailSrc}
             alt=""
@@ -112,16 +117,25 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
           {repost.moreCount !== undefined ? (
             <span
               data-feed-repost-embed-more
-              className="absolute bottom-1.5 right-1.5 rounded-chip px-1.5 py-0.5 text-check font-semibold text-white"
-              style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+              className="absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-check font-bold text-white"
+              style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
             >
               +{repost.moreCount}
             </span>
           ) : null}
         </div>
       ) : null}
-      <span className="text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-        {translate(language, 'feed.post.action.like')} {repost.likeCount}
+      {/* UN CŒUR ET UN CHIFFRE (`FeedPostCard.swift:878-889`, `heart.fill`) —
+          jamais le verbe « Aimer » peint en toutes lettres, qui se lirait comme
+          un bouton que cette carte n'offre pas. Le nom accessible du glyphe
+          reste celui de la rangée d'actions : « Aimer 24 ». */}
+      <span
+        data-feed-repost-embed-likes
+        className="flex items-center gap-1 text-check font-medium"
+        style={{ color: 'var(--color-ios-ink-3)' }}
+      >
+        <GlyphSvg glyph={FEED_GLYPHS.heartFill} size={12} title={translate(language, 'feed.post.action.like')} />
+        {repost.likeCount}
       </span>
     </div>
   );

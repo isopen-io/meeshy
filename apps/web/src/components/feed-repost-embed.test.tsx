@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { POST_REPOST } from '@/lib/api/fixtures-feed';
+import { POST_REPOST, POST_SCENE_TEXT } from '@/lib/api/fixtures-feed';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 
 import { FeedPostCard } from './feed-post-card';
@@ -173,6 +173,60 @@ describe('FeedPostCard — la publication citée d’un repost simple', () => {
       }),
     );
     expect(container.querySelector('[data-feed-repost-embed-more]')?.textContent).toBe('+2');
+  });
+
+  /**
+   * LA PRÉSÉANCE DU CORPS (revue-correction #6278 c) — iOS ne rend JAMAIS la
+   * carte citée À CÔTÉ d'un visuel qui la répète (`FeedPostCard.swift:560-678`,
+   * échelle `if … else if …`). La passerelle RECOPIE le contenu d'une source
+   * éphémère dans le repost (`PostService.repostPost`, `isEphemeralSourceRepost`) :
+   * sans cette préséance, une story repartagée se peignait DEUX fois — la scène
+   * recopiée, puis la vignette de l'original juste au-dessus.
+   */
+  test('la carte porte sa PROPRE scène ⇒ la scène seule, aucune carte citée (iOS :560, « priorité sur les branches repost »)', () => {
+    mount({ ...POST_SCENE_TEXT, repostOf: { id: 'story-1', type: 'STORY', author: { id: 'u9', displayName: 'Yann Petit' } } }, ['fr', 'en']);
+
+    expect(container.querySelector('[data-feed-scene-box]')).not.toBeNull();
+    expect(container.querySelector('[data-feed-repost-embed]')).toBeNull();
+  });
+
+  test('une STORY citée sans scène ⇒ la carte citée SEULE, jamais le média recopié à côté (iOS :636-647)', () => {
+    const snapshot = { id: 'm-copy', fileUrl: 'story.jpg', thumbnailUrl: 'story-thumb.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920 };
+    mount(post({ media: [snapshot], repostOf: { id: 'story-2', type: 'STORY', author: { id: 'u9' }, media: [{ ...snapshot, id: 'm-orig' }] } }));
+
+    expect(container.querySelector('[data-feed-repost-embed]')).not.toBeNull();
+    expect(container.querySelector('[data-feed-media]')).toBeNull();
+  });
+
+  test('un POST cité ⇒ le visuel de la carte PUIS la carte citée, dans cet ordre (iOS :668-678)', () => {
+    mount(
+      post({
+        content: 'Regardez',
+        originalLanguage: 'fr',
+        media: [{ id: 'm-own', fileUrl: 'own.jpg', mimeType: 'image/jpeg', width: 800, height: 800 }],
+        repostOf: { id: 'orig-own', type: 'POST', author: { id: 'u9' } },
+      }),
+    );
+
+    const media = container.querySelector('[data-feed-media]');
+    const embed = container.querySelector('[data-feed-repost-embed]');
+    expect(media).not.toBeNull();
+    expect(embed).not.toBeNull();
+    expect(media!.compareDocumentPosition(embed!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  /** Le compte de « j'aime » de l'original est un CŒUR suivi du chiffre
+   * (`FeedPostCard.swift:878-889`, `heart.fill`) — jamais le VERBE « Aimer »
+   * peint en toutes lettres, qui se lit comme un bouton que la carte n'offre
+   * pas. Le nom accessible reste celui de la rangée d'actions (« Aimer 24 »). */
+  test('le compte de « j’aime » cité est un cœur et un chiffre — jamais le verbe peint', () => {
+    mount(POST_REPOST, ['fr', 'en']);
+
+    const likes = container.querySelector('[data-feed-repost-embed-likes]');
+    expect(likes).not.toBeNull();
+    expect(likes?.querySelector('svg')).not.toBeNull();
+    expect(likes?.textContent?.trim()).toBe('24');
+    expect(likes?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Aimer');
   });
 
   test('sans vignette dédiée, une vidéo SEULE ne rend aucune image', () => {

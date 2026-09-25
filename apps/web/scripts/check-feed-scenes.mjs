@@ -324,9 +324,11 @@ async function runScheme(colorScheme) {
 
   /* ── post-repost : la carte CITÉE d'un repost simple (#6278 c) ───────── */
   // `POST_REPOST.repostOf` — original en espagnol, traduit en ANGLAIS
-  // seulement : sous le prisme du lecteur (['fr','en'], `fr` en rang 1 sans
-  // traduction disponible, `en` en rang 4 servi par la locale du navigateur
-  // ici en 'en-US') le corps cité sert le rang 2, jamais l'espagnol.
+  // seulement. Le prisme du lecteur de ce gate est ['fr','en'] : `fr`, la
+  // langue de l'app (rang 1), n'a pas de traduction ; `en` vient de la locale
+  // du navigateur 'en-US' (4ᵉ priorité, 2ᵉ langue du tableau). Le corps cité
+  // sert donc l'anglais — une langue AUTRE que la première —, jamais
+  // l'espagnol d'origine.
   await page.waitForSelector('[data-feed-card-id="post-repost"] [data-feed-repost-embed]');
   const repostEmbed = await page.evaluate(() => {
     const carte = document.querySelector('[data-feed-card-id="post-repost"]');
@@ -342,6 +344,9 @@ async function runScheme(colorScheme) {
       openHref: open?.getAttribute('href') ?? null,
       openLabel: open?.getAttribute('aria-label') ?? null,
       radius: embed === null ? null : getComputedStyle(embed).borderRadius,
+      likes: embed?.querySelector('[data-feed-repost-embed-likes]')?.textContent?.trim() ?? null,
+      likesGlyph: embed?.querySelector('[data-feed-repost-embed-likes] svg') !== null,
+      duplicated: carte?.querySelector('[data-feed-media], [data-feed-scene-box]') !== null,
     };
   });
   check(
@@ -367,6 +372,15 @@ async function runScheme(colorScheme) {
     `[${colorScheme}] post-repost : nom accessible attendu « Original post by Yann Petit » — reçu « ${repostEmbed.openLabel} »`,
   );
   check(repostEmbed.radius === '14px', `[${colorScheme}] post-repost : rayon attendu 14px (--ios-radius-repost-embed) — reçu "${repostEmbed.radius}"`);
+  // UN CŒUR ET UN CHIFFRE (`FeedPostCard.swift:878-889`) — jamais le verbe
+  // « Like » peint en toutes lettres.
+  check(
+    repostEmbed.likesGlyph && repostEmbed.likes === '24',
+    `[${colorScheme}] post-repost : compte de « j'aime » cité attendu « ♥ 24 » — reçu « ${repostEmbed.likes} » (glyphe ${repostEmbed.likesGlyph})`,
+  );
+  // LA PRÉSÉANCE iOS (`feedCardBody`) : un repost SIMPLE sans média propre
+  // ne peint AUCUN visuel à côté de la carte citée.
+  check(!repostEmbed.duplicated, `[${colorScheme}] post-repost : un visuel est peint À CÔTÉ de la carte citée`);
 
   /* ── Contre-épreuve : prefers-reduced-motion ⇒ aucune lecture ────────── */
   await context.close();

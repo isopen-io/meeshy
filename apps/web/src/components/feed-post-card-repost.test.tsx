@@ -2,7 +2,8 @@ import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { FEED_QUERY_KEY } from '@/lib/api/feed';
-import type { FeedInfiniteData } from '@/lib/api/feed-pages';
+import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
+import { POST_IMAGE_FR } from '@/lib/api/fixtures-feed';
 import type { ApiResult } from '@/lib/api/http';
 import { performRepost, type RepostResult } from '@/lib/api/publication-repost';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
@@ -39,6 +40,12 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
 
   const NOW = new Date('2026-09-25T12:00:00.000Z');
 
+  /** UNE CARTE DE FIXTURE (`POST_IMAGE_FR`, le corpus du Flux) — jamais un
+   * objet écrit pour le témoin : la carte qu'on clique est celle que l'écran
+   * sert sous `VITE_DATA_SOURCE=fixtures`, seuls l'état « par moi » et le
+   * compte de départ sont posés. */
+  const CARD: FeedPost = POST_IMAGE_FR;
+
   /** LE PONT ENTRE LE CACHE et la carte — lit `FEED_QUERY_KEY` par
    * `useQuery` (`enabled: false` : aucune requête, la seule source est le
    * cache que le test sème et que `performRepost` bascule), résout le
@@ -74,18 +81,16 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
   const mount = async (deps: ReturnType<typeof gatewayDeps>, results: RepostResult[]) =>
     mounter.mount(
       <QueryClientProvider client={deps.queryClient}>
-        <Host postId="p1" deps={deps} results={results} />
+        <Host postId={CARD.id} deps={deps} results={results} />
       </QueryClientProvider>,
     );
 
   const repostButton = (host: HTMLElement) => host.querySelector('button[data-feed-gesture="repost"]') as HTMLButtonElement | null;
 
   test('clic ⇒ `aria-pressed=true` et le compte +1 AVANT la réponse — puis retour sur un refus 403', async () => {
-    const queryClient = seededOn(FEED_QUERY_KEY as unknown as string[], [
-      { id: 'p1', type: 'POST', createdAt: '2026-09-25T11:00:00.000Z', content: 'Bonjour', originalLanguage: 'fr', isRepostedByMe: false, repostCount: 5 },
-    ]);
+    const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, isRepostedByMe: false, repostCount: 5 }]);
     let release: (r: ApiResult<unknown>) => void = () => undefined;
-    const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
+    const { requests, transport } = scripted(() => new Promise((resolve) => (release = resolve)));
     const results: RepostResult[] = [];
 
     const host = await mount(gatewayDeps(queryClient, transport), results);
@@ -98,6 +103,8 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
     // que le tour synchrone de `performRepost`, le transport reste en vol.
     expect(repostButton(host)?.getAttribute('aria-pressed')).toBe('true');
     expect(repostButton(host)?.textContent).toContain('6');
+    // LA ROUTE RÉELLE (`routes/posts/interactions.ts:819`), en vol.
+    expect(requests.map((r) => `${r.method} ${r.path}`)).toEqual([`POST /api/v1/posts/${CARD.id}/repost`]);
 
     release({ ok: false, status: 403, error: 'refusé' });
     await mounter.settle();
@@ -111,9 +118,7 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
   });
 
   test('clic ⇒ succès 201 — l’optimiste RESTE, la notice est celle du succès', async () => {
-    const queryClient = seededOn(FEED_QUERY_KEY as unknown as string[], [
-      { id: 'p1', type: 'POST', createdAt: '2026-09-25T11:00:00.000Z', content: 'Bonjour', originalLanguage: 'fr', isRepostedByMe: false, repostCount: 5 },
-    ]);
+    const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, isRepostedByMe: false, repostCount: 5 }]);
     const { transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));
     const results: RepostResult[] = [];
 
@@ -126,9 +131,7 @@ describe('FeedPostCard — repartager : la carte se repeint depuis le cache', ()
   });
 
   test('le CACHE seed initial se peint tel quel, sans qu’aucun clic n’ait eu lieu (cache-first)', async () => {
-    const queryClient = seededOn(FEED_QUERY_KEY as unknown as string[], [
-      { id: 'p1', type: 'POST', createdAt: '2026-09-25T11:00:00.000Z', content: 'Bonjour', originalLanguage: 'fr', isRepostedByMe: true, repostCount: 9 },
-    ]);
+    const queryClient = seededOn(FEED_QUERY_KEY, [{ ...CARD, isRepostedByMe: true, repostCount: 9 }]);
     const { transport } = scripted(async () => ({ ok: true, status: 201, data: {} }));
 
     const host = await mount(gatewayDeps(queryClient, transport), []);
