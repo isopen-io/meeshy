@@ -78,7 +78,31 @@ export type FeedMedia = {
   readonly order?: number | null;
 };
 
-export type FeedRepostOf = { readonly author?: { readonly username?: string | null } | null };
+/**
+ * L'ORIGINAL D'UNE REPUBLICATION (#6278 c) — la forme que `repostOfInclude`
+ * sert (`services/gateway/src/services/posts/postIncludes.ts:236-270`),
+ * réduite à ce que la CARTE CITÉE peint : auteur, corps (Prisme), médium
+ * (POST/REEL/STORY/STATUS — la puce et le clic distinguent le repost d'un
+ * réel de celui d'une story, § `FeedPostCard.swift:822-910`), une vignette et
+ * le compte de « j'aime » de l'ORIGINAL (iOS n'affiche que celui-ci sur la
+ * carte imbriquée, jamais les quatre autres compteurs).
+ */
+export type FeedRepostOf = {
+  readonly id?: string;
+  readonly type?: string;
+  readonly content?: string | null;
+  readonly originalLanguage?: string | null;
+  readonly translations?: unknown;
+  readonly moodEmoji?: string | null;
+  readonly createdAt?: string | Date;
+  readonly likeCount?: number | null;
+  /** `id` OPTIONNEL, à la différence de `FeedPost.author` — le seul champ que
+   * l'ANCIENNE forme de `FeedRepostOf` exposait (`repostOfHandle`, avant
+   * #6278 c) ne le portait pas, et les fixtures qui la peuplaient n'en
+   * fournissent toujours aucun. */
+  readonly author?: (Omit<FeedAuthor, 'id'> & { readonly id?: string }) | null;
+  readonly media?: readonly FeedMedia[] | null;
+};
 
 /**
  * `X-Canvas-Caps: 3` (#6514) — sans cet en-tête, la passerelle traite le

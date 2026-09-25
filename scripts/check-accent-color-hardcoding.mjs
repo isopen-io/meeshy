@@ -126,8 +126,18 @@
 // lieu de lui répondre. Le §ADMITTED reste donc volontairement étroit, et
 // c'est bien ici — dans le registre daté qu'il exige — que l'appel se
 // justifie. Aucun littéral ne bouge (118).
+//
+// 2026-09-25 (#7977, Refs #7881) — variables inconnues 433 → 434. UN seul
+// appel neuf : `FocalQuoteRail`, le filet de citation désormais PARTAGÉ par
+// toutes les citations de Script et de Focal (porteur, 2026-09-25), carte de
+// story comprise. Sa couleur EST la règle : l'accent de la conversation
+// (`accentHex`) quand la citation est de moi, sinon la couleur d'auteur que
+// le SDK a déjà résolue (`ReplyReference.authorColor`). La propriété s'appelle
+// `colorHex` parce qu'elle porte l'un OU l'autre ; la nommer `accentColor`
+// mentirait sur la moitié des cas. Même raisonnement que #6793 ci-dessus :
+// relever plutôt que déplacer l'appel. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 433;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 434;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

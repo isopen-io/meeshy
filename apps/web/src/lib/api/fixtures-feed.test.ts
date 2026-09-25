@@ -76,8 +76,26 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
     expect(resolveMosaicLayout(POST_HERO.storyEffects)).toBe('hero');
   });
 
-  test('POST_REPOST porte l’attribution de republication', () => {
-    expect(POST_REPOST.repostOf?.author?.username).toBe('yann.petit');
+  /**
+   * `POST_REPOST.repostOf` À LA FORME RÉELLE de `repostOfInclude` (#6278 c,
+   * G3/T3b) — l'ANCIENNE fixture ne portait que `author.username`, et la
+   * carte citée rendait « yann.petit · Aimer 0 » : sans contenu, sans
+   * vignette, NON cliquable, sans rang de Prisme à descendre. `translations.fr`
+   * reste ABSENT : un rang 2 possible (anglais), jamais le rang 1.
+   */
+  test('POST_REPOST.repostOf a la forme de `repostOfInclude`', () => {
+    const repostOf = POST_REPOST.repostOf;
+    expect(repostOf?.id).toBe('post-repost-original');
+    expect(repostOf?.type).toBe('POST');
+    expect(repostOf?.originalLanguage).toBe('es');
+    expect((repostOf?.translations as Record<string, { text: string }>)?.en?.text).toBe('Our sales grew 12% this quarter.');
+    expect((repostOf?.translations as Record<string, unknown>)?.fr).toBeUndefined();
+    expect(repostOf?.author?.id).toBeDefined();
+    expect(repostOf?.author?.displayName).toBe('Yann Petit');
+    expect(repostOf?.author?.username).toBe('yann.petit');
+    expect(repostOf?.media?.[0]?.thumbnailUrl).toBeDefined();
+    expect(repostOf?.likeCount).toBe(24);
+    expect(repostOf?.createdAt).toBeDefined();
   });
 
   test('REEL_PORTRAIT est un REEL vidéo en portrait, dimensionné', () => {

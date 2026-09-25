@@ -140,7 +140,7 @@ type PreviewMessage = {
   messageSource?: string | null;
   effectFlags?: number | null;
   forwardedFromId?: string | null;
-  sender?: { displayName?: string | null; user?: { displayName?: string | null } | null } | null;
+  sender?: { displayName?: string | null; userId?: string | null; user?: { displayName?: string | null } | null } | null;
   attachments?: readonly PreviewMediaAttachmentInput[];
   _count?: { attachments?: number } | null;
 };

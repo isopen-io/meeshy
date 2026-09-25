@@ -65,11 +65,10 @@ function messageTypeOf(attachments: readonly LastMessagePreviewAttachment[]): Me
  * `ConversationUpdatedEventData` : pas de pièce jointe déclarée ⇒ pas de
  * pièce jointe, pas flouté déclaré ⇒ pas flouté).
  *
- * `sender` — SEUL le `displayName` (motif `rawMessageFromSocket`, § doc-
- * comment ci-dessus : le cast est justifié par les deux seuls lecteurs de
- * `message.sender` sur une rangée de liste, `displayName` et `avatar` — ici
- * seul le premier est transporté). Absent si `lastMessageSenderName` ne l'est
- * pas (tri-état, jamais un nom fabriqué).
+ * `sender` — le `displayName` et le `userId` servis (`servedSender`, #7978 :
+ * le composeur décide « Vous » sur `userId`). Le cast est justifié par les
+ * seuls lecteurs de `message.sender` sur une rangée de liste. Absent si la
+ * charge ne porte ni l'un ni l'autre (tri-état, jamais un nom fabriqué).
  *
  * `createdAt`/`timestamp` — `lastMessageAt`, chaîne ISO gardée TELLE QUELLE
  * (D-26) ; repli sur `updatedAt` (le SEUL horodatage que le contrat garantit
@@ -100,9 +99,7 @@ export function neutralLastMessageFromPreview(data: ConversationUpdatedEventData
     ...(data.lastMessageExpiresAt === undefined || data.lastMessageExpiresAt === null
       ? {}
       : { expiresAt: data.lastMessageExpiresAt as unknown as Date }),
-    ...(data.lastMessageSenderName === undefined || data.lastMessageSenderName === null
-      ? {}
-      : { sender: { displayName: data.lastMessageSenderName } as unknown as Participant }),
+    ...servedSender(data),
     ...(attachments.length === 0 ? {} : { attachments: attachments as unknown as Message['attachments'] }),
   } as unknown as Message;
 }
@@ -299,9 +296,43 @@ function refreshedLastMessage(known: Message, described: Message, data: Conversa
     ...(data.lastMessagePreview === undefined || data.lastMessagePreview === null ? {} : { content: data.lastMessagePreview }),
     ...(described.expiresAt === undefined ? {} : { expiresAt: described.expiresAt }),
     ...(described.attachments === undefined ? {} : { attachments: described.attachments }),
-    ...(data.lastMessageSenderName === undefined || data.lastMessageSenderName === null || kept.sender !== undefined
-      ? {}
-      : { sender: described.sender as Message['sender'] }),
+    ...keptSenderWithIdentity(kept.sender, described.sender),
   } as Message;
+}
+
+/**
+ * L'AUTEUR SERVI (#7978) — son nom (`lastMessageSenderName`) et son identité
+ * UTILISATEUR (`lastMessageSenderUserId`), la seule sur laquelle la liste
+ * décide « Vous » : `senderId` est un `Participant.id`, jamais l'id du
+ * lecteur. Chaque moitié absente reste absente, jamais fabriquée.
+ */
+function servedSender(data: ConversationUpdatedEventData): { readonly sender?: Participant } {
+  const name = data.lastMessageSenderName ?? null;
+  const userId = data.lastMessageSenderUserId ?? null;
+  if (name === null && userId === null) return {};
+  return {
+    sender: {
+      ...(name === null ? {} : { displayName: name }),
+      ...(userId === null ? {} : { userId }),
+    } as unknown as Participant,
+  };
+}
+
+/**
+ * L'auteur d'un MÊME message ne change jamais : la ligne garde ce qu'elle en
+ * savait (avatar, nom) et n'y ajoute que l'identité utilisateur servie quand
+ * elle lui manquait — une traduction qui aboutit prouve alors « Vous » sur une
+ * ligne composée par un recalcul antérieur.
+ */
+function keptSenderWithIdentity(
+  known: Message['sender'] | undefined,
+  served: Message['sender'] | undefined,
+): { readonly sender?: Message['sender'] } {
+  if (served === undefined) return {};
+  if (known === undefined || known === null) return { sender: served };
+  const servedUserId = (served as { readonly userId?: string }).userId;
+  const knownUserId = (known as { readonly userId?: string | null }).userId;
+  if (servedUserId === undefined || (knownUserId !== undefined && knownUserId !== null)) return {};
+  return { sender: { ...known, userId: servedUserId } as Message['sender'] };
 }
 
