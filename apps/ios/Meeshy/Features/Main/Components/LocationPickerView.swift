@@ -32,6 +32,19 @@ nonisolated enum MapPinLift {
     }
 }
 
+/// **Ce que la carte cherche, et où** (#7922, directive porteur 2026-09-25 :
+/// « chercher les éléments autour de soi, et un accès à la carte pour choisir
+/// une adresse ou un lieu, monument nommé »).
+nonisolated enum LocationSearchPlan {
+    /// « Autour de moi » : les lieux nommés dans ce rayon, les plus proches
+    /// d'abord.
+    static let nearbyRadiusMeters: CLLocationDistance = 1_000
+    /// Une recherche tapée regarde d'abord autour de l'auteur, sans s'y
+    /// enfermer : un monument de la ville voisine doit rester trouvable.
+    static let searchRegionMeters: CLLocationDistance = 20_000
+    static let maxResults = 8
+}
+
 struct LocationPickerView: View {
     /// Couleur PRIMAIRE de la conversation — les appelants passent
     /// `conversation.accentColor`, qui est `colorPalette.primary`.
@@ -51,6 +64,7 @@ struct LocationPickerView: View {
     @StateObject private var viewModel = LocationPickerModel()
     @ObservedObject private var preferencesStore = LocationSharingPreferencesStore.shared
     @State private var searchText = ""
+    @State private var searchTask: Task<Void, Never>?
     @State private var mapTarget: MapTarget?
     @State private var didCenterOnUser = false
     @State private var isShowingSettings = false
@@ -342,8 +356,40 @@ struct LocationPickerView: View {
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .onSubmit { viewModel.search(query: searchText) }
+                // La recherche suit la frappe, 300 ms après la dernière touche :
+                // assez pour ne pas lancer une requête par lettre, assez peu
+                // pour que la liste réponde avant qu'on cherche « Entrée ».
+                .adaptiveOnChange(of: searchText) { _, requête in
+                    searchTask?.cancel()
+                    // Un résultat choisi écrit son nom dans le champ : ce n'est
+                    // pas une nouvelle requête, la liste ne doit pas se rouvrir.
+                    guard requête != viewModel.selectedName else { return }
+                    searchTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        guard !Task.isCancelled else { return }
+                        viewModel.search(query: requête)
+                    }
+                }
 
-            if !searchText.isEmpty {
+            if searchText.isEmpty {
+                Button {
+                    HapticFeedback.light()
+                    viewModel.searchNearby()
+                } label: {
+                    Label(String(localized: "location.nearby", defaultValue: "Autour de moi", bundle: .main),
+                          systemImage: "location.circle.fill")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .foregroundColor(Color(hex: accentColor))
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 30)
+                        .background(Capsule().fill(Color(hex: accentColor).opacity(0.12)))
+                }
+                .accessibilityHint(String(localized: "location.nearby.hint",
+                                          defaultValue: "Liste les lieux nommés autour de vous",
+                                          bundle: .main))
+            } else {
                 Button {
                     searchText = ""
                     viewModel.searchResults.removeAll()
@@ -798,8 +844,11 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         guard !query.isEmpty else { searchResults = []; return }
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
+        request.resultTypes = [.address, .pointOfInterest]
         if let loc = userLocation {
-            request.region = MKCoordinateRegion(center: loc, latitudinalMeters: 50000, longitudinalMeters: 50000)
+            request.region = MKCoordinateRegion(center: loc,
+                                                latitudinalMeters: LocationSearchPlan.searchRegionMeters,
+                                                longitudinalMeters: LocationSearchPlan.searchRegionMeters)
         }
         // `.start` retains its completion closure until the request finishes.
         // Without `[weak self]` the closure strongly captures `self`, and if
@@ -810,7 +859,28 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         MKLocalSearch(request: request).start { [weak self] response, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.searchResults = Array(response?.mapItems.prefix(5) ?? [])
+                self.searchResults = Array(response?.mapItems.prefix(LocationSearchPlan.maxResults) ?? [])
+            }
+        }
+    }
+
+    /// **Autour de moi** : les lieux nommés dans un rayon d'un kilomètre, les
+    /// plus proches d'abord, rendus dans la même liste que la recherche.
+    func searchNearby() {
+        guard let centre = userLocation else {
+            requestPermission()
+            return
+        }
+        let requête = MKLocalPointsOfInterestRequest(center: centre, radius: LocationSearchPlan.nearbyRadiusMeters)
+        let origine = CLLocation(latitude: centre.latitude, longitude: centre.longitude)
+        MKLocalSearch(request: requête).start { [weak self] response, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let proches = (response?.mapItems ?? []).sorted {
+                    $0.placemark.location?.distance(from: origine) ?? .infinity
+                        < $1.placemark.location?.distance(from: origine) ?? .infinity
+                }
+                self.searchResults = Array(proches.prefix(LocationSearchPlan.maxResults))
             }
         }
     }

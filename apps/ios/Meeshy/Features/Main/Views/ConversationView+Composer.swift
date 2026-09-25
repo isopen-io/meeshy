@@ -296,7 +296,8 @@ extension ConversationView {
     /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
     /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
     /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
-    /// l'onglet « Lieu » est absent (loi 4, jamais grisé).
+    /// l'onglet « Lieu » est absent (loi 4, jamais grisé) ; sans
+    /// `storyLocationPickerProvided`, la carte l'est aussi (#7922).
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
@@ -316,6 +317,9 @@ extension ConversationView {
             .storyPasteProvided()
             .storyStickerLibraryProvided()
             .stickerNearbyPlacesProvided()
+            // « Ma position… » ouvre la carte : adresse, lieu, monument
+            // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
+            .storyLocationPickerProvided(accentColor: accentColor)
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         })
