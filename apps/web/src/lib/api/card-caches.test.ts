@@ -382,7 +382,7 @@ describe('les caisses de cartes et leurs voisines (#7341)', () => {
  */
 describe('mergeServedPost — ce qui appartient au LECTEUR ne vient pas du serveur', () => {
   test('un `isLikedByMe` TENU survit au remplacement par le servi', () => {
-    const incoming = post({ id: 'p1', content: 'texte servi', isLikedByMe: undefined });
+    const incoming = post({ id: 'p1', content: 'texte servi' });
     const held = post({ id: 'p1', content: 'texte optimiste', isLikedByMe: true });
 
     expect(mergeServedPost(incoming, held).isLikedByMe).toBe(true);
@@ -390,7 +390,7 @@ describe('mergeServedPost — ce qui appartient au LECTEUR ne vient pas du serve
   });
 
   test('un `false` TENU est une réponse du lecteur, et survit aussi', () => {
-    const incoming = post({ id: 'p1', isBookmarkedByMe: undefined });
+    const incoming = post({ id: 'p1' });
     const held = post({ id: 'p1', isBookmarkedByMe: false });
 
     expect(mergeServedPost(incoming, held).isBookmarkedByMe).toBe(false);

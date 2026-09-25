@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { scriptedTransport } from '@/test-support/scripted-transport';
 
 import { FEED_QUERY_KEY } from './feed';
-import { deletePost, pinPost } from './publication-actions';
+import type { FeedInfiniteData, FeedPost } from './feed-pages';
+import type { HttpTransport } from './http';
+import { deletePost, editPost, pinPost } from './publication-actions';
+import { postQueryKey } from './publication-detail';
+import { reelsQueryKey } from './reels';
 import { reportPost } from './reports';
 import { STORY_TRAY_QUERY_KEY, type StoryTrayPost } from './stories';
 
@@ -107,6 +111,149 @@ describe('deletePost — une story quitte le plateau AVANT la réponse, et y rev
     await deletePost({ postId: 'p1', deps: { source: 'gateway', transport, queryClient } });
 
     expect(queryClient.getQueryData(STORY_TRAY_QUERY_KEY)).toBe(stories);
+  });
+});
+
+/**
+ * **`editPost`** (#7534) — le TEXTE d'une publication, en optimiste avec
+ * retour en arrière, miroir `FeedViewModel.updatePost` (`:1325-1370`) et la
+ * route réelle `PUT /api/v1/posts/:postId` (`core.ts:513-661`) : corps
+ * `{ content }` seul, `translations` remis à `{}` (le texte a changé, les
+ * traductions décrivaient l'ANCIEN), l'état du LECTEUR (`isLikedByMe`…)
+ * préservé à travers la réponse servie (`mergeServedPost`), et le fil GELÉ
+ * des Réels jamais réécrit — même registre que `applyPostUpdated`.
+ */
+describe('editPost', () => {
+  const post = (partial: Partial<FeedPost>): FeedPost => ({
+    id: 'p1',
+    type: 'POST',
+    createdAt: '2026-09-24T10:00:00.000Z',
+    content: 'Texte original',
+    isLikedByMe: true,
+    translations: { en: { text: 'Original text' } },
+    ...partial,
+  });
+
+  const feedWithPost = (feedPost: FeedPost): QueryClient => {
+    const queryClient = new QueryClient();
+    const data: FeedInfiniteData = {
+      pages: [{ posts: [feedPost], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    };
+    queryClient.setQueryData(FEED_QUERY_KEY, data);
+    return queryClient;
+  };
+
+  const cardIn = (queryClient: QueryClient, key: QueryKey = FEED_QUERY_KEY): FeedPost | undefined =>
+    queryClient.getQueryData<FeedInfiniteData>(key)?.pages.flatMap((p) => p.posts)[0];
+
+  test('la requête est un PUT avec `{ content }`, et le cache est patché AVANT la réponse', async () => {
+    const queryClient = feedWithPost(post({}));
+    const { transport, calls } = scriptedTransport({
+      'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Nouveau.', translations: {} }) },
+    });
+
+    const pending = editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } });
+    /* PENDANT LE VOL — l'optimiste est déjà posé, sur le fil ET la fiche. */
+    expect(cardIn(queryClient)?.content).toBe('Nouveau');
+    expect(cardIn(queryClient)?.translations).toEqual({});
+
+    expect(await pending).toBe('done');
+    expect(calls().map((c) => `${c.method} ${c.path}`)).toEqual(['PUT /api/v1/posts/p1']);
+    expect(calls()[0]?.body).toEqual({ content: 'Nouveau' });
+    /* LA RÉPONSE SERVIE (texte assaini) remplace l'optimiste, et l'état du
+       lecteur (`isLikedByMe`) SURVIT à travers elle. */
+    expect(cardIn(queryClient)?.content).toBe('Nouveau.');
+    expect(cardIn(queryClient)?.isLikedByMe).toBe(true);
+  });
+
+  test('la FICHE de la publication est patchée aussi', async () => {
+    const queryClient = feedWithPost(post({}));
+    queryClient.setQueryData(postQueryKey('p1'), post({}));
+    const { transport } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Nouveau' }) } });
+
+    await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } });
+
+    expect((queryClient.getQueryData(postQueryKey('p1')) as FeedPost).content).toBe('Nouveau');
+  });
+
+  test('un refus PERMANENT restaure la carte à l’identique, et vaut `failed`', async () => {
+    const original = post({});
+    const queryClient = feedWithPost(original);
+    const { transport } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: false, status: 403, error: 'FORBIDDEN' } });
+
+    expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('failed');
+    expect(cardIn(queryClient)).toEqual(original);
+  });
+
+  test('un 500 restaure la carte, et vaut `offline`', async () => {
+    const original = post({});
+    const queryClient = feedWithPost(original);
+    const { transport } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: false, status: 500, error: 'INTERNAL_ERROR' } });
+
+    expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('offline');
+    expect(cardIn(queryClient)).toEqual(original);
+  });
+
+  test('un transport EN PANNE (rejet) restaure la carte, et vaut `offline`', async () => {
+    const original = post({});
+    const queryClient = feedWithPost(original);
+    const transport = { request: () => Promise.reject(new TypeError('Failed to fetch')) } as unknown as HttpTransport;
+
+    expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('offline');
+    expect(cardIn(queryClient)).toEqual(original);
+  });
+
+  test('texte inchangé (après trim) : `done` SANS appel réseau', async () => {
+    const queryClient = feedWithPost(post({ content: 'Déjà là' }));
+    const { transport, calls } = scriptedTransport({});
+
+    expect(await editPost({ postId: 'p1', content: '  Déjà là  ', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
+    expect(calls()).toHaveLength(0);
+  });
+
+  test('texte vide ou blanc : `failed` SANS appel réseau', async () => {
+    const queryClient = feedWithPost(post({}));
+    const { transport, calls } = scriptedTransport({});
+
+    expect(await editPost({ postId: 'p1', content: '   ', deps: { source: 'gateway', transport, queryClient } })).toBe('failed');
+    expect(calls()).toHaveLength(0);
+  });
+
+  test('une carte ABSENTE du cache (aucune caisse ne la tient) : `failed` SANS appel', async () => {
+    const queryClient = new QueryClient();
+    const { transport, calls } = scriptedTransport({});
+
+    expect(await editPost({ postId: 'introuvable', content: 'Texte', deps: { source: 'gateway', transport, queryClient } })).toBe('failed');
+    expect(calls()).toHaveLength(0);
+  });
+
+  test('un SECOND appel pendant le vol du premier n’envoie rien de plus', async () => {
+    const queryClient = feedWithPost(post({}));
+    const { transport, calls } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Nouveau' }) } });
+
+    const first = editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } });
+    const second = editPost({ postId: 'p1', content: 'Autre texte', deps: { source: 'gateway', transport, queryClient } });
+
+    await Promise.all([first, second]);
+    expect(calls()).toHaveLength(1);
+  });
+
+  test('le fil GELÉ des Réels n’est JAMAIS réécrit — même registre que `applyPostUpdated`', async () => {
+    const original = post({});
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(reelsQueryKey('graine'), {
+      pages: [{ posts: [original], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    const { transport } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Nouveau' }) } });
+
+    /* La carte n'est tenue QUE par une caisse gelée — `findCardPost` la
+       trouve quand même (la RECHERCHE parcourt tout le registre), et
+       l'appel part normalement ; seule l'ÉCRITURE de l'optimiste évite les
+       caisses gelées. */
+    expect(await editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
+    expect(cardIn(queryClient, reelsQueryKey('graine'))?.content).toBe('Texte original');
   });
 });
 
