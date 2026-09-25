@@ -125,9 +125,17 @@ sans elle, la WebView peut ne jamais faire lever les événements `online`/
 `offline` que `useOnline()` (`src/lib/net/online.ts`) et ses trois
 consommateurs (`socket.ts`, `receipts.ts`, `media-absent.ts`) écoutent ;
 l'app native gelée (`apps/android/app/src/main/AndroidManifest.xml:6`) la
-déclare déjà. Ce gate est dans `bun run gate` et nomme la permission
-manquante / dupliquée / commentée s'il rougit. Une déclaration en commentaire
-XML ne compte pas (mesuré 2026-09-24 : une fusion a produit un doublon).
+déclare déjà. Ce gate est dans `bun run gate` et nomme la permission en
+défaut s'il rougit. Depuis #7869 il compte les déclarations EFFECTIVES et en
+exige exactement une : une fusion avait laissé un doublon que rien n'avait
+signalé (`996e392937`), et ne comptent pas une déclaration en commentaire,
+une balise d'une autre casse ou d'un autre nom (`uses-permission-sdk-23`),
+`tools:node="remove"` (la fusion du manifeste la retire) ni
+`android:maxSdkVersion` (l'octroi s'arrête à ce niveau d'API). Sa logique a
+son témoin (`scripts/check-android-manifest.test.ts`) ; son pilote ne tourne
+que lancé, par `scripts/lib/entry-point.mjs`, qui compare les chemins résolus
+— la comparaison brute rendait le gate muet (rc 0) lancé par un lien
+symbolique.
 **Recette manuelle restante, non exécutable depuis un conteneur Linux** (aucun
 émulateur Android ici) : sur l'AVD `Meeshy_Poc_Web-v31`, mode avion → une
 pastille hors-ligne doit apparaître, retour réseau → le socket doit se

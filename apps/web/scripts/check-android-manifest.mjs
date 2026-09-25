@@ -6,25 +6,26 @@
  * déclare `ACCESS_NETWORK_STATE` (`AndroidManifest.xml:6`) : c'est ce qui
  * permet à une app de SAVOIR quand le réseau coupe et revient, plutôt que de
  * le déduire d'un timeout de requête. La coque Capacitor de `apps/web`
- * (`apps/web/android`) ne le déclare pas, alors que le web lui-même dépend
+ * (`apps/web/android`) ne la déclarait pas, alors que le web lui-même dépend
  * de cette capacité — `src/lib/net/online.ts` (`useOnline`), et ses
  * consommateurs `src/lib/api/socket.ts`, `src/lib/api/receipts.ts`,
  * `src/lib/api/media-absent.ts` écoutent tous les événements `online`/
- * `offline` du navigateur. Une WebView Android SANS `ACCESS_NETWORK_STATE`
- * peut laisser ces événements ne jamais se déclencher correctement selon la
- * version d'Android/WebView — la coque doit déclarer explicitement ce que
- * la plateforme native gelée déclare déjà, sans qu'aucun gate ne le garde.
+ * `offline` du navigateur, que la WebView Android ne lève pas sans elle.
  *
- * CE QU'IL VÉRIFIE : chaque permission de `REQUIRED_PERMISSIONS` figure
- * exactement une fois dans `apps/web/android/app/src/main/AndroidManifest.xml`
- * sous forme d'un `<uses-permission android:name="…" />` — pas zéro, pas deux,
- * jamais en commentaire. Un manifeste absent, illisible, ou une permission
- * manquante / dupliquée / commentée fait échouer ce gate avec le NOM de la
- * permission en défaut — jamais un message générique.
+ * CE QU'IL VÉRIFIE (#7869) : chaque permission de `REQUIRED_PERMISSIONS`
+ * figure exactement une fois dans `apps/web/android/app/src/main/AndroidManifest.xml`
+ * sous forme d'un `<uses-permission android:name="…" />` EFFECTIF — pas zéro,
+ * pas deux. Ne comptent pas : une déclaration en commentaire, une balise
+ * d'un autre nom ou d'une autre casse (le manifeste est sensible à la casse),
+ * `tools:node="remove"` (la fusion du manifeste la RETIRE) et
+ * `android:maxSdkVersion` (l'octroi s'arrête à ce niveau d'API). Un manifeste
+ * absent ou une permission en défaut fait échouer ce gate avec le NOM de la
+ * permission — jamais un message générique.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+
+import { isEntryPoint } from './lib/entry-point.mjs';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
@@ -43,62 +44,54 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.ACCESS_NETWORK_STATE',
 ];
 
-/**
- * Ôte les commentaires XML du manifeste — une ligne commentée ne doit pas
- * être comptée comme une déclaration valide.
- */
-function stripXmlComments(xml) {
-  return xml.replace(/<!--[\s\S]*?-->/g, '');
-}
+const XML_COMMENT = /<!--[\s\S]*?-->/g;
+const USES_PERMISSION_ELEMENT = /<uses-permission(?=[\s/>])([^>]*)>/g;
+const ATTRIBUTE = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+const REMOVING_MERGE_RULES = new Set(['remove', 'removeAll']);
+
+const attributesOf = (source) =>
+  new Map(
+    [...source.matchAll(ATTRIBUTE)].map(([, name, doubleQuoted, singleQuoted]) => [
+      name,
+      doubleQuoted ?? singleQuoted,
+    ]),
+  );
+
+const grantedOnEveryDevice = (attributes) =>
+  !REMOVING_MERGE_RULES.has(attributes.get('tools:node')) &&
+  !attributes.has('android:maxSdkVersion');
+
+const effectiveDeclarations = (manifest) =>
+  [...manifest.replace(XML_COMMENT, '').matchAll(USES_PERMISSION_ELEMENT)]
+    .map(([, source]) => attributesOf(source))
+    .filter(grantedOnEveryDevice)
+    .map((attributes) => attributes.get('android:name'))
+    .filter((permission) => permission !== undefined);
 
 /**
- * Extrait toutes les occurrences d'une permission dans l'XML (commentaires ôtés).
- * Reconnaît les attributs dans n'importe quel ordre et les guillemets simple/double.
- */
-function declaredPermissions(xml) {
-  const cleaned = stripXmlComments(xml);
-  const matches = [...cleaned.matchAll(
-    /<uses-permission\b[^>]*\bandroid:name\s*=\s*["']([^"']+)["'][^>]*\/?>/gi,
-  )];
-  return matches.map((m) => m[1]);
-}
-
-/**
- * Juge si chaque permission requise est déclarée exactement une fois.
- * Retourne un tableau des violations : { permission, count }.
- * Un count !== 1 est une violation (0 = absent, ≥2 = dupliqué).
+ * Les permissions de `required` qui ne sont pas déclarées EXACTEMENT une fois
+ * de façon effective : `count` 0 = absente ou neutralisée, ≥ 2 = doublée.
  */
 export const auditManifestPermissions = ({ manifest, required = REQUIRED_PERMISSIONS }) => {
+  const declared = effectiveDeclarations(manifest);
   return required
     .map((permission) => ({
       permission,
-      count: declaredPermissions(manifest).filter((n) => n === permission).length,
+      count: declared.filter((name) => name === permission).length,
     }))
     .filter(({ count }) => count !== 1);
 };
 
-/**
- * Compose le message d'erreur du gate.
- * Format : une ligne par violation, nommant la permission, son count,
- * et le chemin du manifeste.
- */
-export const formatViolations = ({ manifestPath, violations }) => {
-  if (violations.length === 0) {
-    return '';
-  }
+const violationLine = ({ permission, count }) =>
+  count === 0
+    ? `  • ${permission} — manquante (commentée, tools:node="remove" ou android:maxSdkVersion ne comptent pas), ajouter <uses-permission android:name="${permission}" />`
+    : `  • ${permission} — déclarée ${count} fois, n'en garder qu'une (cf. 996e392937)`;
 
-  const lines = violations.map(({ permission, count }) => {
-    if (count === 0) {
-      return `  • ${permission} — manquante, ajouter <uses-permission android:name="${permission}" />`;
-    }
-    return `  • ${permission} — déclarée ${count} fois, n'en garder qu'une (cf. 996e392937)`;
-  });
-
-  return [
+export const formatViolations = ({ manifestPath, violations }) =>
+  [
     `check-android-manifest: permission(s) manquante(s) ou dupliquée(s) dans ${manifestPath} :`,
-    ...lines,
+    ...violations.map(violationLine),
   ].join('\n');
-};
 
 function main() {
   if (!existsSync(MANIFEST_PATH)) {
@@ -120,8 +113,6 @@ function main() {
   );
 }
 
-// N'exécute main() que si ce module est lancé directement,
-// pas s'il est importé par un test.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryPoint({ moduleUrl: import.meta.url, invokedPath: process.argv[1] })) {
   main();
 }
