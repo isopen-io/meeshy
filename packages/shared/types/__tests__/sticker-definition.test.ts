@@ -4,6 +4,7 @@ import {
   stickerFitWithin,
   stickerMimeFromSignature,
   isStickerAnimatedGif,
+  stickerStoredMime,
 } from '../sticker-definition';
 
 const bytes = (...values: number[]): Uint8Array => Uint8Array.from(values);
@@ -19,8 +20,13 @@ describe('stickerMimeFromSignature', () => {
     expect(stickerMimeFromSignature(webp())).toBe('image/webp');
   });
 
-  it('refuses a JPEG, which cannot carry transparency, and anything unknown', () => {
-    expect(stickerMimeFromSignature(jpeg())).toBeNull();
+  it('accepts a JPEG photo pasted from elsewhere, and keeps it as WebP', () => {
+    expect(stickerMimeFromSignature(jpeg())).toBe('image/jpeg');
+    expect(stickerStoredMime('image/jpeg')).toBe('image/webp');
+    expect(stickerStoredMime('image/gif')).toBe('image/gif');
+  });
+
+  it('refuses anything that is not an image it can keep', () => {
     expect(stickerMimeFromSignature(bytes(0x25, 0x50, 0x44, 0x46))).toBeNull();
     expect(stickerMimeFromSignature(bytes())).toBeNull();
   });

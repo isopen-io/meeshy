@@ -22,6 +22,14 @@
 export const STICKER_MIME_TYPES = ['image/png', 'image/webp', 'image/gif'] as const;
 export type StickerMimeType = (typeof STICKER_MIME_TYPES)[number];
 
+/**
+ * Ce qu'on ACCEPTE pour créer un sticker est plus large que ce qu'on GARDE :
+ * une photo JPEG collée d'ailleurs devient un sticker — l'utilisateur n'a pas
+ * à savoir qu'un JPEG n'a pas de transparence (dimension 12). Elle est
+ * convertie en WebP à la normalisation (`stickerStoredMime`).
+ */
+export type StickerSourceMimeType = StickerMimeType | 'image/jpeg';
+
 /** D'où vient le sticker — l'origine ne change pas le rendu, elle dit à
  * l'utilisateur (et à l'analyse d'usage) quel geste l'a créé. */
 export const STICKER_ORIGINS = ['upload', 'paste', 'lift', 'received'] as const;
@@ -30,8 +38,10 @@ export type StickerOrigin = (typeof STICKER_ORIGINS)[number];
 export const STICKER_LIMITS = {
   /** Côté le plus long, en pixels — la taille d'un sticker WhatsApp/Telegram. */
   maxEdge: 512,
-  /** Un GIF animé collé d'ailleurs pèse plus qu'un PNG fixe ; au-delà, il se refuse. */
+  /** Poids du sticker GARDÉ, après normalisation : un GIF animé pèse plus qu'un PNG fixe. */
   maxBytes: 2 * 1024 * 1024,
+  /** Poids de l'image SOURCE admise avant normalisation (une capture d'écran pleine taille). */
+  maxSourceBytes: 12 * 1024 * 1024,
   /** Par personne : une bibliothèque, pas un second album photo. */
   maxCount: 200,
   maxNameLength: 40,
@@ -60,13 +70,16 @@ const GIF87 = [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] as const;
 const GIF89 = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] as const;
 const RIFF = [0x52, 0x49, 0x46, 0x46] as const;
 const WEBP = [0x57, 0x45, 0x42, 0x50] as const;
+const JPEG = [0xff, 0xd8, 0xff] as const;
 
 /**
  * Le type RÉEL des octets — jamais le type déclaré par le fichier ni par le
- * presse-papier, qui peuvent mentir. `null` ⇒ ce n'est pas un sticker.
+ * presse-papier, qui peuvent mentir. `null` ⇒ rien dont on puisse faire un
+ * sticker.
  */
-export function stickerMimeFromSignature(data: Uint8Array): StickerMimeType | null {
+export function stickerMimeFromSignature(data: Uint8Array): StickerSourceMimeType | null {
   if (startsWith(data, PNG)) return 'image/png';
+  if (startsWith(data, JPEG)) return 'image/jpeg';
   if (startsWith(data, GIF87) || startsWith(data, GIF89)) return 'image/gif';
   if (startsWith(data, RIFF) && startsWith(data, WEBP, 8)) return 'image/webp';
   return null;
@@ -88,6 +101,11 @@ export function isStickerAnimatedGif(data: Uint8Array): boolean {
     }
   }
   return false;
+}
+
+/** Le format sous lequel un sticker est GARDÉ : le JPEG devient WebP, le reste ne change pas. */
+export function stickerStoredMime(source: StickerSourceMimeType): StickerMimeType {
+  return source === 'image/jpeg' ? 'image/webp' : source;
 }
 
 /** Les dimensions d'une image ramenée dans le carré du sticker, ratio gardé. */

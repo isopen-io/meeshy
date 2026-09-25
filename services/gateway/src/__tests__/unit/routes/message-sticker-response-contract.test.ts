@@ -22,6 +22,7 @@ const STICKER = {
   slots: { caption: 'Toi', name: 'Alice' },
   animation: 'heartbeat',
   emoji: '❤️',
+  stickerId: '65f0c0ffee0000000000abcd',
 };
 
 function stickerMessage(sticker: unknown): Record<string, unknown> {
@@ -45,7 +46,7 @@ function serialize(payload: unknown): Record<string, any> {
 }
 
 describe('messageSchema — sérialisation REST du sticker', () => {
-  it('sert le sticker ENTIER — gabarit, slots (carte), animation, emoji', () => {
+  it('sert le sticker ENTIER — gabarit, slots (carte), animation, emoji, sticker de bibliothèque', () => {
     const out = serialize(stickerMessage(STICKER));
 
     expect(out.sticker).toEqual(STICKER);
