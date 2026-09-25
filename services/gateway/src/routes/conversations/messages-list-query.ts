@@ -17,6 +17,12 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import {
+  CITED_POST_LIVENESS_SELECT,
+  citedPostIdsOf,
+  servePostReplyCitation,
+  withdrawnCitationsOf,
+} from '../../services/messaging/servedPostReply';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
@@ -947,37 +953,31 @@ export async function enrichForwardedMessagesForList(
 
 export async function enrichPostReplyMessagesForList(
   prisma: PrismaClient,
-  mappedMessages: MappedMessageRow[]
-): Promise<void> {
-      // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
-      // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, capturé
-      // au moment de la réponse — il survit à l'expiration du post (STATUS 1h /
-      // STORY 21h) et à sa suppression. On le hisse en champ top-level
-      // `postReplyTo` (contrat client propre). La résolution live de
-      // `storyReplyToId` n'est qu'un fallback pour les messages legacy.
-      for (const m of mappedMessages) {
-        if (!m.storyReplyToId) continue;
-        const fromSnapshot = postReplyToFromMetadata(m.metadata);
-        if (fromSnapshot) m.postReplyTo = fromSnapshot;
-      }
+  mappedMessages: readonly MappedMessageRow[]
+): Promise<MappedMessageRow[]> {
+  // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
+  // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, hissé en
+  // `postReplyTo` — il survit à l'expiration du post, PAS à son retrait par
+  // l'auteur (#7950, `servePostReplyCitation`). La résolution live de
+  // `storyReplyToId` n'est qu'un repli pour les réponses legacy sans snapshot.
+  //
+  // UNE requête pour la page : la vivacité de chaque post cité (y compris ceux
+  // que citent `replyTo` et `forwardedFrom`) et, dans le même aller, de quoi
+  // reconstruire le snapshot d'une réponse legacy.
+  const ids = citedPostIdsOf(mappedMessages);
+  const citedPosts = ids.length === 0 ? [] : await prisma.post.findMany({
+    where: { id: { in: [...ids] } },
+    select: { ...POST_REPLY_SNAPSHOT_SELECT, ...CITED_POST_LIVENESS_SELECT },
+  });
+  const postMap = new Map(citedPosts.map((p) => [p.id, p]));
+  const withdrawn = withdrawnCitationsOf(citedPosts);
 
-      const legacyPostReplyIds = mappedMessages
-        .filter((m) => m.storyReplyToId && !m.postReplyTo)
-        .map((m) => m.storyReplyToId as string);
-
-      if (legacyPostReplyIds.length > 0) {
-        const uniquePostIds = [...new Set(legacyPostReplyIds)];
-        const citedPosts = await prisma.post.findMany({
-          where: { id: { in: uniquePostIds } },
-          select: POST_REPLY_SNAPSHOT_SELECT,
-        });
-        const postMap = new Map(citedPosts.map((p) => [p.id, p]));
-        for (const m of mappedMessages) {
-          if (!m.storyReplyToId || m.postReplyTo) continue;
-          const post = postMap.get(m.storyReplyToId);
-          if (!post) continue; // post supprimé sans snapshot → citation absente
-          m.postReplyTo = buildPostReplyTo(post);
-        }
-      }
+  return mappedMessages.map((m) => {
+    if (!m.storyReplyToId) return servePostReplyCitation(m, withdrawn);
+    const fromSnapshot = postReplyToFromMetadata(m.metadata);
+    const live = fromSnapshot ? undefined : postMap.get(m.storyReplyToId);
+    const postReplyTo = fromSnapshot ?? (live ? buildPostReplyTo(live) : undefined);
+    const hoisted = postReplyTo ? { ...m, postReplyTo } : m;
+    return servePostReplyCitation(hoisted, withdrawn);
+  });
 }
-

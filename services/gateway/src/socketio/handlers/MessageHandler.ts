@@ -36,11 +36,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
 import { blockCacheKey, BLOCK_CACHE_TTL_SECONDS } from '../../utils/block-cache';
 import { MessagingService } from '../../services/MessagingService';
-import {
-  buildPostReplyTo,
-  postReplyToFromMetadata,
-  POST_REPLY_SNAPSHOT_SELECT,
-} from '../../services/messaging/postReplySnapshot';
+import { serveNewMessagePostReply } from '../../services/messaging/servedPostReply';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { carriesNonTextBody } from '../../services/messaging/nonTextBody';
 import { StatusService } from '../../services/StatusService';
@@ -1285,19 +1281,9 @@ export class MessageHandler {
       // Réponse à un post (status/story/reel/post) : servir le SNAPSHOT figé
       // (rangé dans `metadata.postReplyTo` à la création) pour que le
       // destinataire voie la citation immédiatement et qu'elle survive à
-      // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
-      // legacy via lookup du post.
-      const postReplyParts = await (async () => {
-        if (!message.storyReplyToId) return {};
-        const fromSnapshot = postReplyToFromMetadata(message.metadata);
-        if (fromSnapshot) return { postReplyTo: fromSnapshot };
-        // Best-effort : le fallback live ne doit pas gater la délivrance.
-        const post = await this.prisma.post.findUnique({
-          where: { id: message.storyReplyToId },
-          select: POST_REPLY_SNAPSHOT_SELECT,
-        }).catch(() => null);
-        return post ? { postReplyTo: buildPostReplyTo(post) } : {};
-      })();
+      // l'expiration du post, pas à son retrait (#7950). Hissé en `postReplyTo`
+      // top-level. Même loi que la liste : `serveNewMessagePostReply`.
+      const postReplyParts = await serveNewMessagePostReply(this.prisma, message);
 
       const mentionParts = await (async () => {
         if (!message.content) return {};
