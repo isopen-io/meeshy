@@ -84,6 +84,29 @@ final class MessagePersistenceRealtimeFollowTests: XCTestCase {
         XCTAssertEqual(try reactions(queue, "m3").map(\.participantId), [Self.me])
     }
 
+    /// #7936 — la page REST sert `currentUserReactions` (camelCase) : dès le
+    /// chargement, ma réaction s'écrit sous `currentUserId`, et mon propre
+    /// retrait (le geste local) l'enlève sans toucher celle de l'autre.
+    func test_upsert_servedCurrentUserReactions_areMineAndRemovableFromLoad() async throws {
+        let (actor, queue) = try makeActor()
+        let json = """
+        {"id":"m4","conversationId":"conv_follow","senderId":"p-bob","content":"salut",
+         "createdAt":"2026-09-25T10:00:00Z","updatedAt":"2026-09-25T10:00:00Z",
+         "reactionSummary":{"👍":2},"reactionCount":2,"currentUserReactions":["👍"]}
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        try await actor.upsertFromAPIMessages([try decoder.decode(APIMessage.self, from: Data(json.utf8))])
+
+        XCTAssertEqual(try reactions(queue, "m4").filter { $0.participantId == Self.me }.count, 1)
+
+        try await actor.removeReaction(localId: "m4", emoji: "👍", participantId: Self.me)
+
+        let left = try reactions(queue, "m4")
+        XCTAssertEqual(left.count, 1)
+        XCTAssertNil(left.first?.participantId)
+    }
+
     // MARK: - Citations
 
     func test_markDeleted_sealsEveryQuoteOfTheParent() async throws {
