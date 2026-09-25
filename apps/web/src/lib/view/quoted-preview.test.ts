@@ -361,6 +361,10 @@ describe('quotedPreviewOf — le cadre d’une pièce unique citée (#7929)', ()
   test('un rapport extrême est borné : jamais plus haut que la scène de story (9:16), jamais plus plat que 3:1', () => {
     expect(preview(quoted({ attachments: [photo({ width: 100, height: 1000 })] })).media?.frame?.aspectRatio).toBe(9 / 16);
     expect(preview(quoted({ attachments: [photo({ width: 4000, height: 500 })] })).media?.frame?.aspectRatio).toBe(3);
+  });
+});
+
+/**
  * #7926 — UNE CITATION D'UN MESSAGE SUPPRIMÉ NE DIT PLUS CE QU'IL DISAIT.
  * `message:deleted` pose `deletedAt` sur la citation embarquée
  * (`realtime-message-mutations.ts`) ; la citation rend alors le libellé du
