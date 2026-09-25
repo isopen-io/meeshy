@@ -338,7 +338,13 @@ export const parseCatalogBlock = (blockLines) => {
 // compte (`admin.usersByUserIdActivity`, `admin.anonymousUsers`…) : ce lot
 // n'ouvre pas la migration du web vers le catalogue. Valeur MESURÉE sur la
 // branche du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 460;
+// 460 → 461 (#6937) : `app.shellVersion`, générée depuis `route-manifest.json`
+// quand la passerelle a monté `GET /app/shell-version`. Son client
+// (`apps/web/src/lib/app-update/shell-update.ts`) écrit l'adresse en littéral
+// comme tout `apps/web`, et comme sa jumelle `app.minVersion`, déjà au compte :
+// morte ici au même titre, jusqu'à #7716. Valeur MESURÉE sur la branche du
+// 2026-09-25.
+const BASELINE_DEAD_ENTRIES = 461;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

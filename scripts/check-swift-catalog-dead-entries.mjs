@@ -272,7 +272,13 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'administration iOS n'appelle aucune des lectures admin voisines
 // (`usersByUserIdActivity`, `usersByUserIdSessions`… sont déjà au compte).
 // Valeur MESURÉE en CI sur la branche du 2026-09-25.
-const BASELINE_DEAD_ENTRIES = 265;
+// 265 → 266 (#6937) : `AppEndpoint.shellVersion` — la version publiée de la
+// coque Capacitor de `apps/web` (`GET /app/shell-version`). Morte à la
+// naissance PAR CONSTRUCTION et pour de bon : l'entrée est GÉNÉRÉE depuis
+// `route-manifest.json`, et l'app iOS NATIVE n'est pas la coque — son annonce
+// de version passe par la porte `minVersion` et l'App Store, jamais par cette
+// route. Son appelant est TS (`apps/web/src/lib/app-update/shell-update.ts`).
+const BASELINE_DEAD_ENTRIES = 266;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
