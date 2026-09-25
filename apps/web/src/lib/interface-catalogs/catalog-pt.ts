@@ -118,6 +118,7 @@ const pt = {
   'feed.post.pin_failed': 'Não foi possível fixar a publicação',
   'feed.post.edited': 'Publicação atualizada',
   'feed.post.edit_failed': 'Não foi possível atualizar a publicação',
+  'feed.post.edit_busy': 'Já há uma edição em curso',
   'feed.post.deleted': 'Publicação excluída',
   'feed.post.delete_failed': 'Erro ao excluir',
   'feed.post.repost.success': 'Republicado',

@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
 import { deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
-import type { PostActionOutcome } from '@/lib/api/publication-actions';
+import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { sessionStore } from '@/lib/api/session';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { translate } from '@/lib/i18n-catalog';
@@ -55,6 +55,7 @@ type MenuNotice =
   | 'feed.post.pin_failed'
   | 'feed.post.edited'
   | 'feed.post.edit_failed'
+  | 'feed.post.edit_busy'
   | 'feed.post.deleted'
   | 'feed.post.delete_failed'
   | 'report.done'
@@ -143,9 +144,13 @@ export function usePostGesture(options?: {
       onPin: (postId: string) => {
         void pinPostAction(postId).then((outcome) => say(outcome === 'done' ? 'feed.post.pinned' : 'feed.post.pin_failed'));
       },
-      onEdit: (postId: string, content: string): Promise<PostActionOutcome> =>
+      onEdit: (postId: string, content: string): Promise<EditPostOutcome> =>
+        /* `'busy'` (revue-correction #7534, défaut majeur 1) N'ANNONCE PAS
+           `'feed.post.edited'` : un second texte pendant le vol du premier
+           n'est jamais parti, et « Publication modifiée » mentirait sur ce
+           qu'il vient de se passer. */
         editPostAction(postId, content).then((outcome) => {
-          say(outcome === 'done' ? 'feed.post.edited' : 'feed.post.edit_failed');
+          say(outcome === 'done' ? 'feed.post.edited' : outcome === 'busy' ? 'feed.post.edit_busy' : 'feed.post.edit_failed');
           return outcome;
         }),
       onDelete: (postId: string) => {

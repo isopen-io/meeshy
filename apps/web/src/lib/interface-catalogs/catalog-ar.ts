@@ -114,6 +114,7 @@ const ar = {
   'feed.post.pin_failed': 'تعذّر تثبيت المنشور',
   'feed.post.edited': 'تم تحديث المنشور',
   'feed.post.edit_failed': 'تعذّر تحديث المنشور',
+  'feed.post.edit_busy': 'يوجد تعديل قيد التنفيذ بالفعل',
   'feed.post.deleted': 'تم حذف المنشور',
   'feed.post.delete_failed': 'حدث خطأ أثناء الحذف',
   'feed.post.repost.success': 'تمت إعادة النشر',

@@ -151,6 +151,7 @@ const fr = {
   'feed.post.pin_failed': 'Impossible d’épingler la publication',
   'feed.post.edited': 'Publication modifiée',
   'feed.post.edit_failed': 'La publication n’a pas pu être modifiée',
+  'feed.post.edit_busy': 'Une modification est déjà en cours',
   'feed.post.deleted': 'Publication supprimée',
   'feed.post.delete_failed': 'Erreur lors de la suppression',
   /* REPARTAGER DEPUIS LE RAIL DES RÉELS (#6484) — miroir `ReelsViewModel.repost`

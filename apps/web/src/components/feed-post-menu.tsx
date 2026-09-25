@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 
-import type { PostActionOutcome } from '@/lib/api/publication-actions';
+import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import type { ReportReason } from '@/lib/api/reports';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
@@ -40,9 +40,10 @@ export type PostMenuHost = {
   readonly onPin: (postId: string) => void;
   /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
    * la feuille l'attend pour se fermer (`'done'`) ou rester ouverte
-   * (`'offline'`/`'failed'`), là où les autres gestes n'ont pas de surface
+   * (`'offline'`/`'failed'`/`'busy'`, revue-correction — un second appel
+   * pendant le vol du premier), là où les autres gestes n'ont pas de surface
    * qui attend. */
-  readonly onEdit: (postId: string, content: string) => Promise<PostActionOutcome>;
+  readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
 };

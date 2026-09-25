@@ -114,6 +114,7 @@ const en = {
   'feed.post.pin_failed': 'Couldn’t pin the post',
   'feed.post.edited': 'Post updated',
   'feed.post.edit_failed': 'Couldn’t update the post',
+  'feed.post.edit_busy': 'An edit is already in progress',
   'feed.post.deleted': 'Post deleted',
   'feed.post.delete_failed': 'Couldn’t delete the post',
   'feed.post.repost.success': 'Reposted',

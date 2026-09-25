@@ -23,6 +23,18 @@ import { STORIES_QUERY_PREFIX } from './stories';
  */
 export type PostActionOutcome = 'done' | 'offline' | 'failed';
 
+/**
+ * L'ISSUE D'UNE MODIFICATION DE TEXTE (#7534, revue-correction) — `'busy'`
+ * EN PLUS de `PostActionOutcome` : un second appel pendant que le PUT du
+ * premier vole encore. Distincte de `'done'` (le défaut majeur qu'elle
+ * corrige : un second appel rendait `'done'` SANS RIEN ENVOYER, et l'hôte
+ * annonçait « Publication modifiée » pour un texte parti nulle part) et de
+ * `'failed'` (ce n'est pas un refus SERVI, rejouer une fois le premier
+ * revenu peut réussir — jamais un rejeu automatique en tâche de fond, même
+ * garde que `'offline'`, § doc-comment d'`editPost`).
+ */
+export type EditPostOutcome = PostActionOutcome | 'busy';
+
 export type PostActionDeps = {
   readonly source: DataSource;
   readonly transport: HttpTransport;
@@ -133,7 +145,7 @@ const editInFlight = new Set<string>();
  * qu'`applyPostUpdated` (`feed-realtime.ts`), qu'iOS ne câble pas non plus sur
  * `postUpdated` pour son pager de Réels.
  */
-export async function editPost(params: { readonly postId: string; readonly content: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
+export async function editPost(params: { readonly postId: string; readonly content: string; readonly deps: PostActionDeps }): Promise<EditPostOutcome> {
   const { postId, deps } = params;
   const content = params.content.trim();
   if (content === '' || content.length > POST_CONTENT_MAX_LENGTH) return 'failed';
@@ -146,10 +158,20 @@ export async function editPost(params: { readonly postId: string; readonly conte
   if (held === undefined) return 'failed';
   /* `UpdatePostSchema` refuse un corps qui ne change RIEN (« Nothing to
      update », miroir `UpdateCommentSchema`) — et un aller-retour qui ne
-     change rien n'a de toute façon aucune raison de partir. */
+     change rien n'a de toute façon aucune raison de partir. Ce test précède
+     la garde de vol : `held` porte déjà l'optimiste du PUT en cours (posé
+     SYNCHRONE ci-dessous), donc un texte qui l'égale est un rejeu du MÊME
+     appel — `'done'` est alors juste, sans en envoyer un second. */
   if (content === (held.content ?? '').trim()) return 'done';
 
-  if (editInFlight.has(postId)) return 'done';
+  /* UN SECOND texte pendant le vol du premier (revue-correction #7534,
+     défaut majeur 1) — la ligne au-dessus vient d'écarter le cas où il
+     s'agirait du MÊME texte, donc atteindre cette garde prouve que le texte
+     DIFFÈRE de celui déjà en vol. Ce n'était PAS le cas avant ce correctif :
+     `'done'` s'y rendait quel que soit le texte, et l'hôte annonçait un
+     succès pour un contenu parti nulle part. `'busy'` ne touche ni la caisse
+     ni le réseau — le brouillon en vol reste seul jusqu'à son issue. */
+  if (editInFlight.has(postId)) return 'busy';
   editInFlight.add(postId);
 
   try {

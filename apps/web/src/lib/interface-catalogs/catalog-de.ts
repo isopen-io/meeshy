@@ -114,6 +114,7 @@ const de = {
   'feed.post.pin_failed': 'Beitrag konnte nicht angeheftet werden',
   'feed.post.edited': 'Beitrag aktualisiert',
   'feed.post.edit_failed': 'Beitrag konnte nicht aktualisiert werden',
+  'feed.post.edit_busy': 'Eine Bearbeitung läuft bereits',
   'feed.post.deleted': 'Beitrag gelöscht',
   'feed.post.delete_failed': 'Fehler beim Löschen',
   'feed.post.repost.success': 'Repostet',

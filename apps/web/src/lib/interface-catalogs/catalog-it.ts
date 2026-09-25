@@ -114,6 +114,7 @@ const it = {
   'feed.post.pin_failed': 'Impossibile fissare il post',
   'feed.post.edited': 'Post aggiornato',
   'feed.post.edit_failed': 'Impossibile aggiornare il post',
+  'feed.post.edit_busy': 'È già in corso una modifica',
   'feed.post.deleted': 'Post eliminato',
   'feed.post.delete_failed': 'Errore durante l’eliminazione',
   'feed.post.repost.success': 'Ripubblicato',

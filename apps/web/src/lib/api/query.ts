@@ -25,7 +25,7 @@ import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
-import { deletePost, editPost, pinPost, type PostActionOutcome } from './publication-actions';
+import { deletePost, editPost, pinPost, type EditPostOutcome, type PostActionOutcome } from './publication-actions';
 import { reportPost, type ReportOutcome, type ReportReason } from './reports';
 import {
   STORIES_QUERY_PREFIX,
@@ -211,7 +211,7 @@ export function pinPostAction(postId: string): Promise<PostActionOutcome> {
 /** MODIFIER LE TEXTE (#7534) — RÉFÉRENCE DE MODULE STABLE, même motif : le
  * cache que le fil observe est celui que le geste patche, optimiste ET
  * réponse servie compris. */
-export function editPostAction(postId: string, content: string): Promise<PostActionOutcome> {
+export function editPostAction(postId: string, content: string): Promise<EditPostOutcome> {
   return editPost({ postId, content, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 

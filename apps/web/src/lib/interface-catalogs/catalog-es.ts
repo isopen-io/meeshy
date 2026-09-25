@@ -114,6 +114,7 @@ const es = {
   'feed.post.pin_failed': 'No se pudo fijar la publicación',
   'feed.post.edited': 'Publicación actualizada',
   'feed.post.edit_failed': 'No se pudo actualizar la publicación',
+  'feed.post.edit_busy': 'Ya hay una edición en curso',
   'feed.post.deleted': 'Publicación eliminada',
   'feed.post.delete_failed': 'Error al eliminar',
   'feed.post.repost.success': 'Republicado',

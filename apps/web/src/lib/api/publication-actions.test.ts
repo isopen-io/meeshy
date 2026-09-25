@@ -230,15 +230,30 @@ describe('editPost', () => {
     expect(calls()).toHaveLength(0);
   });
 
-  test('un SECOND appel pendant le vol du premier n’envoie rien de plus', async () => {
+  /**
+   * **UN SECOND TEXTE, DIFFÉRENT, PENDANT LE VOL DU PREMIER, N'EST JAMAIS
+   * `'done'`** (revue-correction #7534, défaut majeur 1). Avant ce correctif,
+   * cette garde rendait `'done'` SANS RIEN ENVOYER quel que soit le texte
+   * demandé : la feuille se fermait, l'hôte annonçait « Publication
+   * modifiée », et le second texte n'était parti nulle part — seul le
+   * PREMIER atteignait le serveur. `'busy'` distingue ce cas : ni la caisse
+   * ni le réseau n'ont vu le second texte, qui doit rester RETENTABLE
+   * (`publication-edit-sheet.test.tsx`) plutôt qu'annoncé comme publié.
+   */
+  test('un SECOND texte, différent, pendant le vol du premier rend `busy` — jamais `done`, et n’envoie rien de plus', async () => {
     const queryClient = feedWithPost(post({}));
     const { transport, calls } = scriptedTransport({ 'PUT /api/v1/posts/p1': { ok: true, data: post({ content: 'Nouveau' }) } });
 
     const first = editPost({ postId: 'p1', content: 'Nouveau', deps: { source: 'gateway', transport, queryClient } });
     const second = editPost({ postId: 'p1', content: 'Autre texte', deps: { source: 'gateway', transport, queryClient } });
 
-    await Promise.all([first, second]);
+    expect(await second).toBe('busy');
+    expect(await first).toBe('done');
     expect(calls()).toHaveLength(1);
+    expect(calls()[0]?.body).toEqual({ content: 'Nouveau' });
+    /* La carte porte le texte du PREMIER appel (le seul parti), jamais celui
+       du second, que `'busy'` a laissé sur le côté. */
+    expect(cardIn(queryClient)?.content).toBe('Nouveau');
   });
 
   test('le fil GELÉ des Réels n’est JAMAIS réécrit — même registre que `applyPostUpdated`', async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { PostActionOutcome } from '@/lib/api/publication-actions';
+import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { POST_CONTENT_MAX_LENGTH, publicationEditState } from '@/lib/feed/publication-edit';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -20,14 +20,20 @@ import { Sheet } from './sheet';
  * - « Annuler » (`common.cancel`) et « Publier » (`feed.post.edit.publish`,
  *   `data-publication-edit-save`), désactivé tant que rien n'a changé, que le
  *   texte est invalide, ou que l'appel est en vol ;
- * - un échec (`'offline'`/`'failed'`) laisse la feuille OUVERTE avec le
- *   brouillon INTACT (`data-publication-edit-error`) — jamais de reprise
+ * - un échec (`'offline'`/`'failed'`/`'busy'`) laisse la feuille OUVERTE avec
+ *   le brouillon INTACT (`data-publication-edit-error`) — jamais de reprise
  *   silencieuse en tâche de fond sur un texte qu'on n'a peut-être plus envie
  *   de publier ainsi (§ doc-comment de `publication-actions.ts#editPost`) ;
- *   `'offline'` seul offre « Réessayer » (`data-publication-edit-retry`,
+ *   `'offline'` ET `'busy'` offrent « Réessayer » (`data-publication-edit-retry`,
  *   `feed.retry`, réutilisé plutôt qu'une clé de plus) — `'failed'` est un
  *   refus SERVI (403, texte invalide côté passerelle) qu'un rejeu IDENTIQUE
- *   ne changerait pas.
+ *   ne changerait pas. **`'busy'`** (revue-correction #7534, défaut majeur 1)
+ *   est un SECOND texte tapé et publié pendant qu'un premier PUT vole encore
+ *   pour la MÊME publication (rouvrir « Modifier » pendant le vol, § FERMER
+ *   PENDANT LE VOL FERME ci-dessous) : ni la caisse ni le réseau n'ont vu ce
+ *   second texte, qui reste donc dans CE brouillon jusqu'à ce que le premier
+ *   revienne — jamais l'annonce « Publication modifiée » pour un texte parti
+ *   nulle part.
  *
  * **FERMER PENDANT LE VOL FERME** (revue-correction #7534, § Q5 de la
  * spécification). La croix de `Sheet`, Échap et le retour matériel ferment le
@@ -57,13 +63,13 @@ export function PublicationEditSheet({
   /** La langue d'`original` (`FeedCardText.originalLanguage`) — vide quand la
    * passerelle n'en sert pas : aucun `lang` n'est alors inventé. */
   readonly originalLanguage: string;
-  readonly onSave: (postId: string, content: string) => Promise<PostActionOutcome>;
+  readonly onSave: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onClose: () => void;
 }) {
   const language = currentInterfaceLanguage();
   const [draft, setDraft] = useState(original);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'offline' | 'failed' | null>(null);
+  const [error, setError] = useState<'offline' | 'failed' | 'busy' | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
   useEffect(() => {
@@ -142,8 +148,8 @@ export function PublicationEditSheet({
 
         {error !== null ? (
           <p data-publication-edit-error role="alert" className="text-caption" style={{ color: 'var(--color-error)' }}>
-            {translate(language, 'feed.post.edit_failed')}
-            {error === 'offline' ? (
+            {translate(language, error === 'busy' ? 'feed.post.edit_busy' : 'feed.post.edit_failed')}
+            {error === 'offline' || error === 'busy' ? (
               <button
                 type="button"
                 data-publication-edit-retry

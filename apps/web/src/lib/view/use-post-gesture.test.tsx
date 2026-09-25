@@ -293,6 +293,78 @@ describe('usePostGesture — une modification CONFIRMÉE s’annonce (#7534)', (
 });
 
 /**
+ * **UN SECOND TEXTE PENDANT LE VOL DU PREMIER N'ANNONCE JAMAIS
+ * « Publication modifiée » POUR CE TEXTE-LÀ** (revue-correction #7534, défaut
+ * majeur 1). Avant ce correctif, `editPost` rendait `'done'` pour CE second
+ * appel SANS RIEN ENVOYER — la feuille (rouverte pendant le vol du premier,
+ * § FERMER PENDANT LE VOL FERME de `publication-edit-sheet.tsx`) se fermait,
+ * et cet hôte annonçait un succès pour un texte parti nulle part. `'busy'`
+ * ferme ce chemin : la promesse du second appel ne peut plus rendre `'done'`
+ * tant que son propre texte n'est pas passé par le réseau.
+ */
+describe('usePostGesture — un second texte, différent, pendant le vol du premier n’est jamais confirmé (revue-correction #7534)', () => {
+  test('fr : `busy`, jamais `done`, pour le texte qui n’est pas parti', async () => {
+    document.documentElement.lang = 'fr';
+    const post: FeedPost = { id: 'p-edit-busy', type: 'POST', createdAt: '2026-09-24T10:00:00.000Z', content: 'Texte original' };
+    appQueryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, {
+      pages: [{ posts: [post], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+
+    let firstOutcome: string | undefined;
+    let secondOutcome: string | undefined;
+    function EditHarness() {
+      const { announcement, menu } = usePostGesture();
+      return (
+        <div>
+          <span data-live>{announcement}</span>
+          <button
+            type="button"
+            data-edit
+            onClick={() => {
+              /* LES DEUX PARTENT DANS LE MÊME TOUR, comme un clic « Publier »
+                 sur une feuille rouverte pendant que le premier PUT vole
+                 encore : rien ne les sépare qu'une garde EN MÉMOIRE. */
+              void menu.onEdit('p-edit-busy', 'Premier texte').then((outcome) => {
+                firstOutcome = outcome;
+              });
+              void menu.onEdit('p-edit-busy', 'Second texte').then((outcome) => {
+                secondOutcome = outcome;
+              });
+            }}
+          />
+        </div>
+      );
+    }
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<EditHarness />);
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-edit]')!.click();
+    });
+    await laisserPasser();
+    await laisserPasser();
+
+    expect(secondOutcome).toBe('busy');
+    expect(firstOutcome).toBe('done');
+    /* Le SECOND texte n'a touché ni la caisse ni le réseau : la carte porte
+       le PREMIER, jamais le second — et l'annonce finale ne ment pas sur ce
+       qui est réellement parti. */
+    const held = appQueryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
+    expect(held?.content).toBe('Premier texte');
+    /* L'annonce finale ne peut être QUE l'une de ces deux phrases, jamais une
+       « Publication modifiée » qui daterait du texte qui n'est pas parti. */
+    expect([translate('fr', 'feed.post.edited'), translate('fr', 'feed.post.edit_busy')]).toContain(liveOf(container));
+    appQueryClient.removeQueries({ queryKey: FEED_QUERY_KEY });
+  });
+});
+
+/**
  * **SUPPRIMER DEPUIS LA FICHE QUITTE LA FICHE** (revue-correction #7534) —
  * miroir `PostDetailView.swift` (`if await viewModel.deletePost(postId) {
  * router.pop() }`). La fiche reçoit le menu depuis #7534 ; sans ce rappel, la
