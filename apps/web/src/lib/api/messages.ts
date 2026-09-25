@@ -9,7 +9,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
-import { refreshMineForPage } from './reactions-mine';
+import { seedMineFromPage, snapshotMine } from './reactions-mine';
 import { sealedIfOpened } from './view-once-seal';
 
 /**
@@ -80,15 +80,16 @@ export async function loadMessages(
     limit: String(MESSAGES_LIMIT),
     ...(params.before !== undefined ? { before: params.before } : {}),
   });
+  const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
     path: `/api/v1/conversations/${params.conversationId}/messages?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
-  /* « MA RÉACTION » DÈS LE CHARGEMENT (#5863) — en arrière-plan, sans
-     retarder la page : `reactions-mine.ts`. */
-  void refreshMineForPage(params, result.data);
+  /* « MA RÉACTION » DÈS LE CHARGEMENT (#5863, #7936) — lue sur la page
+     (`currentUserReactions`), sans requête de plus : `reactions-mine.ts`. */
+  seedMineFromPage(result.data, mineBefore);
   return {
     ok: true,
     data: {

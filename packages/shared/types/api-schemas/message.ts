@@ -430,6 +430,11 @@ export const messageSchema = {
       description: 'Total number of reactions on this message',
       default: 0
     },
+    currentUserReactions: {
+      type: 'array',
+      items: { type: 'string' },
+      description: "Emojis the READER has put on this message (#7936) — resolved per page in one query, never another participant's"
+    },
 
     // Mentions
     validatedMentions: {
