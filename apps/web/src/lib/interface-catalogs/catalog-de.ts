@@ -124,6 +124,7 @@ const de = {
   'feed.post.repost.unconfirmed': 'Repost nicht bestätigt — bitte erneut versuchen',
   'feed.post.repost.audience': 'Diese Zielgruppe würde die Reichweite des Originalbeitrags erweitern',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel von {author}',
   'feed.post.open': 'Beitrag von {author} öffnen',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */

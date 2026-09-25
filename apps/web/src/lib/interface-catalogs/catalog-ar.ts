@@ -124,6 +124,7 @@ const ar = {
   'feed.post.repost.unconfirmed': 'لم تُؤكَّد إعادة النشر — أعد المحاولة',
   'feed.post.repost.audience': 'سيؤدي هذا الجمهور إلى توسيع نطاق المنشور الأصلي',
   'feed.post.reel.chip': 'ريل',
+  'feed.post.repost.embed.story': 'قصة',
   'feed.post.reel.of': 'ريل {author}',
   'feed.post.open': 'فتح منشور {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */

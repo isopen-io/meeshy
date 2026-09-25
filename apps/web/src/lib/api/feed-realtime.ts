@@ -266,6 +266,48 @@ export function applyServedBookmark(
   writeCardCache<FeedInfiniteData>(queryClient, BOOKMARKS_QUERY_KEY, (data) => withoutBookmark(data, postId));
 }
 
+/**
+ * `post:reposted` (#6278 c) — LE COMPTE ABSOLU DE L'ORIGINAL SUIT LE REPOST
+ * D'UN AUTRE, sur TOUTES les caisses qui montrent sa carte (registre
+ * `card-caches.ts`, comme `post:liked`) : sans lui, l'auteur d'un original
+ * repartagé par un autre lecteur voyait un compte figé jusqu'au prochain
+ * rechargement, pendant que son PROPRE repost se reflétait déjà par
+ * l'optimiste (`performRepost#markReposted`).
+ *
+ * **`isRepostedByMe` NE BASCULE JAMAIS ICI, ET C'EST DÉLIBÉRÉ.** Le repost
+ * DU LECTEUR est déjà posé par son geste optimiste (`markReposted`, avant même
+ * que la passerelle réponde) ; le repost D'UN AUTRE ne doit jamais remplir
+ * mon propre cœur — exactement la garde que `applyServedLike` pose avec
+ * `byViewer` sur le cœur, ici plus simple : cet écho ne touche QUE le compte.
+ *
+ * **LE COMPTE VOYAGE AVEC `repost.repostOf`** (`PostRepostedEventData.repost`,
+ * `packages/shared/types/post.ts`) : la charge ne porte AUCUN champ
+ * `originalRepostCount` de premier niveau — la passerelle diffuse le REPOST
+ * fraîchement créé, qui embarque une PROJECTION de son original
+ * (`repostOfInclude`, `services/gateway/src/services/posts/postIncludes.ts`)
+ * dont `repostCount` EST celui, déjà incrémenté, de la publication citée. Un
+ * repost dont l'original n'a pas cette projection (repost d'un repost, type
+ * hors `postInclude`…) ne pose rien plutôt que de deviner un chiffre.
+ */
+type RepostedEvent = { readonly originalPostId: string; readonly repostCount: number };
+
+function repostedEventOf(payload: unknown): RepostedEvent | null {
+  const originalPostId = objectOf(payload)?.originalPostId;
+  if (typeof originalPostId !== 'string' || originalPostId.length === 0) return null;
+  const repostOf = objectOf(objectOf(payload)?.repost)?.repostOf;
+  const repostCount = objectOf(repostOf)?.repostCount;
+  return typeof repostCount === 'number' && Number.isFinite(repostCount) ? { originalPostId, repostCount } : null;
+}
+
+export function applyServedRepost(queryClient: QueryClient, payload: unknown): void {
+  const event = repostedEventOf(payload);
+  if (event === null) return;
+
+  updateCardPost(queryClient, event.originalPostId, (post) =>
+    withServedCount(post, { postId: event.originalPostId, kind: 'repost', count: event.repostCount }),
+  );
+}
+
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {
   if (!isPostReactionEvent(payload)) return;
   if (payload.emoji !== HEART_EMOJI) return;

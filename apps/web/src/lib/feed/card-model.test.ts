@@ -81,6 +81,66 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     expect('repostOfHandle' in model).toBe(false);
   });
 
+  /** LA CARTE CITÉE (#6278 c) — `repostOf` porte l'auteur, le corps déjà
+   * résolu par le Prisme (rang ≠ 1, comme le témoin de rang de la carte
+   * elle-même) et la vignette du premier média de l'ORIGINAL. */
+  test('la carte citée descend le Prisme jusqu’au rang 2, distinct du texte de la republication', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Regardez ça',
+        originalLanguage: 'fr',
+        repostOf: {
+          id: 'orig-1',
+          type: 'POST',
+          content: 'Good morning',
+          originalLanguage: 'en',
+          translations: { es: { text: 'Buenos días' } },
+          author: { id: 'u9', displayName: 'Yann Petit', username: 'yann.petit' },
+          media: [{ id: 'm9', fileUrl: 'orig.jpg', thumbnailUrl: 'orig-thumb.jpg' }],
+          likeCount: 12,
+          createdAt: '2026-09-13T10:00:00.000Z',
+        },
+      }),
+      { preferredLanguages: ['fr', 'es'], now: NOW },
+    );
+    expect(model.repostOf?.text).toEqual({
+      full: 'Buenos días',
+      language: 'es',
+      translated: true,
+      original: 'Good morning',
+      originalLanguage: 'en',
+    });
+    expect(model.repostOf?.author.name).toBe('Yann Petit');
+    expect(model.repostOf?.likeCount).toBe(12);
+    expect(model.repostOf?.thumbnailSrc).toBeDefined();
+    expect(model.repostOf?.isStory).toBe(false);
+    expect(model.repostOf?.isReel).toBe(false);
+    expect(model.repostOf?.id).toBe('orig-1');
+  });
+
+  test('la carte citée marque STORY et REEL par le type de l’original', () => {
+    const story = resolveFeedCardModel(basePost({ repostOf: { id: 'o1', type: 'STORY', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(story.repostOf?.isStory).toBe(true);
+    expect(story.repostOf?.isReel).toBe(false);
+
+    const reel = resolveFeedCardModel(basePost({ repostOf: { id: 'o2', type: 'REEL', author: { id: 'u1' } } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(reel.repostOf?.isReel).toBe(true);
+  });
+
+  test('sans republication, aucune clé `repostOf` (pas `undefined` posé)', () => {
+    const model = resolveFeedCardModel(basePost({ content: 'x', originalLanguage: 'fr' }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect('repostOf' in model).toBe(false);
+  });
+
   test('type REEL ⇒ isReel vrai et le ratio du média suit reelCardRatio, pas postMediaRatio', () => {
     const model = resolveFeedCardModel(
       basePost({

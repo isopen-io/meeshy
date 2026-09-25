@@ -128,6 +128,7 @@ const pt = {
   'feed.post.repost.unconfirmed': 'Republicação não confirmada — tente novamente',
   'feed.post.repost.audience': 'Esse público ampliaria o alcance da publicação original',
   'feed.post.reel.chip': 'Reel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Reel de {author}',
   'feed.post.open': 'Abrir a publicação de {author}',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */

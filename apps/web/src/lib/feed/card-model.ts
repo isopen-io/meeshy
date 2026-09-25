@@ -155,6 +155,30 @@ export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boo
  * (D-78) : `v !== 3`, `scenes` absent/vide, ou pas de `storyEffects`. */
 export type FeedCardScene = { readonly document: CanvasDocument; readonly carrier: SceneCarrier };
 
+/**
+ * LA PUBLICATION CITÉE (#6278 c) — la carte IMBRIQUÉE qu'un repost SIMPLE
+ * rend sous son propre en-tête, miroir `FeedPostCard.swift:822-910`
+ * (`repostView`) : auteur, corps déjà résolu par le Prisme (`text`, jamais
+ * une seconde descente — D-14), une vignette de son premier média et son
+ * compte de « j'aime » — les QUATRE autres compteurs de l'original
+ * n'apparaissent PAS sur la carte imbriquée iOS. `isStory`/`isReel`
+ * distinguent le médium cité (`FeedPostCard.swift:155-169`) : ils gouvernent
+ * le libellé de la puce, jamais un second aiguillage de rendu (§ 4 loi 6).
+ * `undefined` sur toute la structure quand `post.repostOf` n'est pas chargé
+ * (relation absente, jamais une carte vide affichée à sa place).
+ */
+export type FeedCardRepostEmbed = {
+  readonly id?: string;
+  readonly isStory: boolean;
+  readonly isReel: boolean;
+  readonly author: FeedCardAuthor;
+  readonly relativeTime: string;
+  readonly text?: FeedCardText;
+  readonly moodEmoji?: string;
+  readonly thumbnailSrc?: string;
+  readonly likeCount: number;
+};
+
 export type FeedCardModel = {
   readonly id: string;
   readonly viewer: FeedCardViewer;
@@ -168,6 +192,9 @@ export type FeedCardModel = {
    * pour son propre format (`toLocaleString`), comme `MediaCarrier.sentAt`. */
   readonly createdAt: string;
   readonly repostOfHandle?: string;
+  /** LA CARTE CITÉE, voir `FeedCardRepostEmbed` — absente quand ce post n'est
+   * pas un repost, OU quand `repostOf` n'a pas été chargé par la source. */
+  readonly repostOf?: FeedCardRepostEmbed;
   readonly text?: FeedCardText;
   /**
    * LES PSEUDOS QUE LE SERVEUR A VALIDÉS (#7032) — le jeu qui décide quels
@@ -315,6 +342,60 @@ function resolveMedia(
 }
 
 /**
+ * `resolveFeedRepostEmbed` — LA CARTE CITÉE, résolue UNE fois avec le RESTE
+ * du modèle (jamais relue par le composant, D-14). `undefined` sans relation
+ * chargée ; un `repostOf` sans auteur ni contenu ni média reste malgré tout
+ * rendu (un compte supprimé garde sa place dans la chaîne, iOS ne la masque
+ * pas non plus — `repostView` ne garde qu'`author`/`content` optionnels).
+ */
+function resolveFeedRepostEmbed(
+  repostOf: FeedPost['repostOf'],
+  preferredLanguages: readonly string[],
+  now: Date,
+): FeedCardRepostEmbed | undefined {
+  if (repostOf == null) return undefined;
+
+  const authorName =
+    textOrUndefined(repostOf.author?.displayName) ?? textOrUndefined(repostOf.author?.username) ?? FALLBACK_AUTHOR_NAME;
+  const avatarSrc = resolveAuthorSrc(repostOf.author?.avatar);
+  const content = repostOf.content ?? '';
+  const text =
+    content.trim() === ''
+      ? undefined
+      : (() => {
+          const resolved = resolveFeedText({
+            preferredLanguages,
+            originalLanguage: repostOf.originalLanguage,
+            translations: repostOf.translations,
+            content,
+          });
+          return { full: resolved.text, language: resolved.language, translated: resolved.translated, original: content, originalLanguage: repostOf.originalLanguage ?? '' };
+        })();
+  const firstMedia = (repostOf.media ?? [])[0];
+  const thumbnailSrc = textOrUndefined(firstMedia?.thumbnailUrl) !== undefined ? attachmentSrc(firstMedia!.thumbnailUrl!) : undefined;
+  const moodEmoji = textOrUndefined(repostOf.moodEmoji);
+
+  return {
+    ...(textOrUndefined(repostOf.id) !== undefined ? { id: repostOf.id } : {}),
+    isStory: repostOf.type === 'STORY',
+    isReel: repostOf.type === 'REEL',
+    author: {
+      name: authorName,
+      initials: initialsOf(authorName),
+      accentColor: authorAccentColor(repostOf.author?.id, authorName),
+      ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...(textOrUndefined(repostOf.author?.username) !== undefined ? { username: textOrUndefined(repostOf.author?.username) as string } : {}),
+      ...(textOrUndefined(repostOf.author?.id) !== undefined ? { id: textOrUndefined(repostOf.author?.id) as string } : {}),
+    },
+    relativeTime: repostOf.createdAt === undefined ? '' : shortRelativeTime(new Date(repostOf.createdAt), now),
+    ...(text !== undefined ? { text } : {}),
+    ...(moodEmoji !== undefined ? { moodEmoji } : {}),
+    ...(thumbnailSrc !== undefined ? { thumbnailSrc } : {}),
+    likeCount: numberOrUndefined(repostOf.likeCount) ?? 0,
+  };
+}
+
+/**
  * `resolveFeedCardModel` — LE SITE UNIQUE qui compose : la géographie du
  * type (`REEL` ⇒ affiche plein cadre), le Prisme du corps
  * (`resolveFeedText`, `lib/feed/text.ts` — JAMAIS réécrit ici, D-14),
@@ -352,6 +433,7 @@ export function resolveFeedCardModel(
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);
   const repostOfHandle = textOrUndefined(post.repostOf?.author?.username);
+  const repostEmbed = resolveFeedRepostEmbed(post.repostOf, params.preferredLanguages, params.now);
   const media = resolveMedia(post, isReel, params.preferredLanguages, text);
   const document = parseCanvasDocument(post.storyEffects);
   // Le PORTEUR d'une scène est fait des médias DÉJÀ résolus par le Prisme
@@ -407,6 +489,7 @@ export function resolveFeedCardModel(
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     createdAt: new Date(post.createdAt).toISOString(),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
+    ...(repostEmbed !== undefined ? { repostOf: repostEmbed } : {}),
     ...(text !== undefined ? { text } : {}),
     // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas
     // prononcé » : la passerelle sert `null` pour un champ optionnel absent

@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { FEED_NEW_COUNT_KEY } from './feed-new-count';
-import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated } from './feed-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedRepost } from './feed-realtime';
 import { postQueryKey } from './publication-detail';
 import { REELS_QUERY_ROOT, reelsQueryKey } from './reels';
 
@@ -424,5 +424,54 @@ describe('les graines de Réels que rien ne touche gardent leur IDENTITÉ (#7227
     );
 
     expect(queryClient.getQueryData(reelsQueryKey('graine'))).toBe(reels);
+  });
+});
+
+/**
+ * `post:reposted` (#6278 c) — LE COMPTE ABSOLU, jamais `isRepostedByMe`. Le
+ * repost du LECTEUR est déjà posé par l'optimiste (`performRepost`) ; cet
+ * écho ne fait que remplacer l'estimation par le chiffre servi, EXACTEMENT
+ * comme `post:liked` pour le cœur — sauf que rien ici ne bascule jamais l'état
+ * « par moi », posture délibérée (voir le doc-comment d'`applyServedRepost`).
+ */
+describe('`post:reposted` — le compte de l’original suit le repost D’UN AUTRE', () => {
+  const reposted = (originalPostId: string, repostCount: number, patch: Record<string, unknown> = {}) => ({
+    originalPostId,
+    repost: { id: 'repost-1', author: { id: 'u-other' }, repostOf: { id: originalPostId, repostCount }, ...patch },
+  });
+
+  test('pose le compte ABSOLU servi, sans jamais toucher `isRepostedByMe`', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3, isRepostedByMe: false })]);
+
+    applyServedRepost(queryClient, reposted('p-original', 4));
+
+    const carte = cartes(queryClient)[0]!;
+    expect(carte.repostCount).toBe(4);
+    expect(carte.isRepostedByMe).toBe(false);
+  });
+
+  test('mon PROPRE repost — le compte se confirme, `isRepostedByMe` reste tel que l’optimiste l’a posé', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 4, isRepostedByMe: true })]);
+
+    applyServedRepost(queryClient, reposted('p-original', 4, { author: { id: 'u-viewer' } }));
+
+    const carte = cartes(queryClient)[0]!;
+    expect(carte.repostCount).toBe(4);
+    expect(carte.isRepostedByMe).toBe(true);
+  });
+
+  test('une charge sans `repost.repostOf.repostCount` ne pose rien', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3 })]);
+    const flux = queryClient.getQueryData(FEED_QUERY_KEY);
+
+    applyServedRepost(queryClient, { originalPostId: 'p-original', repost: { author: { id: 'u-other' } } });
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(flux);
+  });
+
+  test('une charge MALFORMÉE (originalPostId absent) ne lève pas', () => {
+    const queryClient = clientAvec([post({ id: 'p-original', repostCount: 3 })]);
+    expect(() => applyServedRepost(queryClient, { repost: {} })).not.toThrow();
+    expect(() => applyServedRepost(queryClient, null)).not.toThrow();
   });
 });

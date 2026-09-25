@@ -163,6 +163,7 @@ const fr = {
   'feed.post.repost.unconfirmed': 'Repartage non confirmé — réessayez',
   'feed.post.repost.audience': 'Cette audience élargirait la diffusion d’origine',
   'feed.post.reel.chip': 'Réel',
+  'feed.post.repost.embed.story': 'Story',
   'feed.post.reel.of': 'Réel de {author}',
   /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :
      « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
