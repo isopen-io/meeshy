@@ -1,5 +1,29 @@
 # @meeshy/gateway
 
+## 1.70.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'export des données passe par le portail de livraison (#7864)
+  - le gate du manifeste Android ne compte que les déclarations effectives, et ne se tait plus lancé par un lien (Closes #7869)
+  - le gate exige exactement une déclaration par permission, jamais commentée (Closes #7844-residual)
+  - un second texte pendant le vol du premier n'est jamais `done` (Refs #7534)
+  - l'auteur modifie le texte de sa publication depuis le menu « ⋯ » (Closes #7534)
+  - une story de plusieurs scènes composée sur le web part en autant de stories (Closes #7707)
+  - une story de plusieurs pages part en autant de stories (Refs #7707)
+  - la coque Android enregistre sa story par MeeshyShare.shareFile (#7863)
+  - markdown léger, liens www./courriel et barre de format du compositeur (#7849)
+  - gras, italique, souligné, barré en un geste dans le compositeur (#7849)
+  - rendu du markdown léger et liens Meeshy ouverts dans l'app (#7849)
+  - code inline, liens markdown, www., courriels et blocs dans le découpage d'un message (#7849)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.25.0
+
 ## 1.69.0
 
 ### Minor Changes
