@@ -36,7 +36,7 @@ struct FocalDeletedRow: View, Equatable {
         Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
             .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
             .italic()
-            .foregroundColor(ThemeManager.shared.textMuted)
+            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             .padding(.leading, FocalMetrics.Row.contentIndent)
             .accessibilityElement(children: .combine)
     }
@@ -60,12 +60,12 @@ struct FocalSystemNoticeRow: View, Equatable {
             if let timeString, !timeString.isEmpty {
                 Text(timeString)
                     .font(MeeshyFont.relative(9.5, weight: .semibold))
-                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark).opacity(0.7))
                     .accessibilityIdentifier("focal-system-notice-time")
             }
             Text(text)
                 .font(MeeshyFont.relative(12.5, weight: .medium))
-                .foregroundColor(ThemeManager.shared.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, alignment: .center)
