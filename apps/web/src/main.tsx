@@ -224,3 +224,24 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
   if (document.readyState === 'complete') inscrire();
   else window.addEventListener('load', inscrire, { once: true });
 }
+
+/**
+ * ET LA COQUE APPREND QU'UNE VERSION EST PUBLIÉE (#6937). Sans service worker,
+ * c'est la passerelle qui le lui dit (`GET /api/v1/app/shell-version`), au
+ * démarrage et à chaque retour au premier plan ; la bannière ouvre alors la
+ * fiche du magasin au lieu de recharger. Même horloge que l'inscription du
+ * worker ci-dessus : après la première peinture, sur le `load`.
+ */
+if (__SHELL__) {
+  const guetter = (): void => {
+    void Promise.all([
+      import('@/lib/app-update/shell-update'),
+      import('@/lib/api/client'),
+      import('@/lib/native-shell'),
+    ]).then(([{ watchShellUpdates }, { httpTransport }, { coqueCourante }]) =>
+      watchShellUpdates({ transport: httpTransport, installed: __APP_VERSION__, bridge: coqueCourante(), host: document }),
+    );
+  };
+  if (document.readyState === 'complete') guetter();
+  else window.addEventListener('load', guetter, { once: true });
+}

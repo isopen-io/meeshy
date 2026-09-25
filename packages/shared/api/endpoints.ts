@@ -175,6 +175,7 @@ export const API_ENDPOINTS = {
   },
   app: {
     minVersion: '/api/v1/app/min-version',
+    shellVersion: '/api/v1/app/shell-version',
   },
   attachments: {
     batchAnalysis: '/api/v1/attachments/batch/analysis',
@@ -727,6 +728,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/anonymous/link/:identifier',
   '/api/v1/anonymous/refresh',
   '/api/v1/app/min-version',
+  '/api/v1/app/shell-version',
   '/api/v1/attachments/:attachmentId',
   '/api/v1/attachments/:attachmentId/analysis',
   '/api/v1/attachments/:attachmentId/metadata',
@@ -1201,6 +1203,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/anonymous/link/:identifier': ['GET'],
   '/api/v1/anonymous/refresh': ['POST'],
   '/api/v1/app/min-version': ['GET'],
+  '/api/v1/app/shell-version': ['GET'],
   '/api/v1/attachments/:attachmentId': ['GET', 'DELETE'],
   '/api/v1/attachments/:attachmentId/analysis': ['GET', 'POST'],
   '/api/v1/attachments/:attachmentId/metadata': ['GET'],
