@@ -126,15 +126,31 @@ const datedIn = (queryClient: QueryClient, queryKey: QueryKey, post: FeedPost | 
  * amorce la déclare comme la sienne (`initialDataUpdatedAt`), et sa règle de
  * fraîcheur juge alors l'âge réel de la donnée, pas l'instant de l'ouverture.
  */
-export function findCachedCard(queryClient: QueryClient, postId: string): CachedCard | undefined {
+const findIn = (queryClient: QueryClient, lists: readonly CardList[], postId: string): CachedCard | undefined => {
   const detailKey = postQueryKey(postId);
-  const [listed] = cardsOf(queryClient, CARD_LISTS).flatMap(([queryKey, data]) => datedIn(queryClient, queryKey, cardIn(data, postId)));
+  const [listed] = cardsOf(queryClient, lists).flatMap(([queryKey, data]) => datedIn(queryClient, queryKey, cardIn(data, postId)));
   return listed ?? datedIn(queryClient, detailKey, queryClient.getQueryData<FeedPost>(detailKey))[0];
+};
+
+export function findCachedCard(queryClient: QueryClient, postId: string): CachedCard | undefined {
+  return findIn(queryClient, CARD_LISTS, postId);
 }
 
 /** L'état « AVANT » d'un geste — la carte seule, sans sa date. */
 export function findCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
   return findCachedCard(queryClient, postId)?.post;
+}
+
+/**
+ * **LE TEXTE TEL QUE L'AUTEUR L'A ÉCRIT EN DERNIER** (revue-correction #7534)
+ * — la carte d'une caisse VIVANTE, celles que `replaceCardContent` écrit,
+ * jamais le fil GELÉ des Réels : il ne reçoit pas les modifications (D-66,
+ * `frozen`) et peut tenir un texte que toutes les autres caisses ont déjà
+ * remplacé. Un geste sur le CONTENU qui y lirait son « avant » comparerait à
+ * un texte périmé et, sur un refus, le recopierait partout.
+ */
+export function findLiveCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
+  return findIn(queryClient, UNFROZEN_LISTS, postId)?.post;
 }
 
 /**
@@ -186,6 +202,40 @@ export function replaceCardContent(queryClient: QueryClient, postId: string, app
 export function removeCardPost(queryClient: QueryClient, postId: string): void {
   writeLists(queryClient, CARD_LISTS, (data) => dropCardPost(data, postId));
   queryClient.removeQueries({ queryKey: postQueryKey(postId) });
+}
+
+/**
+ * CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR (#7182, extrait de
+ * `feed-realtime.ts#merged`, AUCUN changement de règle — #7534). `isLikedByMe`
+ * et `isBookmarkedByMe` se lisent PAR LECTEUR ; un événement diffusé à tous ou
+ * une réponse servie à CE lecteur ne peuvent pas les porter justes pour
+ * chacun. Sans cette préservation, un auteur corrigeant une faute de frappe
+ * dé-remplirait le cœur de tous ceux qui avaient aimé — miroir explicite
+ * d'iOS, « Preserve local-only state (isLiked) across the update »
+ * (`FeedViewModel.swift:1495`).
+ *
+ * **SITE UNIQUE** — le port du menu « ⋯ » (`publication-actions.ts#editPost`)
+ * a besoin de la MÊME loi pour hydrater son optimiste avec la réponse
+ * servie, et il vit dans le chunk SYNCHRONE (un geste de carte, jamais
+ * différé) alors que `feed-realtime.ts` n'est atteint qu'en `import()` par
+ * `socket.ts` (le chunk `realtime`, chargé APRÈS la première peinture) : un
+ * port de geste ne peut PAS l'importer sans y traîner tout le temps réel.
+ * Elle vit donc ICI, dans le registre que les deux appelants lisent déjà.
+ *
+ * Un spread CONDITIONNEL, et non `a ?? b` : sous `exactOptionalPropertyTypes`,
+ * poser explicitement `undefined` sur une propriété optionnelle est un défaut
+ * de type — une propriété ABSENTE et une propriété qui VAUT `undefined` ne sont
+ * pas la même chose. La comparaison est `== null` pour couvrir les deux formes
+ * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
+ * pas une absence, et il survit. Les COMPTEURS ne sont pas préservés —
+ * `likeCount` est un agrégat que le serveur tient mieux que nous.
+ */
+export function mergeServedPost(incoming: FeedPost, held: FeedPost): FeedPost {
+  return {
+    ...incoming,
+    ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+    ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
+  };
 }
 
 /**

@@ -35,6 +35,7 @@ export function StudioTextInput({
   fontSize,
   onText,
   onPublish,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly targetId: string | null;
@@ -44,6 +45,11 @@ export function StudioTextInput({
   readonly fontSize: string | null;
   readonly onText: (value: string) => void;
   readonly onPublish: () => void;
+  /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan publié
+   * lit le texte tel qu'il était au premier clic sur Publier ; une frappe
+   * après coup partirait dans l'ancienne version, ou serait perdue quand la
+   * page quitte le brouillon dès sa story commise. */
+  readonly locked?: boolean;
 }) {
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const text = layer?.text ?? '';
@@ -67,7 +73,7 @@ export function StudioTextInput({
         data-story-text-target={targetId ?? undefined}
         lang={layer?.language ?? fallbackLanguage}
         dir="auto"
-        disabled={layer === null}
+        disabled={layer === null || locked}
         value={text}
         onInput={(event) => {
           onText(event.currentTarget.value);

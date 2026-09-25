@@ -733,4 +733,29 @@ describe('StoryComposeScreen — ouvert par l’accueil post-inscription (#7729)
     dispose();
     goTo(before);
   });
+
+  test('une story de DEUX pages part en deux stories, et c’est la PREMIÈRE que l’accueil reçoit (#7707)', async () => {
+    const happyDom: unknown = Reflect.get(window, 'happyDOM');
+    const setUrl: unknown = typeof happyDom === 'object' && happyDom !== null ? Reflect.get(happyDom, 'setURL') : undefined;
+    const before = window.location.href;
+    const goTo = (url: string) => {
+      if (typeof setUrl === 'function') Reflect.apply(setUrl, happyDom, [url]);
+    };
+    goTo('http://localhost/stories/new?from=onboarding');
+    const bench = harness({});
+    const { container, dispose } = mountFromOnboarding(bench.deps);
+
+    typeText(container, 'Première');
+    act(() => container.querySelector<HTMLButtonElement>('[data-story-option="add-page"]')!.click());
+    await flush(() => container.querySelectorAll('[data-story-studio-page-tile]').length === 2);
+    typeText(container, 'Seconde');
+    act(() => publishButton(container)!.click());
+    await flush(() => window.location.pathname === '/onboarding');
+
+    expect(bench.posts).toHaveLength(2);
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/onboarding?story=post-1');
+    expect(storyReturn.take('post-1')).toBe(true);
+    dispose();
+    goTo(before);
+  });
 });

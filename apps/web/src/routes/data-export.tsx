@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
-import { downloadJsonFile, exportFileName, requestDataExport, type DataExportResult } from '@/lib/api/data-export';
+import { deliverJsonFile, exportFileName, requestDataExport, type DataExportResult } from '@/lib/api/data-export';
 import type { ApiResult } from '@/lib/api/http';
 import { reachFailureOf, type ReachFailure } from '@/lib/api/link-failure';
+import type { DeliverFileOutcome } from '@/lib/media/deliver-file';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -34,18 +35,28 @@ import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, ReachFailurePa
 
 export type DataExportPageDeps = {
   readonly request: () => Promise<ApiResult<DataExportResult>>;
-  readonly download: (fileName: string, jsonText: string) => void;
+  readonly download: (fileName: string, jsonText: string) => Promise<DeliverFileOutcome>;
 };
 
 const GATEWAY_DEPS: DataExportPageDeps = {
   request: () => requestDataExport(apiDeps),
-  download: downloadJsonFile,
+  download: (fileName, jsonText) => deliverJsonFile(fileName, jsonText),
 };
 
+type ExportFile = { readonly fileName: string; readonly jsonText: string };
+
+/**
+ * **UN EXPORT NON LIVRÉ RESTE EN MAIN** (#7864). Une feuille de partage fermée
+ * sans choix, ou une activation de geste expirée pendant la requête (la coque
+ * iOS n'a que `navigator.share`), ne perdent pas l'export : la page passe à
+ * « prêt », et le tap suivant — une activation neuve — livre le MÊME fichier
+ * sans le redemander au serveur. « Export terminé » ne se dit que livré.
+ */
 type ExportState =
   | { readonly phase: 'idle' }
   | { readonly phase: 'exporting' }
   | { readonly phase: 'done' }
+  | { readonly phase: 'ready'; readonly file: ExportFile; readonly undelivered: boolean }
   | { readonly phase: 'failed'; readonly failure: ReachFailure };
 
 export function DataExportPage({
@@ -70,8 +81,12 @@ export function DataExportPage({
       setState({ phase: 'failed', failure: reachFailureOf(result) });
       return;
     }
-    deps.download(exportFileName(result.data.exportDate), JSON.stringify(result.data.raw, null, 2));
-    setState({ phase: 'done' });
+    await deliver({ fileName: exportFileName(result.data.exportDate), jsonText: JSON.stringify(result.data.raw, null, 2) });
+  }
+
+  async function deliver(file: ExportFile) {
+    const outcome = await deps.download(file.fileName, file.jsonText);
+    setState(outcome === 'delivered' ? { phase: 'done' } : { phase: 'ready', file, undelivered: outcome === 'unavailable' });
   }
 
   if (state.phase === 'failed') {
@@ -79,6 +94,27 @@ export function DataExportPage({
   }
 
   const exporting = state.phase === 'exporting';
+
+  if (state.phase === 'ready') {
+    return (
+      <LinkPage
+        glyph="archive"
+        tone="brand"
+        title={translate(language, 'dataExport.ready.title')}
+        body={
+          <>
+            <LinkText>{translate(language, 'dataExport.ready.body')}</LinkText>
+            {state.undelivered ? <LinkAlert>{translate(language, 'dataExport.undelivered.body')}</LinkAlert> : null}
+          </>
+        }
+      >
+        <ActionButton onClick={() => void deliver(state.file)}>{translate(language, 'dataExport.action.deliver')}</ActionButton>
+        <ActionLink to="settings" tone="secondary">
+          {translate(language, 'linkPage.settings')}
+        </ActionLink>
+      </LinkPage>
+    );
+  }
 
   if (state.phase === 'done') {
     return (

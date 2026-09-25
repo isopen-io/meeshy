@@ -125,9 +125,8 @@ export function isStudioDraftEmpty(draft: StudioDraft): boolean {
 
 /** Les pages qui PARTIRONT — une page sans matière ne produit aucune scène
  * (`composeStoryCanvasPages`). Le SITE UNIQUE de « combien de scènes ? » pour
- * le sous-menu de disposition (`layoutIsServed`) et le refus d'une story de
- * plusieurs pages (`studioPublishRefusal`) : compter `pages.length` offrait
- * une disposition qu'une page vide rendait sans effet. */
+ * le sous-menu de disposition (`layoutIsServed`) : compter `pages.length`
+ * offrait une disposition qu'une page vide rendait sans effet. */
 export function studioPublishablePageCount(draft: StudioDraft): number {
   return draft.pages.filter((page) => !isStudioPageEmpty(page)).length;
 }
@@ -173,6 +172,26 @@ export function withoutPage(draft: StudioDraft, id: string): StudioDraft {
 /** Change la scène courante (`selectSlide(at:)`) — un `id` inconnu ⇒ inchangé. */
 export function withCurrentPage(draft: StudioDraft, id: string): StudioDraft {
   return draft.pages.some((page) => page.id === id) ? { ...draft, currentPage: id } : draft;
+}
+
+/**
+ * **RETIRER PLUSIEURS PAGES D'UN COUP** (#7707) — ce qu'un échec PARTIEL du
+ * canal `.scene` laisse derrière lui : les pages PARTIES n'ont plus leur
+ * place dans le brouillon, celles qui restent gardent leur IDENTITÉ D'OBJET
+ * (Zero Unnecessary Re-render, comme `withPage`). Des `id` inconnus sont
+ * ignorés — jamais une exception pour un id déjà retiré.
+ *
+ * **Retirer TOUTES les pages laisse le brouillon INCHANGÉ** : le succès
+ * COMPLET d'une publication passe par `clear(viewerId)` (le brouillon entier
+ * disparaît) — jamais par ici, qui ne réduit un document qu'à ce qu'il en
+ * reste à publier.
+ */
+export function withoutPages(draft: StudioDraft, ids: readonly string[]): StudioDraft {
+  const removed = new Set(ids);
+  const pages = draft.pages.filter((page) => !removed.has(page.id));
+  const first = pages[0];
+  if (first === undefined || pages.length === draft.pages.length) return draft;
+  return { ...draft, pages, currentPage: removed.has(draft.currentPage) ? first.id : draft.currentPage };
 }
 
 /** Le nombre de médias (fond/calque/son) que le DOCUMENT ENTIER porte, prêts

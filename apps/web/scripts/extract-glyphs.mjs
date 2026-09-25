@@ -304,8 +304,24 @@ emit({
  * `star` / `star-fill` (#7378) — le favori de la feuille « Plus... »
  * (`action.star` / `action.unstar`, `star.fill` iOS) : Ajouter (contour),
  * Retirer (plein). La feuille vit dans le chunk du fil, comme ce jeu.
+ *
+ * `pencil-simple` (#7534) — « Modifier » du menu « ⋯ » d'une carte du fil,
+ * miroir `pencil` (SF Symbols, `FeedPostCard+Header.swift:213`) : même
+ * glyphe que `AUTH`/`THREAD_STATES` (composeur, avatar), un jeu D'ÉCRAN
+ * distinct parce que ce menu et le fil des messages ne se chargent jamais
+ * ensemble.
  */
-const THREAD_MENU = ['check-circle', 'globe', 'copy', 'arrow-bend-up-right', 'magic-wand', 'dots-three', 'star', 'star-fill'];
+const THREAD_MENU = [
+  'check-circle',
+  'globe',
+  'copy',
+  'arrow-bend-up-right',
+  'magic-wand',
+  'dots-three',
+  'star',
+  'star-fill',
+  'pencil-simple',
+];
 
 emit({
   ids: THREAD_MENU,

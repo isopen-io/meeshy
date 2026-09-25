@@ -484,4 +484,43 @@ for (const scheme of ['dark', 'light']) {
 
 }
 
+/**
+ * LA FEUILLE « MODIFIER » D'UNE PUBLICATION (#7534) — ouverte depuis le menu
+ * « ⋯ » de `post-mine`, la SEULE publication du corpus dont l'auteur est le
+ * lecteur (`POST_MINE`, `fixtures-feed.ts`). Le menu ne propose « Modifier »
+ * qu'à l'AUTEUR : la session est donc posée sur `u-viewer` (`VIEWER_ID`,
+ * `fixtures-base.ts`), comme `check-gateway-build.mjs` la pose. Deux états :
+ * à l'ouverture (champ sur l'ORIGINAL, compteur, « Publier » éteint) et
+ * après une frappe (« Publier » allumé).
+ */
+const VIEWER_SESSION = JSON.stringify({
+  token: 'capture-token',
+  sessionToken: 'capture-session',
+  user: { id: 'u-viewer', username: 'vous' },
+  expiresAt: INSTANT.getTime() + 3_600_000,
+});
+for (const scheme of ['dark', 'light']) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    colorScheme: scheme === 'light' ? 'light' : 'dark',
+  });
+  await context.addInitScript((session) => window.localStorage.setItem('meeshy.session', session), VIEWER_SESSION);
+  const page = await context.newPage();
+  await page.clock.setFixedTime(INSTANT);
+  await page.goto(`${BASE}/post/post-mine`, { waitUntil: 'networkidle' });
+  await page.locator('[data-feed-post-menu]').click();
+  await page.locator('[data-feed-post-action="edit"]').click();
+  await page.waitForSelector('[data-publication-edit-sheet]');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUTPUT}publication-edit-sheet.${scheme}.png` });
+  console.log(`  publication-edit-sheet · ${scheme}`);
+  await page.locator('[data-publication-edit-field]').press('End');
+  await page.keyboard.type(' Corrigée.');
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: `${OUTPUT}publication-edit-sheet-changed.${scheme}.png` });
+  console.log(`  publication-edit-sheet-changed · ${scheme}`);
+  await context.close();
+}
+
 await browser.close();

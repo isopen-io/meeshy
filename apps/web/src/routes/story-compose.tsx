@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -11,7 +11,6 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { refreshFeedAction } from '@/lib/api/query';
-import { publishStory } from '@/lib/api/stories-publish';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { backgroundCss } from '@/lib/canvas/background';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
@@ -39,7 +38,7 @@ import {
   pageWithVisualAspectRatio,
   pageWithVisualUpload,
   type StudioDoor,
-  type StudioFailureKey,
+  type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
 import {
@@ -48,7 +47,6 @@ import {
   currentStudioPage,
   selectedTextLayer,
   studioDraftFromSnapshot,
-  studioFailureKey,
   studioPlaceRefusal,
   studioPublishablePageCount,
   studioSnapshotOf,
@@ -64,13 +62,15 @@ import {
   withVisualCaption,
   withVisualPose,
   withoutPage,
+  withoutPages,
   withoutSound,
   withoutText,
   withoutVisual,
   type StudioDraft,
 } from '@/lib/stories/studio';
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
-import { settle, studioPublishPayload, uploadStateOf, type PendingUpload, type SettledPage } from '@/lib/stories/studio-publish';
+import { settlePages, studioPublishPlan, uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
+import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import type { StudioTextLayer } from '@/lib/stories/studio-text';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
@@ -78,9 +78,10 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
-import { Link, href, navigate } from '@/routes/route-table';
+import { href, navigate } from '@/routes/route-table';
+import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
-import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice } from '@/routes/story-compose-footer';
+import { publicationRefusalText, StudioFooterMessage, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 import {
   LayerMark,
@@ -109,14 +110,24 @@ import { StudioTextInput } from '@/routes/story-compose-text-input';
  * elles ne règlent rien, elles SONT l'objet qu'on saisit
  * (`story-compose-stage.tsx`).
  *
- * TROIS lois tenues ici, inchangées depuis #6900 :
+ * QUATRE lois tenues ici, les trois premières inchangées depuis #6900 :
  *  - **le brouillon est persisté à CHAQUE changement** (par lecteur,
  *    `studio-draft-store.ts`) — un échec, un départ par ✕, un rechargement le
  *    conservent ; seul un succès le purge ;
  *  - **un média PRÊT n'est jamais remonté** : la publication lit son identité
  *    dans le brouillon ; seul un média EN VOL est attendu (§ 1.4) ;
  *  - **hors ligne, l'intention de publier est ARMÉE** et part seule au retour
- *    du réseau — l'écran ne promet que ce qu'il fait.
+ *    du réseau — l'écran ne promet que ce qu'il fait ;
+ *  - **LE PLAN EST FIGÉ AU PREMIER CLIC SUR PUBLIER** (#7707, revue-correction)
+ *    — `studioPublishPlan` lit le brouillon UNE fois, avant la première
+ *    requête de la séquence ; tant que `publishing` est vrai, la composition
+ *    entière (couloirs, plateau, rail de pages, pied, audience) passe en
+ *    LECTURE SEULE, comme iOS ferme le composer à la publication
+ *    (`StoryViewModel+Publication.swift:549`). Sans ce verrou, une page
+ *    retirée du rail pendant l'envoi partait quand même, une retouche de
+ *    texte partait dans son ancienne version puis se perdait, et un
+ *    changement d'audience était ignoré en silence (défauts 1 et 2, revue de
+ *    #7707). Seuls le ✕ (`StudioShell`) et la capsule Publier restent actifs.
  */
 
 const ScenePlayer = lazy(() => import('@/components/scene-player'));
@@ -168,7 +179,14 @@ function revokeIfLocal(url: string | undefined): void {
   if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
 }
 
-const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
+/** Les TROIS aperçus locaux d'UNE page — fond, calque, son — révoqués
+ * ensemble : une page qui quitte le brouillon (retrait, publication) ne
+ * laisse aucun `blob:` derrière elle. */
+function revokePageMedia(page: StudioPage): void {
+  revokeIfLocal(page.background?.previewUrl);
+  revokeIfLocal(page.overlay?.previewUrl);
+  revokeIfLocal(page.sound?.previewUrl);
+}
 
 /**
  * LE COMPOSER UNIQUE de la story, du post et du réel (#7497) — `initialKind`
@@ -201,43 +219,6 @@ export default function StoryComposeScreen({
       requestedAudience={requestedAudience}
       origin={origin}
     />
-  );
-}
-
-/** La barre haute d'iOS (`ComposerTopBar.swift:49-71`) : ✕ · rail · ⋯. Le
- * rail des scènes (#7684) prend la place du titre dès la deuxième page — le
- * titre reste pour le lecteur d'écran, et la scène ne change pas de hauteur
- * quand le rail apparaît. */
-function StudioShell({
-  kind,
-  origin,
-  rail,
-  children,
-}: {
-  readonly kind: PublicationKind;
-  readonly origin: StudioOrigin | null;
-  readonly rail?: ReactNode;
-  readonly children: ReactNode;
-}) {
-  const lang = currentInterfaceLanguage();
-  return (
-    <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
-      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
-        <Link
-          to={origin === 'onboarding' ? 'onboarding' : kind === 'STORY' ? 'list' : 'feed'}
-          aria-label={translate(lang, 'story.studio.cancel')}
-          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
-        >
-          <Glyph name="x" size={18} />
-        </Link>
-        {rail}
-        <h1 className={rail === undefined ? 'flex-1 text-body font-semibold' : 'offscreen'} style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(lang, TITLE_KEY[kind])}
-        </h1>
-      </header>
-      {children}
-    </main>
   );
 }
 
@@ -283,7 +264,10 @@ function StoryStudio({
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
-  const [publishFailure, setPublishFailure] = useState<StudioFailureKey | null>(null);
+  const [publishFailure, setPublishFailure] = useState<StudioPublishFailureNotice | null>(null);
+  /** Où en est la séquence (#7707) — la capsule dit « Publication k/N… » dès
+   * que le plan porte deux publications ou plus. */
+  const [publishProgress, setPublishProgress] = useState<{ readonly published: number; readonly total: number } | null>(null);
   const [placeRefusal, setPlaceRefusal] = useState<StudioPlaceRefusalNotice | null>(null);
   /** Les contrôleurs de l'outil ouvert (zone BASSE d'iOS) — FERMÉS par défaut :
    * la scène garde toute sa hauteur tant que l'auteur ne règle rien. */
@@ -297,21 +281,26 @@ function StoryStudio({
 
   const pendingRef = useRef<Record<string, PendingUpload | null>>({});
   const abortRef = useRef<Record<string, AbortController | null>>({});
+  /** L'envoi EN COURS — abandonné au démontage : la séquence s'arrête entre
+   * deux requêtes, jamais au milieu d'une (`runStudioPublish`). */
+  const sendRef = useRef<AbortController | null>(null);
+  /** Vrai dès que la publication a TOUT emporté : le brouillon est purgé, et
+   * un rendu tardif (une page retirée en cours de séquence, rendue APRÈS la
+   * purge) ne le réécrit plus — sans quoi le brouillon rouvert reposterait la
+   * dernière page retirée. */
+  const purgedRef = useRef(false);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
 
   useEffect(() => {
-    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
+    if (viewerId !== null && !purgedRef.current) deps.drafts.set(viewerId, studioSnapshotOf(draft, language));
   }, [draft, language, viewerId, deps.drafts]);
 
   useEffect(
     () => () => {
       Object.values(abortRef.current).forEach((controller) => controller?.abort());
-      latestDraft.current.pages.forEach((p) => {
-        revokeIfLocal(p.background?.previewUrl);
-        revokeIfLocal(p.overlay?.previewUrl);
-        revokeIfLocal(p.sound?.previewUrl);
-      });
+      sendRef.current?.abort();
+      latestDraft.current.pages.forEach(revokePageMedia);
     },
     [],
   );
@@ -403,9 +392,7 @@ function StoryStudio({
       const removed = latestDraft.current.pages.find((p) => p.id === id);
       if (removed === undefined || latestDraft.current.pages.length <= 1) return;
       ALL_DOORS.forEach((door) => forgetUpload(id, door));
-      revokeIfLocal(removed.background?.previewUrl);
-      revokeIfLocal(removed.overlay?.previewUrl);
-      revokeIfLocal(removed.sound?.previewUrl);
+      revokePageMedia(removed);
       setDraft((current) => withoutPage(current, id));
     },
     [forgetUpload],
@@ -473,12 +460,31 @@ function StoryStudio({
     [],
   );
 
+  /** **UNE PAGE PARTIE NE REPART JAMAIS** (#7707, miroir `publishedPostIds`,
+   * `StoryViewModel+Publication.swift:240-245` : « otherwise a partial-failure
+   * retry creates duplicate slides ») — retirée du brouillon DÈS que sa story
+   * est commise, pas à la fin de la séquence : le rail la perd sous les yeux
+   * de l'auteur, et le magasin est écrit ICI, en plus de l'effet de
+   * persistance, parce qu'un studio quitté pendant l'envoi ne rend plus rien
+   * — sans cette écriture, le brouillon rouvert republierait la page 1. */
+  function dropPublishedPages(pageIds: readonly string[]) {
+    latestDraft.current.pages.filter((p) => pageIds.includes(p.id)).forEach((p) => {
+      ALL_DOORS.forEach((door) => forgetUpload(p.id, door));
+      revokePageMedia(p);
+    });
+    const reduced = withoutPages(latestDraft.current, pageIds);
+    latestDraft.current = reduced;
+    if (viewerId !== null) deps.drafts.set(viewerId, studioSnapshotOf(reduced, language));
+    setDraft((c) => withoutPages(c, pageIds));
+  }
+
   /**
-   * **PLUSIEURS PAGES, PLUSIEURS SCÈNES, UN SEUL ENVOI** (#7684) — chaque
-   * page règle ses TROIS montées en vol (`settle`, adressées par
-   * `${pageId}:${door}`), jamais seulement celles de la page à l'écran.
-   * `chosen` est le GESTE entier (format ET disposition, `PublishChoice`) :
-   * une intention armée hors ligne, ou un échec, repart avec les deux.
+   * **PLUSIEURS PAGES, PLUSIEURS PUBLICATIONS** (#7684, canal `.scene` #7707)
+   * — `settlePages` règle les montées, `studioPublishPlan` décide du NOMBRE
+   * de publications (une par page pour une story, une pour tout le reste),
+   * `publishStudioPlan` les envoie en séquence. `chosen` porte le GESTE
+   * entier (format et disposition) : un échec ou une intention armée hors
+   * ligne repart avec les deux.
    */
   async function publish(chosen: PublishChoice = choice) {
     if (!canPublishStudioDraft(draft) || publishing) return;
@@ -492,51 +498,34 @@ function StoryStudio({
     setPublishing(true);
     setPublishFailure(null);
 
-    const settledByPage = new Map(
-      await Promise.all(
-        draft.pages.map(
-          async (p): Promise<readonly [string, SettledPage]> => [
-            p.id,
-            await Promise.all([
-              settle(p.background?.upload, pendingRef.current[uploadKey(p.id, 'visual')] ?? null),
-              settle(p.overlay?.upload, pendingRef.current[uploadKey(p.id, 'overlay')] ?? null),
-              settle(p.sound?.upload, pendingRef.current[uploadKey(p.id, 'sound')] ?? null),
-            ]),
-          ],
-        ),
-      ),
-    );
-
+    const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
     const current = latestDraft.current;
-    // Le sous-menu n'offre une disposition QUE pour Post (`layoutIsServed`) :
-    // un autre format part sans `layout`, même choisi plus tôt sur un Post.
-    const payload = studioPublishPayload({ pages: current.pages, settled: settledByPage, layout: chosen.kind === 'POST' ? chosen.layout : null });
-    if (payload.kind !== 'ready') {
+    const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
+    if (plan.kind !== 'ready') {
       setPublishing(false);
-      setPublishFailure(null);
       return;
     }
 
-    // **AUCUN `content`** (défaut 4, revue-correction #6900) : le texte d'une
-    // story vit dans `storyEffects` — l'envoyer en `content` le ferait rendre
-    // DEUX FOIS chez le lecteur, miroir du `content: nil` iOS
-    // (`StoryViewModel+PublicationUpload.swift:378-391`). `mediaCaption`, LUI,
-    // part (#6944) : `PostMedia.caption` est le contenu du MÉDIA.
-    const result = await publishStory({
-      ...deps.api,
-      type: chosen.kind,
-      // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le défaut
-      // reste une règle SERVEUR (`core.ts:421`) — jamais un défaut recopié ici.
-      ...(current.visibility !== null ? { visibility: current.visibility } : {}),
-      ...(current.pages.some((p) => p.texts.some((layer) => layer.text.trim() !== '')) ? { originalLanguage: language } : {}),
-      ...(payload.mediaCaption !== undefined ? { mediaCaption: payload.mediaCaption } : {}),
-      storyEffects: payload.storyEffects,
-      mediaIds: payload.mediaIds,
+    const send = new AbortController();
+    sendRef.current = send;
+    setPublishProgress({ published: 0, total: plan.publications.length });
+    const outcome = await publishStudioPlan({
+      plan,
+      api: deps.api,
+      kind: chosen.kind,
+      visibility: current.visibility,
+      language,
+      signal: send.signal,
+      onPublished: ({ pageIds, published, total }) => {
+        dropPublishedPages(pageIds);
+        setPublishProgress({ published, total });
+      },
     });
 
-    if (!result.ok) {
+    if (outcome.kind !== 'published') {
+      setPublishProgress(null);
       setPublishing(false);
-      setPublishFailure(studioFailureKey(result, 'publish') ?? 'story.studio.failure.network');
+      if (outcome.kind === 'failed') setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total });
       return;
     }
 
@@ -544,17 +533,20 @@ function StoryStudio({
     // Publier le temps de l'invalidation, et un second geste publiait la même
     // story deux fois.
 
+    purgedRef.current = true;
     if (viewerId !== null) deps.drafts.clear(viewerId);
-    current.pages.forEach((p) => {
-      revokeIfLocal(p.background?.previewUrl);
-      revokeIfLocal(p.overlay?.previewUrl);
-      revokeIfLocal(p.sound?.previewUrl);
-    });
+    current.pages.forEach(revokePageMedia);
     if (chosen.kind === 'STORY') {
       await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
-      if (origin === 'onboarding') {
-        storyReturn.note(result.data.id);
-        navigate(href('onboarding', undefined, { story: result.data.id }), true);
+      // La PREMIÈRE story de la séquence — celle par laquelle le lecteur
+      // commence — porte le retour de l'accueil post-inscription.
+      const firstPostId = outcome.postIds[0];
+      // L'auteur a QUITTÉ le studio pendant la dernière requête : la story est
+      // partie et le brouillon purgé, mais l'écran ne le ramène pas de force.
+      if (send.signal.aborted) return;
+      if (origin === 'onboarding' && firstPostId !== undefined) {
+        storyReturn.note(firstPostId);
+        navigate(href('onboarding', undefined, { story: firstPostId }), true);
         return;
       }
       navigate(href('stories'), false);
@@ -563,7 +555,7 @@ function StoryStudio({
     // Le rafraîchissement du fil ne retient pas la navigation, et son
     // annulation (le cache vidé en route) n'est pas un échec de publication.
     void refreshFeedAction().catch(() => undefined);
-    navigate(href('feed'), true);
+    if (!send.signal.aborted) navigate(href('feed'), true);
   }
 
   const publishRef = useRef(publish);
@@ -705,7 +697,12 @@ function StoryStudio({
    * propre défaut serveur. */
   const audienceOf = (candidate: PublicationKind) => draft.visibility ?? defaultAudienceOf(candidate);
   const publishLabel = publishing
-    ? translate(lang, 'story.studio.publishing')
+    ? publishProgress !== null && publishProgress.total > 1
+      ? translate(lang, 'story.studio.publishing.progress', {
+          current: String(Math.min(publishProgress.published + 1, publishProgress.total)),
+          total: String(publishProgress.total),
+        })
+      : translate(lang, 'story.studio.publishing')
     : awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
       : translate(lang, publishTitleKey(kind));
@@ -725,7 +722,14 @@ function StoryStudio({
       rail={
         draft.pages.length > 1 ? (
           <Suspense fallback={<span className="min-w-0 flex-1" />}>
-            <StudioPageRail lang={lang} pages={draft.pages} currentPageId={draft.currentPage} onSelect={selectPage} onDelete={deletePage} />
+            <StudioPageRail
+              lang={lang}
+              pages={draft.pages}
+              currentPageId={draft.currentPage}
+              onSelect={selectPage}
+              onDelete={deletePage}
+              locked={publishing}
+            />
           </Suspense>
         ) : undefined
       }
@@ -738,7 +742,10 @@ function StoryStudio({
 
       <div className="flex min-h-0 flex-1 gap-2 px-2">
         {/* COULOIR GAUCHE — ce qu'on POSE sur la scène, puis ce qui y est déjà
-            posé (`meeshy-composer-modele.md` § 6, `apps/ios/CLAUDE.md` § 1). */}
+            posé (`meeshy-composer-modele.md` § 6, `apps/ios/CLAUDE.md` § 1).
+            VERROUILLÉ pendant l'envoi (#7707, revue-correction) : le plan
+            publié est figé au premier clic sur Publier — poser un objet après
+            coup ne rejoindrait jamais la séquence en cours. */}
         <div className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto pt-2 pb-2">
           <StudioDoorButton
             door="visual"
@@ -746,6 +753,7 @@ function StoryStudio({
             glyph="image"
             accept="image/*,video/*"
             onSelect={(file) => place('visual', file)}
+            disabled={publishing}
           />
           <StudioDoorButton
             door="overlay"
@@ -753,6 +761,7 @@ function StoryStudio({
             glyph="layer"
             accept="image/*,video/*"
             onSelect={(file) => place('overlay', file)}
+            disabled={publishing}
           />
           <StudioDoorButton
             door="sound"
@@ -760,6 +769,7 @@ function StoryStudio({
             glyph="microphone"
             accept="audio/*"
             onSelect={(file) => place('sound', file)}
+            disabled={publishing}
           />
           <div
             role="group"
@@ -776,6 +786,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withSelected(current, layer.id))}
                 probe={`select:${layer.id}`}
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <span aria-hidden="true">T{index + 1}</span>
               </StudioChip>
@@ -787,6 +798,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withSelected(current, 'overlay'))}
                 probe="select:overlay"
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <LayerMark size={16} />
               </StudioChip>
@@ -795,6 +807,13 @@ function StoryStudio({
         </div>
 
         <div className="grid min-w-0 flex-1 place-items-center" style={{ containerType: 'size' }}>
+          {/* LE PLATEAU EN LECTURE SEULE PENDANT L'ENVOI (#7707,
+              revue-correction) — le plan publié lit le brouillon tel qu'il
+              était au premier clic sur Publier : déplacer une poignée ou
+              couper le son de l'aperçu après coup ne change plus rien à ce
+              qui part, et laisser le geste actif fait croire le contraire à
+              l'auteur (`StoryViewModel+Publication.swift:549` : sur iOS ce
+              feedback est le dismiss, déjà passé). */}
           <div
             data-scene-stage
             data-story-studio-current-page={page.id}
@@ -809,6 +828,7 @@ function StoryStudio({
               containerType: 'inline-size',
               backgroundColor: backgroundCss(STORY_PLAIN_BACKGROUND, 'var(--color-ios-card)'),
             }}
+            inert={publishing}
           >
             {previewDocument !== null ? (
               <Suspense fallback={null}>
@@ -850,6 +870,7 @@ function StoryStudio({
               fontSize={textAppearance !== null ? `${textAppearance.widthFraction * 100}cqw` : null}
               onText={onTextChange}
               onPublish={() => void publish()}
+              locked={publishing}
             />
             {/* LES POIGNÉES — seule chose posée sur la scène, et elles ne
                 règlent rien : elles SONT l'objet qu'on saisit. */}
@@ -882,6 +903,7 @@ function StoryStudio({
                 onPress={() => setDraft((current) => withAddedPage(current, language))}
                 probe="add-page"
                 style={{ minWidth: 44, paddingInline: 0 }}
+                disabled={publishing}
               >
                 <PageMark size={18} />
               </StudioChip>
@@ -894,6 +916,7 @@ function StoryStudio({
             onPress={() => setDraft((current) => withAddedText(current, language))}
             probe="add-text"
             style={{ minWidth: 44, paddingInline: 0 }}
+            disabled={publishing}
           >
             <Glyph name="plus" size={18} />
           </StudioChip>
@@ -903,6 +926,7 @@ function StoryStudio({
             onPress={() => setEditorOpen((open) => !open)}
             probe="editor-toggle"
             style={{ minWidth: 44, paddingInline: 0 }}
+            disabled={publishing}
           >
             <SlidersMark size={18} />
           </StudioChip>
@@ -910,12 +934,15 @@ function StoryStudio({
       </div>
 
       {/* LES CONTRÔLEURS DE L'OUTIL OUVERT — la zone BASSE d'iOS, plafonnée en
-          hauteur pour que la scène garde sa place. */}
+          hauteur pour que la scène garde sa place. VERROUILLÉE pendant l'envoi
+          (#7707) : un panneau déjà ouvert avant Publier ne doit pas rester une
+          voie d'édition sur un plan déjà figé. */}
       {editorOpen ? (
         <div
           data-story-editor-panel
           className="shrink-0 overflow-y-auto border-t px-4 py-2"
           style={{ maxHeight: 200, borderColor: 'var(--color-edge)' }}
+          inert={publishing}
         >
           <Suspense fallback={null}>
             <StudioObjectEditor
@@ -942,6 +969,7 @@ function StoryStudio({
           onRemove={remove}
           onCaption={(door, value) => setDraft((current) => withVisualCaption(current, door, value))}
           onSoundPlane={(plane) => setDraft((current) => withSoundPlane(current, plane))}
+          locked={publishing}
         />
         <StudioFooterMessage lang={lang} placeRefusal={placeRefusal} kindRefusal={kindRefusal} publishFailure={publishFailure} />
         {/* La rangée du socle iOS (`MeeshyComposerHost+Socle.swift:43-51`) :
@@ -953,6 +981,7 @@ function StoryStudio({
             source={audienceSource}
             open={audienceOpen}
             onOpen={openAudience}
+            disabled={publishing}
           />
           <span aria-hidden="true" className="flex-1" />
           <PublishSplitButton

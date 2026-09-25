@@ -40,21 +40,34 @@ export function StudioPageRail({
   currentPageId,
   onSelect,
   onDelete,
+  locked = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly pages: readonly StudioPage[];
   readonly currentPageId: string;
   readonly onSelect: (id: string) => void;
   readonly onDelete: (id: string) => void;
+  /**
+   * **VERROUILLÉ PENDANT L'ENVOI** (#7707, revue-correction) — le plan publié
+   * a déjà groupé les pages par `studioPublishPlan`, AVANT la première
+   * requête de la séquence : une page retirée du rail après ce point est
+   * publiée quand même, puisque le groupe qui la porte est déjà figé. La
+   * corbeille disparaît (jamais grisée, loi 4 : elle n'aurait plus aucun
+   * effet honnête) et les tuiles deviennent `inert` — le rail reste visible
+   * (l'auteur voit encore quelles pages restent à partir) mais ne répond
+   * plus au geste, comme le reste de la composition (`story-compose.tsx`).
+   */
+  readonly locked?: boolean;
 }) {
   if (pages.length <= 1) return null;
   return (
     <div
       role="group"
-      aria-label={translate(lang, 'story.studio.pages.label')}
+      aria-label={locked ? undefined : translate(lang, 'story.studio.pages.label')}
       data-story-studio-page-rail
       className="scrollbar-none flex min-w-0 flex-1 items-start overflow-x-auto"
       style={{ gap: RAIL_GAP }}
+      inert={locked}
     >
       {pages.flatMap((page, index) => {
         const current = page.id === currentPageId;
@@ -72,7 +85,9 @@ export function StudioPageRail({
             onSelect={onSelect}
           />
         );
-        return current ? [tile, <StudioPageDelete key={`${page.id}:delete`} lang={lang} id={page.id} index={index} onDelete={onDelete} />] : [tile];
+        return current && !locked
+          ? [tile, <StudioPageDelete key={`${page.id}:delete`} lang={lang} id={page.id} index={index} onDelete={onDelete} />]
+          : [tile];
       })}
     </div>
   );

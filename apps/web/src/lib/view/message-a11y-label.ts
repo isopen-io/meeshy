@@ -7,6 +7,7 @@ import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/rea
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { plainTextOf } from '@meeshy/shared/utils/text-plain';
 
 /**
  * LE LIBELLÉ D'ACCESSIBILITÉ D'UN MESSAGE — SITE UNIQUE, partagé par la
@@ -289,7 +290,7 @@ export function composeMessageLabel({
     } else if (body.kind === 'emoji-only') {
       segments.push(message.content);
     } else if (servedText !== '') {
-      segments.push(servedText);
+      segments.push(plainTextOf(servedText));
     }
     segments.push(...attachmentSegments(message.attachments));
 

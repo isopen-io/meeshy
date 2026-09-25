@@ -32,6 +32,9 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
+import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
+import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
 
 /**
@@ -215,6 +218,20 @@ export const Composer = memo(function Composer({
       compose.setText(next);
     },
   });
+  /* LA SÉLECTION (#7849) — non vide, elle fait paraître la barre de format. */
+  const [hasSelection, setHasSelection] = useState(false);
+  const syncSelection = (el: HTMLTextAreaElement) => setHasSelection(el.selectionEnd > el.selectionStart);
+  /* `selectionchange` sur le DOCUMENT : c'est le seul signal que Preact
+     (production) et React (témoins) reçoivent tous deux quand on sélectionne
+     au doigt ou à la souris — `onSelect` n'y est pas le même événement. */
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const el = field.current;
+      if (el !== null && document.activeElement === el) syncSelection(el);
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => document.removeEventListener('selectionchange', onSelectionChange);
+  }, []);
   /* UN LIEU SEUL SUFFIT À ENVOYER — comme une pièce jointe seule. Sans lui
      dans cette somme, partager sa position aurait demandé d'écrire un mot,
      et le bouton d'envoi serait resté invisible sur un composeur qui porte
@@ -475,6 +492,30 @@ export const Composer = memo(function Composer({
    * il regarde. `selectionStart`/`selectionEnd` absents (champ jamais
    * focalisé) ⇒ fin du texte, le cas nominal.
    */
+  /**
+   * POSER OU RETIRER UNE EMPHASE (#7849) — sur la sélection, par le raccourci
+   * ou la barre. La sélection SUIT le texte mis en forme : on peut enchaîner
+   * gras puis italique sans resélectionner.
+   */
+  const applyEmphasis = (style: EmphasisStyle) => {
+    const el = field.current;
+    const result = toggleEmphasis(
+      { text, start: el?.selectionStart ?? text.length, end: el?.selectionEnd ?? text.length },
+      style,
+    );
+    setText(result.text);
+    onTextChange?.(result.text);
+    compose.setText(result.text);
+    queueMicrotask(() => {
+      const after = field.current;
+      if (after === null) return;
+      after.focus();
+      after.setSelectionRange(result.start, result.end);
+      mention.syncCaret(after);
+      syncSelection(after);
+    });
+  };
+
   const insertEmoji = (emoji: string) => {
     const el = field.current;
     const start = el?.selectionStart ?? text.length;
@@ -652,6 +693,8 @@ export const Composer = memo(function Composer({
           />
         </Suspense>
       ) : (
+        <>
+        {focused && hasSelection ? <ComposerFormatBar onFormat={applyEmphasis} /> : null}
         <div className="flex items-end gap-3 px-3 py-2.5">
           {/* LE PANNEAU N'EST PLUS JAMAIS VIDE, DONC LE « + » NE S'EFFACE PLUS
               (#7280) — la garde qui vivait ici (`canAttachAnything`)
@@ -730,7 +773,11 @@ export const Composer = memo(function Composer({
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
               }}
               onClick={(e) => mention.syncCaret(e.currentTarget)}
-              onKeyUp={(e) => mention.syncCaret(e.currentTarget)}
+              onKeyUp={(e) => {
+                mention.syncCaret(e.currentTarget);
+                syncSelection(e.currentTarget);
+              }}
+              onMouseUp={(e) => syncSelection(e.currentTarget)}
               /* LE MOTIF « CHAMP + LISTE À DESCENDANT ACTIF » (#7826) — le
                  champ reste un `textbox` multiligne (ARIA in HTML n'admet
                  aucun autre rôle sur `<textarea>`), et annonce sa liste par
@@ -738,6 +785,12 @@ export const Composer = memo(function Composer({
               {...mention.aria}
               onKeyDown={(e) => {
                 if (mention.onKeyDown(e.nativeEvent)) return;
+                const emphasis = emphasisShortcutOf(e);
+                if (emphasis !== null) {
+                  e.preventDefault();
+                  applyEmphasis(emphasis);
+                  return;
+                }
                 // La touche Entree ENVOIE (`.submitLabel(.send)`) ; Maj+Entree
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -792,6 +845,7 @@ export const Composer = memo(function Composer({
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* SOUS la rangée, à la place du clavier — `attachmentCarouselPanel`

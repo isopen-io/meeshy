@@ -15,6 +15,24 @@
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
+> **Correction du 2026-09-24.** Depuis #7668 (2026-09-24), `apps/web-v2` a
+> pris le nom et le chemin `apps/web` ; l'ancien `apps/web` legacy a quitté le
+> dépôt et vit sous le tag figé `legacy-web-final`, que le script lit
+> désormais sous ce nom (`legacy (legacy-web-final)`). Ce tableau et son
+> en-tête ci-dessous gardent encore les anciens noms `apps/web` (legacy) /
+> `apps/web-v2` (chantier) : ils décrivaient l'état VRAI à leurs dates
+> respectives et ne se réécrivent pas rétroactivement (même règle que pour
+> `tasks/` et les CHANGELOG, § bandeau racine « UNE SEULE APPLICATION WEB »).
+> Lire partout « `apps/web` (legacy) » comme `legacy-web-final`, et
+> « `apps/web-v2` » comme l'actuel `apps/web`. Mesure du jour, `node
+> scripts/route-inventory.mjs` : **72** routes côté `apps/web` (65 écrans + 7
+> documents pré-rendus, contre 62/57+5 le 2026-09-19) / **127** adresses
+> distinctes en union avec le legacy figé (toujours **80**, inchangé). Le
+> tour a ajouté `/stories/mine` (le listing « Mes stories » ouvert par la
+> pastille « moi » du rail, #6149, D-120) ; les neuf autres adresses de plus
+> depuis le 2026-09-19 n'ont pas été reprojetées ici — même réserve que les
+> corrections précédentes, aucun gate ne tient ce delta à jour.
+
 > **Correction du 2026-09-12.** Ce tableau est resté à « 14 » (relevé du
 > 2026-09-09) : la table de routes a gagné `/conversations/new` (le rail de
 > stories et ses deux boutons d'en-tête, #5652), `/stories`, `/stories/new` et

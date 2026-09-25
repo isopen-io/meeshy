@@ -47,12 +47,14 @@ describe('segmentText — les mentions', () => {
     expect(mention).toEqual({ kind: 'mention', text: '@marie-claire', username: 'marie-claire' });
   });
 
-  it('une adresse e-mail n’est pas une mention — frontière gauche de mention-parser', () => {
-    expect(texts('écris à contact@marie.com')).toEqual(['text']);
+  it('une adresse e-mail n’est pas une mention — elle devient un lien mailto (#7849)', () => {
+    expect(segmentText('écris à contact@marie.com').filter((s) => s.kind !== 'text')).toEqual([
+      { kind: 'url', text: 'contact@marie.com', href: 'mailto:contact@marie.com' },
+    ]);
   });
 
   it('un @ précédé d’une lettre ACCENTUÉE n’est pas une mention non plus', () => {
-    expect(texts('éric@marie.com')).toEqual(['text']);
+    expect(texts('éric@marie.com')).toEqual(['url']);
   });
 
   it('le username SERVI est en minuscules, le texte AFFICHÉ garde sa casse', () => {
@@ -115,7 +117,7 @@ describe('segmentText — les liens', () => {
     }
   });
 
-  it('AUCUN segment produit ne porte un href hors http(s), quel que soit l’entrant', () => {
+  it('AUCUN segment produit ne porte un href hors http(s) et mailto, quel que soit l’entrant', () => {
     const hrefs = segmentText('a javascript:x https://ok.fr data:x', { hashtags: true })
       .flatMap((s) => (s.kind === 'url' ? [s.href] : []));
     expect(hrefs).toEqual(['https://ok.fr']);
@@ -248,13 +250,32 @@ describe('segmentText — le gras et l’italique', () => {
     ]);
   });
 
-  it('une emphase ne s’imbrique pas dans une emphase — un seul niveau, pas de récursion sans fin', () => {
+  it('les emphases se COMBINENT (#7849) — un italique dans un gras', () => {
     const [segment] = segmentText('**a *b* c**');
     expect(segment).toEqual({
       kind: 'emphasis',
       style: 'bold',
-      children: [{ kind: 'text', text: 'a *b* c' }],
+      children: [
+        { kind: 'text', text: 'a ' },
+        { kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'b' }] },
+        { kind: 'text', text: ' c' },
+      ],
     });
+  });
+
+  it('***mot*** est un italique dans un gras, sans étoile orpheline', () => {
+    expect(segmentText('***mot***')).toEqual([
+      {
+        kind: 'emphasis',
+        style: 'bold',
+        children: [{ kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'mot' }] }],
+      },
+    ]);
+  });
+
+  it('un style déjà ouvert n’est plus cherché dedans — la récursion est bornée', () => {
+    const [segment] = segmentText('~~a ~b~ c~~');
+    expect(segment).toEqual({ kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'text', text: 'a ~b~ c' }] });
   });
 });
 
