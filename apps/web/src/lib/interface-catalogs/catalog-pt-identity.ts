@@ -12,6 +12,7 @@ const ptIdentity = {
   'a11y.avatar.story': 'Ver a story de {name}',
   'avatar.menu.label': 'Ações para {name}',
   'avatar.menu.view_profile': 'Ver o perfil',
+  'userProfile.peek.openPage': 'Abrir o perfil completo',
   'avatar.menu.view_story': 'Ver a story',
   'avatar.menu.conversation_details': 'Detalhes da conversa',
   'conversation.details.title': 'Detalhes da conversa',
