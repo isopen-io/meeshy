@@ -856,11 +856,6 @@ struct FocalRow: View {
         .padding(.leading, indent)
     }
 
-    private var isShowingOriginal: Bool {
-        guard let translation = content.translation else { return true }
-        return translation.activeLangCode.lowercased() == translation.originalLangCode.lowercased()
-    }
-
     // MARK: - Bordure basse du message EN FOCUS (2026-08-21)
 
     /// Les langues proposées sur la bordure : l'originale d'abord, puis les
@@ -1139,53 +1134,6 @@ struct FocalRow: View {
                     actions.onSetActiveDisplayLanguageForGroup?(content.messageId, code)
                 }
             }
-        }
-    }
-
-    /// Drapeau-TOGGLE de version — le SEUL indicateur multi-langue de la
-    /// rangée (arbitrages user 2026-08-18 : plus d'icône translate ni de
-    /// bande de drapeaux ; le menu d'appui long garde l'exploration
-    /// complète). Affiché UNIQUEMENT quand plusieurs versions existent
-    /// (`content.translation` non-nil).
-    ///
-    /// Le drapeau montre L'AUTRE version disponible, et le tap y bascule :
-    /// - traduction affichée → drapeau de la langue D'ORIGINE ; tap =
-    ///   afficher l'original (`onSetActiveDisplayLanguage(originalLangCode)`) ;
-    /// - original affiché → drapeau de la langue CONFIGURÉE sur le profil
-    ///   (la cible du Prisme, `preferredLangCode`) ; tap = revenir à la
-    ///   traduction (`onSetActiveDisplayLanguage(nil)` → résolution Prisme).
-    /// Quand le Prisme n'a aucune traduction préférée (`preferredLangCode`
-    /// nil), le drapeau d'origine reste un simple indicateur multi-versions.
-    @ViewBuilder
-    private var originalLanguageFlag: some View {
-        if let translation = content.translation {
-            let profileLang = translation.preferredLangCode
-            let showsProfileFlag = isShowingOriginal && profileLang != nil
-            Button {
-                if isShowingOriginal {
-                    // Retour à la traduction — seulement si le Prisme en a une.
-                    guard profileLang != nil else { return }
-                    actions.onSetActiveDisplayLanguage?(content.messageId, nil)
-                } else {
-                    actions.onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)
-                }
-            } label: {
-                Text(showsProfileFlag
-                     ? LanguageFlagChip.flag(for: profileLang ?? "")
-                     : LanguageFlagChip.flag(for: translation.originalLangCode))
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(showsProfileFlag
-                ? String(
-                    format: String(localized: "focal.translation.back_to_translation_flag", defaultValue: "Revenir à la traduction (%@)", bundle: .main),
-                    LanguageData.info(for: (profileLang ?? "").lowercased())?.nativeName ?? (profileLang ?? "")
-                )
-                : String(
-                    format: String(localized: "focal.translation.show_original_flag", defaultValue: "Afficher la version originale (%@)", bundle: .main),
-                    LanguageData.info(for: translation.originalLangCode.lowercased())?.nativeName ?? translation.originalLangCode
-                ))
         }
     }
 }

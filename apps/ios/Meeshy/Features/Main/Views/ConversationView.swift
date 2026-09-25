@@ -588,36 +588,6 @@ struct ConversationView: View {
         }
     }
 
-    // MARK: - Encryption Disclaimer
-
-    @ViewBuilder
-    private var encryptionDisclaimer: some View {
-        if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.paginationPhase.isBlockingSpinnerNeeded {
-            VStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "lock.fill")
-                    .font(MeeshyFont.relative(14, weight: .bold))
-                    .foregroundColor(MeeshyColors.indigo400)
-                    .padding(MeeshySpacing.sm)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-
-                Text(String(localized: "conversation.view.e2e_notice", bundle: .main))
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, MeeshySpacing.sm)
-            }
-            .padding(.vertical, MeeshySpacing.lg)
-            .padding(.horizontal, MeeshySpacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
-                    .fill(isDark ? Color.black.opacity(0.4) : Color(UIColor.systemBackground).opacity(0.6))
-            )
-            .padding(.horizontal, MeeshySpacing.xxl)
-            .padding(.top, MeeshySpacing.lg)
-            .padding(.bottom, MeeshySpacing.sm)
-        }
-    }
-
     // MARK: - Closed Conversation Banner
 
     private var closedConversationBanner: some View {
