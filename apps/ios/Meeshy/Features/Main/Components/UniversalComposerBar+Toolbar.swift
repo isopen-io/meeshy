@@ -113,6 +113,7 @@ extension UniversalComposerBar {
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
             }
+            .fixedSize()
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))

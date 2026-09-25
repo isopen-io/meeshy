@@ -149,7 +149,7 @@ struct PostDetailView: View {
     @State var storyCanvasVisible: Bool = true
     @State var isCallActive: Bool = false
     @State var sceneMeasures = PostDetailSceneFraming.Measures()
-    static let scrollSpace = "postDetailScroll"
+    nonisolated static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.

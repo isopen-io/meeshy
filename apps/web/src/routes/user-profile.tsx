@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import { FeedPostCard } from '@/components/feed-post-card';
 import { LiveAnnouncement } from '@/components/live-announcement';
@@ -11,38 +10,24 @@ import { GroupedSection } from '@/components/grouped-section';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import { authorPostsInfiniteOptions, flattenAuthorPosts } from '@/lib/api/author-posts';
 import { apiDeps } from '@/lib/api/deps';
-import { createDirectConversation } from '@/lib/api/conversations';
-import {
-  performBlock,
-  performRespondToRequest,
-  performSendRequest,
-  performUnblock,
-  type FriendActionDeps,
-  type FriendActionOutcome,
-} from '@/lib/api/friend-actions';
-import type { PersonSummary } from '@/lib/api/friend-requests';
-import { publicProfileQueryOptions } from '@/lib/api/public-profile';
 import { sharedConversationsQueryOptions } from '@/lib/api/shared-conversations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/profile/failure';
+import { profileFailureOf } from '@/lib/profile/failure';
 import { filterPosts, showsEmptyState, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
-import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
-import { announcementToneOf } from '@/lib/view/announcement-tone';
-import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 import { ReportSheet } from '@/components/report-sheet';
-import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
+import { useProfileController } from '@/routes/user-profile-controller';
 import { ProfileHero } from '@/routes/user-profile-header';
 import {
   ProfileBlockedCard,
@@ -52,7 +37,7 @@ import {
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
 import {
-  ProfileNotice,
+  ProfileFailureNotice,
   ProfileOfflineBanner,
   ProfilePostsEmpty,
   ProfilePostsError,
@@ -93,42 +78,6 @@ import {
  * absence.
  */
 
-/** Le rendu d'un échec, par sa NATURE — la loi vit dans `lib/profile/failure.ts`,
- * pure, parce que « 403 et 404 rendent le même texte » ne se mesure qu'en
- * comparant deux chaînes. */
-const FAILURE_NOTICE = {
-  refused: { glyph: 'lock', tone: 'var(--color-ios-ink-3)', alert: false, title: 'userProfile.refused.title', body: 'userProfile.refused.body' },
-  throttled: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: true, title: 'userProfile.throttled.title', body: 'userProfile.throttled.body' },
-  offline: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: false, title: 'profile.offline.title', body: 'userProfile.offline.body' },
-  error: { glyph: 'warningCircle', tone: 'var(--color-error)', alert: true, title: 'userProfile.error.title', body: 'userProfile.error.body' },
-} as const satisfies Readonly<
-  Record<ProfileFailure, { readonly glyph: 'lock' | 'warningCircle'; readonly tone: string; readonly alert: boolean; readonly title: InterfaceCatalogKey; readonly body: InterfaceCatalogKey }>
->;
-
-/**
- * L'ISSUE D'UN GESTE, DITE À VOIX HAUTE — les clés de « Découvrir » sont
- * réutilisées telles quelles (même geste, même mot), `userProfile.announce.*`
- * ne portant que ce qui est propre à cet écran.
- *
- * **« Écrire » n'a PAS de `done`, et c'est délibéré** : un geste qui réussit
- * NAVIGUE, et l'écran d'après EST le retour. Lui coller « Demande envoyée »
- * par commodité de table aurait annoncé une autre action que celle posée — un
- * lecteur d'écran aurait entendu le mauvais mot avant de changer d'écran.
- */
-const ANNOUNCE = {
-  add: { done: 'discover.announce.sent', failed: 'discover.announce.sendFailed' },
-  accept: { done: 'discover.announce.accepted', failed: 'discover.announce.acceptFailed' },
-  reject: { done: 'discover.announce.rejected', failed: 'discover.announce.rejectFailed' },
-  cancel: { done: 'discover.announce.cancelled', failed: 'discover.announce.cancelFailed' },
-  block: { done: 'userProfile.announce.blocked', failed: 'userProfile.announce.blockFailed' },
-  unblock: { done: 'discover.announce.unblocked', failed: 'discover.announce.unblockFailed' },
-  write: { done: null, failed: 'userProfile.announce.writeFailed' },
-  /* SIGNALER a ses PROPRES annonces (#7187) : « envoyé » n'est pas « ajouté »,
-     et son refus le plus fréquent — le DÉBIT — n'est pas un échec. Les trois
-     issues sont distinctes chez le port (`ReportOutcome`) et le restent ici. */
-  report: { done: 'report.done', failed: 'report.failed' },
-} as const satisfies Readonly<Record<ProfileActionKind, { readonly done: InterfaceCatalogKey | null; readonly failed: InterfaceCatalogKey }>>;
-
 function ProfileHeaderBar({ title }: { readonly title: string }) {
   return (
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
@@ -144,28 +93,6 @@ function ProfileHeaderBar({ title }: { readonly title: string }) {
         {title}
       </h1>
     </header>
-  );
-}
-
-function ProfileFailureNotice({
-  language,
-  failure,
-  onRetry,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly failure: ProfileFailure;
-  readonly onRetry: () => void;
-}) {
-  const notice = FAILURE_NOTICE[failure];
-  return (
-    <ProfileNotice
-      glyph={notice.glyph}
-      tone={notice.tone}
-      alert={notice.alert}
-      title={translate(language, notice.title)}
-      detail={translate(language, notice.body)}
-      {...(failureMayRetry(failure) ? { action: { label: translate(language, 'profile.retry'), onAction: onRetry } } : {})}
-    />
   );
 }
 
@@ -190,78 +117,34 @@ export function UserProfileView({ username }: { readonly username: string }) {
      la publication, à son ancre de commentaires. L'adresse vivait ici en
      copie ; elle vit désormais avec les deux autres gestes de la rangée. */
   const { announcement: gestureAnnouncement, onGesture, onShare, onComment, menu } = usePostGesture();
-  const { text: actionAnnouncement, tone: actionTone, announce } = useLiveAnnouncer();
+  const {
+    view,
+    person,
+    name,
+    accent,
+    relation,
+    actions,
+    signedIn,
+    busy,
+    onAction,
+    reporting,
+    closeReport,
+    onPickReason,
+    announce,
+    announcement: actionAnnouncement,
+    announcementTone: actionTone,
+  } = useProfileController(username, language);
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
-  const [busy, setBusy] = useState(false);
 
-  const viewerId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
   /**
    * **LE LECTEUR DE LA LIGNE, PAS CELUI DU GESTE** (#7124). `titleOf` a besoin
    * d'un identifiant pour savoir QUI est « l'autre » dans un direct ; lui
-   * passer la chaîne vide fait de la première partie l'autre — et une rangée
-   * qui porte « Vous » là où elle devrait porter le nom du pair (MESURÉ au
-   * navigateur avant ce correctif : `VOVous` sur `/c/c-direct-kwame`).
-   *
-   * `resolveViewer` est le site UNIQUE qui rend cette identité, fixtures
-   * comprises — le MÊME que la Lentille (`conversations.tsx:427`) et le fil.
-   * `viewerId` ci-dessus reste ce qu'il est : l'identité de COMPTE, qui
-   * gouverne les gestes et ne doit rien inventer sous fixtures.
+   * passer la chaîne vide fait de la première partie l'autre. `resolveViewer`
+   * est le site UNIQUE qui rend cette identité, fixtures comprises. `viewerId`
+   * reste l'identité de COMPTE, qui gouverne les gestes.
    */
   const session = useStore(sessionStore, (state) => state.session);
   const rowViewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
-  /* Sous fixtures il n'y a pas de session : les gestes y restent mesurables,
-     exactement comme `/me` le fait (`profile.tsx:132`). */
-  const signedIn = apiDeps.source === 'fixtures' || viewerId !== null;
-
-  const view = useQuery(publicProfileQueryOptions({ ...apiDeps, handle: username }), appQueryClient);
-  const person = view.data?.profile;
-  const served = view.data?.relation ?? 'none';
-
-  /**
-   * **LE BLOCAGE SE LIT PAR SUJET, SUR LE MÊME FIL QUE L'IDENTITÉ** (#7125) —
-   * `blockedByViewer`, servi avec `expand=relation` et résolu par `hasBlocked`
-   * (`services/gateway/src/utils/blocking.ts`). Il voyage À CÔTÉ de `relation`,
-   * jamais dedans : bloquer n'efface pas la ligne d'amitié, et débloquer doit
-   * rendre la relation qu'on avait (`lib/api/public-profile.ts`).
-   *
-   * **Ce que la lecture par sujet ferme, et que le drainage laissait ouvert.**
-   * L'état se DÉDUISAIT du panier `GET /blocks`, plafonné à cent lignes, qu'un
-   * effet tournait page par page jusqu'à y trouver la personne. Cette boucle
-   * finissait par rendre le bon verdict — mais PENDANT qu'elle tournait,
-   * `blocked` valait `false` : l'écran rendait le contenu d'une personne
-   * bloquée et LANÇAIT sa requête de publications (mesuré : `dataUpdateCount`
-   * à 1). La réponse arrive maintenant AVEC l'identité ; il n'y a plus de
-   * fenêtre, plus de page à tourner, et cet écran ne s'abonne plus au panier.
-   *
-   * Le panier VIT toujours — « Découvrir » le lit, et `performBlock` /
-   * `performUnblock` l'écrivent au geste ; ces deux gestes patchent DE PLUS
-   * `blockedByViewer` sur chaque fiche en cache, sans quoi « Bloquer » n'aurait
-   * plus aucun effet visible sur l'écran d'où on le touche (loi 4).
-   */
-  const blocked = view.data?.blockedByViewer === true;
-
-  /**
-   * **LA LIGNE SE BÂTIT DEPUIS LE FIL** (#7122) — elle se CHERCHAIT dans le
-   * panier des demandes, chargé dès que la relation était en attente, et les
-   * trois gestes restaient désarmés tant qu'il était en vol. La passerelle
-   * sert l'identifiant avec l'identité ; le reste de la ligne se déduit du
-   * SENS de la demande et du sujet de l'écran (`pendingRequestFrom`).
-   */
-  const pendingRequest = useMemo(
-    () =>
-      person === undefined
-        ? null
-        : pendingRequestFrom({
-            served,
-            requestId: view.data?.relationRequestId ?? null,
-            person: { id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar },
-            viewerId,
-          }),
-    [person, served, view.data?.relationRequestId, viewerId],
-  );
-
-  const relation = relationFromServed({ served, blocked, request: pendingRequest });
-  const actions = actionsFor(relation);
   const showsContent = relation.kind !== 'blocked';
 
   const posts = useInfiniteQuery(
@@ -301,101 +184,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
     // `minute` réévalue `new Date()` — même motif que `feed.tsx` et `hashtag.tsx`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [posts.data, filter, readerLanguages, minute],
-  );
-
-  const name = person?.displayName ?? person?.username ?? `@${username}`;
-  const accent = person === undefined ? 'var(--color-ios-brand)' : authorAccentColor(person.id, name);
-
-  const deps: FriendActionDeps = useMemo(
-    () => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine, viewerId: () => viewerId }),
-    [viewerId],
-  );
-
-  /* UN ÉCHEC NE SE LIT PAS COMME UNE RÉUSSITE (revue #7083) : le refus et le
-     hors-ligne portent l'encre d'erreur, et la région est VISIBLE — c'était
-     la moitié manquante. Aucun bouton « Réessayer » ne s'ajoute pour autant :
-     l'état optimiste a été défait, le bouton d'action est revenu à son libellé
-     d'avant, et c'est LUI le geste rejouable — un second contrôle pour le
-     même geste serait le doublon que D-11 interdit. */
-  const report = useCallback(
-    (kind: ProfileActionKind, outcome: FriendActionOutcome) => {
-      const tone = announcementToneOf(outcome);
-      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), tone);
-      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed), tone);
-      const done = ANNOUNCE[kind].done;
-      if (done !== null) announce(translate(language, done), tone);
-    },
-    [announce, language],
-  );
-
-
-  const onAction = useCallback(
-    (kind: ProfileActionKind) => {
-      if (person === undefined || busy) return;
-      const summary: PersonSummary = { id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar };
-      setBusy(true);
-      const settle = (outcome: FriendActionOutcome) => {
-        setBusy(false);
-        report(kind, outcome);
-      };
-      if (kind === 'write') {
-        if (!navigator.onLine) return settle('offline');
-        void createDirectConversation(apiDeps, person.id).then((result) => {
-          if (!result.ok) return settle('failed');
-          setBusy(false);
-          navigate(href('thread', { conversation: result.data.id }));
-        });
-        return;
-      }
-      if (kind === 'report') {
-        setBusy(false);
-        setReporting(true);
-        return;
-      }
-      if (kind === 'add') return void performSendRequest({ person: summary, deps }).then(settle);
-      if (kind === 'block') return void performBlock({ person: summary, deps }).then(settle);
-      if (kind === 'unblock') return void performUnblock({ person: summary, deps }).then(settle);
-      /* Accepter, refuser, annuler ont besoin de la LIGNE : sans elle, le
-         bouton est désactivé et la bannière de contexte le dit — jamais un
-         geste qui part dans le vide. */
-      if (pendingRequest === null) return settle('failed');
-      const action = kind === 'accept' ? 'accept' : kind === 'reject' ? 'reject' : 'cancel';
-      void performRespondToRequest({ request: pendingRequest, action, deps }).then(settle);
-    },
-    [busy, deps, pendingRequest, person, report],
-  );
-
-  /**
-   * SIGNALER OUVRE UNE FEUILLE, IL N'ENVOIE PAS (#7187) — choisir un motif EST
-   * la confirmation, et il n'y en a pas de seconde : un « êtes-vous sûr ? »
-   * par-dessus ferait payer deux gestes pour une action qu'on abandonne déjà
-   * en fermant la feuille.
-   *
-   * L'issue `throttled` a son PROPRE message, distinct de l'échec : la
-   * passerelle pose trois limiteurs sur cette route, et dire « échoué » à
-   * quelqu'un qui vient de signaler un harcèlement l'enverrait recommencer —
-   * le limiteur le refuserait encore.
-   */
-  const [reporting, setReporting] = useState(false);
-
-  const onPickReason = useCallback(
-    (reason: ReportReason) => {
-      const cible = person;
-      if (cible === null || cible === undefined) return;
-      setBusy(true);
-      void reportUser({ userId: cible.id, reason, deps: apiDeps }).then((outcome) => {
-        setBusy(false);
-        setReporting(false);
-        /* LES TROIS ISSUES SE DISENT DIFFÉREMMENT, et le TON suit : seul un
-           succès est « neutre ». Un débit annoncé comme une erreur laisserait
-           croire à un échec ce qui n'est qu'un « pas maintenant ». */
-        if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), 'error');
-        if (outcome === 'throttled') return announce(translate(language, 'report.throttled'), 'error');
-        if (outcome === 'done') return announce(translate(language, 'report.done'), 'neutral');
-        announce(translate(language, 'report.failed'), 'error');
-      });
-    },
-    [announce, language, person],
   );
 
   const onFilter = useCallback((tap: ProfilePostsFilterTap) => setFilter((current) => toggledFilter(current, tap)), []);
@@ -585,8 +373,8 @@ export function UserProfileView({ username }: { readonly username: string }) {
         tone={actionAnnouncement === '' ? 'neutral' : actionTone}
         marker="profile"
       />
-      {reporting && person !== null ? (
-        <ReportSheet name={name} busy={busy} onPick={onPickReason} onClose={() => setReporting(false)} />
+      {reporting && person !== undefined ? (
+        <ReportSheet name={name} busy={busy} onPick={onPickReason} onClose={closeReport} />
       ) : null}
     </div>
   );

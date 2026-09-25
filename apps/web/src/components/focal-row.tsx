@@ -17,7 +17,9 @@ import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import {
   AVATAR_FRAME,
+  AVATAR_INSET,
   AVATAR_SIZE,
+  CONTENT_PULL,
   FLAG_LIMIT_PLAIN,
   GROUP_TOP_PADDING,
   META_TEXT_OPACITY,
@@ -48,11 +50,21 @@ import {
   Flags,
   PrismPastille,
   Quote,
+  QuoteIndent,
   ReactionChip,
   reactionEntries,
 } from './message-blocks';
 
 const defaultNow = (): number => Date.now();
+
+/**
+ * L'ORIGINE DU CONTENU (#7929) — ce qui appartient au message remonte de la
+ * colonne du nom au bord gauche de la pastille ; la tête d'identité seule
+ * reste dans sa colonne. Une MARGE négative, et non une seconde grille : la
+ * carte d'élection, le chip d'identité et la bande de focus restent ancrés à
+ * la colonne `relative`, qu'ils débordent déjà jusqu'à la pastille.
+ */
+const CONTENT_ORIGIN = { marginInlineStart: -CONTENT_PULL } as const;
 
 /**
  * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
@@ -310,7 +322,9 @@ export const FocalRow = memo(function FocalRow({
         }}
       >
         <div aria-hidden />
-        <ProtectionNotice kind={kind} surface="row" />
+        <div data-row-content style={CONTENT_ORIGIN}>
+          <ProtectionNotice kind={kind} surface="row" />
+        </div>
       </div>
     );
   }
@@ -484,6 +498,12 @@ export const FocalRow = memo(function FocalRow({
    */
   const storyCitation = storyCitationOf(message);
   const moodCitation = moodCitationOf(message);
+  /* EN MODE SÉLECTION, la coche prend la place de l'avatar sur CHAQUE
+     rangée : le contenu reste dans la colonne du nom — ramené sous la coche,
+     il la recouvrait et interceptait son clic (#7929, gate
+     `check-thread-states.mjs`). */
+  const pulled = selected === undefined;
+  const contentOrigin = pulled ? CONTENT_ORIGIN : undefined;
   const sharedPlace = placeOf(message);
   const body = bodyKindOf(message);
 
@@ -497,22 +517,28 @@ export const FocalRow = memo(function FocalRow({
           (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
           l'expéditeur mais sur la SURFACE qui la porte. */}
       {storyCitation !== null ? (
-        <StoryCitationCard
-          citation={storyCitation}
-          accent="var(--accent)"
-          language={currentInterfaceLanguage()}
-          now={new Date(nowMs)}
-          {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
-        />
+        <QuoteIndent railed indented={pulled}>
+          <StoryCitationCard
+            citation={storyCitation}
+            accent="var(--accent)"
+            language={currentInterfaceLanguage()}
+            now={new Date(nowMs)}
+            {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
+          />
+        </QuoteIndent>
       ) : moodCitation !== null ? (
-        <MoodQuote citation={moodCitation} isMine={false} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
+        <QuoteIndent indented={pulled}>
+          <MoodQuote citation={moodCitation} isMine={false} language={currentInterfaceLanguage()} now={new Date(nowMs)} />
+        </QuoteIndent>
       ) : message.replyTo ? (
-        <Quote
-          quote={message.replyTo}
-          isMine={false}
-          languages={languages}
-          onJump={() => onJumpToMessage(message.replyTo!.id)}
-        />
+        <QuoteIndent indented={pulled}>
+          <Quote
+            quote={message.replyTo}
+            isMine={false}
+            languages={languages}
+            onJump={() => onJumpToMessage(message.replyTo!.id)}
+          />
+        </QuoteIndent>
       ) : null}
       {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
@@ -596,6 +622,25 @@ export const FocalRow = memo(function FocalRow({
             : 'transparent',
       }}
     >
+      {/* LA BANDE DE TÊTE — badges (épinglé, transféré, #5936) puis chrome
+          de protection (F11, #7454), AU-DESSUS de l'identité
+          (`FocalRow.swift:233`, `:365-376`). Elle s'étend sur les DEUX
+          colonnes et part du bord gauche de la pastille (#7929) : posée dans
+          la colonne du nom puis ramenée à l'origine, elle recouvrait
+          l'avatar, qui partage la même ligne de grille. Les effets décoratifs
+          ne s'y comptent plus : ils s'EXÉCUTENT (#7596). L'horloge du chrome
+          est PARTAGÉE (`secondClock`) — cette rangée ne re-rend jamais pour
+          elle. */}
+      <div data-row-band style={{ gridColumn: '1 / -1', paddingInlineStart: AVATAR_INSET }}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badges badges={badges} />
+        </div>
+        <ProtectionChrome
+          deadline={ephemeralDeadline}
+          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
+        />
+      </div>
+
       {/* L'AVATAR DE LA TÊTE DE GROUPE — s'EFFACE en focus, comme le nom
           juste à côté : côté iOS l'en-tête d'identité ENTIER (avatar + nom)
           passe à `opacity: 0` (`FocalRow.swift:269`) et `focusIdentityChip`
@@ -686,23 +731,6 @@ export const FocalRow = memo(function FocalRow({
           />
         ) : null}
 
-        {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de
-            l'identité, `FocalRow.swift:233`. Les effets décoratifs ne s'y
-            comptent plus : ils s'EXÉCUTENT (#7596, `MessageEffectsHost`). */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badges badges={badges} />
-        </div>
-
-        {/* LE CHROME DE PROTECTION — AU-DESSUS de l'identité (F11,
-            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`). UN
-            composant pour les deux peaux et pour les modes à venir (#7454) :
-            le décompte d'un éphémère ET la désignation d'une vue unique, que
-            cette rangée ne câble plus elle-même. L'horloge est PARTAGÉE
-            (`secondClock`) — cette rangée ne re-rend jamais pour elle. */}
-        <ProtectionChrome
-          deadline={ephemeralDeadline}
-          {...(onEphemeralExpired === undefined ? {} : { onExpired: () => onEphemeralExpired(message.id) })}
-        />
 
         {head ? (
           /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne
@@ -767,7 +795,7 @@ export const FocalRow = memo(function FocalRow({
             basse) à gauche ; l'heure et l'accusé à droite, alignés sur la
             DERNIÈRE ligne du bloc — `items-end` fait ce que
             `HStack(alignment:.bottom)` fait côté iOS. */}
-        <div className="flex items-end gap-2">
+        <div data-row-content className="flex items-end gap-2" style={contentOrigin}>
           <div className="min-w-0 flex-1">
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
@@ -844,7 +872,9 @@ export const FocalRow = memo(function FocalRow({
                       : { onToggle: () => onPickLanguage(message.originalLanguage) })}
                   />
                 ) : null}
-                {onPickLanguage === undefined ? null : (
+                {/* Une bande VIDE occupait une place du `gap` et décalait les
+                    réactions de 4 px de l'origine du contenu (#7929). */}
+                {onPickLanguage === undefined || footerLanguages.length === 0 ? null : (
                   <Flags
                     languages={footerLanguages}
                     active={activeLanguage}

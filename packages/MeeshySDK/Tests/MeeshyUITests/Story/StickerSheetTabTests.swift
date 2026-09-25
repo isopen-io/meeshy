@@ -64,11 +64,6 @@ final class StickerSheetTabTests: XCTestCase {
         XCTAssertEqual(StickerSheetTab.custom.symbolName, "paintbrush.pointed.fill")
     }
 
-    /// « Mes stickers » a quitté la RECHERCHE, qui garde les catalogues figés.
-    func test_recherche_neCompteplusMesStickers() {
-        XCTAssertFalse(StickerSheetTab.sections(of: .search, offered: toutesServies).contains(.library))
-    }
-
     /// **Le LIEU reste servi SANS fournisseur de position** (directive porteur
     /// 2026-09-05).
     ///
@@ -107,15 +102,15 @@ final class StickerSheetTabTests: XCTestCase {
         XCTAssertEqual(StickerSheetTab.sections(of: .smileys, offered: toutesServies), [.emoji])
     }
 
-    /// RECHERCHE atteint tout le reste — c'est ce qui rend le témoin
-    /// d'atteignabilité satisfiable, et c'est aussi ce qui fait de cet onglet
-    /// le seul indispensable.
-    func test_recherche_porteLesCataloguesFiges_etMesStickers() {
+    /// RECHERCHE porte les catalogues FIGÉS. « Mes stickers » l'a quittée pour
+    /// PERSONNALISÉS (directive porteur 2026-09-25) : le témoin
+    /// d'atteignabilité reste satisfait, chaque famille ayant son onglet.
+    func test_recherche_porteLesCataloguesFiges() {
         let trouvees = StickerSheetTab.sections(of: .search, offered: toutesServies)
-        XCTAssertTrue(trouvees.contains(.library))
         XCTAssertTrue(trouvees.contains(.love))
+        XCTAssertFalse(trouvees.contains(.library), "Mes stickers vit dans Personnalisés")
         XCTAssertFalse(trouvees.contains(.emoji), "les smileys ont leur onglet")
-        XCTAssertFalse(trouvees.contains(.place), "le lieu est une donnée VIVANTE")
+        XCTAssertFalse(trouvees.contains(.place), "le lieu se personnalise")
     }
 
     /// **FAVORIS et RÉCENTS ne portent AUCUNE famille de catalogue**, et c'est

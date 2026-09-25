@@ -15,6 +15,7 @@ import UIKit
 /// Le défaut se lisait comme une décision d'ÉCRAN (l'hôte plein écran gardait
 /// `id != objectId`) alors que la cause était une couche plus bas, et valait
 /// pour tous les hôtes du canvas.
+@MainActor
 final class StoryCanvasInlineEditTouchPolicyTests: XCTestCase {
 
     /// Aucune édition en cours : rien n'est disputé, tout revient au canvas.

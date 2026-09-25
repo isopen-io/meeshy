@@ -719,7 +719,7 @@ struct AudioMediaView: View, Equatable {
             )
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !ref.messageId.isEmpty else { return }
+                guard ref.opensQuotedTarget else { return }
                 HapticFeedback.light()
                 if replyIsStory {
                     onStoryReplyTap?(ref.messageId)

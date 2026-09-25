@@ -170,6 +170,7 @@ function formatReplyToMessage(replyTo: any, citingMetadata?: unknown) {
     isBlurred: Boolean(replyTo.isBlurred),
     isEncrypted: Boolean(replyTo.isEncrypted),
     effectFlags: replyTo.effectFlags ?? 0,
+    ...(guarded['deletedAt'] ? { deletedAt: guarded['deletedAt'] } : {}),
     ...(guarded['attachmentReplyTo'] ? { attachmentReplyTo: guarded['attachmentReplyTo'] } : {})
   };
 }

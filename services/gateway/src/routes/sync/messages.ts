@@ -15,7 +15,8 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
-import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
+import { selectForFields, restrictFields, isFieldServed, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
+import { loadReaderReactionsByMessage } from '../conversations/messages-reader-reactions';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
 
@@ -305,6 +306,9 @@ const syncMessageSchema = {
     replyToId: { type: 'string', nullable: true },
     reactionSummary: { type: 'object', nullable: true, additionalProperties: true },
     reactionCount: { type: 'integer' },
+    // #7936 — MES emojis sur ce message, servis avec `reactionSummary` : sans
+    // eux le delta dit « combien » sans « qui », et « ma réaction » se devine.
+    currentUserReactions: { type: 'array', items: { type: 'string' } },
     validatedMentions: { type: 'array', items: { type: 'string' } },
     // Les SIX champs de `MESSAGE_PROTECTION_SELECT`, aux types que le schéma
     // partagé leur donne (`api-schemas/message.ts:354-364`, `:443-447`) : un
@@ -539,13 +543,27 @@ export async function syncMessages(opts: {
     (conversationId) => readerParticipantIdByConversation.get(conversationId),
     (err) => logger.warn('view-once reader states failed — served closed', { err }),
   );
+  // #7936 — MES réactions, UNE requête pour la page, seulement si les
+  // réactions sont servies : elles accompagnent `reactionSummary`.
+  const servesReactions = isFieldServed(fields, 'reactionSummary', servedPinned);
+  const readerReactions = servesReactions
+    ? await loadReaderReactionsByMessage(prisma, {
+        messageIds: visible.map((m) => m.id),
+        readerParticipantIds: [...new Set(readerParticipantIdByConversation.values())],
+      })
+    : null;
+  const withReaderReactions = (m: SyncMessage, served: Record<string, unknown>): Record<string, unknown> =>
+    readerReactions === null ? served : { ...served, currentUserReactions: readerReactions.get(m.id) ?? [] };
   const serialize = (m: SyncMessage): Record<string, unknown> =>
     projectViewOnceForReader(
       hoistLocationOnto(
-        restrictFields(
-          serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
-          fields,
-          servedPinned,
+        withReaderReactions(
+          m,
+          restrictFields(
+            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+            fields,
+            servedPinned,
+          ),
         ),
       ) as Record<string, unknown> & { id: string; isViewOnce?: boolean | null },
       viewOnceStates.get(m.id),

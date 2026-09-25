@@ -46,6 +46,7 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -454,6 +455,15 @@ export function registerEditMessagePutRoute(
       const messageResponse = {
         ...updatedMessage,
         conversationId,
+        // #7927 — la citation passe par la garde UNIQUE : l'`include` sert la
+        // ligne CITÉE entière, texte d'un parent supprimé ou protégé compris,
+        // et cette réponse est aussi la charge `message:edited`.
+        replyTo: updatedMessage.replyTo
+          ? {
+              ...updatedMessage.replyTo,
+              ...servedQuotedMessage(updatedMessage.replyTo, { includeTranslations: false }),
+            }
+          : updatedMessage.replyTo,
         translations: transformTranslationsToArray(
           messageId,
           (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations

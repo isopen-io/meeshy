@@ -17,6 +17,7 @@ import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view
 import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
+import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -323,7 +324,13 @@ function MemberRow({
         </div>
       ) : (
         <AvatarMenuTrigger entries={entries} name={member.displayName}>
-          <Link to="userProfile" params={{ username: member.username }} className={rowClass} style={rowStyle}>
+          <Link
+            to="userProfile"
+            params={{ username: member.username }}
+            onClick={peekProfileOnClick(member.username)}
+            className={rowClass}
+            style={rowStyle}
+          >
             {contenu}
           </Link>
         </AvatarMenuTrigger>

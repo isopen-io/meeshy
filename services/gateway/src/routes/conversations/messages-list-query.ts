@@ -335,6 +335,9 @@ export function buildMessageListSelect(options: {
           select: {
             id: true,
             content: true,
+            // #7927 — la suppression garde `content` en base : sans ce champ,
+            // `servedQuotedMessage` ne peut pas savoir qu'il doit le taire.
+            deletedAt: true,
             originalLanguage: true,
             createdAt: true,
             senderId: true,
@@ -582,6 +585,8 @@ export type MessageRowMappingContext = {
    * colonne, qui porte l'heure interne de destruction.
    */
   ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
+  /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
+  readerReactions?: ReadonlyMap<string, readonly string[]>;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -664,12 +669,11 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
           reactionCount: message.reactionCount,
-          // #4177 — `currentUserReactions` (message-level) retiré : ni
-          // déclaré dans `messageSchema` ni lu par aucun client, il payait
-          // un `reaction.findMany` par page pour rien depuis toujours. Son
-          // miroir PAR PIÈCE JOINTE (`attachments[].currentUserReactions`,
-          // via `aggregateAttachmentReactions`) reste servi — lui EST
-          // déclaré et lu.
+          // #7936 — MES emojis sur ce message, chargés en UNE requête pour la
+          // page (`loadReaderReactionsByMessage`) et DÉCLARÉS au
+          // `messageSchema` : #4177 les avait retirés parce qu'ils mouraient
+          // à la sérialisation.
+          currentUserReactions: ctx.readerReactions?.get(message.id) ?? [],
 
           // Chiffrement
           isEncrypted: message.isEncrypted,

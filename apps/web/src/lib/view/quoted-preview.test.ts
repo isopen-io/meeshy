@@ -292,3 +292,101 @@ describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
     expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media?.kind).toBe('image');
   });
 });
+
+/**
+ * #7929 (complément porteur du 2026-09-25) — LA RÉPONSE À UNE PIÈCE UNIQUE
+ * montre une MINIATURE aussi large que la carte de story, dont la hauteur
+ * suit le rapport d'aspect ORIGINAL du média. `frame` est la moitié DONNÉE de
+ * cette règle : le cadre existe pour une image ou une vidéo seule (ou la pièce
+ * NOMMÉE d'un carrousel), jamais pour un média protégé — ses dimensions
+ * décrivent un contenu que le lecteur n'a pas le droit de voir.
+ */
+describe('quotedPreviewOf — le cadre d’une pièce unique citée (#7929)', () => {
+  const photo = (dims: { readonly width?: number; readonly height?: number; readonly id?: string } = {}) =>
+    attachment({
+      id: dims.id ?? 'a-photo',
+      mimeType: 'image/jpeg',
+      fileUrl: `https://cdn.meeshy.me/${dims.id ?? 'a-photo'}.jpg`,
+      ...(dims.width === undefined ? {} : { width: dims.width }),
+      ...(dims.height === undefined ? {} : { height: dims.height }),
+    });
+
+  test('une photo PAYSAGE seule : le rapport largeur / hauteur du média, mesuré', () => {
+    expect(preview(quoted({ attachments: [photo({ width: 1200, height: 900 })] })).media?.frame).toEqual({
+      aspectRatio: 1200 / 900,
+      measured: true,
+    });
+  });
+
+  test('une photo PORTRAIT seule : le rapport du média, mesuré', () => {
+    expect(preview(quoted({ attachments: [photo({ width: 900, height: 1600 })] })).media?.frame).toEqual({
+      aspectRatio: 900 / 1600,
+      measured: true,
+    });
+  });
+
+  test('une vidéo seule : le cadre existe aussi, même sans vignette servie', () => {
+    const clip = attachment({ id: 'a-clip', mimeType: 'video/mp4', fileUrl: 'https://cdn.meeshy.me/c.mp4', width: 160, height: 90 });
+    expect(preview(quoted({ attachments: [clip] })).media?.frame).toEqual({ aspectRatio: 160 / 90, measured: true });
+  });
+
+  test('sans dimensions : repli CARRÉ, déclaré non mesuré', () => {
+    expect(preview(quoted({ attachments: [photo()] })).media?.frame).toEqual({ aspectRatio: 1, measured: false });
+  });
+
+  test('la pièce NOMMÉE d’un carrousel est une pièce unique : son propre rapport', () => {
+    const carrousel = Object.assign(
+      quoted({ attachments: [photo({ width: 1200, height: 900, id: 'a-1' }), photo({ width: 900, height: 1600, id: 'a-2' })] }),
+      { attachmentReplyTo: { attachmentId: 'a-2', kind: 'image' } },
+    );
+    expect(preview(carrousel).media?.frame).toEqual({ aspectRatio: 900 / 1600, measured: true });
+  });
+
+  test('un carrousel cité EN ENTIER garde la petite vignette : aucun cadre', () => {
+    const carrousel = quoted({ attachments: [photo({ width: 1200, height: 900, id: 'a-1' }), photo({ id: 'a-2' })] });
+    expect(preview(carrousel).media?.frame).toBeNull();
+  });
+
+  test('un vocal n’a pas de cadre', () => {
+    const vocal = attachment({ id: 'a-v', mimeType: 'audio/mp4', fileUrl: 'https://cdn.meeshy.me/v.m4a' });
+    expect(preview(quoted({ attachments: [vocal] })).media?.frame).toBeNull();
+  });
+
+  test('un média PROTÉGÉ ne livre ni cadre ni rapport, au niveau du message comme de la pièce', () => {
+    expect(preview(quoted({ isViewOnce: true, attachments: [photo({ width: 1200, height: 900 })] })).media?.frame).toBeNull();
+    const floue = { ...photo({ width: 1200, height: 900 }), isBlurred: true } as Attachment;
+    expect(preview(quoted({ attachments: [floue] })).media?.frame).toBeNull();
+  });
+
+  test('un rapport extrême est borné : jamais plus haut que la scène de story (9:16), jamais plus plat que 3:1', () => {
+    expect(preview(quoted({ attachments: [photo({ width: 100, height: 1000 })] })).media?.frame?.aspectRatio).toBe(9 / 16);
+    expect(preview(quoted({ attachments: [photo({ width: 4000, height: 500 })] })).media?.frame?.aspectRatio).toBe(3);
+  });
+});
+
+/**
+ * #7926 — UNE CITATION D'UN MESSAGE SUPPRIMÉ NE DIT PLUS CE QU'IL DISAIT.
+ * `message:deleted` pose `deletedAt` sur la citation embarquée
+ * (`realtime-message-mutations.ts`) ; la citation rend alors le libellé du
+ * catalogue — jamais l'ancien texte, ni sa traduction, ni sa pièce jointe,
+ * même si une charge en garde encore une trace.
+ */
+describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
+  const gone = quoted({
+    content: 'Le code est 4521',
+    translations: [{ targetLanguage: 'en', translatedContent: 'The code is 4521' } as unknown as Message['translations'][number]],
+    attachments: [PHOTO],
+    deletedAt: '2026-09-25T10:00:00.000Z' as unknown as Date,
+  });
+
+  test('le libellé « Message supprimé » remplace le texte', () => {
+    expect(preview(gone).text).toBe('Message supprimé');
+  });
+
+  test('ni traduction, ni vignette, ni inventaire ne voyagent', () => {
+    const shown = preview(gone, ['en', 'fr']);
+    expect(shown.text).toBe('Message supprimé');
+    expect(shown.media).toBeNull();
+    expect(shown.inventory).toEqual([]);
+  });
+});

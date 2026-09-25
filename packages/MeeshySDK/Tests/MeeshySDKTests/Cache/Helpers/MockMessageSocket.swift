@@ -43,6 +43,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
     let viewOncePurged = PassthroughSubject<ViewOncePurgedEvent, Never>()
+    let messageStarred = PassthroughSubject<MessageStarredEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
