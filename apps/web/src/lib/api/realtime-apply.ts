@@ -119,6 +119,12 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(raw.maxViewOnceCount !== undefined ? { maxViewOnceCount: raw.maxViewOnceCount } : {}),
     ...(raw.effectFlags !== undefined ? { effectFlags: raw.effectFlags } : {}),
     ...(raw.replyToId !== undefined ? { replyToId: raw.replyToId } : {}),
+    /* LA CITATION VOYAGE AVEC LA RÉPONSE (#7996) — la passerelle la sert sur
+       `message:new` (`buildMessageNewPayload`) ; l'énumération la jetait, et
+       l'écho de MA réponse remplaçait la rangée optimiste, qui la portait,
+       par une rangée amputée. Portée BRUTE, comme le reste de la charge :
+       `decodeMessage` la revit récursivement au `select` (D-26). */
+    ...(raw.replyTo === undefined || raw.replyTo === null ? {} : { replyTo: raw.replyTo }),
     ...(raw.storyReplyToId !== undefined ? { storyReplyToId: raw.storyReplyToId } : {}),
     ...(raw.forwardedFromId !== undefined ? { forwardedFromId: raw.forwardedFromId } : {}),
     ...(raw.forwardedFromConversationId !== undefined
