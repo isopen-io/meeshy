@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 
 import { authorPostsQueryKey } from './author-posts';
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { mergeServedPost } from './card-caches';
 import { FEED_QUERY_KEY } from './feed';
 import { BOOKMARK_FAILED_MESSAGE, LIKE_FAILED_MESSAGE, performPostGesture, type PostGestureDeps } from './feed-gestures';
 import { FEED_NEW_COUNT_KEY } from './feed-new-count';
@@ -367,5 +368,46 @@ describe('les caisses de cartes et leurs voisines (#7341)', () => {
 
     expect(cardIn(queryClient, FEED_QUERY_KEY)?.isLikedByMe).toBe(true);
     expect(queryClient.getQueryState(BOOKMARKS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+});
+
+/**
+ * `mergeServedPost` (#7534) — extraite de `feed-realtime.ts#merged`, SITE
+ * UNIQUE désormais partagé par le temps réel (`applyPostCreated`,
+ * `applyPostUpdated`) ET le port du menu « ⋯ » (`publication-actions.ts#editPost`,
+ * qui en a besoin pour hydrater son optimiste avec la réponse SERVIE sans
+ * importer le chunk `realtime`, différé). Le comportement n'a pas changé —
+ * ces témoins couvrent ce que `feed-realtime.test.ts` couvrait déjà
+ * indirectement, par l'API publique de la loi extraite.
+ */
+describe('mergeServedPost — ce qui appartient au LECTEUR ne vient pas du serveur', () => {
+  test('un `isLikedByMe` TENU survit au remplacement par le servi', () => {
+    const incoming = post({ id: 'p1', content: 'texte servi', isLikedByMe: undefined });
+    const held = post({ id: 'p1', content: 'texte optimiste', isLikedByMe: true });
+
+    expect(mergeServedPost(incoming, held).isLikedByMe).toBe(true);
+    expect(mergeServedPost(incoming, held).content).toBe('texte servi');
+  });
+
+  test('un `false` TENU est une réponse du lecteur, et survit aussi', () => {
+    const incoming = post({ id: 'p1', isBookmarkedByMe: undefined });
+    const held = post({ id: 'p1', isBookmarkedByMe: false });
+
+    expect(mergeServedPost(incoming, held).isBookmarkedByMe).toBe(false);
+  });
+
+  test('`likeCount` n’est PAS préservé — le compte servi remplace toujours l’estimation', () => {
+    const incoming = post({ id: 'p1', likeCount: 9 });
+    const held = post({ id: 'p1', likeCount: 3 });
+
+    expect(mergeServedPost(incoming, held).likeCount).toBe(9);
+  });
+
+  test('sans état tenu (`null`), le servi gagne sans rien inventer', () => {
+    const incoming = post({ id: 'p1', isLikedByMe: true, isBookmarkedByMe: true });
+    const held = post({ id: 'p1', isLikedByMe: null, isBookmarkedByMe: null });
+
+    expect(mergeServedPost(incoming, held).isLikedByMe).toBe(true);
+    expect(mergeServedPost(incoming, held).isBookmarkedByMe).toBe(true);
   });
 });

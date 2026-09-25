@@ -189,6 +189,40 @@ export function removeCardPost(queryClient: QueryClient, postId: string): void {
 }
 
 /**
+ * CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR (#7182, extrait de
+ * `feed-realtime.ts#merged`, AUCUN changement de règle — #7534). `isLikedByMe`
+ * et `isBookmarkedByMe` se lisent PAR LECTEUR ; un événement diffusé à tous ou
+ * une réponse servie à CE lecteur ne peuvent pas les porter justes pour
+ * chacun. Sans cette préservation, un auteur corrigeant une faute de frappe
+ * dé-remplirait le cœur de tous ceux qui avaient aimé — miroir explicite
+ * d'iOS, « Preserve local-only state (isLiked) across the update »
+ * (`FeedViewModel.swift:1495`).
+ *
+ * **SITE UNIQUE** — le port du menu « ⋯ » (`publication-actions.ts#editPost`)
+ * a besoin de la MÊME loi pour hydrater son optimiste avec la réponse
+ * servie, et il vit dans le chunk SYNCHRONE (un geste de carte, jamais
+ * différé) alors que `feed-realtime.ts` n'est atteint qu'en `import()` par
+ * `socket.ts` (le chunk `realtime`, chargé APRÈS la première peinture) : un
+ * port de geste ne peut PAS l'importer sans y traîner tout le temps réel.
+ * Elle vit donc ICI, dans le registre que les deux appelants lisent déjà.
+ *
+ * Un spread CONDITIONNEL, et non `a ?? b` : sous `exactOptionalPropertyTypes`,
+ * poser explicitement `undefined` sur une propriété optionnelle est un défaut
+ * de type — une propriété ABSENTE et une propriété qui VAUT `undefined` ne sont
+ * pas la même chose. La comparaison est `== null` pour couvrir les deux formes
+ * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
+ * pas une absence, et il survit. Les COMPTEURS ne sont pas préservés —
+ * `likeCount` est un agrégat que le serveur tient mieux que nous.
+ */
+export function mergeServedPost(incoming: FeedPost, held: FeedPost): FeedPost {
+  return {
+    ...incoming,
+    ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+    ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
+  };
+}
+
+/**
  * LES CAISSES QUI MONTRENT LA CARTE SONT PÉRIMÉES (un 409 sur « aimer » : le
  * lecteur avait déjà réagi ailleurs) — celles-là seulement, et jamais le fil
  * GELÉ des Réels, que le retour en arrière a déjà remis.

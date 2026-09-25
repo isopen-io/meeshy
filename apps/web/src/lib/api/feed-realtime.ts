@@ -4,7 +4,7 @@ import { withoutBookmark } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
-import { removeCardPost, replaceCardContent, updateCardPost, writeCardCache } from './card-caches';
+import { mergeServedPost, removeCardPost, replaceCardContent, updateCardPost, writeCardCache } from './card-caches';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
@@ -61,28 +61,6 @@ const mutationIdOf = (payload: unknown): string | null => {
  * façon la règle du dépôt.
  */
 
-/**
- * CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR. `isLikedByMe` et
- * `isBookmarkedByMe` se lisent PAR LECTEUR ; un événement diffusé à tous ne
- * peut pas les porter justes pour chacun. Sans cette préservation, un auteur
- * corrigeant une faute de frappe dé-remplirait le cœur de tous ceux qui
- * avaient aimé — miroir explicite d'iOS, « Preserve local-only state (isLiked)
- * across the update » (`FeedViewModel.swift:1495`).
- *
- * Un spread CONDITIONNEL, et non `a ?? b` : sous `exactOptionalPropertyTypes`,
- * poser explicitement `undefined` sur une propriété optionnelle est un défaut
- * de type — une propriété ABSENTE et une propriété qui VAUT `undefined` ne sont
- * pas la même chose. La comparaison est `== null` pour couvrir les deux formes
- * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
- * pas une absence, et il survit. Les COMPTEURS ne sont pas préservés —
- * `likeCount` est un agrégat que le serveur tient mieux que nous.
- */
-const merged = (incoming: FeedPost, held: FeedPost): FeedPost => ({
-  ...incoming,
-  ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
-  ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
-});
-
 /** Le parcours des pages du FLUX SEUL, pour `post:created` : insérer en tête
  *  et réconcilier par cmid n'ont de sens que là. Tout ce qui change une carte
  *  sur CHAQUE écran qui la montre passe par le registre (`card-caches.ts`). */
@@ -126,7 +104,7 @@ export function applyPostCreated(queryClient: QueryClient, payload: unknown): vo
   if (cmid !== null && ids.includes(cmid)) {
     queryClient.setQueryData<FeedInfiniteData>(
       FEED_QUERY_KEY,
-      mapPosts(data, (posts) => posts.map((held) => (held.id === cmid ? merged(incoming, held) : held))),
+      mapPosts(data, (posts) => posts.map((held) => (held.id === cmid ? mergeServedPost(incoming, held) : held))),
     );
     return;
   }
@@ -152,7 +130,7 @@ export function applyPostUpdated(queryClient: QueryClient, payload: unknown): vo
   const incoming = postOf(payload);
   if (incoming === null) return;
 
-  replaceCardContent(queryClient, incoming.id, (held) => merged(incoming, held));
+  replaceCardContent(queryClient, incoming.id, (held) => mergeServedPost(incoming, held));
 }
 
 /**
