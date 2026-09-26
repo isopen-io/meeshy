@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { useStore } from 'zustand/react';
+
+import { callOutputStore } from '@/lib/calls/call-output';
 
 /**
  * **UN FLUX, UN ÉLÉMENT** (#6382) — `srcObject` ne passe pas par un attribut :
@@ -34,7 +37,21 @@ export function StreamVideo({ stream, mirrored, className, label }: { readonly s
   );
 }
 
+type SinkableAudio = HTMLAudioElement & { readonly setSinkId?: (sinkId: string) => Promise<void> };
+
+/**
+ * La sortie choisie (#8046) : chaque pair, même arrivé APRÈS le choix, sort
+ * sur le même casque. `''` rend la sortie par défaut du système. Là où
+ * `setSinkId` manque (Safari iOS, WebView), le sélecteur ne propose pas de
+ * sortie : rien à appliquer.
+ */
 export function StreamAudio({ stream }: { readonly stream: MediaStream }) {
   const ref = useSrcObject<HTMLAudioElement>(stream);
-  return <audio ref={ref} autoPlay data-call-audio="" />;
+  const sinkId = useStore(callOutputStore, (state) => state.sinkId);
+  useEffect(() => {
+    const element = ref.current as SinkableAudio | null;
+    if (element === null || typeof element.setSinkId !== 'function') return;
+    void element.setSinkId(sinkId ?? '').catch(() => undefined);
+  }, [sinkId, ref]);
+  return <audio ref={ref} autoPlay data-call-audio="" data-call-sink={sinkId ?? 'default'} />;
 }

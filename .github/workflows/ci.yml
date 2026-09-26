@@ -777,6 +777,17 @@ jobs:
           cd apps/web
           node scripts/check-calls-join.mjs
 
+      # #8046 — continuer à discuter pendant l'appel : un appel vivant (faux
+      # micro et fausse caméra de Chromium) se choisit ses périphériques, se
+      # réduit en pastille puis en bulle, survit à la navigation, laisse écrire
+      # et envoyer dans une autre conversation, se déplace au doigt et au
+      # clavier, revient en un geste ; l'image dans l'image s'ouvre.
+      - name: Gate appel en cours (bulle, image dans l'image, périphériques)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-during.mjs
+
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
       # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
       # retirent la ligne et font baisser le compte de l'onglet ET du barreau au
