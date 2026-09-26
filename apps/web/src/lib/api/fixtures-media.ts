@@ -1,6 +1,6 @@
 import type { Attachment, Conversation, Message } from './types';
 import { VIEWER_ID, amina, attachmentDefaults, conversationDefaults, dayAt, kwame, message, translation, viewer } from './fixtures-base';
-import { MEDIA_GRID_MESSAGES, MEDIA_SOLO_VIDEO_MESSAGE } from './fixtures-media-grid';
+import { MEDIA_GRID_MESSAGES, MEDIA_SOLO_VIDEO_MESSAGE, PROTECTED_MEDIA_AFTER_MEDIA_10, PROTECTED_MEDIA_AFTER_MEDIA_9 } from './fixtures-media-grid';
 
 /**
  * LE CORPUS « MÉDIAS » (#5805) — le SEUL fil du jeu qui porte une image ET
@@ -500,7 +500,9 @@ const media7 = mediaMessage({
 export const MEDIA_MESSAGES: readonly Message[] = [
   media8,
   media9,
+  ...PROTECTED_MEDIA_AFTER_MEDIA_9,
   media10,
+  ...PROTECTED_MEDIA_AFTER_MEDIA_10,
   media1,
   media2,
   media3,
