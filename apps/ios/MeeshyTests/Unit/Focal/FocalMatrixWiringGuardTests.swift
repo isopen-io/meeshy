@@ -138,7 +138,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
         )
         guard let textBlockStart = code.range(of: "private var textBlock"),
-              let textBlockEnd = code.range(of: "private var readMorePayload")
+              let textBlockEnd = code.range(of: "private var headerTimeString")
         else { return XCTFail("bornes du textBlock introuvables") }
         let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
         XCTAssertFalse(

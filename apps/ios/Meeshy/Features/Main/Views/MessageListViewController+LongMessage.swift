@@ -51,9 +51,9 @@ extension MessageListViewController {
         let resize = { [weak self] in
             guard let self else { return }
             self.applyToDataSource(snapshot) {}
-            // La cellule re-hébergée s'auto-dimensionne À LA PASSE de layout :
-            // l'invalider rend sa nouvelle hauteur effective dans la passe.
-            self.collectionView.collectionViewLayout.invalidateLayout()
+            // La cellule re-hébergée s'auto-dimensionne dans cette passe — pas
+            // d'invalidation du layout ici : elle périmerait le mémo de la pastille
+            // de jour (`MessageListStickyDayMemoGuardTests`).
             self.collectionView.layoutIfNeeded()
         }
         // Le layout du fil tient lui-même son ancre (le bas VISUEL, repère
