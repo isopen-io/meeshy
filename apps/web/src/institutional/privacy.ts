@@ -21,7 +21,7 @@ import type { ContentPage } from './type';
  */
 export const PAGE_PRIVACY: ContentPage = {
   title: 'Politique de Confidentialité',
-  mention: 'Dernière mise à jour : 29 janvier 2026',
+  mention: 'Dernière mise à jour : 26 septembre 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   sections: [
     {
@@ -138,6 +138,42 @@ export const PAGE_PRIVACY: ContentPage = {
               body: 'Vous tenir informé des nouveautés et changements importants',
             },
           ],
+        },
+      ],
+    },
+    {
+      title: "Votre Carnet d'Adresses",
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Si vous l'autorisez — et seulement dans ce cas —, Meeshy envoie à nos serveurs les numéros de téléphone, les adresses e-mail et les noms tels que vous les avez enregistrés dans le carnet d'adresses de votre téléphone. L'autorisation se retire à tout moment dans les réglages du téléphone : plus rien n'est envoyé ensuite.",
+          ],
+        },
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Pourquoi',
+              body: "Retrouver ceux de vos contacts qui sont déjà sur Meeshy, et vous prévenir quand l'un d'eux rejoint Meeshy. Seuls les numéros et e-mails vérifiés par leur titulaire servent à ce rapprochement, et l'annonce d'une arrivée ne transmet jamais le numéro ni l'e-mail qui a permis de la reconnaître.",
+            },
+            {
+              title: 'Ce que nous ne faisons pas',
+              body: "Personne n'est contacté à votre place : aucun SMS, aucun e-mail, aucune invitation n'est envoyé à vos contacts. Votre carnet ne sert à rien d'autre, et il n'est ni vendu ni partagé.",
+            },
+            {
+              title: 'Conservation',
+              body: "Votre carnet est conservé tant que votre compte existe, pour que l'arrivée d'un contact puisse vous être annoncée. Un contact que vous retirez de votre téléphone disparaît de nos serveurs à la synchronisation complète suivante.",
+            },
+            {
+              title: 'Effacement',
+              body: "Vous pouvez demander à tout moment l'effacement complet de votre carnet à privacy@meeshy.me. Il est aussi effacé avec toutes vos données lors de la suppression de votre compte.",
+            },
+          ],
+        },
+        {
+          kind: 'accent',
+          body: "Vous ne voulez pas qu'on vous retrouve par votre numéro ou votre e-mail ? Activez « Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail » dans Paramètres > Confidentialité : vos contacts ne vous retrouveront plus ainsi et ne seront pas prévenus de votre arrivée.",
         },
       ],
     },
