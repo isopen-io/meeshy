@@ -177,6 +177,10 @@ struct UniversalComposerBar: View {
     var onPhotoLibrary: (() -> Void)? = nil
     var onCamera: (() -> Void)? = nil
     var onFilePicker: (() -> Void)? = nil
+    /// Tuile « Contact » (#8101) : l'hôte ouvre le sélecteur du carnet, et le
+    /// contact choisi part en pièce jointe vCard. Absente si l'hôte ne câble
+    /// rien — une tuile sans effet n'est jamais rendue (loi 4).
+    var onContactPicker: (() -> Void)? = nil
 
     /// Fired when the attachment carousel becomes visible. The keyboard, the
     /// attachment carousel and any host-owned emoji panel are mutually

@@ -65,7 +65,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Meeshy needs access to your contacts to help you connect with friends on the platform.</string>
+	<string>Meeshy uses your contacts to find friends who are already on Meeshy and let you know when one of them joins. No one is contacted on your behalf.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -1,5 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useMemo, useState } from 'react';
 
+import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
+
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -59,6 +61,9 @@ import { revealedAttachment, useAttachmentMasked } from './view-once-opened';
  * multi-pistes, l'anneau de téléchargement.
  */
 const MediaViewer = lazy(() => import('./media-viewer'));
+
+/** La carte de visite (#8101) — son lecteur vCard et sa fiche en chunk à la demande. */
+const ContactCard = lazy(() => import('./contact-card'));
 
 /** [0..1] → pourcentage arrondi au DIXIÈME — `MediaConsumptionProgressBar.swift:23-41`. */
 const consumptionPercentOf = (fraction: number): number => Math.round(fraction * 1000) / 10;
@@ -513,6 +518,13 @@ export function Attachments({
       {nonMedia.map((attachment, i) =>
         maskedAttachment(attachment) ? (
           <MaskedAttachment key={`file-${i}`} attachment={attachment} />
+        ) : isContactCardAttachment(attachment) ? (
+          <Suspense
+            key={`file-${i}`}
+            fallback={<FileAttachmentRow attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />}
+          >
+            <ContactCard attachment={attachment} />
+          </Suspense>
         ) : (
           <FileAttachmentRow key={`file-${i}`} attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />
         ),

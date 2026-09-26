@@ -22,6 +22,7 @@ const cached: AppPreferences = {
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  hideProfileFromSearch: false,
 };
 
 const deferred = () => {
@@ -57,7 +58,7 @@ describe('performPreferenceEdit', () => {
     const pending = performPreferenceEdit({ patch: { showOnlineStatus: false }, deps });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(read()?.showOnlineStatus).toBe(false);
-    answer.resolve({ ok: true, data: { privacy: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: true } } });
+    answer.resolve({ ok: true, data: { privacy: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: true, hideProfileFromSearch: false } } });
     expect(await pending).toEqual({ status: 'saved' });
   });
 

@@ -93,13 +93,16 @@ enum OnboardingFlow {
     /// proposer les notifications.
     static let productiveSteps: Set<OnboardingStepId> = [.global, .story, .friends]
 
-    static func pendingGestureSteps(for state: APIOnboardingState) -> [OnboardingStepId] {
+    /// `contactsOfferable` : la proposition « retrouver tes amis » (#8105) peut
+    /// aboutir — elle suffit alors à faire naître la carte 4, même sans profil
+    /// suggéré.
+    static func pendingGestureSteps(for state: APIOnboardingState, contactsOfferable: Bool = false) -> [OnboardingStepId] {
         let settled = Set(state.seenSteps).union(state.prefilledSteps)
         return gestureSteps.filter { step in
             guard !settled.contains(step) else { return false }
             switch step {
             case .global: return state.globalConversationId != nil
-            case .friends: return !state.suggestions.isEmpty
+            case .friends: return !state.suggestions.isEmpty || contactsOfferable
             // Proposée au seul compte DÉCLARÉ non vérifié : une passerelle qui
             // ne le dit pas (`nil`) ne fait naître aucune carte.
             case .email: return state.emailVerified == false

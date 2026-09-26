@@ -76,6 +76,17 @@ describe('une catégorie devient un filtre SERVEUR, jamais un tri local d’une 
   });
 });
 
+describe('« X a rejoint Meeshy » (#8105)', () => {
+  test('`contact_joined` se range sous « Contacts », là où vivent les demandes d’ami', () => {
+    expect(categoryQuery('contacts').types?.split(',')).toContain('contact_joined');
+    expect(categoryAccepts('contacts', { type: 'contact_joined', state: { isRead: false } })).toBe(true);
+  });
+
+  test('`contact_joined` prend la teinte de la famille contacts, pas l’indigo du système', () => {
+    expect(notificationAccent('contact_joined')).toBe(notificationAccent('friend_request'));
+  });
+});
+
 describe('une ligne reçue appartient-elle à une catégorie ?', () => {
   const ligne = (type: string, isRead: boolean) => ({ type, state: { isRead } });
 

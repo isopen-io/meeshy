@@ -76,6 +76,7 @@
     "build:shells": "node scripts/build-shells.mjs"
   },
   "dependencies": {
+    "@capacitor/push-notifications": "8.1.2",
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
     "@tanstack/react-virtual": "3.14.13",
@@ -102,7 +103,6 @@
     "@capacitor/android": "8.5.1",
     "@capacitor/cli": "8.5.1",
     "@capacitor/core": "8.5.1",
-    "@capacitor/ios": "8.5.1",
-    "@capacitor/push-notifications": "8.1.2"
+    "@capacitor/ios": "8.5.1"
   }
 }

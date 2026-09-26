@@ -54,6 +54,8 @@ export enum NotificationTypeEnum {
   CONTACT_UNBLOCKED = 'contact_unblocked',
   FRIEND_REQUEST = 'friend_request',
   FRIEND_ACCEPTED = 'friend_accepted',
+  /** Un compte du carnet d'adresses du destinataire vient d'arriver sur Meeshy (#8105). */
+  CONTACT_JOINED = 'contact_joined',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -356,7 +358,7 @@ export interface NotificationDelivery {
  * Metadata de base commune à toutes les notifications
  */
 interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'open_call' | 'view_details' | 'update_app' | 'none';
+  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'update_app' | 'none';
 }
 
 /**
@@ -573,6 +575,19 @@ export interface LoginNewDeviceNotificationMetadata extends BaseNotificationMeta
 }
 
 /**
+ * Metadata pour contact_joined (#8105) — « X a rejoint Meeshy ».
+ *
+ * Ne transporte que ce qu'un profil public montre : jamais le numéro ni
+ * l'e-mail apparié. `joinerIds` grandit quand plusieurs contacts arrivent
+ * en peu de temps chez le même destinataire (une seule ligne regroupée).
+ */
+export interface ContactJoinedNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly joinerIds: readonly string[];
+  readonly joinerCount: number;
+}
+
+/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -599,6 +614,7 @@ export type NotificationMetadata =
   | CommentLikeNotificationMetadata
   | FriendContentNotificationMetadata
   | LoginNewDeviceNotificationMetadata
+  | ContactJoinedNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================
@@ -941,6 +957,7 @@ export function isNotificationTypeEnabled(
     case 'contact_request':
     case 'friend_request':
     case 'contact_accepted':
+    case 'contact_joined':
       return prefs.contactRequestEnabled;
     case 'member_joined':
     case 'member_left':
