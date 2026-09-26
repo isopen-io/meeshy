@@ -104,12 +104,6 @@ final class CanvasMediaAdoptionTests: XCTestCase {
                        ["orphelin-via-mediaId"],
                        "un fond référencé par mediaId, dans une scène ≥ 1, doit être vu comme les autres")
     }
-}
-
-private extension CanvasMediaAdoption {
-    static func isCoherent(_ effects: StoryEffects, postMediaIds: [String]) -> Bool {
-        isCoherent(effects: effects, postMediaIds: postMediaIds)
-    }
 
     // MARK: - Les mediaIds d'une publication (#8012)
 
@@ -127,3 +121,8 @@ private extension CanvasMediaAdoption {
     }
 }
 
+private extension CanvasMediaAdoption {
+    static func isCoherent(_ effects: StoryEffects, postMediaIds: [String]) -> Bool {
+        isCoherent(effects: effects, postMediaIds: postMediaIds)
+    }
+}
