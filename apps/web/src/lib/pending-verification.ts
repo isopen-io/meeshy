@@ -10,10 +10,14 @@
  *
  * `accountCreated` choisit la phrase de l'écran du code (compte créé à
  * l'instant, ou compte qui attendait déjà sa vérification).
+ *
+ * `password` est ABSENT après une inscription sans numéro (#8055) : le mot
+ * de passe y est déjà enregistré sur le compte, il ne voyage pas une seconde
+ * fois avec le code.
  */
 export type PendingVerification = {
   readonly email: string;
-  readonly password: string;
+  readonly password?: string;
   readonly accountCreated: boolean;
 };
 
