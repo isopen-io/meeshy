@@ -48,6 +48,14 @@ import {
 } from './auth/registration.service';
 import type { AfterResponse } from '../utils/after-response';
 import { verifyPassword } from '../utils/password-hash';
+import { getCacheStore, type CacheStore } from './CacheStore';
+import {
+  startAccountFromEmail,
+  type AccountFromEmailInput,
+  type AccountFromEmailOutcome,
+} from './auth/account-from-email';
+import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth/email-proof.service';
+import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -94,6 +102,11 @@ export type AuthServiceOptions = {
    * persisté.
    */
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  /**
+   * Le magasin qui compte les envois de code par adresse et par IP (#8033).
+   * Absent ⇒ le singleton `getCacheStore()`, résolu à l'appel.
+   */
+  readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
 };
 
 export class AuthService {
@@ -102,11 +115,13 @@ export class AuthService {
   private emailService: EmailService;
   private frontendUrl: string;
   private readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  private readonly accountThrottle?: Pick<CacheStore, 'get' | 'set'>;
 
   constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
     this.resolveSocketManager = options.resolveSocketManager;
+    this.accountThrottle = options.accountThrottle;
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
 
@@ -607,118 +622,48 @@ export class AuthService {
   }
 
   /**
-   * Verify email with token (from email link) or 6-digit code (from mobile app)
+   * Vérifier une adresse par son code ou son lien — la preuve qui, depuis
+   * #8033, ouvre la session. Règles et gardes : `./auth/email-proof.service`.
    */
-  async verifyEmail(tokenOrCode: string, email: string, isCode: boolean = false): Promise<{ success: boolean; error?: string; alreadyVerified?: boolean; verifiedAt?: Date }> {
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
+  async verifyEmail(proof: EmailProof): Promise<EmailProofResult> {
+    return verifyEmailProof(this.prisma, proof);
+  }
 
-      // First, check if user exists with this email
-      const existingUser = await this.prisma.user.findFirst({
-        where: {
-          email: { equals: normalizedEmail, mode: 'insensitive' }
-        },
-        select: {
-          id: true,
-          email: true,
-          emailVerifiedAt: true,
-          emailVerificationToken: true,
-          emailVerificationCode: true,
-          emailVerificationExpiry: true
-        }
-      });
-
-      // If user exists and email is already verified, return success with verification date
-      if (existingUser && existingUser.emailVerifiedAt) {
-        logger.info(`[AUTH_SERVICE] ℹ️ Email déjà vérifié pour existingUser.email=${existingUser.email} le existingUser.emailVerifiedAt.toISOString()=${existingUser.emailVerifiedAt.toISOString()}`);
-        return {
-          success: true,
-          alreadyVerified: true,
-          verifiedAt: existingUser.emailVerifiedAt
-        };
-      }
-
-      if (isCode) {
-        // OTP code verification (mobile flow)
-        const user = await this.prisma.user.findFirst({
-          where: {
-            email: { equals: normalizedEmail, mode: 'insensitive' },
-            emailVerificationCode: tokenOrCode,
-            emailVerificationExpiry: { gt: new Date() }
-          }
-        });
-
-        if (!user) {
-          const expiredUser = await this.prisma.user.findFirst({
-            where: {
-              email: { equals: normalizedEmail, mode: 'insensitive' },
-              emailVerificationCode: tokenOrCode
-            }
-          });
-
-          if (expiredUser) {
-            return { success: false, error: 'Le code de vérification a expiré. Veuillez en demander un nouveau.' };
-          }
-          return { success: false, error: 'Code de vérification invalide.' };
-        }
-
-        const now = new Date();
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            emailVerifiedAt: now,
-            emailVerificationToken: null,
-            emailVerificationCode: null,
-            emailVerificationExpiry: null
-          }
-        });
-
-        logger.info(`[AUTH_SERVICE] ✅ Email vérifié par code OTP pour user.email=${user.email}`);
-        return { success: true, verifiedAt: now };
-      }
-
-      // Token verification (email link flow)
-      const hashedToken = this.hashToken(tokenOrCode);
-      const user = await this.prisma.user.findFirst({
-        where: {
-          email: { equals: normalizedEmail, mode: 'insensitive' },
-          emailVerificationToken: hashedToken,
-          emailVerificationExpiry: { gt: new Date() }
-        }
-      });
-
-      if (!user) {
-        const expiredUser = await this.prisma.user.findFirst({
-          where: {
-            email: { equals: normalizedEmail, mode: 'insensitive' },
-            emailVerificationToken: hashedToken
-          }
-        });
-
-        if (expiredUser) {
-          return { success: false, error: 'Le lien de vérification a expiré. Veuillez en demander un nouveau.' };
-        }
-        return { success: false, error: 'Lien de vérification invalide.' };
-      }
-
-      const now = new Date();
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          emailVerifiedAt: now,
-          emailVerificationToken: null,
-          emailVerificationCode: null,
-          emailVerificationExpiry: null
-        }
-      });
-
-      logger.info(`[AUTH_SERVICE] ✅ Email vérifié pour user.email=${user.email}`);
-      return { success: true, verifiedAt: now };
-
-    } catch (error) {
-      logger.error('[AUTH_SERVICE] ❌ Erreur lors de la vérification email', error);
-      return { success: false, error: 'Erreur lors de la vérification.' };
-    }
+  /**
+   * Une adresse devient un compte en un geste (#8033) — la fonction UNIQUE que
+   * partagent `POST /login` et `POST /magic-link/request`. Tableau des cas et
+   * gardes : `./auth/account-from-email`.
+   */
+  async startAccountFromEmail(
+    input: AccountFromEmailInput,
+    options?: { readonly afterResponse?: AfterResponse },
+  ): Promise<AccountFromEmailOutcome> {
+    return startAccountFromEmail(
+      {
+        prisma: this.prisma,
+        throttle: this.accountThrottle ?? getCacheStore(),
+        mailer: this.emailService,
+        frontendUrl: this.frontendUrl,
+        afterResponse: options?.afterResponse,
+        register: (data, requestContext, ttlMinutes) =>
+          registerAccount(
+            {
+              prisma: this.prisma,
+              emailService: this.emailService,
+              frontendUrl: this.frontendUrl,
+              resolveSocketManager: this.resolveSocketManager,
+              toSocketIOUser: (user) => this.userToSocketIOUser(user),
+              verificationToken: () => this.generateVerificationToken(),
+              verificationCode: () => this.generatePhoneCode(),
+              verificationTtlMinutes: ttlMinutes,
+              afterResponse: options?.afterResponse,
+            },
+            data,
+            requestContext,
+          ),
+      },
+      input,
+    );
   }
 
   /**
@@ -761,24 +706,18 @@ export class AuthService {
         return { success: false, error: 'Cette adresse email est déjà vérifiée.' };
       }
 
-      // Generate new token + OTP code
-      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
-      const verificationCode = this.generatePhoneCode();
-      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600;
-      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
+      // Une paire neuve — seules ses EMPREINTES sont écrites (#8033).
+      const pair = mintEmailCodePair(verificationTtlMinutes());
+      const verificationCode = pair.code;
+      const tokenExpiryHours = verificationTtlMinutes() / 60;
 
-      // Update user with new token + code
       await this.prisma.user.update({
         where: { id: user.id },
-        data: {
-          emailVerificationToken: verificationTokenHash,
-          emailVerificationCode: verificationCode,
-          emailVerificationExpiry: verificationExpiry
-        }
+        data: { ...pair.columns }
       });
 
       // Send email in user's preferred language
-      const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
+      const verificationLink = emailCodeLink(this.frontendUrl, pair.rawToken, normalizedEmail);
       await this.emailService.sendEmailVerification({
         to: normalizedEmail,
         name: user.displayName || `${user.firstName} ${user.lastName}`,

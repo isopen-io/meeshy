@@ -83,6 +83,21 @@ struct SignupView: View {
             guard defini, !isPasswordRevealed else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { isPasswordRevealed = true }
         }
+        // UNE ALERTE, JAMAIS UN BLOCAGE (#8040) : sans numéro, dire à quoi il
+        // sert ; « Continuer quand même » crée le compte comme avant.
+        .alert(
+            String(localized: "auth.signup.phoneNudge.title", defaultValue: "Continuer sans numéro ?", bundle: .main),
+            isPresented: $viewModel.isPhoneNudgePresented
+        ) {
+            Button(String(localized: "auth.signup.phoneNudge.addPhone", defaultValue: "Ajouter mon numéro", bundle: .main), role: .cancel) {
+                focusedField = viewModel.addPhoneInstead()
+            }
+            Button(String(localized: "auth.signup.phoneNudge.continue", defaultValue: "Continuer quand même", bundle: .main)) {
+                continueWithoutPhone()
+            }
+        } message: {
+            Text(String(localized: "auth.signup.phoneNudge.message", defaultValue: "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail.", bundle: .main))
+        }
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
@@ -624,18 +639,31 @@ struct SignupView: View {
         guard viewModel.canSubmit else { return }
         focusedField = nil
         Task {
-            let created = await viewModel.submit()
-            if created {
-                HapticFeedback.success()
-                // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
-                // félicitations avant de laisser entrer. Une pause posée sur un
-                // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).
-                onComplete?()
-                dismiss()
-            } else {
-                HapticFeedback.error()
+            switch await viewModel.requestSubmit() {
+            case .created: land(created: true)
+            case .rejected: land(created: false)
+            // L'alerte EST le retour : aucune haptique d'échec pour une
+            // question posée (#8040).
+            case .phoneNudged: break
             }
         }
+    }
+
+    private func continueWithoutPhone() {
+        Task { land(created: await viewModel.continueWithoutPhone()) }
+    }
+
+    private func land(created: Bool) {
+        guard created else {
+            HapticFeedback.error()
+            return
+        }
+        HapticFeedback.success()
+        // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
+        // félicitations avant de laisser entrer. Une pause posée sur un
+        // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).
+        onComplete?()
+        dismiss()
     }
 
     // MARK: - Composition d'un champ

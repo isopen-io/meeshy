@@ -3,8 +3,13 @@ import {
   userSchema,
   sessionMinimalSchema,
   loginRequestSchema,
+  loginVerificationRequiredProperties,
   errorResponseSchema
 } from '@meeshy/shared/types';
+import { emailSchema } from '@meeshy/shared/types/validation';
+import type { RequestContext } from '../../services/GeoIPService';
+import { deferAfterResponse } from '../../utils/after-response';
+import { localeDeLaRequete } from './request-locale';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { getRequestContext } from '../../services/GeoIPService';
 import { logWarn } from '../../utils/logger';
@@ -26,6 +31,7 @@ import type { AuthResult } from '../../services/AuthService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
   sendSuccess,
+  sendError,
   sendUnauthorized,
   sendBadRequest,
   sendInternalError
@@ -50,6 +56,44 @@ export function registerLoginRoutes(context: AuthRouteContext) {
   const loginRateLimiter = createLoginRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
   const twoFactorRateLimiter = createTwoFactorLoginRateLimiter(redis);
+  const afterResponse = context.afterResponse ?? deferAfterResponse;
+
+  /**
+   * #8033 — UNE ADRESSE SANS COMPTE DEVIENT UN COMPTE, sans session.
+   *
+   * Consultée seulement quand la connexion a échoué (aucun compte actif, ou un
+   * compte SANS mot de passe) et que l'identifiant est une adresse VALIDE : le
+   * chemin nominal ne paie aucune lecture de plus, et un pseudo inconnu reste
+   * un 401. Le mot de passe tapé n'est PAS transmis — un tiers qui taperait
+   * votre adresse vous imposerait sinon son mot de passe.
+   *
+   * Rend `true` quand la réponse est partie ; `false` laisse le refus
+   * d'origine (401, ou `PASSWORD_NOT_SET`) décider.
+   */
+  async function replyFromEmailAccount(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    identifier: string,
+    requestContext: RequestContext
+  ): Promise<boolean> {
+    const email = identifier.trim();
+    if (!emailSchema.safeParse(email).success) return false;
+
+    const issue = await authService.startAccountFromEmail(
+      { email, door: 'password-login', requestContext, deviceLocale: localeDeLaRequete(request) },
+      { afterResponse }
+    );
+
+    if (issue.kind === 'verification-required') {
+      sendSuccess(reply, { status: issue.kind, accountCreated: issue.accountCreated, email: issue.email });
+      return true;
+    }
+    if (issue.kind === 'rate-limited') {
+      sendError(reply, 429, 'Trop de demandes pour cette adresse. Réessayez dans une heure.', { code: 'RATE_LIMITED' });
+      return true;
+    }
+    return false;
+  }
 
   // POST /login - Main login endpoint
   fastify.post('/login', {
@@ -98,7 +142,11 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 // SERVEUR entre les deux étapes (`pending-device-trust.ts`),
                 // comme le lien magique le fait déjà : il n'y a plus rien à
                 // rejouer, donc plus rien à écho.
-                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // Branche « vérification requise » (#8033) — adresse sans compte
+                // actif : aucun jeton, aucune session, un code est parti.
+                ...loginVerificationRequiredProperties
               }
             }
           }
@@ -126,9 +174,22 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const requestContext = await getRequestContext(request);
       logger.debug('Auth context', { ip: requestContext.ip, location: requestContext.geoData?.location });
 
-      const authResult = await authService.authenticate({ username, password }, requestContext);
+      let authResult: AuthResult | null;
+      try {
+        authResult = await authService.authenticate({ username, password }, requestContext);
+      } catch (error) {
+        // Un compte SANS mot de passe (#6424) : créé par une adresse et jamais
+        // vérifié, il reçoit son code (#8033) ; sinon le refus garde sa porte.
+        if (error instanceof PasswordNotSetError && await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
+        throw error;
+      }
 
       if (!authResult) {
+        if (await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
         logger.warn('Échec de connexion — identifiants invalides', { username });
         return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
       }
