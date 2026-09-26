@@ -13,6 +13,7 @@ import MeeshySDK
 /// Un témoin par ligne du tableau : texte ou média × flouté ou vue unique ×
 /// scellé, révélé ou déjà ouvert. Les trois modes (Script, Focal, Bulles)
 /// consomment le même `BubbleContent`, donc la même décision.
+@MainActor
 final class ProtectedContentTapTests: XCTestCase {
 
     // MARK: - Fabriques
@@ -169,12 +170,14 @@ final class ProtectedContentTapTests: XCTestCase {
         let hints = [
             ProtectedContentTap.revealText.accessibilityHint,
             ProtectedContentTap.openFullscreen(photo()).accessibilityHint,
-            ProtectedContentTap.openViewOnce(fullscreen: true).accessibilityHint,
             ProtectedContentTap.openViewOnce(fullscreen: false).accessibilityHint,
             ProtectedContentTap.closeViewOnce.accessibilityHint
         ]
         XCTAssertTrue(hints.allSatisfy { ($0?.isEmpty == false) })
         XCTAssertEqual(Set(hints.compactMap { $0 }).count, hints.count, "chaque geste a son propre libellé")
+        XCTAssertEqual(ProtectedContentTap.openViewOnce(fullscreen: true).accessibilityHint,
+                       ProtectedContentTap.openFullscreen(photo()).accessibilityHint,
+                       "une vue unique média dit, elle aussi, qu'elle s'ouvre en plein écran")
     }
 
     func test_accessibilityHint_fullscreenSaysFullscreen() {

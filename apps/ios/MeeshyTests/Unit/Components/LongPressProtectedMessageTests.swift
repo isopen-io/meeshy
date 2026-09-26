@@ -14,6 +14,7 @@ import MeeshySDK
 /// Les pièces jointes de l'aperçu, elles, étaient rognées (`.fill` dans un cadre
 /// 16:9 ou plafonné à 200 pt) : elles s'affichent désormais à leur rapport
 /// d'aspect ORIGINAL.
+@MainActor
 final class LongPressProtectedMessageTests: XCTestCase {
 
     // MARK: - Fabriques
