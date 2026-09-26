@@ -11,7 +11,6 @@
  */
 
 import crypto from 'crypto';
-import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import {
@@ -32,6 +31,7 @@ import {
 import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
 import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
 import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
+import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -328,6 +328,10 @@ export class EmailService {
     return `<img src="${this.frontendUrl}/l/meeshy-emails?${params.toString()}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
   }
 
+  private sender(): EmailSender {
+    return { name: this.fromName, email: this.fromEmail };
+  }
+
   getProviders(): string[] {
     return this.providers.map(p => p.name);
   }
@@ -353,9 +357,9 @@ export class EmailService {
         logger.info(`[EmailService] 🔄 Trying provider: ${provider.name}`);
         let result: EmailResult;
         switch (provider.name) {
-          case 'brevo': result = await this.sendViaBrevo(provider.apiKey, data); break;
-          case 'sendgrid': result = await this.sendViaSendGrid(provider.apiKey, data); break;
-          case 'mailgun': result = await this.sendViaMailgun(provider.apiKey, data); break;
+          case 'brevo': result = await sendViaBrevo(provider.apiKey, this.sender(), data); break;
+          case 'sendgrid': result = await sendViaSendGrid(provider.apiKey, this.sender(), data); break;
+          case 'mailgun': result = await sendViaMailgun(provider.apiKey, this.sender(), data); break;
           default: continue;
         }
         if (result.success) {
@@ -378,56 +382,6 @@ export class EmailService {
     logger.error('[EmailService] ❌ All providers failed for', to);
     logger.error('[EmailService] ❌ Errors', errors.join(' | '));
     return { success: false, error: `All providers failed: ${errors.join('; ')}` };
-  }
-
-  private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
-    logger.info(`[EmailService] [Brevo] 📤 Sending to Brevo API...`);
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-      sender: { name: this.fromName, email: this.fromEmail },
-      to: [{ email: data.to }],
-      subject: data.subject,
-      htmlContent: data.html,
-      textContent: data.text
-    }, {
-      headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
-    });
-    logger.info(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
-    return { success: true, messageId: response.data.messageId };
-  }
-
-  private async sendViaSendGrid(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const response = await axios.post('https://api.sendgrid.com/v3/mail/send', {
-      personalizations: [{ to: [{ email: data.to }] }],
-      from: { email: this.fromEmail, name: this.fromName },
-      subject: data.subject,
-      content: [{ type: 'text/plain', value: data.text }, { type: 'text/html', value: data.html }]
-    }, {
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-    });
-    return { success: true, messageId: response.headers['x-message-id'] || undefined };
-  }
-
-  private async sendViaMailgun(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const domain = process.env.MAILGUN_DOMAIN || '';
-    if (!domain) return { success: false, error: 'MAILGUN_DOMAIN not configured' };
-
-    const response = await axios.post(
-      `https://api.mailgun.net/v3/${domain}/messages`,
-      new URLSearchParams({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: data.to,
-        subject: data.subject,
-        text: data.text,
-        html: data.html
-      }),
-      {
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
-    return { success: true, messageId: response.data.id };
   }
 
   // ==========================================================================

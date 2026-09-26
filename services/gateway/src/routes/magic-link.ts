@@ -49,11 +49,17 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
 
   // #8033 — la porte « e-mail seul » passe par la fonction UNIQUE que partage
   // `POST /auth/login` : code + lien `/auth/verify-email`, compte créé si
-  // l'adresse est inconnue. Le manager Socket.IO est résolu à l'APPEL.
-  const accountService = new AuthService(fastify.prisma, getJwtSecret(), {
-    resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
-    accountThrottle: cacheStore,
-  });
+  // l'adresse est inconnue. Construit à la PREMIÈRE demande, jamais à
+  // l'enregistrement : le secret JWT et le manager Socket.IO se résolvent à
+  // l'appel, comme partout ailleurs.
+  let accountService: AuthService | null = null;
+  const accounts = (): AuthService => {
+    accountService ??= new AuthService(fastify.prisma, getJwtSecret(), {
+      resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
+      accountThrottle: cacheStore,
+    });
+    return accountService;
+  };
 
   /**
    * POST /auth/magic-link/request
@@ -126,7 +132,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
 
       const requestContext = await getRequestContext(request);
 
-      const issue = await accountService.startAccountFromEmail(
+      const issue = await accounts().startAccountFromEmail(
         { email, door: 'email-only', requestContext, deviceLocale: localeDeLaRequete(request) },
         { afterResponse: deferAfterResponse }
       );

@@ -10,7 +10,7 @@ import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import type { RegisterData } from '../../services/AuthService';
 import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
-import { createSession, generateSessionToken } from '../../services/SessionService';
+import { openSession } from './open-session';
 import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
@@ -372,14 +372,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
       // Le `sessionToken` est renvoyé pour que le client puisse le présenter
       // (fenêtre glissante), sur la même clé que `POST /login`.
-      const sessionToken = generateSessionToken();
-      const session = await createSession({
-        userId: user.id,
-        token: sessionToken,
-        requestContext
-      });
-
-      const token = authService.generateToken(user, session.id);
+      const { token, sessionToken } = await openSession(authService, user, requestContext);
       const permissions = authService.getUserPermissions(user);
 
       completerLaGeolocalisation(context, afterResponse, user.id, requestContext);

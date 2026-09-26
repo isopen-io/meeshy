@@ -284,6 +284,13 @@ services:
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       - ATTACHMENT_MASTER_KEY=${ATTACHMENT_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+      # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
+      # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
+      # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
+      - MEESHY_ENV=staging
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
     volumes:
       - gateway_staging_uploads:/app/uploads
       - gateway_staging_sounds:/app/sounds
