@@ -430,6 +430,9 @@ const it = {
   'settings.privacy.read_receipts.info':
     'È reciproco: se non invii conferme di lettura, non vedrai nemmeno se i tuoi messaggi sono stati letti.',
   'settings.privacy.typing_indicator': 'Indicatore di digitazione',
+  'settings.privacy.hide_from_search': 'Non propormi a chi ha il mio numero o la mia email',
+  'settings.privacy.hide_from_search.info':
+    'I tuoi contatti non ti troveranno tramite il tuo numero o la tua email, e non saranno avvisati del tuo arrivo.',
   'settings.section.appearance': 'Aspetto',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',

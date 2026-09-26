@@ -434,6 +434,9 @@ const pt = {
   'settings.privacy.read_receipts.info':
     'É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas.',
   'settings.privacy.typing_indicator': 'Indicador de digitação',
+  'settings.privacy.hide_from_search': 'Não me sugerir a quem tem meu número ou e-mail',
+  'settings.privacy.hide_from_search.info':
+    'Seus contatos não vão te encontrar pelo seu número ou e-mail, e não serão avisados da sua chegada.',
   'settings.section.appearance': 'Aparência',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',

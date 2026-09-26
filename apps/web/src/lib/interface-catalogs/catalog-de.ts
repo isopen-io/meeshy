@@ -430,6 +430,9 @@ const de = {
   'settings.privacy.read_receipts.info':
     'Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.',
   'settings.privacy.typing_indicator': 'Schreibanzeige',
+  'settings.privacy.hide_from_search': 'Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben',
+  'settings.privacy.hide_from_search.info':
+    'Deine Kontakte finden dich nicht über deine Nummer oder E-Mail und werden nicht benachrichtigt, wenn du beitrittst.',
   'settings.section.appearance': 'Erscheinungsbild',
   'settings.theme': 'Design',
   'settings.theme.auto': 'Auto',
