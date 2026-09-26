@@ -1984,7 +1984,7 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if scrollState.isNearBottom == false || viewModel.isSearchingQuotedMessage {
+            if Self.showsScrollToBottomButton(isNearBottom: scrollState.isNearBottom, isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage, isInJumpedState: viewModel.isInJumpedState) {
                 // Bulle « retour en bas » : elle disparaît VERS LE BAS (bord le
                 // plus proche) en fondant pendant le défilement et en revient
                 // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
@@ -1997,6 +1997,7 @@ struct ConversationView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
             }
 
             VStack {
@@ -2066,7 +2067,6 @@ struct ConversationView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
             searchResultsBlurOverlay
-            returnToLatestButton
         }
         // #3901 — le Résumé Vivant ne rend jamais bulle par bulle
         // (`MessageListViewController.rendersThread`), donc ne peut jamais
