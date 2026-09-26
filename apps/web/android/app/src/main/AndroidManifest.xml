@@ -90,6 +90,14 @@
          pas (il ne déclare que son MessagingService). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- #8007 — la tuile « Position » du composeur (navigator.geolocation)
+         passe par BridgeWebChromeClient.onGeolocationPermissionsShowPrompt,
+         qui demande ces deux permissions a l'execution : non declarees,
+         Android les refuse sans dialogue et la tuile tombe toujours sur
+         « refuse ». L'app native gelee (apps/android) les declare deja. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
          passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.
