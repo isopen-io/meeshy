@@ -100,6 +100,21 @@ export function isContactCardAttachment(attachment: {
   return normalizeContactCardMimeType(attachment.mimeType ?? '', attachment.fileName) === CONTACT_CARD_MIME_TYPE;
 }
 
+const LEGACY_TEMPORARY_PREFIX = /^contact_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+
+/**
+ * Le nom HUMAIN d'une carte de visite lu dans son nom de fichier d'origine
+ * (#8122) — sans extension, et sans le préfixe `contact_<UUID>_` que le
+ * composer iOS écrivait avant #8142 (les messages déjà envoyés le gardent).
+ * `null` quand il ne reste rien : l'appelant dit alors « Carte de visite ».
+ * Miroir de `ContactCardName.fromFileName` (iOS).
+ */
+export function contactCardNameFromFileName(fileName: string | null | undefined): string | null {
+  const base = (fileName ?? '').trim().replace(CONTACT_CARD_FILE, '');
+  const name = base.replace(LEGACY_TEMPORARY_PREFIX, '').trim();
+  return name.length > 0 ? name : null;
+}
+
 const indexOutsideQuotes = (text: string, target: string): number => {
   let inQuotes = false;
   for (let index = 0; index < text.length; index += 1) {
