@@ -62,6 +62,8 @@ function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: No
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
          (#7173), la ligne ne le reconstruit pas. */
       return <Link to="discover" search={target.search} {...surface} />;
+    case 'userProfile':
+      return <Link to="userProfile" params={target.params} {...surface} />;
     case 'progression':
       return <Link to="progression" {...surface} />;
     case 'settings':

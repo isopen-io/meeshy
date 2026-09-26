@@ -431,6 +431,9 @@ const ar = {
   'settings.privacy.read_receipts': 'إيصالات القراءة',
   'settings.privacy.read_receipts.info': 'الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك.',
   'settings.privacy.typing_indicator': 'مؤشر الكتابة',
+  'settings.privacy.hide_from_search': 'لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني',
+  'settings.privacy.hide_from_search.info':
+    'لن يجدك جهات اتصالك عبر رقمك أو بريدك الإلكتروني، ولن يتم إعلامهم بانضمامك.',
   'settings.section.appearance': 'المظهر',
   'settings.theme': 'السمة',
   'settings.theme.auto': 'تلقائي',

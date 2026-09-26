@@ -431,6 +431,9 @@ const fr = {
   'settings.privacy.read_receipts.info':
     "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus.",
   'settings.privacy.typing_indicator': 'Indicateur de frappe',
+  'settings.privacy.hide_from_search': 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail',
+  'settings.privacy.hide_from_search.info':
+    'Vos contacts ne vous retrouveront pas par votre numéro ou votre e-mail, et ne seront pas prévenus de votre arrivée.',
   'settings.section.appearance': 'Apparence',
   'settings.theme': 'Thème',
   'settings.theme.auto': 'Auto',
