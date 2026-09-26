@@ -236,6 +236,26 @@ describe('register() — POST /auth/register (#5555, T2)', () => {
     expect(result.ok && isPhoneConflict(result.data)).toBe(true);
   });
 
+  /**
+   * SANS NUMÉRO, L'INSCRIPTION N'OUVRE AUCUNE SESSION (#8055) — la passerelle
+   * rend la forme de la connexion d'un e-mail inconnu (#8033) : le compte
+   * existe, le code et le lien sont partis, et c'est le code qui ouvrira la
+   * session. Le magasin reste `anonymous`.
+   */
+  test('200 verification-required (#8055) ⇒ magasin INCHANGÉ (anonymous), résultat rendu tel quel', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      { ok: true, data: { status: 'verification-required', accountCreated: true, email: 'nova@x.io' } },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.register({ displayName: 'Nova', email: 'nova@x.io', password: 'un-mot-de-passe-solide' });
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+    expect(result.ok && isVerificationRequired(result.data)).toBe(true);
+    expect(result.ok && isPhoneConflict(result.data)).toBe(false);
+  });
+
   test('échec (409 EMAIL_TAKEN) ⇒ rien d’écrit, le champ voyage jusqu’à l’appelant', async () => {
     const store = memoryStore();
     const { transport } = stubTransport([

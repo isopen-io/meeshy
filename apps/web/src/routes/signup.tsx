@@ -14,13 +14,14 @@ import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { convertReferral, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
-import { auth, isPhoneConflict, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
+import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { countryName, type Country } from '@/lib/countries';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
 import {
   PASSWORD_MIN,
   canSubmit,
@@ -369,6 +370,16 @@ export default function SignupScreen({
     }
     if (isPhoneConflict(result.data)) {
       setFeedback(placeSignupFailure({ kind: 'phone-conflict' }));
+      return;
+    }
+    /* SANS NUMÉRO, AUCUNE SESSION (#8055) : le compte attend son code. Le
+       chemin est celui de la connexion d'un e-mail inconnu (#8034) — l'écran
+       du code, qui ouvrira la session. Le mot de passe est DÉJÀ enregistré
+       sur le compte : il n'est pas retenu pour repartir avec le code.
+       L'invitation (`next`) voyage jusqu'à lui, sans le court-circuiter. */
+    if (isVerificationRequired(result.data)) {
+      holdPendingVerification({ email: result.data.email, accountCreated: result.data.accountCreated });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, next: safeNext ?? undefined }), true);
       return;
     }
     // Compte créé : le magasin de session est déjà `authenticated`
