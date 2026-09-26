@@ -824,6 +824,10 @@ export const Composer = memo(function Composer({
             <textarea
               ref={field}
               rows={1}
+              /* Entrée ENVOIE (`onKeyDown`) : le clavier logiciel doit le DIRE,
+                 comme `.submitLabel(.send)` iOS — sans quoi Android dessine un
+                 saut de ligne sur une touche qui part (#8031). */
+              enterKeyHint="send"
               value={text}
               onFocus={() => {
                 setFocused(true);
