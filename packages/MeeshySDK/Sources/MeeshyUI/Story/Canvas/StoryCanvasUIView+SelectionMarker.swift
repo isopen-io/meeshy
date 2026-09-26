@@ -142,7 +142,7 @@ extension StoryCanvasUIView {
     /// `makeSelectionBadge` à chaque `rebuildLayers()`, jusqu'à 120 Hz en `.edit`.
     private static let selectionBadgeAttributes: [NSAttributedString.Key: Any] = [
         .font: UIFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
-        .foregroundColor: Self.selectionMarkerTint,
+        .foregroundColor: StoryCanvasUIView.selectionMarkerTint,
         .kern: 0.7
     ]
     /// Largeur mesurée par texte de badge (quelques chaînes distinctes par session).
