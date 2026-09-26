@@ -99,9 +99,8 @@ final class ConversationLinkCardViewModel: ObservableObject {
         changeSubscription = NotificationCenter.default
             .publisher(for: ConversationCardChange.notification)
             .compactMap { $0.object as? ConversationCardChange }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] change in
-                MainActor.assumeIsolated { self?.conversationDidChange(change) }
+                Task { @MainActor [weak self] in self?.conversationDidChange(change) }
             }
     }
 

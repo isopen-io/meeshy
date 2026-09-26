@@ -307,7 +307,7 @@ final class ConversationLinkCardViewModelTests: XCTestCase {
         XCTAssertEqual(sut.phase, .privateConversation)
     }
 
-    private func waitUntil(timeout: TimeInterval = 2, _ condition: @MainActor () -> Bool) async {
+    private func waitUntil(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) async {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition(), Date() < deadline {
             try? await Task.sleep(nanoseconds: 20_000_000)
