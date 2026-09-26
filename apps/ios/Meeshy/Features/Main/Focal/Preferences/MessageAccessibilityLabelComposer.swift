@@ -55,7 +55,7 @@ enum MessageAccessibilityLabelComposer {
             parts.append(replyLabel)
         }
 
-        if let raw = content.text?.raw, !raw.isEmpty {
+        if let raw = content.text?.raw, !raw.isEmpty, !content.isBlurred {
             parts.append(raw)
         }
 

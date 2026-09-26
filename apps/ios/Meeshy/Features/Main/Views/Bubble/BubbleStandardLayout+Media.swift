@@ -28,6 +28,21 @@ import MeeshyUI
 // MARK: - Visual Media Grid (extension on BubbleStandardLayout)
 extension BubbleStandardLayout {
 
+    /// **Le média caché d'un message flouté s'ouvre en plein écran** (#8009),
+    /// depuis le voile de la bulle, en appelant l'hôte DIRECTEMENT.
+    ///
+    /// Le détour par la liaison `fullscreenAttachment` (posée, puis relayée par
+    /// `adaptiveOnChange`) ne présentait rien quand l'écriture partait du voile :
+    /// mesuré au simulateur, le rappel de l'hôte n'était jamais atteint. La
+    /// liaison ne reste que pour l'hôte sans galerie (`onMediaTap == nil`).
+    func openProtectedMedia(_ media: MessageAttachment) {
+        guard let onMediaTap else {
+            fullscreenAttachment = media
+            return
+        }
+        onMediaTap(media)
+    }
+
     /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
     /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
     /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois

@@ -180,6 +180,20 @@ final class ProtectedContentTapTests: XCTestCase {
                        "une vue unique média dit, elle aussi, qu'elle s'ouvre en plein écran")
     }
 
+    /// Mesuré au simulateur : VoiceOver lisait le texte FLOUTÉ en entier
+    /// (« 8009 · texte FLOUTÉ : le code secret est 4242 »). Le libellé dit
+    /// désormais qu'il est flouté ; l'indice dit ce que fait le toucher.
+    func test_accessibilityLabel_blurredText_doesNotReadTheText() {
+        let label = MessageAccessibilityLabelComposer.compose(content(message(text: "code 4242", blurred: true)))
+        XCTAssertFalse(label.contains("4242"), label)
+        XCTAssertTrue(label.contains("Demo"), "l'expéditeur reste dit : \(label)")
+    }
+
+    func test_accessibilityLabel_clearText_stillReadsTheText() {
+        let label = MessageAccessibilityLabelComposer.compose(content(message(text: "code 4242")))
+        XCTAssertTrue(label.contains("4242"), label)
+    }
+
     func test_accessibilityHint_fullscreenSaysFullscreen() {
         let hint = ProtectedContentTap.openFullscreen(photo()).accessibilityHint ?? ""
         XCTAssertTrue(hint.localizedCaseInsensitiveContains("plein écran")

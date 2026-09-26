@@ -440,7 +440,7 @@ struct BubbleStandardLayout: View {
         if let replyLabel = replyAccessibilityLabel {
             parts.append(replyLabel)
         }
-        if let raw = content.text?.raw, !raw.isEmpty {
+        if let raw = content.text?.raw, !raw.isEmpty, !content.isBlurred {
             parts.append(raw)
         }
         if !visualAttachments.isEmpty {
@@ -1521,7 +1521,7 @@ struct BubbleStandardLayout: View {
     /// #8009 — un média caché s'ouvre en plein écran, sans dévoilement dans la bulle.
     private func revealBlurredContent() {
         HapticFeedback.medium()
-        if case .openFullscreen(let media) = content.protectedTap() { fullscreenAttachment = media; return }
+        if case .openFullscreen(let media) = content.protectedTap() { return openProtectedMedia(media) }
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,
