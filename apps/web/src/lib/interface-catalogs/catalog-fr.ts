@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
@@ -1120,6 +1121,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
