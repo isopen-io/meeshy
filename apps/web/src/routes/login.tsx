@@ -15,6 +15,7 @@ import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
@@ -320,17 +321,14 @@ export function LoginDoors({
 
           <Field id="login-password" label="Mot de passe" icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
             {({ id }) => (
-              <input
+              <PasswordInput
                 id={id}
-                type="password"
                 autoComplete="current-password"
                 value={password}
-                onInput={(e) => setPassword(e.currentTarget.value)}
+                onValue={setPassword}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
                 placeholder="Mot de passe"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>

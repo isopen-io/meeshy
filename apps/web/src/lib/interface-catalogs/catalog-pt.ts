@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptVerifyEmail from './catalog-pt-verify-email';
+import ptPassword from './catalog-pt-password';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
@@ -193,6 +194,7 @@ const pt = {
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
   ...ptVerifyEmail,
+  ...ptPassword,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',

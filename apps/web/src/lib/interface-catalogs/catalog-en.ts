@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enVerifyEmail from './catalog-en-verify-email';
+import enPassword from './catalog-en-password';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -189,6 +190,7 @@ const en = {
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
   ...enVerifyEmail,
+  ...enPassword,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
