@@ -18,6 +18,7 @@ import XCTest
 /// qu'un texte. Ce témoin lit les hôtes parce que la composition d'une vue
 /// SwiftUI ne s'observe pas sans rendu (même contrat que
 /// `FocalRowSourceGuardTests`).
+@MainActor
 final class ReadingModeCardsMountGuardTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
