@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
@@ -49,6 +49,8 @@ function RoundButton({
   pressed,
   size = 56,
   caption,
+  popup = false,
+  marker,
 }: {
   readonly label: string;
   readonly glyph: ReactNode;
@@ -57,6 +59,8 @@ function RoundButton({
   readonly pressed?: boolean;
   readonly size?: number;
   readonly caption?: string;
+  readonly popup?: boolean;
+  readonly marker?: string;
 }) {
   const background = tone === 'danger' ? HANGUP : tone === 'accept' ? ANSWER : tone === 'active' ? INK : PILL;
   const color = tone === 'active' ? '#111' : INK;
@@ -66,6 +70,8 @@ function RoundButton({
         type="button"
         aria-label={label}
         {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
+        {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
+        {...(marker === undefined ? {} : { 'data-call-control': marker })}
         onClick={onPress}
         className="grid place-items-center rounded-full transition-transform active:scale-95"
         style={{ width: size, height: size, background, color }}
@@ -81,6 +87,8 @@ function RoundButton({
   );
 }
 
+const CallDeclineSheet = lazy(() => import('./call-decline-entry').then((module) => ({ default: module.ConnectedCallDeclineSheet })));
+
 const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
 
@@ -90,6 +98,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
   const t = (key: PlainCallKey): string => translate(language, key);
   const [swapped, setSwapped] = useState(false);
   const [featuredId, setFeaturedId] = useState<string | null>(null);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const removal = useCallRemoval(call);
   const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
@@ -214,6 +223,18 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
   const controls = (() => {
     if (phase === 'incoming') {
       return (
+        <div className="flex flex-col gap-6">
+          <div className="flex justify-center">
+            <RoundButton
+              label={translate(language, 'callDecline.title')}
+              caption={translate(language, 'callDecline.open')}
+              size={48}
+              glyph={screenGlyph('chatCircleText', 22)}
+              onPress={() => setDeclineOpen(true)}
+              popup
+              marker="decline-message"
+            />
+          </div>
         <div className="flex items-start justify-around gap-6 px-8">
           <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
           {call.media === 'video' ? (
@@ -227,6 +248,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
             glyph={call.media === 'video' ? screenGlyph('videoCamera', 30) : <Glyph name="phone" size={28} />}
             onPress={() => callActions.accept()}
           />
+        </div>
         </div>
       );
     }
@@ -311,6 +333,11 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           </p>
         )}
         <div className="pb-6">{controls}</div>
+        {declineOpen && phase === 'incoming' ? (
+          <Suspense fallback={null}>
+            <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   );

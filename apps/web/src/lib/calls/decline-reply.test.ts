@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 import { DECLINE_REPLY_KEYS, declineWithReply, type DeclineReplyDeps } from './decline-reply';
 
@@ -20,7 +20,7 @@ const recorder = () => {
 const incoming = { conversationId: 'conv-1', phase: { kind: 'incoming' as const } };
 
 describe('declineWithReply — refuser un appel avec un message (#8065)', () => {
-  it('refuse l’appel PUIS dépose le message dans la conversation de l’appel, dans la langue de l’interface', () => {
+  test('refuse l’appel PUIS dépose le message dans la conversation de l’appel, dans la langue de l’interface', () => {
     const { events, sent, deps } = recorder();
     const done = declineWithReply({ call: incoming, text: 'Je te rappelle.', language: 'fr', deps });
     expect(done).toBe(true);
@@ -28,7 +28,7 @@ describe('declineWithReply — refuser un appel avec un message (#8065)', () => 
     expect(sent).toEqual([{ conversationId: 'conv-1', content: 'Je te rappelle.', language: 'fr' }]);
   });
 
-  it('rogne le texte libre et n’envoie rien quand il est vide', () => {
+  test('rogne le texte libre et n’envoie rien quand il est vide', () => {
     const { events, sent, deps } = recorder();
     expect(declineWithReply({ call: incoming, text: '   ', language: 'fr', deps })).toBe(false);
     expect(events).toEqual([]);
@@ -36,7 +36,7 @@ describe('declineWithReply — refuser un appel avec un message (#8065)', () => 
     expect(sent[0]?.content).toBe('En réunion');
   });
 
-  it('ne fait rien hors de la sonnerie : un appel déjà décroché ne se refuse plus', () => {
+  test('ne fait rien hors de la sonnerie : un appel déjà décroché ne se refuse plus', () => {
     const { events, deps } = recorder();
     const connected = { conversationId: 'conv-1', phase: { kind: 'connected' as const } };
     expect(declineWithReply({ call: connected, text: 'Je te rappelle.', language: 'fr', deps })).toBe(false);
@@ -44,7 +44,7 @@ describe('declineWithReply — refuser un appel avec un message (#8065)', () => 
     expect(events).toEqual([]);
   });
 
-  it('propose des réponses rapides distinctes, toutes au catalogue', () => {
+  test('propose des réponses rapides distinctes, toutes au catalogue', () => {
     expect(DECLINE_REPLY_KEYS.length).toBeGreaterThanOrEqual(3);
     expect(new Set(DECLINE_REPLY_KEYS).size).toBe(DECLINE_REPLY_KEYS.length);
   });
