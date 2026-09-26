@@ -7,6 +7,7 @@ import { PersonName } from './person-name';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
+import { ThreadCallButton } from './thread-call-button';
 import { UnreadBadge } from './unread-badge';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
@@ -237,16 +238,12 @@ export function ThreadHeader({
                 jeton GÉNÉRÉ depuis iOS (`--size-header-circle`) — il était
                 écrit ici en `size-7`, juste par accident, et en `size-8` sur
                 l'écran de liste, faux du même accident. */}
-            <button
-              type="button"
-              className={CHROME_ACTION_HIT_CLASS}
-              style={{ color: 'var(--accent)' }}
-              aria-label="Appeler"
-            >
-              <ChromeActionDisc>
-                <Glyph name="phone" size={13} />
-              </ChromeActionDisc>
-            </button>
+{/* L'APPEL (#6382) — vocal ou vidéo, dans une conversation directe ou de
+                groupe : les deux seuls types que la passerelle appelle
+                (`CallService.initiateCall`, `VIDEO_CALLS_NOT_SUPPORTED` ailleurs). */}
+            {conversation.type === 'direct' || conversation.type === 'group' ? (
+              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} />
+            ) : null}
             <button
               type="button"
               className={CHROME_ACTION_HIT_CLASS}
