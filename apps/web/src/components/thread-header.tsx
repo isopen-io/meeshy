@@ -9,6 +9,7 @@ import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
 import { ThreadCallButton } from './thread-call-button';
 import { UnreadBadge } from './unread-badge';
+import type { ListConversation } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
@@ -242,7 +243,7 @@ export function ThreadHeader({
                 groupe : les deux seuls types que la passerelle appelle
                 (`CallService.initiateCall`, `VIDEO_CALLS_NOT_SUPPORTED` ailleurs). */}
             {conversation.type === 'direct' || conversation.type === 'group' ? (
-              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} />
+              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} />
             ) : null}
             <button
               type="button"

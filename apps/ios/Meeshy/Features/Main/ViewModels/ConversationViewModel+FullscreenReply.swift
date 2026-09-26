@@ -36,12 +36,11 @@ extension ConversationViewModel {
     @discardableResult
     func sendReplyToAttachment(attachmentId: String,
                                text: String,
-                               language: String?) async -> Bool {
+                               language: String?,
+                               carrier outOfWindow: Message? = nil) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        guard let carrier = messages.first(where: { message in
-            message.attachments.contains { $0.id == attachmentId }
-        }) else { return false }
+        guard let carrier = resolveCarrier(ofAttachment: attachmentId, outOfWindow: outOfWindow) else { return false }
         guard let piece = carrier.attachments.first(where: { $0.id == attachmentId }),
               !ComposableAttachment.isProtected(piece),
               !carrier.isViewOnce, !carrier.isBlurred, !carrier.isEncrypted
@@ -65,11 +64,20 @@ extension ConversationViewModel {
     ///
     /// `nil` quand la pièce n'a pas de porteur en mémoire : la barre ne monte
     /// alors pas, plutôt que de monter sans dire ce qu'elle cite.
-    func fullscreenReplyCitation(for attachmentId: String) -> ReplyReference? {
-        guard let carrier = messages.first(where: { message in
-            message.attachments.contains { $0.id == attachmentId }
-        }) else { return nil }
+    func fullscreenReplyCitation(for attachmentId: String, carrier outOfWindow: Message? = nil) -> ReplyReference? {
+        guard let carrier = resolveCarrier(ofAttachment: attachmentId, outOfWindow: outOfWindow) else { return nil }
         let piece = carrier.attachments.first { $0.id == attachmentId }
         return optimisticReplyReference(quoting: carrier, citing: piece)
+    }
+
+    /// **Le porteur d'une pièce** : celui de la fenêtre d'abord — il est le
+    /// plus frais —, sinon celui que l'hôte a résolu dans l'index des médias
+    /// (#8095). Le second n'est admis que s'il PORTE bien la pièce : une ancre
+    /// qui désignerait un autre message serait refusée par la passerelle.
+    private func resolveCarrier(ofAttachment attachmentId: String, outOfWindow: Message?) -> Message? {
+        let porte: (Message) -> Bool = { message in
+            message.attachments.contains { $0.id == attachmentId }
+        }
+        return messages.first(where: porte) ?? outOfWindow.flatMap { porte($0) ? $0 : nil }
     }
 }

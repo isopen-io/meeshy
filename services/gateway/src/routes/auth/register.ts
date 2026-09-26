@@ -173,7 +173,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response is `{ status: "verification-required", accountCreated: true, email }`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },

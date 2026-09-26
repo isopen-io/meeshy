@@ -187,6 +187,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
         // dans le même commit (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
+        // #8095 — même geste que le #6145 : la légende servie et ses libellés
+        // VoiceOver ont quitté le fichier épinglé avec leurs deux clés.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Captions.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8

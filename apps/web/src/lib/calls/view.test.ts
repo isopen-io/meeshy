@@ -19,6 +19,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   isVideo: false,
   startedAt: '2026-09-13T09:00:00.000Z',
   durationSec: 185,
+  bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
   ...overrides,
 });

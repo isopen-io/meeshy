@@ -187,6 +187,7 @@ export function registerMessagesListRoute(
         view,
         parentId,
         q,
+        kinds,
         include_translations: includeTranslationsStr = 'true',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
@@ -323,7 +324,7 @@ export function registerMessagesListRoute(
       // `resolveCollectionView` en fait un `predicate` identique.
       // `ThreadRepliesLoader.swift` l'envoie en production ; il n'y a rien à
       // migrer côté client.
-      const vue = resolveCollectionView({ view, parentId, replyToId, q });
+      const vue = resolveCollectionView({ view, parentId, replyToId, q, kinds });
       if (vue.genre === 'refus') {
         return sendBadRequest(reply, vue.message, { code: 'INVALID_VIEW' });
       }

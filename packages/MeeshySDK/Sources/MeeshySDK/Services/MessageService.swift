@@ -7,6 +7,10 @@ public protocol MessageServiceProviding: Sendable {
     func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
     func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    /// #8095 — la vue `media` de la collection : les seuls messages portant au
+    /// moins une image ou une vidéo non vue-unique, du plus récent au plus
+    /// ancien. `before == nil` ⇒ la page la plus récente.
+    func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
@@ -100,6 +104,28 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
             URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
             URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
         ]
+        if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
+        return try await api.request(
+            ConversationsEndpoint.byIdMessages(id: conversationId),
+            queryItems: items
+        )
+    }
+
+    /// #8095 — `?view=media` : l'INDEX des porteurs de médias, feuilleté par
+    /// `before` (id de message) jusqu'à `hasMore == false`. Les traductions
+    /// voyagent (la légende d'une pièce descend le Prisme) ; les réponses
+    /// citées non — une page d'index ne rend pas de bulle.
+    ///
+    /// Un serveur antérieur à la vue répond 400 `INVALID_VIEW` : l'erreur
+    /// remonte telle quelle, la dégradation est l'affaire de l'appelant.
+    public func listMedia(conversationId: String, before: String?, limit: Int = 50, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "view", value: "media"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "false"),
+            URLQueryItem(name: "include_translations", value: "true"),
+        ]
+        if let before { items.append(URLQueryItem(name: "before", value: before)) }
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
             ConversationsEndpoint.byIdMessages(id: conversationId),

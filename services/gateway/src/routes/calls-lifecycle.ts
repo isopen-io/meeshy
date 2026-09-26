@@ -25,6 +25,7 @@ import { callSessionSchema, errorResponseSchema } from '@meeshy/shared/types/api
 import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
 import { CallParams, CallRouteDeps } from './calls-shared';
 import { resolvePreJoinDeclineParticipantId } from '../socketio/call-participants.js';
+import { noticeRemovedFromCall } from '../socketio/call-removal-notice.js';
 
 /**
  * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
@@ -627,6 +628,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
       // or ends the wrong side of the call). Resolve the target's real
       // Participant.id from their userId whenever we can't trust the shortcut.
       let leaveParticipantId: string;
+      let removedRoomKey: string | null = null;
       if (participantId === userId && authRequest.authContext.participantId) {
         leaveParticipantId = authRequest.authContext.participantId;
       } else if (participantId === userId) {
@@ -646,11 +648,11 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
         const targetParticipant =
           (await prisma.participant.findFirst({
             where: { conversationId: call.conversationId, userId: participantId, isActive: true },
-            select: { id: true, role: true }
+            select: { id: true, userId: true, role: true }
           })) ??
           (await prisma.participant.findFirst({
             where: { conversationId: call.conversationId, id: participantId, isActive: true },
-            select: { id: true, role: true }
+            select: { id: true, userId: true, role: true }
           }));
         // Do NOT fall back to the raw, unresolved `participantId` string here
         // — that fallback is what previously let a caller with no real
@@ -674,6 +676,7 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
           return sendForbidden(reply, 'PERMISSION_DENIED');
         }
         leaveParticipantId = targetParticipant.id;
+        removedRoomKey = targetParticipant.userId ?? targetParticipant.id;
       }
 
       // Snapshot the leaving/kicked participant's OWN CallParticipant row id
@@ -728,6 +731,15 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
           leavingCallParticipant.id,
           participantId,
           callSession.mode
+        );
+      }
+
+      // Les restants apprennent le départ ci-dessus ; l'EXCLU, lui, ne lit
+      // rien dans `call:participant-left` qui le referme.
+      const io = fastify.socketIOHandler?.getManager()?.getIO();
+      if (removedRoomKey !== null && io) {
+        await noticeRemovedFromCall(io, { callId, personalRoomKey: removedRoomKey }).catch((error: unknown) =>
+          logger.warn('call:force-leave de l\'exclu non remis', { callId, error })
         );
       }
 

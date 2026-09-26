@@ -574,34 +574,30 @@ final class CallClockPolicyTests: XCTestCase {
 
 }
 
-// MARK: - Fresh TURN credentials landing mid-reconnect (audit 2026-07-11 #9)
+// MARK: - Fresh TURN credentials: what ICE does next (audit 2026-07-11 #9, #8074)
 
-/// `updateIceServers` is setConfiguration-only — no ICE re-gather. Fresh
-/// TURN credentials landing while an ICE-restart cycle is in flight must
-/// re-arm the attempt's restart (the coalesce path) so the re-gather runs
-/// with the credentials just applied, instead of idling until the
-/// `.reconnecting` watchdog escalates seconds later.
-final class CredentialRefreshRearmPolicyTests: XCTestCase {
+/// `updateIceServers` is setConfiguration-only — no ICE re-gather. Fresh TURN
+/// credentials must therefore re-arm the restart of an in-flight reconnection,
+/// and restart ICE on an established call (#8074): coturn refuses to refresh an
+/// allocation past the expiry baked into its username, so a relayed call that
+/// kept its old allocations would lose its path at expiry.
+final class TurnCredentialRefreshPolicyTests: XCTestCase {
 
-    func test_shouldRearmRestartOnCredentialRefresh_reconnecting_rearms() {
-        XCTAssertTrue(CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(
-            state: .reconnecting(attempt: 1)
-        ))
+    func test_iceAction_reconnecting_rearmsTheReconnect() {
+        XCTAssertEqual(TurnCredentialRefreshPolicy.iceAction(after: .reconnecting(attempt: 2)), .rearmReconnect)
     }
 
-    /// Outside `.reconnecting` the periodic 80%-TTL refresh stays inert by
-    /// design: the TTL clamp guarantees credentials always outlive the call,
-    /// so a healthy call must never pay a gratuitous ICE re-gather.
-    func test_shouldRearmRestartOnCredentialRefresh_steadyPhases_stayInert() {
-        let steady: [CallState] = [
-            .idle, .ringing(isOutgoing: true), .offering, .connecting,
-            .connected, .ended(reason: .remote),
+    func test_iceAction_connected_restartsIce() {
+        XCTAssertEqual(TurnCredentialRefreshPolicy.iceAction(after: .connected), .restartIce)
+    }
+
+    func test_iceAction_withoutANegotiatedPath_staysInert() {
+        let inert: [CallState] = [
+            .idle, .ringing(isOutgoing: true), .ringing(isOutgoing: false),
+            .offering, .connecting, .ended(reason: .remote),
         ]
-        for state in steady {
-            XCTAssertFalse(
-                CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(state: state),
-                "\(state) must not re-arm"
-            )
+        for state in inert {
+            XCTAssertEqual(TurnCredentialRefreshPolicy.iceAction(after: state), .inert, "\(state) must stay inert")
         }
     }
 }

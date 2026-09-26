@@ -377,7 +377,7 @@ export function scanFileForMismatches(source: string, file: string): readonly Pa
     }
 
     const declared = declaredDataKeys(code, responseOpen, responseEnd);
-    if (!declared) continue;
+    if (!declared || declared.includes(SPREAD)) continue;
 
     for (const argStart of calls) {
       const sent = sentPayload(code, argStart, responseEnd);
