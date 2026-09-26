@@ -17,6 +17,13 @@
  * | compte actif, autre état                   | `existing-account`        | code de CONNEXION envoyé   |
  * | compte supprimé (`isActive: false`)        | `unavailable`             | `unavailable`              |
  *
+ * La troisième porte, `proven-password` (#8055), n'est ouverte que par
+ * `POST /login` APRÈS que `authenticate` a vérifié le mot de passe d'un compte
+ * non vérifié et sans numéro — un compte qui n'est pas encore actif. Elle
+ * renvoie le code de vérification (débit compté comme `password-login`), ne
+ * crée jamais de compte (`unavailable` sans ligne) et rend `existing-account`
+ * si l'adresse a été prouvée entre-temps.
+ *
  * ## Sécurité — ce que ce module ne fait JAMAIS
  *
  * - **Il ne stocke aucun mot de passe.** Celui tapé à la connexion n'entre pas
@@ -65,7 +72,7 @@ export const ACCOUNT_IP_SENDS_PER_HOUR = PRODUCTION ? 10 : 50;
 
 const HOUR_SECONDS = 3600;
 
-export type AccountDoor = 'password-login' | 'email-only';
+export type AccountDoor = 'password-login' | 'email-only' | 'proven-password';
 
 export type AccountFromEmailOutcome =
   | { readonly kind: 'verification-required'; readonly accountCreated: boolean; readonly email: string }
@@ -212,6 +219,10 @@ const ttlFor = (door: AccountDoor): number =>
 
 const isPendingSignup = (account: AccountRow): boolean => account.password === null && account.emailVerifiedAt === null;
 
+/** Le compte attend-il son code, vu depuis cette porte ? */
+const awaitsCode = (account: AccountRow, door: AccountDoor): boolean =>
+  door === 'proven-password' ? account.emailVerifiedAt === null : isPendingSignup(account);
+
 /**
  * Démarrer — ou reprendre — un compte depuis une adresse. Voir le tableau en
  * tête de module.
@@ -238,11 +249,15 @@ export async function startAccountFromEmail(
     return { kind: 'unavailable' };
   }
 
-  if (account && input.door === 'password-login' && !isPendingSignup(account)) {
+  if (!account && input.door === 'proven-password') {
+    return { kind: 'unavailable' };
+  }
+
+  if (account && input.door !== 'email-only' && !awaitsCode(account, input.door)) {
     return { kind: 'existing-account' };
   }
 
-  if (input.door === 'password-login' && !(await consumeSend(deps.throttle, email, ip))) {
+  if (input.door !== 'email-only' && !(await consumeSend(deps.throttle, email, ip))) {
     // Un compte en attente garde son code en cours : on ne le régénère pas, on
     // ne renvoie rien, et l'écran de saisie du code reste la bonne suite.
     return account ? { kind: 'verification-required', accountCreated: false, email } : { kind: 'rate-limited' };

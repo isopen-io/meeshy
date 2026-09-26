@@ -29,6 +29,12 @@ struct SignupView: View {
     /// Ramène à la connexion, depuis le pied de page ou depuis un refus
     /// « adresse déjà utilisée ».
     var onSwitchToLogin: (() -> Void)?
+    /// Compte créé SANS numéro, puis code vérifié (#8055, #8059) : reçoit de
+    /// quoi ouvrir la session, une fois la feuille du code REFERMÉE. L'hôte
+    /// referme alors l'inscription et ouvre la session dans SON `onDismiss` —
+    /// l'ouvrir plus tôt démonte l'écran qui présente l'inscription et la
+    /// laisse orpheline. `nil` ⇒ la session s'ouvre dès la feuille refermée.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
 
     @FocusState private var focusedField: SignupField?
     @State private var isShowingLanguageSheet = false
@@ -42,6 +48,7 @@ struct SignupView: View {
     @State private var isPasswordRevealed = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
+    @State private var provenSessionOpener: ProvenSessionOpener?
 
     var body: some View {
         ZStack {
@@ -101,6 +108,23 @@ struct SignupView: View {
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
+        // #8055 — sans numéro, le compte attend son code : même écran que la
+        // connexion (#8035). Le mot de passe est déjà sur le compte, il ne
+        // repart pas ; la vérification ouvre la session et `MeeshyApp` bascule.
+        .sheet(item: $viewModel.pendingVerification, onDismiss: handOffProvenSession) { pending in
+            EmailVerificationView(
+                email: pending.email,
+                accountCreated: pending.accountCreated,
+                onVerified: { provenSessionOpener = $0 }
+            )
+        }
+    }
+
+    private func handOffProvenSession() {
+        guard let open = provenSessionOpener else { return }
+        provenSessionOpener = nil
+        guard let onVerified else { return open() }
+        onVerified(open)
     }
 
     // MARK: - Chrome
@@ -424,13 +448,15 @@ struct SignupView: View {
                 field: .password,
                 label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
             ) {
-                SecureField(
+                MeeshyPasswordField(
                     String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                    text: $viewModel.form.password
+                    text: $viewModel.form.password,
+                    role: .new,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
                 )
-                .textContentType(.newPassword)
                 .submitLabel(.go)
-                .focused($focusedField, equals: .password)
                 .onSubmit { attemptSubmit() }
                 .foregroundColor(theme.textPrimary)
             }
@@ -659,6 +685,8 @@ struct SignupView: View {
             return
         }
         HapticFeedback.success()
+        // Compte créé sans numéro (#8055) : on reste pour la saisie du code.
+        guard viewModel.pendingVerification == nil else { return }
         // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
         // félicitations avant de laisser entrer. Une pause posée sur un
         // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).

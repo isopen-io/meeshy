@@ -14,6 +14,7 @@ import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frVerifyEmail from './catalog-fr-verify-email';
+import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
@@ -180,6 +181,7 @@ const fr = {
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
   ...frVerifyEmail,
+  ...frPassword,
   ...frCall,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',

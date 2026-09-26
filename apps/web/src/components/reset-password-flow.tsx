@@ -10,6 +10,7 @@ import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
 import { Field } from './field';
 import { Glyph } from './glyph';
+import { PasswordInput } from './password-input';
 
 /**
  * LE FLUX DE RÉINITIALISATION DU MOT DE PASSE (T-reset, #5672) — extrait en
@@ -184,19 +185,15 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             error={password.length > 0 && !passwordOk ? `Mot de passe trop court (min ${PASSWORD_MIN} caractères)` : undefined}
           >
             {({ id, describedBy }) => (
-              <input
+              <PasswordInput
                 id={id}
-                aria-describedby={describedBy}
-                type="password"
+                describedBy={describedBy}
                 autoComplete="new-password"
                 autoFocus
                 value={password}
-                /* `onInput`, jamais `onChange` (motif `magic-link-flow.tsx#magic-link-email`). */
-                onInput={(e) => setPassword(e.currentTarget.value)}
+                onValue={setPassword}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>
@@ -210,17 +207,14 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             error={mismatch ? 'Les mots de passe ne correspondent pas' : undefined}
           >
             {({ id, describedBy }) => (
-              <input
+              <PasswordInput
                 id={id}
-                aria-describedby={describedBy}
-                type="password"
+                describedBy={describedBy}
                 autoComplete="new-password"
                 value={confirm}
-                onInput={(e) => setConfirm(e.currentTarget.value)}
+                onValue={setConfirm}
                 onFocus={() => setFocused('confirm')}
                 onBlur={() => setFocused(null)}
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>
