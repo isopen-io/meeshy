@@ -399,6 +399,34 @@ class MeeshyServer {
         });
       }
 
+      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
+      // `err.validation`. Sans cette branche il tombait dans le repli
+      // générique et ressortait en « Internal Server Error / An unexpected
+      // error occurred » sous un code 400 — le client apprenait qu'il avait
+      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
+      // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
+      //
+      // Et elle passe AVANT `logger.error` (#8082) : un refus de schéma est
+      // une saisie du client, pas une panne. Journalisé en ERROR « Uncaught
+      // error in request handler », un pseudo de 17 caractères accusait le
+      // serveur — le bruit que #6591 a retiré pour les refus CORS.
+      const schemaRefusal = schemaValidationErrorResponse(error);
+      if (schemaRefusal) {
+        logger.warn('Schema validation refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: request.url,
+          method: request.method,
+          fields: schemaRefusal.details.map(({ field }) => field)
+        });
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
+      }
+
       logger.error('Uncaught error in request handler', {
         module: 'ErrorHandler',
         func: 'setErrorHandler',
@@ -427,21 +455,6 @@ class MeeshyServer {
       // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
       // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
 
-      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
-      // `err.validation`. Sans cette branche il tombait dans le repli
-      // générique et ressortait en « Internal Server Error / An unexpected
-      // error occurred » sous un code 400 — le client apprenait qu'il avait
-      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
-      // `POST /auth/register` le 2026-08-18.
-      //
-      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
-      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
-      // par tout repli qui lit ce champ.
-      const schemaRefusal = schemaValidationErrorResponse(error);
-      if (schemaRefusal) {
-        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
-        return reply.code(refusStatus).send(corpsRefus);
-      }
 
       // TOUTE la hiérarchie typée, en UNE branche (#4212).
       //
