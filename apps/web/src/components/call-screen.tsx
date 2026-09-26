@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { CallGrid, Portrait } from '@/components/call-grid';
+import { CallPeerAlerts } from '@/components/call-quality';
 import { StreamVideo } from '@/components/call-media-elements';
 import { CallScreenTools } from '@/components/call-screen-tools';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -161,16 +162,20 @@ export function CallScreen({ call, canShare = browserCanShare() }: { readonly ca
   );
 
   const pills = statusPills(call);
-  const pillRow =
-    live && pills.length > 0 ? (
-      <div className="flex flex-wrap justify-center gap-2 px-4">
-        {pills.map((pill) => (
-          <span key={pill} className="rounded-full px-3 py-1 text-mini" style={{ background: PILL, color: INK }} data-call-pill={pill}>
-            {t(STATUS_PILL_KEY[pill])}
-          </span>
-        ))}
-      </div>
-    ) : null;
+  const pillRow = live ? (
+    <>
+      {pills.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-2 px-4">
+          {pills.map((pill) => (
+            <span key={pill} className="rounded-full px-3 py-1 text-mini" style={{ background: PILL, color: INK }} data-call-pill={pill}>
+              {t(STATUS_PILL_KEY[pill])}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <CallPeerAlerts members={call.members} language={language} />
+    </>
+  ) : null;
 
   const stage = (() => {
     if (layout === 'grid') {

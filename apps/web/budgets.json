@@ -174,6 +174,15 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 8,15 Ko -- le moteur d appel (`lib/calls/engine.ts` : signalisation, pairs WebRTC `peer-link.ts`, sons synthetises `call-tones.ts`, acquisition des medias `call-media.ts`, decodeurs `call-decode.ts`). Charge A LA DEMANDE (`lib/calls/call-actions.ts`, motif D-54) au premier geste d appel ou au premier evenement `call:*` recu : un utilisateur qui n appelle jamais ne le telecharge jamais. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
+    "call_quality": {
+      "pattern": "^assets/call-quality-loop-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #8047, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis gzip -9) : 1,73 Ko -- la boucle de qualite d un appel (`lib/calls/call-quality-loop.ts` : getStats sur chaque lien, `call-quality.ts` : niveaux et paliers d encodage par pair, `call-survival.ts` : gel puis suspension de la video). Chargee A LA DEMANDE par `engine-defaults.ts` au premier releve d un appel CONNECTE : elle ne pese ni sur qui n appelle pas, ni sur la sonnerie. C est ce decoupage qui garde `call_engine` sous ses 10 Ko (9,25 mesures ; 10,54 si la boucle y restait). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+      }
+    },
     "call_overlay": {
       "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,

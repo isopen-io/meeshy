@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { TIER_ENCODING } from './call-quality';
-import { createQualityLoop, qualityReport } from './call-quality-loop';
+import { qualityReport } from './call-analytics';
+import { createQualityLoop } from './call-quality-loop';
 import { FREEZE_AFTER_MS, RESUME_AFTER_MS, SUSPEND_AFTER_MS } from './call-survival';
 
 type Encoding = Readonly<Record<string, unknown>>;

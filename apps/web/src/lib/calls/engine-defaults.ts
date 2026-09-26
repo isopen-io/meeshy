@@ -8,7 +8,7 @@ import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
 import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
-import { createQualityLoop } from './call-quality-loop';
+import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
@@ -38,6 +38,16 @@ function watchBrowserNetwork(onChange: () => void): () => void {
   };
 }
 
+/**
+ * La boucle de qualité est un chunk à part (`budgets.json` › `call_quality`),
+ * chargé au premier relevé : `getStats`, paliers et survie ne pèsent que sur un
+ * appel CONNECTÉ, jamais sur la sonnerie.
+ */
+function lazyQualityLoop(deps: QualityLoopDeps): QualityLoop {
+  const loop = import('./call-quality-loop').then((module) => module.createQualityLoop(deps));
+  return { tick: () => loop.then((ready) => ready.tick()) };
+}
+
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   return {
     transport: currentCallTransport,
@@ -55,7 +65,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     stopRepeat: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
     tones: { start: startTone, stop: stopTone, cue: playCue, prime: primeTones },
     ringLabel: () => translate(currentInterfaceLanguage(), 'call.incoming.title.tab'),
-    createQualityLoop,
+    createQualityLoop: lazyQualityLoop,
     watchNetwork: watchBrowserNetwork,
     platform: () => (__SHELL__ ? 'android-shell' : 'web'),
     deviceModel: () => (typeof navigator === 'undefined' ? 'web' : deviceLabel(navigator.userAgent)),

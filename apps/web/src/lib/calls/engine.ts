@@ -19,7 +19,7 @@ import {
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
-import { analyticsPayload, createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withSample, type Telemetry } from './call-analytics';
+import { analyticsPayload, createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample, type Telemetry } from './call-analytics';
 import { mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
@@ -36,7 +36,7 @@ import {
   type WaitingCall,
 } from './call-store';
 import { peerAlert } from './call-peer-alerts';
-import { qualityReport, type QualityLoop, type QualityLoopDeps } from './call-quality-loop';
+import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
 import { loadDefaultEngineDeps } from './engine-defaults';

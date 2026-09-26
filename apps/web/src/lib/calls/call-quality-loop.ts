@@ -1,5 +1,3 @@
-import type { ConnectionQualityStats } from '@meeshy/shared/types/video-call';
-
 import { aggregateQuality, appliedTier, encodingFor, peerRate, readStats, type PeerQuality, type StatsRead, type VideoTier } from './call-quality';
 import { initialSurvival, stepSurvival, type SurvivalStage, type SurvivalState } from './call-survival';
 
@@ -74,26 +72,4 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
   };
 
   return { tick };
-}
-
-/** `CallQualityReportEvent` tel qu'il VOYAGE : l'horodatage part en ISO (`socketQualityReportSchema` refuse un nombre). */
-export type QualityReportPayload = {
-  readonly callId: string;
-  readonly stats: Omit<ConnectionQualityStats, 'timestamp'> & { readonly timestamp: string };
-};
-
-export function qualityReport(callId: string, total: PeerQuality, at: number): QualityReportPayload {
-  return {
-    callId,
-    stats: {
-      level: total.level,
-      packetLoss: total.packetLoss,
-      rtt: Math.round(total.rtt),
-      jitter: total.jitter,
-      bitrate: { audio: total.audioKbps, video: total.videoKbps },
-      bytesSent: total.bytesSent,
-      bytesReceived: total.bytesReceived,
-      timestamp: new Date(at).toISOString(),
-    },
-  };
 }

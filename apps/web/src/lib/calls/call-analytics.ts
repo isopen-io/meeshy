@@ -1,7 +1,10 @@
-import type { CallAnalyticsEvent, CallQualityDistribution, ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
+import type { CallAnalyticsEvent, CallQualityDistribution, ConnectionQualityLevel, ConnectionQualityStats } from '@meeshy/shared/types/video-call';
+
+import type { PeerQuality } from './call-quality';
 
 /**
- * **LE RAPPORT DE FIN D'APPEL** (#8047) — l'accumulateur de `call:analytics`
+ * **CE QUE LE CLIENT RAPPORTE D'UN APPEL** (#8047) — `call:quality-report` à
+ * chaque relevé, et l'accumulateur de `call:analytics`
  * (`CallAnalyticsEvent`, validé par `socketCallAnalyticsSchema`), émis une fois
  * au raccrochage. Le legacy l'émettait avec `codec: 'unknown'` et
  * `transcriptionUsed: false` codés en dur : ici chaque champ est LU — le codec
@@ -111,5 +114,27 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     deviceModel: context.deviceModel.slice(0, 100),
     isVideo: context.isVideo,
     endReason: context.endReason,
+  };
+}
+
+/** `CallQualityReportEvent` tel qu'il VOYAGE : l'horodatage part en ISO (`socketQualityReportSchema` refuse un nombre). */
+export type QualityReportPayload = {
+  readonly callId: string;
+  readonly stats: Omit<ConnectionQualityStats, 'timestamp'> & { readonly timestamp: string };
+};
+
+export function qualityReport(callId: string, total: PeerQuality, at: number): QualityReportPayload {
+  return {
+    callId,
+    stats: {
+      level: total.level,
+      packetLoss: total.packetLoss,
+      rtt: Math.round(total.rtt),
+      jitter: total.jitter,
+      bitrate: { audio: total.audioKbps, video: total.videoKbps },
+      bytesSent: total.bytesSent,
+      bytesReceived: total.bytesReceived,
+      timestamp: new Date(at).toISOString(),
+    },
   };
 }

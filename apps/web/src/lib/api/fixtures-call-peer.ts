@@ -36,6 +36,14 @@ export type FixtureCallPeerProbe = {
   readonly toggles: ReadonlyArray<{ readonly event: string; readonly enabled: boolean }>;
   /** Images vidéo décodées par le pair : > 0 quand l'écran partagé lui ARRIVE. */
   readonly videoFrames: () => Promise<number>;
+  /** Paquets audio reçus par le pair : ils AUGMENTENT tant que l'audio n'est pas coupé (#8047). */
+  readonly audioPackets: () => Promise<number>;
+  /** `call:quality-report` et `call:analytics` émis par le client, dans l'ordre (#8047). */
+  readonly reports: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** La passerelle signale que le lien du pair reste dégradé (`call:quality-alert`). */
+  readonly alertQuality: () => void;
+  /** La passerelle relaie une capture d'écran du pair (`call:screen-capture-alert`). */
+  readonly capture: (isCapturing: boolean) => void;
   readonly share: () => void;
   readonly stopShare: () => void;
 };
@@ -55,6 +63,7 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   let epoch = 0;
   let screen: MediaStreamTrack | null = null;
   const toggles: Array<{ readonly event: string; readonly enabled: boolean }> = [];
+  const reports: Array<{ readonly event: string; readonly payload: unknown }> = [];
 
   const signal = (payload: SignalOut): void => {
     if (callId === null || viewerId === null) return;
@@ -110,6 +119,19 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   };
 
   const TOGGLES: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, CLIENT_EVENTS.CALL_TOGGLE_VIDEO, CLIENT_EVENTS.CALL_TOGGLE_AUDIO]);
+  const REPORTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+
+  const inbound = async (kind: 'audio' | 'video', field: 'framesDecoded' | 'packetsReceived'): Promise<number> => {
+    const report = await pc?.getStats();
+    let total = 0;
+    report?.forEach((entry: Record<string, unknown>) => {
+      const value = entry[field];
+      if (entry.type === 'inbound-rtp' && entry.kind === kind && typeof value === 'number') total += value;
+    });
+    return total;
+  };
+
+  const about = (): { readonly callId: string; readonly participantId: string; readonly userId: string } | null => (callId === null ? null : { callId, participantId: CALL_PEER_PARTICIPANT_ID, userId: CALL_PEER_USER_ID });
 
   return {
     initiated: (id) => {
@@ -128,16 +150,20 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
         return;
       }
       if (TOGGLES.has(event) && isRecord(payload) && typeof payload.enabled === 'boolean') toggles.push({ event, enabled: payload.enabled });
+      if (REPORTS.has(event)) reports.push({ event, payload });
     },
     probe: {
       toggles,
-      videoFrames: async () => {
-        const report = await pc?.getStats();
-        let frames = 0;
-        report?.forEach((entry: Record<string, unknown>) => {
-          if (entry.type === 'inbound-rtp' && entry.kind === 'video' && typeof entry.framesDecoded === 'number') frames += entry.framesDecoded;
-        });
-        return frames;
+      videoFrames: () => inbound('video', 'framesDecoded'),
+      audioPackets: () => inbound('audio', 'packetsReceived'),
+      reports,
+      alertQuality: () => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, { ...peer, metric: 'packetLoss', value: 9, threshold: 5 });
+      },
+      capture: (isCapturing) => {
+        const peer = about();
+        if (peer !== null) deps.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { ...peer, isCapturing });
       },
       share: () => {
         const transceiver = videoSender();

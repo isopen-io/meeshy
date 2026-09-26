@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 
+import { CallQualityIndicator } from '@/components/call-quality';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
@@ -9,7 +10,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LES OUTILS DE L'EN-TÊTE D'APPEL** (#8046) — à droite de l'en-tête de
- * l'écran d'appel, en face de « Réduire » : l'image dans l'image (quand le
+ * l'écran d'appel, en face de « Réduire » : l'indicateur de qualité (#8047), l'image dans l'image (quand le
  * navigateur la sait et qu'une vidéo peut flotter) et les périphériques. La
  * feuille des périphériques est un chunk à part, chargée au premier geste.
  */
@@ -24,6 +25,7 @@ export function CallScreenTools({ call }: { readonly call: ActiveCall }) {
   const offerPip = shouldOfferPip(call, browserPipSupport());
   return (
     <div className="flex items-center gap-1">
+      {call.quality === null ? null : <CallQualityIndicator quality={call.quality} language={language} />}
       {offerPip ? (
         <button type="button" aria-label={translate(language, 'call.pip.enter')} onClick={requestCallPip} className="grid size-11 place-items-center rounded-full" style={{ color: '#fff' }} data-call-pip="">
           <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />

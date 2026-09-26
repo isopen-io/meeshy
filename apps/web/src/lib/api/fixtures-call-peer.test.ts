@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { decodeMediaToggled, decodeParticipantJoined, decodeSignal } from '@/lib/calls/call-decode';
+import { peerAlert } from '@/lib/calls/call-peer-alerts';
 
 import { CALL_PEER_USER_ID, createFixtureCallPeer } from './fixtures-call-peer';
 
@@ -93,5 +94,26 @@ describe('le pair des gates d’appel', () => {
     await flush();
     expect(h.video.sender.replaced.at(-1)).toBeNull();
     expect(decodeMediaToggled(h.fired.at(-1)?.[1])).toMatchObject({ mediaType: 'screen', enabled: false });
+  });
+
+  test('retient les rapports de qualité et de fin d’appel du client, et compte ses paquets audio (#8047)', async () => {
+    const h = peer();
+    h.created.emitted(CLIENT_EVENTS.CALL_QUALITY_REPORT, { callId: 'call-1', stats: { level: 'poor' } });
+    h.created.emitted(CLIENT_EVENTS.CALL_ANALYTICS, { callId: 'call-1', codec: 'VP8' });
+    h.created.emitted(CLIENT_EVENTS.CALL_HEARTBEAT, { callId: 'call-1' });
+    expect(h.created.probe.reports.map((report) => report.event)).toEqual([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+    expect(await h.created.probe.audioPackets()).toBe(0);
+  });
+
+  test('lève les alertes de la passerelle à son sujet, sous la forme que décode le moteur (#8047)', () => {
+    const h = peer();
+    h.created.initiated('call-1');
+    const resolve = (userId: string | null) => userId;
+    h.created.probe.alertQuality();
+    const [qualityEvent, qualityPayload] = h.fired.at(-1) ?? [];
+    expect(peerAlert(String(qualityEvent), qualityPayload, resolve)).toMatchObject({ callId: 'call-1', userId: CALL_PEER_USER_ID, patch: { weakNetwork: true } });
+    h.created.probe.capture(true);
+    const [captureEvent, capturePayload] = h.fired.at(-1) ?? [];
+    expect(peerAlert(String(captureEvent), capturePayload, resolve)).toMatchObject({ userId: CALL_PEER_USER_ID, patch: { capturing: true } });
   });
 });
