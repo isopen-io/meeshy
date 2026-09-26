@@ -395,7 +395,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Elle tient les mêmes drapeaux (`isLoading`, `errorMessage`) que sa
     /// jumelle, pour qu'un écran branché sur l'un ou l'autre voie le même
     /// `AuthManager`.
-    public func registerThrowing(request: RegisterRequest) async throws {
+    ///
+    /// #8055 — rend `.verificationRequired` quand le compte, créé SANS numéro,
+    /// attend la preuve de son adresse : aucune session n'est appliquée, et
+    /// l'écran présente la saisie du code (le mot de passe est déjà sur le
+    /// compte). `.authenticated` quand la session est appliquée.
+    @discardableResult
+    public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -408,10 +414,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
             if data.phoneOwnershipConflict == true {
                 throw PhoneOwnershipConflict()
             }
+            if let pending = data.pendingEmailVerification(typedIdentifier: request.email) {
+                return .verificationRequired(pending)
+            }
             guard let token = data.token, let user = data.user else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
             applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+            return .authenticated
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             throw error
@@ -424,6 +434,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
+            // #8055 — compte créé sans numéro : aucune session, rien d'une panne.
+            if data.pendingEmailVerification(typedIdentifier: request.email) != nil {
+                isLoading = false
+                return
+            }
             if let token = data.token, let user = data.user {
                 applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
             } else {
