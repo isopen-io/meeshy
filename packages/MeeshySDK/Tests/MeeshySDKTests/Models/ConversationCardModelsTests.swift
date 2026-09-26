@@ -57,6 +57,12 @@ final class ConversationCardModelsTests: XCTestCase {
                        .join(identifier: "mshy_club", allowsAnonymous: true))
     }
 
+    func test_resolveActions_connectedAccountOnGuestFriendlyLink_joinsInItsOwnNameOnly() throws {
+        let card = try decode(Self.shareLinkJSON)
+        XCTAssertEqual(ConversationCardActions.resolve(for: card, target: .shareLink(identifier: "mshy_club"), viewerHasAccount: true),
+                       .join(identifier: "mshy_club", allowsAnonymous: false))
+    }
+
     func test_resolveActions_member_leavesOrOpens() {
         let card = Self.card(kind: .direct, conversationId: "c1", isMember: true, link: nil)
         XCTAssertEqual(ConversationCardActions.resolve(for: card, target: .direct(conversationId: "c1")),
@@ -90,6 +96,23 @@ final class ConversationCardModelsTests: XCTestCase {
         let left = joined.with(isMember: false, conversationId: nil)
         XCTAssertEqual(ConversationCardActions.resolve(for: left, target: .shareLink(identifier: "x")),
                        .join(identifier: "x", allowsAnonymous: false))
+    }
+
+    // #8138 — le compte de membres suit le geste.
+    func test_withIsMember_joining_countsTheReaderAmongMembers() {
+        let card = Self.card(kind: .shareLink, conversationId: nil, isMember: false,
+                             link: ConversationCardLink(identifier: "x", isActive: true, expiresAt: nil))
+        XCTAssertEqual(card.with(isMember: true, conversationId: "c7").stats.memberCount, 3)
+    }
+
+    func test_withIsMember_leaving_removesTheReaderFromMembers() {
+        let card = Self.card(kind: .direct, conversationId: "c1", isMember: true, link: nil)
+        XCTAssertEqual(card.with(isMember: false, conversationId: nil).stats.memberCount, 1)
+    }
+
+    func test_withIsMember_unchangedMembership_keepsTheCount() {
+        let card = Self.card(kind: .direct, conversationId: "c1", isMember: true, link: nil)
+        XCTAssertEqual(card.with(isMember: true, conversationId: nil).stats.memberCount, 2)
     }
 
     static func card(kind: ConversationCardKind, conversationId: String?, isMember: Bool,

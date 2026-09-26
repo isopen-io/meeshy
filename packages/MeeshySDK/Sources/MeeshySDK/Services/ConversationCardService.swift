@@ -14,6 +14,25 @@ public protocol ConversationCardServiceProviding: Sendable {
     /// Pose un verdict connu localement (état optimiste d'une jonction).
     func store(_ resolution: ConversationCardResolution, for target: ConversationCardTarget)
     func invalidate(_ target: ConversationCardTarget)
+    /// Oublie TOUTES les cartes d'une conversation — lien de partage et lien
+    /// direct — puis l'annonce (`ConversationCardChange.notification`) pour
+    /// que les cartes à l'écran se relisent (#8138). `origin` est la carte du
+    /// geste : elle connaît déjà son nouvel état.
+    func invalidate(conversationId: String, from origin: ConversationCardTarget)
+}
+
+/// Une jonction ou un départ vient de changer l'appartenance du lecteur à une
+/// conversation : toute carte qui la désigne est périmée.
+public struct ConversationCardChange: Equatable, Sendable {
+    public static let notification = Notification.Name("ConversationCardService.conversationDidChange")
+
+    public let conversationId: String
+    public let origin: ConversationCardTarget
+
+    public init(conversationId: String, origin: ConversationCardTarget) {
+        self.conversationId = conversationId
+        self.origin = origin
+    }
 }
 
 public final class ConversationCardService: ConversationCardServiceProviding, @unchecked Sendable {
@@ -78,6 +97,28 @@ public final class ConversationCardService: ConversationCardServiceProviding, @u
 
     public func invalidate(_ target: ConversationCardTarget) {
         _ = entries.withLock { $0.removeValue(forKey: target) }
+    }
+
+    public func invalidate(conversationId: String, from origin: ConversationCardTarget) {
+        entries.withLock { entries in
+            entries = entries.filter { target, entry in
+                !Self.designates(conversationId, target: target, resolution: entry.resolution)
+            }
+        }
+        NotificationCenter.default.post(
+            name: ConversationCardChange.notification,
+            object: ConversationCardChange(conversationId: conversationId, origin: origin)
+        )
+    }
+
+    /// Une carte désigne une conversation par sa cible (lien direct) ou par ce
+    /// que le serveur a servi (un lien de partage vu par un membre). Un lien de
+    /// partage vu par un NON-membre ne porte pas l'id : c'est la carte du geste
+    /// de jonction, qui se met à jour elle-même.
+    static func designates(_ conversationId: String, target: ConversationCardTarget, resolution: ConversationCardResolution) -> Bool {
+        if target.directConversationId == conversationId { return true }
+        if case .card(let card) = resolution { return card.conversationId == conversationId }
+        return false
     }
 
     /// Un refus du serveur est un VERDICT (il se cache) ; une panne de réseau

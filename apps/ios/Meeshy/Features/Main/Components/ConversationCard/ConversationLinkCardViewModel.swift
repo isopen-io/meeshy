@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import os
 import MeeshySDK
@@ -60,18 +61,26 @@ final class ConversationLinkCardViewModel: ObservableObject {
     let target: ConversationCardTarget
     private let service: ConversationCardServiceProviding
     private let performer: ConversationCardActionPerforming
+    private let viewerHasAccount: Bool
     private var isFresh: Bool
+    private var changeSubscription: AnyCancellable?
+    /// Le changement que CETTE carte vient d'annoncer : elle connaît déjà son
+    /// nouvel état et ne se relit pas. Une autre carte du même lien, elle, se
+    /// relit — d'où un jeton par carte plutôt qu'une comparaison de cibles.
+    private var ownAnnouncedChange: ConversationCardChange?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-card")
 
     init(
         target: ConversationCardTarget,
         service: ConversationCardServiceProviding = ConversationCardService.shared,
-        performer: ConversationCardActionPerforming = LiveConversationCardActions()
+        performer: ConversationCardActionPerforming = LiveConversationCardActions(),
+        viewerHasAccount: Bool = ConversationLinkCardViewModel.currentViewerHasAccount()
     ) {
         self.target = target
         self.service = service
         self.performer = performer
+        self.viewerHasAccount = viewerHasAccount
         // Cache d'abord, à la construction : une carte déjà vue se rend dès la
         // première image, sans squelette.
         switch service.cached(target) {
@@ -85,11 +94,51 @@ final class ConversationLinkCardViewModel: ObservableObject {
             phase = .loading
             isFresh = false
         }
+        // #8138 — une jonction ou un départ fait depuis UNE AUTRE carte de la
+        // même conversation (lien de partage ↔ lien direct) périme celle-ci.
+        changeSubscription = NotificationCenter.default
+            .publisher(for: ConversationCardChange.notification)
+            .compactMap { $0.object as? ConversationCardChange }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in
+                MainActor.assumeIsolated { self?.conversationDidChange(change) }
+            }
+    }
+
+    /// Relit la carte si le geste vient d'ailleurs et qu'elle désigne la même
+    /// conversation — par sa cible (lien direct) ou par ce que le serveur a
+    /// servi (lien de partage vu en membre).
+    private func conversationDidChange(_ change: ConversationCardChange) {
+        if change == ownAnnouncedChange {
+            ownAnnouncedChange = nil
+            return
+        }
+        guard pending == .none, change.origin == target || designates(change.conversationId) else { return }
+        isFresh = false
+        Task { await load() }
+    }
+
+    private func announceChange(of conversationId: String) {
+        ownAnnouncedChange = ConversationCardChange(conversationId: conversationId, origin: target)
+        service.invalidate(conversationId: conversationId, from: target)
+    }
+
+    /// Un compte connecté (pas une session invitée) : il ne rejoint qu'en son
+    /// nom, jamais « en anonyme » — même règle que la page d'invitation web.
+    static func currentViewerHasAccount() -> Bool {
+        guard let user = AuthManager.shared.currentUser else { return false }
+        return user.isAnonymous != true
+    }
+
+    private func designates(_ conversationId: String) -> Bool {
+        if target.directConversationId == conversationId { return true }
+        if case .card(let card) = phase { return card.conversationId == conversationId }
+        return false
     }
 
     var actions: ConversationCardActions {
         guard case .card(let card) = phase else { return .none }
-        return ConversationCardActions.resolve(for: card, target: target)
+        return ConversationCardActions.resolve(for: card, target: target, viewerHasAccount: viewerHasAccount)
     }
 
     /// Relit la carte, sauf si le cache est frais. Une carte périmée reste à
@@ -116,6 +165,7 @@ final class ConversationLinkCardViewModel: ObservableObject {
             let conversationId = try await performer.join(identifier: identifier)
             let joined = before.with(isMember: true, conversationId: conversationId)
             phase = .card(joined)
+            announceChange(of: conversationId)
             service.store(.card(joined), for: target)
             pending = .none
             HapticFeedback.success()
@@ -146,7 +196,7 @@ final class ConversationLinkCardViewModel: ObservableObject {
             pending = .none
             // Hors du groupe, un lien DIRECT ne montre plus rien : le serveur
             // en décide à la prochaine lecture.
-            service.invalidate(target)
+            announceChange(of: conversationId)
             if before.kind == .direct { phase = .privateConversation }
             HapticFeedback.success()
         } catch {
