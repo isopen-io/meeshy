@@ -14,6 +14,13 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  */
 const loadOverlay = () => import('./call-overlay').then((module) => ({ default: module.CallOverlay }));
 const CallOverlay = lazy(loadOverlay);
+/* #8046 — la bulle et l'image dans l'image sont des FRÈRES de l'écran, pas
+   ses enfants : un chunk chargé par un autre chunk à la demande ne peut
+   pas en partager les modules sans l'importer statiquement (budgets.json ›
+   dynamic_only). Chargés d'ici, leurs modules communs (éléments média,
+   glyphes) forment un chunk partagé. */
+const CallBubbleLayer = lazy(() => import('./call-bubble').then((module) => ({ default: module.CallBubbleLayer })));
+const CallPipLayer = lazy(() => import('./call-pip-window').then((module) => ({ default: module.CallPipLayer })));
 /* « Reprendre l'appel » (#3586) — son propre chunk, chargé APRÈS la première
    peinture : la coquille n'en paie que l'`import()`. Monté sur toutes les
    routes, il peut précéder l'écran qui charge le catalogue : il l'attend
@@ -24,6 +31,8 @@ const CallResumeBanner = lazy(() =>
 
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
+  const hasCall = useStore(callStore, (state) => state.call !== null);
+  const bubble = useStore(callStore, (state) => state.call?.display === 'bubble');
   return (
     <>
       <Suspense fallback={null}>
@@ -32,6 +41,12 @@ export function CallLayer() {
       {active ? (
         <Suspense fallback={null}>
           <CallOverlay />
+        </Suspense>
+      ) : null}
+      {hasCall ? (
+        <Suspense fallback={null}>
+          <CallPipLayer />
+          {bubble ? <CallBubbleLayer /> : null}
         </Suspense>
       ) : null}
     </>

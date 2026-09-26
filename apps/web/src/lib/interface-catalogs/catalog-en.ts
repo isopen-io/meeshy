@@ -1,11 +1,13 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
+import enMediaHub from './catalog-en-media-hub';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
 import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
+import enCallDevices from './catalog-en-call-devices';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -194,11 +196,13 @@ const en = {
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
+  ...enMediaHub,
   ...enVerifyEmail,
   ...enPassword,
   ...enCall,
   ...enCallShell,
   ...enCallJoin,
+  ...enCallDevices,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
@@ -431,6 +435,9 @@ const en = {
   'settings.privacy.read_receipts.info':
     "This works both ways: if you don't send read receipts, you won't see whether your own messages were read.",
   'settings.privacy.typing_indicator': 'Typing indicator',
+  'settings.privacy.hide_from_search': 'Don\'t suggest me to people who have my number or email',
+  'settings.privacy.hide_from_search.info':
+    'Your contacts won\'t find you by your number or email, and won\'t be told when you join.',
   'settings.section.appearance': 'Appearance',
   'settings.theme': 'Theme',
   'settings.theme.auto': 'Auto',

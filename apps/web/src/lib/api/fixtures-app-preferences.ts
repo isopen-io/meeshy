@@ -18,6 +18,7 @@ const INITIAL: AppPreferences = {
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  hideProfileFromSearch: false,
 };
 
 const state: { preferences: AppPreferences } = { preferences: INITIAL };

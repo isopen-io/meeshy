@@ -1062,7 +1062,7 @@ struct RootView: View {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .legacyStatusUpdate:
+             .contactJoined, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,

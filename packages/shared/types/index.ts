@@ -187,19 +187,22 @@ export {
   type NotificationResponse,
   type NotificationCounts,
 
-  // Preferences
-  type NotificationPreference,
-  type CreateNotificationPreferenceDTO,
-  type UpdateNotificationPreferenceDTO,
-
   // Utility functions
   isNotificationExpired,
   isNotificationUnread,
+} from './notification.js';
+
+// Les préférences de notification et leurs règles d'envoi (extraites de
+// `notification.ts`, budget de taille #4532).
+export {
+  type NotificationPreference,
+  type CreateNotificationPreferenceDTO,
+  type UpdateNotificationPreferenceDTO,
   isDNDActive,
   isNotificationTypeEnabled,
   shouldSendNotification,
   getDefaultNotificationPreferences,
-} from './notification.js';
+} from './notification-preferences.js';
 
 // Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
 export type { NotificationAttachmentWire } from './notification-attachment-wire.js';

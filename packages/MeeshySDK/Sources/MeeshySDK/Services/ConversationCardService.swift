@@ -51,7 +51,7 @@ public final class ConversationCardService: ConversationCardServiceProviding, @u
 
     public func refresh(_ target: ConversationCardTarget) async -> ConversationCardResolution {
         do {
-            let response: APIResponse<ConversationCard> = try await api.request(ConversationCardEndpoint(target: target))
+            let response: APIResponse<ConversationCard> = try await api.request(Self.endpoint(for: target))
             let resolution = ConversationCardResolution.card(response.data)
             store(resolution, for: target)
             return resolution
@@ -61,6 +61,13 @@ public final class ConversationCardService: ConversationCardServiceProviding, @u
             }
             store(verdict, for: target)
             return verdict
+        }
+    }
+
+    static func endpoint(for target: ConversationCardTarget) -> ConversationCardEndpoint {
+        switch target {
+        case .shareLink(let identifier): return ConversationCardEndpoint.shareLink(identifier: identifier)
+        case .direct(let conversationId): return ConversationCardEndpoint.direct(conversationId: conversationId)
         }
     }
 

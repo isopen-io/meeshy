@@ -1,11 +1,13 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
+import esMediaHub from './catalog-es-media-hub';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
+import esCallDevices from './catalog-es-call-devices';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -194,11 +196,13 @@ const es = {
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
   ...esIdentity,
+  ...esMediaHub,
   ...esVerifyEmail,
   ...esPassword,
   ...esCall,
   ...esCallShell,
   ...esCallJoin,
+  ...esCallDevices,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
@@ -431,6 +435,9 @@ const es = {
   'settings.privacy.read_receipts.info':
     'Es recíproco: si no envías confirmaciones de lectura, tampoco verás si han leído tus mensajes.',
   'settings.privacy.typing_indicator': 'Indicador de escritura',
+  'settings.privacy.hide_from_search': 'No sugerirme a quien tenga mi número o mi correo',
+  'settings.privacy.hide_from_search.info':
+    'Tus contactos no te encontrarán por tu número o tu correo, y no se les avisará de tu llegada.',
   'settings.section.appearance': 'Apariencia',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',

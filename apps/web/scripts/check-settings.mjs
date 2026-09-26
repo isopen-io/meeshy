@@ -9,7 +9,7 @@
  * geste, ni que la déconnexion efface la session. Ce gate mesure, pour chaque
  * schéma × gabarit (390 × 844, 320 × 568) :
  *
- *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; six bascules ;
+ *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; sept bascules ;
  *     aucune entrée non portée n'est offerte — le legacy est décommissionné
  *     (#6702) — et aucun contrôle ne vise une autre origine : la suppression
  *     de compte ouvre sa page de la v2, dans le même onglet (#6715) ;
@@ -173,7 +173,7 @@ try {
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
         `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
-      check((await page.$$('[role="switch"]')).length === 6, `${label} : six bascules que la passerelle obéit`);
+      check((await page.$$('[role="switch"]')).length === 7, `${label} : sept bascules que la passerelle obéit`);
       check(((await textOf(page, '[data-settings-profile]')) ?? '').includes('@awa'), `${label} : la carte de profil porte la session`);
       // Le legacy est décommissionné (#6702) : une entrée non portée est MASQUÉE,
       // jamais marquée. La suppression de compte mène à SA page de la v2

@@ -51,6 +51,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  hideProfileFromSearch: false,
   ...overrides,
 });
 
@@ -127,7 +128,7 @@ describe('le compte — seule la suppression reste offerte', () => {
   });
 });
 
-describe('la confidentialité — quatre bascules que la passerelle obéit', () => {
+describe('la confidentialité — cinq bascules que la passerelle obéit', () => {
   const NAMES = ['Statut en ligne', 'Dernière connexion', 'Accusés de lecture', 'Indicateur de frappe'];
 
   test('chaque bascule annonce son état réel', () => {
@@ -146,6 +147,38 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
   test('ce qu’une bascule COÛTE se lit sous elle — la réciprocité des accusés de lecture', () => {
     const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
     expect(host.textContent).toContain('vous ne verrez pas non plus si vos messages ont été lus');
+  });
+
+  /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
+     recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
+     #8112) : la bascule a un effet, elle se montre. */
+  const DISCRETION = 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail';
+
+  test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
+    const edits: Array<readonly [string, boolean]> = [];
+    const host = dom(
+      <PrivacySection
+        language="fr"
+        view={ready({ hideProfileFromSearch: true })}
+        disabled={false}
+        onToggle={(key, value) => edits.push([key, value])}
+        onRetry={noop}
+      />,
+    );
+    const toggle = switchNamed(host, DISCRETION);
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('hideProfileFromSearch');
+    expect(host.textContent).toContain('ne seront pas prévenus de votre arrivée');
+  });
+
+  test('la discrétion se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<PrivacySection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="hideProfileFromSearch"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(DISCRETION);
+    }
   });
 
   test('hors ligne, aucune bascule n’est actionnable', () => {

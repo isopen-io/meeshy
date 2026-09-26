@@ -14,11 +14,13 @@ import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
+import frMediaHub from './catalog-fr-media-hub';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
+import frCallDevices from './catalog-fr-call-devices';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
@@ -184,11 +186,13 @@ const fr = {
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
+  ...frMediaHub,
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
   ...frCallShell,
   ...frCallJoin,
+  ...frCallDevices,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
@@ -429,6 +433,9 @@ const fr = {
   'settings.privacy.read_receipts.info':
     "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus.",
   'settings.privacy.typing_indicator': 'Indicateur de frappe',
+  'settings.privacy.hide_from_search': 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail',
+  'settings.privacy.hide_from_search.info':
+    'Vos contacts ne vous retrouveront pas par votre numéro ou votre e-mail, et ne seront pas prévenus de votre arrivée.',
   'settings.section.appearance': 'Apparence',
   'settings.theme': 'Thème',
   'settings.theme.auto': 'Auto',
