@@ -56,8 +56,11 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case broadcastsByIdSendInapp(id: String)
     case communities
     case conversations
+    case conversationsByConversationId(conversationId: String)
     case conversationsByConversationIdMessages(conversationId: String)
     case conversationsByConversationIdParticipants(conversationId: String)
+    case conversationsByConversationIdParticipantsByUserId(conversationId: String, userId: String)
+    case conversationsByConversationIdParticipantsByUserIdRemove(conversationId: String, userId: String)
     case dashboard
     case dashboardInvalidateCache
     case invitations
@@ -167,8 +170,11 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
         case .communities: return "/api/v1/admin/communities"
         case .conversations: return "/api/v1/admin/conversations"
+        case .conversationsByConversationId(let conversationId): return "/api/v1/admin/conversations/\(conversationId)"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
         case .conversationsByConversationIdParticipants(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/participants"
+        case .conversationsByConversationIdParticipantsByUserId(let conversationId, let userId): return "/api/v1/admin/conversations/\(conversationId)/participants/\(userId)"
+        case .conversationsByConversationIdParticipantsByUserIdRemove(let conversationId, let userId): return "/api/v1/admin/conversations/\(conversationId)/participants/\(userId)/remove"
         case .dashboard: return "/api/v1/admin/dashboard"
         case .dashboardInvalidateCache: return "/api/v1/admin/dashboard/invalidate-cache"
         case .invitations: return "/api/v1/admin/invitations"

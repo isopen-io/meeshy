@@ -295,7 +295,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // (synchroniser `StickerLibraryStore`, aujourd'hui local, avec ces routes).
 // Leur appelant actuel est TS (`apps/web/src/lib/api/stickers.ts`). Valeur
 // MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
-const BASELINE_DEAD_ENTRIES = 272;
+// 272 → 275 (#7999) : `AdminEndpoint.conversationsByConversationId`,
+// `.conversationsByConversationIdParticipantsByUserId` et
+// `.conversationsByConversationIdParticipantsByUserIdRemove` — GÉNÉRÉES depuis
+// `route-manifest.json` ; leur seul appelant est la fiche d'administration WEB.
+// Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 275;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

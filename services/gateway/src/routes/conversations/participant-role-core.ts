@@ -74,6 +74,51 @@ export type DemandeDeRangDeParticipant = {
 
 const RANGS_ACCEPTES: readonly string[] = ['admin', 'moderator', 'member'];
 
+/**
+ * **La diffusion de `participant:role-updated`**, extraite de
+ * `changerRangDeParticipant` par #7845 pour que la route SOUVERAINE
+ * (`PATCH /admin/conversations/:id/participants/:userId`) annonce le même
+ * événement, sous la même forme, sans en réécrire une copie.
+ *
+ * La charge ne transporte JAMAIS `isOnline`/`lastActiveAt` : une diffusion en
+ * salle n'a pas de destinataire nommé capable de porter une visibilité, et le
+ * type partagé (`ParticipantRoleUpdatedEventData`) ne les déclare pas. Le
+ * `participant` reçu peut donc avoir été gaté pour le DEMANDEUR — ils sont
+ * retirés ici, quel qu'en soit l'état.
+ *
+ * Thread-only À JUSTE TITRE, vérifié plutôt que déduit : aucune ligne de liste
+ * ne rend un rôle ; les seuls consommateurs sont les écrans de participants,
+ * tous ouverts DANS la conversation.
+ */
+export function announceParticipantRoleUpdated(params: {
+  readonly manager: ReturnType<PasserelleSocketDeConversation['getManager']>;
+  readonly conversationId: string;
+  /** La cible RÉSOLUE, jamais le segment d'URL (qui peut porter un `Participant.id`). */
+  readonly targetUserId: string;
+  readonly newRole: string;
+  readonly updatedBy: string;
+  readonly participant: ReturnType<typeof serializeConversationParticipant> | null;
+}): void {
+  const { manager, conversationId, targetUserId, newRole, updatedBy, participant } = params;
+  if (!manager) return;
+  const participantForBroadcast = participant
+    ? (() => {
+        const { isOnline: _broadcastIsOnline, lastActiveAt: _broadcastLastActiveAt, ...rest } = participant;
+        return rest;
+      })()
+    : null;
+  manager.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
+    conversationId,
+    userId: targetUserId,
+    newRole,
+    updatedBy,
+    participant: participantForBroadcast,
+  });
+  // Le cache d'identifiants de participant (5 min) servirait sinon l'ancien
+  // rang au prochain `message:send` de la cible.
+  manager.invalidateParticipantCache?.(targetUserId, conversationId);
+}
+
 export async function changerRangDeParticipant(
   demande: DemandeDeRangDeParticipant,
 ): Promise<VerdictDeGeste<RangDeParticipantServi>> {
@@ -223,39 +268,14 @@ export async function changerRangDeParticipant(
   const updatedParticipant = updatedRow
     ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
     : null;
-  const participantForBroadcast = updatedParticipant
-    ? (() => {
-        const { isOnline: _broadcastIsOnline, lastActiveAt: _broadcastLastActiveAt, ...rest } = updatedParticipant;
-        return rest;
-      })()
-    : null;
-
-  const manager = demande.socketIO?.getManager();
-  if (manager) {
-    // Thread-only À JUSTE TITRE, vérifié plutôt que déduit — noté ici pour
-    // qu'un prochain balayage de `to(ROOMS.conversation(` ne le rouvre pas.
-    // Aucune ligne de liste ne rend un rôle : les seuls consommateurs sont
-    // les écrans de participants (web `use-participants`, iOS
-    // `ParticipantsView` / `ConversationSocketHandler`), tous ouverts DANS
-    // la conversation. Élargir l'audience coûterait une requête et
-    // diffuserait la hiérarchie d'un groupe à des écrans qui ne l'affichent
-    // pas. À revoir seulement si la ligne de liste se met à montrer un rang.
-    manager.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
-      conversationId,
-      // La cible RÉSOLUE, jamais le segment d'URL : celui-ci peut porter un
-      // `Participant.id`, et recopier un `Participant.id` dans un champ qui
-      // déclare un `User.id` est exactement ce que le CLAUDE.md du gateway
-      // interdit.
-      userId: targetUserId,
-      newRole,
-      updatedBy: currentUserId,
-      participant: participantForBroadcast
-    });
-    // Invalidate the in-process participant-ID cache so the next message:send
-    // from this user re-validates membership/role against the DB instead of
-    // serving a stale 5-minute cached entry.
-    manager.invalidateParticipantCache?.(targetUserId, conversationId);
-  }
+  announceParticipantRoleUpdated({
+    manager: demande.socketIO?.getManager(),
+    conversationId,
+    targetUserId,
+    newRole,
+    updatedBy: currentUserId,
+    participant: updatedParticipant,
+  });
 
   const notificationService = demande.notifications;
   if (notificationService) {

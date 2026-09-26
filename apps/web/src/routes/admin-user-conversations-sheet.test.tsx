@@ -194,6 +194,41 @@ describe('LE PRISME REMIS À LA MODALE EST CELUI DU MEMBRE', () => {
   });
 });
 
+/**
+ * **« CONFIGURER » N'EXISTE QUE POUR QUI PEUT ÉCRIRE** (#7845, #7999).
+ *
+ * La passerelle garde les écritures souveraines par `canManageConversations`
+ * au rang ADMIN — la même règle qui ouvre la section Conversations, et donc
+ * `gerer`. Sans elle, le bouton rendrait un 403 à qui le touche : son absence
+ * est le contraste qui fait le témoin.
+ */
+describe('la ligne porte « Configurer » quand la section Conversations est ouverte', () => {
+  const monterAvecGerer = (gerer: 'admConversation' | null) =>
+    mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" gerer={gerer} deps={{ source: 'gateway', transport: transportListe() }} />
+      </QueryClientProvider>,
+    );
+
+  test('le toucher ouvre la feuille des écritures souveraines de CETTE conversation', async () => {
+    const host = await monterAvecGerer('admConversation');
+    const bouton = host.querySelector('[data-admin-conversation-configure="c-atelier"]');
+    expect(bouton instanceof HTMLButtonElement).toBe(true);
+    expect(document.querySelector('[data-admin-conv-settings]')).toBe(null);
+
+    await mounter.click(bouton as HTMLElement | null);
+
+    expect(document.querySelector('[data-admin-conv-settings="c-atelier"]')).not.toBe(null);
+    expect(document.querySelector('[data-admin-conv-reason]')).not.toBe(null);
+  });
+
+  test('CONTRASTE — sans la section Conversations, aucun « Configurer »', async () => {
+    const host = await monterAvecGerer(null);
+    expect(host.querySelector('[data-admin-conversation="c-atelier"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-conversation-configure]')).toBe(null);
+  });
+});
+
 describe('la section des conversations est REPLIABLE', () => {
   test('elle se plie, et sa liste est alors démontée', async () => {
     const host = await monter();

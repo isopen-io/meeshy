@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeAdminConversationPage, loadAdminUserConversations } from './admin-user-conversations';
+import { decodeAdminConversation, decodeAdminConversationPage, loadAdminUserConversations } from './admin-user-conversations';
 import type { HttpTransport } from './http';
 import { pageServie } from './admin';
 import { resultatServi } from '@/test-support/served-pagination';
@@ -139,5 +139,40 @@ describe('loadAdminUserConversations — l’adresse et le filtre', () => {
 
     expect(resultat.ok).toBe(false);
     expect(!resultat.ok && resultat.status).toBe(403);
+  });
+});
+
+describe('decodeAdminConversation — ce que la feuille « Configurer » pré-remplit (#7999)', () => {
+  test('les réglages servis sous `settings`, la description, les images et la fermeture', () => {
+    const ligne = decodeAdminConversation({
+      id: 'c1',
+      type: 'group',
+      description: 'Le groupe du jeudi',
+      avatar: 'https://cdn.test/a.png',
+      closedAt: '2026-09-20T10:00:00.000Z',
+      messageCount: 12,
+      settings: { defaultWriteRole: 'moderator', isAnnouncementChannel: true, slowModeSeconds: 30, autoTranslateEnabled: false, encryptionMode: 'e2ee' },
+    });
+    expect(ligne?.description).toBe('Le groupe du jeudi');
+    expect(ligne?.avatar).toBe('https://cdn.test/a.png');
+    expect(ligne?.banner).toBe(null);
+    expect(ligne?.closedAt).toBe('2026-09-20T10:00:00.000Z');
+    expect(ligne?.messageCount).toBe(12);
+    expect(ligne?.settings).toEqual({
+      defaultWriteRole: 'moderator',
+      isAnnouncementChannel: true,
+      slowModeSeconds: 30,
+      autoTranslateEnabled: false,
+      encryptionMode: 'e2ee',
+    });
+  });
+
+  test('sans ligne de statistiques, le nombre de messages est INCONNU — jamais un zéro qui affirmerait un fil muet', () => {
+    expect(decodeAdminConversation({ id: 'c1', type: 'group' })?.messageCount).toBe(null);
+  });
+
+  test('un rôle historique en CAPITALES se lit en minuscules — la feuille reconnaît le créateur', () => {
+    const ligne = decodeAdminConversation({ id: 'c1', type: 'group', membership: { userId: 'u1', role: 'CREATOR' } });
+    expect(ligne?.membership?.role).toBe('creator');
   });
 });
