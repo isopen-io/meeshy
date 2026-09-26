@@ -286,6 +286,17 @@ export const registerRequestSchema = {
     phoneTransferToken: {
       type: 'string',
       description: 'Token proving SMS verification when the phone number is being transferred from another account'
+    },
+    // #8058 — le parrainage voyage AVEC l'inscription : le rattachement se crée
+    // à la création du compte, qu'il soit actif ou non (#8055). Même valeur que
+    // `token` / `sessionKey` de `POST /affiliate/register`.
+    affiliateToken: {
+      type: 'string',
+      description: 'OPTIONAL. Affiliate (referral) token from the invitation link — the referral is recorded when the account is created, active or not. An invalid token never blocks the registration.'
+    },
+    affiliateSessionKey: {
+      type: 'string',
+      description: 'OPTIONAL. Session key returned by POST /affiliate/track-visit, linking the prior visit to this signup.'
     }
   }
 } as const;

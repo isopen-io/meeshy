@@ -11,6 +11,7 @@ import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import type { RegisterData } from '../../services/AuthService';
 import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
+import { AffiliateTrackingService } from '../../services/AffiliateTrackingService';
 import { openSession } from './open-session';
 import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
@@ -115,6 +116,42 @@ function completerLaGeolocalisation(
       },
     });
   }, 'registration-geoip-backfill');
+}
+
+/**
+ * RATTACHE le nouveau compte à son parrain, À LA CRÉATION (#8058).
+ *
+ * Arbitrage porteur 2026-09-26 : le parrainage est « sauvegardé lors de la
+ * création de compte » — actif ou non. Depuis #8055 un compte créé sans
+ * numéro n'a pas de session, et l'appel authentifié `POST /affiliate/register`
+ * qui suivait l'inscription devenait impossible : le code voyage donc avec
+ * l'inscription, et c'est le MÊME service qui le valide et crée la relation.
+ *
+ * Un code invalide (inconnu, expiré, épuisé) ou une panne n'empêchent JAMAIS
+ * l'inscription : le compte existe déjà, on journalise et on continue.
+ */
+async function rattacherAuParrain(
+  context: AuthRouteContext,
+  userId: string,
+  affiliateToken: string | undefined,
+  affiliateSessionKey: string | undefined,
+): Promise<void> {
+  if (!affiliateToken) return;
+  try {
+    const resultat = await AffiliateTrackingService.convertAffiliateVisit(
+      context.fastify.prisma,
+      affiliateToken,
+      userId,
+      affiliateSessionKey,
+    );
+    if (!resultat.success) {
+      logger.info('code de parrainage ignoré à l\'inscription', { reason: resultat.error });
+    }
+  } catch (error) {
+    logger.warn('rattachement au parrain impossible à l\'inscription', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**
@@ -246,8 +283,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     const afterResponse = context.afterResponse ?? deferAfterResponse;
 
     try {
-      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
+      const { affiliateToken, affiliateSessionKey, ...validatedData } = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         skipPhoneConflictCheck?: boolean;
+        affiliateToken?: string;
+        affiliateSessionKey?: string;
       };
 
       // #3629 — `AuthSchemas.register` (Zod) ne borne que la LONGUEUR
@@ -363,6 +402,8 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+
+      await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
 
       // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
       // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code

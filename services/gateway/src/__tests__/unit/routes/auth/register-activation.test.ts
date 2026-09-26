@@ -78,6 +78,8 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
     systemLanguage: (data as any)?.systemLanguage || 'fr',
     regionalLanguage: (data as any)?.regionalLanguage || 'fr',
     phoneTransferToken: (data as any)?.phoneTransferToken,
+    affiliateToken: (data as any)?.affiliateToken,
+    affiliateSessionKey: (data as any)?.affiliateSessionKey,
   })),
 }));
 
@@ -97,6 +99,11 @@ jest.mock('../../../../utils/normalize', () => ({
     phoneNumber: `+33${phone.replace(/\D/g, '').slice(-9)}`,
     isValid: true,
   })),
+}));
+
+const mockConvertAffiliateVisit = jest.fn<any>().mockResolvedValue({ success: true, data: { id: 'rel-1', status: 'completed' } });
+jest.mock('../../../../services/AffiliateTrackingService', () => ({
+  AffiliateTrackingService: { convertAffiliateVisit: (...args: any[]) => mockConvertAffiliateVisit(...args) },
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -210,6 +217,7 @@ const inscrire = (app: FastifyInstance, payload: Record<string, unknown> = INSCR
 
 beforeEach(() => {
   mockCreateSession.mockClear();
+  mockConvertAffiliateVisit.mockClear();
 });
 
 describe('inscription SANS numéro — le compte attend son code', () => {
@@ -273,6 +281,59 @@ describe('inscription AVEC numéro — actif tout de suite', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.token).toBe('jwt-token');
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
+  it('sans numéro : le rattachement au parrain est créé à la création, et aucune session ne s’ouvre', async () => {
+    const { app, prisma } = await buildApp();
+    const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
+
+    expect(res.json().data.status).toBe('verification-required');
+    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(prisma, 'aff-123', USER_ID, 'visite-9');
+    expect(mockCreateSession).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('avec numéro : le rattachement est créé aussi, et la session s’ouvre', async () => {
+    const authService = makeAuthService({
+      register: jest.fn<any>().mockResolvedValue({ user: { ...mockUser, phoneNumber: '+33612345678' } }),
+    });
+    const { app } = await buildApp({ authService });
+    const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123' });
+
+    expect(res.json().data.token).toBe('jwt-token');
+    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(expect.anything(), 'aff-123', USER_ID, undefined);
+    await app.close();
+  });
+
+  it('un code INVALIDE n’empêche pas l’inscription : compte créé, sans rattachement', async () => {
+    mockConvertAffiliateVisit.mockResolvedValueOnce({ success: false, error: 'Token invalide' });
+    const { app, authService } = await buildApp();
+    const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'faux' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: true, email: 'alice@test.com' });
+    expect(authService.register).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('une PANNE du rattachement n’empêche pas l’inscription', async () => {
+    mockConvertAffiliateVisit.mockRejectedValueOnce(new Error('mongo down'));
+    const { app } = await buildApp();
+    const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.status).toBe('verification-required');
+    await app.close();
+  });
+
+  it('sans code : aucun rattachement tenté', async () => {
+    const { app } = await buildApp();
+    await inscrire(app);
+
+    expect(mockConvertAffiliateVisit).not.toHaveBeenCalled();
     await app.close();
   });
 });
