@@ -5,6 +5,7 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 import * as sceneActivity from '@/lib/scene/activity';
 import type { SceneActivityState, SceneEvent } from '@/lib/scene/activity';
 
+import { chromeMayCollapse, dismissesKeyboard } from './keyboard-first';
 import { chromeHiding, type ChromeHiding } from './thread-chrome';
 
 /**
@@ -78,14 +79,18 @@ export type UseThreadChromeInput = {
  *
  * Cible chaque pièce du chrome par sa classe LIVRÉE (`.thread-header`,
  * `.thread-header-actions`, `.thread-composer-chrome`,
- * `.thread-scroll-to-bottom`) — les MÊMES sélecteurs que `thread-scene.css`
- * — jamais une seconde énumération de nœuds qui pourrait diverger du CSS.
+ * — les MÊMES sélecteurs que `thread-scene.css` — jamais une seconde
+ * énumération de nœuds qui pourrait diverger du CSS.
+ *
+ * Le bouton « revenir en bas » (`.thread-scroll-to-bottom`) n'en fait PLUS
+ * partie (#8002, directive porteur 2026-09-26) : il ne disparaît pas « comme
+ * les autres éléments de la fenêtre » — c'est pendant le défilement qu'on le
+ * cherche.
  */
 function applyChromeInert(host: HTMLElement, hiding: ChromeHiding): void {
   const header = host.querySelector<HTMLElement>('.thread-header');
   const headerActions = host.querySelector<HTMLElement>('.thread-header-actions');
   const composer = host.querySelector<HTMLElement>('.thread-composer-chrome');
-  const scrollButton = host.querySelector<HTMLElement>('.thread-scroll-to-bottom');
 
   header?.toggleAttribute('inert', hiding.header === 'entire');
   // Quand l'en-tête ENTIER est déjà inerte, la grappe d'actions l'est par
@@ -93,7 +98,6 @@ function applyChromeInert(host: HTMLElement, hiding: ChromeHiding): void {
   // poser l'attribut évite une double comptabilité à retirer plus tard.
   headerActions?.toggleAttribute('inert', hiding.header === 'actions');
   composer?.toggleAttribute('inert', hiding.composer);
-  scrollButton?.toggleAttribute('inert', hiding.composer);
 }
 
 export function useThreadChrome(host: { current: HTMLElement | null }, input: UseThreadChromeInput): void {
@@ -183,6 +187,35 @@ export function useThreadChrome(host: { current: HTMLElement | null }, input: Us
 const DEFAULT_NOW = (): number => performance.now();
 
 /**
+ * La sonde du clavier virtuel (#8000) — `isOpen` : le champ du composeur a le
+ * focus ; `dismiss` : le lui retirer (`blur()`), ce qui referme le clavier.
+ * Absente (tests historiques, écrans sans composeur) ⇒ clavier jamais ouvert.
+ */
+export type KeyboardProbe = {
+  readonly isOpen: () => boolean;
+  readonly dismiss: () => void;
+};
+
+const NO_KEYBOARD: KeyboardProbe = { isOpen: () => false, dismiss: () => {} };
+
+/**
+ * `composerKeyboard` — la sonde de PRODUCTION : le clavier est ouvert tant
+ * qu'une saisie de `.thread-composer-chrome` porte le focus.
+ */
+export function composerKeyboard(host: { current: HTMLElement | null }): KeyboardProbe {
+  const field = (): HTMLElement | null => {
+    const active = document.activeElement;
+    const composer = host.current?.querySelector('.thread-composer-chrome') ?? null;
+    if (!(active instanceof HTMLElement) || composer === null || !composer.contains(active)) return null;
+    return active.matches('textarea, input, [contenteditable="true"]') ? active : null;
+  };
+  return {
+    isOpen: () => field() !== null,
+    dismiss: () => field()?.blur(),
+  };
+}
+
+/**
  * LA LEVÉE D'UN GESTE INDIRECT (revue #5774, défaut majeur 8) — `wheel`
  * (souris/trackpad) et `keydown` n'ont, contrairement au doigt, aucun
  * événement de LEVÉE : `isGestureHeld` (`scene/activity.ts`) les fait donc
@@ -223,7 +256,7 @@ const INDIRECT_TICK_MS = 60;
  */
 export function createScrollerGestureSubscriber(
   scroller: { current: HTMLElement | null },
-  { now = DEFAULT_NOW }: { readonly now?: () => number } = {},
+  { now = DEFAULT_NOW, keyboard = NO_KEYBOARD }: { readonly now?: () => number; readonly keyboard?: KeyboardProbe } = {},
 ): GestureSubscriber {
   return (listener) => {
     const element = scroller.current;
@@ -239,6 +272,15 @@ export function createScrollerGestureSubscriber(
      * il y a moins de `INDIRECT_RELEASE_MS` », jamais la fenêtre de révélé.
      */
     let lastIndirectActivityAt: number | null = null;
+    /**
+     * LE CLAVIER PART D'ABORD (#8000) — le clavier virtuel n'existe que sous
+     * le DOIGT : l'état du clavier au `touchstart` est retenu pour tout le
+     * geste (`chromeMayCollapse`), et le `scrollTop` de départ dit si le
+     * doigt tire vers les messages anciens (`scrollTop` qui DÉCROÎT).
+     */
+    let keyboardOpenAtGestureStart = false;
+    let gestureStartTop = element.scrollTop;
+    const keyboardOpen = (): boolean => state.origin === 'touch' && keyboard.isOpen();
 
     const stopTickTimer = () => {
       if (tickTimer !== null) {
@@ -257,7 +299,10 @@ export function createScrollerGestureSubscriber(
       // défaut 8 : le composeur restait injoignable ~900 ms après le
       // dernier cran de molette, la fenêtre de révélé n'ayant rien à voir
       // avec « le composeur doit-il redevenir cliquable ? ».
-      const held = state.origin === 'touch' ? sceneActivity.isGestureHeld(state, at) : heldForIndirect(at);
+      const gestureHeld = state.origin === 'touch' ? sceneActivity.isGestureHeld(state, at) : heldForIndirect(at);
+      const held =
+        gestureHeld &&
+        (state.origin !== 'touch' || chromeMayCollapse({ keyboardOpenAtGestureStart, keyboardOpen: keyboardOpen() }));
       if (held !== heldWasOn) {
         heldWasOn = held;
         listener(held);
@@ -286,7 +331,11 @@ export function createScrollerGestureSubscriber(
       project();
     };
 
-    const onGrab = () => dispatch({ type: 'grab', at: now() });
+    const onGrab = () => {
+      keyboardOpenAtGestureStart = keyboard.isOpen();
+      gestureStartTop = element.scrollTop;
+      dispatch({ type: 'grab', at: now() });
+    };
     const onRelease = () => dispatch({ type: 'release', at: now() });
     const onIndirectIntent = () => {
       lastIndirectActivityAt = now();
@@ -294,6 +343,12 @@ export function createScrollerGestureSubscriber(
     };
     const onScroll = () => {
       if (state.origin === 'indirect') lastIndirectActivityAt = now();
+      if (
+        state.touching &&
+        dismissesKeyboard({ keyboardOpen: keyboardOpen(), towardOlder: element.scrollTop < gestureStartTop })
+      ) {
+        keyboard.dismiss();
+      }
       dispatch({ type: 'scrolled', at: now(), y: element.scrollTop });
     };
 

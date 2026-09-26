@@ -9,7 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
-import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
+import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
@@ -19,8 +19,9 @@ import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
  * marqueur — voir son commentaire. Trois lecteurs (`index.html` via ce
  * greffon, `scripts/prerender-institutional.tsx`, `src/lib/scheme.ts`) importent
- * désormais la MÊME constante plutôt que de la recopier (#5588) : la clé et le
- * script ne peuvent plus diverger entre eux.
+ * désormais le MÊME module plutôt que de le recopier (#5588) : la clé et le
+ * script ne peuvent plus diverger entre eux. `index.html` reçoit la variante
+ * qui règle aussi la barre du navigateur (#7970).
  */
 const SCHEME_BOOTSTRAP_MARKER = '/*@INLINE_SCHEME_BOOTSTRAP@*/';
 
@@ -33,7 +34,7 @@ const inlineSchemeBootstrap = (): Plugin => ({
           "schéma ne serait plus injecté, et le premier rendu à froid basculerait de couleur (#5588).",
       );
     }
-    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_APP_SCHEME_BOOTSTRAP);
   },
 });
 

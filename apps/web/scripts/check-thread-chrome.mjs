@@ -44,6 +44,16 @@
  *    `MutationObserver` compte au plus quatre mutations pour un geste, quel
  *    que soit le nombre d'images de défilement.
  *
+ * 6. LE BOUTON « REVENIR EN BAS » NE SE REPLIE PAS (#8002). Pendant le même
+ *    geste tenu qui escamote en-tête et composeur, remonté loin du bas, le
+ *    bouton reste à `opacity: 1` et reçoit le doigt.
+ *
+ * 7. LE CLAVIER PART D'ABORD (#8000). Champ du composeur focalisé (le
+ *    clavier virtuel est levé), un geste tactile vers les messages ANCIENS
+ *    retire le focus du champ et ne replie RIEN d'autre : ni
+ *    `data-chrome-header` ni `data-chrome-composer` pendant ce geste. Le
+ *    geste SUIVANT, clavier fermé, replie comme en 1.
+ *
  * CE QU'IL NE MESURE PAS, ET POURQUOI
  *
  * · « recherche ouverte ⇒ rien ne bouge » : aucun état de recherche n'existe
@@ -128,6 +138,7 @@ const chromeState = (page) =>
     const host = header?.parentElement ?? null;
     const actions = document.querySelector('.thread-header-actions');
     const composer = document.querySelector('.thread-composer-chrome');
+    const scrollButton = document.querySelector('.thread-scroll-to-bottom');
     const read = (el) => (el === null ? null : { opacity: getComputedStyle(el).opacity, pointerEvents: getComputedStyle(el).pointerEvents });
     return {
       dataHeader: host?.dataset.chromeHeader ?? null,
@@ -135,6 +146,8 @@ const chromeState = (page) =>
       header: read(header),
       actions: read(actions),
       composer: read(composer),
+      scrollButton: read(scrollButton),
+      scrollButtonInert: scrollButton?.hasAttribute('inert') ?? null,
     };
   });
 
@@ -221,6 +234,15 @@ for (const scheme of ['light', 'dark']) {
       `${scheme} · Focal, geste tenu : le composeur est à opacity 0 et pointer-events none (${JSON.stringify(held.composer)})`,
     );
 
+    // --- 6. #8002 — le bouton « revenir en bas » ne suit PAS le repli.
+    expect(
+      held.scrollButton !== null &&
+        held.scrollButton.opacity === '1' &&
+        held.scrollButton.pointerEvents !== 'none' &&
+        held.scrollButtonInert === false,
+      `${scheme} · geste tenu loin du bas : le bouton « revenir en bas » RESTE visible et joignable (${JSON.stringify([held.scrollButton, held.scrollButtonInert])})`,
+    );
+
     await page.screenshot({ path: join(CAPTURES, `thread-focal-chrome-hidden.${scheme}.png`) });
 
     await touch(page, 'end');
@@ -240,6 +262,58 @@ for (const scheme of ['light', 'dark']) {
       `${scheme} · le chrome mute AUX TRANSITIONS seulement : ${mutations} mutations pour 8 images de défilement (attendu 1..4)`,
     );
 
+    await close(page);
+  }
+
+  // ---------------------------------------------------------------------- 7
+  {
+    const page = await openThread(scheme);
+    /* Chaque geste part du BAS du fil : un `scrollTop` déjà à 0 n'émet aucun
+       `scroll`, et le geste ne serait pas un défilement. */
+    const toBottom = async () => {
+      await page.evaluate(() => {
+        const m = document.querySelector('main');
+        m.scrollTop = m.scrollHeight;
+      });
+      await page.waitForFunction(() => document.querySelector('main').scrollTop > 600, null, { timeout: 3000 }).catch(() => {});
+    };
+    await toBottom();
+    await page.locator('[data-composer] textarea').focus();
+    const focusedBefore = await page.evaluate(() => document.activeElement?.tagName ?? null);
+    expect(focusedBefore === 'TEXTAREA', `${scheme} · le champ du composeur a le focus — le clavier est levé (${focusedBefore})`);
+
+    await touch(page, 'start');
+    for (let i = 0; i < 6; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    const keyboardClosed = await page
+      .waitForFunction(() => document.activeElement?.tagName !== 'TEXTAREA', null, { timeout: 3000 })
+      .then(() => true, () => false);
+    expect(keyboardClosed, `${scheme} · le défilement vers les anciens FERME le clavier (le champ perd le focus)`);
+    const first = await chromeState(page);
+    expect(
+      first.dataHeader === null && first.dataComposer === null && first.header.opacity === '1',
+      `${scheme} · ce premier geste ne replie RIEN d'autre (${JSON.stringify([first.dataHeader, first.dataComposer, first.header.opacity])})`,
+    );
+    await page.screenshot({ path: join(CAPTURES, `thread-keyboard-first.${scheme}.png`) });
+    await touch(page, 'end');
+    await toBottom();
+
+    await touch(page, 'start');
+    for (let i = 0; i < 4; i += 1) {
+      await touch(page, 'move', 60);
+      await page.waitForTimeout(30);
+    }
+    await page
+      .waitForFunction(() => document.querySelector('header.thread-header')?.parentElement?.dataset.chromeHeader === 'entire', null, { timeout: 3000 })
+      .catch(() => {});
+    const second = await chromeState(page);
+    expect(
+      second.dataHeader === 'entire' && second.dataComposer === 'hidden',
+      `${scheme} · le geste SUIVANT, clavier fermé, replie le chrome (${JSON.stringify([second.dataHeader, second.dataComposer])})`,
+    );
+    await touch(page, 'end');
     await close(page);
   }
 

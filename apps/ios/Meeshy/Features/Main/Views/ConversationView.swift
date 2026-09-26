@@ -133,13 +133,6 @@ struct PendingAudioEdit: Identifiable, Equatable {
     let url: URL
 }
 
-struct ConversationHeaderState {
-    var showStoryViewerFromHeader = false
-    var storyUserIdForHeader: String?
-    var showSearch = false
-    var searchQuery = ""
-}
-
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
@@ -1348,6 +1341,7 @@ struct ConversationView: View {
                 // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
                 // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
+                headerBandHeight: previewMode ? 0 : headerState.bandHeight,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -1959,19 +1953,19 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if scrollState.isNearBottom == false || viewModel.isSearchingQuotedMessage {
-                // Bulle « retour en bas » : elle disparaît VERS LE BAS (bord le
-                // plus proche) en fondant pendant le défilement et en revient
-                // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
-                // du bas) suivent la même direction.
+            if Self.showsScrollToBottomButton(isNearBottom: scrollState.isNearBottom, isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage, isInJumpedState: viewModel.isInJumpedState) {
+                // Bulle « retour en bas » : elle NE suit PAS le repli du
+                // défilement (#8002, directive porteur 2026-09-26) — c'est
+                // pendant qu'on remonte qu'on la cherche. Seules ses propres
+                // entrées/sorties (proximité du bas) la font glisser.
                 ConversationTypingRosterHost(store: viewModel.stateStore) { typing in
                     VStack { Spacer(); HStack { Spacer(); scrollToBottomButton(typing: typing).padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
                 }
-                    .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
             }
 
             VStack {
@@ -2041,7 +2035,6 @@ struct ConversationView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
             searchResultsBlurOverlay
-            returnToLatestButton
         }
         // #3901 — le Résumé Vivant ne rend jamais bulle par bulle
         // (`MessageListViewController.rendersThread`), donc ne peut jamais
@@ -2192,7 +2185,8 @@ struct ConversationView: View {
             // fil pendant l'escamotage (`allowsHitTesting`). Conservé DANS la
             // closure : c'est la branche qu'il habille, pas la section.
             expandedBand: { AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top)) },
-            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) }
+            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) },
+            onBandHeightChange: { headerState.bandHeight = $0 }
         )
         // Cette animation-ci reste à l'HÔTE : sa valeur (`hidesEntireHeaderForScroll`)
         // ne gouverne aucune branche de la section — elle accompagne
