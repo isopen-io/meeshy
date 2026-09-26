@@ -14,6 +14,7 @@ import itCallFeedback from './catalog-it-call-feedback';
 import itCallsErase from './catalog-it-calls-erase';
 import itCallDevices from './catalog-it-call-devices';
 import itCallScreen from './catalog-it-call-screen';
+import itCallQuality from './catalog-it-call-quality';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
@@ -216,6 +217,7 @@ const it = {
   ...itCallsErase,
   ...itCallDevices,
   ...itCallScreen,
+  ...itCallQuality,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',

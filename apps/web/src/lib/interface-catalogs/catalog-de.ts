@@ -14,6 +14,7 @@ import deCallFeedback from './catalog-de-call-feedback';
 import deCallsErase from './catalog-de-calls-erase';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
+import deCallQuality from './catalog-de-call-quality';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -216,6 +217,7 @@ const de = {
   ...deCallsErase,
   ...deCallDevices,
   ...deCallScreen,
+  ...deCallQuality,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',

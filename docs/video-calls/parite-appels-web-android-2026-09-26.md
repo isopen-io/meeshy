@@ -88,7 +88,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | D14 | Partage d'écran | ❌ | 🟡 drapeau seul | ❌ | ❌ | 8 | décision produit |
 | D15 | Capteur de proximité, écran maintenu allumé | ✅ | ❌ | ❌ | ❌ | 7 | coque : plugin natif ; web : Wake Lock |
 | D16 | Audio en arrière-plan, `call:backgrounded` / `foregrounded` | ✅ | ❌ | ❌ | ❌ | 1 + 7 | coque : service au premier plan micro / caméra |
-| D17 | Détection de capture d'écran (émise / alerte reçue) | ✅ / ✅ | ❌ / ✅ | ❌ | ❌ | 5 | coque : `DETECT_SCREEN_RECORDING` |
+| D17 | Détection de capture d'écran (émise / alerte reçue) | ✅ / ✅ | ❌ / ✅ | — / ✅ | ❌ / ✅ | 5 | web : alerte reçue affichée en `role="alert"` (`call-quality.tsx`, #8047) ; un navigateur ne sait pas qu'on capture son écran — rien à émettre · coque : émettre exige `DETECT_SCREEN_RECORDING` natif, non fait |
 | D18 | Libellés d'accessibilité, VoiceOver / lecteur d'écran | ✅ | 🟡 | ❌ | ❌ | 2 | |
 | D19 | Haptique aux transitions | ✅ | 🟡 vibration | ❌ | ❌ | 7 | |
 
@@ -103,7 +103,7 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | E5 | `call:reconnecting` / `call:reconnected` | ✅ | ✅ | ❌ | ❌ | 1 | |
 | E6 | Chien de garde de connexion (45 s) | ✅ | ✅ | ❌ | ❌ | 1 | legacy `VideoCallInterface.tsx` |
 | E7 | Reprise après rechargement / plantage (`GET /calls/active`) | ✅ | ✅ | ❌ | ❌ | 3 | |
-| E8 | Survie vidéo (gel à 2 fps sur mauvais lien, audio prioritaire) | ✅ | ✅ | ❌ | ❌ | 5 | iOS `VideoSurvivalController.swift` · legacy `adaptive-degradation.ts` |
+| E8 | Survie vidéo (gel à 2 fps sur mauvais lien, audio prioritaire) | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `VideoSurvivalController.swift` · legacy `adaptive-degradation.ts` · web `call-survival.ts` : gel puis suspension, reprise après 10 s (#8047, `check-calls-quality.mjs`) |
 | E9 | Adaptation thermique | ✅ | — | — | ❌ | — | |
 | E10 | Survie au redémarrage du gateway | 🟡 (#3578) | 🟡 | ❌ | ❌ | 9 | |
 | E11 | Frontière d'erreur de l'écran d'appel | — | ✅ | ❌ | ❌ | 2 | legacy `CallErrorBoundary.tsx` |
@@ -112,11 +112,11 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 
 | # | Fonction | iOS | Legacy | Web | Coque | Lot | Sources |
 |---|---|---|---|---|---|---|---|
-| F1 | Boucle `getStats` et niveau de qualité | ✅ 5 s | ✅ 2 s | ❌ | ❌ | 5 | legacy `use-call-quality.ts` |
-| F2 | Paliers d'encodage vidéo par pair | ✅ | ✅ | ❌ | ❌ | 5 | legacy `use-per-peer-video-tier.ts` |
-| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe | ✅ | ❌ | ❌ | 5 | iOS `CallSignalGlyph.swift` · legacy `CallQualityOverlay.tsx` |
-| F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ❌ | ❌ | 5 | |
-| F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ❌ | ❌ | 5 | |
+| F1 | Boucle `getStats` et niveau de qualité | ✅ 5 s | ✅ 2 s | ✅ 2 s | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-call-quality.ts` · web `call-quality-loop.ts` (chaque lien, pire lien pour le niveau, #8047) |
+| F2 | Paliers d'encodage vidéo par pair | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | legacy `use-per-peer-video-tier.ts` · web `call-quality.ts` (`setParameters`, #8047) |
+| F3 | Indicateur de signal + détail (perte, latence, gigue, débits) | 🟡 glyphe | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | iOS `CallSignalGlyph.swift` · legacy `CallQualityOverlay.tsx` · web `call-quality.tsx` (#8047) |
+| F4 | `call:quality-report` émis, `call:quality-alert` affiché | ✅ | ✅ | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web : rapport horodaté ISO toutes les 5 s au plus, alerte du pair éteinte après 15 s (#8047) |
+| F5 | `call:analytics` en fin d'appel (codec, effets, sous-titres réels) | ✅ | 🟡 champs codés en dur | ✅ | 🟡 même code (WebView), non mesuré sur appareil | 5 | web `call-analytics.ts` : codec lu dans `getStats`, sous-titres comptés quand affichés (#8047) |
 | F6 | Note post-appel | ❌ | ❌ | ❌ | ❌ | — | |
 
 ### G. Sous-titres, transcription, traduction

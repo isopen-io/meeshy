@@ -1,11 +1,5 @@
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { apiDeps } from '@/lib/api/deps';
-import { sessionStore } from '@/lib/api/session';
-import { resolveViewer } from '@/lib/api/viewer';
-import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
-
 import {
   decodeAck,
   decodeCallId,
@@ -25,9 +19,8 @@ import {
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
-import { fetchActiveCallId } from './active-call';
-import { preferredInputs } from './call-devices';
-import { acquireCallMedia, acquireCamera, acquireDisplay, mediaFailureOf, stopStream, type Facing } from './call-media';
+import { analyticsPayload, createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample, type Telemetry } from './call-analytics';
+import { mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
   isCallLive,
@@ -43,9 +36,12 @@ import {
   type WaitingCall,
 } from './call-store';
 import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
-import { playCue, primeTones, startTone, stopTone } from './call-tones';
-import { currentCallTransport, listenCallEvents, type CallTransport } from './call-transport';
-import { createPeerLink, type LinkState, type OutgoingSignal, type PeerLink, type PeerLinkDeps } from './peer-link';
+import { peerAlert } from './call-peer-alerts';
+import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
+import type { playCue, primeTones, startTone, stopTone } from './call-tones';
+import { listenCallEvents, type CallTransport } from './call-transport';
+import { loadDefaultEngineDeps } from './engine-defaults';
+import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-link';
 
 /**
  * **LE MOTEUR D'APPEL DU WEB** (#6382, #3721) — la machine de
@@ -72,7 +68,8 @@ export const ACK_TIMEOUT_MS = 10_000;
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const ENDED_SCREEN_MS = 2_500;
 export const ENDED_RETRY_SCREEN_MS = 8_000;
-const QUALITY_INTERVAL_MS = 5_000;
+export const QUALITY_INTERVAL_MS = 2_000;
+export const QUALITY_REPORT_MS = 5_000;
 
 export type StartCallRequest = {
   readonly conversationId: string;
@@ -102,6 +99,11 @@ export type CallEngineDeps = {
   readonly stopRepeat: (handle: unknown) => void;
   readonly tones: { readonly start: typeof startTone; readonly stop: typeof stopTone; readonly cue: typeof playCue; readonly prime: typeof primeTones };
   readonly ringLabel: () => string;
+  readonly createQualityLoop: (deps: QualityLoopDeps) => QualityLoop;
+  /** Chaque changement de réseau (`online`, `navigator.connection`) — rend le désabonnement. */
+  readonly watchNetwork: (onChange: () => void) => () => void;
+  readonly platform: () => string;
+  readonly deviceModel: () => string;
   /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
   readonly random?: () => number;
 };
@@ -144,6 +146,10 @@ type Session = {
   lastQualityReport: number;
   retry: StartCallRequest | null;
   cameraBeforeShare: boolean;
+  loop: QualityLoop | null;
+  telemetry: Telemetry;
+  alertTimers: Map<string, unknown>;
+  unwatchNetwork: (() => void) | null;
   /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
   troubled: boolean;
 };
@@ -158,6 +164,10 @@ const emptySession = (): Session => ({
   lastQualityReport: 0,
   retry: null,
   cameraBeforeShare: false,
+  loop: null,
+  telemetry: createTelemetry(0),
+  alertTimers: new Map(),
+  unwatchNetwork: null,
   troubled: false,
 });
 
@@ -225,6 +235,11 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.heartbeat = null;
     if (session.qualityTimer !== null) deps.stopRepeat(session.qualityTimer);
     session.qualityTimer = null;
+    session.loop = null;
+    session.unwatchNetwork?.();
+    session.unwatchNetwork = null;
+    for (const timer of session.alertTimers.values()) deps.cancel(timer);
+    session.alertTimers.clear();
     incomingTimer = clear(incomingTimer);
   };
 
@@ -249,6 +264,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const call = read();
     if (call === null || call.phase.kind === 'ended') return;
     const retry = session.retry;
+    if (call.callId !== null) emit(CLIENT_EVENTS.CALL_ANALYTICS, analyticsPayload(session.telemetry, { callId: call.callId, now: deps.now(), isVideo: call.media === 'video', endReason: reason, platform: deps.platform(), deviceModel: deps.deviceModel() }));
     stopTimers();
     teardownMedia();
     deps.tones.stop();
@@ -281,6 +297,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       if (call.connectedAt === null) deps.tones.cue('connected');
       session.ringTimer = clear(session.ringTimer);
       write({ ...call, phase: { kind: 'connected' }, connectedAt: call.connectedAt ?? deps.now() });
+      session.telemetry = markConnected(session.telemetry, deps.now());
       startQuality();
       return;
     }
@@ -308,6 +325,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         micMuted: flags?.micMuted ?? current?.micMuted ?? false,
         cameraOn: flags?.cameraOn ?? current?.cameraOn ?? false,
         screenSharing: current?.screenSharing ?? false,
+        weakNetwork: current?.weakNetwork ?? false,
+        capturing: current?.capturing ?? false,
         link: current?.link ?? 'waiting',
       });
     });
@@ -331,6 +350,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     update((current) => patchMember(current, userId, { link: state }));
     const callId = call.callId;
     if (callId !== null && state === 'reconnecting' && before === 'connected') {
+      session.telemetry = markReconnecting(session.telemetry);
       emit(CLIENT_EVENTS.CALL_RECONNECTING, { callId, participantId: deps.viewerId(), attempt: 1 });
     }
     if (callId !== null && state === 'connected' && before === 'reconnecting') {
@@ -381,35 +401,46 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const startQuality = (): void => {
     if (session.qualityTimer !== null) return;
+    session.loop = deps.createQualityLoop({
+      links: () => [...session.links.entries()].map(([userId, link]) => [userId, link.connection()] as const),
+      wantsVideo: () => (localStream?.getVideoTracks().length ?? 0) > 0,
+      now: deps.now,
+    });
+    session.unwatchNetwork = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));
     session.qualityTimer = deps.repeat(() => void sampleQuality(), QUALITY_INTERVAL_MS);
   };
 
+  /** Un relevé : le niveau et la survie à l'écran, l'échantillon au rapport de fin, le rapport à la passerelle (5 s au plus). */
   const sampleQuality = async (): Promise<void> => {
-    const call = read();
-    const link = [...session.links.values()][0];
-    if (call === null || call.callId === null || link === undefined) return;
-    const pc = link.connection();
-    if (typeof pc.getStats !== 'function') return;
-    const report = await pc.getStats().catch(() => null);
-    if (report === null) return;
-    let rtt = 0;
-    let lost = 0;
-    let received = 0;
-    report.forEach((entry: Record<string, unknown>) => {
-      if (entry.type === 'candidate-pair' && entry.nominated === true && typeof entry.currentRoundTripTime === 'number') rtt = entry.currentRoundTripTime * 1000;
-      if (entry.type === 'inbound-rtp') {
-        lost += typeof entry.packetsLost === 'number' ? entry.packetsLost : 0;
-        received += typeof entry.packetsReceived === 'number' ? entry.packetsReceived : 0;
-      }
-    });
-    const packetLoss = received + lost === 0 ? 0 : (lost / (received + lost)) * 100;
-    const quality = rtt > 400 || packetLoss > 8 ? 'poor' : rtt > 250 || packetLoss > 3 ? 'fair' : 'good';
-    if (quality === 'poor') session.troubled = true;
-    update((current) => (current.quality === quality ? current : { ...current, quality }));
-    if (deps.now() - session.lastQualityReport < 10_000) return;
+    const loop = session.loop;
+    const callId = read()?.callId ?? null;
+    if (loop === null || callId === null) return;
+    const tick = await loop.tick();
+    if (tick === null || session.loop !== loop || read()?.callId !== callId) return;
+    const { total, stage, codec } = tick;
+    session.telemetry = withCodec(withSample(session.telemetry, total), codec);
+    update((current) => ({ ...current, quality: { level: total.level, packetLoss: total.packetLoss, rtt: total.rtt, jitter: total.jitter, audioKbps: total.audioKbps, videoKbps: total.videoKbps, survival: stage } }));
+    if (total.level === 'poor') session.troubled = true;
+    if (deps.now() - session.lastQualityReport < QUALITY_REPORT_MS) return;
     session.lastQualityReport = deps.now();
-    const level = quality === 'good' ? 'good' : quality === 'fair' ? 'fair' : 'poor';
-    emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, { callId: call.callId, stats: { packetLoss: Math.min(100, packetLoss), rtt: Math.round(rtt), level, timestamp: deps.now() } });
+    emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, qualityReport(callId, total, deps.now()));
+  };
+
+  const userOf = (userId: string | null, participantId: string | null): string | null => userId ?? (participantId === null ? null : (session.participantIds.get(participantId) ?? null));
+
+  const onPeerAlert = (event: string, payload: unknown): void => {
+    const alert = peerAlert(event, payload, userOf);
+    if (alert === null || read()?.callId !== alert.callId) return;
+    update((current) => patchMember(current, alert.userId, alert.patch));
+    if (alert.clearAfterMs === null) return;
+    clear(session.alertTimers.get(alert.userId) ?? null);
+    session.alertTimers.set(
+      alert.userId,
+      deps.schedule(() => {
+        session.alertTimers.delete(alert.userId);
+        update((current) => patchMember(current, alert.userId, { weakNetwork: false }));
+      }, alert.clearAfterMs),
+    );
   };
 
   const acquire = async (video: boolean, facing: Facing): Promise<MediaStream | null> => {
@@ -436,6 +467,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const joinExisting = async (request_: JoinCallRequest, callId: string): Promise<void> => {
     const token = generation;
+    session.telemetry = markNegotiating(session.telemetry, deps.now());
     const stream = await acquire(request_.media === 'video', 'user');
     if (stream === null || token !== generation) return;
     update((call) => ({ ...call, callId, localStream: stream, cameraOn: stream.getVideoTracks().length > 0, phase: { kind: 'connecting' } }));
@@ -454,6 +486,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     generation += 1;
     const token = generation;
     session.retry = callRequest;
+    session.telemetry = createTelemetry(deps.now());
     write(baseCall(callRequest, 'outgoing', { kind: 'outgoing' }));
     const stream = await acquire(callRequest.media === 'video', 'user');
     if (stream === null || token !== generation) return;
@@ -511,6 +544,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     generation += 1;
     const token = generation;
     session.retry = joinRequest;
+    session.telemetry = createTelemetry(deps.now());
     write(baseCall(joinRequest, 'outgoing', { kind: 'connecting' }));
     const callId = joinRequest.callId ?? (await deps.fetchActiveCallId(joinRequest.conversationId).catch(() => null));
     if (token !== generation) return;
@@ -537,6 +571,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     resetToIdle();
     generation += 1;
     session.iceServers = event.iceServers ?? [];
+    session.telemetry = createTelemetry(deps.now());
     write({
       ...baseCall({ conversationId: event.conversationId, media: event.media, title, avatar: event.isGroup ? null : event.initiator.avatar, isGroup: event.isGroup }, 'incoming', { kind: 'incoming' }),
       callId: event.callId,
@@ -558,6 +593,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     deps.tones.stop();
     incomingTimer = clear(incomingTimer);
     const token = generation;
+    session.telemetry = markNegotiating(session.telemetry, deps.now());
     write({ ...call, phase: { kind: 'connecting' } });
     const video = call.media === 'video' && options?.audioOnly !== true;
     const stream = await acquire(video, 'user');
@@ -602,6 +638,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (joined.person.userId === deps.viewerId()) return;
     if (joined.iceServers !== null) session.iceServers = joined.iceServers;
     remember(joined.person, joined.participantId, { micMuted: !joined.audio, cameraOn: joined.video });
+    session.telemetry = markNegotiating(session.telemetry, deps.now());
     const existing = session.links.get(joined.person.userId);
     if (existing !== undefined) {
       existing.close();
@@ -684,7 +721,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         const toggled = decodeMediaToggled(payload);
         const call = read();
         if (toggled === null || call === null || call.callId !== toggled.callId) return;
-        const userId = toggled.userId ?? (toggled.participantId === null ? null : (session.participantIds.get(toggled.participantId) ?? null));
+        const userId = userOf(toggled.userId, toggled.participantId);
         if (userId === null) return;
         const patch = toggled.mediaType === 'audio' ? { micMuted: !toggled.enabled } : toggled.mediaType === 'screen' ? { screenSharing: toggled.enabled } : { cameraOn: toggled.enabled };
         update((current) => patchMember(current, userId, patch));
@@ -702,12 +739,17 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         const call = read();
         if (segment === null || call === null || call.callId !== segment.callId) return;
         const speakerName = segment.speakerName ?? call.members[segment.speakerId]?.name ?? '';
+        if (call.captionsOn) session.telemetry = markCaptions(session.telemetry);
         update((current) => ({
           ...current,
           captions: withCaption(current.captions, { id: segment.id, speakerId: segment.speakerId, speakerName, text: segment.text, original: segment.original, isFinal: segment.isFinal, at: deps.now() }),
         }));
         return;
       }
+      case SERVER_EVENTS.CALL_QUALITY_ALERT:
+      case SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT:
+        onPeerAlert(event, payload);
+        return;
       default:
         return;
     }
@@ -852,6 +894,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     resetToIdle();
     generation += 1;
     const token = generation;
+    session.telemetry = createTelemetry(deps.now());
     write({
       ...baseCall({ conversationId: waiting.conversationId, media: waiting.media, title: waiting.title, avatar: waiting.callerAvatar, isGroup: waiting.isGroup }, 'incoming', { kind: 'connecting' }),
       callId: waiting.callId,
@@ -910,7 +953,11 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     toggleScreen,
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
-    toggleCaptions: () => update((call) => ({ ...call, captionsOn: !call.captionsOn })),
+    toggleCaptions: () => {
+      update((call) => ({ ...call, captionsOn: !call.captionsOn }));
+      const call = read();
+      if (call?.captionsOn === true && call.captions.length > 0) session.telemetry = markCaptions(session.telemetry);
+    },
     answerWaiting,
     declineWaiting,
     retry: async () => {
@@ -940,32 +987,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   };
 }
 
-/** Rend la liste des pistes d'un flux — dans un navigateur, un `MediaStream` neuf pour que l'écran relise. */
-function defaultCreateStream(tracks: readonly MediaStreamTrack[]): MediaStream {
-  return new MediaStream([...tracks]);
-}
-
 let singleton: CallEngine | null = null;
-
-export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
-  return {
-    transport: currentCallTransport,
-    viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
-    fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
-    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
-    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
-    acquireDisplay: () => acquireDisplay(),
-    createLink: createPeerLink,
-    createStream: defaultCreateStream,
-    now: Date.now,
-    schedule: (fn, ms) => setTimeout(fn, ms),
-    cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-    repeat: (fn, ms) => setInterval(fn, ms),
-    stopRepeat: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
-    tones: { start: startTone, stop: stopTone, cue: playCue, prime: primeTones },
-    ringLabel: () => translate(currentInterfaceLanguage(), 'call.incoming.title.tab'),
-  };
-}
 
 /** Le moteur du navigateur — construit une fois, au premier besoin. */
 export async function defaultCallEngine(): Promise<CallEngine> {

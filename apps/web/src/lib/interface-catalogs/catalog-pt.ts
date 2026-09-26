@@ -14,6 +14,7 @@ import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallsErase from './catalog-pt-calls-erase';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
+import ptCallQuality from './catalog-pt-call-quality';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
@@ -220,6 +221,7 @@ const pt = {
   ...ptCallsErase,
   ...ptCallDevices,
   ...ptCallScreen,
+  ...ptCallQuality,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',

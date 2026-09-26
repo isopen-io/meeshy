@@ -800,6 +800,18 @@ jobs:
           cd apps/web
           node scripts/check-calls-screen.mjs
 
+      # #8047 — la qualité d'un appel s'adapte au réseau et se voit : un pair de
+      # fixtures décroche un appel VIDÉO ; getStats est enveloppé pour simuler un
+      # réseau dégradé (20 % de perte, 600 ms). La vidéo se gèle puis se
+      # SUSPEND (le pair ne décode plus d'image), la voix continue chaque
+      # seconde, puis tout reprend ; indicateur et détail de qualité, alertes du
+      # pair, call:quality-report et call:analytics (codec réel).
+      - name: Gate qualité d'appel (paliers, survie vidéo, indicateur, alertes)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-quality.mjs
+
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
       # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
       # retirent la ligne et font baisser le compte de l'onglet ET du barreau au

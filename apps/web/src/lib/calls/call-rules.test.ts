@@ -14,7 +14,9 @@ import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statu
 
 afterEach(() => resetCallTransportForTests());
 
-const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
+const quality = (level: 'good' | 'poor', survival: 'sending' | 'frozen' | 'suspended' = 'sending') => ({ level, packetLoss: 0, rtt: 0, jitter: 0, audioKbps: 0, videoKbps: 0, survival });
+
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
 
 describe('décodage', () => {
   test('call:initiated : appelant, type, groupe', () => {
@@ -77,8 +79,13 @@ describe('ce que l’écran dit', () => {
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
-    expect(statusPills({ micMuted: true, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'poor', isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
-    expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'good', isGroup: true })).toEqual([]);
+    expect(statusPills({ micMuted: true, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('poor'), isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
+    expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('good'), isGroup: true })).toEqual([]);
+  });
+
+  test('pastilles de survie (#8047) : ma vidéo ralentie, puis en pause, tant que le réseau est faible', () => {
+    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('poor', 'frozen'), isGroup: false })).toEqual(['poor-network', 'video-frozen']);
+    expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('good', 'suspended'), isGroup: false })).toEqual(['video-suspended']);
   });
 
   test('la grille range les connectés d’abord, puis par nom', () => {

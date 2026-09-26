@@ -1,5 +1,8 @@
-import type { CallFeedbackPrompt } from './call-feedback';
+import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { createStore, type StoreApi } from 'zustand/vanilla';
+
+import type { CallFeedbackPrompt } from './call-feedback';
+import type { SurvivalStage } from './call-survival';
 
 /**
  * **L'ÉTAT D'UN APPEL** (#6382) — le magasin que lisent l'écran d'appel, la
@@ -33,6 +36,10 @@ export type CallMember = {
   readonly cameraOn: boolean;
   /** Le pair partage son écran (#8063) : sa piste vidéo porte l'écran, pas sa caméra. */
   readonly screenSharing: boolean;
+  /** La passerelle signale que SON lien reste dégradé (`call:quality-alert`, #8047) ; s'éteint seul. */
+  readonly weakNetwork: boolean;
+  /** Il capture l'écran de l'appel (`call:screen-capture-alert`, #8047). */
+  readonly capturing: boolean;
   readonly link: 'waiting' | 'connecting' | 'connected' | 'reconnecting';
 };
 
@@ -44,6 +51,20 @@ export type CallCaption = {
   readonly original: string;
   readonly isFinal: boolean;
   readonly at: number;
+};
+
+/**
+ * Ce que la boucle de qualité (`call-quality-loop.ts`, #8047) a lu au dernier
+ * relevé : le niveau du PIRE lien, son détail, et le stade de survie de MA vidéo.
+ */
+export type CallQuality = {
+  readonly level: ConnectionQualityLevel;
+  readonly packetLoss: number;
+  readonly rtt: number;
+  readonly jitter: number;
+  readonly audioKbps: number;
+  readonly videoKbps: number;
+  readonly survival: SurvivalStage;
 };
 
 /** `full` : l'écran d'appel ; `pill` : la pastille du haut ; `bubble` : la bulle déplaçable (`CallBubbleView.swift`). */
@@ -74,7 +95,7 @@ export type ActiveCall = {
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
   readonly captions: readonly CallCaption[];
   readonly captionsOn: boolean;
-  readonly quality: 'good' | 'fair' | 'poor' | null;
+  readonly quality: CallQuality | null;
 };
 
 export type WaitingCall = {
