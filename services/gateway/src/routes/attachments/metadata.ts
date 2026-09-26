@@ -21,6 +21,7 @@ import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInterna
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -449,16 +450,12 @@ export async function registerMetadataRoutes(
             description: 'Authentication required',
             ...errorResponseSchema
           },
-          403: {
-            description: 'Access denied to this conversation',
-            ...errorResponseSchema
-          },
           // #4856 — un invité anonyme dont le `participantId` de session ne
           // résout plus à aucune ligne (retiré entretemps) est un « je ne
           // trouve pas » sur SA PROPRE identité, pas un refus d'accès à un
           // tiers : rien à cacher.
           404: {
-            description: 'The anonymous participant this session was authenticated as no longer exists',
+            description: 'Conversation not found — or the caller is not a member (#8116: both answer the same) — or the anonymous participant this session was authenticated as no longer exists',
             ...errorResponseSchema
           },
           500: {
@@ -525,16 +522,17 @@ export async function registerMetadataRoutes(
           // session (son `participantId` de jeton), jamais celle d'un tiers
           // — son absence est un « je ne trouve pas ». La branche inscrite,
           // elle, cherche un membership sous l'identité de l'appelant dans
-          // CETTE conversation : rien ne distingue ici « pas membre » de
-          // « conversation inexistante », donc le 403 anti-énumération reste
-          // le bon statut, inchangé.
+          // CETTE conversation : rien n'y distingue « pas membre » de
+          // « conversation inexistante », et la réponse est celle de toute
+          // lecture d'une conversation (#8116) — le 404 d'une conversation
+          // introuvable, jamais un 403 qui dirait qu'elle existe.
           return isAnonymous
             ? sendNotFound(reply, 'Participant not found')
-            : sendForbidden(reply, 'Access denied to this conversation');
+            : refuserCommeIntrouvable(reply);
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {
-          return sendForbidden(reply, 'Access denied to this conversation');
+          return refuserCommeIntrouvable(reply);
         }
 
         // `participant.shareLinkId` et non la copie embarquée dans

@@ -5,6 +5,7 @@ import {
   isContactCardAttachment,
   normalizeContactCardMimeType,
   buildResolveContactsRequest,
+  contactCardNameFromFileName,
 } from '../vcard';
 
 const crlf = (lines: readonly string[]): string => lines.join('\r\n');
@@ -206,5 +207,20 @@ describe('buildResolveContactsRequest', () => {
     const lines = Array.from({ length: 14 }, (_, i) => `TEL:+3360000000${String(i).padStart(2, '0')}`);
     const card = parseVCard(['BEGIN:VCARD', 'FN:X', ...lines, 'END:VCARD'].join('\n'));
     expect(card && buildResolveContactsRequest(card).phones).toHaveLength(10);
+  });
+});
+
+describe('contactCardNameFromFileName — le nom humain d’une carte (#8148)', () => {
+  it('décape le préfixe technique contact_<UUID>_ et l’extension', () => {
+    expect(contactCardNameFromFileName('contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf')).toBe('Zoé Sanscompte');
+  });
+
+  it('garde le nom d’un fichier nommé par son auteur', () => {
+    expect(contactCardNameFromFileName('Marc Dupont.VCARD')).toBe('Marc Dupont');
+  });
+
+  it('rend null quand il ne reste aucun nom', () => {
+    expect(contactCardNameFromFileName('')).toBeNull();
+    expect(contactCardNameFromFileName('contact_80140BD0-3D81-42CA-B339-E67D81528456_.vcf')).toBeNull();
   });
 });

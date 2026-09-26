@@ -269,7 +269,7 @@ describe('GET /conversations/:conversationId/links', () => {
     return { prisma, reply, route };
   }
 
-  it('returns 403 when user is not a member — jamais quand un AUTRE membre existe (#5191)', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member — jamais quand un AUTRE membre existe (#5191, #8116)', async () => {
     const { prisma, reply, route } = getLinksRoute();
     // Aucune ligne pour `USER_ID` : seul un `where` honorant `userId` peut
     // légitimement rendre `null` — un `where` qui l'aurait perdu trouverait
@@ -281,7 +281,8 @@ describe('GET /conversations/:conversationId/links', () => {
     );
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('moderator sees all links (aucun filtre createdBy)', async () => {

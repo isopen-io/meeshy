@@ -8,18 +8,11 @@ import MeeshySDK
 /// souvent en `application/octet-stream` — quand son nom finit en `.vcf` /
 /// `.vcard`. Miroir de `isContactCardAttachment` (`packages/shared/utils/vcard.ts`).
 enum ContactCardMime {
-    static let mimeType = "text/vcard"
-    static let fileExtension = "vcf"
-
-    private static let aliases: Set<String> = ["text/vcard", "text/x-vcard", "text/directory"]
-    private static let extensions: Set<String> = ["vcf", "vcard"]
+    static let mimeType = ContactCardFile.mimeType
+    static let fileExtension = ContactCardFile.fileExtension
 
     static func isContactCard(mimeType: String, fileName: String) -> Bool {
-        let bare = mimeType.split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
-        if aliases.contains(bare) { return true }
-        guard bare.isEmpty || bare == "application/octet-stream" || bare.hasPrefix("text/") else { return false }
-        let ext = (fileName as NSString).pathExtension.lowercased()
-        return extensions.contains(ext)
+        ContactCardFile.isContactCard(mimeType: mimeType, fileName: fileName)
     }
 }
 
@@ -27,20 +20,11 @@ enum ContactCardMime {
 ///
 /// Avant #8142 le composer téléversait `contact_<UUID>_<nom>.vcf` : le préfixe
 /// technique voyageait jusqu'à VoiceOver. Les messages déjà envoyés le gardent,
-/// d'où ce décapage — le nom tel que l'auteur l'a nommé, jamais l'UUID.
+/// d'où ce décapage — le nom tel que l'auteur l'a nommé, jamais l'UUID. Le
+/// site unique est au SDK (`ContactCardFile`), que la ligne d'aperçu lit aussi.
 enum ContactCardName {
-    private static let temporaryPrefix = try! NSRegularExpression(
-        pattern: "^contact_[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}_"
-    )
-
     static func fromFileName(_ fileName: String) -> String? {
-        let lowered = fileName.lowercased()
-        let suffix = [".vcf", ".vcard"].first(where: lowered.hasSuffix)
-        let base = suffix.map { String(fileName.dropLast($0.count)) } ?? fileName
-        let range = NSRange(base.startIndex..., in: base)
-        let stripped = temporaryPrefix.stringByReplacingMatches(in: base, range: range, withTemplate: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return stripped.isEmpty ? nil : stripped
+        ContactCardFile.displayName(fromFileName: fileName)
     }
 }
 

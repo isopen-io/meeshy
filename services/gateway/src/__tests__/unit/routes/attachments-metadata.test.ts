@@ -438,9 +438,10 @@ describe('GET /conversations/:id/attachments — authenticated not member', () =
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when user is not a conversation member', async () => {
+  it('returns the 404 of an unknown conversation when user is not a member (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
   });
 });
 
@@ -503,9 +504,10 @@ describe('GET /conversations/:id/attachments — anonymous wrong conversation', 
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when participant belongs to a different conversation', async () => {
+  it('returns the 404 of an unknown conversation when participant belongs to a different one (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
   });
 });
 

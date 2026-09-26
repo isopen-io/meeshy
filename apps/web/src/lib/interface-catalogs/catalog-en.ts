@@ -10,6 +10,7 @@ import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
 import enCallDecline from './catalog-en-call-decline';
 import enCallFeedback from './catalog-en-call-feedback';
+import enCallsErase from './catalog-en-calls-erase';
 import enCallDevices from './catalog-en-call-devices';
 import enCallScreen from './catalog-en-call-screen';
 import enSignup from './catalog-en-signup';
@@ -210,6 +211,7 @@ const en = {
   ...enCallJoin,
   ...enCallDecline,
   ...enCallFeedback,
+  ...enCallsErase,
   ...enCallDevices,
   ...enCallScreen,
   ...enSignup,

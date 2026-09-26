@@ -99,6 +99,13 @@ public final class ConversationCardService: ConversationCardServiceProviding, @u
         _ = entries.withLock { $0.removeValue(forKey: target) }
     }
 
+    /// Oublie toutes les cartes et tous les verdicts : appelé par
+    /// `CacheCoordinator.reset()` au logout et au changement de compte (#8120),
+    /// sans quoi le compte B verrait la carte résolue pour le compte A.
+    public func invalidateAll() {
+        entries.withLock { $0.removeAll() }
+    }
+
     public func invalidate(conversationId: String, from origin: ConversationCardTarget) {
         entries.withLock { entries in
             entries = entries.filter { target, entry in

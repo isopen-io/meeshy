@@ -10,6 +10,7 @@ import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
+import deCallsErase from './catalog-de-calls-erase';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
 import deSignup from './catalog-de-signup';
@@ -210,6 +211,7 @@ const de = {
   ...deCallJoin,
   ...deCallDecline,
   ...deCallFeedback,
+  ...deCallsErase,
   ...deCallDevices,
   ...deCallScreen,
   ...deSignup,

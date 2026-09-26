@@ -31,6 +31,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
@@ -43,6 +44,10 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
  */
+const REFUS_DES_EPINGLES = {
+  sansSession: 'Authentication required to read the pinned messages of this conversation'
+} as const;
+
 export function registerMessagePinRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -362,14 +367,15 @@ export function registerMessagePinRoutes(
       // coercion) would otherwise reach Prisma as `take: NaN` → HTTP 500.
       const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DES_EPINGLES
+      });
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
-      }
-
-      const hasAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!hasAccess) {
-        return sendForbidden(reply, 'Access denied');
+        return;
       }
 
       // Une épingle est posée pour TOUT le monde, mais elle ne rend pas au

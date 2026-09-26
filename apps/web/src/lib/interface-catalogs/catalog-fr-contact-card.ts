@@ -18,6 +18,7 @@ const frContactCard = {
   'contactCard.state.requestSent': 'Demande envoyée',
   'contactCard.state.requestReceived': 'Vous a envoyé une demande',
   'contactCard.sheet.title': 'Carte de visite',
+  'contactCard.shared': 'Contact partagé',
   'contactCard.close': 'Fermer',
   'contactCard.copy': 'Copier : {field}',
   'contactCard.copied': 'Copié dans le presse-papiers',
