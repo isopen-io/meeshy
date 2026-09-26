@@ -375,7 +375,11 @@ export const parseCatalogBlock = (blockLines) => {
 // la carte de conversation ; son client web
 // (`apps/web/src/lib/api/conversation-card.ts`) écrit les deux adresses en
 // littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 474;
+// 474 → 475 (#8066) : `calls.historyByCallId` — effacer une ligne du journal
+// d'appels ; son client web (`apps/web/src/lib/api/call-history-actions.ts`)
+// écrit l'adresse en littéral, comme tout `apps/web`, jusqu'à #7716. Valeur
+// MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 475;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
