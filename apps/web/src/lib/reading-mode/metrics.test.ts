@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
+import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
+
 import {
   FOCUS_CARD_HORIZONTAL_INSET,
+  FOCUS_CARD_MARGIN_VERTICAL,
+  FOCUS_CARD_RADIUS,
+  FOCUS_LOUPE_GAIN,
+  SCENE_FLATTEN_DURATION_MS,
   FOCUS_CHIP_HEIGHT,
   IDENTITY_CHIP_HEIGHT,
   IDENTITY_OVERHANG,
@@ -28,8 +34,6 @@ import {
 describe('sceneStyleVars', () => {
   test('rend les cotes attendues, calculées depuis les constantes dérivées', () => {
     expect(sceneStyleVars()).toEqual({
-      '--focus-fill-dark': '0.16',
-      '--focus-fill-light': '0.1',
       '--focus-chip-fill-dark': '0.18',
       '--focus-chip-fill-light': '0.14',
       '--focus-card-radius': '18px',
@@ -44,6 +48,8 @@ describe('sceneStyleVars', () => {
       '--focus-text-indent': '41px',
       '--focus-identity-overhang': '20px',
       '--focus-strip-overhang': '15px',
+      '--unfold-dim': '0.62',
+      '--unfold-enter-ms': '250ms',
     });
   });
 
@@ -56,5 +62,17 @@ describe('sceneStyleVars', () => {
     // (gouttière d'avatar comprise) est la cote de la rangée elle-même, pas
     // un nombre à part — correction de revue #5648.
     expect(vars['--focus-text-indent']).toBe(`${TEXT_INDENT}px`);
+  });
+});
+
+describe('les cotes du Focal dérivées de Swift égalent la loi partagée (#8147)', () => {
+  test('rayon, débords, marge et gain de loupe, aplatissement', () => {
+    expect(FOCAL_METRICS.glassRadius).toBe(FOCUS_CARD_RADIUS);
+    expect(FOCAL_METRICS.glassHorizontalInset).toBe(FOCUS_CARD_HORIZONTAL_INSET);
+    expect(FOCAL_METRICS.glassVerticalInset).toBe(ROW_PADDING_VERTICAL);
+    expect(FOCAL_METRICS.loupeMarginVertical).toBe(FOCUS_CARD_MARGIN_VERTICAL);
+    expect(FOCAL_METRICS.loupeMarginHorizontal).toBe(ROW_PADDING_HORIZONTAL);
+    expect(FOCAL_METRICS.loupeGain).toBe(FOCUS_LOUPE_GAIN);
+    expect(FOCAL_METRICS.flattenDurationMs).toBe(SCENE_FLATTEN_DURATION_MS);
   });
 });

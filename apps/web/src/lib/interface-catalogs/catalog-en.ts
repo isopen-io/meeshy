@@ -5,6 +5,7 @@ import enMediaHub from './catalog-en-media-hub';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
+import enRowActions from './catalog-en-row-actions';
 import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
 import enCallDevices from './catalog-en-call-devices';
@@ -202,6 +203,7 @@ const en = {
   ...enVerifyEmail,
   ...enPassword,
   ...enCall,
+  ...enRowActions,
   ...enCallShell,
   ...enCallJoin,
   ...enCallDevices,
@@ -1027,6 +1029,8 @@ const en = {
 
   'thread.unread-separator.one': '{count} unread message',
   'thread.unread-separator.other': '{count} unread messages',
+  'thread.long-message.read-more': 'Read more',
+  'thread.long-message.collapse': 'Show less',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',

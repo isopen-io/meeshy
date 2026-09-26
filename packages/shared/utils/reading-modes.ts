@@ -51,7 +51,7 @@ export const ORCHESTRATOR_ABSENCE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * `'bubbles'` n'appartenant à AUCUN catalogue drapeau-on
  * (`FLAG_DISABLED_AVAILABLE_MODES` est le seul à le porter), un `bulles`
  * mémorisé passe systématiquement par `clampToCapabilities` et ressort en
- * `focal`/`'clamped-unavailable'` — le traitement EXACT d'un `riviere`
+ * `script`/`'clamped-unavailable'` — le traitement EXACT d'un `riviere`
  * mémorisé hors catalogue. Rien de neuf n'est atteignable ; ce qui change,
  * c'est qu'un choix jusque-là INEXPRIMABLE a maintenant un nom, donc une
  * persistance unique et une raison de clamp honnête au lieu d'un `undefined`
@@ -102,17 +102,21 @@ const isReaderAbsent = (lastOpenedAt: Date | string | number | null, nowMs: numb
 };
 
 /**
- * Repli du clamp : `'focal'` est le PLANCHER de la loi, présent dans tous les
+ * Repli du clamp ET mode par défaut : `'script'` (directive porteur
+ * 2026-09-26, #8147 — « ce ne doit plus être le mode par défaut, mais le
+ * mode Script »). Focal reste choisissable ; un choix collant mémorisé est
+ * conservé tel quel, et « auto » n'ayant aucune clé stockée, aucune
+ * migration n'est nécessaire. `'script'` est présent dans tous les
  * catalogues drapeau-on (`REGISTERED_AVAILABLE_MODES`,
- * `ANONYMOUS_AVAILABLE_MODES`). C'est aussi pourquoi la branche par défaut
- * n'est pas clampée : elle rend déjà le repli, et se clamper soi-même serait
+ * `ANONYMOUS_AVAILABLE_MODES`) : c'est pourquoi la branche par défaut n'est
+ * pas clampée — elle rend déjà le repli, et se clamper soi-même serait
  * circulaire.
  */
-const CLAMP_FALLBACK_MODE: ConversationReadingMode = 'focal';
+export const CLAMP_FALLBACK_MODE: ConversationReadingMode = 'script';
 
 /**
  * Borne une décision naturelle au catalogue du lecteur. Hors catalogue ⇒
- * repli `'focal'` avec sa raison dédiée, pour que l'encoche « AUTO · … » dise
+ * repli `'script'` avec sa raison dédiée, pour que l'encoche « AUTO · … » dise
  * la vérité : le mode n'a pas été choisi, il a été rabattu.
  */
 const clampToCapabilities = (
@@ -132,7 +136,7 @@ const clampToCapabilities = (
  *    clampée** : `'bubbles'` est hors catalogue par définition — drapeau
  *    éteint, `resolveCapabilities` rend `['bubbles']` et rien d'autre, et le
  *    catalogue drapeau-on ne le contient jamais. Le clamper reviendrait à
- *    rendre `'focal'` à un client qui n'a pas la Lentille.
+ *    rendre `'script'` à un client qui n'a pas la Lentille.
  * 2. `stickyChoice !== 'auto'` → il gagne TOUJOURS, sur les trois branches
  *    numériques qui suivent, y compris `unreadCount > 25` — mais il est
  *    CLAMPÉ (un `riviere` mémorisé ne ressuscite pas un mode retiré du
@@ -141,11 +145,11 @@ const clampToCapabilities = (
  * 4. absence (> 24 h depuis `lastOpenedAt`, ou jamais ouverte) ET
  *    `unreadCount >= 10` → `'summary'`, clampé.
  * 5. défaut (`unreadCount <= 25`, lecteur présent ou peu de non-lus) →
- *    `'focal'` + pont ✦.
+ *    `'script'` + pont ✦ (Focal jusqu'au 2026-09-26, #8147).
  *
  * INVARIANT (REV-1, blocage 3) : drapeau on, le mode rendu appartient
  * TOUJOURS à `capabilities.availableModes`. Un invité à 26 non-lus reçoit
- * `focal`/`'clamped-unavailable'`, jamais un Résumé Vivant qui s'ouvrirait
+ * `script`/`'clamped-unavailable'`, jamais un Résumé Vivant qui s'ouvrirait
  * sur un 403.
  */
 export function resolveOrchestratorDecision(input: OrchestratorDecisionInput): OrchestratorDecision {

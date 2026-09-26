@@ -46,7 +46,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  */
 
 export function FocusCard() {
-  return <div className="focus-card" aria-hidden />;
+  return <div className="glass glass-card focus-card" aria-hidden />;
 }
 
 export function FocusIdentity({

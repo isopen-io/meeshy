@@ -56,6 +56,8 @@ final class ScreenSharePickerLauncher {
         return view
     }()
 
+    nonisolated deinit {}
+
     /// Arrête le partage en cours, sinon ouvre la feuille — après avoir mis
     /// l'app en écoute : l'extension lancée sans app pour la recevoir
     /// s'arrêterait aussitôt.

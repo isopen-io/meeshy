@@ -38,25 +38,40 @@ export type RowMenuItem = {
 /**
  * APPELER DEPUIS LA LIGNE (#8109) — iOS offre « Appeler » au menu contextuel
  * d'une ligne (`ConversationListView+Overlays.swift`) ; le web y pose les deux
- * gestes de son bouton d'appel du fil, vocal et vidéo. `call` absent ⇒ l'appel
- * n'est pas permis (invité anonyme) et aucune entrée ne s'affiche.
+ * gestes de son bouton d'appel du fil, vocal et vidéo. `canCall` faux ⇒ l'appel
+ * n'est pas permis (invité anonyme) et aucune entrée ne s'affiche. Chaque
+ * libellé passe par le catalogue d'interface, dans la langue du lecteur (#8150).
  */
+type RowMenuLabelKey =
+  | 'call.action.audio'
+  | 'call.action.video'
+  | 'rowActions.pin'
+  | 'rowActions.unpin'
+  | 'rowActions.mute'
+  | 'rowActions.unmute'
+  | 'rowActions.read'
+  | 'rowActions.unread'
+  | 'rowActions.archive'
+  | 'rowActions.unarchive';
+
 export function rowMenuItems(params: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
-  readonly call?: { readonly language: InterfaceLanguage };
+  readonly language: InterfaceLanguage;
+  readonly canCall?: boolean;
 }): readonly RowMenuItem[] {
-  const { flags, unread, call } = params;
+  const { flags, unread, language, canCall = false } = params;
+  const label = (key: RowMenuLabelKey) => translate(language, key);
   return [
-    ...(call === undefined
-      ? []
-      : [
-          { id: 'callAudio', label: translate(call.language, 'call.action.audio'), glyph: 'phone' } as const,
-          { id: 'callVideo', label: translate(call.language, 'call.action.video'), glyph: 'videoCamera' } as const,
-        ]),
-    { id: 'pin', label: flags.isPinned ? 'Désépingler' : 'Épingler', glyph: 'pushPin' },
-    { id: 'mute', label: flags.isMuted ? 'Son' : 'Silence', glyph: flags.isMuted ? 'bell' : 'bellSlash' },
-    { id: 'read', label: unread ? 'Lu' : 'Non lu', glyph: 'envelopeOpen' },
-    { id: 'archive', label: flags.isArchived ? 'Désarchiver' : 'Archiver', glyph: 'archive' },
+    ...(canCall
+      ? [
+          { id: 'callAudio', label: label('call.action.audio'), glyph: 'phone' } as const,
+          { id: 'callVideo', label: label('call.action.video'), glyph: 'videoCamera' } as const,
+        ]
+      : []),
+    { id: 'pin', label: label(flags.isPinned ? 'rowActions.unpin' : 'rowActions.pin'), glyph: 'pushPin' },
+    { id: 'mute', label: label(flags.isMuted ? 'rowActions.unmute' : 'rowActions.mute'), glyph: flags.isMuted ? 'bell' : 'bellSlash' },
+    { id: 'read', label: label(unread ? 'rowActions.read' : 'rowActions.unread'), glyph: 'envelopeOpen' },
+    { id: 'archive', label: label(flags.isArchived ? 'rowActions.unarchive' : 'rowActions.archive'), glyph: 'archive' },
   ];
 }

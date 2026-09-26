@@ -39,7 +39,7 @@ import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
-import { RichText } from './rich-text';
+import { LongMessageText } from './long-message-text';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
@@ -570,7 +570,8 @@ export const FocalRow = memo(function FocalRow({
            DEUX côtés à la fois : soit le libellé porte le texte (et ce masque
            reste juste), soit le DOM le rend pour cet état — jamais les deux,
            jamais aucun. */
-        <RichText
+        <LongMessageText
+          messageId={message.id}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
@@ -706,7 +707,7 @@ export const FocalRow = memo(function FocalRow({
           « à elle » l'espace que la superposition vient occuper). Sur une
           rangée de CONTINUATION (sans tête), le débordement reste possible
           — écart hors périmètre de #5648, à suivre si mesuré. */}
-      <div className="min-w-0 relative">
+      <div className="min-w-0 relative isolate">
         {elected ? <FocusCard /> : null}
         {elected ? (
           <FocusIdentity

@@ -186,12 +186,11 @@ nonisolated enum FocalScrollPerspective {
     /// à l'intérieur de la carte, pas d'agrandir la carte — ce qui touche la
     /// hauteur de rangée et sort du périmètre.
     static let focusCardInnerMargin: CGFloat = FocalMetrics.Row.paddingVertical
-    /// Teintes de la carte et de ses chips (fond SwiftUI de la rangée en
-    /// focus) — nommées ici, dans `Core/`, parce que le garde des littéraux
-    /// de loi (`scripts/check-law-literals.sh`) interdit `0.45`/`0.40`/`0.35`
-    /// en dur dans les fichiers de peau.
-    static let focusCardFillOpacityDark: Double = 0.16
-    static let focusCardFillOpacityLight: Double = 0.10
+    /// Teintes des chips posées sur le bloc de verre — nommées ici, dans
+    /// `Core/`, parce que le garde des littéraux de loi
+    /// (`scripts/check-law-literals.sh`) les interdit en dur dans les peaux.
+    /// Le bloc lui-même est du VERRE depuis #8147 (`FocalGlassBlock`) : il n'a
+    /// plus d'alpha de remplissage à lui.
 
     /// Teinte de fond d'une chip posée sur la carte.
     ///
@@ -218,10 +217,6 @@ nonisolated enum FocalScrollPerspective {
         return UIEdgeInsets(top: max(0, top), left: focusCardHorizontalInset, bottom: max(0, bottom), right: focusCardHorizontalInset)
     }
 
-    /// Fond teinté du message en focus — une `UIView` à masque d'auto-
-    /// redimensionnement, insérée SOUS le contenu SwiftUI de la cellule :
-    /// elle suit les bounds de la cellule à chaque layout sans attendre un
-    /// tick. Purement décorative : aucun hit-test, aucune contrainte.
     /// Étiquette de cellule : 1 = la rangée est en TÊTE de groupe (elle porte
     /// `Row.groupTopPadding`), 0 sinon — écrite à la configuration, lue par la
     /// passe pour encadrer la carte avec les bonnes marges.
@@ -236,46 +231,6 @@ nonisolated enum FocalScrollPerspective {
     static func isGroupHead(cellTag: Int) -> Bool { cellTag & groupHeadCellTag != 0 }
 
     static func showsFocusDetails(cellTag: Int) -> Bool { cellTag & focusDetailsCellTag != 0 }
-
-    @MainActor
-    final class FocusCardView: UIView {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            isUserInteractionEnabled = false
-            autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            layer.cornerRadius = FocalScrollPerspective.focusCardCornerRadius
-            layer.cornerCurve = .continuous
-        }
-        required init?(coder: NSCoder) { nil }
-    }
-
-    @MainActor
-    static func focusCard(in contentView: UIView) -> FocusCardView? {
-        contentView.subviews.first { $0 is FocusCardView } as? FocusCardView
-    }
-
-    @MainActor
-    static func showFocusCard(in contentView: UIView, accent: UIColor, isDark: Bool, isFirstInGroup: Bool) {
-        let insets = focusCardInsets(isFirstInGroup: isFirstInGroup)
-        let card = focusCard(in: contentView) ?? {
-            let view = FocusCardView(frame: contentView.bounds.inset(by: insets))
-            contentView.insertSubview(view, at: 0)
-            return view
-        }()
-        card.frame = contentView.bounds.inset(by: insets)
-        card.alpha = 1
-        card.backgroundColor = accent.withAlphaComponent(isDark ? focusCardFillOpacityDark : focusCardFillOpacityLight)
-    }
-
-    @MainActor
-    static func hideFocusCard(in contentView: UIView) {
-        focusCard(in: contentView)?.removeFromSuperview()
-    }
 
     /// Échelle de LOUPE du message élu (directive porteur 2026-09-15, #6586).
     /// L'élu seul grandit, autour de son centre ; ses voisins restent à plat
