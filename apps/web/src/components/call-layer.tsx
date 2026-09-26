@@ -29,10 +29,17 @@ const CallResumeBanner = lazy(() =>
   Promise.all([import('./call-resume-banner'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
 );
 
+/* La note d'après-appel (#8072) : son chunk, chargé quand une note est
+   demandée, avec le catalogue comme la bannière « Reprendre ». */
+const CallFeedbackLayer = lazy(() =>
+  Promise.all([import('./call-feedback-layer'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
+
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
   const hasCall = useStore(callStore, (state) => state.call !== null);
   const bubble = useStore(callStore, (state) => state.call?.display === 'bubble');
+  const rating = useStore(callStore, (state) => state.feedback !== null && state.call === null);
   return (
     <>
       <Suspense fallback={null}>
@@ -41,6 +48,11 @@ export function CallLayer() {
       {active ? (
         <Suspense fallback={null}>
           <CallOverlay />
+        </Suspense>
+      ) : null}
+      {rating ? (
+        <Suspense fallback={null}>
+          <CallFeedbackLayer />
         </Suspense>
       ) : null}
       {hasCall ? (
