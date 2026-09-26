@@ -2,6 +2,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response.js';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
+import {
+  countContactIdentifiers,
+  refuseContactIdentifierBudget,
+  spendContactIdentifierBudget,
+} from '../../utils/contact-identifier-budget';
 import { ContactDirectoryService, type SyncMode } from '../../services/ContactDirectoryService';
 import type { AuthenticatedRequest } from '../users/types';
 
@@ -58,6 +63,9 @@ export async function synchroniser(
 
     const totalContacts = body.contacts.length;
     const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
+
+    const budget = await spendContactIdentifierBudget(fastify, moi, countContactIdentifiers(contacts));
+    if (!budget.allowed) return refuseContactIdentifierBudget(reply, budget.retryAfter);
 
     const tronque = totalContacts > MAX_CONTACTS_PER_SYNC;
     if (tronque) {

@@ -20,7 +20,7 @@ jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
 jest.mock('../../../../utils/rate-limiter.js', () => ({
-  createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),
+  createCustomRateLimiter: () => ({ middleware: () => async () => undefined, consume: async () => null }),
 }));
 
 import { directoryContactsRoutes, LIMITE_MAX_CONTACTS } from '../../../../routes/directory/contacts';
@@ -54,6 +54,10 @@ function prismaDouble() {
       deleteMany: jest.fn<any>(async () => ({ count: 2 })),
       upsert: jest.fn<any>(async () => ({})),
     },
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
       findMany: jest.fn<any>(async () => []),

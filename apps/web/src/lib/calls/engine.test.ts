@@ -36,7 +36,7 @@ const stream = (tracks: readonly FakeTrack[]): MediaStream => {
   return fake as unknown as MediaStream;
 };
 
-type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[] };
+type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
 function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error } = {}) {
   resetCallTransportForTests();
@@ -76,11 +76,12 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
         offers: 0,
         closed: false,
         received: [],
+        sent: [],
         offer: async () => void (link.offers += 1),
         receiveDescription: async (description) => void link.received.push(description.type),
         receiveCandidate: async () => void link.received.push('candidate'),
-        setVideoTrack: async () => undefined,
-        setAudioTrack: async () => undefined,
+        setVideoTrack: async (sent) => void link.sent.push(sent),
+        setAudioTrack: async (sent) => void link.sent.push(sent),
         setIceServers: () => undefined,
         connection: () => ({}) as RTCPeerConnection,
         close: () => void (link.closed = true),
@@ -359,6 +360,57 @@ describe('en appel', () => {
       h.engine.handle(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, { callId: 'call-1', segment: { id: `s${n}`, speakerId: PEER, text: `line ${n}`, translatedText: `phrase ${n}`, startMs: n, endMs: n + 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr' } });
     }
     expect(h.call()?.captions.map((caption) => caption.text)).toEqual(['phrase 2', 'phrase 3', 'phrase 4']);
+  });
+
+  test('éteindre la caméra repasse l’appel en vocal, sans le couper, et le pair l’apprend (D3)', async () => {
+    const h = await connected();
+    await h.engine.toggleCamera();
+    await h.engine.toggleCamera();
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([]);
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: 'call-1', enabled: false }]);
+  });
+
+  test('changer de micro remplace la piste sur chaque lien, relâche l’ancienne et garde le micro coupé (D5)', async () => {
+    const h = await connected();
+    h.engine.toggleMic();
+    const old = h.call()?.localStream?.getAudioTracks()[0] as unknown as FakeTrack;
+    const next = track('audio');
+    await h.engine.replaceInput('microphone', next as unknown as MediaStreamTrack);
+    expect(h.call()?.localStream?.getAudioTracks()).toEqual([next] as unknown as MediaStreamTrack[]);
+    expect(next.enabled).toBe(false);
+    expect(old.readyState).toBe('ended');
+    expect(h.links[0]?.sent.at(-1)).toBe(next);
+  });
+
+  test('changer de caméra quand elle tourne remplace la piste vidéo ; caméra éteinte, le choix ne l’allume pas (D5)', async () => {
+    const h = await connected();
+    const idle = track('video');
+    await h.engine.replaceInput('camera', idle as unknown as MediaStreamTrack);
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(idle.readyState).toBe('ended');
+    await h.engine.toggleCamera();
+    const chosen = track('video');
+    await h.engine.replaceInput('camera', chosen as unknown as MediaStreamTrack);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([chosen] as unknown as MediaStreamTrack[]);
+    expect(h.call()?.facing).toBe('user');
+    expect(h.links[0]?.sent.at(-1)).toBe(chosen);
+  });
+
+  test('un périphérique choisi sans appel vivant est relâché aussitôt', async () => {
+    const h = harness();
+    const stray = track('audio');
+    await h.engine.replaceInput('microphone', stray as unknown as MediaStreamTrack);
+    expect(stray.readyState).toBe('ended');
+    expect(h.call()).toBeNull();
+  });
+
+  test('la bulle est un affichage réduit comme la pastille : l’appel continue', async () => {
+    const h = await connected();
+    h.engine.setDisplay('bubble');
+    expect(h.call()?.display).toBe('bubble');
+    expect(h.call()?.phase.kind).toBe('connected');
   });
 
   test('réduire puis agrandir ne touche pas à l’appel', async () => {

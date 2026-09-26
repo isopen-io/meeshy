@@ -477,11 +477,10 @@ extension ConversationSyncEngine {
 
     /// #8095 — un message supprimé ou échu quitte l'INDEX des médias : la
     /// galerie feuillette aussi les messages hors de la fenêtre chargée, et y
-    /// retrouver une photo retirée serait une fuite, pas un cache.
+    /// retrouver une photo retirée serait une fuite, pas un cache. #8103 — de
+    /// TOUS les genres de l'index (documents, liens, audios…).
     private func dropFromMediaIndex(conversationId: String, messageId: String) async {
-        await cache.conversationMedia.update(for: conversationId) { carriers in
-            carriers.filter { $0.id != messageId }
-        }
+        await cache.dropFromConversationMedia(conversationId: conversationId, messageId: messageId)
     }
 
     /// `message:expired` — même effet local que la suppression : contenu vidé,

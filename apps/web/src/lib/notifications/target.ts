@@ -48,6 +48,7 @@ export type NotificationTarget =
   | { readonly route: 'thread'; readonly params: { readonly conversation: string } }
   | { readonly route: 'story' | 'post'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
+  | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
   | { readonly route: 'progression' | 'settings' };
 
 /**
@@ -77,6 +78,13 @@ export type NotificationTargetInput = {
   readonly contentType?: string | undefined;
   readonly friendRequestId?: string | undefined;
   /**
+   * Le pseudonyme de l'ACTEUR — `senderUsername` est la clé que la passerelle
+   * pose sur la carte `data` (`NotificationService.createNotification`) ; la
+   * cloche le lit sur `actor.username`. Il ne route que les types qui
+   * annoncent une PERSONNE (`PROFILE_TYPES`).
+   */
+  readonly senderUsername?: string | undefined;
+  /**
    * L'indice de ROUTE posé par la passerelle pour les notifications de
    * réengagement. Son propre commentaire dit QUAND il le pose : « quand la
    * notification ne porte ni conversation ni contenu social ». Il prime donc
@@ -105,6 +113,12 @@ const EPHEMERAL_ONLY_TYPES: ReadonlySet<string> = new Set([
  * la bonne destination — on peut désormais écrire.
  */
 const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_request']);
+
+/**
+ * Les types qui annoncent une PERSONNE (#8105) : « X a rejoint Meeshy » ouvre
+ * le profil de l'arrivant, où l'on trouve « Se connecter » et « Écrire ».
+ */
+const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined']);
 
 const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
   'achievement_unlocked',
@@ -168,6 +182,9 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
   const type = present(input.type);
   if (present(input.friendRequestId) !== '' || REQUEST_TYPES.has(type)) return DISCOVER_REQUESTS;
 
+  const username = present(input.senderUsername);
+  if (PROFILE_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
+
   const indice = hinted(present(input.route));
   if (indice !== null) return indice;
 
@@ -185,6 +202,7 @@ export function notificationTarget(notification: NotificationRecord): Notificati
     postType: notification.metadata.postType,
     contentType: notification.metadata.contentType,
     friendRequestId: notification.context.friendRequestId,
+    senderUsername: notification.actor?.username,
   });
   /* La cloche ne construit jamais l'indice `route` (`NotificationRecord` ne le
      décode pas) : `notifications` est donc hors d'atteinte ici, et le repli de

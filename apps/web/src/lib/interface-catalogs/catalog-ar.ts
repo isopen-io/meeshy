@@ -1,15 +1,19 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
+import arMediaHub from './catalog-ar-media-hub';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
+import arCallDevices from './catalog-ar-call-devices';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
+import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
+import arContactCard from './catalog-ar-contact-card';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -192,11 +196,13 @@ const ar = {
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
+  ...arMediaHub,
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,
   ...arCallShell,
   ...arCallJoin,
+  ...arCallDevices,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',
@@ -427,6 +433,9 @@ const ar = {
   'settings.privacy.read_receipts': 'إيصالات القراءة',
   'settings.privacy.read_receipts.info': 'الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك.',
   'settings.privacy.typing_indicator': 'مؤشر الكتابة',
+  'settings.privacy.hide_from_search': 'لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني',
+  'settings.privacy.hide_from_search.info':
+    'لن يجدك جهات اتصالك عبر رقمك أو بريدك الإلكتروني، ولن يتم إعلامهم بانضمامك.',
   'settings.section.appearance': 'المظهر',
   'settings.theme': 'السمة',
   'settings.theme.auto': 'تلقائي',
@@ -1120,7 +1129,9 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arConversationCard,
   ...arStoriesMine,
+  ...arContactCard,
 } satisfies InterfaceCatalog;
 
 export default ar;
