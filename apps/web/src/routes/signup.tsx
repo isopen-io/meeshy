@@ -51,6 +51,7 @@ import {
 import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * L'ÉCRAN D'INSCRIPTION (#5555) — UN écran, anatomie de `SignupView.swift:44-59`.
@@ -576,19 +577,16 @@ export default function SignupScreen({
                 error={feedback.fieldErrors.password}
               >
                 {({ id, describedBy }) => (
-                  <input
+                  <PasswordInput
                     id={id}
-                    type="password"
                     autoComplete="new-password"
                     value={form.password}
-                    onInput={(e) => patch({ password: e.currentTarget.value })}
+                    onValue={(password) => patch({ password })}
                     onFocus={() => setFocused('password')}
                     onBlur={() => setFocused(null)}
                     placeholder={`${PASSWORD_MIN} caractères minimum`}
-                    className="w-full bg-transparent py-3 text-input outline-none"
-                    aria-describedby={describedBy}
-                    aria-invalid={feedback.fieldErrors.password !== undefined}
-                    style={{ color: 'var(--color-ios-ink)' }}
+                    describedBy={describedBy}
+                    invalid={feedback.fieldErrors.password !== undefined}
                   />
                 )}
               </Field>

@@ -12,6 +12,7 @@ import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
+import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
@@ -583,8 +584,12 @@ export default defineConfig({
                * visiteur qui revient recevrait la coquille à la place d'une
                * redirection 308 (`src/lib/net/network-only-navigations.ts`,
                * confrontée à la table des routes par son témoin).
+               *
+               * La TROISIÈME (#8053) : les liens d'e-mail qui portent un jeton
+               * — la coquille d'une version en attente ne sait pas toujours le
+               * consommer (`src/lib/net/email-token-navigations.ts`).
                */
-              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS],
+              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS, ...EMAIL_TOKEN_NAVIGATIONS],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash

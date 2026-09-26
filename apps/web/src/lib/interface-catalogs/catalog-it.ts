@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
 import itVerifyEmail from './catalog-it-verify-email';
+import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
 import itSignup from './catalog-it-signup';
 
@@ -190,6 +191,7 @@ const it = {
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
   ...itVerifyEmail,
+  ...itPassword,
   ...itCall,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
