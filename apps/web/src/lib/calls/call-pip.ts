@@ -44,13 +44,13 @@ export function shouldOfferPip(call: PipCall, support: PipSupport): boolean {
   return support !== 'none' && call.phase.kind !== 'ended' && call.phase.kind !== 'incoming' && pipSource(call) !== null;
 }
 
-type ActionSession = { readonly setActionHandler: (action: string, handler: (() => void) | null) => void };
+export type AutoPipSession = { readonly setActionHandler: (action: string, handler: (() => void) | null) => void };
 
 /**
  * Arme la bascule automatique ; rend ce qui la désarme. Une action inconnue
  * lève un `TypeError` (Firefox, Safari) : la bascule manque, l'appel non.
  */
-export function armAutoPip(session: ActionSession | undefined, enter: () => void): () => void {
+export function armAutoPip(session: AutoPipSession | undefined, enter: () => void): () => void {
   const set = (handler: (() => void) | null): boolean => {
     try {
       session?.setActionHandler('enterpictureinpicture', handler);

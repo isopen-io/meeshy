@@ -80,15 +80,15 @@ describe('préférences par appareil', () => {
 
 describe('contraintes', () => {
   test('le micro choisi est DEMANDÉ (ideal), jamais exigé : un micro disparu ne fait pas échouer l’appel', () => {
-    expect(audioInputConstraints(null)).not.toHaveProperty('deviceId');
+    expect('deviceId' in (audioInputConstraints(null) as object)).toBe(false);
     expect(audioInputConstraints('mic-1')).toMatchObject({ echoCancellation: true, deviceId: { ideal: 'mic-1' } });
   });
 
   test('la caméra choisie remplace la face avant ; retourner la caméra cherche l’autre face', () => {
     expect(videoInputConstraints('user', 'cam-2')).toMatchObject({ deviceId: { ideal: 'cam-2' } });
-    expect(videoInputConstraints('user', 'cam-2')).not.toHaveProperty('facingMode');
+    expect('facingMode' in (videoInputConstraints('user', 'cam-2') as object)).toBe(false);
     expect(videoInputConstraints('environment', 'cam-2')).toMatchObject({ facingMode: 'environment' });
-    expect(videoInputConstraints('environment', 'cam-2')).not.toHaveProperty('deviceId');
+    expect('deviceId' in (videoInputConstraints('environment', 'cam-2') as object)).toBe(false);
     expect(videoInputConstraints('user', null)).toMatchObject({ facingMode: 'user' });
   });
 });
@@ -125,6 +125,6 @@ describe('acquireChosenInput', () => {
   test('« Par défaut » rouvre l’appareil du système', async () => {
     const r = recorder();
     await acquireChosenInput({ kind: 'microphone', deviceId: null, mediaDevices: r.mediaDevices });
-    expect(r.asked[0]?.audio).not.toHaveProperty('deviceId');
+    expect('deviceId' in (r.asked[0]?.audio as object)).toBe(false);
   });
 });

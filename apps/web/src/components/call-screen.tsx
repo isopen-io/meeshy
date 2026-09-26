@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { StreamVideo } from '@/components/call-media-elements';
+import { CallScreenTools } from '@/components/call-screen-tools';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
@@ -145,7 +146,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           {translate(language, 'call.members', { count: String(Object.keys(call.members).length + 1) })}
         </span>
       ) : null}
-      <span className="size-11" />
+      <CallScreenTools call={call} />
     </div>
   );
 
