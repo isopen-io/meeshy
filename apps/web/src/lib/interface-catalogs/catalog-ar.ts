@@ -9,6 +9,7 @@ import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
+import arCallFeedback from './catalog-ar-call-feedback';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arSignup from './catalog-ar-signup';
@@ -208,6 +209,7 @@ const ar = {
   ...arCallShell,
   ...arCallJoin,
   ...arCallDecline,
+  ...arCallFeedback,
   ...arCallDevices,
   ...arCallScreen,
   ...arSignup,

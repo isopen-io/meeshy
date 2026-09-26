@@ -9,6 +9,7 @@ import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDecline from './catalog-it-call-decline';
+import itCallFeedback from './catalog-it-call-feedback';
 import itCallDevices from './catalog-it-call-devices';
 import itCallScreen from './catalog-it-call-screen';
 import itSignup from './catalog-it-signup';
@@ -208,6 +209,7 @@ const it = {
   ...itCallShell,
   ...itCallJoin,
   ...itCallDecline,
+  ...itCallFeedback,
   ...itCallDevices,
   ...itCallScreen,
   ...itSignup,
