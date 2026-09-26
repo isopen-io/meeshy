@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest } from './http';
-import { createAuthClient, isPhoneConflict } from './auth';
+import { createAuthClient, isPhoneConflict, isVerificationRequired } from './auth';
 import { createSessionStore } from './session';
 
 /**
@@ -493,6 +493,109 @@ describe('verifyEmail() — POST /auth/verify-email (magic-link.ts:307-364, Auth
     const result = await auth.verifyEmail({ email: 'ada@x.io', code: '000000' });
 
     expect(result).toEqual({ ok: false, status: 400, error: 'Invalid or expired verification code' });
+  });
+});
+
+/**
+ * UN E-MAIL INCONNU À LA CONNEXION DEVIENT UN COMPTE (#8034, contrat #8033) —
+ * `login` rend 200 `{ status: 'verification-required', accountCreated, email }`,
+ * SANS jeton : le magasin reste anonyme, la reprise est à l'écran (le code).
+ */
+describe('login() — email inconnu ⇒ `verification-required` (#8034)', () => {
+  test('⇒ AUCUNE session, le résultat est rendu tel quel et reconnu par `isVerificationRequired`', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      { ok: true, data: { status: 'verification-required', accountCreated: true, email: 'neuf@x.io' }, status: 200 },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.login({ username: 'neuf@x.io', password: 'secret-1' });
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+    expect(result.ok && isVerificationRequired(result.data)).toBe(true);
+    expect(result.ok && isVerificationRequired(result.data) ? result.data.email : null).toBe('neuf@x.io');
+  });
+
+  test('une connexion ordinaire n’est PAS une vérification requise', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      { ok: true, data: { user: { id: 'u-1', username: 'ada', displayName: 'Ada' }, token: 'jwt-1', sessionToken: 'sess-1', expiresIn: 60 } },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.login({ username: 'ada', password: 'secret' });
+
+    expect(result.ok && isVerificationRequired(result.data)).toBe(false);
+    expect(store.getState().session.status).toBe('authenticated');
+  });
+});
+
+describe('verifyEmail() — la vérification OUVRE la session (#8034, contrat #8033)', () => {
+  const sessionData = {
+    verified: true,
+    token: 'jwt-v',
+    sessionToken: 'sess-v',
+    user: { id: 'u-9', username: 'neuf', displayName: 'Neuf' },
+  };
+
+  test('{ email, token } (le lien de l’e-mail) ⇒ corps exact, session établie, 24 h par défaut sans `expiresIn`', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: sessionData, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', token: 'tok-123' });
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'neuf@x.io', token: 'tok-123' } });
+    const session = store.getState().session;
+    expect(session.status).toBe('authenticated');
+    expect(session.status === 'authenticated' ? [session.token, session.sessionToken, session.user.id, session.expiresAt] : null).toEqual([
+      'jwt-v',
+      'sess-v',
+      'u-9',
+      FIXED_NOW + 24 * 60 * 60 * 1000,
+    ]);
+  });
+
+  test('{ email, code, password } ⇒ le mot de passe voyage avec le CODE, et `expiresIn` servi est respecté', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { ...sessionData, expiresIn: 60 }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', code: '123456', password: 'secret-1' });
+
+    expect(calls[0]?.body).toEqual({ email: 'neuf@x.io', code: '123456', password: 'secret-1' });
+    const session = store.getState().session;
+    expect(session.status === 'authenticated' ? session.expiresAt : null).toBe(FIXED_NOW + 60_000);
+  });
+
+  test('un mot de passe VIDE n’est jamais envoyé', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { message: 'ok' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', code: '123456', password: '' });
+
+    expect(calls[0]?.body).toEqual({ email: 'neuf@x.io', code: '123456' });
+  });
+
+  test('une réponse SANS session (ancienne passerelle) laisse le magasin intact', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: true, data: { message: 'Email vérifié' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'ada@x.io', token: 'tok' });
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('un échec n’écrit rien', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: false, status: 400, error: 'Invalid' }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'ada@x.io', token: 'tok' });
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 });
 
