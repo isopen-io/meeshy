@@ -1,4 +1,4 @@
-import CoreGraphics
+import Foundation
 
 /// Le dépliage EN PLACE d'un message long (#8147) — loi pure, sans UIKit.
 ///
@@ -31,6 +31,12 @@ nonisolated enum LongMessageExpansionLaw {
         isExpanding ? .top : .bottom
     }
 
+    /// La fenêtre pendant laquelle le bord ancré est tenu : la durée de la
+    /// mise en avant, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
+    /// le fil redevient libre — une hauteur qui change plus tard (image,
+    /// traduction) obéit aux lois ordinaires du fil.
+    static let holdWindow: TimeInterval = FocalMetrics.Focus.expandDuration + 0.35
+
     /// Le décalage de défilement qui ramène le bord ancré à son ordonnée
     /// VISUELLE d'avant — dans le fil renversé (`scaleY: -1`), augmenter le
     /// décalage fait DESCENDRE le contenu à l'écran. Borné à la plage de
@@ -45,6 +51,22 @@ nonisolated enum LongMessageExpansionLaw {
     ) -> CGFloat {
         let target = current + (edgeBefore - edgeAfter)
         return min(max(target, minOffset), max(minOffset, maxOffset))
+    }
+
+    /// Le cadre du bloc de verre du déplié (#8161), dans le repère de la
+    /// rangée. En Bulles, le verre ÉPOUSE la bulle et en déborde des cotes
+    /// partagées (`FOCAL_METRICS` : 6 pt de côté, 3 pt en haut et en bas) —
+    /// jamais la largeur entière de la rangée, qui ferait d'une bulle de
+    /// 70 % un bandeau. Sans bulle mesurée (rangée plate, Rivière, première
+    /// passe), il retombe sur la rangée moins sa gouttière.
+    static func glassFrame(bubble: CGRect?, row: CGRect) -> CGRect {
+        guard let bubble, !bubble.isEmpty else {
+            return row.insetBy(dx: FocalScrollPerspective.focusCardHorizontalInset, dy: 0)
+        }
+        return bubble.insetBy(
+            dx: -FocalScrollPerspective.focusCardHorizontalInset,
+            dy: -FocalScrollPerspective.focusCardInnerMargin
+        )
     }
 
     /// L'opacité d'une cellule : le déplié reste pleinement lisible, ses

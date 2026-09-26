@@ -42,14 +42,25 @@ final class BubbleExpandableTextStateTests: XCTestCase {
         XCTAssertTrue(state.showsCollapse)
     }
 
-    func test_expansion_equality_readsTheStateOnly_notTheClosure() {
+    func test_expansion_equality_readsTheMessageAndTheState_notTheClosure() {
         XCTAssertEqual(
-            LongMessageExpansion(isExpanded: true, toggle: {}),
-            LongMessageExpansion(isExpanded: true, toggle: { _ = 1 })
+            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: {}),
+            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: { _ = 1 })
         )
         XCTAssertNotEqual(
-            LongMessageExpansion(isExpanded: true, toggle: {}),
-            LongMessageExpansion(isExpanded: false, toggle: {})
+            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: {}),
+            LongMessageExpansion(messageId: "m1", isExpanded: false, toggle: {})
+        )
+    }
+
+    /// #8161 — une cellule RÉUTILISÉE reçoit l'état de dépliage d'un AUTRE
+    /// message. Égal sur l'état seul (replié ⇔ replié), l'environnement
+    /// gardait la fermeture du message précédent : « Lire la suite » dépliait
+    /// l'ancien occupant de la cellule, et le texte affiché ne bougeait pas.
+    func test_expansion_equality_twoMessagesInTheSameState_areDistinct() {
+        XCTAssertNotEqual(
+            LongMessageExpansion(messageId: "m1", isExpanded: false, toggle: {}),
+            LongMessageExpansion(messageId: "m2", isExpanded: false, toggle: {})
         )
     }
 }

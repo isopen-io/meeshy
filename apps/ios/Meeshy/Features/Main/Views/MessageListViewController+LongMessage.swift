@@ -13,18 +13,31 @@ import SwiftUI
 
 extension MessageListViewController {
 
+    /// Le message long déplié — un seul à la fois.
+    var expandedLongMessageLocalId: String? {
+        get { longMessageExpansionState.localId }
+        set { longMessageExpansionState.localId = newValue }
+    }
+
     /// L'état de dépliage d'UNE cellule, remis à la bulle par l'environnement
     /// (la rangée plate le reçoit par `FocalRowInput.isExpanded`).
     func longMessageExpansion(for localId: String) -> LongMessageExpansion {
-        LongMessageExpansion(isExpanded: expandedLongMessageLocalId == localId) { [weak self] in
+        LongMessageExpansion(messageId: localId, isExpanded: expandedLongMessageLocalId == localId) { [weak self] in
             self?.toggleLongMessageExpansion(localId)
         }
     }
 
-    /// « Lire la suite » / « Réduire ». Replie le précédent déplié, anime la
-    /// hauteur de la cellule en tenant immobile le bord ancré
+    /// « Lire la suite » / « Réduire ». Replie le précédent déplié, pose la
+    /// nouvelle hauteur de la cellule en tenant immobile le bord ancré
     /// (`LongMessageExpansionLaw.anchor`) — aucun saut de défilement — puis
-    /// pose l'effet Focal. Réduire le mouvement ⇒ aucune animation.
+    /// pose l'effet Focal (animé, sauf sous Réduire le mouvement).
+    ///
+    /// La hauteur n'est PAS animée (#8162) : mesuré au simulateur en Release,
+    /// envelopper la reconfiguration dans `UIView.animate` (plus une passe de
+    /// layout forcée pour l'animer) coûtait 27–84 ms de fil principal et 2 à
+    /// 6 images perdues par bascule ; posée d'un coup, 13–29 ms et au plus
+    /// une. Le bord ancré ne bougeant pas, la suite se déroule sous l'extrait
+    /// sans que l'œil ait à suivre une glissade.
     func toggleLongMessageExpansion(_ localId: String) {
         guard isViewLoaded, dataSource != nil else { return }
         let previous = expandedLongMessageLocalId
@@ -46,52 +59,62 @@ extension MessageListViewController {
         snapshot.reconfigureItems(items)
 
         let anchor = LongMessageExpansionLaw.anchor(isExpanding: next == localId)
-        let edgeBefore = visibleCell(forLocalId: localId).map { visualEdge(of: $0, anchor: anchor) }
-        let animated = !UIAccessibility.isReduceMotionEnabled
-        let resize = { [weak self] in
-            guard let self else { return }
-            self.applyToDataSource(snapshot) {}
-            // La cellule re-hébergée s'auto-dimensionne dans cette passe — pas
-            // d'invalidation du layout ici : elle périmerait le mémo de la pastille
-            // de jour (`MessageListStickyDayMemoGuardTests`).
-            self.collectionView.layoutIfNeeded()
+        if visibleCell(forLocalId: localId) != nil, let edge = visualEdge(ofLocalId: localId, anchor: anchor) {
+            beginAnchorHold(.init(localId: localId, anchor: anchor, edge: edge))
         }
-        // Le layout du fil tient lui-même son ancre (le bas VISUEL, repère
-        // renversé) pendant la passe : le bord de lecture se recale donc au
-        // tour suivant, d'un glissé de la même durée — jamais d'un saut.
-        let reanchor = { [weak self] in
-            guard let self, let edgeBefore, let cell = self.visibleCell(forLocalId: localId) else { return }
-            let inset = self.collectionView.adjustedContentInset
-            let target = LongMessageExpansionLaw.anchoredOffset(
-                current: self.collectionView.contentOffset.y,
-                edgeBefore: edgeBefore,
-                edgeAfter: self.visualEdge(of: cell, anchor: anchor),
-                minOffset: -inset.top,
-                maxOffset: self.collectionView.contentSize.height - self.collectionView.bounds.height + inset.bottom
-            )
-            guard abs(target - self.collectionView.contentOffset.y) > 0.5 else { return }
-            guard animated else { return self.collectionView.contentOffset.y = target }
-            UIView.animate(
-                withDuration: FocalMetrics.Focus.expandDuration,
-                delay: 0,
-                options: [.curveEaseInOut, .allowUserInteraction],
-                animations: { self.collectionView.contentOffset.y = target }
-            )
+        // La cellule re-hébergée s'auto-dimensionne dans la passe de la mise à
+        // jour — pas d'invalidation du layout ici : elle périmerait le mémo de
+        // la pastille de jour (`MessageListStickyDayMemoGuardTests`). Le bord
+        // ancré est recalé DANS la passe où la hauteur change
+        // (`holdAnchoredEdge`, sur `contentSize`) : il ne bouge à aucune image.
+        UIView.performWithoutAnimation {
+            applyToDataSource(snapshot) {}
         }
-        guard animated else {
-            UIView.performWithoutAnimation(resize)
-            reanchor()
-            applyLongMessageExpansionPresentation(animated: false)
-            return
+        applyLongMessageExpansionPresentation(animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    /// Tient le bord ancré du dépliage pendant que sa hauteur se pose : à
+    /// chaque changement de `contentSize`, quelle que soit la passe de layout
+    /// qui le porte. La fenêtre se referme d'elle-même peu après.
+    private func beginAnchorHold(_ hold: LongMessageExpansionState.Hold) {
+        longMessageExpansionState.hold = hold
+        longMessageExpansionState.contentSizeObservation = collectionView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.holdAnchoredEdge() }
         }
-        UIView.animate(
-            withDuration: FocalMetrics.Focus.expandDuration,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
-            animations: resize
+        DispatchQueue.main.asyncAfter(deadline: .now() + LongMessageExpansionLaw.holdWindow) { [weak self] in
+            guard let self, self.longMessageExpansionState.hold?.id == hold.id else { return }
+            self.longMessageExpansionState.hold = nil
+            self.longMessageExpansionState.contentSizeObservation = nil
+        }
+    }
+
+    /// Ramène le bord tenu à son ordonnée VISUELLE d'avant la passe
+    /// (`LongMessageExpansionLaw.anchoredOffset`). Le layout du fil tient,
+    /// lui, le bas visuel ; sans ce décalage, un déplié dont le haut est sous
+    /// le chrome grandirait vers le HAUT. Le doigt garde toujours la main.
+    private func holdAnchoredEdge() {
+        guard let hold = longMessageExpansionState.hold,
+              !collectionView.isTracking,
+              let edgeAfter = visualEdge(ofLocalId: hold.localId, anchor: hold.anchor)
+        else { return }
+        let inset = collectionView.adjustedContentInset
+        let target = LongMessageExpansionLaw.anchoredOffset(
+            current: collectionView.contentOffset.y,
+            edgeBefore: hold.edge,
+            edgeAfter: edgeAfter,
+            minOffset: -inset.top,
+            maxOffset: collectionView.contentSize.height - collectionView.bounds.height + inset.bottom
         )
-        DispatchQueue.main.async(execute: reanchor)
-        applyLongMessageExpansionPresentation(animated: true)
+        guard abs(target - collectionView.contentOffset.y) > 0.5 else { return }
+        // Un défilement VOULU : loin du bas, le verrou de scène (loi du
+        // rouleau) annule tout mouvement d'offset non piloté — il rendait ici
+        // l'ancre d'avant, et le déplié grandissait vers le haut (#8157).
+        // Le verrou ADOPTE ensuite la position atteinte.
+        let wasIntentional = isIntentionalProgrammaticScroll
+        isIntentionalProgrammaticScroll = true
+        collectionView.contentOffset.y = target
+        isIntentionalProgrammaticScroll = wasIntentional
+        captureSceneLockAnchor()
     }
 
     /// L'effet Focal du déplié : loupe sur lui, voisins atténués — tant qu'il
@@ -149,9 +172,13 @@ extension MessageListViewController {
     }
 
     /// Ordonnée VISUELLE (repère de `view`) du bord ancré — la conversion
-    /// traverse le renversement du fil.
-    private func visualEdge(of cell: UICollectionViewCell, anchor: LongMessageExpansionLaw.Anchor) -> CGFloat {
-        let frame = collectionView.convert(cell.frame, to: view)
+    /// traverse le renversement du fil. Lue sur les attributs du LAYOUT, pas
+    /// sur `cell.frame` : quand `contentSize` change, le layout porte déjà
+    /// la nouvelle hauteur alors que la cellule n'a pas encore été reposée.
+    private func visualEdge(ofLocalId localId: String, anchor: LongMessageExpansionLaw.Anchor) -> CGFloat? {
+        guard let indexPath = dataSource?.indexPath(for: .message(localId: localId)),
+              let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return nil }
+        let frame = collectionView.convert(attributes.frame, to: view)
         return anchor == .top ? frame.minY : frame.maxY
     }
 }

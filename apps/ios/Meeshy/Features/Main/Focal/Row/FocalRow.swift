@@ -803,7 +803,7 @@ struct FocalRow: View {
     /// Le dépliage EN PLACE (#8147), tenu par l'hôte : un seul message
     /// déplié à la fois. Sans hôte, le texte garde son état local.
     private var expansion: LongMessageExpansion? {
-        actions.onToggleExpanded.map { LongMessageExpansion(isExpanded: input.isExpanded, toggle: $0) }
+        actions.onToggleExpanded.map { LongMessageExpansion(messageId: input.localId, isExpanded: input.isExpanded, toggle: $0) }
     }
 
     // `flagEmoji` a vécu ici, repliant sur 🌐 et lisant `LanguageData` quand la
