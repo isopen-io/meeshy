@@ -530,6 +530,11 @@ describe('CommentComposer — le champ se vide avant le réseau, et revient sur 
     });
   };
 
+  test('la touche Entrée du clavier logiciel annonce l’envoi — Entrée envoie (#8031)', async () => {
+    const host = await monter(<CommentComposer language="fr" canWrite onSend={async () => ({ ok: true })} />);
+    expect(host.querySelector('[data-comment-field]')?.getAttribute('enterkeyhint')).toBe('send');
+  });
+
   test('un visiteur anonyme n’a PAS de champ — la passerelle exige un compte (loi 4)', async () => {
     const host = await monter(<CommentComposer language="fr" canWrite={false} onSend={async () => ({ ok: true })} />);
     expect(host.querySelector('[data-comment-field]')).toBeNull();
