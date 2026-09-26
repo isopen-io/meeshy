@@ -18,8 +18,11 @@ import {
   effectiveDisplayName,
   effectiveUsername,
   isIdentityDefined,
+  usernameFieldRefusal,
+  USERNAME_MAX,
   type SignupFormState,
 } from './signup-form';
+import { usernameRefusalMessage } from './view/auth-feedback';
 import { countryOf } from './countries';
 
 /**
@@ -328,5 +331,39 @@ describe('identité dérivée en direct (#7897)', () => {
     const muette = baseForm({ displayName: null, email: 'a@b.co' });
     expect(isIdentityDefined(muette)).toBe(false);
     expect(isIdentityDefined({ ...muette, username: 'awa', displayName: 'Awa' })).toBe(true);
+  });
+});
+
+/**
+ * LA BORNE DU PSEUDO PENDANT LA SAISIE (#8082) — la même que la passerelle :
+ * `usernameMaxLength` de `registerRequestSchema`, jamais un littéral.
+ */
+describe('le pseudo tapé tient la borne du schéma partagé', () => {
+  test('la borne est LUE sur le schéma', () =>
+    expect(USERNAME_MAX).toBe(registerRequestSchema.properties.username.maxLength));
+
+  test('17 caractères (le pseudo de la recette) ⇒ refus « trop long » et bouton inactif', () => {
+    const form = baseForm({ username: 'direction_recette' });
+    expect(usernameFieldRefusal(form)).toBe('too-long');
+    expect(canSubmit(form)).toBe(false);
+    expect(isIdentityDefined(form)).toBe(false);
+  });
+
+  test('16 caractères ⇒ aucun refus', () => {
+    const form = baseForm({ username: 'direction_recett' });
+    expect(usernameFieldRefusal(form)).toBeNull();
+    expect(canSubmit(form)).toBe(true);
+  });
+
+  test('un espace ou un accent ⇒ refus de caractères', () =>
+    expect(usernameFieldRefusal(baseForm({ username: 'josé' }))).toBe('invalid-characters'));
+
+  test('pseudo jamais touché ⇒ la dérivation est recevable, aucun refus', () =>
+    expect(usernameFieldRefusal(baseForm({ username: null }))).toBeNull());
+
+  test('le message nomme la borne, jamais « réessayez »', () => {
+    const message = usernameRefusalMessage('too-long');
+    expect(message).toContain(String(USERNAME_MAX));
+    expect(message).not.toMatch(/réessayez/i);
   });
 });

@@ -32,6 +32,9 @@ const ptVerifyEmail = {
   'verifyEmail.handoff.opened': 'O link foi aberto no app Meeshy.',
   'verifyEmail.handoff.stay': 'Continuar no navegador',
   'verifyEmail.signingIn': 'A iniciar sessão…',
+  'verifyEmail.arrival.title': 'Endereço confirmado!',
+  'verifyEmail.arrival.lead': 'A preparar as suas conversas…',
+  'verifyEmail.arrival.status': 'Endereço confirmado — a iniciar sessão…',
   'emailSent.codeOrLink': 'Introduza o código de 6 dígitos recebido em {email} ou abra o link do mesmo e-mail.',
 };
 

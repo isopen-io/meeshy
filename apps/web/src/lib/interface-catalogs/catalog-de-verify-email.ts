@@ -32,6 +32,9 @@ const deVerifyEmail = {
   'verifyEmail.handoff.opened': 'Der Link wurde in der Meeshy-App geöffnet.',
   'verifyEmail.handoff.stay': 'Im Browser fortfahren',
   'verifyEmail.signingIn': 'Anmeldung…',
+  'verifyEmail.arrival.title': 'Adresse bestätigt!',
+  'verifyEmail.arrival.lead': 'Deine Unterhaltungen werden vorbereitet…',
+  'verifyEmail.arrival.status': 'Adresse bestätigt — Anmeldung…',
   'emailSent.codeOrLink': 'Gib den 6-stelligen Code ein, der an {email} gesendet wurde, oder öffne den Link in derselben E-Mail.',
 };
 

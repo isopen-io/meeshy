@@ -1,3 +1,6 @@
+import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
+import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
+
 import type { ApiFailure, ApiResult } from '../api/http';
 import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
 
@@ -39,6 +42,27 @@ export type SignupFeedback = {
 export type PhoneConflict = { readonly kind: 'phone-conflict' };
 
 const EMAIL_TAKEN_CODE = 'EMAIL_TAKEN';
+const VALIDATION_ERROR_CODE = 'VALIDATION_ERROR';
+
+/**
+ * LA RÈGLE DU PSEUDO, dite au lecteur (#8082) — sous le champ pendant la
+ * saisie, et à la place du texte d'Ajv quand la passerelle refuse le pseudo.
+ * Les bornes sont LUES sur le schéma partagé, jamais recopiées.
+ */
+export function usernameRefusalMessage(refusal: UsernameRefusal): string {
+  switch (refusal) {
+    case 'too-long':
+      return `${usernameMaxLength} caractères au plus.`;
+    case 'too-short':
+      return `${usernameMinLength} caractères au moins.`;
+    case 'invalid-characters':
+      return 'Lettres sans accent, chiffres, - et _ uniquement — pas d’espace.';
+  }
+}
+
+/** Le refus de SCHÉMA d'un pseudo : Ajv ne dit pas lequel des trois motifs
+ * dans une forme stable ; la règle entière l'englobe. */
+const USERNAME_RULE_MESSAGE = `De ${usernameMinLength} à ${usernameMaxLength} caractères : lettres sans accent, chiffres, - et _.`;
 const USERNAME_TAKEN_CODE = 'USERNAME_TAKEN';
 const PHONE_INVALID_CODE = 'PHONE_INVALID';
 
@@ -169,7 +193,7 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
 
   if (field !== null) {
     return {
-      fieldErrors: { [field]: failure.error },
+      fieldErrors: { [field]: fieldMessage(field, failure) },
       bannerError: null,
       showSignIn,
       usernameSuggestions: failure.suggestions ?? [],
@@ -179,6 +203,16 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
   // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce repli, un
   // code inconnu effacerait le formulaire de toute trace de l'échec.
   return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [] };
+}
+
+/**
+ * Le texte posé sous un champ. Un refus de SCHÉMA sur le pseudo porte la
+ * phrase d'Ajv (« body/username must NOT have more than 16 characters ») —
+ * anglaise, technique : la règle du pseudo la remplace (#8082).
+ */
+function fieldMessage(field: SignupField, failure: ApiFailure): string {
+  if (field === 'username' && failure.code === VALIDATION_ERROR_CODE) return USERNAME_RULE_MESSAGE;
+  return failure.error;
 }
 
 // --- Connexion ---------------------------------------------------------
