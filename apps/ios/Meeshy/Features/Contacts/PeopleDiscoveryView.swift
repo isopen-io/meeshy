@@ -16,7 +16,6 @@ import MeeshyUI
 /// its own scroll + cache-first load, and the view-models are held here so state
 /// survives sub-tab switches.
 struct PeopleDiscoveryView: View {
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
@@ -84,38 +83,8 @@ struct PeopleDiscoveryView: View {
     private func subTabButton(_ tab: DiscoveryTab) -> some View {
         let isSelected = subTab == tab
         let badge = subBadge(for: tab)
-
-        return Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                subTab = tab
-            }
-        } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: tab.icon)
-                        .font(.footnote.weight(.medium))
-
-                    Text(tabTitle(tab))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(Circle().fill(MeeshyColors.indigo500))
-                    }
-                }
-                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
-
-                Rectangle()
-                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
-                    .frame(height: 2)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subTab)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+        return HubTabButton(icon: tab.icon, title: tabTitle(tab), badge: badge, isSelected: isSelected, selection: subTab) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { subTab = tab }
         }
         .accessibilityLabel(tabTitle(tab))
         .accessibilityValue(badge > 0 ? "\(badge)" : "")

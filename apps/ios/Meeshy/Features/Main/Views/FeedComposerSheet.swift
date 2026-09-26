@@ -61,7 +61,6 @@ struct FeedComposerSheet: View {
     @State private var showLocationPicker = false
     @State private var isUploading = false
     @State private var uploadProgress: UploadQueueProgress?
-    @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
     /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
     /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
@@ -315,7 +314,7 @@ struct FeedComposerSheet: View {
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || pendingPlace != nil {
                     sheetAttachmentsRow
                 }
 
@@ -447,6 +446,15 @@ struct FeedComposerSheet: View {
                     }
                 )
             )
+        }
+        .sheet(isPresented: $showEmojiPicker) {
+            EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard,
+                             title: "composer.attach.emoji") { emoji in
+                composerText += emoji
+                showEmojiPicker = false
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
@@ -581,11 +589,6 @@ struct FeedComposerSheet: View {
                 if let place = pendingPlace {
                     sheetPlaceTile(place)
                 }
-                if isLoadingMedia && preparingAttachments.isEmpty {
-                    ProgressView()
-                        .tint(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 12)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -618,22 +621,12 @@ struct FeedComposerSheet: View {
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
-                } else if attachment.type == .location {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 72, height: 72)
-                        .overlay(
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundStyle(.white, .white.opacity(0.3))
-                                .accessibilityHidden(true)
-                        )
                 } else {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(LinearGradient(colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
-                            Image(systemName: sheetIconForType(attachment.type))
+                            Image(systemName: attachment.type.composerGlyph)
                                 .font(.system(size: 26))
                                 .foregroundColor(.white)
                                 .accessibilityHidden(true)
@@ -668,7 +661,7 @@ struct FeedComposerSheet: View {
                 .offset(x: 6, y: -6)
             }
 
-            Text(sheetLabelForAttachment(attachment))
+            Text(MediaKindLabel.attachmentLabel(for: attachment))
                 .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
@@ -773,23 +766,8 @@ struct FeedComposerSheet: View {
     }
 
     private func trackSheetPreparation(_ prep: PreparingAttachment) {
-        preparingAttachments.append(prep)
-        Task { @MainActor [prep] in
-            let result = await prep.awaitCompletion()
-            switch result {
-            case .success(let prepared):
-                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    pendingThumbnails[prepared.attachment.id] = thumb
-                }
-                pendingAttachments.append(prepared.attachment)
-                HapticFeedback.success()
-            case .failure(.preparationFailed(let message)):
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(message)
-            }
-            preparingAttachments.removeAll { $0.id == prep.id }
-        }
+        PreparationTracking.track(prep, preparing: $preparingAttachments, attachments: $pendingAttachments,
+                                  mediaFiles: $pendingMediaFiles, thumbnails: $pendingThumbnails)
     }
 
     private func cancelSheetPreparation(_ prep: PreparingAttachment) {
@@ -802,7 +780,7 @@ struct FeedComposerSheet: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let fileName = url.lastPathComponent
-            let mimeType = mimeTypeForURL(url)
+            let mimeType = MimeTypeResolver.mimeType(forURL: url)
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
             try? FileManager.default.copyItem(at: url, to: tempURL)
             appendSheetFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
@@ -843,18 +821,10 @@ struct FeedComposerSheet: View {
                         try? FileManager.default.removeItem(at: url)
                         continue
                     }
-                    let prep = AttachmentPreparationService.shared.prepareImage(
-                        image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
-                    )
-                    trackSheetPreparation(prep)
+                    handleCameraCapture(image)
                     try? FileManager.default.removeItem(at: url)
                 case .video:
-                    let prep = AttachmentPreparationService.shared.prepareVideo(
-                        sourceURL: url,
-                        deleteSourceAfterCompression: true,
-                        context: .feedPost
-                    )
-                    trackSheetPreparation(prep)
+                    handleCameraVideo(url)
                 case .audio, .file:
                     appendSheetFileAttachment(tempURL: url, fileName: name, mimeType: mime)
                 }
@@ -938,7 +908,7 @@ struct FeedComposerSheet: View {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: capturedPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision) }
             }
             return
         }
@@ -969,7 +939,7 @@ struct FeedComposerSheet: View {
                     visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
                     originalLanguage: lang,
                     type: postType,
-                    location: pendingPlace,
+                    location: capturedPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
                     mobileTranscription: nil,
@@ -1004,8 +974,7 @@ struct FeedComposerSheet: View {
                 var progressCancellable: AnyCancellable?
                 progressCancellable = uploader.progressPublisher
                     .receive(on: DispatchQueue.main)
-                    .sink { [progressCancellable] progress in
-                        _ = progressCancellable
+                    .sink { progress in
                         uploadProgress = progress
                     }
 
@@ -1068,7 +1037,7 @@ struct FeedComposerSheet: View {
     /// — c'est l'inverse exact du défaut d'hier, qui publiait PUBLIC sans rien
     /// dire.
     private func publishAudioFromSheet(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
-        await MainActor.run { isUploading = true }
+        isUploading = true
 
         await viewModel.publish(PublishIntent.audioRecording(
             fileURL: audioURL,
@@ -1084,20 +1053,18 @@ struct FeedComposerSheet: View {
             discoverabilityPrecision: nil
         ))
 
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError != nil {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            } else {
-                onDismiss()
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(
-                    NetworkMonitor.shared.isOffline
-                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
-                        : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
-                )
-            }
+        isUploading = false
+        if viewModel.publishError != nil {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+        } else {
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(
+                NetworkMonitor.shared.isOffline
+                    ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
+                    : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
+            )
         }
     }
 
@@ -1105,22 +1072,20 @@ struct FeedComposerSheet: View {
     /// purs (`BorrowedSoundPost`), mais l'état (`isUploading`, `forcePlainPost`,
     /// `onDismiss`) est celui du composer sheet.
     private func publishBorrowedSoundFromSheet(_ sound: APISound) async {
-        await MainActor.run { isUploading = true }
+        isUploading = true
         await viewModel.createBorrowedSoundPost(
             type: BorrowedSoundPost.type(for: sound, forcePlainPost: forcePlainPost),
             storyEffects: BorrowedSoundPost.effects(for: sound),
             mentions: declaredReferences
         )
-        await MainActor.run {
-            isUploading = false
-            if viewModel.publishError == nil {
-                onDismiss()
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
-            } else {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-            }
+        isUploading = false
+        if viewModel.publishError == nil {
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
+        } else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
         }
     }
 
@@ -1129,35 +1094,6 @@ struct FeedComposerSheet: View {
         onDismiss()
     }
 
-    // MARK: - Helpers
-    private func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        return try? await UIImage(cgImage: generator.image(at: .zero).image)
-    }
-
-    private func mimeTypeForURL(_ url: URL) -> String {
-        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
-        // Replaces a deliberately-narrow table that excluded several formats
-        // (webp/heic/wav/audio/ogg/...) — the resolver covers all of them.
-        MimeTypeResolver.mimeType(forURL: url)
-    }
-
-    private func sheetIconForType(_ type: MessageAttachment.AttachmentType) -> String {
-        switch type {
-        case .image: return "photo.fill"
-        case .video: return "video.fill"
-        case .audio: return "waveform"
-        case .file: return "doc.fill"
-        case .location: return "location.fill"
-        }
-    }
-
-    private func sheetLabelForAttachment(_ attachment: MessageAttachment) -> String {
-        MediaKindLabel.attachmentLabel(for: attachment)
-    }
 }
 
 private struct EditingAttachmentItem: Identifiable {

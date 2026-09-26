@@ -27,7 +27,6 @@ public struct DocumentViewerView: View {
     @State private var showFullViewer = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
-    private var accent: Color { Color(hex: accentColor) }
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,

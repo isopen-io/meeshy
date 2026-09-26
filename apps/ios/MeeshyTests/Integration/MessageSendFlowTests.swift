@@ -20,7 +20,7 @@ final class MessageSendFlowTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: dbQueue)
 
         let store = MessageStore(conversationId: "conv_t15_send", persistence: persistence)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let beforeCount = store.messages.count
 
@@ -62,7 +62,7 @@ final class MessageSendFlowTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: dbQueue)
 
         let store = MessageStore(conversationId: "conv_t15_fail", persistence: persistence)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let tempId = "offline_t15_fail"
         let record = SendFlowMessageRecordFactory.make(

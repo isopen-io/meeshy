@@ -187,8 +187,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
         // dans le même commit (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
+        // #8095 — même geste que le #6145 : la légende servie et ses libellés
+        // VoiceOver ont quitté le fichier épinglé avec leurs deux clés.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Captions.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
-        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
@@ -285,7 +288,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
         "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
-        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 0
+        // #8081 — les refus de la preuve d'adresse ont quitté le ViewModel pour
+        // la table que partagent la saisie du code, le lien et l'envoi : le
+        // cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578).
+        "apps/ios/Meeshy/Features/Auth/EmailProofErrorText.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1
@@ -512,6 +519,14 @@ final class LocalizationConsistencyTests: XCTestCase {
         // quelqu'un qu'on est en train de perdre, et on lui parlait français.
         "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
+        // Dédoublonnage audit L3-18 — le switch « type de conversation → libellé »
+        // était recopié dans quatre fichiers ; trois d'entre eux étaient épinglés
+        // ici (`ConversationInfoSheet.swift`, `GlobalSearchView.swift`,
+        // `SharePickerView.swift`). Le cliquet suit le CODE, pas le chemin (#4084,
+        // #6040, #6145, #6693) : sans cette ligne, les huit clés `conversation.type.*`
+        // seraient sorties de la garde des trois en même temps, sans qu'une seule
+        // assertion rougisse.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationTypeDisplayName.swift",  // 8
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
@@ -771,6 +786,23 @@ final class LocalizationConsistencyTests: XCTestCase {
             "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
             + "plafond du cliquet borne une mesure partielle"
         )
+    }
+
+    /// Un `bundle:` PASSÉ EN PARAMÈTRE (`MeeshyPasswordField`, #8054) désigne le
+    /// catalogue que ses appelants lui donnent : `.module` seul ⇒ le SDK ; le
+    /// moindre `.main` ⇒ l'app, où la clé reste exigée.
+    func test_leScannerSuitUnBundlePasséEnParamètre() {
+        let forwarded = """
+        var label: String { label(bundle: .module) }
+        func label(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: forwarded).map(\.isModuleBundle), [true])
+
+        let mixed = forwarded + "\nlet b = label(bundle: .main)"
+        XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
+                       "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
     }
 
     /// Keys with at least one locale expressed as plural variations.

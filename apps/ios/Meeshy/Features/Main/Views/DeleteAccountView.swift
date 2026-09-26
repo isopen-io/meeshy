@@ -6,7 +6,6 @@ import MeeshyUI
 struct DeleteAccountView: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
 
     @State private var confirmationText = ""
     /// Le mot de passe COURANT. Sans lui, un jeton volé ouvrait la suppression
@@ -211,14 +210,15 @@ struct DeleteAccountView: View {
                     .foregroundColor(theme.textSecondary)
                     .padding(.top, 6)
 
-                SecureField(
+                MeeshyPasswordField(
                     String(localized: "account.delete.password.placeholder", defaultValue: "Mot de passe actuel", bundle: .main),
-                    text: $currentPassword
+                    text: $currentPassword,
+                    role: .current,
+                    accessibilityLabel: String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main),
+                    eyeColor: theme.textMuted
                 )
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textPrimary)
-                .textContentType(.password)
-                .accessibilityLabel(String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main))
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)

@@ -357,6 +357,7 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
+            messageAudioItems: allAudioItems,
             activeAudioLanguage: activeAudioLanguage,
             isLastInGroup: isLastInGroup,
             isLastReceivedMessage: false,

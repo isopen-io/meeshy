@@ -18,20 +18,20 @@ final class MockSignupRegistrar: SignupRegistering {
     // hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    var registerResult: Result<Void, Error> = .success(())
+    var registerResult: Result<RegistrationOutcome, Error> = .success(.authenticated)
     private(set) var registerCallCount = 0
     /// La charge EXACTE que le ViewModel a composée — c'est elle que les
     /// témoins de contrat inspectent, pas un état interne.
     private(set) var lastRegisterRequest: RegisterRequest?
 
-    func register(_ request: RegisterRequest) async throws {
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         registerCallCount += 1
         lastRegisterRequest = request
-        try registerResult.get()
+        return try registerResult.get()
     }
 
     func reset() {
-        registerResult = .success(())
+        registerResult = .success(.authenticated)
         registerCallCount = 0
         lastRegisterRequest = nil
     }
@@ -63,5 +63,21 @@ final class MockPushPermissionDeferral: PushPermissionDeferring {
         isPending = false
         postponeCallCount = 0
         resolveCallCount = 0
+    }
+}
+
+/// Test double pour `PendingReferralStoreProviding` (#8075) — le code
+/// d'invitation EN MÉMOIRE, sans toucher aux `UserDefaults` du simulateur.
+final class MockPendingReferralStore: PendingReferralStoreProviding {
+    private(set) var code: String?
+    private(set) var forgetCallCount = 0
+
+    init(code: String? = nil) { self.code = code }
+
+    func remember(_ code: String) { self.code = code }
+    func recall() -> String? { code }
+    func forget() {
+        forgetCallCount += 1
+        code = nil
     }
 }

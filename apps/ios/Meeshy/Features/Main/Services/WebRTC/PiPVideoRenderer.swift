@@ -15,7 +15,6 @@
 
 import AVFoundation
 import CoreMedia
-import os
 
 #if canImport(WebRTC)
 @preconcurrency import WebRTC
@@ -25,7 +24,7 @@ import os
 nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked Sendable {
 
     private let displayLayer: AVSampleBufferDisplayLayer
-    private let converter: VideoFrameConverter
+    private let converter = VideoFrameConverter()
     private let queue = DispatchQueue(label: "me.meeshy.pip.render", qos: .userInteractive)
     private var minIntervalNs: UInt64
     private let onRotation: (@Sendable (Int) -> Void)?
@@ -38,11 +37,9 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     private var isRemoteVideoMuted = false
 
     init(displayLayer: AVSampleBufferDisplayLayer,
-         maxFrameRate: Int = 15,
-         converter: VideoFrameConverter = VideoFrameConverter(),
-         onRotation: (@Sendable (Int) -> Void)? = nil) {
+         maxFrameRate: Int,
+         onRotation: (@Sendable (Int) -> Void)?) {
         self.displayLayer = displayLayer
-        self.converter = converter
         self.minIntervalNs = UInt64(1_000_000_000 / max(1, maxFrameRate))
         self.onRotation = onRotation
         super.init()
@@ -106,26 +103,11 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
 
     // MARK: - Surface d'enqueue (iOS 16 vs 17+)
 
-    private var isReadyForMoreMediaData: Bool {
-        if #available(iOS 17.0, *) { return displayLayer.sampleBufferRenderer.isReadyForMoreMediaData }
-        return displayLayer.isReadyForMoreMediaData
-    }
+    private var isReadyForMoreMediaData: Bool { displayLayer.isReadyForMoreMediaDataCompat }
 
-    private func enqueue(_ sample: CMSampleBuffer) {
-        if #available(iOS 17.0, *) {
-            displayLayer.sampleBufferRenderer.enqueue(sample)
-        } else {
-            displayLayer.enqueue(sample)
-        }
-    }
+    private func enqueue(_ sample: CMSampleBuffer) { displayLayer.enqueueCompat(sample) }
 
-    private func flush() {
-        if #available(iOS 17.0, *) {
-            displayLayer.sampleBufferRenderer.flush()
-        } else {
-            displayLayer.flush()
-        }
-    }
+    private func flush() { displayLayer.flushCompat() }
 
     /// Synchronously flushes the display layer from this renderer's own serial
     /// `queue`, for callers detaching from a different thread (`PiPCallController.
@@ -141,17 +123,7 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
         queue.sync { flush() }
     }
 
-    private func flushIfFailed() {
-        if #available(iOS 17.0, *) {
-            if displayLayer.sampleBufferRenderer.status == .failed {
-                displayLayer.sampleBufferRenderer.flush()
-                Logger.pipRenderer.warning("PiP sampleBufferRenderer failed → flush")
-            }
-        } else if displayLayer.status == .failed {
-            displayLayer.flush()
-            Logger.pipRenderer.warning("PiP displayLayer failed → flush")
-        }
-    }
+    private func flushIfFailed() { displayLayer.flushIfFailedCompat() }
 
     private func notifyRotationIfChanged(_ rotation: Int) {
         guard rotation != lastRotation, let onRotation else { return }
@@ -160,7 +132,4 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     }
 }
 
-private extension Logger {
-    nonisolated static let pipRenderer = Logger(subsystem: "me.meeshy.app", category: "pip")
-}
 #endif

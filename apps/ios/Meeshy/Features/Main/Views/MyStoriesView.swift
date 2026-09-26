@@ -41,7 +41,7 @@ struct MyStoriesView: View {
     // Réinjectés par le tray sur la sheet (même raison que ses covers : la
     // sheet interne SharePickerView crasherait sur un env object manquant).
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     /// Surfaces the failed-publish history (`failedItems`) in the drafts tab
     /// with resume/retry/discard — the tray badge (`StoryUploadOverlay`) is
@@ -263,7 +263,7 @@ struct MyStoriesView: View {
                 onShareToConversation: nil
             )
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large])
         }

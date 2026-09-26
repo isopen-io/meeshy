@@ -299,27 +299,6 @@ public struct CommunityDetailView: View {
         )
     }
 
-    @ViewBuilder
-    private func avatarFallback(emoji: String?, color: String, name: String) -> some View {
-        RoundedRectangle(cornerRadius: 18)
-            .fill(
-                LinearGradient(
-                    colors: [Color(hex: color), Color(hex: color).opacity(0.6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay {
-                if let e = emoji {
-                    Text(e).font(.system(size: 32))
-                } else {
-                    Text(String(name.prefix(2)).uppercased())
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                }
-            }
-    }
-
     // MARK: - Stats
 
     @ViewBuilder

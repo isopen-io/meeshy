@@ -209,7 +209,7 @@ struct DiscoverTab: View {
                 accentColor: color,
                 avatarURL: match.user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: match.user.id)?.moodEmoji,
-                presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline ?? false),
+                presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline),
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
             .onTapGesture { router.deepLinkProfileUser = profileUser }
@@ -286,41 +286,18 @@ struct DiscoverTab: View {
     }
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
-
-            TextField(String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main), text: $viewModel.searchQuery)
-                .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onSubmit { Task { await viewModel.performSearch() } }
-                .adaptiveOnChange(of: viewModel.searchQuery) { _, newValue in
-                    if newValue.count >= 2 {
-                        Task { await viewModel.performSearch() }
-                    } else {
-                        viewModel.searchResults = []
-                    }
-                }
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                    viewModel.searchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
+        ContactsSearchField(
+            placeholder: String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main),
+            query: $viewModel.searchQuery
+        )
+        .onSubmit { Task { await viewModel.performSearch() } }
+        .adaptiveOnChange(of: viewModel.searchQuery) { _, newValue in
+            if newValue.count >= 2 {
+                Task { await viewModel.performSearch() }
+            } else {
+                viewModel.searchResults = []
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var searchResults: some View {
@@ -334,6 +311,7 @@ struct DiscoverTab: View {
     private func searchResultRow(_ user: UserSearchResult, index: Int) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
+        let profileUser = ProfileSheetUser(userId: user.id, username: user.username, displayName: user.displayName, avatarURL: user.avatar)
 
         return HStack(spacing: 14) {
             MeeshyAvatar(
@@ -345,14 +323,7 @@ struct DiscoverTab: View {
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline),
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
-            .onTapGesture {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    avatarURL: user.avatar
-                )
-            }
+            .onTapGesture { router.deepLinkProfileUser = profileUser }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -364,14 +335,7 @@ struct DiscoverTab: View {
                     .foregroundColor(theme.textMuted)
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    avatarURL: user.avatar
-                )
-            }
+            .onTapGesture { router.deepLinkProfileUser = profileUser }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))

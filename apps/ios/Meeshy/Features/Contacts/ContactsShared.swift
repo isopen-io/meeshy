@@ -100,6 +100,37 @@ enum RequestFilter: String, CaseIterable {
 // all share the same set of cases. The local re-declaration that used
 // to live here is gone; consumers `import MeeshySDK` to get it.
 
+extension LoadState {
+    /// Projection « liste » d'un état `CacheFirstLoader` : un cache (frais ou
+    /// périmé) vaut chargé, l'erreur porte le message de l'écran. Partagée par
+    /// `BlockedViewModel` et `CallsViewModel`, dont les deux `setLoadState`
+    /// réduisaient le même jeu de cas côte à côte.
+    func collapsedForList(errorMessage: String) -> LoadState {
+        switch self {
+        case .cachedFresh, .cachedStale, .loaded: return .loaded
+        case .loading: return .loading
+        case .offline: return .offline
+        case .error: return .error(errorMessage)
+        case .idle: return .idle
+        }
+    }
+}
+
+// MARK: - Call Direction Label
+
+extension CallDirection {
+    /// Libellé localisé de la direction d'un appel, partagé par la fiche
+    /// détail (`CallDetailSheet.statusLine`) et la ligne du journal
+    /// (`CallJournalRow.rowAccessibilityLabel`).
+    var localizedLabel: String {
+        switch self {
+        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
+        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
+        }
+    }
+}
+
 // MARK: - Date Extension
 
 extension Date {
@@ -170,20 +201,19 @@ extension View {
 // MARK: - Friend List Aggregation
 
 /// Single source of truth for building the user's friend (contact) list from
-/// their accepted friend requests. The gateway exposes friendships only as
-/// `/friend-requests/received` + `/friend-requests/sent`; a "friend" is any
-/// request with `status == "accepted"`, in either direction. Shared by
-/// `ContactsListViewModel` (the Contacts directory) and
-/// `NewConversationViewModel` (the contact-first conversation picker) so the
-/// definition of "who is a contact" never drifts between the two surfaces.
+/// their accepted friend requests — the requests accepted in EITHER
+/// direction, fetched via `/users/friend-requests?direction=any` so a single
+/// page already covers both. Shared by `ContactsListViewModel` (the Contacts
+/// directory) and `NewConversationViewModel` (the contact-first conversation
+/// picker) so the definition of "who is a contact" never drifts between the
+/// two surfaces.
 enum FriendListAggregator {
-    /// Merges accepted received + sent requests into a deduplicated,
-    /// online-first friend list. `currentUserId` is excluded defensively so a
-    /// self-referencing request can never surface the user as their own
-    /// contact. Pure function — no I/O, trivially testable.
+    /// Merges accepted requests into a deduplicated, online-first friend
+    /// list. `currentUserId` is excluded defensively so a self-referencing
+    /// request can never surface the user as their own contact. Pure
+    /// function — no I/O, trivially testable.
     static func aggregate(
         received: [FriendRequest],
-        sent: [FriendRequest],
         currentUserId: String
     ) -> [FriendRequestUser] {
         var friendMap: [String: FriendRequestUser] = [:]
@@ -193,14 +223,6 @@ enum FriendListAggregator {
                 friendMap[sender.id] = sender
             } else if let receiver = request.receiver, receiver.id != currentUserId {
                 friendMap[receiver.id] = receiver
-            }
-        }
-
-        for request in sent where request.status == "accepted" {
-            if let receiver = request.receiver, receiver.id != currentUserId {
-                friendMap[receiver.id] = receiver
-            } else if let sender = request.sender, sender.id != currentUserId {
-                friendMap[sender.id] = sender
             }
         }
 
@@ -254,6 +276,80 @@ struct ContactsSearchField: View {
         .padding(.vertical, 8)
         .background(theme.inputBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// La pastille de filtre de l'annuaire — trois onglets la dessinaient chacun
+/// (RequestsTab garde la sienne : paddings et compteur différents).
+struct ContactsFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    /// `true` sur CallsTab : cible 44 pt DANS le label (la zone sensible d'un
+    /// Button est son label) ; la capsule reste visuellement compacte.
+    var hitTarget: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
+                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+                .frame(minHeight: hitTarget ? 44 : nil)
+                .contentShape(Rectangle())
+        }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Un onglet de la barre supérieure d'un hub — icône, titre, badge optionnel,
+/// soulignement animé. Partagé par `ContactsHubView.tabButton` et
+/// `PeopleDiscoveryView.subTabButton`, qui le peignaient à l'identique.
+/// `Selection` porte le type de la valeur observée par `.animation(value:)`
+/// (`PeopleTab` ou `DiscoveryTab`) : seule cette valeur diffère entre les deux
+/// hôtes.
+struct HubTabButton<Selection: Equatable>: View {
+    let icon: String
+    let title: String
+    let badge: Int
+    let isSelected: Bool
+    let selection: Selection
+    let action: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.footnote.weight(.medium))
+
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+
+                    if badge > 0 {
+                        Text("\(badge)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Circle().fill(MeeshyColors.indigo500))
+                    }
+                }
+                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
+
+                Rectangle()
+                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
+                    .frame(height: 2)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selection)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+        }
     }
 }
 

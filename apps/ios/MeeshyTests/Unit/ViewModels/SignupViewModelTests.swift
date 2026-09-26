@@ -19,10 +19,11 @@ final class SignupViewModelTests: XCTestCase {
     // MARK: - Fabrique
 
     private func makeSUT(
-        locale: Locale = Locale(identifier: "fr_FR")
+        locale: Locale = Locale(identifier: "fr_FR"),
+        referrals: MockPendingReferralStore = MockPendingReferralStore()
     ) -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
         let registrar = MockSignupRegistrar()
-        let sut = SignupViewModel(registrar: registrar, locale: locale)
+        let sut = SignupViewModel(registrar: registrar, locale: locale, referrals: referrals)
         return (sut, registrar)
     }
 
@@ -66,6 +67,87 @@ final class SignupViewModelTests: XCTestCase {
         fillValidForm(sut)
         XCTAssertTrue(sut.form.phoneDigits.isEmpty)
         XCTAssertTrue(sut.canSubmit)
+    }
+
+    // MARK: - Parrainage (#8075)
+
+    func test_submit_rememberedReferral_travelsWithTheRegistration() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateSessionKey, "iOS ne tient aucune clé de visite")
+    }
+
+    func test_submit_withPhone_referralStillTravels() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+        sut.form.phoneDigits = "0612345678"
+
+        await sut.submit()
+
+        XCTAssertNotNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+    }
+
+    func test_submit_withoutReferral_sendsNoAffiliateToken() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateToken)
+    }
+
+    func test_submit_accountCreatedWithSession_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.authenticated)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(referrals.code)
+        XCTAssertEqual(referrals.forgetCallCount, 1)
+    }
+
+    func test_submit_accountCreatedAwaitingVerification_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNotNil(sut.pendingVerification)
+        XCTAssertNil(referrals.code, "le compte existe déjà, rattaché : le code a servi")
+    }
+
+    func test_submit_rejected_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42", "aucun compte créé : le code attend le prochain essai")
+        XCTAssertEqual(referrals.forgetCallCount, 0)
+    }
+
+    func test_submit_phoneConflict_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(PhoneOwnershipConflict())
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42")
     }
 
     // MARK: - Envoi
@@ -324,7 +406,7 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error(for: .email))
         XCTAssertTrue(sut.emailAlreadyRegistered)
 
-        registrar.registerResult = .success(())
+        registrar.registerResult = .success(.authenticated)
         sut.form.email = "autre@example.com"
         let created = await sut.submit()
 
@@ -370,5 +452,213 @@ final class SignupViewModelTests: XCTestCase {
     func test_serverFieldNames_prismRanks_areNotFieldErrors() {
         XCTAssertNil(SignupViewModel.field(forServerName: "systemLanguage"))
         XCTAssertNil(SignupViewModel.field(forServerName: "regionalLanguage"))
+    }
+
+    /// Le repli par CODE suit la même règle que le repli par NOM DE CHAMP
+    /// (#6479) : `USERNAME_TAKEN` vise le pseudo, qui a sa propre saisie
+    /// depuis que l'écran l'envoie — jamais le nom affiché.
+    func test_fieldForCode_usernameTaken_targetsTheUsernameInput() {
+        XCTAssertEqual(SignupViewModel.field(forCode: "USERNAME_TAKEN"), .username)
+    }
+
+    // MARK: - Alerte « sans numéro » (#8040)
+
+    /// La règle pure : une inscription SANS numéro alerte, une inscription
+    /// AVEC numéro ne dit rien.
+    func test_phoneNudge_rule_withoutPhone_nudges() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.email = "awa@example.com"
+        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    func test_phoneNudge_rule_withPhone_doesNotNudge() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.email = "awa@example.com"
+        form.phoneDigits = "612345678"
+        XCTAssertFalse(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    /// Des espaces seuls ne sont pas un numéro : `hasPhone` lit les chiffres.
+    func test_phoneNudge_rule_whitespaceOnly_nudges() {
+        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
+        form.phoneDigits = "   "
+        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
+    }
+
+    func test_requestSubmit_withoutPhone_presentsTheNudgeAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .phoneNudged)
+        XCTAssertTrue(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0,
+                       "l'alerte PRÉCÈDE l'envoi : rien ne part avant la réponse")
+    }
+
+    func test_requestSubmit_withPhone_sendsWithoutNudge() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
+    }
+
+    func test_requestSubmit_invalidForm_neitherNudgesNorSends() async {
+        let (sut, registrar) = makeSUT()
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_requestSubmit_withPhone_serverRefusal_isRejected() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+    }
+
+    /// « Ajouter mon numéro » : l'alerte se ferme, le champ téléphone est
+    /// désigné pour le focus, et RIEN n'est envoyé.
+    func test_addPhoneInstead_closesTheNudgeFocusesThePhoneAndSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        _ = await sut.requestSubmit()
+
+        let focus = sut.addPhoneInstead()
+
+        XCTAssertEqual(focus, .phoneNumber)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    /// « Continuer quand même » : le compte naît SANS numéro, exactement comme
+    /// avant l'alerte — ni `phoneNumber` ni `phoneCountryCode` ne partent.
+    func test_continueWithoutPhone_createsTheAccountWithoutPhone() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        _ = await sut.requestSubmit()
+
+        let created = await sut.continueWithoutPhone()
+
+        XCTAssertTrue(created)
+        XCTAssertFalse(sut.isPhoneNudgePresented)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertNil(registrar.lastRegisterRequest?.phoneCountryCode)
+        XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
+    }
+
+    // MARK: - #8055 — sans numéro, le compte attend son code
+
+    /// « Continuer quand même » crée un compte SANS numéro, qui n'est pas encore
+    /// actif : le ViewModel expose l'adresse à vérifier pour que l'écran
+    /// présente la saisie du code — il ne rentre pas dans l'app.
+    func test_continueWithoutPhone_verificationRequired_exposesThePendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        let pending = PendingEmailVerification(email: "awa@example.com", accountCreated: true)
+        registrar.registerResult = .success(.verificationRequired(pending))
+        _ = await sut.requestSubmit()
+
+        let created = await sut.continueWithoutPhone()
+
+        XCTAssertTrue(created)
+        XCTAssertEqual(sut.pendingVerification, pending)
+        XCTAssertNil(sut.bannerError)
+    }
+
+    /// Avec un numéro, la session est ouverte : rien à vérifier avant d'entrer.
+    func test_requestSubmit_withPhone_authenticated_exposesNoPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "612345678"
+        registrar.registerResult = .success(.authenticated)
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .created)
+        XCTAssertNil(sut.pendingVerification)
+    }
+
+    /// Un nouvel envoi efface l'adresse en attente d'un envoi précédent.
+    func test_submit_clearsAPreviousPendingVerification() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        await sut.submit()
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+
+        await sut.submit()
+
+        XCTAssertNil(sut.pendingVerification)
+    }
+
+    // MARK: - La borne du pseudo (#8082)
+
+    /// Recette 2026-09-26 : `direction_recette` (17 caractères) passait l'écran,
+    /// la passerelle le refusait, et l'app disait « réessayez ». La borne se
+    /// dit désormais PENDANT la saisie, sous le pseudo, et rien ne part.
+    func test_tooLongUsername_showsTheBoundUnderTheFieldWhileTyping() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recette"
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRefusalMessage(.tooLong))
+        XCTAssertTrue(sut.error(for: .username)?.contains("16") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+    }
+
+    func test_tooLongUsername_submitSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.username = "direction_recette"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_validUsername_hasNoFieldMessage() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recett"
+
+        XCTAssertNil(sut.error(for: .username))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
+    /// La passerelle sert `violations: [{ path: "username", message: "must NOT
+    /// have more than 16 characters" }]` : le refus se pose SOUS le pseudo,
+    /// dans la langue du lecteur — jamais le texte d'Ajv, jamais « réessayez ».
+    func test_schemaRefusalOnUsername_landsUnderTheFieldInTheReadersLanguage() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .failure(
+            rejection(code: "VALIDATION_ERROR", message: "body/username must NOT have more than 16 characters", violations: [
+                .init(path: "username", message: "must NOT have more than 16 characters"),
+            ])
+        )
+
+        _ = await sut.submit()
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRuleMessage)
+        XCTAssertNil(sut.bannerError)
     }
 }

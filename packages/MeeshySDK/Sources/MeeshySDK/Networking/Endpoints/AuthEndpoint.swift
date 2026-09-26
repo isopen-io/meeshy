@@ -47,6 +47,7 @@ public enum AuthEndpoint: MeeshyEndpoint, Sendable {
     case sendPhoneCode
     case sessions
     case sessionsBySessionId(sessionId: String)
+    case verificationStatus
     case verifyEmail
     case verifyPhone
 
@@ -87,6 +88,7 @@ public enum AuthEndpoint: MeeshyEndpoint, Sendable {
         case .sendPhoneCode: return "/api/v1/auth/send-phone-code"
         case .sessions: return "/api/v1/auth/sessions"
         case .sessionsBySessionId(let sessionId): return "/api/v1/auth/sessions/\(sessionId)"
+        case .verificationStatus: return "/api/v1/auth/verification/status"
         case .verifyEmail: return "/api/v1/auth/verify-email"
         case .verifyPhone: return "/api/v1/auth/verify-phone"
         }

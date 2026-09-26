@@ -79,3 +79,5 @@
 - [`mark-unread` ne confond plus « je viens de répondre » avec « quelqu'un a lu plus loin », et pousse enfin son badge (2026-09-21/22, #7346)](decisions/mark-unread-ne-confond-plus-je-viens-de-repondre-avec-quelqu-un-a-lu-plus-loin.md)
 - [`EXACT_READ_TRACKING_SINCE` est armée par les compositions de staging et de production, pas seulement documentée (2026-09-22, #7356)](decisions/exact-read-tracking-since-est-armee-par-les-compositions-de-staging-et-de.md)
 - [Meeshy Global tient une vague d'arrivées : mode lent des nouveaux comptes et arrivées regroupées (2026-09-24, #7740)](decisions/meeshy-global-tient-une-vague-d-arrivees-mode-lent-des-nouveaux-comptes-et.md)
+- [Une adresse inconnue devient un compte, et la vérification ouvre la session (2026-09-26, #8033, #8036)](decisions/une-adresse-inconnue-devient-un-compte-et-la-verification-ouvre-la-session-2026-09-26-8033.md)
+- [Sans numéro, un compte n'est actif qu'une fois l'adresse prouvée (2026-09-26 soir, #8055)](decisions/sans-numero-un-compte-n-est-actif-qu-une-fois-l-adresse-prouvee-2026-09-26-8055.md)

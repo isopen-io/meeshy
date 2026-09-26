@@ -37,7 +37,6 @@ class ConversationViewModel: ObservableObject {
         _cachedLastSentIndex = .uncomputed
 
         if structureChanged {
-            _messagesByDate = nil
             _topActiveMembers = nil
             _mediaSenderInfoMap = nil
             _allVisualAttachments = nil
@@ -75,11 +74,6 @@ class ConversationViewModel: ObservableObject {
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
 
-    /// Message ids whose `messageService.edit` round-trip is in flight. The
-    /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
-    /// badge while the set contains its id so the user never wonders if
-    /// their edit actually landed.
-    @Published var editInProgress: Set<String> = []
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
@@ -100,9 +94,6 @@ class ConversationViewModel: ObservableObject {
         }
         return error.localizedDescription
     }
-
-    /// Set before prepend so the view can restore scroll position
-    @Published var scrollAnchorId: String?
 
     /// Real-time translation/transcription/audio data keyed by messageId
     ///
@@ -372,7 +363,6 @@ class ConversationViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var searchHasMore = false
     @Published var currentSearchQuery: String?
-    var searchNextCursor: String?
 
     /// True when the user jumped to a search result and messages are loaded around that point
     @Published var isInJumpedState = false
@@ -382,10 +372,6 @@ class ConversationViewModel: ObservableObject {
     /// reference. Drives a pulsing indicator on the scroll-to-bottom button
     /// so the user knows the app is working to find the cited message.
     @Published var isSearchingQuotedMessage = false
-    /// The message id the user is trying to jump to. Set alongside
-    /// `isSearchingQuotedMessage` and cleared once the jump completes
-    /// (or fails). Read by the scroll button to display contextual text.
-    @Published var quotedMessageSearchTarget: String? = nil
 
     // Permanent mapping `optimistic id → server id` for the lifetime of the
     // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
@@ -403,16 +389,6 @@ class ConversationViewModel: ObservableObject {
     // MARK: - O(1) Message Index
 
     var _messageIdIndex: [String: Int]?
-
-    // MARK: - Date-Grouped Messages
-
-    struct DateGroup: Identifiable {
-        let id: String
-        let date: Date
-        let messages: [Message]
-    }
-
-    var _messagesByDate: [DateGroup]?
 
     // MARK: - Conversation-Wide Media
 
@@ -452,7 +428,10 @@ class ConversationViewModel: ObservableObject {
         let translatedAudios: [MessageTranslatedAudio]
     }
 
-    var _allAudioItems: [AudioItem]?
+    var _allAudioItems: [AudioItem]? { didSet { _audioItemsByMessageId = nil } }
+    /// Index par message de `_allAudioItems` — voir `audioItemsByMessageId`
+    /// (ConversationViewModel+Projections.swift). Invalidé avec son parent.
+    var _audioItemsByMessageId: [String: [AudioItem]]?
 
     /// Maps attachment.id -> caption text for the fullscreen gallery.
     /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
@@ -508,10 +487,7 @@ class ConversationViewModel: ObservableObject {
     /// Actor for optimistic inserts and state-machine transitions.
     private(set) var messagePersistence: MessagePersistenceActor
     var lastOlderPaginationTime: Date = .distantPast
-    var lastNewerPaginationTime: Date = .distantPast
     static let paginationDebounceInterval: TimeInterval = 0.3
-    static let paginationRetryCount: Int = 3
-    private static let paginationRetryDelay: UInt64 = 500_000_000
 
     let authManager: AuthManaging
     let messageService: MessageServiceProviding

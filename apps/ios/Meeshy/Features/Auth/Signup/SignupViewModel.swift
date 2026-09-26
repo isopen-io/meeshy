@@ -14,11 +14,13 @@ import MeeshyUI
 /// bascule la session de tout le processus de test.
 @MainActor
 protocol SignupRegistering: AnyObject {
-    /// Crée le compte et APPLIQUE la session. Lève :
+    /// Crée le compte et APPLIQUE la session — ou, sans numéro de téléphone,
+    /// rend l'adresse à vérifier : le compte n'est pas encore actif (#8055).
+    /// Lève :
     /// - `MeeshyError.rejected(APIRejection)` — refus typé par champ ;
     /// - `PhoneOwnershipConflict` — numéro déjà rattaché à un compte vérifié ;
     /// - `MeeshyError.network(…)` — réseau indisponible.
-    func register(_ request: RegisterRequest) async throws
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome
 }
 
 /// L'implémentation de production : une couche mince au-dessus d'`AuthManager`.
@@ -38,11 +40,9 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
 
     private let authManager: AuthManager
 
-    init(authManager: AuthManager = .shared) {
-        self.authManager = authManager
-    }
+    private init() { self.authManager = .shared }
 
-    func register(_ request: RegisterRequest) async throws {
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         try await authManager.registerThrowing(request: request)
     }
 }
@@ -59,6 +59,25 @@ enum SignupField: String, CaseIterable, Hashable {
     case email
     case phoneNumber
     case password
+}
+
+// MARK: - L'alerte « sans numéro » (#8040)
+
+/// Faut-il ALERTER avant de créer le compte ? Oui quand aucun numéro n'est
+/// saisi — le numéro sécurise le compte et le récupère quand l'accès à l'adresse
+/// est perdu. Une alerte, jamais un blocage : « Continuer quand même » crée le
+/// compte sans numéro, exactement comme avant. Miroir web : `apps/web`
+/// (`signup.tsx`).
+enum SignupPhoneNudge {
+    static func shouldNudge(before form: SignupForm) -> Bool { !form.hasPhone }
+}
+
+/// Ce qu'une demande d'envoi a produit — l'écran en tire son retour haptique :
+/// une alerte n'est ni un succès ni un échec.
+enum SignupSubmitOutcome: Equatable {
+    case created
+    case rejected
+    case phoneNudged
 }
 
 // MARK: - ViewModel
@@ -95,14 +114,25 @@ final class SignupViewModel: ObservableObject {
     /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris
     /// (#6479). Vide partout ailleurs.
     @Published private(set) var usernameSuggestions: [String] = []
+    /// L'alerte « sans numéro » est-elle à l'écran (#8040) ? Écrite par
+    /// l'`.alert` elle-même quand l'utilisateur répond.
+    @Published var isPhoneNudgePresented = false
+    /// L'adresse à vérifier quand le compte, créé SANS numéro, n'est pas encore
+    /// actif (#8055) : l'écran présente alors la saisie du code au lieu d'entrer
+    /// dans l'app. Le mot de passe est déjà sur le compte — il ne repart pas.
+    @Published var pendingVerification: PendingEmailVerification?
 
     private let registrar: any SignupRegistering
+    /// Le code du lien d'invitation ouvert avant l'inscription (#8075).
+    private let referrals: PendingReferralStoreProviding
 
     init(
         registrar: any SignupRegistering = AuthManagerSignupRegistrar.shared,
-        locale: Locale = .current
+        locale: Locale = .current,
+        referrals: PendingReferralStoreProviding = PendingReferralStore.shared
     ) {
         self.registrar = registrar
+        self.referrals = referrals
         self.form = SignupForm(locale: locale)
     }
 
@@ -112,12 +142,46 @@ final class SignupViewModel: ObservableObject {
     /// Rien de réseau n'entre dans cette décision.
     var canSubmit: Bool { form.canSubmit && !isSubmitting }
 
-    func error(for field: SignupField) -> String? { fieldErrors[field] }
+    /// Le refus du serveur d'abord ; à défaut, ce que la saisie viole DÉJÀ —
+    /// la borne du pseudo se dit PENDANT la frappe (#8082), pas après un aller-retour.
+    func error(for field: SignupField) -> String? {
+        fieldErrors[field] ?? liveError(for: field)
+    }
+
+    private func liveError(for field: SignupField) -> String? {
+        guard field == .username, let refusal = form.usernameRefusal else { return nil }
+        return Self.usernameRefusalMessage(refusal)
+    }
 
     // MARK: - Envoi
 
-    /// Crée le compte. `true` quand la session est appliquée — l'appelant
-    /// enchaîne IMMÉDIATEMENT, sans pause d'aucune sorte.
+    /// Le geste « Créer mon compte » : alerte d'abord si aucun numéro n'est
+    /// saisi (#8040), sinon crée le compte.
+    func requestSubmit() async -> SignupSubmitOutcome {
+        guard canSubmit else { return .rejected }
+        if SignupPhoneNudge.shouldNudge(before: form) {
+            isPhoneNudgePresented = true
+            return .phoneNudged
+        }
+        return await submit() ? .created : .rejected
+    }
+
+    /// « Ajouter mon numéro » : ferme l'alerte, n'envoie rien, et rend le
+    /// champ à focaliser.
+    func addPhoneInstead() -> SignupField {
+        isPhoneNudgePresented = false
+        return .phoneNumber
+    }
+
+    /// « Continuer quand même » : le compte naît sans numéro.
+    func continueWithoutPhone() async -> Bool {
+        isPhoneNudgePresented = false
+        return await submit()
+    }
+
+    /// Crée le compte. `true` quand le compte est créé — l'appelant enchaîne
+    /// IMMÉDIATEMENT, sans pause d'aucune sorte : dans l'app si la session est
+    /// appliquée, vers la saisie du code si `pendingVerification` est posé.
     @discardableResult
     func submit() async -> Bool {
         guard form.canSubmit, !isSubmitting else { return false }
@@ -130,10 +194,20 @@ final class SignupViewModel: ObservableObject {
         // peut-être plus.
         usernameSuggestions = []
         emailAlreadyRegistered = false
+        pendingVerification = nil
         defer { isSubmitting = false }
 
         do {
-            try await registrar.register(form.registerRequest())
+            // Le code d'invitation VOYAGE avec l'inscription (#8058) : la
+            // passerelle rattache le compte au parrain, et un code invalide ne
+            // bloque jamais la création. Le compte existe dès qu'elle répond —
+            // session ouverte ou code à saisir — donc le code a servi.
+            let request = form.registerRequest().referred(byCode: referrals.recall())
+            let outcome = try await registrar.register(request)
+            referrals.forget()
+            if case .verificationRequired(let pending) = outcome {
+                pendingVerification = pending
+            }
             return true
         } catch {
             apply(error)
@@ -172,7 +246,13 @@ final class SignupViewModel: ObservableObject {
         var placed: [SignupField: String] = [:]
         for name in rejection.affectedFields {
             guard let field = Self.field(forServerName: name),
-                  let message = rejection.message(forField: name) else { continue }
+                  let served = rejection.message(forField: name) else { continue }
+            // Un refus de SCHÉMA porte le texte d'Ajv (« must NOT have more
+            // than 16 characters ») — anglais, technique. Sous le pseudo, la
+            // règle dans la langue du lecteur le remplace (#8082).
+            let message = field == .username && rejection.code == Self.validationErrorCode
+                ? Self.usernameRuleMessage
+                : served
             // Le PREMIER message qui vise un champ gagne : `violations` est
             // ordonné par le serveur, et empiler deux phrases sous une même
             // saisie n'en rendrait aucune lisible.
@@ -252,13 +332,51 @@ final class SignupViewModel: ObservableObject {
     static func field(forCode code: String?) -> SignupField? {
         switch code {
         case emailTakenCode: return .email
-        case usernameTakenCode: return .displayName
+        case usernameTakenCode: return .username
         case phoneInvalidCode: return .phoneNumber
         default: return nil
         }
     }
 
     // MARK: - Copies de refus
+
+    /// La borne du pseudo, dite sous le champ PENDANT la saisie (#8082). Les
+    /// nombres viennent de `SignupForm` — miroir du schéma partagé — jamais
+    /// d'un littéral de la copie.
+    static func usernameRefusalMessage(_ refusal: SignupForm.UsernameRefusal) -> String {
+        switch refusal {
+        case .tooLong:
+            return String(
+                format: String(localized: "auth.signup.username.tooLong", defaultValue: "%lld caractères au plus.", bundle: .main),
+                SignupForm.usernameMaxLength
+            )
+        case .tooShort:
+            return String(
+                format: String(localized: "auth.signup.username.tooShort", defaultValue: "%lld caractères au moins.", bundle: .main),
+                SignupForm.usernameMinLength
+            )
+        case .invalidCharacters:
+            return String(
+                localized: "auth.signup.username.invalidCharacters",
+                defaultValue: "Lettres sans accent, chiffres, - et _ uniquement — pas d’espace.",
+                bundle: .main
+            )
+        }
+    }
+
+    /// La règle ENTIÈRE, quand la passerelle refuse le pseudo sans motif
+    /// exploitable (texte d'Ajv) : elle couvre les trois.
+    static var usernameRuleMessage: String {
+        String(
+            format: String(
+                localized: "auth.signup.username.rule",
+                defaultValue: "De %1$lld à %2$lld caractères : lettres sans accent, chiffres, - et _.",
+                bundle: .main
+            ),
+            SignupForm.usernameMinLength,
+            SignupForm.usernameMaxLength
+        )
+    }
 
     /// Le seul refus dont l'écran connaît le REMÈDE, et il le dit.
     static let phoneOwnershipConflictMessage = String(

@@ -8,7 +8,6 @@ import MeeshyUI
 struct MessageReactionsDetailView: View {
     let message: Message
     let contactColor: String
-    let conversationId: String
     /// Ajouter une réaction depuis cette vue (voir + ajouter). `nil` = lecture seule.
     var onReact: ((String) -> Void)? = nil
 
@@ -21,7 +20,7 @@ struct MessageReactionsDetailView: View {
     @State private var reactionFilter: String = "all"
     @State private var showFullEmojiPicker = false
 
-    private static let quickReactionDefaults = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀"]
+    private static let quickReactionDefaults = Array(MessageOverlayMenu.defaultEmojis.prefix(12))
 
     var body: some View {
         VStack(spacing: 12) {
@@ -198,9 +197,7 @@ struct MessageReactionsDetailView: View {
     /// `true` quand `message.id` est un ObjectId MongoDB (24 hex). Un message
     /// encore optimiste garde son id local `cid_…` : il n'existe pas côté
     /// serveur, et l'endpoint `/reactions/:id` répondrait 400 "Validation failed".
-    private var messageHasServerId: Bool {
-        message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
-    }
+    private var messageHasServerId: Bool { ConversationViewModel.isServerMessageId(message.id) }
 
     /// Seeds `reactionGroups` from `message.reactions` — the same raw data
     /// already summarized into the pills shown under the bubble the user

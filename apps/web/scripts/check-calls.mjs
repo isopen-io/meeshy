@@ -7,8 +7,8 @@
  * depuis « Tous », ce qu'une ligne annonce et où elle mène. Aucun ne traverse le
  * CÂBLAGE ni la FEUILLE DE STYLE — une ligne qu'un disque flottant recouvre, un
  * nom manqué rouge illisible en clair, un filtre qui attend le réseau alors que
- * le cache répond, ou un « Rappeler » qui réapparaîtrait sans effet les laissent
- * tous verts. Ce gate les mesure dans un navigateur réel, sur le `dist`
+ * le cache répond, ou un « Rappeler » qui disparaîtrait ou n'ouvrirait aucun appel
+ * les laissent tous verts. Ce gate les mesure dans un navigateur réel, sur le `dist`
  * construit (source fixtures : cinq appels), dans les DEUX schémas et aux deux
  * gabarits de la charte (390 × 844, 320 × 568) :
  *
@@ -19,13 +19,16 @@
  *     chaque contrôle fait au moins 44 de haut ; chaque ligne s'atteint une fois
  *     amenée au milieu de l'écran ;
  *  3. les trois directions se distinguent par un glyphe PROPRE et un libellé
- *     VISIBLE, et aucune ligne ne porte de bouton (« Rappeler » n'a pas d'effet
- *     sur le web) ;
+ *     VISIBLE, et chaque ligne porte UN bouton, « Rappeler », du type de l'appel
+ *     d'origine, hors du lien de la ligne (#6382, #8056) ;
  *  4. chaque texte tient AA dans les deux schémas — le nom ROUGE d'un manqué
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
  *  6. une ligne ouvre le fil de SA conversation, et le retour ramène au journal ;
+ *  6 bis. « Rappeler » a un EFFET (loi : un contrôle n'existe que s'il agit) —
+ *     il ouvre l'écran d'appel vers la personne de la ligne, au-dessus du
+ *     journal, et « Raccrocher » l'en retire ;
  *  7. hors ligne, le journal reste lisible et le dit ; la pastille de
  *     synchronisation ne recouvre aucun filtre du rail (#6401, #6387) ;
  *  8. aucune erreur de page.
@@ -151,7 +154,7 @@ try {
       const rows = await reachRows(page);
       check(rows.length === 5 && rows.every((r) => r.ok && r.hauteur >= TAP_FLOOR), `${label} : chaque ligne s'atteint — ${JSON.stringify(rows)}`);
 
-      // ------------------------------------------------ 3. trois directions, sans la couleur, sans « Rappeler »
+      // ------------------------------------------------ 3. trois directions, sans la couleur, avec « Rappeler »
       const directions = await page.$$eval('[data-call]', (els) =>
         els.map((el) => ({
           ligne: el.getAttribute('data-call'),
@@ -159,6 +162,11 @@ try {
           libelle: (el.querySelector('[data-call-direction]')?.textContent ?? '').trim(),
           glyphe: el.querySelector('[data-call-meta] svg')?.innerHTML ?? '',
           boutons: el.querySelectorAll('button').length,
+          rappel: el.querySelector('button[data-call-back]')?.getAttribute('data-call-back') ?? null,
+          rappelNomme: el.querySelector('button[data-call-back]')?.getAttribute('aria-label') ?? '',
+          nom: (el.querySelector('[data-call-name]')?.textContent ?? '').trim(),
+          horsDuLien: el.querySelector('a [data-call-back], [data-call-back] a') === null,
+          video: el.querySelector('[data-call-video]') !== null,
         })),
       );
       const byDirection = (d) => directions.filter((row) => row.direction === d);
@@ -168,7 +176,10 @@ try {
       );
       const glyphs = new Set(['missed', 'incoming', 'outgoing'].map((d) => byDirection(d)[0]?.glyphe ?? ''));
       check(glyphs.size === 3 && !glyphs.has(''), `${label} : les trois directions ont trois glyphes distincts`);
-      check(directions.every((r) => r.boutons === 0), `${label} : aucune ligne ne porte de bouton — « Rappeler » n'a pas d'effet sur le web`);
+      check(
+        directions.every((r) => r.boutons === 1 && r.horsDuLien && r.rappel === (r.video ? 'video' : 'audio') && r.rappelNomme === `Rappeler ${r.nom}`),
+        `${label} : chaque ligne porte UN bouton « Rappeler <nom> », du type de l'appel d'origine, hors du lien — ${JSON.stringify(directions.map(({ ligne, boutons, rappel, rappelNomme, horsDuLien }) => ({ ligne, boutons, rappel, rappelNomme, horsDuLien })))}`,
+      );
       const videos = await page.$$eval('[data-call-video]', (els) => els.map((el) => el.closest('[data-call]')?.getAttribute('data-call')));
       check(JSON.stringify(videos) === JSON.stringify(['call-kwame-video', 'call-fatou-manque']), `${label} : les appels vidéo portent leur glyphe (${JSON.stringify(videos)})`);
       check(
@@ -220,6 +231,42 @@ try {
       await page.waitForURL('**/calls');
       await page.waitForSelector('[data-call]');
       check((await shownCalls(page)).length === 5, `${label} : le retour ramène au journal`);
+
+      // ------------------------------------------------ 6 bis. « Rappeler » a un EFFET
+      for (const [ligne, nom] of [
+        ['call-amina-manque', 'Amina Diallo'],
+        ['call-kwame-video', 'Kwame Mensah'],
+      ]) {
+        await page.click(`[data-call="${ligne}"] [data-call-back]`);
+        const opened = await page.waitForSelector('[data-call-screen]', { timeout: 5000 }).then(() => true, () => false);
+        const screen = opened
+          ? await page.$eval('[data-call-screen]', (el) => ({
+              role: el.getAttribute('role'),
+              nom: el.getAttribute('aria-label'),
+              titre: (el.querySelector('h2')?.textContent ?? '').trim(),
+            }))
+          : null;
+        check(
+          screen !== null && screen.role === 'dialog' && screen.nom === `Appel avec ${nom}` && screen.titre === nom,
+          `${label} : « Rappeler » sur ${ligne} ouvre l'écran d'appel vers ${nom} (${JSON.stringify(screen)})`,
+        );
+        check(new URL(page.url()).pathname === '/calls', `${label} : l'appel se pose AU-DESSUS du journal, sans quitter /calls (${new URL(page.url()).pathname})`);
+        await capture(page, `appels-rappel-${ligne}-${slug}`);
+        /* L'écran change de phase sous le doigt (sortant, échec d'accès aux
+           médias sur un runner sans caméra, fin) : on vise par LOCATEUR, qui
+           se re-résout, jamais par une poignée d'élément qui peut se détacher. */
+        const tap = (name) =>
+          page
+            .locator(`[data-call-screen] button[aria-label="${name}"]`)
+            .first()
+            .click({ timeout: 2000 })
+            .then(() => true, () => false);
+        await tap('Raccrocher');
+        if ((await page.$('[data-call-screen]')) !== null) await tap('Fermer');
+        const gone = await page.waitForSelector('[data-call-screen]', { state: 'detached', timeout: 8000 }).then(() => true, () => false);
+        check(opened && gone, `${label} : raccrocher retire l'écran d'appel de ${ligne} et rend le journal`);
+      }
+      check((await shownCalls(page)).length === 5, `${label} : après le rappel, le journal est intact`);
 
       // ------------------------------------------------ 7. hors ligne
       await context.setOffline(true);

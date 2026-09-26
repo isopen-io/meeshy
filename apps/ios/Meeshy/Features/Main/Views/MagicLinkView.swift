@@ -10,6 +10,10 @@ struct MagicLinkView: View {
     @EnvironmentObject var authManager: AuthManager
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    /// Code saisi et vérifié (#8059) : reçoit de quoi ouvrir la session, que
+    /// l'hôte pose une fois cet écran REFERMÉ — l'ouvrir pendant qu'il est
+    /// présenté démonte la connexion qui le présente, et il resterait figé.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
 
     @State private var email = ""
     @State private var step: Step = .emailInput
@@ -21,6 +25,9 @@ struct MagicLinkView: View {
     @FocusState private var isEmailFocused: Bool
     /// Le (i) DÉPLIÉ — un seul à la fois, comme à l'inscription (#6626).
     @State private var expandedHint: Hint?
+    /// L'e-mail envoyé porte un code ET un lien (#8035) : la saisie du code
+    /// suit l'envoi, pour l'adresse à laquelle il est parti.
+    @State private var codeEntry: EmailVerificationViewModel?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
 
@@ -272,7 +279,7 @@ struct MagicLinkView: View {
                 .foregroundColor(theme.textPrimary)
 
             VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Ouvrez le lien reçu à", bundle: .main))
+                Text(String(localized: "auth.magiclink.sent.codeAndLink", defaultValue: "Code et lien envoyés à", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -282,6 +289,13 @@ struct MagicLinkView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .accessibilityElement(children: .combine)
+
+            if let codeEntry {
+                EmailCodeEntry(viewModel: codeEntry)
+                    .onReceive(codeEntry.$verificationSuccess.filter { $0 }.first()) { _ in
+                        handOff(codeEntry)
+                    }
+            }
 
             if linkExpired {
                 Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: .main))
@@ -366,6 +380,12 @@ struct MagicLinkView: View {
         LocalizedNumber.spokenDuration(seconds: countdownRemaining)
     }
 
+    private func handOff(_ entry: EmailVerificationViewModel) {
+        guard let onVerified else { return entry.openProvenSession() }
+        onVerified(entry.openProvenSession)
+        dismiss()
+    }
+
     private func sendMagicLink() {
         guard isValidEmail else { return }
 
@@ -375,8 +395,15 @@ struct MagicLinkView: View {
 
         Task {
             do {
-                let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
+                let dispatch = try await AuthService.shared.requestEmailCode(email: email)
+                let expiresInSeconds = dispatch.expiresInSeconds ?? 300
 
+                if codeEntry?.email != email {
+                    codeEntry = EmailVerificationViewModel(email: email)
+                }
+                // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
+                // que l'adresse a été confirmée sur un autre appareil.
+                codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false
@@ -385,12 +412,8 @@ struct MagicLinkView: View {
 
                 startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
-            } catch let error as APIError {
-                errorMessage = error.errorDescription
-                isLoading = false
-                Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: .main)
+                errorMessage = EmailProofErrorText.sendMessage(for: error)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }

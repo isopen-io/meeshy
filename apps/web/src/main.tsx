@@ -210,6 +210,14 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
       listenNotificationTapsInBrowser(),
     );
     /**
+     * ET « RÉPONDRE » SUR LA NOTIFICATION D'APPEL DÉCROCHE (#8043) : le fil
+     * ouvert par le worker décroche l'appel désigné dès qu'il sonne, et la
+     * notification disparaît quand l'appel quitte la sonnerie.
+     */
+    void import('@/lib/calls/call-answer-intent').then(({ listenCallAnswerIntentsInBrowser }) =>
+      listenCallAnswerIntentsInBrowser(),
+    );
+    /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
      * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun
      * module de `src/` : sans ce pont IndexedDB, posé dès que la session est

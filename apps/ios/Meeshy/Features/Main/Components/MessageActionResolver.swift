@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// Action affichée dans la liste verticale de l'overlay appui-long.
 enum PrimaryAction: String, Equatable {
-    case edit, translate, copy, saveMedia, pin, unpin, star, unstar, more, delete
+    case edit, translate, copy, saveMedia, more
     /// **Composer** (lot 5, O13) — ouvre l'atelier sur le média reçu, déjà
     /// posé. Elle vit dans la liste VERTICALE et non dans « Plus… » parce que
     /// O13 fixe le budget à DEUX gestes : la feuille en coûterait trois.

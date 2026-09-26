@@ -472,10 +472,12 @@ final class Router: ObservableObject {
                     await self?.handleConversationDeepLink(id, draftText: draftText)
                 }
 
-            case .magicLink(let token):
-                Self.logger.info("Deep link magic link received")
-                Task { [weak self] in
-                    await self?.handleMagicLinkToken(token)
+            case .magicLink, .emailVerificationLink:
+                // Tapé in-app, donc déjà connecté (#8035) : `SignInLinkOpener`
+                // décide s'il faut d'abord déconnecter le compte courant.
+                Self.logger.info("Deep link sign-in link received")
+                if let link = SignInLink(destination) {
+                    Task { await SignInLinkOpener.open(link) }
                 }
 
             case .share(let text, let urlString):
@@ -516,7 +518,7 @@ final class Router: ObservableObject {
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
 
-            case .external:
+            case .referral, .external:
                 break
             }
         }
@@ -554,31 +556,6 @@ final class Router: ObservableObject {
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
             FeedbackToastManager.shared.showError(String(localized: "deeplink.conversation.error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main))
-        }
-    }
-
-    // MARK: - Magic Link Validation
-
-    private func handleMagicLinkToken(_ token: String) async {
-        // P0 — this path only runs while `RootView`/`iPadRootView` are
-        // mounted, i.e. while ALREADY authenticated (as a possibly DIFFERENT
-        // account — e.g. a magic-link URL rendered as an in-app tappable
-        // `Link` and routed here via the `openURL` environment override).
-        // Applying a new session on top of the current one without a full
-        // teardown would leak account A's caches, sockets, and E2EE session
-        // keys into account B's session. See `MeeshyApp.validateMagicLinkToken`
-        // for the mirrored fix on the cold/warm system-URL path.
-        if AuthManager.shared.isAuthenticated {
-            await AuthManager.shared.logout()
-        }
-        await AuthManager.shared.validateMagicLink(token: token)
-
-        if AuthManager.shared.isAuthenticated {
-            FeedbackToastManager.shared.showSuccess(String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main))
-            Self.logger.info("Magic link validated successfully")
-        } else {
-            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main))
-            Self.logger.error("Magic link validation failed")
         }
     }
 

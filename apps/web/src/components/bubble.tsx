@@ -23,6 +23,7 @@ import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
+import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
   Check,
@@ -195,7 +196,7 @@ export function Bubble({
   if (systemRow !== null) {
     return (
       <div data-message={message.id} style={{ marginBottom: tail ? 6 : 2 }}>
-        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" />
+        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" callTarget={callNoticeTarget(message)} />
       </div>
     );
   }

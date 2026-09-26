@@ -840,10 +840,10 @@ struct BubbleStandardLayout: View {
                 // can't be used to key the carousel.
                 let footer = resolvedFooter(includesTranslationControls: true)
                 let trackIDs = Set(auds.map(\.id))
+                // UNE passe sur la liste conversation-entière (deux filtres avant).
+                let pageItems = allAudioItems.filter { trackIDs.contains($0.id) }
                 let perPageTranscriptions = Dictionary(
-                    allAudioItems
-                        .filter { trackIDs.contains($0.id) }
-                        .compactMap { item in item.transcription.map { (item.id, $0) } },
+                    pageItems.compactMap { item in item.transcription.map { (item.id, $0) } },
                     uniquingKeysWith: { first, _ in first }
                 )
                 // Per-page translated audios are keyed by attachmentId from
@@ -854,9 +854,7 @@ struct BubbleStandardLayout: View {
                 // so it can't be used to key the carousel. Falls back to the
                 // grouped per-message array for safety (single-audio path).
                 let perAttachmentAudios = Dictionary(
-                    allAudioItems
-                        .filter { trackIDs.contains($0.id) }
-                        .map { ($0.id, $0.translatedAudios) },
+                    pageItems.map { ($0.id, $0.translatedAudios) },
                     uniquingKeysWith: { first, _ in first }
                 )
                 let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })

@@ -91,6 +91,9 @@ export const AuthSchemas = {
     systemLanguage: supportedLanguageCode.optional(),
     regionalLanguage: supportedLanguageCode.optional(),
     phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
+    // #8058 — le parrainage voyage avec l'inscription (même valeur que `POST /affiliate/register`).
+    affiliateToken: z.string().min(1).optional(),
+    affiliateSessionKey: z.string().min(1).optional(),
   }),
   // La disjonction d'identité (`displayName`, ou `firstName` + `lastName`) a
   // été RETIRÉE par #6424, en même temps que l'`anyOf` de sa jumelle Ajv : le
@@ -106,14 +109,26 @@ export const AuthSchemas = {
     sessionToken: z.string().optional(),
   }),
 
-  // Verify email (token from link OR 6-digit code from mobile)
+  /**
+   * Vérifier l'adresse — par le lien (`token`) OU par le code à six chiffres —
+   * et, depuis #8033, OUVRIR la session.
+   *
+   * `password` est admis avec le CODE seulement : c'est l'écran de saisie du
+   * code qui peut le demander, jamais un lien cliqué depuis une boîte mail. Le
+   * serveur ne l'applique qu'à un compte qui n'en a pas encore — un mot de
+   * passe existant ne se remplace pas par cette porte.
+   */
   verifyEmail: z.object({
     token: z.string().min(1).optional(),
     code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
     email: z.email(),
+    password: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort).optional(),
   }).refine(
     (data) => !!data.token || !!data.code,
     { message: 'Either token or code must be provided' }
+  ).refine(
+    (data) => data.password === undefined || !!data.code,
+    { message: 'A password can only be set together with the code', path: ['password'] }
   ),
 
   // Resend verification

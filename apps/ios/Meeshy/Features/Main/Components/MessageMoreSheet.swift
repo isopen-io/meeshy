@@ -430,7 +430,7 @@ struct MessageMoreSheet: View {
     private func destination(for item: MoreItem) -> some View {
         switch item {
         case .language:
-            MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
+            MessageLanguageDetailView(message: message,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
                 onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage,
                 translatingTextLanguages: translatingTextLanguages, translatingAudioLanguages: translatingAudioLanguages,
@@ -439,16 +439,16 @@ struct MessageMoreSheet: View {
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
-            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId, onReact: onReact)
+            MessageReactionsDetailView(message: message, contactColor: contactColor, onReact: onReact)
         case .transcription:
-            MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
-                transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
+            MessageTranscriptionDetailView(message: message, contactColor: contactColor,
+                transcription: transcription, translatedAudios: translatedAudios)
         case .sentiment:
             MessageDetailSentimentTab(content: message.content, isDark: colorScheme == .dark).equatable()
         case .history:
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
-            MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
+            MessageReportDetailView(onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
              .pinSticker, .unpinSticker, .delete, .edit, .copy, .share:
             EmptyView()

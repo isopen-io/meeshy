@@ -380,7 +380,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // fichier qui annonçait une extension de `FeedView`.
         let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
-        XCTAssertTrue(publish.contains("location: pendingPlace"),
+        // Le lieu est CAPTURÉ avant `onDismiss()` (la feuille est démontée
+        // aussitôt, une lecture tardive depuis la Task ne trouverait plus
+        // rien) : c'est la capture qui part, jamais le `@State` relu.
+        XCTAssertTrue(publish.contains("let capturedPlace = pendingPlace"),
+                      "publishPost doit capturer la position avant de refermer la feuille.")
+        XCTAssertTrue(publish.contains("location: capturedPlace"),
                       "publishPost perd la position dans sa branche sans fichier.")
 
         XCTAssertTrue(publish.contains("pendingPlace != nil"),
@@ -615,7 +620,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     // MARK: - Mot de passe
 
-    /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
+    /// Sans `.newPassword` — que `MeeshyPasswordField` pose pour le rôle `.new`
+    /// (#8054) —, iOS ne propose ni mot de passe fort ni — surtout —
     /// l'enregistrement au trousseau en fin d'inscription.
     ///
     /// **UN seul site depuis #5218**, contre deux auparavant : la confirmation
@@ -631,13 +637,24 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_signupPasswordFields_optIntoKeychainSave() throws {
         let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
         XCTAssertEqual(
-            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 1,
-            "Une seule saisie de mot de passe, et elle doit être `.newPassword`."
+            src.components(separatedBy: "role: .new").count - 1, 1,
+            "Une seule saisie de mot de passe, et elle doit être `.newPassword` (`MeeshyPasswordField` rôle `.new`, #8054)."
         )
         XCTAssertTrue(
             src.contains(".textContentType(.emailAddress)") || src.contains(".textContentType(.username)"),
             "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe."
         )
+    }
+
+    /// `fieldBlock` posait `.accessibilityLabel(label)` sur tout son contenu :
+    /// l'œil du mot de passe se lisait « Mot de passe, Masqué » au lieu de
+    /// « Afficher le mot de passe » (mesuré au simulateur, #8054). Le champ de
+    /// mot de passe se libelle LUI-MÊME, et le bloc ne l'écrase pas.
+    func test_signupPasswordField_keepsTheEyeButtonAccessibilityLabel() throws {
+        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
+        let block = try XCTUnwrap(src.range(of: "private var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
+        XCTAssertTrue(block.contains("labelsContent: false"), "Le bloc ne doit pas écraser le libellé de l'œil.")
+        XCTAssertTrue(block.contains("accessibilityLabel:"), "Le champ porte son propre libellé VoiceOver.")
     }
 
     /// `webcredentials:` est ce qui associe l'app au domaine dans le trousseau

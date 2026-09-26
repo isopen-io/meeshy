@@ -136,8 +136,18 @@
 // `colorHex` parce qu'elle porte l'un OU l'autre ; la nommer `accentColor`
 // mentirait sur la moitié des cas. Même raisonnement que #6793 ci-dessus :
 // relever plutôt que déplacer l'appel. Aucun littéral ne bouge (118).
+//
+// 2026-09-26 (#7945, lot 6) — variables inconnues 431 → 432. UN seul appel
+// neuf, et ce n'est qu'un DÉPLACEMENT : `FeedPostEmbedRow`, la ligne d'embed
+// vidéo extraite de `FeedPostCard` pour que ses deux balayages NSDataDetector
+// ne rejouent plus à chaque re-render de la carte (`.equatable()`), reçoit
+// l'accent du post sous le nom ÉTABLI `accentHex: String` — la carte, qui
+// écrivait `Color(hex: accentColor)` en place (variable admise), lui passe sa
+// propre `accentColor`. Même vocabulaire que #6793 ci-dessus (la CHAÎNE, par
+// opposition à la COULEUR) : relever plutôt que renommer. Aucun littéral ne
+// bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 434;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 432;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

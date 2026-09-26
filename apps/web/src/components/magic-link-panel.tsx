@@ -14,8 +14,11 @@ import {
 } from '@/lib/view/magic-link';
 import { HOW_IT_WORKS_LABEL, HOW_IT_WORKS_TEXT } from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { AuthSubmitButton } from './auth-chrome';
+import { EmailCodeForm, withStrongEmail } from './email-code-form';
 import { EmailSentNotice } from './email-sent-notice';
 import { Field } from './field';
 import { GlyphSvg } from './glyph';
@@ -44,6 +47,10 @@ export type MagicLinkPanelDeps = {
   readonly request: typeof auth.requestMagicLink;
   readonly clock: IntervalClock;
   readonly now: () => number;
+  /** La saisie du code reçu (#8034) — `auth.verifyEmail` si absent. */
+  readonly verifyEmail?: typeof auth.verifyEmail;
+  /** L'état de l'adresse via le jeton d'attente (#8083) — `auth.verificationStatus` si absent. */
+  readonly verificationStatus?: typeof auth.verificationStatus;
 };
 
 export const defaultMagicLinkDeps: MagicLinkPanelDeps = {
@@ -105,6 +112,8 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
   const [outcome, setOutcome] = useState<MagicLinkRequestOutcome | null>(null);
   const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
   const [focused, setFocused] = useState(false);
+  const [codeVerified, setCodeVerified] = useState(false);
+  const [pendingSessionToken, setPendingSessionToken] = useState<string | null>(null);
   const howItWorks = useInfoHint();
 
   const remaining = useCountdown(deadline, deps.clock, deps.now);
@@ -119,6 +128,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
     setSubmitting(false);
     const resolved = resolveMagicLinkRequest(result);
     if (resolved.kind === 'sent') {
+      setPendingSessionToken(result.ok ? (result.data?.pendingSessionToken ?? null) : null);
       setDeadline({ startedAt: deps.now(), expiresInSeconds: resolved.expiresInSeconds });
       setStep('waiting');
       return;
@@ -128,6 +138,8 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
 
   function cancel() {
     setStep('input');
+    setPendingSessionToken(null);
+    setCodeVerified(false);
     setOutcome(null);
     onCancel?.();
   }
@@ -140,26 +152,50 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
     /* L'ÉCRAN « E-MAIL ENVOYÉ » est aussi celui du mot de passe oublié
        (`EmailSentNotice`, #6643) : l'enveloppe, l'adresse et « Rien reçu ? » y
        vivent une fois. Ce qui n'appartient qu'à la connexion — le compte à
-       rebours, le renvoi, l'annulation — entre par ses deux emplacements. */
+       rebours, le renvoi, l'annulation — entre par ses deux emplacements.
+
+       « E-MAIL SEUL → CODE + LIEN » (#8034, arbitrage porteur 2026-09-26) :
+       l'e-mail envoyé porte, compte existant OU nouveau, un code à 6 chiffres
+       ET un lien. Le code se saisit ICI, sans changer d'écran
+       (`EmailCodeForm`, la machine de `/auth/verify-email`) ; il ouvre la
+       session et mène là où une connexion mène. */
+    const language = currentInterfaceLanguage();
     return (
       <EmailSentNotice
         email={email}
+        lead={withStrongEmail(translate(language, 'emailSent.codeOrLink', { email }), email, 'var(--ios-indigo-400)')}
         status={
-          expired ? (
-            <p role="alert" style={{ color: 'var(--ios-error)' }}>
-              Lien expiré, renvoyez-en un nouveau
-            </p>
-          ) : (
-            <p
-              role="timer"
-              aria-live="off"
-              aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
-              className="font-bold tabular-nums text-screen"
-              style={{ color: 'var(--ios-indigo-600)' }}
-            >
-              {formatCountdown(remaining, locale)}
-            </p>
-          )
+          <>
+            {expired ? (
+              <p role="alert" style={{ color: 'var(--ios-error)' }}>
+                Lien expiré, renvoyez-en un nouveau
+              </p>
+            ) : (
+              <p
+                role="timer"
+                aria-live="off"
+                aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+                className="font-bold tabular-nums text-screen"
+                style={{ color: 'var(--ios-indigo-600)' }}
+              >
+                {formatCountdown(remaining, locale)}
+              </p>
+            )}
+            {codeVerified ? (
+              <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
+                {translate(language, 'verifyEmail.verified')}
+              </p>
+            ) : (
+              <EmailCodeForm
+                email={email}
+                next={next}
+                {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
+                {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
+                pendingSessionToken={pendingSessionToken}
+                onVerified={() => setCodeVerified(true)}
+              />
+            )}
+          </>
         }
       >
         <button

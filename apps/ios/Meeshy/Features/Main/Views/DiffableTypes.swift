@@ -41,15 +41,5 @@ nonisolated enum FeedListItem: Hashable, Sendable {
     case mediaPost(id: String)
 }
 
-nonisolated enum CommentListSection: Hashable, Sendable {
-    case topLevel(commentId: String)
-}
-nonisolated enum CommentListItem: Hashable, Sendable {
-    case comment(id: String)
-    case loadMoreReplies(parentId: String, remaining: Int)
-}
-
 // Type aliases for DiffableDataSource to suppress @MainActor inference
-typealias MessageListDataSource = UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>
 typealias FeedListDataSource = UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>
-typealias CommentListDataSource = UICollectionViewDiffableDataSource<CommentListSection, CommentListItem>

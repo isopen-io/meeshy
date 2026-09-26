@@ -130,18 +130,6 @@ extension UniversalComposerBar {
     // MARK: - Toolbar Icon Button
     // ========================================================================
 
-    private func toolbarButton(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(mutedColor)
-                .frame(width: 30, height: 30)
-                .contentShape(Circle())
-        }
-        .disabled(effectiveIsRecording)
-        .opacity(effectiveIsRecording ? 0.4 : 1)
-    }
-
     // ========================================================================
     // MARK: - Swipe Handle
     // ========================================================================

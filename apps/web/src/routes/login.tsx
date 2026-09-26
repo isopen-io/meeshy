@@ -7,13 +7,15 @@ import { Field } from '@/components/field';
 import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
-import { auth } from '@/lib/api/auth';
+import { auth, isVerificationRequired } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
 import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
@@ -110,11 +112,14 @@ export function LoginDoors({
   method,
   next = null,
   magicLinkDeps,
+  passwordLogin = auth.login,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
   readonly next?: string | null;
   readonly magicLinkDeps?: MagicLinkPanelDeps;
+  /** La connexion par mot de passe — injectable pour les témoins. */
+  readonly passwordLogin?: typeof auth.login;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
@@ -149,9 +154,23 @@ export function LoginDoors({
     if (username.trim() === '' || password === '' || isSubmitting) return;
     setSubmitting(true);
     setErrorMessage(null);
-    const result = await auth.login({ username, password });
+    const result = await passwordLogin({ username, password });
     setSubmitting(false);
-    if (!result.ok) setErrorMessage(placeLoginFailure(result).message);
+    if (!result.ok) {
+      setErrorMessage(placeLoginFailure(result).message);
+      return;
+    }
+    /* UN E-MAIL INCONNU DEVIENT UN COMPTE (#8034, contrat #8033) : la
+       passerelle l'a créé SANS mot de passe ni session, et envoyé un code et
+       un lien. On va AUSSITÔT à la saisie du code ; le mot de passe tapé est
+       retenu en mémoire vive (jamais l'adresse, jamais le stockage) pour
+       voyager avec ce code — seule preuve que celui qui l'a tapé possède
+       l'adresse. */
+    if (isVerificationRequired(result.data)) {
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, password, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, ...nextSearch }));
+    }
     // Un succès (avec ou sans 2FA) écrit le magasin — `session.status` change
     // et `SessionGate` (`main.tsx`) prend la suite (redirection vers `/`).
   }
@@ -291,7 +310,7 @@ export function LoginDoors({
                 autoCapitalize="none"
                 autoCorrect="off"
                 value={username}
-                onChange={(e) => setUsername(e.currentTarget.value)}
+                onInput={(e) => setUsername(e.currentTarget.value)}
                 onFocus={() => setFocused('username')}
                 onBlur={() => setFocused(null)}
                 placeholder="Identifiant, e-mail ou téléphone"
@@ -303,17 +322,14 @@ export function LoginDoors({
 
           <Field id="login-password" label="Mot de passe" icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
             {({ id }) => (
-              <input
+              <PasswordInput
                 id={id}
-                type="password"
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
+                onValue={setPassword}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
                 placeholder="Mot de passe"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>

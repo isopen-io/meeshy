@@ -13,8 +13,8 @@ import XCTest
 ///   inline iPad (T3.4) est DESCOPÉ — nommé + gardé par T3.3, pas migré. Les
 ///   deux CITATIONS restent, condition de levée **7.5** (un écrivain durable du
 ///   repost, §A.4).
-/// - **capacités tenues** : cinq manquent au meuble et vivent encore SUR la
-///   feuille — progression, références, dépôt, éditeur d'image, son emprunté.
+/// - **capacités tenues** : quatre manquent au meuble et vivent encore SUR la
+///   feuille — progression, dépôt, éditeur d'image, son emprunté.
 ///   Les retirer avec la feuille les retirerait à l'utilisateur.
 final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
 
@@ -63,20 +63,11 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
     /// commit — soit elle a été PERDUE, et c'est une régression, pas une mise à
     /// jour d'inventaire.
     func test_leSetDesCapacitesNonMigrees_estOpposableAuRetrait() throws {
-        // **Deux fichiers depuis #6040**, et l'inventaire dit LEQUEL porte quoi.
-        //
-        // La feuille vivait dans `FeedView+Attachments.swift`, qui annonce une
-        // EXTENSION de `FeedView` et contenait surtout autre chose : 1 136
-        // lignes de feuille contre 199 d'extension, au-dessus du plafond dur.
-        // Le découpage les sépare — et il ne répartit PAS les cinq ancres de
-        // façon homogène : quatre partent avec la feuille, `feedDeclaredReferences`
-        // reste dans l'extension, parce que ce sont les deux publications audio
-        // survivantes qui la lisent.
-        //
-        // > Un inventaire qui dirait seulement « ces cinq ancres existent
-        // > quelque part » se laisserait satisfaire par un déménagement qui
-        // > casse la capacité. Nommer le FICHIER de chacune est ce qui rend le
-        // > déplacement visible.
+        // `feedDeclaredReferences` a quitté l'inventaire : depuis #6016 rien
+        // n'écrivait `FeedView.composerReferences` (l'ancre mesurait un
+        // tableau constamment vide) et le meuble porte lui-même
+        // `composerReferences` (MeeshyComposerHost) — capacité reprise, pas
+        // perdue.
         let feuille = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let lExtension = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
         // guard-foul : la feuille est la RÉFÉRENCE — si on la lit vide, l'inventaire
@@ -86,7 +77,6 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
 
         let capacites: [(nom: String, ancre: String, chez: String, source: String)] = [
             ("progression",       "uploadProgress",         "FeedComposerSheet",     feuille),
-            ("références",         "feedDeclaredReferences", "FeedView+Attachments", lExtension),
             ("dépôt",              "TusUploadManager(",      "FeedComposerSheet",     feuille),
             ("éditeur d'image",    "MeeshyImageEditorView(", "FeedComposerSheet",     feuille),
             ("son emprunté",       "publishBorrowedSoundPost", "FeedComposerSheet",   feuille)
@@ -102,8 +92,8 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
         }
         XCTAssertEqual(
             Set(capacites.map(\.nom)),
-            ["progression", "références", "dépôt", "éditeur d'image", "son emprunté"],
-            "Cinq capacités manquent encore au meuble et vivent SUR la feuille. Le retrait reste INTERDIT "
+            ["progression", "dépôt", "éditeur d'image", "son emprunté"],
+            "Quatre capacités manquent encore au meuble et vivent SUR la feuille. Le retrait reste INTERDIT "
                 + "tant qu'elles ne sont pas migrées ; ce test dit LESQUELLES, pour qu'un lot suivant sache "
                 + "quoi lever plutôt que de recompter."
         )

@@ -77,6 +77,51 @@ export interface LoginResponseData {
 }
 
 /**
+ * `POST /auth/login` quand l'identifiant est une adresse sans compte actif, ou
+ * celle d'un compte créé ainsi et jamais vérifié (#8033). Aucune session.
+ */
+export type LoginVerificationRequiredData = {
+  readonly status: 'verification-required';
+  readonly accountCreated: boolean;
+  readonly email: string;
+  /** #8083 — jeton d'attente de CET appareil, pour `POST /auth/verification/status`. */
+  readonly pendingSessionToken?: string;
+};
+
+/**
+ * `POST /auth/verification/status` (#8083) : l'adresse a-t-elle été prouvée
+ * depuis que CET appareil a demandé son code ? Un état, jamais une session.
+ */
+export type VerificationStatusData = {
+  readonly status: 'pending' | 'proven';
+};
+
+/**
+ * `POST /auth/register` SANS numéro de téléphone (#8055) : le compte existe
+ * mais n'est pas actif — même forme que la connexion, `accountCreated: true`.
+ */
+export type RegisterVerificationRequiredData = LoginVerificationRequiredData;
+
+/**
+ * `POST /auth/verify-email` (#8033) : la preuve de possession de l'adresse
+ * ouvre la session — ou, pour un compte à second facteur, rend le défi.
+ */
+export type VerifyEmailResponseData = {
+  readonly verified: true;
+  readonly alreadyVerified: boolean;
+  readonly verifiedAt?: string;
+  readonly message?: string;
+  readonly passwordSet?: boolean;
+  readonly user: Record<string, unknown>;
+  readonly token?: string;
+  readonly sessionToken?: string;
+  readonly session?: SessionMinimal;
+  readonly expiresIn?: number;
+  readonly requires2FA?: boolean;
+  readonly twoFactorToken?: string;
+};
+
+/**
  * TypeScript type for register response data
  */
 export interface RegisterResponseData {

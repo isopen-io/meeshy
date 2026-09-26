@@ -1,6 +1,10 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
+import esVerifyEmail from './catalog-es-verify-email';
+import esPassword from './catalog-es-password';
+import esCall from './catalog-es-call';
+import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
 import esStoriesMine from './catalog-es-stories-mine';
@@ -186,6 +190,10 @@ const es = {
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
   ...esIdentity,
+  ...esVerifyEmail,
+  ...esPassword,
+  ...esCall,
+  ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
   'report.body': 'Elija el motivo de su denuncia. Nuestro equipo de moderación la recibirá.',

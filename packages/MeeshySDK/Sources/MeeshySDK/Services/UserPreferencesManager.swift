@@ -48,7 +48,6 @@ public final class UserPreferencesManager: ObservableObject {
     /// Même couture que `service`, pour `GET`/`PUT /me/consents`.
     internal var consentService: ConsentServiceProviding = ConsentService.shared
     private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
     private var cancellables = Set<AnyCancellable>()
 

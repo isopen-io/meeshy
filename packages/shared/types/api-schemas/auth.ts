@@ -138,6 +138,17 @@ export const personNamePatternSource = "^(?=.*\\p{L})[\\p{L}\\p{M}\\s'’ʼ.-]+$
 export const usernamePatternSource = "^[a-zA-Z0-9_-]+$";
 
 /**
+ * Les bornes d'un pseudo d'inscription — LA source (#8082). Le schéma Ajv
+ * ci-dessous, la dérivation (`utils/registration-identity.ts`), le changement
+ * de pseudo (`PATCH /users/me/username`) et le verdict client
+ * (`utils/username-rule.ts`) les citent ; le miroir Swift
+ * (`RegistrationIdentity.pseudoMin/pseudoMax`) est tenu par sa suite.
+ * Un pseudo de 17 caractères passait le formulaire iOS faute de les connaître.
+ */
+export const usernameMinLength = 2;
+export const usernameMaxLength = 16;
+
+/**
  * Les trois champs d'identité, déclarés UNE fois et cités deux — dans
  * `properties`, et dans la branche d'`anyOf` qui les exige.
  *
@@ -238,8 +249,8 @@ export const registerRequestSchema = {
     displayName: displayNameProperty,
     username: {
       type: 'string',
-      minLength: 2,
-      maxLength: 16,
+      minLength: usernameMinLength,
+      maxLength: usernameMaxLength,
       pattern: usernamePatternSource,
       description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces). Optional: generated from the display name when absent.'
     },
@@ -286,6 +297,17 @@ export const registerRequestSchema = {
     phoneTransferToken: {
       type: 'string',
       description: 'Token proving SMS verification when the phone number is being transferred from another account'
+    },
+    // #8058 — le parrainage voyage AVEC l'inscription : le rattachement se crée
+    // à la création du compte, qu'il soit actif ou non (#8055). Même valeur que
+    // `token` / `sessionKey` de `POST /affiliate/register`.
+    affiliateToken: {
+      type: 'string',
+      description: 'OPTIONAL. Affiliate (referral) token from the invitation link — the referral is recorded when the account is created, active or not. An invalid token never blocks the registration.'
+    },
+    affiliateSessionKey: {
+      type: 'string',
+      description: 'OPTIONAL. Session key returned by POST /affiliate/track-visit, linking the prior visit to this signup.'
     }
   }
 } as const;
@@ -345,11 +367,130 @@ export const verifyEmailRequestSchema = {
           type: 'string',
           format: 'email',
           description: 'Email address to verify'
+        },
+        // #8033 — admis avec le CODE seulement ; appliqué uniquement à un compte
+        // qui n'a pas encore de mot de passe. Littéral aligné sur
+        // `PASSWORD_MIN_LENGTH` (garde `password-min-length-parity.test.ts`).
+        password: {
+          type: 'string',
+          minLength: 6,
+          description: 'OPTIONAL. Sets the account password when the account has none yet (ignored otherwise). Accepted only with `code`.'
         }
       },
       additionalProperties: false
     }
   ]
+} as const;
+
+/**
+ * Le jeton d'ATTENTE remis à l'appareil qui vient de demander un code (#8083).
+ *
+ * Il ne sert qu'à `POST /auth/verification/status`, qui rend `pending` ou
+ * `proven` — jamais une session (décision porteur « si et seulement si » :
+ * l'appareil ne se connecte que par le code saisi sur lui ou le lien ouvert
+ * sur lui), jamais l'adresse. Le nom historique du contrat est gardé.
+ */
+export const pendingSessionTokenProperty = {
+  type: 'string',
+  description: 'Opaque watch token for THIS device (#8083). Present it to POST /auth/verification/status to learn whether the address was proven elsewhere (`pending` / `proven`). It never yields a session.'
+} as const;
+
+/**
+ * La branche « vérification requise » de `POST /auth/login` (#8033) et de
+ * `POST /auth/register` (#8055) — UNE forme, deux routes.
+ *
+ * Login : l'identifiant est une adresse VALIDE sans compte actif (le compte
+ * est alors créé, sans mot de passe), celle d'un compte ainsi créé et jamais
+ * vérifié, ou le BON mot de passe d'un compte non vérifié et sans numéro (le
+ * code est renvoyé, `accountCreated: false`).
+ * Register : inscription SANS numéro de téléphone — le compte est créé, mot
+ * de passe compris, mais n'est pas actif (`accountCreated: true`).
+ * Aucune session, aucun jeton : la session ne s'ouvre qu'à
+ * `POST /auth/verify-email`.
+ */
+export const verificationRequiredProperties = {
+  status: {
+    type: 'string',
+    enum: ['verification-required'],
+    description: 'Present only when no session is opened: a code and a link were emailed, to be presented to POST /auth/verify-email'
+  },
+  accountCreated: {
+    type: 'boolean',
+    description: 'True when this request created the account; false when the account already existed and the code was re-sent'
+  },
+  email: {
+    type: 'string',
+    description: 'The normalized address the code was sent to'
+  },
+  pendingSessionToken: pendingSessionTokenProperty
+} as const;
+
+/** Nom historique (#8033) de `verificationRequiredProperties`. */
+export const loginVerificationRequiredProperties = verificationRequiredProperties;
+
+/**
+ * Réponse de `POST /auth/verify-email` (#8033) — la vérification OUVRE la
+ * session, sous la même forme que `POST /login`. Un compte protégé par un
+ * second facteur reçoit à la place `requires2FA` + `twoFactorToken`, à
+ * présenter à `POST /login/2fa`.
+ */
+export const verifyEmailResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        verified: { type: 'boolean', example: true },
+        message: { type: 'string' },
+        alreadyVerified: { type: 'boolean', description: 'True when the address was already verified before this proof (a sign-in code)' },
+        verifiedAt: { type: 'string', format: 'date-time' },
+        user: userSchema,
+        token: { type: 'string', description: 'JWT access token (absent when a second factor is required)' },
+        sessionToken: { type: 'string', description: 'Session token (absent when a second factor is required)' },
+        session: sessionMinimalSchema,
+        expiresIn: { type: 'number', example: 86400 },
+        passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
+        requires2FA: { type: 'boolean' },
+        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' }
+      }
+    }
+  }
+} as const;
+
+/**
+ * `POST /auth/verification/status` (#8083) — l'écran du code demande si
+ * l'adresse a été prouvée ailleurs.
+ */
+export const verificationStatusRequestSchema = {
+  type: 'object',
+  required: ['pendingSessionToken'],
+  properties: {
+    pendingSessionToken: { type: 'string', minLength: 1, maxLength: 256 }
+  },
+  additionalProperties: false
+} as const;
+
+/**
+ * Réponse de `POST /auth/verification/status` : un ÉTAT, rien d'autre. Un jeton
+ * inconnu rend 401 (`PENDING_TOKEN_INVALID`), un jeton expiré 410
+ * (`PENDING_TOKEN_EXPIRED`).
+ */
+export const verificationStatusResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['pending', 'proven'],
+          description: '`proven`: the address was proven (code or link) after this token was issued — the device still signs in only with the code typed on it or the link opened on it'
+        }
+      }
+    }
+  }
 } as const;
 
 /**

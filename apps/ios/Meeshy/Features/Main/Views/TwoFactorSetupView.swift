@@ -435,21 +435,25 @@ struct TwoFactorDisableView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xl)
 
-                    SecureField(String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"), text: $disablePassword)
-                        .textContentType(.password)
-                        .font(MeeshyFont.relative(16, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-                        .padding(.vertical, MeeshySpacing.md + 2)
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .background(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .fill(MeeshyColors.error.opacity(0.06))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
-                                )
-                        )
-                        .padding(.horizontal, MeeshySpacing.lg)
+                    MeeshyPasswordField(
+                        String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"),
+                        text: $disablePassword,
+                        role: .current,
+                        eyeColor: theme.textMuted
+                    )
+                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .padding(.vertical, MeeshySpacing.md + 2)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .background(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .fill(MeeshyColors.error.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                    .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal, MeeshySpacing.lg)
 
                     TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $disableCode)
                         .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))

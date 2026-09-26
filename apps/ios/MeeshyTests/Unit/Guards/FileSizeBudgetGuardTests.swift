@@ -64,7 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "MessageListViewController.swift",
-        "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "ProfileUserPostsList.swift",
@@ -474,6 +473,21 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // le rend, et le `switch` de cinq cas devient une garde (−10) — le plafond
     // reprend les 10 lignes dans le même lot.
     //
+    // **51 972 depuis l'application du relevé d'audit G014.**
+    // `ConversationDashboardView.swift` (1300 → 1211, −89) perd son code mort
+    // (`participants` non lu, deux `@State` de chargement jamais lus, la
+    // branche `activityChartSection` inatteignable + son placeholder, une
+    // garde `contentTypesSection` redondante) et déplace le calcul des
+    // statistiques dérivées des messages (sentiment `NLTagger`, comptages de
+    // mots/médias, activité par participant) — pur de `messages`, jamais de
+    // `chartPeriod`/`serverStats` — dans un type `nonisolated` neuf,
+    // `ConversationDashboardClientStats.swift`, calculé UNE fois par
+    // `Task.detached` plutôt qu'à chaque rendu sur le MainActor.
+    // `ConversationInfoSheet.swift` (1268 → 1267, −1) perd l'argument
+    // `participants:` que `ConversationDashboardView` ne lisait plus. Les
+    // deux hôtes RESTENT en dette ; le plafond baisse d'exactement ce que le
+    // lot retire.
+    //
     // **52 005 depuis #8009.** Le toucher d'un message protégé devait passer
     // par `BubbleStandardLayout` et l'aperçu d'appui long par
     // `MessageOverlayMenu`, tous deux hors budget : `BlurRevealModifier` a
@@ -481,7 +495,18 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // second pour `MessageOverlayPreviewMedia.swift` (−39). Le plafond reprend
     // les 55 lignes, et les 2 que `ConversationView` rend (garde de l'appui
     // long), dans le même lot.
-    private static let legacyLineCeiling = 52_005
+    //
+    // **50 721 à la réunion des deux lots** (52 062 à leur base commune) :
+    // G014 retire 90 lignes, #8009 en retire 57 ; et `MessageOverlayMenu.swift`,
+    // que #7990 allège de son code mort pendant que #8009 en extrait la grille
+    // d'aperçu, repasse SOUS le budget (1 194 lignes comptées) : il quitte la
+    // liste, plafond compris.
+    //
+    // #8074 — 50 721 → 50 683 (−38). Les délais d'appel de `WebRTCTypes.swift`
+    // lisent `CallRules` (SDK) au lieu de les redire (−23) ; `CallManager.swift`
+    // cède `CallEndReasonMapper` à son propre fichier avant de recevoir la
+    // relance ICE sur identifiants TURN frais (−15 net).
+    private static let legacyLineCeiling = 50_683
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -17,6 +17,23 @@ struct ConversationInfoSheet: View {
     /// sur la valeur figée capturée à la navigation : le titre et l'avatar
     /// d'AVANT l'édition, alors que le serveur a confirmé les nouveaux.
     var onConversationUpdated: ((Conversation) -> Void)? = nil
+    /// Dérivés UNE fois de `messages` (un `let`) — relus jusqu'à quatre fois par rendu avant.
+    private let pinnedMessages: [Message]
+    private let mediaAttachments: [MessageAttachment]
+
+    init(conversation: Conversation, accentColor: String, messages: [Message],
+         onConversationUpdated: ((Conversation) -> Void)? = nil) {
+        self.conversation = conversation
+        self.accentColor = accentColor
+        self.messages = messages
+        self.onConversationUpdated = onConversationUpdated
+        pinnedMessages = messages.filter { $0.pinnedAt != nil }
+            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
+        let isVisual: (MessageAttachment) -> Bool = { [.image, .video].contains($0.type) }
+        mediaAttachments = messages.filter { $0.attachments.contains(where: isVisual) }
+            .sorted { $0.createdAt > $1.createdAt }
+            .flatMap { $0.attachments.filter(isVisual) }
+    }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -34,7 +51,6 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var isLoadingMoreParticipants = false
     @State private var hasMoreParticipants = true
-    @State private var totalParticipants: Int = 0
     @State private var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
     @State private var showBlockConfirm = false
@@ -57,11 +73,8 @@ struct ConversationInfoSheet: View {
 
     @State private var showAllPinnedMessages = false
 
-    enum InfoTab: String, CaseIterable {
-        case members = "Membres"
-        case media = "Medias"
-        case plus = "Stats"
-        case preferences = "Options"
+    enum InfoTab: CaseIterable {
+        case members, media, plus, preferences
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -71,24 +84,6 @@ struct ConversationInfoSheet: View {
     private var canManageMembers: Bool {
         guard let role = conversation.currentUserRole?.lowercased() else { return false }
         return ["creator", "admin", "moderator"].contains(role)
-    }
-
-    private var pinnedMessages: [Message] {
-        messages.filter { $0.pinnedAt != nil }
-            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
-    }
-
-    private var mediaMessages: [Message] {
-        messages.filter { msg in
-            msg.attachments.contains { [.image, .video].contains($0.type) }
-        }
-        .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var mediaAttachments: [MessageAttachment] {
-        mediaMessages.flatMap { msg in
-            msg.attachments.filter { [.image, .video].contains($0.type) }
-        }
     }
 
     // MARK: - Body
@@ -129,7 +124,6 @@ struct ConversationInfoSheet: View {
         }
         .presentationDragIndicator(.visible)
         .task {
-            totalParticipants = conversation.memberCount
             await loadParticipants()
         }
         .alert(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main), isPresented: $showBlockConfirm) {
@@ -363,7 +357,7 @@ struct ConversationInfoSheet: View {
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(accent)
 
-            Text(conversationTypeLabel)
+            Text(conversation.type.displayName)
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
@@ -463,11 +457,10 @@ struct ConversationInfoSheet: View {
                 ConversationDashboardView(
                     conversationId: conversation.id,
                     messages: messages,
-                    accentColor: accentColor,
-                    participants: participants
+                    accentColor: accentColor
                 )
             case .preferences:
-                ConversationPreferencesTab(conversation: conversation, participants: participants, accentColor: accentColor)
+                ConversationPreferencesTab(conversation: conversation, accentColor: accentColor)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
@@ -1091,7 +1084,7 @@ struct ConversationInfoSheet: View {
             guard let shareURL = URL(string: result.joinUrl) else {
                 throw URLError(.badURL)
             }
-            await MainActor.run { shareableLink = ShareableLink(url: shareURL) }
+            shareableLink = ShareableLink(url: shareURL)
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la création du lien", bundle: .main))
         }
@@ -1116,19 +1109,6 @@ struct ConversationInfoSheet: View {
         case .community: return "building.2.fill"
         case .channel: return "megaphone.fill"
         case .bot: return "cpu.fill"
-        }
-    }
-
-    private var conversationTypeLabel: String {
-        switch conversation.type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
-        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
-        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 
@@ -1266,9 +1246,6 @@ struct ConversationInfoSheet: View {
             )
             participants = fetched
             hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
-                totalParticipants = serverTotal
-            }
         } catch {
             Self.logger.error("Failed to load participants: \(error.localizedDescription)")
         }
@@ -1283,9 +1260,6 @@ struct ConversationInfoSheet: View {
             let allFetched = try await ParticipantService.shared.loadNextPage(for: conversation.id)
             participants = allFetched
             hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-            if let serverTotal = await ParticipantService.shared.totalCount(for: conversation.id) {
-                totalParticipants = serverTotal
-            }
         } catch {
             Self.logger.error("Failed to load more participants: \(error.localizedDescription)")
         }

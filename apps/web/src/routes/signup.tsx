@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
@@ -12,12 +13,15 @@ import { LanguageSheet } from '@/components/language-sheet';
 import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
-import { convertReferral, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
-import { auth, isPhoneConflict } from '@/lib/api/auth';
+import { inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
+import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { countryName, type Country } from '@/lib/countries';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { holdPendingVerification } from '@/lib/pending-verification';
 import {
   PASSWORD_MIN,
   canSubmit,
@@ -26,9 +30,11 @@ import {
   composeRegisterBody,
   emptySignupForm,
   hasPassword,
+  hasPhoneNumber,
   isEmailValid,
   isIdentityDefined,
   isPasswordValid,
+  usernameFieldRefusal,
   type SignupFormState,
 } from '@/lib/signup-form';
 import {
@@ -37,7 +43,7 @@ import {
   showsSignupRung,
   type SignupReveal,
 } from '@/lib/view/signup-rungs';
-import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
+import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import {
   isReferralCodeShaped,
   normalizeReferralCode,
@@ -46,6 +52,7 @@ import {
 import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * L'ÉCRAN D'INSCRIPTION (#5555) — UN écran, anatomie de `SignupView.swift:44-59`.
@@ -123,9 +130,10 @@ const EMPTY_FEEDBACK: SignupFeedback = {
 
 /**
  * `SignupField` énumère ce que la PASSERELLE peut refuser ; le focus, lui,
- * couvre aussi ce qu'elle ne connaît pas — le code de parrainage n'entre dans
- * aucune charge de `POST /auth/register` (#6584). Élargir `SignupField` pour
- * ce champ ferait croire qu'un refus serveur peut le viser.
+ * couvre aussi ce qu'elle ne refuse jamais — le code de parrainage voyage
+ * dans `POST /auth/register` (#8058), mais un jeton invalide n'y bloque
+ * aucune inscription. Élargir `SignupField` pour ce champ ferait croire qu'un
+ * refus serveur peut le viser.
  */
 type FocusedField = SignupField | 'referral' | null;
 
@@ -200,9 +208,13 @@ function PasswordWhy() {
   );
 }
 
+/** `POST /auth/register` — injectable pour les témoins, `auth.register` sinon. */
+export type SignupRegister = (body: RegisterBody) => Promise<ApiResult<RegisterResponseData>>;
+
 export default function SignupScreen({
   referralDeps = defaultReferralDeps,
-}: { readonly referralDeps?: SignupReferralDeps } = {}) {
+  register = auth.register,
+}: { readonly referralDeps?: SignupReferralDeps; readonly register?: SignupRegister } = {}) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
   // `navigator.language` peut manquer hors navigateur (rendu de témoin, coque
@@ -219,6 +231,23 @@ export default function SignupScreen({
   // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : il
   // pose le MÊME (i), dont la note garde l'identifiant que sa saisie cite.
   const phoneHint = useInfoHint('signup-phone-hint');
+  /**
+   * L'ALERTE D'UNE INSCRIPTION SANS NUMÉRO (#8040) — directive porteur
+   * 2026-09-26 : le numéro sécurise le compte et permet de le récupérer. Une
+   * alerte, jamais un blocage : « Continuer quand même » crée le compte comme
+   * avant. Le drapeau MIROIR (`ref`) répond une seule fois par ouverture —
+   * le démontage du `<dialog>` émet encore `close`, qui ne doit pas rejouer
+   * « Ajouter mon numéro » après « Continuer ».
+   */
+  const [isShowingPhoneNudge, setShowingPhoneNudge] = useState(false);
+  const phoneNudgeOpen = useRef(false);
+  const phoneInput = useRef<HTMLInputElement>(null);
+  const [phoneFocusRequest, setPhoneFocusRequest] = useState(0);
+  // APRÈS le démontage du dialogue : `close()` rend le focus à ce qui l'avait
+  // avant l'ouverture (le bouton d'envoi) — le champ le reprend ensuite.
+  useEffect(() => {
+    if (phoneFocusRequest > 0) phoneInput.current?.focus();
+  }, [phoneFocusRequest]);
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
@@ -307,13 +336,35 @@ export default function SignupScreen({
     setForm((current) => ({ ...current, ...fields }));
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!canSubmit(form) || isSubmitting) return;
+    if (!hasPhoneNumber(form)) {
+      openPhoneNudge();
+      return;
+    }
+    void createAccount();
+  }
+
+  function openPhoneNudge() {
+    phoneNudgeOpen.current = true;
+    setShowingPhoneNudge(true);
+  }
+
+  /** Répond UNE fois : le premier geste referme, les suivants se taisent. */
+  function answerPhoneNudge(choice: 'add-phone' | 'continue') {
+    if (!phoneNudgeOpen.current) return;
+    phoneNudgeOpen.current = false;
+    setShowingPhoneNudge(false);
+    if (choice === 'continue') void createAccount();
+    else setPhoneFocusRequest((n) => n + 1);
+  }
+
+  async function createAccount() {
     setSubmitting(true);
     setFeedback(EMPTY_FEEDBACK);
 
-    const result = await auth.register(composeRegisterBody(form));
+    const result = await register(composeRegisterBody(form, { referralCode }));
     setSubmitting(false);
 
     if (!result.ok) {
@@ -324,33 +375,40 @@ export default function SignupScreen({
       setFeedback(placeSignupFailure({ kind: 'phone-conflict' }));
       return;
     }
+    /* SANS NUMÉRO, AUCUNE SESSION (#8055) : le compte attend son code. Le
+       chemin est celui de la connexion d'un e-mail inconnu (#8034) — l'écran
+       du code, qui ouvrira la session. Le mot de passe est DÉJÀ enregistré
+       sur le compte : il n'est pas retenu pour repartir avec le code.
+       L'invitation (`next`) voyage jusqu'à lui, sans le court-circuiter. */
+    /* LE PARRAINAGE EST NOUÉ PAR LA CRÉATION DU COMPTE (#8058) : le code est
+       parti dans le corps de `POST /auth/register` (`affiliateToken`), et la
+       passerelle rattache le compte à son parrain, activé ou non. Le compte
+       existe désormais : le code a servi, il est OUBLIÉ — sinon il se
+       rattacherait une seconde fois à une inscription suivante sur ce même
+       navigateur. Un refus ou un conflit de numéro, eux, n'ont créé aucun
+       compte : le code reste pour la tentative suivante. */
+    forgetReferralCode();
+    if (isVerificationRequired(result.data)) {
+      const { email, accountCreated, pendingSessionToken } = result.data;
+      holdPendingVerification({ email, accountCreated, ...(pendingSessionToken !== undefined ? { pendingSessionToken } : {}) });
+      navigate(href('verifyEmail', undefined, { email: result.data.email, next: safeNext ?? undefined }), true);
+      return;
+    }
     // Compte créé : le magasin de session est déjà `authenticated`
     // (`auth.ts#register`) — mais l'e-mail reste à vérifier (T-verify,
     // #5672) avant d'entrer dans la Lentille. `justRegistered` retient
     // l'effet ci-dessus le temps de ce routage, IMMÉDIATEMENT, sans pause
     // d'aucune sorte (doctrine SignupView.swift:413-429).
     setJustRegistered(true);
-    /**
-     * LA RELATION DE PARRAINAGE SE NOUE ICI, ET NE RETIENT RIEN (#6584).
-     *
-     * `POST /affiliate/register` est AUTHENTIFIÉ et porte sur l'appelant —
-     * possible seulement maintenant, l'inscription venant d'établir la session
-     * (#4264). Elle part sans être attendue : un parrainage qui échoue est un
-     * parrainage perdu, jamais une entrée retardée. Rien dans l'écran ne
-     * dépend de sa réponse, donc rien n'a à l'attendre.
-     */
-    const code = normalizeReferralCode(referralCode);
-    if (isReferralCodeShaped(code)) {
-      // OUBLIÉ tout de suite, pas à la réponse : le compte est créé, ce code a
-      // servi. L'attendre pour l'oublier le laisserait se rattacher une seconde
-      // fois à une inscription suivante sur le même navigateur.
-      forgetReferralCode();
-      void convertReferral({ code, userId: result.data.user.id }).catch(() => undefined);
-    }
     navigate(landingAfterRegistration({ next, email: form.email }), true);
   }
 
   const emailError = feedback.fieldErrors.email;
+  // #8082 — la borne du pseudo se dit PENDANT la frappe ; un refus serveur
+  // posé sur ce champ garde la priorité.
+  const usernameRefusal = usernameFieldRefusal(form);
+  const usernameError =
+    feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(usernameRefusal) : undefined);
   const canSend = canSubmit(form) && online;
   /** « OK » au sens de la directive : un mot de passe TAPÉ qui tient la borne
    * du schéma partagé. Un champ vide reste légitime (#6424) — il n'est pas
@@ -358,6 +416,7 @@ export default function SignupScreen({
    * dessous. */
   const isPasswordStrong = hasPassword(form.password) && isPasswordValid(form.password);
   const language = getLanguageInfo(form.systemLanguage);
+  const interfaceLanguage = currentInterfaceLanguage();
 
   return (
     /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
@@ -452,6 +511,8 @@ export default function SignupScreen({
               </button>
               <div className="flex flex-1 items-center rounded-[14px] px-4" style={{ minHeight: 48, backgroundColor: 'var(--color-ios-card)' }}>
                 <input
+                  ref={phoneInput}
+                  id="signup-phone"
                   type="tel"
                   autoComplete="tel-national"
                   value={form.phoneDigits}
@@ -495,7 +556,7 @@ export default function SignupScreen({
             focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
             onFocus={(field) => setFocused(field)}
             onBlur={() => setFocused(null)}
-            usernameError={feedback.fieldErrors.username}
+            usernameError={usernameError}
             displayNameError={feedback.fieldErrors.displayName}
             suggestions={feedback.usernameSuggestions}
           />
@@ -523,19 +584,16 @@ export default function SignupScreen({
                 error={feedback.fieldErrors.password}
               >
                 {({ id, describedBy }) => (
-                  <input
+                  <PasswordInput
                     id={id}
-                    type="password"
                     autoComplete="new-password"
                     value={form.password}
-                    onInput={(e) => patch({ password: e.currentTarget.value })}
+                    onValue={(password) => patch({ password })}
                     onFocus={() => setFocused('password')}
                     onBlur={() => setFocused(null)}
                     placeholder={`${PASSWORD_MIN} caractères minimum`}
-                    className="w-full bg-transparent py-3 text-input outline-none"
-                    aria-describedby={describedBy}
-                    aria-invalid={feedback.fieldErrors.password !== undefined}
-                    style={{ color: 'var(--color-ios-ink)' }}
+                    describedBy={describedBy}
+                    invalid={feedback.fieldErrors.password !== undefined}
                   />
                 )}
               </Field>
@@ -718,6 +776,19 @@ export default function SignupScreen({
           </Link>
         </div>
       </form>
+
+      {isShowingPhoneNudge ? (
+        <ConfirmDialog
+          name="signup-phone-nudge"
+          title={translate(interfaceLanguage, 'signup.phoneNudge.title')}
+          body={translate(interfaceLanguage, 'signup.phoneNudge.body')}
+          cancelLabel={translate(interfaceLanguage, 'signup.phoneNudge.add')}
+          confirmLabel={translate(interfaceLanguage, 'signup.phoneNudge.continue')}
+          tone="default"
+          onConfirm={() => answerPhoneNudge('continue')}
+          onCancel={() => answerPhoneNudge('add-phone')}
+        />
+      ) : null}
 
       {isShowingCountrySheet ? (
         <CountrySheet

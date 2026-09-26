@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
 
 import {
+  hasPhoneNumber,
   PASSWORD_MIN,
   composeRegisterBody,
   defaultLanguages,
@@ -17,8 +18,11 @@ import {
   effectiveDisplayName,
   effectiveUsername,
   isIdentityDefined,
+  usernameFieldRefusal,
+  USERNAME_MAX,
   type SignupFormState,
 } from './signup-form';
+import { usernameRefusalMessage } from './view/auth-feedback';
 import { countryOf } from './countries';
 
 /**
@@ -130,6 +134,19 @@ describe('le numéro FOURNI doit être plausible (#6479)', () => {
   });
 });
 
+describe('hasPhoneNumber — la question de l’alerte d’inscription (#8040)', () => {
+  test('champ vide ⇒ aucun numéro', () => expect(hasPhoneNumber(baseForm({ phoneDigits: '' }))).toBe(false));
+  test('des espaces ou des tirets seuls ne font pas un numéro', () =>
+    expect(hasPhoneNumber(baseForm({ phoneDigits: ' - ' }))).toBe(false));
+  test('un chiffre tapé ⇒ un numéro — et c’est lui que la charge porte', () => {
+    const form = baseForm({ phoneDigits: '06 12 34 56 78' });
+    expect(hasPhoneNumber(form)).toBe(true);
+    expect(composeRegisterBody(form).phoneNumber).toBe('0612345678');
+  });
+  test('sans numéro, la charge ne porte aucune clé téléphone', () =>
+    expect('phoneNumber' in composeRegisterBody(baseForm({ phoneDigits: ' ' }))).toBe(false));
+});
+
 describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479)', () => {
   /**
    * LA LOI A CHANGÉ, et le témoin avec elle.
@@ -239,6 +256,23 @@ describe('composeRegisterBody — la charge EXACTE de POST /auth/register (regis
     expect('phoneCountryCode' in body).toBe(false);
   });
 
+  test('un code de parrainage BIEN FORMÉ part en `affiliateToken`, normalisé (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: '  aff_abc123 ' });
+    expect(body.affiliateToken).toBe('aff_abc123');
+    expect('affiliateSessionKey' in body).toBe(false);
+  });
+
+  test('la clé de session d’affiliation accompagne le jeton quand elle est connue (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: 'aff_abc123', referralSessionKey: 'sk-1' });
+    expect(body.affiliateSessionKey).toBe('sk-1');
+  });
+
+  test('un code vide ou mal formé ⇒ AUCUNE clé de parrainage (#8058)', () => {
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: '' })).toBe(false);
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: 'deux mots' })).toBe(false);
+    expect('affiliateSessionKey' in composeRegisterBody(baseForm(), { referralCode: '', referralSessionKey: 'sk-1' })).toBe(false);
+  });
+
   test('les chiffres non numériques (espaces, points) sont filtrés avant envoi', () => {
     const body = composeRegisterBody(baseForm({ phoneDigits: '06 12.34 56 78' }));
     expect(body.phoneNumber).toBe('0612345678');
@@ -297,5 +331,39 @@ describe('identité dérivée en direct (#7897)', () => {
     const muette = baseForm({ displayName: null, email: 'a@b.co' });
     expect(isIdentityDefined(muette)).toBe(false);
     expect(isIdentityDefined({ ...muette, username: 'awa', displayName: 'Awa' })).toBe(true);
+  });
+});
+
+/**
+ * LA BORNE DU PSEUDO PENDANT LA SAISIE (#8082) — la même que la passerelle :
+ * `usernameMaxLength` de `registerRequestSchema`, jamais un littéral.
+ */
+describe('le pseudo tapé tient la borne du schéma partagé', () => {
+  test('la borne est LUE sur le schéma', () =>
+    expect(USERNAME_MAX).toBe(registerRequestSchema.properties.username.maxLength));
+
+  test('17 caractères (le pseudo de la recette) ⇒ refus « trop long » et bouton inactif', () => {
+    const form = baseForm({ username: 'direction_recette' });
+    expect(usernameFieldRefusal(form)).toBe('too-long');
+    expect(canSubmit(form)).toBe(false);
+    expect(isIdentityDefined(form)).toBe(false);
+  });
+
+  test('16 caractères ⇒ aucun refus', () => {
+    const form = baseForm({ username: 'direction_recett' });
+    expect(usernameFieldRefusal(form)).toBeNull();
+    expect(canSubmit(form)).toBe(true);
+  });
+
+  test('un espace ou un accent ⇒ refus de caractères', () =>
+    expect(usernameFieldRefusal(baseForm({ username: 'josé' }))).toBe('invalid-characters'));
+
+  test('pseudo jamais touché ⇒ la dérivation est recevable, aucun refus', () =>
+    expect(usernameFieldRefusal(baseForm({ username: null }))).toBeNull());
+
+  test('le message nomme la borne, jamais « réessayez »', () => {
+    const message = usernameRefusalMessage('too-long');
+    expect(message).toContain(String(USERNAME_MAX));
+    expect(message).not.toMatch(/réessayez/i);
   });
 });

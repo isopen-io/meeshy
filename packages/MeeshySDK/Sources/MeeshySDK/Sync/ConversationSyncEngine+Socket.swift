@@ -462,6 +462,7 @@ extension ConversationSyncEngine {
             msg.deletedAt = deletedAt
             msg.content = ""
         }
+        await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
         await realtimeMessagePersistor?(.deleted(messageId: event.messageId, deletedAt: deletedAt))
         if let callId {
             await CallTranscriptStore.shared.invalidate(for: callId)
@@ -474,6 +475,15 @@ extension ConversationSyncEngine {
             conversationId: event.conversationId, deletedMessageId: event.messageId)
     }
 
+    /// #8095 — un message supprimé ou échu quitte l'INDEX des médias : la
+    /// galerie feuillette aussi les messages hors de la fenêtre chargée, et y
+    /// retrouver une photo retirée serait une fuite, pas un cache.
+    private func dropFromMediaIndex(conversationId: String, messageId: String) async {
+        await cache.conversationMedia.update(for: conversationId) { carriers in
+            carriers.filter { $0.id != messageId }
+        }
+    }
+
     /// `message:expired` — même effet local que la suppression : contenu vidé,
     /// aperçu recalculé. La table canonique reçoit `.expired`, que l'hôte
     /// applique comme la conversation ouverte (citations scellées, favori
@@ -484,6 +494,7 @@ extension ConversationSyncEngine {
             msg.deletedAt = expiredAt
             msg.content = ""
         }
+        await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
         await realtimeMessagePersistor?(.expired(messageId: event.messageId, expiredAt: expiredAt))
         EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
         _messagesDidChange.send(event.conversationId)

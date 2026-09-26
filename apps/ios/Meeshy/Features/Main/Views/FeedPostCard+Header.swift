@@ -55,7 +55,7 @@ extension FeedPostCard {
                     // ensemble faisait lire « 2 h · 🇫🇷 · Impressions » comme une
                     // seule énumération, où la donnée la plus consultée — quand
                     // — se noyait dans la moins consultée.
-                    Text(timeAgo(from: post.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
                         .font(.caption)
                         .foregroundColor(theme.textMuted)
 

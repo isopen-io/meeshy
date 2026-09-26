@@ -29,6 +29,12 @@ struct SignupView: View {
     /// Ramène à la connexion, depuis le pied de page ou depuis un refus
     /// « adresse déjà utilisée ».
     var onSwitchToLogin: (() -> Void)?
+    /// Compte créé SANS numéro, puis code vérifié (#8055, #8059) : reçoit de
+    /// quoi ouvrir la session, une fois la feuille du code REFERMÉE. L'hôte
+    /// referme alors l'inscription et ouvre la session dans SON `onDismiss` —
+    /// l'ouvrir plus tôt démonte l'écran qui présente l'inscription et la
+    /// laisse orpheline. `nil` ⇒ la session s'ouvre dès la feuille refermée.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
 
     @FocusState private var focusedField: SignupField?
     @State private var isShowingLanguageSheet = false
@@ -42,40 +48,46 @@ struct SignupView: View {
     @State private var isPasswordRevealed = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
+    @State private var provenSessionOpener: ProvenSessionOpener?
 
     var body: some View {
         ZStack {
             theme.backgroundGradient
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                    header
-                    // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
-                    // puis l'adresse, puis l'identité — qui DÉCOULE de
-                    // l'adresse et n'a rien à montrer avant elle.
-                    phoneField
-                    emailField
-                    derivedIdentityBlock
-                    if isPasswordRevealed {
-                        passwordField
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+            // La croix vit dans SA zone (#8080) : empilée au-dessus du
+            // défilement, jamais en inset sans fond sous lequel le formulaire
+            // glissait.
+            VStack(spacing: 0) {
+                closeBar
+                ScrollView {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                        header
+                        // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
+                        // puis l'adresse, puis l'identité — qui DÉCOULE de
+                        // l'adresse et n'a rien à montrer avant elle.
+                        phoneField
+                        emailField
+                        derivedIdentityBlock
+                        if isPasswordRevealed {
+                            passwordField
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                        languageChip
+                        submitSection
+                        switchToLoginRow
                     }
-                    languageChip
-                    submitSection
-                    switchToLoginRow
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.xxl)
+                    .padding(.bottom, MeeshySpacing.xxxl)
+                    .iPadFormWidth()
                 }
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.xxl)
-                .padding(.bottom, MeeshySpacing.xxxl)
-                .iPadFormWidth()
+                // Le clavier suit le doigt et remonte si on relâche avant la fin —
+                // le mécanisme système, jamais un `DragGesture.onEnded` maison
+                // (directive porteur 2026-08-30).
+                .scrollDismissesKeyboard(.interactively)
             }
-            // Le clavier suit le doigt et remonte si on relâche avant la fin —
-            // le mécanisme système, jamais un `DragGesture.onEnded` maison
-            // (directive porteur 2026-08-30).
-            .scrollDismissesKeyboard(.interactively)
         }
-        .safeAreaInset(edge: .top) { closeBar }
         // Le mot de passe paraît quand l'identité est DÉFINIE (#7897) et ne se
         // referme plus : corriger son adresse ne fait pas disparaître ce
         // qu'on y a tapé.
@@ -83,9 +95,42 @@ struct SignupView: View {
             guard defini, !isPasswordRevealed else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { isPasswordRevealed = true }
         }
+        // UNE ALERTE, JAMAIS UN BLOCAGE (#8040) : sans numéro, dire à quoi il
+        // sert ; « Continuer quand même » crée le compte comme avant.
+        .alert(
+            String(localized: "auth.signup.phoneNudge.title", defaultValue: "Continuer sans numéro ?", bundle: .main),
+            isPresented: $viewModel.isPhoneNudgePresented
+        ) {
+            Button(String(localized: "auth.signup.phoneNudge.addPhone", defaultValue: "Ajouter mon numéro", bundle: .main), role: .cancel) {
+                focusedField = viewModel.addPhoneInstead()
+            }
+            Button(String(localized: "auth.signup.phoneNudge.continue", defaultValue: "Continuer quand même", bundle: .main)) {
+                continueWithoutPhone()
+            }
+        } message: {
+            Text(String(localized: "auth.signup.phoneNudge.message", defaultValue: "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail.", bundle: .main))
+        }
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
         .sheet(isPresented: $isShowingPrivacy) { PrivacyPolicyView() }
+        // #8055 — sans numéro, le compte attend son code : même écran que la
+        // connexion (#8035). Le mot de passe est déjà sur le compte, il ne
+        // repart pas ; la vérification ouvre la session et `MeeshyApp` bascule.
+        .sheet(item: $viewModel.pendingVerification, onDismiss: handOffProvenSession) { pending in
+            EmailVerificationView(
+                email: pending.email,
+                accountCreated: pending.accountCreated,
+                pendingSessionToken: pending.pendingSessionToken,
+                onVerified: { provenSessionOpener = $0 }
+            )
+        }
+    }
+
+    private func handOffProvenSession() {
+        guard let open = provenSessionOpener else { return }
+        provenSessionOpener = nil
+        guard let onVerified else { return open() }
+        onVerified(open)
     }
 
     // MARK: - Chrome
@@ -407,15 +452,19 @@ struct SignupView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             fieldBlock(
                 field: .password,
-                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
+                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
+                labelsContent: false
             ) {
-                SecureField(
+                MeeshyPasswordField(
                     String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                    text: $viewModel.form.password
+                    text: $viewModel.form.password,
+                    role: .new,
+                    focus: $focusedField,
+                    equals: .password,
+                    accessibilityLabel: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
+                    eyeColor: theme.textMuted
                 )
-                .textContentType(.newPassword)
                 .submitLabel(.go)
-                .focused($focusedField, equals: .password)
                 .onSubmit { attemptSubmit() }
                 .foregroundColor(theme.textPrimary)
             }
@@ -624,18 +673,33 @@ struct SignupView: View {
         guard viewModel.canSubmit else { return }
         focusedField = nil
         Task {
-            let created = await viewModel.submit()
-            if created {
-                HapticFeedback.success()
-                // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
-                // félicitations avant de laisser entrer. Une pause posée sur un
-                // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).
-                onComplete?()
-                dismiss()
-            } else {
-                HapticFeedback.error()
+            switch await viewModel.requestSubmit() {
+            case .created: land(created: true)
+            case .rejected: land(created: false)
+            // L'alerte EST le retour : aucune haptique d'échec pour une
+            // question posée (#8040).
+            case .phoneNudged: break
             }
         }
+    }
+
+    private func continueWithoutPhone() {
+        Task { land(created: await viewModel.continueWithoutPhone()) }
+    }
+
+    private func land(created: Bool) {
+        guard created else {
+            HapticFeedback.error()
+            return
+        }
+        HapticFeedback.success()
+        // Compte créé sans numéro (#8055) : on reste pour la saisie du code.
+        guard viewModel.pendingVerification == nil else { return }
+        // IMMÉDIATEMENT : le wizard remplacé s'accordait une seconde de
+        // félicitations avant de laisser entrer. Une pause posée sur un
+        // succès est une lenteur, donc un bug (CLAUDE.md § roadmap).
+        onComplete?()
+        dismiss()
     }
 
     // MARK: - Composition d'un champ
@@ -644,6 +708,7 @@ struct SignupView: View {
         field: SignupField,
         label: String,
         hint: AuthInfoHint? = nil,
+        labelsContent: Bool = true,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -652,9 +717,11 @@ struct SignupView: View {
                 .foregroundColor(theme.textMuted)
 
             HStack(spacing: 0) {
+                // Un contenu qui porte plusieurs éléments (le champ de mot de
+                // passe et son œil, #8054) se libelle lui-même : un libellé
+                // posé ici écraserait celui de chacun.
                 content()
-                    .accessibilityLabel(label)
-                    .accessibilityHint(hint?.text ?? "")
+                    .modifier(FieldBlockAccessibility(label: label, hint: hint?.text ?? "", applies: labelsContent))
                 if let hint {
                     AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
                 }
@@ -768,6 +835,21 @@ struct SignupCountrySheet: View {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private struct FieldBlockAccessibility: ViewModifier {
+    let label: String
+    let hint: String
+    let applies: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if applies {
+            content.accessibilityLabel(label).accessibilityHint(hint)
+        } else {
+            content
         }
     }
 }

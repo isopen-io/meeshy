@@ -32,6 +32,16 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
         )
     }
 
+    /// Même lecture, depuis `Features/Main` — pour les hôtes qui vivent hors de `Views/`.
+    private func strippedMainSource(_ relativeToMain: String) throws -> String {
+        AppSourceGuard.stripComments(
+            try String(
+                contentsOf: viewsRoot().deletingLastPathComponent().appendingPathComponent(relativeToMain),
+                encoding: .utf8
+            )
+        )
+    }
+
     /// Toutes les déclarations `@EnvironmentObject` d'un fichier, aplaties sur
     /// une ligne : la déclaration et son type peuvent être séparés par un
     /// retour à la ligne, et une garde qui lit ligne à ligne les raterait.
@@ -106,6 +116,43 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
             XCTAssertTrue(
                 code.contains(".meeshyConversationList(conversationViewModel)"),
                 "\(fichier) doit poser les deux canaux du modèle de liste (#7006)."
+            )
+        }
+    }
+
+    // MARK: - Les hôtes qui ne font que RETRANSMETTRE le modèle
+
+    /// Neuf vues déclaraient `@EnvironmentObject ConversationListViewModel` pour
+    /// une seule raison : le remettre à une feuille ou à un cover
+    /// (`SharePickerView`, les portes de composition) — ou, pour la recherche,
+    /// retrouver un DM hors `body`. Aucune ne lit un `@Published` de la liste ;
+    /// chacune payait pourtant, comme la conversation (#7006), chaque
+    /// `typing:start` de n'importe quelle conversation — `StoryViewerView` en
+    /// plein visionnage. La valeur d'environnement porte la référence ;
+    /// `.conversationListObject(_:)` repose l'OBJET une couche plus bas, `nil`
+    /// compris (#7714, point 4).
+    func test_forwardingHosts_readTheListThroughTheEnvironmentValue() throws {
+        let hosts = [
+            "Views/StoryViewerView.swift", "Views/MyStoriesView.swift", "Views/BookmarksView.swift",
+            "Views/LinksHubView.swift", "Views/ShareLinksView.swift", "Views/GlobalSearchView.swift",
+            "Views/RootViewComponents.swift",
+            "Composer/StoryEditComposer.swift", "Composer/StoryRepublishComposer.swift",
+        ]
+        for host in hosts {
+            let code = try strippedMainSource(host)
+            for declaration in environmentObjectDeclarations(in: code) {
+                XCTAssertFalse(
+                    declaration.contains("ConversationListViewModel"),
+                    "\(host) ne lit le modèle de liste que pour le retransmettre : la valeur d'environnement suffit, l'abonnement coûte des images (#7714). Déclaration fautive : \(declaration)"
+                )
+            }
+            XCTAssertTrue(
+                code.contains("@Environment(\\.meeshyConversationList)"),
+                "\(host) doit recevoir le modèle de liste par la valeur d'environnement (#7714)."
+            )
+            XCTAssertFalse(
+                code.contains(".environmentObject(conversationListViewModel)"),
+                "\(host) repose l'objet par `.conversationListObject(...)`, qui accepte l'optionnel — jamais `.environmentObject` sur une valeur d'environnement (#7714)."
             )
         }
     }

@@ -74,48 +74,11 @@ struct ContactsHubView: View {
 
     private func tabButton(_ tab: PeopleTab) -> some View {
         let isSelected = selectedTab == tab
-        let badge = badgeCount(for: tab)
-
-        return Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                selectedTab = tab
-            }
-        } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: tab.icon)
-                        .font(.footnote.weight(.medium))
-
-                    Text(tab.title)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(Circle().fill(MeeshyColors.indigo500))
-                    }
-                }
-                .foregroundColor(isSelected ? MeeshyColors.indigo500 : theme.textMuted)
-
-                Rectangle()
-                    .fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
-                    .frame(height: 2)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedTab)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+        return HubTabButton(icon: tab.icon, title: tab.title, badge: 0, isSelected: isSelected, selection: selectedTab) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { selectedTab = tab }
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Onglet", bundle: .main)) \(tab.title)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "éléments", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Onglet", bundle: .main)) \(tab.title)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    private func badgeCount(for tab: PeopleTab) -> Int {
-        switch tab {
-        case .contacts, .calls, .keypad: return 0
-        }
     }
 
     // MARK: - Tab Content

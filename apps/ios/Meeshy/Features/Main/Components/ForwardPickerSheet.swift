@@ -84,6 +84,7 @@ struct ForwardPickerSheet: View {
     }
 
     var body: some View {
+        let visible = visibleTargets
         NavigationStack {
             VStack(spacing: 0) {
                 messagePreview
@@ -96,7 +97,7 @@ struct ForwardPickerSheet: View {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                     Spacer()
-                } else if visibleTargets.isEmpty && loadFailed {
+                } else if visible.isEmpty && loadFailed {
                     // Cold-start load failure — distinct from a genuinely empty
                     // list so the user gets a recoverable Retry rather than a
                     // misleading "no conversations". Reuses the conversation-list
@@ -110,7 +111,7 @@ struct ForwardPickerSheet: View {
                         compact: true,
                         onAction: { Task { await pickerModel.loadInitial() } }
                     )
-                } else if visibleTargets.isEmpty {
+                } else if visible.isEmpty {
                     EmptyStateView(
                         icon: "bubble.left.and.bubble.right",
                         title: String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main),
@@ -121,7 +122,7 @@ struct ForwardPickerSheet: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(visibleTargets) { target in
+                            ForEach(visible) { target in
                                 targetRow(target)
                             }
 
@@ -291,10 +292,8 @@ struct ForwardPickerSheet: View {
             id: target.id,
             name: target.title,
             typeLabel: target.subtitle ?? "",
-            memberCount: 0,
             avatarURL: target.avatarURL,
             avatarAccentHex: DynamicColorGenerator.colorForName(target.title),
-            favoriteEmoji: nil,
             moodEmoji: target.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
             accentHex: accentColor,
             isDark: isDark,
@@ -729,10 +728,8 @@ struct ForwardPickerRow: View, Equatable {
     let id: String
     let name: String
     let typeLabel: String
-    let memberCount: Int
     let avatarURL: String?
     let avatarAccentHex: String
-    let favoriteEmoji: String?
     let moodEmoji: String?
     let accentHex: String
     let isDark: Bool
@@ -747,10 +744,8 @@ struct ForwardPickerRow: View, Equatable {
         lhs.id == rhs.id
             && lhs.name == rhs.name
             && lhs.typeLabel == rhs.typeLabel
-            && lhs.memberCount == rhs.memberCount
             && lhs.avatarURL == rhs.avatarURL
             && lhs.avatarAccentHex == rhs.avatarAccentHex
-            && lhs.favoriteEmoji == rhs.favoriteEmoji
             && lhs.moodEmoji == rhs.moodEmoji
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
@@ -789,30 +784,14 @@ struct ForwardPickerRow: View, Equatable {
                 VStack(alignment: .leading, spacing: 2) {
                     ConversationTitleLabel(
                         name: name,
-                        favoriteEmoji: favoriteEmoji,
+                        favoriteEmoji: nil,
                         font: MeeshyFont.relative(15, weight: .medium),
                         color: theme.textPrimary
                     )
 
-                    // La puce séparatrice est de la MISE EN PAGE, pas du texte :
-                    // elle vivait gravée dans les 13 formes localisées de
-                    // `forward.members-count`, ce qui obligeait chaque traducteur
-                    // à reproduire un glyphe décoratif et empêchait la clé de
-                    // servir aux surfaces sans puce. Rendue ici et masquée à
-                    // VoiceOver (doctrine 223i), qui lit désormais « Groupe,
-                    // 3 membres » au lieu d'intercaler le nom de la puce.
-                    HStack(spacing: 4) {
-                        Text(typeLabel)
-
-                        if memberCount > 0 {
-                            Text(verbatim: "\u{2022}")
-                                .accessibilityHidden(true)
-
-                            Text(MembersCountLabel.text(memberCount))
-                        }
-                    }
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textMuted)
+                    Text(typeLabel)
+                        .font(MeeshyFont.relative(12))
+                        .foregroundColor(theme.textMuted)
                 }
                 .accessibilityElement(children: .combine)
 

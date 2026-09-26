@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 // MARK: - Agnostic Types (no WebRTC framework dependency)
 
@@ -40,11 +41,6 @@ struct IceServer: Sendable {
     ]
 }
 
-struct MediaTracks: Sendable {
-    let audioEnabled: Bool
-    let videoEnabled: Bool
-}
-
 enum CallMediaType: Sendable {
     case audioOnly
     case audioVideo
@@ -55,10 +51,8 @@ enum CallMediaType: Sendable {
 enum PeerConnectionState: String, Sendable {
     case new
     case connecting
-    case checking      // ICE checking — UX warning lors d'une nouvelle tentative de connexion
     case connected
     case disconnected
-    case reconnecting  // ICE restart en cours après perte de connectivité
     case failed
     case closed
 }
@@ -416,21 +410,6 @@ nonisolated enum CallReliabilityPolicy {
         }
     }
 
-    /// Audit appels 2026-07-11 #9 — `updateIceServers` is setConfiguration-only
-    /// (no ICE re-gather), so TURN credentials landing MID-RECONNECT would only
-    /// take effect at the next allocation, i.e. once the `.reconnecting`
-    /// watchdog escalates seconds later. Re-arming the in-flight attempt's
-    /// restart the moment the fresh credentials are applied removes that dead
-    /// window. On every other phase the refresh stays inert by design: the
-    /// TURNCredentialService TTL clamp guarantees credentials always outlive
-    /// the call, so a healthy call never pays a gratuitous re-gather.
-    static func shouldRearmRestartOnCredentialRefresh(state: CallState) -> Bool {
-        switch state {
-        case .reconnecting: return true
-        case .idle, .ringing, .offering, .connecting, .connected, .ended: return false
-        }
-    }
-
     /// Duration-clock decision at the `.connected` transition. Reset on a fresh
     /// connect AND on a first-ever connect that transited through
     /// `.reconnecting` (pre-establishment ICE restart) — `durationTask` dies on
@@ -767,7 +746,6 @@ enum VideoDegradationPreference: String, Sendable, Equatable {
 
 protocol WebRTCClientProviding: AnyObject {
     var delegate: (any WebRTCClientDelegate)? { get set }
-    var isConnected: Bool { get }
     var localVideoTrack: Any? { get }
     var remoteVideoTrack: Any? { get }
 
@@ -1117,10 +1095,8 @@ nonisolated enum QualityThresholds {
     // walks the entire stats graph (~5–10ms CPU per call); 5s is the
     // industry baseline (WhatsApp/Jitsi use 2–5s during reconnection only).
     static let statsIntervalSeconds: TimeInterval = 5.0
-    /// Phase 1 fix P1: cellular networks have RTT 800ms+ ; 5s heartbeat with
-    /// 15s lost was too aggressive (false-positive reconnects). SOTA matches
-    /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
-    static let heartbeatIntervalSeconds: TimeInterval = 10.0
+    /// The shared heartbeat cadence (`CallRules`, #8074) — 10 s, cellular-safe.
+    static let heartbeatIntervalSeconds: TimeInterval = CallRules.heartbeatInterval
 
     /// Cadence des snapshots analytics « in_progress » pendant un appel
     /// connecté. 60 s = 1-2 req/min avec l'émission finale — bien sous le
@@ -1182,7 +1158,6 @@ nonisolated enum QualityThresholds {
     /// are NOT debounced (terminal/decisive).
     static let disconnectDebounceSeconds: TimeInterval = 3.5
 
-    static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
     /// Frame-rate floor applied when `VideoQualityLevel.critical.targetFPS == 0`.
@@ -1234,15 +1209,10 @@ nonisolated enum QualityThresholds {
     /// no network flap to re-arm `attemptReconnection`).
     static let reconnectAttemptBudgetSeconds: TimeInterval = 10.0
 
-    /// Caller-side ringing timeout. The gateway has its own 60s server-side
-    /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
-    /// 45s client-side cutoff gives the user a faster fail path when:
-    ///   - the recipient is unreachable yet the gateway delays the no_answer
-    ///   - the network drops the call:ended event before we receive it
-    ///   - the server timeout misfires
-    /// Picked at 45s to align with WhatsApp/FaceTime UX while leaving 15s
-    /// headroom under the gateway's hard cap.
-    static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
+    /// Caller-side ringing timeout — the SAME window the gateway marks missed
+    /// at (`CallRules.ringTimeout`, #8074). The server arms its timer first,
+    /// at creation; this one is the net when `call:ended` never arrives.
+    static let outgoingRingTimeoutSeconds: TimeInterval = CallRules.ringTimeout
 
     /// Default TURN credential TTL (seconds) used when the signalling path does
     /// not carry an explicit `ttl` field (VoIP push, socket-only incoming — neither
@@ -1280,11 +1250,9 @@ nonisolated enum QualityThresholds {
     /// past that without leaving the user in a silent call for long.
     static let stuckMutedFallbackDelaySeconds: TimeInterval = 2.0
 
-    /// How long to wait for an SDP offer after the callee answers before
-    /// treating the call as timed-out and failing it. Covers worst-case
-    /// signalling round-trips on bad cellular (NAT traversal + server hop).
-    /// Matches the gateway's own offer-expiry window.
-    static let sdpOfferTimeoutSeconds: TimeInterval = 30
+    /// How long the callee waits for an SDP offer after answering before
+    /// failing the call — the shared `CallRules.offerTimeout` (#8074).
+    static let sdpOfferTimeoutSeconds: TimeInterval = CallRules.offerTimeout
 
     /// Safety net that force-fulfills a held `CXAnswerCallAction` if the call
     /// still hasn't connected. MUST stay strictly greater than

@@ -102,7 +102,7 @@ extension ConversationViewModel {
             let missing = await Self.resolveVoiceConsentMissing {
                 try await VoiceProfileService.shared.getConsentStatus().hasConsent
             }
-            await MainActor.run { self?.voiceConsentMissing = missing }
+            self?.voiceConsentMissing = missing
         }
     }
 
@@ -207,7 +207,7 @@ extension ConversationViewModel {
         // manquerait toutes, puis publierait une fenêtre incomplète AVANT que
         // les traductions ne soient hydratées — le contraire de la publication
         // atomique que `loadInitialSnapshot` + `apply` construisent.
-        messageStore.startObserving(dbPool: startupDependencies.dbPool)
+        messageStore.startObserving()
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)

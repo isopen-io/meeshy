@@ -23,17 +23,14 @@ struct MessageActionsMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(actions.enumerated()), id: \.element) { index, action in
-                if action == .delete {
-                    Divider().overlay(accent.opacity(0.12))
-                }
                 row(action)
-                if index < actions.count - 1 && actions[index + 1] != .delete {
+                if index < actions.count - 1 {
                     Divider().overlay(accent.opacity(0.08)).padding(.leading, 52)
                 }
             }
         }
         .padding(.vertical, 6)
-        .frame(width: 240)
+        .frame(width: Self.menuWidth)
         // Design système par version d'iOS : Liquid Glass natif iOS 26
         // (`.regular` pur, sans teinte ni ombre manuelle) / fallback material
         // avant — MÊME rendu que le menu des lignes de conversation
@@ -46,8 +43,7 @@ struct MessageActionsMenu: View {
     }
 
     private func row(_ action: PrimaryAction) -> some View {
-        let isDestructive = action == .delete
-        let tint = isDestructive ? MeeshyColors.error : accent
+        let tint = accent
         return Button {
             HapticFeedback.light()
             onSelect(action)
@@ -100,12 +96,7 @@ struct MessageActionsMenu: View {
         case .copy: return "doc.on.doc"
         case .saveMedia: return "arrow.down.to.line"
         case .compose: return "wand.and.stars"
-        case .pin: return "pin.fill"
-        case .unpin: return "pin.slash.fill"
-        case .star: return "star.fill"
-        case .unstar: return "star.slash.fill"
         case .more: return "ellipsis"
-        case .delete: return "trash"
         case .callDetail: return "info.circle"
         case .select: return "checkmark.circle"
         }
@@ -118,12 +109,7 @@ struct MessageActionsMenu: View {
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .saveMedia: return String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
         case .compose: return String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
-        case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
-        case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-        case .star: return String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main)
-        case .unstar: return String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
-        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
         case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         }

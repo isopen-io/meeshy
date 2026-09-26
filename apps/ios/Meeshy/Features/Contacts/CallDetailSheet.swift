@@ -8,7 +8,6 @@ struct CallDetailSheet: View {
     let record: APICallRecord
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     private var unknownCallerFallback: String {
         String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
@@ -73,13 +72,7 @@ struct CallDetailSheet: View {
     }
 
     private var statusLine: String {
-        let direction: String
-        switch record.directionKind {
-        case .outgoing: direction = String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
-        case .incoming: direction = String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
-        case .missed: direction = String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
-        }
-        return "\(direction) · \(record.startedAt.relativeTimeString)"
+        "\(record.directionKind.localizedLabel) · \(record.startedAt.relativeTimeString)"
     }
 
     // MARK: - Redial

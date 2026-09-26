@@ -74,31 +74,6 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
-    // MARK: - CommentsSheetView.computeLikedIds tests (mirrors StoryViewerView)
-
-    func test_commentsSheet_computeLikedIds_withHeartReaction_includesCommentId() {
-        let comments = [
-            makeComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
-            makeComment(id: "c2", currentUserReactions: ["\u{1F525}"]),
-            makeComment(id: "c3", currentUserReactions: nil)
-        ]
-
-        let result = CommentsSheetView.computeLikedIds(from: comments)
-
-        XCTAssertEqual(result, ["c1"])
-    }
-
-    func test_commentsSheet_computeLikedIds_withNoReactions_returnsEmptySet() {
-        let comments = [
-            makeComment(id: "c1", currentUserReactions: nil),
-            makeComment(id: "c2", currentUserReactions: [])
-        ]
-
-        let result = CommentsSheetView.computeLikedIds(from: comments)
-
-        XCTAssertTrue(result.isEmpty)
-    }
-
     // MARK: - CommentsSheetView.computeLikedIds(from: [FeedComment]) tests
     // C'est l'overload réellement branché pour semer `likedIds` à l'ouverture de la
     // sheet (depuis `post.comments` + réponses, qui portent `currentUserReactions`).

@@ -6,8 +6,10 @@ import {
   displayNameDepuisEmail,
   pseudoRacine,
 } from '@meeshy/shared/utils/registration-identity';
+import { usernameRefusal, type UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
 import type { RegisterBody } from './api/auth';
+import { isReferralCodeShaped, normalizeReferralCode } from './view/referral-code';
 import { countryOf, type Country } from './countries';
 
 /**
@@ -54,6 +56,11 @@ export const DISPLAY_NAME_MAX = registerRequestSchema.properties.displayName.max
  * (#3629 : la borne serveur est passée de 6 à 12 sans que le miroir iOS le
  * suive ; ce module ne peut pas rejouer ce défaut, il LIT le schéma). */
 export const PASSWORD_MIN = registerRequestSchema.properties.password.minLength;
+
+/** Longueur maximale d'un pseudo — LUE sur `registerRequestSchema` (#8082) :
+ * `direction_recette` (17 caractères) passait l'écran et se faisait refuser
+ * par la passerelle, faute que le client connaisse la borne. */
+export const USERNAME_MAX = registerRequestSchema.properties.username.maxLength;
 
 /** Compilé depuis la source PARTAGÉE — la même regex que le schéma Ajv du
  * serveur et le Zod de `AuthSchemas.register` compilent tous deux. */
@@ -124,7 +131,8 @@ export function canSubmit(form: SignupFormState): boolean {
     isDisplayNameValid(form.displayName) &&
     isEmailValid(form.email) &&
     isPasswordValid(form.password) &&
-    isPhoneValid(form.phoneDigits)
+    isPhoneValid(form.phoneDigits) &&
+    usernameFieldRefusal(form) === null
   );
 }
 
@@ -165,6 +173,17 @@ export function effectiveUsername(form: SignupFormState): string {
   return derive === PSEUDO_DE_SECOURS ? '' : derive;
 }
 
+/**
+ * LE REFUS DU PSEUDO, PENDANT LA SAISIE (#8082) — le verdict que la passerelle
+ * rendrait (`usernameRefusal`, `@meeshy/shared/utils/username-rule`), posé sur
+ * le pseudo QUI PARTIRA. `null` quand il est recevable, ou absent : la
+ * passerelle le dérive alors elle-même.
+ */
+export function usernameFieldRefusal(form: SignupFormState): UsernameRefusal | null {
+  const pseudo = effectiveUsername(form);
+  return pseudo === '' ? null : usernameRefusal(pseudo);
+}
+
 /** Le nom affiché qui partira — tapé s'il l'a été, tiré de l'adresse sinon. */
 export function effectiveDisplayName(form: SignupFormState): string {
   const tape = (form.displayName ?? '').trim();
@@ -181,7 +200,8 @@ export function isIdentityDefined(form: SignupFormState): boolean {
     isEmailValid(form.email) &&
     effectiveDisplayName(form) !== '' &&
     isDisplayNameValid(effectiveDisplayName(form)) &&
-    effectiveUsername(form) !== ''
+    effectiveUsername(form) !== '' &&
+    usernameFieldRefusal(form) === null
   );
 }
 
@@ -191,14 +211,43 @@ export function normalizedPhoneDigits(phoneDigits: string): string {
 }
 
 /**
- * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — sept clés
+ * UN NUMÉRO A-T-IL ÉTÉ DONNÉ ? — la MÊME question que la charge se pose
+ * (`composeRegisterBody`) et que l'alerte d'une inscription sans numéro pose
+ * à l'écran (#8040) : l'alerte ne peut pas paraître pour une saisie que la
+ * charge enverrait, ni se taire pour une saisie qu'elle omettrait.
+ */
+export function hasPhoneNumber(form: SignupFormState): boolean {
+  return normalizedPhoneDigits(form.phoneDigits).length > 0;
+}
+
+/**
+ * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — neuf clés
  * au plus, jamais `username` / `firstName` / `lastName` (la passerelle les
  * dérive de `displayName`, #5218). Le couple téléphone est TOUT ou RIEN : un
  * numéro sans pays ne qualifierait rien.
  */
-export function composeRegisterBody(form: SignupFormState): RegisterBody {
+/**
+ * Le parrainage qui accompagne l'inscription (#8058). Depuis #8055, une
+ * inscription sans numéro ne rend AUCUNE session : le rattachement authentifié
+ * d'après-inscription (`POST /affiliate/register`) ne pouvait plus partir. Le
+ * code voyage donc DANS la création du compte, et la passerelle noue la
+ * relation au parrain, activé ou non. Un code mal formé n'est pas envoyé ; un
+ * code refusé par la passerelle ne bloque jamais l'inscription.
+ */
+export type RegisterReferral = {
+  readonly referralCode?: string;
+  readonly referralSessionKey?: string;
+};
+
+function referralFields(referral: RegisterReferral): Pick<RegisterBody, 'affiliateToken' | 'affiliateSessionKey'> {
+  const code = normalizeReferralCode(referral.referralCode ?? '');
+  if (!isReferralCodeShaped(code)) return {};
+  const sessionKey = (referral.referralSessionKey ?? '').trim();
+  return { affiliateToken: code, ...(sessionKey !== '' ? { affiliateSessionKey: sessionKey } : {}) };
+}
+
+export function composeRegisterBody(form: SignupFormState, referral: RegisterReferral = {}): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
-  const hasPhone = digits.length > 0;
   return {
     // OMISE quand le champ est vide, jamais `''` : `displayNameProperty` porte
     // `minLength: 1` — une chaîne vide serait une VALEUR, refusée par la borne,
@@ -213,9 +262,10 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
     // téléphone une ligne plus bas : une clé présente à valeur vide décrit
     // quelque chose qui n'a pas été demandé.
     ...(hasPassword(form.password) ? { password: form.password } : {}),
-    ...(hasPhone ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
+    ...(hasPhoneNumber(form) ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
     systemLanguage: form.systemLanguage,
     regionalLanguage: form.regionalLanguage,
+    ...referralFields(referral),
   };
 }
 

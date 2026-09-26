@@ -54,18 +54,9 @@ final class CallsViewModel: ObservableObject {
             }
         let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
                 guard let self, self.loadGeneration == generation else { return }
-                switch state {
-                case .cachedFresh, .cachedStale, .loaded:
-                    self.loadState = .loaded
-                case .loading:
-                    self.loadState = .loading
-                case .offline:
-                    self.loadState = .offline
-                case .error:
-                    self.loadState = .error(String(localized: "calls.history.error", defaultValue: "Erreur lors du chargement", bundle: .main))
-                case .idle:
-                    self.loadState = .idle
-                }
+                self.loadState = state.collapsedForList(
+                    errorMessage: String(localized: "calls.history.error", defaultValue: "Erreur lors du chargement", bundle: .main)
+                )
             }
         let apply: @MainActor @Sendable ([APICallRecord]) -> Void = { [weak self] records in
             guard let self, self.loadGeneration == generation else { return }

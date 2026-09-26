@@ -381,7 +381,7 @@ final class ContactsListViewModelTests: XCTestCase {
         mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [alice, bob]))
 
         await sut.loadFriends()
-        sut.search("ali")
+        sut.searchQuery = "ali"
 
         XCTAssertEqual(sut.filteredFriends.count, 1)
         XCTAssertEqual(sut.filteredFriends.first?.username, "alice")

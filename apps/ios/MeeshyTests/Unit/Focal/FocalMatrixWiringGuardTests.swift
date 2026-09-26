@@ -89,28 +89,12 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     // MARK: - Drapeau langue d'origine (arbitrage user 2026-08-18)
 
-    func test_originalLanguageFlag_isAVersionToggle_gatedOnMultipleVersions() throws {
+    /// L'ancien toggle unique `originalLanguageFlag` a quitté `FocalRow` avec
+    /// son dernier appelant (2026-09-25) : la bande `plainLanguageFlags` porte
+    /// le geste (test suivant). L'invariant qui lui survit : l'icône translate
+    /// reste hors de la rangée.
+    func test_translateChip_staysRemovedFromTheRow() throws {
         let code = try stripped(rowPath)
-        guard let flagStart = code.range(of: "private var originalLanguageFlag") else {
-            return XCTFail("originalLanguageFlag introuvable dans FocalRow — le seul indicateur multi-langue de la rangée")
-        }
-        let window = String(code[flagStart.lowerBound...].prefix(2000))
-        XCTAssertTrue(
-            window.contains("if let translation = content.translation"),
-            "le drapeau n'apparaît QUE quand plusieurs versions existent (content.translation non-nil) — jamais sur un message monolingue"
-        )
-        XCTAssertTrue(
-            window.contains("onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)"),
-            "tap sur le drapeau d'origine = AFFICHER l'original (arbitrage user 2026-08-18 : le drapeau est un toggle de version)"
-        )
-        XCTAssertTrue(
-            window.contains("onSetActiveDisplayLanguage?(content.messageId, nil)"),
-            "tap sur le drapeau de la langue du profil = REVENIR à la traduction (résolution Prisme) — sans ce retour, la V.O. serait un cul-de-sac"
-        )
-        XCTAssertTrue(
-            window.contains("preferredLangCode") || code.contains("profileLang"),
-            "l'état « original affiché » montre le drapeau de la langue CONFIGURÉE sur le profil (preferredLangCode), jamais un globe"
-        )
         XCTAssertFalse(
             code.contains("translationChip") || code.contains("systemName: \"globe\""),
             "l'icône translate (chip 🌐) reste RETIRÉE de la rangée — le toggle est un DRAPEAU"

@@ -76,7 +76,7 @@ struct StoryEditComposer: View {
     @State private var previewAssets: StoryPreviewAssets?
 
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
@@ -196,7 +196,7 @@ struct StoryEditComposer: View {
             // `fullScreenCover` — sans eux l'aperçu planterait à la première
             // lecture d'un de ces trois modèles.
             .environmentObject(router)
-            .environmentObject(conversationListViewModel)
+            .conversationListObject(conversationListViewModel)
             .environmentObject(statusViewModel)
         }
     }

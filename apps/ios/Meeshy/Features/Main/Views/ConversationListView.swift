@@ -142,7 +142,6 @@ struct ConversationListView: View {
     // change only on explicit user action (rare), and the gate keeps unaffected
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
-    private var blockService: BlockService { BlockService.shared }
     // Lecture directe sans @ObservedObject sur PresenceManager lui-même —
     // observer l'objet entier re-déclencherait ce body à CHAQUE mutation de
     // `presenceMap` (un event `user:status` par contact), pas seulement
@@ -172,11 +171,7 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State private var animateGradient = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
-
-    // Scroll tracking
-    @State private var hideSearchBar = false
 
     // Performance optimized scroll variables
     @State private var selectedProfileUser: ProfileSheetUser? = nil

@@ -410,8 +410,7 @@ extension ConversationView {
             var progressCancellable: AnyCancellable?
             progressCancellable = uploader.progressPublisher
                 .receive(on: DispatchQueue.main)
-                .sink { [progressCancellable] progress in
-                    _ = progressCancellable
+                .sink { progress in
                     composerState.uploadProgress = progress
                 }
 
@@ -1027,27 +1026,8 @@ extension ConversationView {
     ///    result into the legacy pending dicts the send pipeline already
     ///    knows how to consume. `.failed` simply drops the tile + toasts.
     func trackPreparation(_ prep: PreparingAttachment) {
-        composerState.preparingAttachments.append(prep)
-        observePreparation(prep)
-    }
-
-    private func observePreparation(_ prep: PreparingAttachment) {
-        Task { @MainActor [prep] in
-            let result = await prep.awaitCompletion()
-            switch result {
-            case .success(let prepared):
-                composerState.pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
-                if let thumb = prep.thumbnail {
-                    composerState.pendingThumbnails[prepared.attachment.id] = thumb
-                }
-                composerState.pendingAttachments.append(prepared.attachment)
-                HapticFeedback.success()
-            case .failure(.preparationFailed(let message)):
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(message)
-            }
-            composerState.preparingAttachments.removeAll { $0.id == prep.id }
-        }
+        PreparationTracking.track(prep, preparing: $composerState.preparingAttachments, attachments: $composerState.pendingAttachments,
+                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails)
     }
 
     func sendMessage() {

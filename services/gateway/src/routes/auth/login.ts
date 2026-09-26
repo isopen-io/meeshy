@@ -3,8 +3,13 @@ import {
   userSchema,
   sessionMinimalSchema,
   loginRequestSchema,
+  loginVerificationRequiredProperties,
   errorResponseSchema
 } from '@meeshy/shared/types';
+import { emailSchema } from '@meeshy/shared/types/validation';
+import type { RequestContext } from '../../services/GeoIPService';
+import { deferAfterResponse } from '../../utils/after-response';
+import { localeDeLaRequete } from './request-locale';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { getRequestContext } from '../../services/GeoIPService';
 import { logWarn } from '../../utils/logger';
@@ -15,7 +20,7 @@ import {
   createAuthGlobalRateLimiter,
   createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
-import { PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
+import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -26,6 +31,7 @@ import type { AuthResult } from '../../services/AuthService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
   sendSuccess,
+  sendError,
   sendUnauthorized,
   sendBadRequest,
   sendInternalError
@@ -34,6 +40,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import { notifyIfLoginFromNewDevice } from './notify-new-device';
+import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
 import {
   rememberPendingDeviceTrust,
   consumePendingDeviceTrust
@@ -50,6 +57,52 @@ export function registerLoginRoutes(context: AuthRouteContext) {
   const loginRateLimiter = createLoginRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
   const twoFactorRateLimiter = createTwoFactorLoginRateLimiter(redis);
+  const afterResponse = context.afterResponse ?? deferAfterResponse;
+
+  /**
+   * #8033 — UNE ADRESSE SANS COMPTE DEVIENT UN COMPTE, sans session.
+   *
+   * Consultée seulement quand la connexion a échoué (aucun compte actif, ou un
+   * compte SANS mot de passe) et que l'identifiant est une adresse VALIDE : le
+   * chemin nominal ne paie aucune lecture de plus, et un pseudo inconnu reste
+   * un 401. Le mot de passe tapé n'est PAS transmis — un tiers qui taperait
+   * votre adresse vous imposerait sinon son mot de passe.
+   *
+   * #8055 — porte `proven-password` : consultée APRÈS un mot de passe JUSTE
+   * sur un compte pas encore actif (adresse à prouver, aucun numéro), avec
+   * l'adresse du compte ; le code de vérification est renvoyé, sans session.
+   *
+   * Rend `true` quand la réponse est partie ; `false` laisse le refus
+   * d'origine (401, ou `PASSWORD_NOT_SET`) décider.
+   */
+  async function replyFromEmailAccount(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    identifier: string,
+    requestContext: RequestContext,
+    door: 'password-login' | 'proven-password' = 'password-login'
+  ): Promise<boolean> {
+    const email = identifier.trim();
+    if (!emailSchema.safeParse(email).success) return false;
+
+    const issue = await authService.startAccountFromEmail(
+      { email, door, requestContext, deviceLocale: localeDeLaRequete(request) },
+      { afterResponse }
+    );
+
+    if (issue.kind === 'verification-required') {
+      // #8083 — le jeton d'attente de CET appareil : il dira à l'écran du code
+      // que l'adresse a été prouvée ailleurs. Un état, jamais une session.
+      const attente = await pendingSessionTokenFor(context.prisma, issue.email);
+      sendSuccess(reply, { status: issue.kind, accountCreated: issue.accountCreated, email: issue.email, ...attente });
+      return true;
+    }
+    if (issue.kind === 'rate-limited') {
+      sendError(reply, 429, 'Trop de demandes pour cette adresse. Réessayez dans une heure.', { code: 'RATE_LIMITED' });
+      return true;
+    }
+    return false;
+  }
 
   // POST /login - Main login endpoint
   fastify.post('/login', {
@@ -98,7 +151,11 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 // SERVEUR entre les deux étapes (`pending-device-trust.ts`),
                 // comme le lien magique le fait déjà : il n'y a plus rien à
                 // rejouer, donc plus rien à écho.
-                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // Branche « vérification requise » (#8033) — adresse sans compte
+                // actif : aucun jeton, aucune session, un code est parti.
+                ...loginVerificationRequiredProperties
               }
             }
           }
@@ -126,9 +183,31 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const requestContext = await getRequestContext(request);
       logger.debug('Auth context', { ip: requestContext.ip, location: requestContext.geoData?.location });
 
-      const authResult = await authService.authenticate({ username, password }, requestContext);
+      let authResult: AuthResult | null;
+      try {
+        authResult = await authService.authenticate({ username, password }, requestContext);
+      } catch (error) {
+        // Un compte SANS mot de passe (#6424) : créé par une adresse et jamais
+        // vérifié, il reçoit son code (#8033) ; sinon le refus garde sa porte.
+        if (error instanceof PasswordNotSetError && await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
+        // #8055 — le BON mot de passe d'un compte pas encore actif (adresse à
+        // prouver, aucun numéro) : aucune session, le code part à l'adresse
+        // DU COMPTE, quel que soit l'identifiant tapé.
+        if (error instanceof ActivationRequiresEmailProofError) {
+          if (await replyFromEmailAccount(request, reply, error.email, requestContext, 'proven-password')) {
+            return reply;
+          }
+          return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
+        }
+        throw error;
+      }
 
       if (!authResult) {
+        if (await replyFromEmailAccount(request, reply, username, requestContext)) {
+          return reply;
+        }
         logger.warn('Échec de connexion — identifiants invalides', { username });
         return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
       }

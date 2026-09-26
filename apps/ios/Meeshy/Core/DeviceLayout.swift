@@ -6,10 +6,6 @@ enum DeviceLayout {
         UIDevice.current.userInterfaceIdiom == .pad
     }
 
-    static func isRegular(_ sizeClass: UserInterfaceSizeClass?) -> Bool {
-        sizeClass == .regular
-    }
-
     /// The scene the app is actually on screen in.
     ///
     /// Resolved by `activationState`, never by `connectedScenes.first`:
@@ -105,33 +101,5 @@ enum DeviceLayout {
     /// `bubbleMaxWidth(containerWidth:sizeClass:)`.
     static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?) -> CGFloat {
         bubbleMaxWidth(containerWidth: windowSize.width, sizeClass: sizeClass)
-    }
-
-    static func sheetMaxHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        if sizeClass == .regular {
-            return min(screenHeight * 0.72, 720)
-        }
-        return screenHeight * 0.85
-    }
-
-    static func pickerSheetHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        if sizeClass == .regular {
-            return min(screenHeight * 0.55, 640)
-        }
-        return screenHeight * 0.65
-    }
-}
-
-extension View {
-    /// Applies sensible presentation detents on iPad form-sheet contexts.
-    /// On compact (iPhone) returns the view unchanged so existing sheet
-    /// layouts (which often manage their own heights) remain in control.
-    @ViewBuilder
-    func adaptivePresentationDetents(_ detents: Set<PresentationDetent> = [.medium, .large]) -> some View {
-        if #available(iOS 16.0, *) {
-            self.presentationDetents(detents)
-        } else {
-            self
-        }
     }
 }

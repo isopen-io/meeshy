@@ -83,18 +83,9 @@ struct PhonebookListView: View {
 
     private func filterChip(_ filter: DirectoryFilter) -> some View {
         let isSelected = viewModel.activeFilter == filter
-        return Button {
+        return ContactsFilterChip(title: label(for: filter), isSelected: isSelected) {
             viewModel.setFilter(filter)
-        } label: {
-            Text(label(for: filter))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
         }
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func label(for filter: DirectoryFilter) -> String {

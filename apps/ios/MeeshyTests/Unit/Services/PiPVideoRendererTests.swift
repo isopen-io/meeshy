@@ -25,6 +25,20 @@ final class PiPVideoRendererTests: XCTestCase {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
+    /// `flush`/`enqueue`/`isReadyForMoreMediaData`/`flushIfFailed` moved to the
+    /// shared `AVSampleBufferDisplayLayer` extension (dedup with
+    /// `PiPCallController.flushSurface()`) — the iOS 16/17 branching anchors
+    /// below now live there, not in `PiPVideoRenderer.swift`.
+    private static let layerSource: String = {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/AVSampleBufferDisplayLayer+Meeshy.swift")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }()
+
     // MARK: - Thread safety
 
     func test_renderFrame_isNonisolated() {
@@ -111,7 +125,7 @@ final class PiPVideoRendererTests: XCTestCase {
 
     func test_flushIfFailed_checksFailedStatus() {
         XCTAssertTrue(
-            Self.source.contains("== .failed"),
+            Self.layerSource.contains("== .failed"),
             "flushIfFailed must check status == .failed before flushing (avoid flushing healthy layers)"
         )
     }
@@ -120,16 +134,16 @@ final class PiPVideoRendererTests: XCTestCase {
 
     func test_enqueue_branchesOnOS17() {
         XCTAssertTrue(
-            Self.source.contains("if #available(iOS 17.0, *)"),
+            Self.layerSource.contains("if #available(iOS 17.0, *)"),
             "PiPVideoRenderer must branch on iOS 17 availability for the sampleBufferRenderer API"
         )
         XCTAssertTrue(
-            Self.source.contains("sampleBufferRenderer.enqueue"),
+            Self.layerSource.contains("sampleBufferRenderer.enqueue"),
             "iOS 17+ path must enqueue via sampleBufferRenderer"
         )
         XCTAssertTrue(
-            Self.source.contains("displayLayer.enqueue("),
-            "iOS <17 fallback must enqueue directly on displayLayer"
+            Self.layerSource.contains("enqueue(sample)"),
+            "iOS <17 fallback must enqueue directly on the display layer"
         )
     }
 

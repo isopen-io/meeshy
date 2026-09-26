@@ -2,6 +2,15 @@ import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
+import {
+  verificationOpensSession,
+  verifyEmailBody,
+  type VerificationStatusData,
+  type VerifyEmailData,
+  type VerifyEmailRequest,
+} from './verify-email';
+
+export { verificationOpensSession, type VerificationStatusData, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
 
 /**
  * LE FLUX DE CONNEXION (#5605, T4) — compose les requêtes EXACTES de
@@ -37,11 +46,44 @@ type LoginTwoFactorData = {
   readonly message: string;
 };
 
-type LoginResponseData = LoginSuccessData | LoginTwoFactorData;
+/**
+ * UN E-MAIL INCONNU À LA CONNEXION DEVIENT UN COMPTE (#8034, contrat #8033) —
+ * la passerelle crée le compte SANS mot de passe ni session et envoie un code
+ * et un lien. `accountCreated:false` : le compte existait, jamais vérifié, et
+ * le code vient d'être renvoyé. AUCUN jeton de session : la reprise est à
+ * l'écran du code, jamais au magasin.
+ *
+ * `pendingSessionToken` (#8083) : le jeton d'ATTENTE de CET appareil — il ne
+ * lit que l'état `pending` / `proven` (`verificationStatus`), jamais une
+ * session. Tenu en mémoire vive (`pending-verification.ts`), jamais stocké,
+ * jamais dans l'adresse, jamais journalisé.
+ */
+export type LoginVerificationRequiredData = {
+  readonly status: 'verification-required';
+  readonly accountCreated: boolean;
+  readonly email: string;
+  readonly pendingSessionToken?: string;
+};
+
+export type LoginResponseData = LoginSuccessData | LoginTwoFactorData | LoginVerificationRequiredData;
+
+/** La MÊME forme, rendue par la connexion d'un e-mail inconnu (#8033) et par
+ * une inscription SANS numéro (#8055) : un compte qui attend son code. */
+export type VerificationRequiredData = LoginVerificationRequiredData;
 
 function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorData {
   return (data as LoginTwoFactorData).requires2FA === true;
 }
+
+export function isVerificationRequired(
+  data: LoginResponseData | RegisterResponseData,
+): data is VerificationRequiredData {
+  return (data as VerificationRequiredData).status === 'verification-required';
+}
+
+/** L'horizon d'une session dont la passerelle ne sert pas `expiresIn` — le
+ * défaut de `login.ts` sans « se souvenir de cet appareil ». */
+const DEFAULT_SESSION_SECONDS = 24 * 60 * 60;
 
 /**
  * LA CHARGE EXACTE de `POST /auth/register` (`register.ts:133`,
@@ -77,6 +119,13 @@ export type RegisterBody = {
   readonly phoneCountryCode?: string;
   readonly systemLanguage?: string;
   readonly regionalLanguage?: string;
+  /** Le code de parrainage (#8058) — la même valeur que `token` de
+   * `POST /affiliate/register`. La passerelle noue la relation au parrain à la
+   * CRÉATION du compte ; un jeton invalide ne bloque jamais l'inscription. */
+  readonly affiliateToken?: string;
+  /** La clé de session d'affiliation (`sessionKey` de `/affiliate/register`),
+   * seulement quand elle est connue. */
+  readonly affiliateSessionKey?: string;
 };
 
 /** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une
@@ -106,7 +155,14 @@ export type PhoneConflictData = {
   readonly pendingRegistration: Record<string, unknown>;
 };
 
-export type RegisterResponseData = RegisterSuccessData | PhoneConflictData;
+/**
+ * Trois branches de succès : la session (AVEC numéro), le conflit de numéro,
+ * et — SANS numéro (#8055, règle porteur 2026-09-26) — le compte qui attend
+ * son code, à la forme de la connexion d'un e-mail inconnu (#8033). Une
+ * passerelle qui n'a pas encore adopté #8055 rend toujours la session : les
+ * deux formes sont décodées.
+ */
+export type RegisterResponseData = RegisterSuccessData | PhoneConflictData | VerificationRequiredData;
 
 /** Le discriminant entre les deux branches de succès de `register()` — exporté
  * pour que l'écran d'inscription (`routes/signup.tsx`) n'ait pas à connaître
@@ -138,6 +194,7 @@ export type AuthDeps = {
  * 206-212`).
  */
 function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): void {
+  if (isVerificationRequired(data)) return;
   if (isTwoFactorResponse(data)) {
     store.getState().beginTwoFactor({ user: data.user, twoFactorToken: data.twoFactorToken });
     return;
@@ -153,25 +210,11 @@ function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): vo
 /** `POST /auth/magic-link/request` (`routes/magic-link.ts:45-118`) —
  * `expiresInSeconds` optionnel : ABSENT sur un refus de débit dépassé
  * emballé en 200 (§ 3.1 de la spécification, § `view/magic-link.ts`). */
-export type MagicLinkRequestData = { readonly expiresInSeconds?: number };
+export type MagicLinkRequestData = { readonly expiresInSeconds?: number; readonly pendingSessionToken?: string };
 
 /** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
  * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
 export type ForgotPasswordData = { readonly message?: string } | undefined;
-
-/**
- * `POST /auth/verify-email` (`magic-link.ts:307-364`, `AuthSchemas.verifyEmail`)
- * — CE client n'envoie QUE la branche `code` (le champ à 6 chiffres de
- * `EmailVerificationView`, jamais `token` : la validation par LIEN reste hors
- * tranche, elle vit sur `/auth/magic-link/validate`). `alreadyVerified` +
- * `verifiedAt` distinguent la branche « déjà vérifié » (magic-link.ts:349-354)
- * d'une vérification neuve, sans que ce soit une erreur pour l'appelant.
- */
-export type VerifyEmailData = {
-  readonly message: string;
-  readonly alreadyVerified?: boolean;
-  readonly verifiedAt?: string;
-};
 
 /** `POST /auth/resend-verification` (`magic-link.ts:377-416`) — toujours 200
  * générique, même garde de non-révélation que `forgotPassword`. */
@@ -283,7 +326,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     });
     if (!result.ok) return result;
 
-    if (isPhoneConflict(result.data)) return result;
+    if (isPhoneConflict(result.data) || isVerificationRequired(result.data)) return result;
 
     store.getState().establish({
       user: result.data.user,
@@ -318,11 +361,34 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return result;
   }
 
-  /** `POST /auth/verify-email` (T-verify) — AUCUNE écriture de magasin : la
-   * session existe déjà, posée par `register()` au moment de l'inscription
-   * (#4264) ; vérifier l'e-mail ne (re)connecte personne. */
-  async function verifyEmail(request: { readonly email: string; readonly code: string }): Promise<ApiResult<VerifyEmailData>> {
-    return transport.request<VerifyEmailData>({ method: 'POST', path: '/api/v1/auth/verify-email', body: request });
+  /** `POST /auth/verify-email` — une réponse qui porte une session l'ÉTABLIT
+   * (#8034), par le même `establish` que la connexion ; sans session (ancienne
+   * passerelle), le magasin reste tel quel. */
+  async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
+    const result = await transport.request<VerifyEmailData>({
+      method: 'POST',
+      path: '/api/v1/auth/verify-email',
+      body: verifyEmailBody(request),
+    });
+    if (!result.ok || !verificationOpensSession(result.data)) return result;
+
+    store.getState().establish({
+      user: result.data.user,
+      token: result.data.token,
+      sessionToken: result.data.sessionToken,
+      expiresIn: result.data.expiresIn ?? DEFAULT_SESSION_SECONDS,
+    });
+    return result;
+  }
+
+  /** `POST /auth/verification/status` (#8083) — un ÉTAT, AUCUNE écriture de
+   * magasin : l'appareil ne se connecte que par le code ou le lien. */
+  async function verificationStatus(pendingSessionToken: string): Promise<ApiResult<VerificationStatusData>> {
+    return transport.request<VerificationStatusData>({
+      method: 'POST',
+      path: '/api/v1/auth/verification/status',
+      body: { pendingSessionToken },
+    });
   }
 
   /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
@@ -389,6 +455,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     validateMagicLink,
     forgotPassword,
     verifyEmail,
+    verificationStatus,
     resendVerification,
     verifyResetToken,
     resetPassword,

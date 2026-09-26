@@ -210,7 +210,6 @@ struct CommentsSheetView: View {
     var targetCommentId: String? = nil
     /// Parent comment when `targetCommentId` is a reply.
     var targetParentCommentId: String? = nil
-    var onSendComment: ((String, String, String?) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
@@ -309,14 +308,12 @@ struct CommentsSheetView: View {
         accentColor: String,
         targetCommentId: String? = nil,
         targetParentCommentId: String? = nil,
-        onSendComment: ((String, String, String?) -> Void)? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
         self.targetCommentId = targetCommentId
         self.targetParentCommentId = targetParentCommentId
-        self.onSendComment = onSendComment
         self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
@@ -339,27 +336,13 @@ struct CommentsSheetView: View {
         comments.filter { $0.parentId == nil }
     }
 
-    /// Computes the set of comment ids that the current user has heart-reacted to.
-    /// Mirrors `StoryViewerView.computeLikedIds(from:)` so seeding logic is testable.
-    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
-        Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
-    }
-
     /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
     /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
     /// `post.comments` (et des réponses chargées) qui portent désormais
     /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
     /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.
     static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
-        Set(
-            comments
-                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
-                .map { $0.id }
-        )
+        StoryViewerView.computeLikedIds(fromCachedComments: comments)
     }
 
     /// Sème (additif) `likedIds` depuis l'état serveur des commentaires fournis,
@@ -558,13 +541,13 @@ struct CommentsSheetView: View {
     }
 
     var body: some View {
-        sheetBody
-            // Les médias de TOUS les commentaires du post (racines + réponses
-            // chargées) se feuillettent ensemble en plein écran.
-            .commentMediaGallery(topLevel: topLevelComments, replies: repliesMap)
+        let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
+        sheetBody(topLevel)
+            // Les médias de TOUS les commentaires du post (racines + réponses chargées) se feuillettent ensemble en plein écran.
+            .commentMediaGallery(topLevel: topLevel, replies: repliesMap)
     }
 
-    private var sheetBody: some View {
+    private func sheetBody(_ topLevel: [FeedComment]) -> some View {
         NavigationStack {
             ZStack {
                 // Translucent sheet: no opaque fill on 16.4+ (the translucent
@@ -584,7 +567,7 @@ struct CommentsSheetView: View {
                     ScrollViewReader { commentsProxy in
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(topLevelComments) { comment in
+                            ForEach(topLevel) { comment in
                                 ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
@@ -642,7 +625,7 @@ struct CommentsSheetView: View {
                             attemptScrollToTargetComment(using: commentsProxy)
                         }
                     }
-                    .adaptiveOnChange(of: topLevelComments.count) { _, _ in
+                    .adaptiveOnChange(of: topLevel.count) { _, _ in
                         attemptScrollToTargetComment(using: commentsProxy)
                     }
                     } // ScrollViewReader
@@ -737,25 +720,7 @@ struct CommentsSheetView: View {
             // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
             // temps réel rendait SANS ses effets dans cette feuille.
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: data.comment.translations,
-                originalLanguage: data.comment.originalLanguage,
-                preferredLanguages: langs
-            )
-            let feedComment = FeedComment(
-                id: data.comment.id, author: data.comment.author.name,
-                authorId: data.comment.author.id,
-                authorUsername: data.comment.author.username,
-                authorAvatarURL: data.comment.author.avatar,
-                content: data.comment.content, timestamp: data.comment.createdAt,
-                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: parentId,
-                effectFlags: data.comment.effectFlags ?? 0,
-                originalLanguage: data.comment.originalLanguage,
-                translatedContent: translated,
-                currentUserReactions: data.comment.currentUserReactions,
-                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
-            )
+            let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
             // The echoed event for OUR own just-sent comment: replace the optimistic
             // placeholder in place instead of duplicating it. Primary key: the
             // cmid echoed by the gateway matches the optimistic row id exactly.
@@ -817,25 +782,7 @@ struct CommentsSheetView: View {
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: data.comment.translations,
-                originalLanguage: data.comment.originalLanguage,
-                preferredLanguages: langs
-            )
-            let updated = FeedComment(
-                id: data.comment.id, author: data.comment.author.name,
-                authorId: data.comment.author.id,
-                authorUsername: data.comment.author.username,
-                authorAvatarURL: data.comment.author.avatar,
-                content: data.comment.content, timestamp: data.comment.createdAt,
-                likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                parentId: data.comment.parentId,
-                effectFlags: data.comment.effectFlags ?? 0,
-                originalLanguage: data.comment.originalLanguage,
-                translatedContent: translated,
-                currentUserReactions: data.comment.currentUserReactions,
-                media: (data.comment.media ?? []).map { $0.toFeedMedia() }
-            )
+            let updated = FeedComment(api: data.comment, preferredLanguages: langs)
             let topLevelWasLoaded = liveComments != nil
             applyCommentEdit(updated)
             persistCommentCache(
@@ -1045,20 +992,7 @@ struct CommentsSheetView: View {
 
     private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions
-            )
-        }
+        return data.map { FeedComment(api: $0, preferredLanguages: langs) }
     }
 
     /// Page suivante (plus ancienne) du fil — utilisée par la chasse paginée
@@ -1297,23 +1231,7 @@ struct CommentsSheetView: View {
 
     private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorUsername: c.author.username,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: parentId,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
-            )
-        }
+        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Comment Reply Banner
@@ -1520,7 +1438,7 @@ struct CommentsSheetView: View {
                 }
                 ForEach(commentAttachments) { attachment in
                     HStack(spacing: 6) {
-                        Image(systemName: commentAttachmentIcon(attachment.type))
+                        Image(systemName: attachment.type.glyph)
                             .font(.caption)
                             .foregroundColor(Color(hex: attachment.thumbnailColor))
                         Text(attachment.name)
@@ -1554,16 +1472,6 @@ struct CommentsSheetView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-        }
-    }
-
-    private func commentAttachmentIcon(_ type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
         }
     }
 
@@ -2024,21 +1932,6 @@ struct CommentsSheetView: View {
             liveCommentCount = previousCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
         }
-    }
-}
-
-// MARK: - Comment Row View
-
-
-// MARK: - Legacy Support
-
-struct FeedCard: View {
-    let item: FeedItem
-
-    var body: some View {
-        FeedPostCard(
-            post: FeedPost(author: item.author, content: item.content, timestamp: item.timestamp, likes: item.likes)
-        )
     }
 }
 

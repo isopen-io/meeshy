@@ -53,11 +53,6 @@ final class EditHistoryStore: @unchecked Sendable {
         e.dateEncodingStrategy = .iso8601
         return e
     }()
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
 
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults

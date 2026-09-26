@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import os
 import Charts
-import NaturalLanguage
 import MeeshySDK
 import MeeshyUI
 
@@ -12,7 +11,6 @@ struct ConversationDashboardView: View {
     let conversationId: String
     let messages: [Message]
     let accentColor: String
-    let participants: [PaginatedParticipant]
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -20,15 +18,14 @@ struct ConversationDashboardView: View {
 
     @State private var chartPeriod: ChartPeriod = .week
     @State private var agentAnalysis: ConversationAnalysis?
-    @State private var isLoadingAnalysis = true
     @State private var serverStats: ConversationMessageStatsResponse?
-    @State private var isLoadingStats = true
     @State private var sectionsAppeared = false
     @State private var ringsAnimated = false
+    @State private var clientStats: ConversationDashboardClientStats?
 
     private var accent: Color { Color(hex: accentColor) }
 
-    enum ChartPeriod: String, CaseIterable {
+    enum ChartPeriod: CaseIterable {
         case week
         case month
         case all
@@ -53,6 +50,9 @@ struct ConversationDashboardView: View {
     // MARK: - Body
 
     var body: some View {
+        let activity = activityData
+        let participants = participantStats
+        let types = contentTypeStats
         VStack(spacing: 22) {
             if let analysis = agentAnalysis {
                 heroHealthCard(analysis)
@@ -60,24 +60,24 @@ struct ConversationDashboardView: View {
             }
             statsRingsSection
                 .staggerIn(sectionsAppeared, index: 1)
-            if !activityData.isEmpty {
-                activityChartSection
+            if !activity.isEmpty {
+                activityChartSection(activity)
                     .staggerIn(sectionsAppeared, index: 2)
             }
             if let analysis = agentAnalysis, !analysis.participantProfiles.isEmpty {
                 agentParticipantProfilesSection(analysis.participantProfiles)
                     .staggerIn(sectionsAppeared, index: 3)
             }
-            if !participantStats.isEmpty {
-                participantBreakdownSection
+            if !participants.isEmpty {
+                participantBreakdownSection(participants)
                     .staggerIn(sectionsAppeared, index: 4)
             }
-            if sentimentAnalysis.total > 0 {
-                sentimentSection
+            if let sentiment = clientStats?.sentiment, sentiment.total > 0 {
+                sentimentSection(sentiment)
                     .staggerIn(sectionsAppeared, index: 5)
             }
-            if !contentTypeStats.isEmpty {
-                contentTypesSection
+            if !types.isEmpty {
+                contentTypesSection(types)
                     .staggerIn(sectionsAppeared, index: 6)
             }
         }
@@ -85,6 +85,14 @@ struct ConversationDashboardView: View {
         .padding(.top, 12)
         .padding(.bottom, 32)
         .task { await loadAgentAnalysis() }
+        .task(id: messages.count) {
+            let snapshot = messages
+            let stats = await Task.detached(priority: .utility) {
+                ConversationDashboardClientStats(messages: snapshot)
+            }.value
+            guard !Task.isCancelled else { return }
+            clientStats = stats
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 sectionsAppeared = true
@@ -330,7 +338,7 @@ struct ConversationDashboardView: View {
 
     // MARK: - Activity Chart
 
-    private var activityChartSection: some View {
+    private func activityChartSection(_ data: [ActivityPoint]) -> some View {
         sectionCard {
             HStack {
                 sectionHeader(icon: "chart.line.uptrend.xyaxis", title: String(localized: "dashboard.section.activity", defaultValue: "Activité", bundle: .main))
@@ -338,64 +346,59 @@ struct ConversationDashboardView: View {
                 periodPicker
             }
 
-            let data = activityData
-            if data.isEmpty {
-                emptyChartPlaceholder
-            } else {
-                Chart {
-                    ForEach(data, id: \.date) { point in
-                        LineMark(
-                            x: .value("Date", point.label),
-                            y: .value("Messages", point.count)
-                        )
-                        .foregroundStyle(accent)
-                        .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+            Chart {
+                ForEach(data, id: \.date) { point in
+                    LineMark(
+                        x: .value("Date", point.label),
+                        y: .value("Messages", point.count)
+                    )
+                    .foregroundStyle(accent)
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
 
-                        AreaMark(
-                            x: .value("Date", point.label),
-                            y: .value("Messages", point.count)
+                    AreaMark(
+                        x: .value("Date", point.label),
+                        y: .value("Messages", point.count)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [accent.opacity(0.4), accent.opacity(0.0)],
+                            startPoint: .top,
+                            endPoint: .bottom
                         )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [accent.opacity(0.4), accent.opacity(0.0)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.catmullRom)
-                    }
+                    )
+                    .interpolationMethod(.catmullRom)
+                }
 
-                    if let last = data.last {
-                        PointMark(
-                            x: .value("Date", last.label),
-                            y: .value("Messages", last.count)
-                        )
-                        .foregroundStyle(accent)
-                        .symbolSize(40)
-                    }
+                if let last = data.last {
+                    PointMark(
+                        x: .value("Date", last.label),
+                        y: .value("Messages", last.count)
+                    )
+                    .foregroundStyle(accent)
+                    .symbolSize(40)
                 }
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                        AxisValueLabel()
-                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(theme.textMuted)
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                        AxisValueLabel()
-                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(theme.textMuted)
-                        AxisGridLine()
-                            .foregroundStyle(theme.textMuted.opacity(0.12))
-                    }
-                }
-                .frame(height: 160)
-                .animation(.easeInOut(duration: 0.3), value: chartPeriod)
             }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisValueLabel()
+                        // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel()
+                        // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                    AxisGridLine()
+                        .foregroundStyle(theme.textMuted.opacity(0.12))
+                }
+            }
+            .frame(height: 160)
+            .animation(.easeInOut(duration: 0.3), value: chartPeriod)
         }
     }
 
@@ -429,19 +432,6 @@ struct ConversationDashboardView: View {
         .background(
             Capsule().fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
-    }
-
-    private var emptyChartPlaceholder: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(MeeshyFont.relative(24, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.3))
-            Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de données", bundle: .main))
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(height: 120)
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Agent Participant Profiles
@@ -647,11 +637,11 @@ struct ConversationDashboardView: View {
 
     // MARK: - Participant Breakdown
 
-    private var participantBreakdownSection: some View {
+    private func participantBreakdownSection(_ participants: [ParticipantStat]) -> some View {
         sectionCard {
             sectionHeader(icon: "person.2.fill", title: String(localized: "dashboard.section.participant-activity", defaultValue: "Activité par participant", bundle: .main))
 
-            let stats = participantStats.prefix(10)
+            let stats = participants.prefix(10)
             let maxCount = stats.first?.messageCount ?? 1
 
             ForEach(Array(stats.enumerated()), id: \.element.name) { index, stat in
@@ -705,39 +695,35 @@ struct ConversationDashboardView: View {
 
     // MARK: - Sentiment Section
 
-    @ViewBuilder
-    private var sentimentSection: some View {
-        let analysis = sentimentAnalysis
-        if analysis.total > 0 {
-            sectionCard {
-                sectionHeader(icon: "face.smiling", title: String(localized: "dashboard.section.sentiment", defaultValue: "Sentiment", bundle: .main))
+    private func sentimentSection(_ analysis: ConversationDashboardClientStats.Sentiment) -> some View {
+        sectionCard {
+            sectionHeader(icon: "face.smiling", title: String(localized: "dashboard.section.sentiment", defaultValue: "Sentiment", bundle: .main))
 
-                HStack(spacing: 0) {
-                    sentimentSegment(
-                        emoji: "\u{1F604}",
-                        label: String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main),
-                        count: analysis.positive,
-                        total: analysis.total,
-                        color: MeeshyColors.success
-                    )
-                    sentimentSegment(
-                        emoji: "\u{1F610}",
-                        label: String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main),
-                        count: analysis.neutral,
-                        total: analysis.total,
-                        color: MeeshyColors.warning
-                    )
-                    sentimentSegment(
-                        emoji: "\u{1F614}",
-                        label: String(localized: "dashboard.sentiment.negative", defaultValue: "Négatif", bundle: .main),
-                        count: analysis.negative,
-                        total: analysis.total,
-                        color: MeeshyColors.error
-                    )
-                }
-
-                sentimentBar(analysis: analysis)
+            HStack(spacing: 0) {
+                sentimentSegment(
+                    emoji: "\u{1F604}",
+                    label: String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main),
+                    count: analysis.positive,
+                    total: analysis.total,
+                    color: MeeshyColors.success
+                )
+                sentimentSegment(
+                    emoji: "\u{1F610}",
+                    label: String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main),
+                    count: analysis.neutral,
+                    total: analysis.total,
+                    color: MeeshyColors.warning
+                )
+                sentimentSegment(
+                    emoji: "\u{1F614}",
+                    label: String(localized: "dashboard.sentiment.negative", defaultValue: "Négatif", bundle: .main),
+                    count: analysis.negative,
+                    total: analysis.total,
+                    color: MeeshyColors.error
+                )
             }
+
+            sentimentBar(analysis: analysis)
         }
     }
 
@@ -756,7 +742,7 @@ struct ConversationDashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func sentimentBar(analysis: SentimentResult) -> some View {
+    private func sentimentBar(analysis: ConversationDashboardClientStats.Sentiment) -> some View {
         let total = max(analysis.total, 1)
         let posFrac = CGFloat(analysis.positive) / CGFloat(total)
         let neuFrac = CGFloat(analysis.neutral) / CGFloat(total)
@@ -795,48 +781,45 @@ struct ConversationDashboardView: View {
     // MARK: - Content Types
 
     @ViewBuilder
-    private var contentTypesSection: some View {
-        let types = contentTypeStats
-        if !types.isEmpty {
-            let maxCount = types.map(\.count).max() ?? 1
-            sectionCard {
-                sectionHeader(icon: "square.grid.2x2.fill", title: String(localized: "dashboard.section.content-types", defaultValue: "Types de contenu", bundle: .main))
+    private func contentTypesSection(_ types: [ContentTypeStat]) -> some View {
+        let maxCount = types.map(\.count).max() ?? 1
+        sectionCard {
+            sectionHeader(icon: "square.grid.2x2.fill", title: String(localized: "dashboard.section.content-types", defaultValue: "Types de contenu", bundle: .main))
 
-                ForEach(types, id: \.type) { stat in
-                    HStack(spacing: 10) {
-                        Image(systemName: stat.icon)
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                            .foregroundColor(stat.color)
-                            .frame(width: 20)
+            ForEach(types, id: \.type) { stat in
+                HStack(spacing: 10) {
+                    Image(systemName: stat.icon)
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(stat.color)
+                        .frame(width: 20)
 
-                        Text(stat.type)
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
-                            .frame(width: 60, alignment: .leading)
+                    Text(stat.type)
+                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .frame(width: 60, alignment: .leading)
 
-                        GeometryReader { geo in
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
                                 )
-                                .frame(
-                                    width: max(geo.size.width * CGFloat(stat.count) / CGFloat(max(maxCount, 1)), 4),
-                                    height: 10
-                                )
-                        }
-                        .frame(height: 10)
-
-                        Text("\(stat.count)")
-                            .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
-                            .foregroundColor(theme.textSecondary)
-                            .frame(width: 40, alignment: .trailing)
+                            )
+                            .frame(
+                                width: max(geo.size.width * CGFloat(stat.count) / CGFloat(max(maxCount, 1)), 4),
+                                height: 10
+                            )
                     }
-                    .padding(.vertical, 3)
+                    .frame(height: 10)
+
+                    Text("\(stat.count)")
+                        .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.textSecondary)
+                        .frame(width: 40, alignment: .trailing)
                 }
+                .padding(.vertical, 3)
             }
         }
     }
@@ -911,7 +894,6 @@ struct ConversationDashboardView: View {
     }
 
     private func loadAnalysis() async {
-        defer { isLoadingAnalysis = false }
         do {
             agentAnalysis = try await ConversationAnalysisService.shared.fetchAnalysis(
                 conversationId: conversationId
@@ -922,7 +904,6 @@ struct ConversationDashboardView: View {
     }
 
     private func loadStats() async {
-        defer { isLoadingStats = false }
         do {
             serverStats = try await ConversationAnalysisService.shared.fetchStats(
                 conversationId: conversationId
@@ -932,39 +913,13 @@ struct ConversationDashboardView: View {
         }
     }
 
-    // MARK: - Computed Stats
-
-    private var totalWords: Int {
-        messages.reduce(0) { total, msg in
-            total + msg.content.split(whereSeparator: \.isWhitespace).count
-        }
-    }
-
-    private var imageCount: Int {
-        messages.reduce(0) { total, msg in
-            total + msg.attachments.filter { $0.type == .image }.count
-        }
-    }
-
-    private var audioCount: Int {
-        messages.reduce(0) { total, msg in
-            total + msg.attachments.filter { $0.type == .audio }.count
-        }
-    }
-
-    private var videoCount: Int {
-        messages.reduce(0) { total, msg in
-            total + msg.attachments.filter { $0.type == .video }.count
-        }
-    }
-
     // MARK: - Effective Stats (server-first, client fallback)
 
     private var effectiveTotalMessages: Int { serverStats?.totalMessages ?? messages.count }
-    private var effectiveTotalWords: Int { serverStats?.totalWords ?? totalWords }
-    private var effectiveImageCount: Int { serverStats?.contentTypes.image ?? imageCount }
-    private var effectiveAudioCount: Int { serverStats?.contentTypes.audio ?? audioCount }
-    private var effectiveVideoCount: Int { serverStats?.contentTypes.video ?? videoCount }
+    private var effectiveTotalWords: Int { serverStats?.totalWords ?? (clientStats?.totalWords ?? 0) }
+    private var effectiveImageCount: Int { serverStats?.contentTypes.image ?? (clientStats?.imageCount ?? 0) }
+    private var effectiveAudioCount: Int { serverStats?.contentTypes.audio ?? (clientStats?.audioCount ?? 0) }
+    private var effectiveVideoCount: Int { serverStats?.contentTypes.video ?? (clientStats?.videoCount ?? 0) }
     private var effectiveLinkCount: Int { serverStats?.contentTypes.location ?? 0 }
     private var effectiveDocCount: Int { serverStats?.contentTypes.file ?? 0 }
 
@@ -1054,53 +1009,9 @@ struct ConversationDashboardView: View {
                 .map { ParticipantStat(name: $0.name ?? $0.userId, messageCount: $0.messageCount, wordCount: $0.wordCount) }
                 .sorted { $0.messageCount > $1.messageCount }
         }
-        return clientComputedParticipantStats
-    }
-
-    private var clientComputedParticipantStats: [ParticipantStat] {
-        var byName: [String: (messages: Int, words: Int)] = [:]
-
-        for msg in messages {
-            let name = msg.senderName ?? "?"
-            let words = msg.content.split(whereSeparator: \.isWhitespace).count
-            let current = byName[name, default: (0, 0)]
-            byName[name] = (current.messages + 1, current.words + words)
+        return (clientStats?.participantStats ?? []).map {
+            ParticipantStat(name: $0.name, messageCount: $0.messageCount, wordCount: $0.wordCount)
         }
-
-        return byName
-            .map { ParticipantStat(name: $0.key, messageCount: $0.value.messages, wordCount: $0.value.words) }
-            .sorted { $0.messageCount > $1.messageCount }
-    }
-
-    // MARK: - Sentiment Analysis
-
-    private struct SentimentResult {
-        let positive: Int
-        let neutral: Int
-        let negative: Int
-        var total: Int { positive + neutral + negative }
-    }
-
-    private var sentimentAnalysis: SentimentResult {
-        let tagger = NLTagger(tagSchemes: [.sentimentScore])
-        var pos = 0, neu = 0, neg = 0
-
-        let textMessages = messages.filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let sampled = textMessages.count > 200
-            ? Array(textMessages.suffix(200))
-            : textMessages
-
-        for msg in sampled {
-            tagger.string = msg.content
-            let (tag, _) = tagger.tag(at: msg.content.startIndex, unit: .paragraph, scheme: .sentimentScore)
-            let score = Double(tag?.rawValue ?? "0") ?? 0
-
-            if score > 0.15 { pos += 1 }
-            else if score < -0.15 { neg += 1 }
-            else { neu += 1 }
-        }
-
-        return SentimentResult(positive: pos, neutral: neu, negative: neg)
     }
 
     // MARK: - Content Types

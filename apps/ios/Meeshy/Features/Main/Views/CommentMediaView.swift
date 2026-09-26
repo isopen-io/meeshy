@@ -25,7 +25,7 @@ struct CommentAttachmentsTray: View {
                 }
                 ForEach(attachments) { attachment in
                     HStack(spacing: 6) {
-                        Image(systemName: icon(for: attachment.type))
+                        Image(systemName: attachment.type.glyph)
                             .font(.caption)
                             .foregroundColor(Color(hex: attachment.thumbnailColor))
                             .accessibilityHidden(true)
@@ -60,16 +60,6 @@ struct CommentAttachmentsTray: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-        }
-    }
-
-    private func icon(for type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
         }
     }
 

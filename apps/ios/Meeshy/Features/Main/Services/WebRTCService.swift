@@ -361,16 +361,11 @@ final class WebRTCService {
                 guard let stats = await self.client.getStats() else { continue }
                 let previous = self.lastStats
                 self.lastStats = stats
-                self.adjustBitrate(basedOn: stats, previous: previous)
-                // Interval packet-loss % from cumulative-counter deltas (same
-                // formula as adjustBitrate) — reported alongside cumulative
-                // data usage + current quality to the gateway so the
-                // call-summary message can show "data spent · quality" and
-                // loss alerts can fire.
-                let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
-                let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
-                let denom = deltaLost + deltaReceived
-                let packetLossPercent = denom > 0 ? Double(deltaLost) / Double(denom) * 100 : 0
+                let lossRatio = Self.intervalLossRatio(stats, previous: previous)
+                self.adjustBitrate(basedOn: stats, lossRatio: lossRatio)
+                // Interval packet-loss % (same delta formula as adjustBitrate) — reported
+                // alongside cumulative data usage + current quality to the gateway.
+                let packetLossPercent = lossRatio * 100
                 self.delegate?.webRTCService(self, didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent)
             }
         }
@@ -385,16 +380,23 @@ final class WebRTCService {
         jitterBitrateCapTracker.reset()
     }
 
-    private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
-        let rtt = stats.roundTripTimeMs
-        // P1-4 — `packetsLost` / `inboundPacketsReceived` are CUMULATIVE counters.
-        // Compute a real loss RATIO between two snapshots: Δlost / (Δlost+Δrecv).
-        // The old code passed the raw cumulative count as a fraction, so a single
-        // lost packet read as >100% loss and pinned quality to .critical for life.
+    /// Ratio de perte INTER-TICK Δlost / (Δlost+Δrecv), partagé par le moniteur
+    /// (pourcentage servi au delegate) et par `adjustBitrate`.
+    ///
+    /// P1-4 — `packetsLost` / `inboundPacketsReceived` are CUMULATIVE counters.
+    /// Compute a real loss RATIO between two snapshots: Δlost / (Δlost+Δrecv).
+    /// The old code passed the raw cumulative count as a fraction, so a single
+    /// lost packet read as >100% loss and pinned quality to .critical for life.
+    private static func intervalLossRatio(_ stats: CallStats, previous: CallStats?) -> Double {
         let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
         let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
         let denom = deltaLost + deltaReceived
         let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0
+        return lossRatio
+    }
+
+    private func adjustBitrate(basedOn stats: CallStats, lossRatio: Double) {
+        let rtt = stats.roundTripTimeMs
 
         // Merge the RTT/loss heuristic with the TWCC GCC bandwidth estimate.
         // When TWCC is active (bps > 0), GCC has better visibility into the
@@ -687,7 +689,7 @@ extension WebRTCService: WebRTCClientDelegate {
                 self.disconnectDebounceTask?.cancel()
                 self.disconnectDebounceTask = nil
                 self.delegate?.webRTCServiceDidDisconnect(self)
-            case .connecting, .reconnecting, .checking, .new:
+            case .connecting, .new:
                 // No longer in a settled-disconnected state — drop the debounce.
                 self.disconnectDebounceTask?.cancel()
                 self.disconnectDebounceTask = nil
@@ -735,10 +737,4 @@ extension WebRTCService: WebRTCClientDelegate {
             self.delegate?.webRTCService(self, didChangeCameraInterruption: interrupted)
         }
     }
-}
-
-// MARK: - Logger Extension
-
-private extension Logger {
-    nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
 }

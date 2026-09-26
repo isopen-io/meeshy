@@ -3,7 +3,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import SignupScreen from '@/routes/signup';
+import * as affiliateApi from '@/lib/api/affiliate';
 import type { ReferralValidation } from '@/lib/api/affiliate';
+import type { RegisterBody, RegisterResponseData } from '@/lib/api/auth';
+import type { ApiResult } from '@/lib/api/http';
+import { forgetPendingVerification } from '@/lib/pending-verification';
 import { REFERRAL_MEMORY_KEY } from '@/lib/view/referral-memory';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -172,5 +176,107 @@ describe('le code est VÉRIFIÉ, et ce qu’on en apprend est NOMMÉ', () => {
     // LA règle du lot : le bouton reste ACTIF. Un jeton expiré est le problème
     // de celui qui a invité, jamais de celui qui s'inscrit.
     expect((el.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+/**
+ * LE PARRAINAGE VOYAGE AVEC L'INSCRIPTION (#8058) — arbitrage porteur
+ * 2026-09-26 : « C'est pas sauvegardé lors de la création de compte ? »
+ *
+ * Depuis #8055, une inscription SANS numéro ne rend plus de session : l'appel
+ * authentifié `POST /affiliate/register` d'après-inscription ne pouvait plus
+ * partir. Le code part donc DANS le corps de `POST /auth/register`
+ * (`affiliateToken`), et la passerelle noue la relation à la création du
+ * compte, activé ou non.
+ */
+const AWAITING_CODE: ApiResult<RegisterResponseData> = {
+  ok: true,
+  status: 200,
+  data: { status: 'verification-required', accountCreated: true, email: 'ada@meeshy.example' },
+};
+
+const WITH_SESSION: ApiResult<RegisterResponseData> = {
+  ok: true,
+  status: 200,
+  data: { user: { id: 'u-1', username: 'ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 86_400 },
+};
+
+const REFUSED: ApiResult<RegisterResponseData> = { ok: false, status: 500, error: 'boom' };
+
+function mountRegistering(url: string, reply: ApiResult<RegisterResponseData>): { readonly el: HTMLDivElement; readonly sent: RegisterBody[] } {
+  window.history.replaceState({}, '', url);
+  const sent: RegisterBody[] = [];
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <SignupScreen
+        referralDeps={{ validate: async () => ({ ok: true as const, status: 200, data: VALID }) }}
+        register={async (body) => {
+          sent.push(body);
+          return reply;
+        }}
+      />,
+    );
+  });
+  return { el: container, sent };
+}
+
+async function submit(el: HTMLDivElement, { withPhone }: { readonly withPhone: boolean }) {
+  await act(async () => {
+    el.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  if (withPhone) return;
+  await act(async () => {
+    (el.querySelector('[data-confirm="confirm"]') as HTMLButtonElement).click();
+  });
+}
+
+describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+    forgetPendingVerification();
+  });
+
+  test('sans numéro (écran du code) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
+    const { el, sent } = mountRegistering('/signup?ref=aff_abc123', AWAITING_CODE);
+    openIdentity(el);
+    await submit(el, { withPhone: false });
+    expect(sent.length).toBe(1);
+    expect(sent[0]?.affiliateToken).toBe('aff_abc123');
+    expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY)).toBeNull();
+    expect(window.location.pathname).toBe('/auth/verify-email');
+  });
+
+  test('avec numéro (session immédiate) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
+    const { el, sent } = mountRegistering('/signup?ref=aff_abc123', WITH_SESSION);
+    openIdentity(el);
+    type(el, '#signup-phone', '612345678');
+    await submit(el, { withPhone: true });
+    expect(sent[0]?.affiliateToken).toBe('aff_abc123');
+    expect(sent[0]?.phoneNumber).toBe('612345678');
+    expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY)).toBeNull();
+  });
+
+  test('aucun code ⇒ aucune clé de parrainage dans le corps', async () => {
+    window.localStorage.clear();
+    const { el, sent } = mountRegistering('/signup', AWAITING_CODE);
+    openIdentity(el);
+    await submit(el, { withPhone: false });
+    expect('affiliateToken' in (sent[0] ?? {})).toBe(false);
+    expect('affiliateSessionKey' in (sent[0] ?? {})).toBe(false);
+  });
+
+  test('une inscription REFUSÉE garde le code pour la tentative suivante', async () => {
+    const { el, sent } = mountRegistering('/signup?ref=aff_abc123', REFUSED);
+    openIdentity(el);
+    await submit(el, { withPhone: false });
+    expect(sent[0]?.affiliateToken).toBe('aff_abc123');
+    expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY) ?? '').toContain('aff_abc123');
+  });
+
+  test('plus aucun rattachement SÉPARÉ après l’inscription — le port n’offre plus `POST /affiliate/register`', () => {
+    expect('convertReferral' in affiliateApi).toBe(false);
   });
 });

@@ -11,8 +11,7 @@ import os
 // retour à la dernière page. Rien d'autre.
 //
 // Membres de l'hôte ouverts (`private` → interne) pour cette extension :
-// `limit`, `nextMessageCursor`, `lastNewerPaginationTime`,
-// `paginationDebounceInterval`, `paginationRetryCount`, `messageService`,
+// `limit`, `nextMessageCursor`, `messageService`,
 // `userFacingMessage(for:)`, `extractTextTranslations(from:)`,
 // `extractAttachmentTranscriptions(from:)`.
 
@@ -29,25 +28,25 @@ extension ConversationViewModel {
             // Upsert the API batch into GRDB so the window has fresh content.
             try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
 
-            // Switch the store window to be centered on the target message.
-            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
-                ?? response.data.last?.createdAt
-                ?? Date()
-            await messageStore.loadWindow(around: targetDate)
-
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
-            nextMessageCursor = response.cursorPagination?.nextCursor
-            // Fallback optimiste pour les gateways qui strippaient
-            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
-            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
-            // la refermera proprement sur une page vide.
-            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-            hasNewerMessages = response.hasNewer ?? false
-            isInJumpedState = true
+            await applyJumpedWindow(response, around: messageId)
         } catch {
             self.error = userFacingMessage(for: error)
         }
+    }
+
+    /// Fenêtre centrée sur `messageId` + état de pagination — le corps commun
+    /// de `loadMessagesAround` et `jumpToQuotedMessage`, à l'identique.
+    private func applyJumpedWindow(_ response: MessagesAPIResponse, around messageId: String) async {
+        let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
+            ?? response.data.last?.createdAt
+            ?? Date()
+        await messageStore.loadWindow(around: targetDate)
+        extractAttachmentTranscriptions(from: response.data)
+        extractTextTranslations(from: response.data)
+        nextMessageCursor = response.cursorPagination?.nextCursor
+        hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
+        hasNewerMessages = response.hasNewer ?? false
+        isInJumpedState = true
     }
 
     /// Outcome of `jumpToQuotedMessage`.
@@ -78,11 +77,9 @@ extension ConversationViewModel {
 
         // Slow path: need to fetch from server
         isSearchingQuotedMessage = true
-        quotedMessageSearchTarget = messageId
 
         defer {
             isSearchingQuotedMessage = false
-            quotedMessageSearchTarget = nil
         }
 
         do {
@@ -97,22 +94,7 @@ extension ConversationViewModel {
             let found = response.data.contains(where: { $0.id == messageId })
             guard found else { return .notFound }
 
-            // Switch the store window to be centered on the target message.
-            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
-                ?? response.data.last?.createdAt
-                ?? Date()
-            await messageStore.loadWindow(around: targetDate)
-
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
-            nextMessageCursor = response.cursorPagination?.nextCursor
-            // Fallback optimiste pour les gateways qui strippaient
-            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
-            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
-            // la refermera proprement sur une page vide.
-            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-            hasNewerMessages = response.hasNewer ?? false
-            isInJumpedState = true
+            await applyJumpedWindow(response, around: messageId)
 
             // Small delay to let the diffable datasource apply the new snapshot
             // before the caller triggers scroll — otherwise the index path
@@ -124,53 +106,6 @@ extension ConversationViewModel {
             Logger.messages.error("[JumpToQuoted] Failed to load messages around \(messageId): \(error.localizedDescription)")
             return .notFound
         }
-    }
-
-    func loadNewerMessages() async {
-        guard isInJumpedState, hasNewerMessages, !isLoadingNewer, !isProgrammaticScroll else { return }
-        guard let lastMsg = messages.last else { return }
-
-        // Debounce: ignore calls that arrive too soon after the last one
-        let now = Date()
-        guard now.timeIntervalSince(lastNewerPaginationTime) >= Self.paginationDebounceInterval else { return }
-        lastNewerPaginationTime = now
-
-        isLoadingNewer = true
-
-        var lastError: Error?
-        for attempt in 1...Self.paginationRetryCount {
-            do {
-                let response = try await messageService.listAround(
-                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true, includeTranslations: true
-                )
-
-                // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
-                // fires automatically and the store refreshes its window — no direct
-                // messages mutation needed.
-                try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
-                extractAttachmentTranscriptions(from: response.data)
-                extractTextTranslations(from: response.data)
-
-                hasNewerMessages = response.hasNewer ?? false
-                if !hasNewerMessages {
-                    isInJumpedState = false
-                }
-                lastError = nil
-                break
-            } catch {
-                lastError = error
-                if attempt < Self.paginationRetryCount {
-                    Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
-                    try? await Task.sleep(for: .milliseconds(500))
-                }
-            }
-        }
-
-        if let lastError {
-            Logger.messages.error("loadNewerMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
-        }
-
-        isLoadingNewer = false
     }
 
     func returnToLatest() async {

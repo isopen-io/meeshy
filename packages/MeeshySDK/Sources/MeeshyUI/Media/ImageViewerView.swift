@@ -26,7 +26,6 @@ public struct ImageViewerView: View {
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
-    private var accent: Color { Color(hex: accentColor) }
 
     private var imageURL: URL? {
         let urlStr = attachment.fileUrl.isEmpty

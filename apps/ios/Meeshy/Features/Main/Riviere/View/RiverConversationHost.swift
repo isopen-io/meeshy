@@ -22,7 +22,7 @@ struct RiverConversationHost: View {
     /// pour le fil (`MessageListView.bottomInset`), il la dit ici aussi.
     var bottomInset: CGFloat = 0
     /// L2b/2b-7 — les voix qui ÉCRIVENT, DITES par l'appelant
-    /// (`ConversationViewModel.typingUsernames`). Relayé tel quel au lecteur :
+    /// (`ConversationViewModel.typingParticipants.displayNames`). Relayé tel quel au lecteur :
     /// cet hôte ne le regarde pas, et il n'entre JAMAIS dans
     /// `RiverConversationMapping` — la frappe décore la peau, elle ne compose
     /// aucun couloir.

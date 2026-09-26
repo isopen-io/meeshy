@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import {
   userSchema,
   registerRequestSchema,
+  verificationRequiredProperties,
   validationErrorResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types';
@@ -10,11 +11,12 @@ import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import type { RegisterData } from '../../services/AuthService';
 import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
-import { createSession, generateSessionToken } from '../../services/SessionService';
+import { AffiliateTrackingService } from '../../services/AffiliateTrackingService';
+import { openSession } from './open-session';
 import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
-import { preferredAcceptLanguage } from '../../utils/accept-language';
+import { localeDeLaRequete } from './request-locale';
 import { depreciee } from '../../utils/deprecation';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -22,6 +24,7 @@ import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../..
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -38,26 +41,6 @@ const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
  */
 const GEO_AVANT_REPONSE_MS = 400;
 
-/**
- * Le rang 4 du Prisme, tel que la REQUÊTE le porte.
- *
- * Deux sources, dans cet ordre : `X-Device-Locale`, que les clients Meeshy
- * posent explicitement, puis `Accept-Language`, que tout navigateur envoie sans
- * qu'on le lui demande. La seconde est une liste PONDÉRÉE et non ordonnée —
- * d'où `preferredAcceptLanguage` plutôt qu'un `split(',')[0]`, qui rendrait
- * `en` sur `en;q=0.5, fr`.
- *
- * Elle n'écrase JAMAIS une préférence exprimée : `registrationLanguages` ne la
- * consulte que lorsque l'inscription n'exprime AUCUN rang, exactement là où le
- * code écrivait auparavant le littéral `'fr'`.
- */
-function localeDeLaRequete(request: FastifyRequest): string | undefined {
-  const entete = request.headers['x-device-locale'];
-  const declaree = Array.isArray(entete) ? entete[0] : entete;
-  if (typeof declaree === 'string' && declaree.trim() !== '') return declaree.trim();
-
-  return preferredAcceptLanguage(request.headers['accept-language']);
-}
 
 /**
  * REND la tentative comptée par le limiteur — sur un 400, et sur un 409
@@ -137,6 +120,42 @@ function completerLaGeolocalisation(
 }
 
 /**
+ * RATTACHE le nouveau compte à son parrain, À LA CRÉATION (#8058).
+ *
+ * Arbitrage porteur 2026-09-26 : le parrainage est « sauvegardé lors de la
+ * création de compte » — actif ou non. Depuis #8055 un compte créé sans
+ * numéro n'a pas de session, et l'appel authentifié `POST /affiliate/register`
+ * qui suivait l'inscription devenait impossible : le code voyage donc avec
+ * l'inscription, et c'est le MÊME service qui le valide et crée la relation.
+ *
+ * Un code invalide (inconnu, expiré, épuisé) ou une panne n'empêchent JAMAIS
+ * l'inscription : le compte existe déjà, on journalise et on continue.
+ */
+async function rattacherAuParrain(
+  context: AuthRouteContext,
+  userId: string,
+  affiliateToken: string | undefined,
+  affiliateSessionKey: string | undefined,
+): Promise<void> {
+  if (!affiliateToken) return;
+  try {
+    const resultat = await AffiliateTrackingService.convertAffiliateVisit(
+      context.fastify.prisma,
+      affiliateToken,
+      userId,
+      affiliateSessionKey,
+    );
+    if (!resultat.success) {
+      logger.info('code de parrainage ignoré à l\'inscription', { reason: resultat.error });
+    }
+  } catch (error) {
+    logger.warn('rattachement au parrain impossible à l\'inscription', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Register registration and availability check routes
  */
 export function registerRegistrationRoutes(context: AuthRouteContext) {
@@ -154,7 +173,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created successfully - verification email sent. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -176,6 +195,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                 // a déjà payé juste en dessous.
                 sessionToken: { type: 'string', description: 'Session token of the device that created the account — presentable to POST /auth/refresh (absent on a phone-ownership conflict)' },
                 expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
+
+                // Branche « vérification requise » (#8055) — inscription SANS
+                // numéro : le compte existe, mot de passe compris, mais n'est
+                // pas actif ; aucun jeton, aucune session, le code est parti.
+                ...verificationRequiredProperties,
 
                 // Branche « numéro déjà détenu » — aucun compte n'a été créé
                 phoneOwnershipConflict: { type: 'boolean', description: 'True when the phone number belongs to another account; no account was created', example: true },
@@ -260,8 +284,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     const afterResponse = context.afterResponse ?? deferAfterResponse;
 
     try {
-      const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
+      const { affiliateToken, affiliateSessionKey, ...validatedData } = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         skipPhoneConflictCheck?: boolean;
+        affiliateToken?: string;
+        affiliateSessionKey?: string;
       };
 
       // #3629 — `AuthSchemas.register` (Zod) ne borne que la LONGUEUR
@@ -376,6 +402,22 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         }
       }
 
+      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+
+      await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+
+      // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
+      // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code
+      // et le lien sont partis avec l'e-mail de vérification ; seule leur
+      // preuve (`POST /auth/verify-email`) ouvre la session. Même réponse que
+      // la connexion d'une adresse inconnue (#8033). Un numéro — saisi, ou
+      // transféré depuis un autre compte — active le compte tout de suite.
+      const avecNumero = Boolean(user.phoneNumber) || phoneTransferValidated;
+      if (!avecNumero) {
+        const attente = await pendingSessionTokenFor(context.prisma, user.email);
+        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email, ...attente });
+      }
+
       // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
       // désormais une session, comme la connexion.
       //
@@ -392,17 +434,8 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
       // Le `sessionToken` est renvoyé pour que le client puisse le présenter
       // (fenêtre glissante), sur la même clé que `POST /login`.
-      const sessionToken = generateSessionToken();
-      const session = await createSession({
-        userId: user.id,
-        token: sessionToken,
-        requestContext
-      });
-
-      const token = authService.generateToken(user, session.id);
+      const { token, sessionToken } = await openSession(authService, user, requestContext);
       const permissions = authService.getUserPermissions(user);
-
-      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),

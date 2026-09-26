@@ -8,7 +8,6 @@ import MeeshyUI
 /// le détail optionnel sont envoyés via le callback `onReport(type, reason)`,
 /// puis `onDismiss()` ferme la surface hôte.
 struct MessageReportDetailView: View {
-    let message: Message
     var onReport: ((String, String?) -> Void)? = nil
     var onDismiss: (() -> Void)? = nil
 

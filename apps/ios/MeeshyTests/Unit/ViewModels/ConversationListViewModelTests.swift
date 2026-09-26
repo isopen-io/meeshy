@@ -64,7 +64,6 @@ final class ConversationListViewModelTests: XCTestCase {
         let resolvedStore = store ?? Self.makeTestStore()
         let resolvedCategoryStore = categoryStore ?? UserCategoryStore(service: ConvListTestCategoryWriter())
         let sut = ConversationListViewModel(
-            api: api,
             conversationService: conversationService,
             preferenceService: preferenceService,
             messageSocket: messageSocket,
@@ -287,7 +286,6 @@ final class ConversationListViewModelTests: XCTestCase {
         let countAfterFirst = syncEngine.fullSyncCallCount
 
         // Invalidate the cache (both local TTL and CacheCoordinator)
-        sut.invalidateCache()
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         await sut.loadConversations()
         let countAfterSecond = syncEngine.fullSyncCallCount
@@ -1448,7 +1446,7 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.filteredConversations.isEmpty)
         XCTAssertTrue(sut.groupedConversations.isEmpty)
         XCTAssertFalse(sut.isLoading)
-        XCTAssertFalse(sut.isLoadingMore)
+        XCTAssertNotEqual(sut.paginationState, .loadingMore)
         XCTAssertEqual(sut.searchText, "")
         XCTAssertEqual(sut.selectedFilters, [.all])
         XCTAssertTrue(sut.typingUsernames.isEmpty)
@@ -1939,24 +1937,10 @@ final class ConversationListViewModelTests: XCTestCase {
 
     func test_loadConversations_guardsPreviousFetchInProgress() async {
         let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.invalidateCache()
 
         async let first: () = sut.loadConversations()
         async let second: () = sut.loadConversations()
         _ = await (first, second)
-
-        XCTAssertFalse(sut.isLoading)
-    }
-
-    // MARK: - invalidateCache
-
-    func test_invalidateCache_allowsNextLoadToFetch() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "c1")]
-
-        sut.invalidateCache()
-
-        await sut.loadConversations()
 
         XCTAssertFalse(sut.isLoading)
     }

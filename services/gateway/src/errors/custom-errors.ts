@@ -181,6 +181,18 @@ export class EmailNotVerifiedError extends BaseAppError {
   }
 }
 
+/**
+ * Le BON mot de passe d'un compte qui n'est pas encore actif (#8055) : adresse
+ * jamais prouvée et aucun numéro de téléphone. Aucune session ne s'ouvre ; le
+ * refus porte l'adresse du compte, pour que la route y renvoie le code — quel
+ * que soit l'identifiant tapé (pseudo ou adresse).
+ */
+export class ActivationRequiresEmailProofError extends EmailNotVerifiedError {
+  constructor(readonly email: string) {
+    super("Ce compte n'est pas encore actif — saisissez le code reçu par e-mail");
+  }
+}
+
 // ========== RATE LIMITING ==========
 
 export class RateLimitError extends BaseAppError {

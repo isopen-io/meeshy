@@ -66,14 +66,6 @@ struct InviteFriendsSheet: View {
         String(localized: "invite.defaultLinkName", defaultValue: "Rejoins la conversation") + " \"\(conversation.name)\""
     }
 
-    private var effectiveMessage: String {
-        inviteMessage.isEmpty ? defaultInviteMessage : inviteMessage
-    }
-
-    private var effectiveLinkName: String {
-        linkName.isEmpty ? defaultLinkName : linkName
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -674,10 +666,8 @@ struct InviteFriendsSheet: View {
         }
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            await MainActor.run {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showCopiedFeedback = false
-                }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showCopiedFeedback = false
             }
         }
     }
@@ -710,22 +700,5 @@ private enum ExpirationOption: String, CaseIterable {
         }
         guard let date else { return nil }
         return date.formatted(.iso8601)
-    }
-}
-
-// MARK: - ConversationType Display Helper
-
-private extension MeeshyConversation.ConversationType {
-    var displayName: String {
-        switch self {
-        case .direct: String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
-        case .group: String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
-        case .global: String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
-        case .community: String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
-        case .bot: String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
-        }
     }
 }
