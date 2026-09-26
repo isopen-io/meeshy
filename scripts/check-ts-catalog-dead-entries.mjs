@@ -371,7 +371,11 @@ export const parseCatalogBlock = (blockLines) => {
 // d'une carte de visite partagée des comptes Meeshy ; son client web
 // (`apps/web/src/lib/contact-card/resolve.ts`) écrit l'adresse en littéral,
 // comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 472;
+// 472 → 474 (#8099) : `conversations.byIdCard` et `links.byIdentifierCard` —
+// la carte de conversation ; son client web
+// (`apps/web/src/lib/api/conversation-card.ts`) écrit les deux adresses en
+// littéral, comme tout `apps/web`, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 474;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
