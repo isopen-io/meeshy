@@ -9,8 +9,8 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { armAutoPip, pipSource, pipSupport, shouldOfferPip, type AutoPipSession, type PipSupport } from '@/lib/calls/call-pip';
-import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { armAutoPip, browserPipSupport, pipSource, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
+import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
@@ -33,11 +33,6 @@ type PipVideo = HTMLVideoElement & { readonly requestPictureInPicture?: () => Pr
 
 const documentPip = (): DocumentPip | undefined =>
   typeof window === 'undefined' ? undefined : (window as unknown as { readonly documentPictureInPicture?: DocumentPip }).documentPictureInPicture;
-
-export function currentPipSupport(): PipSupport {
-  if (typeof document === 'undefined') return 'none';
-  return pipSupport({ documentPictureInPicture: documentPip(), pictureInPictureEnabled: (document as PipDocument).pictureInPictureEnabled });
-}
 
 const pipWindowStore = createStore<{ readonly window: Window | null }>(() => ({ window: null }));
 
@@ -134,9 +129,9 @@ function CallPipView({ call }: { readonly call: ActiveCall }) {
  * fenêtre PiP, la `<video>` que la PiP simple emprunte, et la bascule
  * automatique quand l'onglet se masque. Un appel fini ferme la fenêtre.
  */
-export function CallPip({ call }: { readonly call: ActiveCall }) {
+function CallPip({ call }: { readonly call: ActiveCall }) {
   const pipWindow = useStore(pipWindowStore, (state) => state.window);
-  const support = currentPipSupport();
+  const support = browserPipSupport();
   const offered = shouldOfferPip(call, support);
   const live = call.phase.kind !== 'ended';
   const source = pipSource(call);
@@ -172,4 +167,10 @@ export function CallPip({ call }: { readonly call: ActiveCall }) {
       {pipWindow === null || !live ? null : createPortal(<CallPipView call={call} />, pipWindow.document.body)}
     </>
   );
+}
+
+/** Monté par `call-layer.tsx` en chunk à part, frère de l'écran d'appel : il vit tant qu'un appel existe. */
+export function CallPipLayer() {
+  const call = useStore(callStore, (state) => state.call);
+  return call === null ? null : <CallPip call={call} />;
 }

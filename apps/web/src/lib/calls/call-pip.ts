@@ -19,14 +19,21 @@ import type { ActiveCall } from './call-store';
 
 export type PipSupport = 'document' | 'video' | 'none';
 
-export type PipEnvironment = { readonly documentPictureInPicture?: unknown; readonly pictureInPictureEnabled?: boolean };
+export type PipEnvironment = { readonly documentPictureInPicture?: unknown; readonly pictureInPictureEnabled?: boolean | undefined };
 
 export function pipSupport(env: PipEnvironment): PipSupport {
   if (env.documentPictureInPicture !== undefined && env.documentPictureInPicture !== null) return 'document';
   return env.pictureInPictureEnabled === true ? 'video' : 'none';
 }
 
-export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean };
+/** Ce que CE navigateur sait — lu hors de la fenêtre PiP, pour que l'écran et la bulle décident sans charger son chunk. */
+export function browserPipSupport(): PipSupport {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 'none';
+  const env = window as unknown as { readonly documentPictureInPicture?: unknown };
+  return pipSupport({ documentPictureInPicture: env.documentPictureInPicture, pictureInPictureEnabled: (document as { readonly pictureInPictureEnabled?: boolean }).pictureInPictureEnabled });
+}
+
+export type PipSource ={ readonly stream: MediaStream; readonly mirrored: boolean };
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'>;
 

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall } from '@/lib/calls/call-store';
 
+import { CallBubble } from './call-bubble';
 import { ActiveCallView } from './call-overlay';
 import { CallScreen } from './call-screen';
 
@@ -51,7 +52,8 @@ describe('la pastille', () => {
 
 describe('la bulle', () => {
   test('remplace la pastille : revenir, micro, raccrocher — et la consigne clavier pour la déplacer', () => {
-    const html = overlay(call({ display: 'bubble' }));
+    expect(overlay(call({ display: 'bubble' }))).toBe('');
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
     expect(html).toContain('data-call-bubble="right"');
     expect(html).toContain('aria-label="Revenir à l’appel"');
     expect(html).toContain('data-call-bubble-control="mic"');
@@ -67,7 +69,7 @@ describe('la bulle', () => {
   });
 
   test('sans vidéo, le navigateur n’a rien à faire flotter : pas de bouton image dans l’image', () => {
-    expect(overlay(call({ display: 'bubble' }))).not.toContain('data-call-bubble-control="pip"');
+    expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).not.toContain('data-call-bubble-control="pip"');
   });
 });
 

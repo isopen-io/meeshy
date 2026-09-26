@@ -3,9 +3,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
-import { CallBubble } from '@/components/call-bubble';
 import { StreamAudio } from '@/components/call-media-elements';
-import { CallPip } from '@/components/call-pip-window';
 import { CallScreen } from '@/components/call-screen';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
@@ -27,10 +25,10 @@ import { initialsOf } from '@/lib/view/conversation';
  * ne le coupe pas.
  *
  * #8046 — la pastille se replie en BULLE déplaçable (bouton, ou glissement
- * horizontal franc comme sur iOS), et l'image dans l'image (`CallPip`) vit
- * ici aussi : elle doit survivre à l'écran plein comme à la pastille. Ni la
- * pastille ni la bulle ne couvrent l'application : on navigue et on écrit
- * dessous.
+ * horizontal franc comme sur iOS). La bulle et l'image dans l'image sont des
+ * chunks FRÈRES montés par `call-layer.tsx`, pas des enfants : ils partagent
+ * les éléments média avec cet écran sans l'importer. Ni la pastille ni la
+ * bulle ne couvrent l'application : on navigue et on écrit dessous.
  */
 
 const PILL_BG = 'rgba(17,16,24,0.92)';
@@ -141,11 +139,11 @@ function Notice() {
   );
 }
 
-/** L'écran plein, la pastille ou la bulle — la sonnerie et la fin reprennent toujours l'écran plein. */
+/** L'écran plein ou la pastille — la bulle est un chunk frère (`call-layer.tsx`) ; la sonnerie et la fin reprennent toujours l'écran plein. */
 export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
   const reduced = call.phase.kind !== 'incoming' && call.phase.kind !== 'ended';
   if (reduced && call.display === 'pill') return <CallPill call={call} />;
-  if (reduced && call.display === 'bubble') return <CallBubble call={call} />;
+  if (reduced && call.display === 'bubble') return null;
   return <CallScreen call={call} />;
 }
 
@@ -160,7 +158,6 @@ export function CallOverlay() {
         <StreamAudio key={userId} stream={stream} />
       ))}
       {call === null ? null : <ActiveCallView call={call} />}
-      {call === null ? null : <CallPip call={call} />}
       {waiting === null ? null : <WaitingBanner waiting={waiting} />}
       {notice === null ? null : <Notice />}
     </>
