@@ -30,6 +30,8 @@ import {
   type IdentiteDuCompte,
 } from './email/account-identity-block';
 import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
+import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
+import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -76,6 +78,8 @@ export interface EmailVerificationData {
   verificationLink: string;
   verificationCode?: string;
   expiryHours: number;
+  /** Posé pour une paire de moins d'une heure (#8033) : « expire dans N minutes ». */
+  expiryMinutes?: number;
   language?: string;
   /**
    * L'identité DÉRIVÉE et ses liens d'édition (#6424).
@@ -231,8 +235,11 @@ export class EmailService {
   private defaultLanguage: SupportedLanguage = 'en';
   private brandLogoUrl: string;
   private frontendUrl: string;
+  /** `MEESHY_ENV=staging`, lu UNE fois (#8036) — voir `./email/staging-marker`. */
+  private readonly staging: boolean;
 
   constructor() {
+    this.staging = isStagingEnvironment(process.env.MEESHY_ENV);
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
     this.frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
@@ -325,7 +332,8 @@ export class EmailService {
     return this.providers.map(p => p.name);
   }
 
-  private async sendEmail(data: EmailData): Promise<EmailResult> {
+  private async sendEmail(input: EmailData): Promise<EmailResult> {
+    const data = markForEnvironment({ ...input }, this.staging);
     if (data.trackingType) {
       const pixel = this.getTrackingPixelHtml(data.trackingType, data.trackingLang);
       data.html = data.html.replace('</body>', `${pixel}\n</body>`);
@@ -465,7 +473,9 @@ export class EmailService {
 
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
+    const expiry = data.expiryMinutes !== undefined
+      ? codeExpiryText(data.language, data.expiryMinutes)
+      : t.verification.expiry.replace('{hours}', data.expiryHours.toString());
 
     const codeBlockHtml = data.verificationCode
       ? `<div style="text-align:center;margin:20px 0"><p style="font-size:14px;color:#666;margin-bottom:8px">${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}:</p><div style="display:inline-block;padding:12px 24px;background:#f4f4f5;border-radius:8px;font-size:32px;font-weight:bold;letter-spacing:8px;font-family:monospace;color:#1e1b4b">${data.verificationCode}</div></div>`
@@ -485,6 +495,16 @@ export class EmailService {
     const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
+  }
+
+  /** Code de CONNEXION + lien, pour un compte déjà vérifié (#8033). */
+  async sendLoginCodeEmail(data: LoginCodeEmailData): Promise<EmailResult> {
+    const { subject, html, text } = composeLoginCodeEmail(data, {
+      styles: this.getBaseStyles(),
+      footerHtml: this.getFooterContentHtml(data.language),
+      footerText: this.getFooterContentText(data.language),
+    });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'login_code', trackingLang: data.language });
   }
 
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {

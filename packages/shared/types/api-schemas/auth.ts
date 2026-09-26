@@ -345,11 +345,73 @@ export const verifyEmailRequestSchema = {
           type: 'string',
           format: 'email',
           description: 'Email address to verify'
+        },
+        // #8033 — admis avec le CODE seulement ; appliqué uniquement à un compte
+        // qui n'a pas encore de mot de passe. Littéral aligné sur
+        // `PASSWORD_MIN_LENGTH` (garde `password-min-length-parity.test.ts`).
+        password: {
+          type: 'string',
+          minLength: 6,
+          description: 'OPTIONAL. Sets the account password when the account has none yet (ignored otherwise). Accepted only with `code`.'
         }
       },
       additionalProperties: false
     }
   ]
+} as const;
+
+/**
+ * La branche « vérification requise » de `POST /auth/login` (#8033).
+ *
+ * Servie quand l'identifiant est une adresse VALIDE sans compte actif (le
+ * compte est alors créé, sans mot de passe) ou celle d'un compte ainsi créé et
+ * jamais vérifié (le code est renvoyé). Aucune session, aucun jeton : la
+ * session ne s'ouvre qu'à `POST /auth/verify-email`.
+ */
+export const loginVerificationRequiredProperties = {
+  status: {
+    type: 'string',
+    enum: ['verification-required'],
+    description: 'Present only when no session is opened: a code and a link were emailed, to be presented to POST /auth/verify-email'
+  },
+  accountCreated: {
+    type: 'boolean',
+    description: 'True when this request created the account; false when the account already existed and the code was re-sent'
+  },
+  email: {
+    type: 'string',
+    description: 'The normalized address the code was sent to'
+  }
+} as const;
+
+/**
+ * Réponse de `POST /auth/verify-email` (#8033) — la vérification OUVRE la
+ * session, sous la même forme que `POST /login`. Un compte protégé par un
+ * second facteur reçoit à la place `requires2FA` + `twoFactorToken`, à
+ * présenter à `POST /login/2fa`.
+ */
+export const verifyEmailResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        verified: { type: 'boolean', example: true },
+        message: { type: 'string' },
+        alreadyVerified: { type: 'boolean', description: 'True when the address was already verified before this proof (a sign-in code)' },
+        verifiedAt: { type: 'string', format: 'date-time' },
+        user: userSchema,
+        token: { type: 'string', description: 'JWT access token (absent when a second factor is required)' },
+        sessionToken: { type: 'string', description: 'Session token (absent when a second factor is required)' },
+        session: sessionMinimalSchema,
+        expiresIn: { type: 'number', example: 86400 },
+        passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
+        requires2FA: { type: 'boolean' },
+        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' }
+      }
+    }
+  }
 } as const;
 
 /**

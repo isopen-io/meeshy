@@ -9,6 +9,11 @@ import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
 import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { AuthService } from '../services/AuthService';
+import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
+import { getJwtSecret } from '../utils/secrets';
+import { deferAfterResponse } from '../utils/after-response';
+import { localeDeLaRequete } from './auth/request-locale';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
@@ -42,13 +47,21 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
     geoIPService
   );
 
+  // #8033 — la porte « e-mail seul » passe par la fonction UNIQUE que partage
+  // `POST /auth/login` : code + lien `/auth/verify-email`, compte créé si
+  // l'adresse est inconnue. Le manager Socket.IO est résolu à l'APPEL.
+  const accountService = new AuthService(fastify.prisma, getJwtSecret(), {
+    resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
+    accountThrottle: cacheStore,
+  });
+
   /**
    * POST /auth/magic-link/request
    * Request a magic link to be sent via email
    */
   fastify.post('/magic-link/request', {
     schema: {
-      description: 'Request a magic link for passwordless login. A link valid for 1 minute will be sent to the provided email address.',
+      description: 'Email-only sign-in (#8033). Sends ONE email carrying a 6-digit code and a link to `/auth/verify-email` — to an existing account, or to an unknown address, whose account is then created without a password. Present the code or the link to POST /auth/verify-email to open the session. The response never reveals whether the account existed.',
       tags: ['auth'],
       summary: 'Request magic link',
       body: {
@@ -109,44 +122,33 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
-      const { email, rememberDevice, returnUrl } = validationResult.data;
+      const { email } = validationResult.data;
 
-      // Get request context
       const requestContext = await getRequestContext(request);
 
-      // Request magic link - rememberDevice is stored server-side with the token
-      const result = await magicLinkService.requestMagicLink({
-        email,
-        ipAddress: requestContext.ip,
-        userAgent: requestContext.userAgent,
-        deviceFingerprint: (request.body as any)?.deviceFingerprint,
-        rememberDevice, // Stored server-side for security
-        returnUrl // Clamped server-side (MagicLinkService.clampMagicLinkReturnUrl) — #6742
-      });
+      const issue = await accountService.startAccountFromEmail(
+        { email, door: 'email-only', requestContext, deviceLocale: localeDeLaRequete(request) },
+        { afterResponse: deferAfterResponse }
+      );
 
       /**
-       * UN REFUS DU LIMITEUR SE DIT (#6655).
+       * UN REFUS DU LIMITEUR SE DIT (#6655) — 429, jamais un 200 qui ferait
+       * croire qu'un e-mail est parti. Il n'énumère rien : le débit est compté
+       * AVANT toute lecture du compte (`startAccountFromEmail`, porte
+       * `email-only`), donc il parle de l'APPELANT.
        *
-       * La route rendait `sendSuccess` quoi que le service ait répondu. Sur un
-       * refus de débit, elle servait donc `{"success":true,"message":"Too many
-       * requests…"}` en HTTP 200 : un client qui branche sur `success` annonce
-       * « regardez votre boîte mail » alors qu'aucun courriel n'est parti.
-       *
-       * Pour un compte SANS mot de passe (#6424), ce lien est la SEULE porte —
-       * l'annoncer ouverte quand elle ne l'est pas laisse la personne dehors
-       * sans qu'elle sache pourquoi.
-       *
-       * Cela ne rouvre AUCUNE énumération, et le service le dit déjà dans son
-       * propre commentaire : le débit est vérifié AVANT la recherche du
-       * compte, donc le refus parle de l'APPELANT, jamais de l'existence de
-       * l'adresse. C'est la raison pour laquelle il peut se dire, là où
-       * « aucun compte » ne le peut pas.
+       * Tout autre cas — compte créé, compte existant, compte supprimé — rend
+       * la MÊME réponse : c'est la garde anti-énumération.
        */
-      if (result.success === false) {
-        return sendError(reply, 429, result.message, { code: result.error ?? 'RATE_LIMITED' });
+      if (issue.kind === 'rate-limited') {
+        return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });
       }
 
-      return sendSuccess(reply, { expiresInSeconds: (result as any).expiresInSeconds }, { message: result.message });
+      return sendSuccess(
+        reply,
+        { expiresInSeconds: LOGIN_CODE_TTL_MINUTES * 60 },
+        { message: 'If an account exists, a login link has been sent.' }
+      );
 
     } catch (error) {
       logger.error('MagicLink error', error as Error);
