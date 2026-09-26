@@ -14,6 +14,7 @@ import {
   verifyEmailRequestSchema,
   verifyEmailResponseSchema,
   loginVerificationRequiredProperties,
+  verificationRequiredProperties,
 } from '../types/api-schemas.js';
 
 const EMAIL = 'nouvelle@example.com';
@@ -61,5 +62,10 @@ describe('les réponses déclarent ce qu’elles servent', () => {
   it('login déclare la branche « vérification requise »', () => {
     expect(Object.keys(loginVerificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email']);
     expect(loginVerificationRequiredProperties.status.enum).toEqual(['verification-required']);
+  });
+
+  it('register et login servent la MÊME branche « vérification requise » (#8055)', () => {
+    expect(verificationRequiredProperties).toBe(loginVerificationRequiredProperties);
+    expect(Object.keys(verificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email']);
   });
 });

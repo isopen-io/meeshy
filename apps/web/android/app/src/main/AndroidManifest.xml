@@ -98,6 +98,13 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- #8045 — l'appel vidéo : getUserMedia({ video }) de la WebView passe
+         par BridgeWebChromeClient.onPermissionRequest, qui demande CAMERA à
+         l'exécution ; non déclarée, Android la refuse sans dialogue. La
+         caméra reste FACULTATIVE : l'appel vocal sert les appareils sans. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
          passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.

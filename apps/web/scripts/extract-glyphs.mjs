@@ -778,6 +778,32 @@ emit({
 });
 
 /**
+ * L'ECRAN D'APPEL (#6382) — miroir des symboles de `CallView.swift`,
+ * `IncomingCallView.swift` et `FloatingCallPillView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `phone.down.fill` (raccrocher, refuser) | `phone-disconnect` |
+ * | `mic.slash.fill` (micro coupe) | `microphone-slash` |
+ * | `video.fill` / `video.slash.fill` (camera) | `video-camera` / `video-camera-slash` |
+ * | `arrow.triangle.2.circlepath.camera` (changer de camera) | `camera-rotate` |
+ * | `arrow.down.right.and.arrow.up.left` (reduire) | `arrows-in-simple` |
+ * | `captions.bubble` (sous-titres) | `closed-captioning` |
+ * | `wifi.exclamationmark` (connexion instable) | `cell-signal-low` |
+ *
+ * `phone` et `microphone` restent au SOCLE. Charge avec l'ecran d'appel, jamais dans le socle.
+ */
+const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low'];
+
+emit({
+  ids: CALL_SCREEN,
+  output: join(HERE, '../src/components/glyphs-call-screen.ts'),
+  constant: 'CALL_SCREEN_GLYPHS',
+  type: 'CallScreenGlyphName',
+  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres et qualite, charge avec l'ecran d'appel, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
  * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
  * `CreateShareLinkView.swift` :

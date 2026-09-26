@@ -41,6 +41,7 @@ import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
+import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
   Check,
@@ -276,7 +277,7 @@ export const FocalRow = memo(function FocalRow({
         }}
       >
         <div style={{ gridColumn: '1 / -1' }}>
-          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" />
+          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" callTarget={callNoticeTarget(message)} />
         </div>
       </div>
     );

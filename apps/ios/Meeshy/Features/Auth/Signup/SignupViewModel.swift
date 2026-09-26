@@ -14,11 +14,13 @@ import MeeshyUI
 /// bascule la session de tout le processus de test.
 @MainActor
 protocol SignupRegistering: AnyObject {
-    /// Crée le compte et APPLIQUE la session. Lève :
+    /// Crée le compte et APPLIQUE la session — ou, sans numéro de téléphone,
+    /// rend l'adresse à vérifier : le compte n'est pas encore actif (#8055).
+    /// Lève :
     /// - `MeeshyError.rejected(APIRejection)` — refus typé par champ ;
     /// - `PhoneOwnershipConflict` — numéro déjà rattaché à un compte vérifié ;
     /// - `MeeshyError.network(…)` — réseau indisponible.
-    func register(_ request: RegisterRequest) async throws
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome
 }
 
 /// L'implémentation de production : une couche mince au-dessus d'`AuthManager`.
@@ -40,7 +42,7 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
 
     private init() { self.authManager = .shared }
 
-    func register(_ request: RegisterRequest) async throws {
+    func register(_ request: RegisterRequest) async throws -> RegistrationOutcome {
         try await authManager.registerThrowing(request: request)
     }
 }
@@ -115,6 +117,10 @@ final class SignupViewModel: ObservableObject {
     /// L'alerte « sans numéro » est-elle à l'écran (#8040) ? Écrite par
     /// l'`.alert` elle-même quand l'utilisateur répond.
     @Published var isPhoneNudgePresented = false
+    /// L'adresse à vérifier quand le compte, créé SANS numéro, n'est pas encore
+    /// actif (#8055) : l'écran présente alors la saisie du code au lieu d'entrer
+    /// dans l'app. Le mot de passe est déjà sur le compte — il ne repart pas.
+    @Published var pendingVerification: PendingEmailVerification?
 
     private let registrar: any SignupRegistering
 
@@ -160,8 +166,9 @@ final class SignupViewModel: ObservableObject {
         return await submit()
     }
 
-    /// Crée le compte. `true` quand la session est appliquée — l'appelant
-    /// enchaîne IMMÉDIATEMENT, sans pause d'aucune sorte.
+    /// Crée le compte. `true` quand le compte est créé — l'appelant enchaîne
+    /// IMMÉDIATEMENT, sans pause d'aucune sorte : dans l'app si la session est
+    /// appliquée, vers la saisie du code si `pendingVerification` est posé.
     @discardableResult
     func submit() async -> Bool {
         guard form.canSubmit, !isSubmitting else { return false }
@@ -174,10 +181,13 @@ final class SignupViewModel: ObservableObject {
         // peut-être plus.
         usernameSuggestions = []
         emailAlreadyRegistered = false
+        pendingVerification = nil
         defer { isSubmitting = false }
 
         do {
-            try await registrar.register(form.registerRequest())
+            if case .verificationRequired(let pending) = try await registrar.register(form.registerRequest()) {
+                pendingVerification = pending
+            }
             return true
         } catch {
             apply(error)

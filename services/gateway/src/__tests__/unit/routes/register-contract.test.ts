@@ -167,5 +167,12 @@ describe("contrat d'entrée de POST /register — couche Ajv RÉELLE", () => {
 
       expect(recu?.phoneTransferToken).toBe('jeton-de-transfert');
     });
+
+    it('TRANSMET le code de parrainage et sa clé de visite (#8058) — un champ non déclaré serait retiré', async () => {
+      await poster({ ...TROIS_CHAMPS, affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
+
+      expect(recu?.affiliateToken).toBe('aff-123');
+      expect(recu?.affiliateSessionKey).toBe('visite-9');
+    });
   });
 });
