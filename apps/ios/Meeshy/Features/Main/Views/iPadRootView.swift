@@ -361,7 +361,8 @@ struct iPadRootView: View {
                 // I-075 — override éphémère, jamais persistant : consommé ici
                 // comme `pendingReplyContext` ci-dessus, jamais écrit en
                 // préférence.
-                forcedReadingMode: router.pendingForcedReadingMode
+                forcedReadingMode: router.pendingForcedReadingMode,
+                landsOnMessage: router.landsOnMessage(in: conversation.id)
             )
             .id(conversation.id)
             .navigationBarHidden(true)
