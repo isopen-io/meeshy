@@ -16,6 +16,7 @@ import { logWarn } from '../../utils/logger';
 import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
@@ -368,6 +369,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendBadRequest(reply, result.error, { code: result.reason === 'expired' ? 'VERIFICATION_EXPIRED' : 'INVALID_VERIFICATION' });
       }
 
+      // Une adresse NEUVEMENT prouvée peut annoncer une arrivée aux carnets
+      // qui la contiennent (#8105) — après la réponse, jamais en ligne.
+      if (!result.alreadyVerified) scheduleContactJoinedAnnouncement(fastify.prisma, result.userId);
+
       const verification = {
         verified: true,
         alreadyVerified: result.alreadyVerified,
@@ -552,6 +557,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       logger.info('[AUTH] ✅ Téléphone vérifié');
+      if (result.verifiedUserId) scheduleContactJoinedAnnouncement(fastify.prisma, result.verifiedUserId);
 
       return sendSuccess(reply, { message: 'Numéro de téléphone vérifié avec succès !' });
 

@@ -4,9 +4,12 @@ import itIdentity from './catalog-it-identity';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
+import itCallShell from './catalog-it-call-shell';
+import itCallJoin from './catalog-it-call-join';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
+import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 
 const it = {
@@ -193,6 +196,8 @@ const it = {
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
+  ...itCallShell,
+  ...itCallJoin,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
@@ -1119,6 +1124,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itConversationCard,
   ...itStoriesMine,
 } satisfies InterfaceCatalog;
 

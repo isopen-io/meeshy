@@ -179,6 +179,10 @@ function fakePrisma(world: World) {
           }))
       ),
     },
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
     user: {
       findMany: jest.fn(async ({ where, take }: { where: Row; take?: number }) =>
         world.users

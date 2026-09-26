@@ -74,6 +74,20 @@ export function CallsHeader({ language }: { readonly language: InterfaceLanguage
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>
         {translate(language, 'root.menu.calls')}
       </h1>
+      {/* LE PAVÉ (#6454) — le troisième onglet de `ContactsHubView` d'iOS,
+          servi en écran frère : un disque au bout de l'en-tête, comme les
+          actions de chrome des autres écrans. */}
+      <Link
+        to="callKeypad"
+        aria-label={translate(language, 'keypad.open')}
+        data-calls-keypad
+        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
+        style={{ color: BRAND, outlineColor: BRAND }}
+      >
+        <ChromeActionDisc>
+          <GlyphSvg glyph={CALLS_GLYPHS.dotsNine} size={15} />
+        </ChromeActionDisc>
+      </Link>
     </header>
   );
 }
@@ -141,8 +155,8 @@ const DIRECTION_A11Y = {
 } as const;
 
 /**
- * UNE LIGNE — `CallJournalRow`. Elle est un LIEN vers le fil de sa conversation
- * ; le RAPPEL (le geste de la feuille de détail d'iOS) est le bouton à sa
+ * UNE LIGNE — `CallJournalRow`. Elle est un LIEN vers la FICHE de son appel
+ * (`/call/:callId`, #6383 — la feuille `CallDetailSheet` d'iOS) ; le RAPPEL (le geste de la feuille de détail d'iOS) est le bouton à sa
  * droite, du même type que l'appel d'origine (#6382). Son `aria-label` recompose TOUT ce que la ligne montre, comme
  * `rowAccessibilityLabel` d'iOS : nom, direction, type, heure, durée.
  */
@@ -171,8 +185,8 @@ export const CallRow = memo(function CallRow({
   return (
     <li data-call={record.callId} className="flex items-center" style={{ borderBottom: EDGE }}>
       <Link
-        to="thread"
-        params={{ conversation: record.conversationId }}
+        to="call"
+        params={{ callId: record.callId }}
         aria-label={label}
         data-call-row
         className="flex min-w-0 flex-1 items-center gap-3.5 py-3 pl-5 pr-2 focus-visible:outline-2 focus-visible:-outline-offset-2"

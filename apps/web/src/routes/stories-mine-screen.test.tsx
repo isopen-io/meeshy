@@ -75,10 +75,16 @@ async function mountScreen(remove?: RemoveStory): Promise<HTMLElement> {
       {remove === undefined ? <StoriesMineView /> : <StoriesMineView remove={remove} />}
     </QueryClientProvider>,
   );
-  await mounter.settle();
-  await mounter.settle();
+  /* Le corpus de fixtures se charge par `import()` : sur une machine lente,
+     deux tours ne suffisent pas et la liste restait à l'état « chargement ».
+     On laisse passer des tours jusqu'à ce que l'écran quitte cet état (borné). */
+  for (let tour = 0; tour < 50 && !host.querySelector(SETTLED_STATE); tour++) {
+    await mounter.settle();
+  }
   return host;
 }
+
+const SETTLED_STATE = '[data-my-stories-list], [data-my-stories-empty], [data-my-stories-offline]';
 
 const rows = (host: HTMLElement): readonly string[] =>
   [...host.querySelectorAll('[data-my-stories-list] li[data-my-story]')].map((li) => li.getAttribute('data-my-story') ?? '');

@@ -209,6 +209,24 @@ const JEU_MEDIAS: readonly Fixture[] = JEU.map((r) =>
   r.id === M_ORDINAIRE ? r : { ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'image/jpeg')] }
 );
 
+/**
+ * #8098 — le jeu de la table des gardes pour UN genre de l'index : chaque ligne
+ * non ordinaire porte ce qui la fait entrer dans ce genre (une pièce de ce
+ * type, une URL dans son contenu, ou le type `location`). La ligne ordinaire
+ * n'en porte aucun : elle témoigne que la SÉLECTION a bien eu lieu.
+ */
+const PORTEUR_DE_GENRE: Readonly<Record<string, (r: Fixture) => Fixture>> = {
+  visual: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'image/jpeg')] }),
+  audio: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'audio/mp4')] }),
+  document: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'application/pdf')] }),
+  contact: (r) => ({ ...r, attachments: [piece(`607f${String(r.id).slice(4)}`, String(r.id), 'text/vcard')] }),
+  link: (r) => ({ ...r, content: `${String(r.content)} https://example.com/page` }),
+  conversation: (r) => ({ ...r, content: `${String(r.content)} https://meeshy.me/chat/mshy_equipe` }),
+  location: (r) => ({ ...r, messageType: 'location' }),
+};
+const jeuDuGenre = (genre: string): readonly Fixture[] =>
+  JEU.map((r) => (r.id === M_ORDINAIRE ? r : PORTEUR_DE_GENRE[genre]!(r)));
+
 // ─── Le double Prisma qui ÉVALUE le `where` ───────────────────────────────────
 
 function asDate(v: unknown): Date | null {
@@ -389,6 +407,13 @@ const VUES: ReadonlyArray<readonly [string, string, Options]> = [
   // #8095 — la vue des médias lit le jeu où chaque ligne non ordinaire porte
   // une image : c'est ce qui la fait entrer dans la même table de gardes.
   ['media', `/conversations/${CONV_ID}/messages?view=media`, { jeu: JEU_MEDIAS }],
+  // #8098 — chaque GENRE de l'index entre dans la même table : un genre qui
+  // aurait son propre chemin de requête devrait prouver qu'il garde tout.
+  ...Object.keys(PORTEUR_DE_GENRE).map(
+    (genre) =>
+      [`media kinds=${genre}`, `/conversations/${CONV_ID}/messages?view=media&kinds=${genre}`, { jeu: jeuDuGenre(genre) }] as const
+  ),
+  ['media kinds=document&q', `/conversations/${CONV_ID}/messages?view=media&kinds=document&q=cible`, { jeu: jeuDuGenre('document') }],
 ];
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -522,6 +547,122 @@ describe('#8095 — `view=media` rend les messages porteurs de médias VISUELS, 
   });
 });
 
+describe('#8098 — `view=media&kinds=` : l\'index couvre TOUT ce qui s\'est échangé, genre par genre', () => {
+  const n = (k: number): string => `507f1f77bcf86cd7994397${String(k).padStart(2, '0')}`;
+  const M = {
+    image: n(1), video: n(2), audio: n(3), pdf: n(4), vcard: n(5), xvcard: n(6),
+    lien: n(7), lienMaj: n(8), suivi: n(9), chat: n(10), direct: n(11), rejoindre: n(12),
+    ancienneForme: n(13), schema: n(14), lieu: n(15), texte: n(16), faussePiste: n(17),
+    voPdf: n(18), voPieceAudio: n(19), voLien: n(20), rapport: n(21),
+  } as const;
+
+  type Entree = readonly [id: string, contenu: string, pieces?: readonly Fixture[], extra?: Fixture];
+  /** Le rang dans le jeu fait la date : le premier est le plus récent. */
+  const entree = (rang: number, [id, contenu, pieces = [], extra = {}]: Entree): Fixture => ({
+    ...ligne(id, new Date(`2026-07-${String(28 - rang).padStart(2, '0')}T10:00:00.000Z`), null, { ordinaire: true }),
+    content: contenu,
+    attachments: pieces,
+    ...extra,
+  });
+  const p = (message: string, mime: string, extra: Fixture = {}): Fixture =>
+    piece(`60${message.slice(2)}`, message, mime, extra);
+
+  const JEU_INDEX: readonly Fixture[] = ([
+    [M.image, '', [p(M.image, 'image/jpeg')]],
+    [M.video, '', [p(M.video, 'video/mp4')]],
+    [M.audio, '', [p(M.audio, 'audio/mpeg')]],
+    [M.pdf, '', [p(M.pdf, 'application/pdf')]],
+    [M.vcard, '', [p(M.vcard, 'text/vcard')]],
+    [M.xvcard, '', [p(M.xvcard, 'text/x-vcard')]],
+    [M.lien, 'lis ça https://example.com/article'],
+    [M.lienMaj, 'VOIR HTTP://EXAMPLE.ORG'],
+    [M.suivi, 'le post https://meeshy.me/l/AbCd12'],
+    [M.chat, 'rejoins-nous https://meeshy.me/chat/mshy_equipe_7f3a'],
+    [M.direct, 'ici https://www.meeshy.me/c/507f1f77bcf86cd799439011'],
+    [M.rejoindre, 'https://meeshy.me/join/mshy_club'],
+    [M.ancienneForme, 'https://app.meeshy.me/conversation/507f1f77bcf86cd799439012'],
+    [M.schema, 'ouvre meeshy://c/507f1f77bcf86cd799439013'],
+    [M.lieu, 'Paris, France', [], { messageType: 'location' }],
+    [M.texte, 'bonjour'],
+    [M.faussePiste, 'http est un protocole, meeshy.me un domaine'],
+    [M.voPdf, '', [p(M.voPdf, 'application/pdf')], { isViewOnce: true }],
+    [M.voPieceAudio, '', [p(M.voPieceAudio, 'audio/mpeg', { isViewOnce: true })]],
+    [M.voLien, 'secret https://example.com/x', [], { isViewOnce: true }],
+    [M.rapport, 'ci-joint', [p(M.rapport, 'application/pdf', { originalName: 'Rapport-Annuel.pdf' })]],
+  ] satisfies readonly Entree[]).map((e, rang) => entree(rang, e));
+
+  const lireIndex = (requete: string) =>
+    lire(`/conversations/${CONV_ID}/messages?view=media&${requete}`, { jeu: JEU_INDEX });
+
+  it('sans `kinds`, sert le VISUEL seul — le client iOS de #8095 n\'envoie rien', async () => {
+    const sans = await lire(`/conversations/${CONV_ID}/messages?view=media`, { jeu: JEU_INDEX });
+    const visuel = await lireIndex('kinds=visual');
+    expect(ids(sans.corps)).toEqual([M.image, M.video]);
+    expect(ids(visuel.corps)).toEqual([M.image, M.video]);
+  });
+
+  it.each([
+    ['audio', [M.audio]],
+    ['document', [M.pdf, M.rapport]],
+    ['contact', [M.vcard, M.xvcard]],
+    ['link', [M.lien, M.lienMaj, M.suivi, M.chat, M.direct, M.rejoindre, M.ancienneForme]],
+    ['conversation', [M.chat, M.direct, M.rejoindre, M.ancienneForme, M.schema]],
+    ['location', [M.lieu]],
+  ] as const)('kinds=%s rend ses seuls porteurs, jamais la vue unique', async (genre, attendus) => {
+    const { statut, corps } = await lireIndex(`kinds=${genre}`);
+    expect(statut).toBe(200);
+    expect(ids(corps)).toEqual(attendus);
+    expect(corps.pagination.total).toBe(attendus.length);
+  });
+
+  it('plusieurs genres font une UNION, dans l\'ordre chronologique inverse', async () => {
+    const { corps } = await lireIndex('kinds=audio,%20contact,location');
+    expect(ids(corps)).toEqual([M.audio, M.vcard, M.xvcard, M.lieu]);
+  });
+
+  it('un genre inconnu refuse en 400 INVALID_VIEW et nomme `kinds`', async () => {
+    const { statut, corps } = await lireIndex('kinds=visual,sticker');
+    expect(statut).toBe(400);
+    expect(corps.success).toBe(false);
+    expect(corps.code).toBe('INVALID_VIEW');
+    expect(String(corps.error)).toMatch(/kinds/);
+    expect(String(corps.error)).toMatch(/sticker/);
+  });
+
+  it('`kinds` sur une vue qui n\'est pas l\'index refuse, plutôt que de perdre le filtre', async () => {
+    const epingles = await lire(`/conversations/${CONV_ID}/messages?view=pinned&kinds=audio`);
+    const chronologie = await lire(`/conversations/${CONV_ID}/messages?kinds=audio`);
+    for (const { statut, corps } of [epingles, chronologie]) {
+      expect(statut).toBe(400);
+      expect(corps.code).toBe('INVALID_VIEW');
+      expect(String(corps.error)).toMatch(/kinds/);
+    }
+  });
+
+  it('`q` cherche dans le NOM d\'origine des pièces, sans tenir compte de la casse', async () => {
+    const { corps } = await lireIndex('kinds=document&q=rapport-ANN');
+    expect(ids(corps)).toEqual([M.rapport]);
+    expect(corps.pagination.total).toBe(1);
+  });
+
+  it('`q` cherche dans le CONTENU du message, genre par genre', async () => {
+    const { corps } = await lireIndex('kinds=link,conversation&q=MSHY_');
+    expect(ids(corps)).toEqual([M.chat, M.rejoindre]);
+  });
+
+  it('`q` de moins de deux caractères refuse en 400 INVALID_VIEW et nomme `q`', async () => {
+    const { statut, corps } = await lireIndex('kinds=document&q=%20r%20');
+    expect(statut).toBe(400);
+    expect(corps.code).toBe('INVALID_VIEW');
+    expect(String(corps.error)).toMatch(/\bq\b/);
+  });
+
+  it('`q` sur `view=search` garde son sens : le terme cherché, sans genre', async () => {
+    const { corps } = await lire(`/conversations/${CONV_ID}/messages?view=search&q=protocole`, { jeu: JEU_INDEX });
+    expect(ids(corps)).toEqual([M.faussePiste]);
+  });
+});
+
 describe('#4340 critère 4 — `?view=thread&parentId=` et `?replyToId=` rendent le MÊME corps', () => {
   it('les deux moyens servent le même fil, champ pour champ', async () => {
     const parVue = await lire(`/conversations/${CONV_ID}/messages?view=thread&parentId=${PARENT_ID}`);
@@ -561,11 +702,12 @@ describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
       expect(corps.data).toBeUndefined();
     });
 
-    it("refuse un non-membre en le nommant, sans rien servir", async () => {
+    it("refuse un non-membre comme une conversation inexistante, sans rien servir (#8099)", async () => {
       mockVerdict.mockResolvedValue({ genre: 'non-membre' });
       const { corps } = await lireVue(url);
       expect(corps.success).toBe(false);
-      expect(corps.code).toBe('CONVERSATION_ACCESS_DENIED');
+      expect(corps.error).toBe('Conversation not found');
+      expect(corps.code).toBeUndefined();
       expect(corps.data).toBeUndefined();
     });
 

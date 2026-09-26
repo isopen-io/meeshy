@@ -1,6 +1,9 @@
 import { memo } from 'react';
 
+import type { ListConversation } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
+import { callActions } from '@/lib/calls/call-actions';
+import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
@@ -12,7 +15,7 @@ import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
-import { LensPreviewLine } from './lens-preview-line';
+import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { RowActions } from './row-actions';
@@ -161,6 +164,7 @@ function LensRowImpl({
   })();
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
+  const liveCall = (conversation as ListConversation).activeCall ?? null;
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -497,6 +501,15 @@ function LensRowImpl({
             )}
           </span>
         </Link>
+        {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
+        {liveCall === null ? null : (
+          <LensJoinCallButton
+            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group }}
+            label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
+            text={translate(currentInterfaceLanguage(), 'callJoin.action')}
+            onJoin={callActions.join}
+          />
+        )}
       </div>
 
       <RowActions

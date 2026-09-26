@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import {
   userSchema,
   registerRequestSchema,
@@ -173,7 +174,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response is `{ status: "verification-required", accountCreated: true, email }`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response carries `status: "verification-required"`, `accountCreated: true` and `email`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -405,6 +406,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
 
       await rattacherAuParrain(context, user.id, affiliateToken, affiliateSessionKey);
+
+      // « X a rejoint Meeshy » (#8105) : le service n'apparie que des
+      // identifiants VÉRIFIÉS — un compte sans numéro n'annonce rien ici,
+      // son e-mail l'annoncera une fois prouvé.
+      scheduleContactJoinedAnnouncement(context.prisma, user.id, { afterResponse });
 
       // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
       // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code

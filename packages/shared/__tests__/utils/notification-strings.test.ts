@@ -427,3 +427,19 @@ describe('formatFileSizeI18n — unités d’octets localisées', () => {
     expect(formatFileSizeI18n('ja', 500_000)).toBe('488 Ko');
   });
 })
+
+describe('contact_joined — « X a rejoint Meeshy » (#8105)', () => {
+  it('le titre naît du nom de l’acteur, dans la langue du destinataire', () => {
+    expect(buildNotificationDisplay('fr', { type: 'contact_joined', actorName: 'Maman' }).title).toBe('Maman est sur Meeshy !');
+    expect(buildNotificationDisplay('en', { type: 'contact_joined', actorName: 'Mum' }).title).toBe('Mum is on Meeshy!');
+  });
+
+  it('les huit langues portent les quatre libellés, et le regroupement compte', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      for (const key of ['contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody'] as const) {
+        expect(notificationString(lang, key).length).toBeGreaterThan(0);
+      }
+      expect(notificationString(lang, 'contact.joinedMany', { actor: 'Ana', count: 2 })).toContain('2');
+    }
+  });
+});

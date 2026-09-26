@@ -87,8 +87,9 @@ protocol ConversationMediaCatalogProviding: AnyObject {
 
 @MainActor
 final class ConversationMediaCatalog: ObservableObject, ConversationMediaCatalogProviding {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
-    // Garde : MainActorDeinitSourceGuardTests.
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
     @Published private(set) var snapshot: ConversationMediaSnapshot = .empty
