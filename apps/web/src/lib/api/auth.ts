@@ -107,6 +107,13 @@ export type RegisterBody = {
   readonly phoneCountryCode?: string;
   readonly systemLanguage?: string;
   readonly regionalLanguage?: string;
+  /** Le code de parrainage (#8058) — la même valeur que `token` de
+   * `POST /affiliate/register`. La passerelle noue la relation au parrain à la
+   * CRÉATION du compte ; un jeton invalide ne bloque jamais l'inscription. */
+  readonly affiliateToken?: string;
+  /** La clé de session d'affiliation (`sessionKey` de `/affiliate/register`),
+   * seulement quand elle est connue. */
+  readonly affiliateSessionKey?: string;
 };
 
 /** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une

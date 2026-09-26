@@ -167,6 +167,24 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(stubAuthService.confirmEmailRequests, [.code("123456", email: "nouveau@exemple.com", password: "choisi")])
     }
 
+    /// #8059 — prouver l'adresse ne pose PAS la session : poser la session
+    /// démonte l'écran de connexion, et la feuille du code encore présentée
+    /// par lui resterait orpheline. La session s'ouvre quand l'écran l'a
+    /// refermée, par `openSession`.
+    func test_verifyEmail_servedSession_doesNotOpenItUntilAsked() async throws {
+        stubAuthService.confirmEmailResult = .success(makeLoginData(user: makeUser(id: "verified-2"), token: "jwt-proven"))
+
+        let proven = try await AuthManager.shared.verifyEmail(.code("123456", email: "nouveau@exemple.com"))
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven?.token, "jwt-proven")
+
+        AuthManager.shared.openSession(try XCTUnwrap(proven))
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "verified-2")
+    }
+
     func test_confirmEmail_verifiedWithoutSession_staysSignedOut() async throws {
         stubAuthService.confirmEmailResult = .success(makeLoginData(token: nil, sessionToken: nil))
 
@@ -394,6 +412,22 @@ final class AuthServiceTests: XCTestCase {
 
         XCTAssertTrue(AuthManager.shared.isAuthenticated)
         XCTAssertEqual(AuthManager.shared.currentUser?.id, "user-123")
+    }
+
+    /// #8076 — prouver le lien de connexion ne pose PAS la session : un lien
+    /// ouvert pendant qu'une feuille d'accès est affichée attend qu'elle parte.
+    func test_verifyMagicLink_doesNotOpenTheSessionUntilAsked() async throws {
+        stubAuthService.validateMagicLinkResult = .success(makeLoginData(user: makeUser(id: "magic-proven"), token: "jwt-magic"))
+
+        let proven = try await AuthManager.shared.verifyMagicLink(token: "magic-token")
+
+        XCTAssertFalse(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(proven.token, "jwt-magic")
+
+        AuthManager.shared.openSession(proven)
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated)
+        XCTAssertEqual(AuthManager.shared.currentUser?.id, "magic-proven")
     }
 
     func test_validateMagicLink_failure_setsErrorMessage() async {

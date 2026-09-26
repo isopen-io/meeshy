@@ -13,7 +13,7 @@ import { LanguageSheet } from '@/components/language-sheet';
 import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
-import { convertReferral, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
+import { inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
 import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { countryName, type Country } from '@/lib/countries';
@@ -51,6 +51,7 @@ import {
 import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { Link, href, navigate } from '@/routes/route-table';
+import { PasswordInput } from '@/components/password-input';
 
 /**
  * L'ÉCRAN D'INSCRIPTION (#5555) — UN écran, anatomie de `SignupView.swift:44-59`.
@@ -128,9 +129,10 @@ const EMPTY_FEEDBACK: SignupFeedback = {
 
 /**
  * `SignupField` énumère ce que la PASSERELLE peut refuser ; le focus, lui,
- * couvre aussi ce qu'elle ne connaît pas — le code de parrainage n'entre dans
- * aucune charge de `POST /auth/register` (#6584). Élargir `SignupField` pour
- * ce champ ferait croire qu'un refus serveur peut le viser.
+ * couvre aussi ce qu'elle ne refuse jamais — le code de parrainage voyage
+ * dans `POST /auth/register` (#8058), mais un jeton invalide n'y bloque
+ * aucune inscription. Élargir `SignupField` pour ce champ ferait croire qu'un
+ * refus serveur peut le viser.
  */
 type FocusedField = SignupField | 'referral' | null;
 
@@ -361,7 +363,7 @@ export default function SignupScreen({
     setSubmitting(true);
     setFeedback(EMPTY_FEEDBACK);
 
-    const result = await register(composeRegisterBody(form));
+    const result = await register(composeRegisterBody(form, { referralCode }));
     setSubmitting(false);
 
     if (!result.ok) {
@@ -377,6 +379,14 @@ export default function SignupScreen({
        du code, qui ouvrira la session. Le mot de passe est DÉJÀ enregistré
        sur le compte : il n'est pas retenu pour repartir avec le code.
        L'invitation (`next`) voyage jusqu'à lui, sans le court-circuiter. */
+    /* LE PARRAINAGE EST NOUÉ PAR LA CRÉATION DU COMPTE (#8058) : le code est
+       parti dans le corps de `POST /auth/register` (`affiliateToken`), et la
+       passerelle rattache le compte à son parrain, activé ou non. Le compte
+       existe désormais : le code a servi, il est OUBLIÉ — sinon il se
+       rattacherait une seconde fois à une inscription suivante sur ce même
+       navigateur. Un refus ou un conflit de numéro, eux, n'ont créé aucun
+       compte : le code reste pour la tentative suivante. */
+    forgetReferralCode();
     if (isVerificationRequired(result.data)) {
       holdPendingVerification({ email: result.data.email, accountCreated: result.data.accountCreated });
       navigate(href('verifyEmail', undefined, { email: result.data.email, next: safeNext ?? undefined }), true);
@@ -388,23 +398,6 @@ export default function SignupScreen({
     // l'effet ci-dessus le temps de ce routage, IMMÉDIATEMENT, sans pause
     // d'aucune sorte (doctrine SignupView.swift:413-429).
     setJustRegistered(true);
-    /**
-     * LA RELATION DE PARRAINAGE SE NOUE ICI, ET NE RETIENT RIEN (#6584).
-     *
-     * `POST /affiliate/register` est AUTHENTIFIÉ et porte sur l'appelant —
-     * possible seulement maintenant, l'inscription venant d'établir la session
-     * (#4264). Elle part sans être attendue : un parrainage qui échoue est un
-     * parrainage perdu, jamais une entrée retardée. Rien dans l'écran ne
-     * dépend de sa réponse, donc rien n'a à l'attendre.
-     */
-    const code = normalizeReferralCode(referralCode);
-    if (isReferralCodeShaped(code)) {
-      // OUBLIÉ tout de suite, pas à la réponse : le compte est créé, ce code a
-      // servi. L'attendre pour l'oublier le laisserait se rattacher une seconde
-      // fois à une inscription suivante sur le même navigateur.
-      forgetReferralCode();
-      void convertReferral({ code, userId: result.data.user.id }).catch(() => undefined);
-    }
     navigate(landingAfterRegistration({ next, email: form.email }), true);
   }
 
@@ -584,19 +577,16 @@ export default function SignupScreen({
                 error={feedback.fieldErrors.password}
               >
                 {({ id, describedBy }) => (
-                  <input
+                  <PasswordInput
                     id={id}
-                    type="password"
                     autoComplete="new-password"
                     value={form.password}
-                    onInput={(e) => patch({ password: e.currentTarget.value })}
+                    onValue={(password) => patch({ password })}
                     onFocus={() => setFocused('password')}
                     onBlur={() => setFocused(null)}
                     placeholder={`${PASSWORD_MIN} caractères minimum`}
-                    className="w-full bg-transparent py-3 text-input outline-none"
-                    aria-describedby={describedBy}
-                    aria-invalid={feedback.fieldErrors.password !== undefined}
-                    style={{ color: 'var(--color-ios-ink)' }}
+                    describedBy={describedBy}
+                    invalid={feedback.fieldErrors.password !== undefined}
                   />
                 )}
               </Field>

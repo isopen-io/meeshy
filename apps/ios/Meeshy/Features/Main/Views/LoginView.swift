@@ -27,6 +27,17 @@ struct LoginView: View {
     /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
     /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
     @State private var codeEntry: CodeEntryContext?
+    /// Le point UNIQUE où une session prouvée s'ouvre (#8059, #8076) : jamais
+    /// pendant qu'une présentation d'accès est là — ouvrir la session démonte
+    /// cet écran, et sa feuille resterait orpheline, figée, « Fermer » inerte.
+    /// Code, lien reçu par e-mail, inscription : la session attend le
+    /// `onDismiss` de la présentation.
+    private let sessionGate = SessionOpeningGate.shared
+
+    /// Une porte d'accès est-elle présentée par cet écran ?
+    private var hasAccessPresentation: Bool {
+        codeEntry != nil || showMagicLink || showRegister || showForgotPassword
+    }
 
     private struct CodeEntryContext: Identifiable {
         let pending: PendingEmailVerification
@@ -179,29 +190,49 @@ struct LoginView: View {
             // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
             .iPadFormWidth()
         }
-        .sheet(isPresented: $showForgotPassword) {
+        .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
             MeeshyForgotPasswordView()
         }
-        .sheet(item: $codeEntry) { entry in
+        .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
             EmailVerificationView(
                 email: entry.pending.email,
                 password: entry.password,
-                accountCreated: entry.pending.accountCreated
+                accountCreated: entry.pending.accountCreated,
+                onVerified: { sessionGate.openWhenDismissed($0) }
             )
         }
-        .sheet(isPresented: $showMagicLink) {
-            MagicLinkView()
+        .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
+            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) })
                 .environmentObject(authManager)
         }
-        .fullScreenCover(isPresented: $showRegister) {
+        .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
             // se contente de refermer : la session est déjà appliquée par
             // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
             // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
             SignupView(
                 onComplete: { showRegister = false },
-                onSwitchToLogin: { showRegister = false }
+                onSwitchToLogin: { showRegister = false },
+                onVerified: { opener in
+                    sessionGate.openWhenDismissed(opener)
+                    showRegister = false
+                }
             )
+        }
+        .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
+            if presenting { sessionGate.presentationBegan() }
+        }
+        // Un lien reçu par e-mail a prouvé une session pendant qu'une porte
+        // d'accès est affichée (#8076) : la refermer, la session s'ouvrira
+        // dans son `onDismiss`.
+        .onReceive(sessionGate.$dismissalRequested.filter { $0 }) { _ in
+            codeEntry = nil
+            showMagicLink = false
+            showRegister = false
+            showForgotPassword = false
+        }
+        .onAppear {
+            if !hasAccessPresentation { sessionGate.presentationEnded() }
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
         // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
@@ -376,13 +407,17 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .accountPassword)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptAccountLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $accountPassword,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .accountPassword,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptAccountLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
@@ -473,13 +508,17 @@ struct LoginView: View {
                     .foregroundColor(MeeshyColors.purple600.opacity(0.7))
                     .frame(width: MeeshySpacing.xl)
                     .accessibilityHidden(true)
-                SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .password)
-                    .foregroundColor(theme.textPrimary)
-                    .submitLabel(.go)
-                    .onSubmit { attemptLogin() }
-                    .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
+                MeeshyPasswordField(
+                    String(localized: "auth.password.placeholder", bundle: .main),
+                    text: $password,
+                    role: .current,
+                    focus: $focusedField,
+                    equals: .password,
+                    eyeColor: theme.textMuted
+                )
+                .foregroundColor(theme.textPrimary)
+                .submitLabel(.go)
+                .onSubmit { attemptLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
@@ -687,6 +726,14 @@ struct LoginView: View {
             let outcome = await authManager.login(username: username, password: password)
             presentCodeEntryIfNeeded(outcome, password: password)
         }
+    }
+
+
+    /// La présentation d'accès est partie : la session prouvée peut s'ouvrir
+    /// (#8059, #8076) — sauf si une autre porte a pris sa place.
+    private func accessPresentationDismissed() {
+        guard !hasAccessPresentation else { return }
+        sessionGate.presentationEnded()
     }
 
     private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {

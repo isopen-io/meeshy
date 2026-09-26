@@ -3,8 +3,17 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// Ouvre la session prouvée par le code. L'HÔTE la reçoit et l'appelle dans le
+/// `onDismiss` de sa présentation (#8059) : ouvrir la session pendant que la
+/// feuille est encore là démonte l'écran de connexion qui la présente, et la
+/// feuille reste orpheline, figée sur « Email vérifié ! ».
+typealias ProvenSessionOpener = @MainActor () -> Void
+
 struct EmailVerificationView: View {
     @StateObject private var viewModel: EmailVerificationViewModel
+    private let onVerified: (@escaping ProvenSessionOpener) -> Void
+    /// Le temps de lire « Email vérifié ! » avant que la feuille se referme.
+    private static let successPause: Duration = .milliseconds(800)
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
 
@@ -12,8 +21,10 @@ struct EmailVerificationView: View {
         email: String,
         password: String? = nil,
         accountCreated: Bool = false,
-        authService: AuthServiceProviding = AuthService.shared
+        authService: AuthServiceProviding = AuthService.shared,
+        onVerified: @escaping (@escaping ProvenSessionOpener) -> Void
     ) {
+        self.onVerified = onVerified
         _viewModel = StateObject(wrappedValue: EmailVerificationViewModel(
             email: email,
             password: password,
@@ -41,6 +52,14 @@ struct EmailVerificationView: View {
                 .iPadFormWidth()
 
                 successOverlay
+            }
+            // #8059 — la vérification réussie REFERME la feuille : l'hôte reçoit
+            // de quoi ouvrir la session, la pose une fois la feuille partie.
+            .task(id: viewModel.verificationSuccess) {
+                guard viewModel.verificationSuccess else { return }
+                onVerified(viewModel.openProvenSession)
+                try? await Task.sleep(for: Self.successPause)
+                dismiss()
             }
             .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))
             .navigationBarTitleDisplayMode(.inline)

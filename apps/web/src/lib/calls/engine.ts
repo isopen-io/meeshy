@@ -1,5 +1,11 @@
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { apiDeps } from '@/lib/api/deps';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 import {
   decodeAck,
   decodeCallId,
@@ -18,6 +24,7 @@ import {
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
+import { fetchActiveCallId } from './active-call';
 import { acquireCallMedia, acquireCamera, mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
@@ -818,15 +825,7 @@ function defaultCreateStream(tracks: readonly MediaStreamTrack[]): MediaStream {
 
 let singleton: CallEngine | null = null;
 
-export async function loadDefaultEngineDeps(): Promise<Omit<CallEngineDeps, 'store'>> {
-  const [{ apiDeps }, { sessionStore }, { resolveViewer }, { fetchActiveCallId }, { translate }, { currentInterfaceLanguage }] = await Promise.all([
-    import('@/lib/api/deps'),
-    import('@/lib/api/session'),
-    import('@/lib/api/viewer'),
-    import('./active-call'),
-    import('@/lib/i18n-catalog'),
-    import('@/lib/interface-language'),
-  ]);
+export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   return {
     transport: currentCallTransport,
     viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
@@ -848,8 +847,7 @@ export async function loadDefaultEngineDeps(): Promise<Omit<CallEngineDeps, 'sto
 /** Le moteur du navigateur — construit une fois, au premier besoin. */
 export async function defaultCallEngine(): Promise<CallEngine> {
   if (singleton !== null) return singleton;
-  const deps = await loadDefaultEngineDeps();
-  if (singleton !== null) return singleton;
+  const deps = loadDefaultEngineDeps();
   const engine = createCallEngine({ ...deps, store: callStore });
   singleton = engine;
   if (typeof window !== 'undefined') window.addEventListener('pagehide', engine.pageHidden);

@@ -91,6 +91,9 @@ export const AuthSchemas = {
     systemLanguage: supportedLanguageCode.optional(),
     regionalLanguage: supportedLanguageCode.optional(),
     phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
+    // #8058 — le parrainage voyage avec l'inscription (même valeur que `POST /affiliate/register`).
+    affiliateToken: z.string().min(1).optional(),
+    affiliateSessionKey: z.string().min(1).optional(),
   }),
   // La disjonction d'identité (`displayName`, ou `firstName` + `lastName`) a
   // été RETIRÉE par #6424, en même temps que l'`anyOf` de sa jumelle Ajv : le
