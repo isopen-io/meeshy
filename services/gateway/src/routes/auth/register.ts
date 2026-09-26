@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import {
   userSchema,
   registerRequestSchema,
+  verificationRequiredProperties,
   validationErrorResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types';
@@ -134,7 +135,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created successfully - verification email sent. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
+          description: 'Account created - verification email (code + link) sent. With a phone number the account is active at once and the response carries the session (`token`, `sessionToken`). Without one it is NOT active yet: the response is `{ status: "verification-required", accountCreated: true, email }`, with no token, and POST /auth/verify-email opens the session. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
@@ -156,6 +157,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                 // a déjà payé juste en dessous.
                 sessionToken: { type: 'string', description: 'Session token of the device that created the account — presentable to POST /auth/refresh (absent on a phone-ownership conflict)' },
                 expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
+
+                // Branche « vérification requise » (#8055) — inscription SANS
+                // numéro : le compte existe, mot de passe compris, mais n'est
+                // pas actif ; aucun jeton, aucune session, le code est parti.
+                ...verificationRequiredProperties,
 
                 // Branche « numéro déjà détenu » — aucun compte n'a été créé
                 phoneOwnershipConflict: { type: 'boolean', description: 'True when the phone number belongs to another account; no account was created', example: true },
@@ -356,6 +362,19 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         }
       }
 
+      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+
+      // #8055 — SANS NUMÉRO, LE COMPTE N'EST PAS ENCORE ACTIF (règle porteur
+      // 2026-09-26). Il existe, le mot de passe choisi est enregistré, le code
+      // et le lien sont partis avec l'e-mail de vérification ; seule leur
+      // preuve (`POST /auth/verify-email`) ouvre la session. Même réponse que
+      // la connexion d'une adresse inconnue (#8033). Un numéro — saisi, ou
+      // transféré depuis un autre compte — active le compte tout de suite.
+      const avecNumero = Boolean(user.phoneNumber) || phoneTransferValidated;
+      if (!avecNumero) {
+        return sendSuccess(reply, { status: 'verification-required', accountCreated: true, email: user.email });
+      }
+
       // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
       // désormais une session, comme la connexion.
       //
@@ -374,8 +393,6 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // (fenêtre glissante), sur la même clé que `POST /login`.
       const { token, sessionToken } = await openSession(authService, user, requestContext);
       const permissions = authService.getUserPermissions(user);
-
-      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),

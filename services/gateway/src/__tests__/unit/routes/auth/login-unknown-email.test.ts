@@ -28,7 +28,7 @@ jest.mock('../../../../services/SessionService', () => ({
 }));
 
 import { registerLoginRoutes } from '../../../../routes/auth/login';
-import { PasswordNotSetError } from '../../../../errors/custom-errors';
+import { PasswordNotSetError, ActivationRequiresEmailProofError } from '../../../../errors/custom-errors';
 
 type Outcome =
   | { kind: 'verification-required'; accountCreated: boolean; email: string }
@@ -158,6 +158,49 @@ describe('compte sans mot de passe', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().code).toBe('PASSWORD_NOT_SET');
+    await app.close();
+  });
+});
+
+describe('bon mot de passe, compte NON vérifié et SANS numéro (#8055)', () => {
+  const refus = async () => {
+    throw new ActivationRequiresEmailProofError('lena@example.com');
+  };
+
+  it('rend « vérification requise » (accountCreated false), sans jeton ni session', async () => {
+    const { app } = await construire({
+      authenticate: refus,
+      outcome: { kind: 'verification-required', accountCreated: false, email: 'lena@example.com' },
+    });
+    const res = await connecter(app, 'lena');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      success: true,
+      data: { status: 'verification-required', accountCreated: false, email: 'lena@example.com' },
+    });
+    await app.close();
+  });
+
+  it("renvoie le code à l'adresse DU COMPTE, par la porte du mot de passe prouvé — quel que soit l'identifiant tapé", async () => {
+    const { app, startAccountFromEmail } = await construire({
+      authenticate: refus,
+      outcome: { kind: 'verification-required', accountCreated: false, email: 'lena@example.com' },
+    });
+    await connecter(app, 'lena');
+    const [entree] = startAccountFromEmail.mock.calls[0] as unknown as [Record<string, unknown>];
+
+    expect(entree).toMatchObject({ email: 'lena@example.com', door: 'proven-password' });
+    expect(JSON.stringify(startAccountFromEmail.mock.calls)).not.toContain('mot-de-passe-tape');
+    await app.close();
+  });
+
+  it('sans renvoi possible (compte vérifié entre-temps), reste un 401 — jamais une session', async () => {
+    const { app } = await construire({ authenticate: refus, outcome: { kind: 'existing-account' } });
+    const res = await connecter(app, 'lena');
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().token).toBeUndefined();
     await app.close();
   });
 });

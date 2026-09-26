@@ -20,7 +20,7 @@ import {
   createAuthGlobalRateLimiter,
   createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
-import { PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
+import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -67,6 +67,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
    * un 401. Le mot de passe tapé n'est PAS transmis — un tiers qui taperait
    * votre adresse vous imposerait sinon son mot de passe.
    *
+   * #8055 — porte `proven-password` : consultée APRÈS un mot de passe JUSTE
+   * sur un compte pas encore actif (adresse à prouver, aucun numéro), avec
+   * l'adresse du compte ; le code de vérification est renvoyé, sans session.
+   *
    * Rend `true` quand la réponse est partie ; `false` laisse le refus
    * d'origine (401, ou `PASSWORD_NOT_SET`) décider.
    */
@@ -74,13 +78,14 @@ export function registerLoginRoutes(context: AuthRouteContext) {
     request: FastifyRequest,
     reply: FastifyReply,
     identifier: string,
-    requestContext: RequestContext
+    requestContext: RequestContext,
+    door: 'password-login' | 'proven-password' = 'password-login'
   ): Promise<boolean> {
     const email = identifier.trim();
     if (!emailSchema.safeParse(email).success) return false;
 
     const issue = await authService.startAccountFromEmail(
-      { email, door: 'password-login', requestContext, deviceLocale: localeDeLaRequete(request) },
+      { email, door, requestContext, deviceLocale: localeDeLaRequete(request) },
       { afterResponse }
     );
 
@@ -182,6 +187,15 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         // vérifié, il reçoit son code (#8033) ; sinon le refus garde sa porte.
         if (error instanceof PasswordNotSetError && await replyFromEmailAccount(request, reply, username, requestContext)) {
           return reply;
+        }
+        // #8055 — le BON mot de passe d'un compte pas encore actif (adresse à
+        // prouver, aucun numéro) : aucune session, le code part à l'adresse
+        // DU COMPTE, quel que soit l'identifiant tapé.
+        if (error instanceof ActivationRequiresEmailProofError) {
+          if (await replyFromEmailAccount(request, reply, error.email, requestContext, 'proven-password')) {
+            return reply;
+          }
+          return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
         }
         throw error;
       }
