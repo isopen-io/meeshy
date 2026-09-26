@@ -69,7 +69,7 @@ nonisolated final class ScreenShareFrameServer: @unchecked Sendable {
     private var pool: CVPixelBufferPool?
     private var poolWidth = 0
     private var poolHeight = 0
-    private lazy var context = CIContext(options: [.useSoftwareRenderer: false])
+    private let context = CIContext(options: [.useSoftwareRenderer: false])
 
     func start(path: String) -> Bool {
         queue.sync {
