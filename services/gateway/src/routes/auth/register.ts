@@ -10,11 +10,11 @@ import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import type { RegisterData } from '../../services/AuthService';
 import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
-import { createSession, generateSessionToken } from '../../services/SessionService';
+import { openSession } from './open-session';
 import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
-import { preferredAcceptLanguage } from '../../utils/accept-language';
+import { localeDeLaRequete } from './request-locale';
 import { depreciee } from '../../utils/deprecation';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -38,26 +38,6 @@ const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
  */
 const GEO_AVANT_REPONSE_MS = 400;
 
-/**
- * Le rang 4 du Prisme, tel que la REQUÊTE le porte.
- *
- * Deux sources, dans cet ordre : `X-Device-Locale`, que les clients Meeshy
- * posent explicitement, puis `Accept-Language`, que tout navigateur envoie sans
- * qu'on le lui demande. La seconde est une liste PONDÉRÉE et non ordonnée —
- * d'où `preferredAcceptLanguage` plutôt qu'un `split(',')[0]`, qui rendrait
- * `en` sur `en;q=0.5, fr`.
- *
- * Elle n'écrase JAMAIS une préférence exprimée : `registrationLanguages` ne la
- * consulte que lorsque l'inscription n'exprime AUCUN rang, exactement là où le
- * code écrivait auparavant le littéral `'fr'`.
- */
-function localeDeLaRequete(request: FastifyRequest): string | undefined {
-  const entete = request.headers['x-device-locale'];
-  const declaree = Array.isArray(entete) ? entete[0] : entete;
-  if (typeof declaree === 'string' && declaree.trim() !== '') return declaree.trim();
-
-  return preferredAcceptLanguage(request.headers['accept-language']);
-}
 
 /**
  * REND la tentative comptée par le limiteur — sur un 400, et sur un 409
@@ -392,14 +372,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
       // Le `sessionToken` est renvoyé pour que le client puisse le présenter
       // (fenêtre glissante), sur la même clé que `POST /login`.
-      const sessionToken = generateSessionToken();
-      const session = await createSession({
-        userId: user.id,
-        token: sessionToken,
-        requestContext
-      });
-
-      const token = authService.generateToken(user, session.id);
+      const { token, sessionToken } = await openSession(authService, user, requestContext);
       const permissions = authService.getUserPermissions(user);
 
       completerLaGeolocalisation(context, afterResponse, user.id, requestContext);

@@ -11,7 +11,6 @@
  */
 
 import crypto from 'crypto';
-import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import {
@@ -30,6 +29,9 @@ import {
   type IdentiteDuCompte,
 } from './email/account-identity-block';
 import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
+import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
+import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
+import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -76,6 +78,8 @@ export interface EmailVerificationData {
   verificationLink: string;
   verificationCode?: string;
   expiryHours: number;
+  /** Posé pour une paire de moins d'une heure (#8033) : « expire dans N minutes ». */
+  expiryMinutes?: number;
   language?: string;
   /**
    * L'identité DÉRIVÉE et ses liens d'édition (#6424).
@@ -231,8 +235,11 @@ export class EmailService {
   private defaultLanguage: SupportedLanguage = 'en';
   private brandLogoUrl: string;
   private frontendUrl: string;
+  /** `MEESHY_ENV=staging`, lu UNE fois (#8036) — voir `./email/staging-marker`. */
+  private readonly staging: boolean;
 
   constructor() {
+    this.staging = isStagingEnvironment(process.env.MEESHY_ENV);
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@meeshy.me';
     this.fromName = process.env.EMAIL_FROM_NAME || 'Meeshy';
     this.frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
@@ -321,11 +328,16 @@ export class EmailService {
     return `<img src="${this.frontendUrl}/l/meeshy-emails?${params.toString()}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
   }
 
+  private sender(): EmailSender {
+    return { name: this.fromName, email: this.fromEmail };
+  }
+
   getProviders(): string[] {
     return this.providers.map(p => p.name);
   }
 
-  private async sendEmail(data: EmailData): Promise<EmailResult> {
+  private async sendEmail(input: EmailData): Promise<EmailResult> {
+    const data = markForEnvironment({ ...input }, this.staging);
     if (data.trackingType) {
       const pixel = this.getTrackingPixelHtml(data.trackingType, data.trackingLang);
       data.html = data.html.replace('</body>', `${pixel}\n</body>`);
@@ -345,9 +357,9 @@ export class EmailService {
         logger.info(`[EmailService] 🔄 Trying provider: ${provider.name}`);
         let result: EmailResult;
         switch (provider.name) {
-          case 'brevo': result = await this.sendViaBrevo(provider.apiKey, data); break;
-          case 'sendgrid': result = await this.sendViaSendGrid(provider.apiKey, data); break;
-          case 'mailgun': result = await this.sendViaMailgun(provider.apiKey, data); break;
+          case 'brevo': result = await sendViaBrevo(provider.apiKey, this.sender(), data); break;
+          case 'sendgrid': result = await sendViaSendGrid(provider.apiKey, this.sender(), data); break;
+          case 'mailgun': result = await sendViaMailgun(provider.apiKey, this.sender(), data); break;
           default: continue;
         }
         if (result.success) {
@@ -370,56 +382,6 @@ export class EmailService {
     logger.error('[EmailService] ❌ All providers failed for', to);
     logger.error('[EmailService] ❌ Errors', errors.join(' | '));
     return { success: false, error: `All providers failed: ${errors.join('; ')}` };
-  }
-
-  private async sendViaBrevo(apiKey: string, data: EmailData): Promise<EmailResult> {
-    logger.info(`[EmailService] [Brevo] 📤 Sending to Brevo API...`);
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-      sender: { name: this.fromName, email: this.fromEmail },
-      to: [{ email: data.to }],
-      subject: data.subject,
-      htmlContent: data.html,
-      textContent: data.text
-    }, {
-      headers: { 'accept': 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }
-    });
-    logger.info(`[EmailService] [Brevo] ✅ API Response Status: ${response.status}`);
-    return { success: true, messageId: response.data.messageId };
-  }
-
-  private async sendViaSendGrid(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const response = await axios.post('https://api.sendgrid.com/v3/mail/send', {
-      personalizations: [{ to: [{ email: data.to }] }],
-      from: { email: this.fromEmail, name: this.fromName },
-      subject: data.subject,
-      content: [{ type: 'text/plain', value: data.text }, { type: 'text/html', value: data.html }]
-    }, {
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-    });
-    return { success: true, messageId: response.headers['x-message-id'] || undefined };
-  }
-
-  private async sendViaMailgun(apiKey: string, data: EmailData): Promise<EmailResult> {
-    const domain = process.env.MAILGUN_DOMAIN || '';
-    if (!domain) return { success: false, error: 'MAILGUN_DOMAIN not configured' };
-
-    const response = await axios.post(
-      `https://api.mailgun.net/v3/${domain}/messages`,
-      new URLSearchParams({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: data.to,
-        subject: data.subject,
-        text: data.text,
-        html: data.html
-      }),
-      {
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`api:${apiKey}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
-    return { success: true, messageId: response.data.id };
   }
 
   // ==========================================================================
@@ -465,7 +427,9 @@ export class EmailService {
 
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const expiry = t.verification.expiry.replace('{hours}', data.expiryHours.toString());
+    const expiry = data.expiryMinutes !== undefined
+      ? codeExpiryText(data.language, data.expiryMinutes)
+      : t.verification.expiry.replace('{hours}', data.expiryHours.toString());
 
     const codeBlockHtml = data.verificationCode
       ? `<div style="text-align:center;margin:20px 0"><p style="font-size:14px;color:#666;margin-bottom:8px">${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}:</p><div style="display:inline-block;padding:12px 24px;background:#f4f4f5;border-radius:8px;font-size:32px;font-weight:bold;letter-spacing:8px;font-family:monospace;color:#1e1b4b">${data.verificationCode}</div></div>`
@@ -485,6 +449,16 @@ export class EmailService {
     const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
+  }
+
+  /** Code de CONNEXION + lien, pour un compte déjà vérifié (#8033). */
+  async sendLoginCodeEmail(data: LoginCodeEmailData): Promise<EmailResult> {
+    const { subject, html, text } = composeLoginCodeEmail(data, {
+      styles: this.getBaseStyles(),
+      footerHtml: this.getFooterContentHtml(data.language),
+      footerText: this.getFooterContentText(data.language),
+    });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'login_code', trackingLang: data.language });
   }
 
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {

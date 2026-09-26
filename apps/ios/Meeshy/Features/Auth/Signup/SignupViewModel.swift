@@ -59,6 +59,25 @@ enum SignupField: String, CaseIterable, Hashable {
     case password
 }
 
+// MARK: - L'alerte « sans numéro » (#8040)
+
+/// Faut-il ALERTER avant de créer le compte ? Oui quand aucun numéro n'est
+/// saisi — le numéro sécurise le compte et le récupère quand l'accès à l'adresse
+/// est perdu. Une alerte, jamais un blocage : « Continuer quand même » crée le
+/// compte sans numéro, exactement comme avant. Miroir web : `apps/web`
+/// (`signup.tsx`).
+enum SignupPhoneNudge {
+    static func shouldNudge(before form: SignupForm) -> Bool { !form.hasPhone }
+}
+
+/// Ce qu'une demande d'envoi a produit — l'écran en tire son retour haptique :
+/// une alerte n'est ni un succès ni un échec.
+enum SignupSubmitOutcome: Equatable {
+    case created
+    case rejected
+    case phoneNudged
+}
+
 // MARK: - ViewModel
 
 /// L'orchestration produit de l'inscription : quand envoyer, où poser chaque
@@ -93,6 +112,9 @@ final class SignupViewModel: ObservableObject {
     /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris
     /// (#6479). Vide partout ailleurs.
     @Published private(set) var usernameSuggestions: [String] = []
+    /// L'alerte « sans numéro » est-elle à l'écran (#8040) ? Écrite par
+    /// l'`.alert` elle-même quand l'utilisateur répond.
+    @Published var isPhoneNudgePresented = false
 
     private let registrar: any SignupRegistering
 
@@ -113,6 +135,30 @@ final class SignupViewModel: ObservableObject {
     func error(for field: SignupField) -> String? { fieldErrors[field] }
 
     // MARK: - Envoi
+
+    /// Le geste « Créer mon compte » : alerte d'abord si aucun numéro n'est
+    /// saisi (#8040), sinon crée le compte.
+    func requestSubmit() async -> SignupSubmitOutcome {
+        guard canSubmit else { return .rejected }
+        if SignupPhoneNudge.shouldNudge(before: form) {
+            isPhoneNudgePresented = true
+            return .phoneNudged
+        }
+        return await submit() ? .created : .rejected
+    }
+
+    /// « Ajouter mon numéro » : ferme l'alerte, n'envoie rien, et rend le
+    /// champ à focaliser.
+    func addPhoneInstead() -> SignupField {
+        isPhoneNudgePresented = false
+        return .phoneNumber
+    }
+
+    /// « Continuer quand même » : le compte naît sans numéro.
+    func continueWithoutPhone() async -> Bool {
+        isPhoneNudgePresented = false
+        return await submit()
+    }
 
     /// Crée le compte. `true` quand la session est appliquée — l'appelant
     /// enchaîne IMMÉDIATEMENT, sans pause d'aucune sorte.

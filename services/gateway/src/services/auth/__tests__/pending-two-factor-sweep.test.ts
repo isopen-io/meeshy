@@ -51,8 +51,12 @@ describe('site unique du défi d\'étape 2 (#4542)', () => {
       ).toBeGreaterThanOrEqual(4);
     });
 
-    it('les DEUX producteurs connus passent par le site unique', () => {
+    // #8033 — un TROISIÈME producteur : `POST /auth/verify-email`, dont la
+    // preuve ouvre désormais une session, rend le défi d'étape 2 à un compte
+    // protégé. Il passe par le site unique, comme les deux autres.
+    it('les TROIS producteurs connus passent par le site unique', () => {
       expect(wiredProducers(SRC_DIR).sort()).toEqual([
+        'routes/auth/magic-link.ts',
         'services/AuthService.ts',
         'services/MagicLinkService.ts'
       ]);

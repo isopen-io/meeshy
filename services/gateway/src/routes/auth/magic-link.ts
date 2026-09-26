@@ -13,7 +13,7 @@ import {
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware/auth';
 import { logWarn } from '../../utils/logger';
-import { AuthRouteContext, formatUserResponse } from './types';
+import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
@@ -26,6 +26,12 @@ import {
 import { depreciee, dateDeRetrait } from '../../utils/deprecation';
 import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { verifyEmailResponseSchema } from '@meeshy/shared/types';
+import { getRequestContext } from '../../services/GeoIPService';
+import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-factor';
+import { validatePasswordStrength } from '../../utils/password-strength';
+import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
+import { openSession } from './open-session';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -62,6 +68,8 @@ const ALIAS_LECTURE_DE_SOI = {
  */
 export function registerMagicLinkRoutes(context: AuthRouteContext) {
   const { fastify, authService } = context;
+  const verifyEmailIpLimiter = createVerifyEmailIpRateLimiter(context.redis);
+  const verifyEmailAddressLimiter = createVerifyEmailAddressRateLimiter(context.redis);
 
   // GET /me — ALIAS de GET /api/v1/me (#4178). Le calcul est PARTAGÉ
   // (`handleGetMe`, `routes/me/get-me.ts`) : aucune réponse propre à cette
@@ -306,65 +314,109 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /verify-email - Verify email with token
+  /**
+   * POST /verify-email — LA PREUVE DE POSSESSION OUVRE LA SESSION (#8033).
+   *
+   * Directive porteur 2026-09-26 : un compte créé à la connexion n'a ni mot de
+   * passe ni session ; la porte « e-mail seul » envoie code + lien à tout
+   * compte. Présenter l'un ou l'autre ici prouve la possession de l'adresse —
+   * la même preuve que le lien magique — et ouvre donc la session, sous la
+   * forme de `POST /login`.
+   *
+   * Gardes, dans l'ordre : débit (IP puis adresse — le code n'a que six
+   * chiffres) ; robustesse du mot de passe optionnel AVANT de consommer le
+   * code ; preuve (`AuthService.verifyEmail`, usage unique) ; second facteur
+   * (le défi, jamais la session) ; compte encore actif.
+   */
   fastify.post('/verify-email', {
     schema: {
-      description: 'Verify user email address with a token sent via email',
+      description: 'Verify an email address with the 6-digit code or the link token, and OPEN THE SESSION (#8033) — same shape as POST /login. A second-factor account receives `requires2FA` + `twoFactorToken` instead. Optional `password` (with `code` only) is applied when the account has none yet. Rate limited.',
       tags: ['auth'],
-      summary: 'Verify email',
+      summary: 'Verify email and sign in',
       body: verifyEmailRequestSchema,
       response: {
-        200: {
-          description: 'Email verified successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string' },
-                alreadyVerified: { type: 'boolean' },
-                verifiedAt: { type: 'string', format: 'date-time' }
-              }
-            }
-          }
-        },
+        200: verifyEmailResponseSchema,
         400: errorResponseSchema,
+        429: {
+          description: 'Too many verification attempts',
+          ...errorResponseSchema,
+          properties: { ...errorResponseSchema.properties, retryAfter: { type: 'number' } }
+        },
         500: errorResponseSchema
       },
       security: []
-    }
+    },
+    preHandler: [verifyEmailIpLimiter.middleware(), verifyEmailAddressLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const validatedData = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
-      const { token, code, email } = validatedData;
+      const { token, code, email, password } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
 
-      logger.info(`[AUTH] Tentative de vérification email pour email=${email} (method=${code ? 'code' : 'token'})`);
-
-      const result = code
-        ? await authService.verifyEmail(code, email, true)
-        : await authService.verifyEmail(token!, email, false);
-
-      if (!result.success) {
-        logger.warn(`[AUTH] ❌ Échec de vérification email result.error=${result.error}`);
-        return sendBadRequest(reply, result.error as string);
+      if (password !== undefined) {
+        const strength = validatePasswordStrength(password);
+        if (!strength.isValid) {
+          return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`, { code: 'WEAK_PASSWORD' });
+        }
       }
 
-      if (result.alreadyVerified && result.verifiedAt) {
-        logger.info(`[AUTH] ℹ️ Email déjà vérifié pour email=${email} le result.verifiedAt.toISOString()=${result.verifiedAt.toISOString()}`);
+      logger.info(`[AUTH] Vérification email (method=${code ? 'code' : 'token'})`);
+
+      const result = await authService.verifyEmail({ email, code, token, password });
+
+      if (result.success === false) {
+        logger.warn(`[AUTH] ❌ Échec de vérification email: ${result.reason}`);
+        if (result.reason === 'error') return sendInternalError(reply, result.error);
+        return sendBadRequest(reply, result.error, { code: result.reason === 'expired' ? 'VERIFICATION_EXPIRED' : 'INVALID_VERIFICATION' });
+      }
+
+      const verification = {
+        verified: true,
+        alreadyVerified: result.alreadyVerified,
+        verifiedAt: result.verifiedAt.toISOString(),
+        passwordSet: result.passwordSet
+      };
+
+      if (result.secondFactor === 'indeterminate') {
+        logger.error('[AUTH] État du second facteur indéterminé — session refusée');
+        return sendInternalError(reply, 'Erreur lors de la vérification');
+      }
+
+      const user = await authService.getUserById(result.userId);
+      if (!user) {
+        return sendBadRequest(reply, 'Code de vérification invalide.', { code: 'INVALID_VERIFICATION' });
+      }
+
+      if (result.secondFactor === 'required') {
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: fastify.prisma, userId: user.id });
         return sendSuccess(reply, {
-          message: 'Votre adresse email est déjà vérifiée.',
-          alreadyVerified: true,
-          verifiedAt: result.verifiedAt.toISOString()
+          ...verification,
+          requires2FA: true,
+          twoFactorToken,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            avatar: user.avatar
+          },
+          message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
         });
       }
 
-      logger.info(`[AUTH] ✅ Email vérifié avec succès pour email=${email}`);
+      const requestContext = await getRequestContext(request);
+      const opened = await openSession(authService, user, requestContext);
+
+      logger.info('[AUTH] ✅ Adresse prouvée — session ouverte');
 
       return sendSuccess(reply, {
-        message: 'Votre adresse email a été vérifiée avec succès !',
-        alreadyVerified: false,
-        verifiedAt: result.verifiedAt?.toISOString()
+        ...verification,
+        message: result.alreadyVerified ? 'Connexion réussie.' : 'Votre adresse email a été vérifiée avec succès !',
+        user: formatUserResponse(user, authService.getUserPermissions(user)),
+        token: opened.token,
+        sessionToken: opened.sessionToken,
+        session: formatSessionResponse(opened.session, false),
+        expiresIn: 24 * 60 * 60
       });
 
     } catch (error) {
