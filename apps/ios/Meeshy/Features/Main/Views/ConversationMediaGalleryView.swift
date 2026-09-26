@@ -906,7 +906,7 @@ struct ConversationMediaGalleryView: View {
         // plus qu'un endroit où la protection pourrait être oubliée.
         if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
                                                   attachment: att,
-                                                  hasHandler: reactsTo(att)) {
+                                                  hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true)) {
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

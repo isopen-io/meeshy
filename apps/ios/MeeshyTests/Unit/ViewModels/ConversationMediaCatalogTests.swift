@@ -272,6 +272,32 @@ final class ConversationMediaCatalogTests: XCTestCase {
     }
 }
 
+// MARK: - La page regardée survit à l'extension
+
+@MainActor
+final class GalleryPagePinningTests: XCTestCase {
+
+    func test_pageToRestore_olderPiecesInsertedAtTheHead_keepsTheSamePieceAtItsNewPosition() {
+        let before = ["att-5", "att-6", "att-7"]
+        let after = ["att-1", "att-2", "att-3", "att-4"] + before
+
+        XCTAssertEqual(GalleryPagePinning.pageToRestore(pinned: "att-6", among: after), "att-6")
+        XCTAssertEqual(GalleryPagePinning.position(of: "att-6", among: before), 1)
+        XCTAssertEqual(GalleryPagePinning.position(of: "att-6", among: after), 5)
+    }
+
+    func test_pageToRestore_pieceNoLongerInTheSource_restoresNothing() {
+        XCTAssertNil(GalleryPagePinning.pageToRestore(pinned: "att-9", among: ["att-1", "att-2"]))
+    }
+
+    func test_signature_growthAtTheHead_changesTheSignature() {
+        let before = [MeeshyMessageAttachment(id: "att-5"), MeeshyMessageAttachment(id: "att-6")]
+        let after = [MeeshyMessageAttachment(id: "att-1")] + before
+
+        XCTAssertNotEqual(GallerySourceSignature(before), GallerySourceSignature(after))
+    }
+}
+
 // MARK: - Index en mémoire
 
 actor InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {

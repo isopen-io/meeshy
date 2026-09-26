@@ -178,7 +178,7 @@ extension ConversationMediaGalleryView {
     private func attachmentReactionBar(_ att: MessageAttachment) -> some View {
         if AttachmentReactionOffer.showsPicker(surface: .fullscreen,
                                                attachment: att,
-                                               hasHandler: reactsTo(att),
+                                               hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true),
                                                isOpen: reactionBarOpen) {
             EmojiReactionPicker(
                 quickEmojis: MeeshyQuickReactions.standard,

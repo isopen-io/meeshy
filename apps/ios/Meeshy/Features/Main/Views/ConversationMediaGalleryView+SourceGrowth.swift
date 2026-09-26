@@ -56,10 +56,4 @@ extension ConversationMediaGalleryView {
             if currentPageID != pinned { currentPageID = pinned }
         }
     }
-
-    /// « Réagir » a-t-il un EFFET sur cette pièce ? Il faut un relais ET une
-    /// pièce que l'hôte sait refléter (`reactableMedia`, #8095).
-    func reactsTo(_ attachment: MessageAttachment) -> Bool {
-        onReactToMedia != nil && (reactableMedia?(attachment) ?? true)
-    }
 }
