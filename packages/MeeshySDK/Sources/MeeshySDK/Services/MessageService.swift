@@ -9,8 +9,10 @@ public protocol MessageServiceProviding: Sendable {
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
     /// #8095 — la vue `media` de la collection : les seuls messages portant au
     /// moins une image ou une vidéo non vue-unique, du plus récent au plus
-    /// ancien. `before == nil` ⇒ la page la plus récente.
-    func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse
+    /// ancien. `before == nil` ⇒ la page la plus récente. #8103 — `kinds`
+    /// choisit les genres de l'index (union), `query` y cherche (contenu, nom
+    /// de fichier d'origine).
+    func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
@@ -19,6 +21,16 @@ public protocol MessageServiceProviding: Sendable {
     func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse
     func search(conversationId: String, query: String, limit: Int) async throws -> MessagesAPIResponse
     func searchWithCursor(conversationId: String, query: String, cursor: String) async throws -> MessagesAPIResponse
+}
+
+public extension MessageServiceProviding {
+    /// L'appel de #8100 — l'index VISUEL, sans recherche.
+    func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
+        try await listMedia(
+            conversationId: conversationId, kinds: [.visual], query: nil,
+            before: before, limit: limit, languages: languages
+        )
+    }
 }
 
 public final class MessageService: MessageServiceProviding, @unchecked Sendable {
@@ -118,19 +130,47 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     ///
     /// Un serveur antérieur à la vue répond 400 `INVALID_VIEW` : l'erreur
     /// remonte telle quelle, la dégradation est l'affaire de l'appelant.
-    public func listMedia(conversationId: String, before: String?, limit: Int = 50, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+    public func listMedia(
+        conversationId: String, kinds: [ConversationMediaKind] = [.visual], query: String? = nil,
+        before: String?, limit: Int = 50, languages: [String]? = nil
+    ) async throws -> MessagesAPIResponse {
         var items: [URLQueryItem] = [
             URLQueryItem(name: "view", value: "media"),
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "include_replies", value: "false"),
             URLQueryItem(name: "include_translations", value: "true"),
         ]
+        if let kindsItem = Self.mediaKindsQueryItem(kinds) { items.append(kindsItem) }
+        if let queryItem = Self.mediaSearchQueryItem(query) { items.append(queryItem) }
         if let before { items.append(URLQueryItem(name: "before", value: before)) }
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
             ConversationsEndpoint.byIdMessages(id: conversationId),
             queryItems: items
         )
+    }
+
+    /// La longueur minimale d'une recherche que la passerelle accepte
+    /// (`LONGUEUR_MINIMALE_RECHERCHE`) — en deçà, elle répond 400.
+    public static let minimumMediaSearchLength = 2
+
+    /// `kinds=` n'est envoyé que s'il diffère du défaut serveur : l'appel de
+    /// #8100 (visuel seul) reste celui qu'une passerelle antérieure à #8098
+    /// comprend.
+    static func mediaKindsQueryItem(_ kinds: [ConversationMediaKind]) -> URLQueryItem? {
+        let unique = kinds.reduce(into: [ConversationMediaKind]()) { acc, kind in
+            if !acc.contains(kind) { acc.append(kind) }
+        }
+        guard !unique.isEmpty, unique != [ConversationMediaKind.serverDefault] else { return nil }
+        return URLQueryItem(name: "kinds", value: unique.map(\.rawValue).joined(separator: ","))
+    }
+
+    /// `q=` est rogné ; trop court, il n'est pas envoyé — le genre entier se
+    /// sert plutôt qu'un refus 400.
+    static func mediaSearchQueryItem(_ query: String?) -> URLQueryItem? {
+        guard let trimmed = query?.trimmingCharacters(in: .whitespacesAndNewlines),
+              trimmed.count >= minimumMediaSearchLength else { return nil }
+        return URLQueryItem(name: "q", value: trimmed)
     }
 
     public func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
