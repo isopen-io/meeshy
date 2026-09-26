@@ -13,6 +13,7 @@ import Foundation
 
 public enum LinksEndpoint: MeeshyEndpoint, Sendable {
     case byIdentifier(identifier: String)
+    case byIdentifierCard(identifier: String)
     case byIdentifierMessages(identifier: String)
     case byKeyMembers(key: String)
     case byLinkId(linkId: String)
@@ -27,6 +28,7 @@ public enum LinksEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .byIdentifier(let identifier): return "/api/v1/links/\(identifier)"
+        case .byIdentifierCard(let identifier): return "/api/v1/links/\(identifier)/card"
         case .byIdentifierMessages(let identifier): return "/api/v1/links/\(identifier)/messages"
         case .byKeyMembers(let key): return "/api/v1/links/\(key)/members"
         case .byLinkId(let linkId): return "/api/v1/links/\(linkId)"
