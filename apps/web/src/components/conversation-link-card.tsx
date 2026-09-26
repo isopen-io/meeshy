@@ -343,11 +343,11 @@ function GroupBody({
 }) {
   const banner: CSSProperties = {
     height: BANNER_HEIGHT,
-    backgroundColor: accent,
+    backgroundColor: card.bannerUrl !== null ? accent : 'var(--color-ios-card)',
     backgroundImage:
       card.bannerUrl !== null
         ? `url("${encodeURI(card.bannerUrl)}")`
-        : `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, transparent))`,
+        : `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 55%, var(--color-ios-card)))`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   };
@@ -439,7 +439,7 @@ const secondaryStyle = (ink: string): CSSProperties => ({
   outlineColor: 'var(--color-ios-brand)',
 });
 
-const BUTTON = 'grid flex-1 place-items-center rounded-chip px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60';
+const BUTTON = 'grid flex-1 place-items-center rounded-chip px-3 text-center text-body leading-tight font-bold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60';
 
 function Row({ children }: { readonly children: ReactNode }) {
   return <div className="flex gap-2">{children}</div>;
