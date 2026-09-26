@@ -138,6 +138,13 @@ public struct RegisterRequest: Encodable, Sendable {
     public let username: String?
     public let firstName: String?
     public let lastName: String?
+    /// Le code du lien d'invitation (#8058, #8075). La passerelle rattache le
+    /// compte créé à son parrain, activé ou non, et un code invalide ne bloque
+    /// jamais l'inscription. `nil` ⇒ absent de la charge.
+    public let affiliateToken: String?
+    /// La clé de visite de `/affiliate/track-visit`, quand le client en tient
+    /// une. Ne voyage qu'avec `affiliateToken`.
+    public let affiliateSessionKey: String?
 
     public init(
         displayName: String? = nil,
@@ -149,8 +156,12 @@ public struct RegisterRequest: Encodable, Sendable {
         regionalLanguage: String? = nil,
         username: String? = nil,
         firstName: String? = nil,
-        lastName: String? = nil
+        lastName: String? = nil,
+        affiliateToken: String? = nil,
+        affiliateSessionKey: String? = nil
     ) {
+        self.affiliateToken = affiliateToken
+        self.affiliateSessionKey = affiliateToken == nil ? nil : affiliateSessionKey
         self.displayName = displayName
         self.email = email
         self.password = password
@@ -161,6 +172,22 @@ public struct RegisterRequest: Encodable, Sendable {
         self.username = username
         self.firstName = firstName
         self.lastName = lastName
+    }
+
+    /// La même charge, portant le code d'invitation s'il a la forme d'un code
+    /// (`ReferralCode.normalized`). Sans code, la charge part sans aucune des
+    /// deux clés : une clé de session seule n'a rien à rattacher.
+    public func referred(byCode code: String?, sessionKey: String? = nil) -> RegisterRequest {
+        let token = code.flatMap(ReferralCode.normalized)
+        let key = sessionKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return RegisterRequest(
+            displayName: displayName, email: email, password: password,
+            phoneNumber: phoneNumber, phoneCountryCode: phoneCountryCode,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            username: username, firstName: firstName, lastName: lastName,
+            affiliateToken: token,
+            affiliateSessionKey: (key?.isEmpty ?? true) ? nil : key
+        )
     }
 }
 
