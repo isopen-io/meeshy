@@ -155,11 +155,11 @@ public enum VCardParser {
                 card.name = name.composed.isEmpty ? nil : name
             case "TEL":
                 let value = property.text.replacingOccurrences(of: "tel:", with: "", options: [.caseInsensitive, .anchored])
-                guard let value = nonEmpty(value) else { return }
+                guard let value = nonEmpty(value), !card.phones.contains(where: { $0.value == value }) else { return }
                 card.phones.append(VCardEntry(value: value, types: property.types, label: label(property)))
             case "EMAIL":
                 let value = property.text.replacingOccurrences(of: "mailto:", with: "", options: [.caseInsensitive, .anchored])
-                guard let value = nonEmpty(value) else { return }
+                guard let value = nonEmpty(value), !card.emails.contains(where: { $0.value.caseInsensitiveCompare(value) == .orderedSame }) else { return }
                 card.emails.append(VCardEntry(value: value, types: property.types, label: label(property)))
             case "ADR":
                 let parts = property.components + Array(repeating: "", count: 7)
@@ -187,13 +187,12 @@ public enum VCardParser {
         }
     }
 
-    /// `_$!<Mobile>!$_` (libellés système d'Apple) → `Mobile`.
+    /// `_$!<Mobile>!$_` (libellé SYSTÈME d'Apple) → la clé normalisée
+    /// `mobile` ; un libellé libre de l'auteur (« Perso ») reste tel quel.
     private static func appleLabel(_ raw: String) -> String? {
-        var label = raw
-        if label.hasPrefix("_$!<"), label.hasSuffix(">!$_") {
-            label = String(label.dropFirst(4).dropLast(4))
-        }
-        return nonEmpty(label)
+        guard raw.hasPrefix("_$!<"), raw.hasSuffix(">!$_") else { return nonEmpty(raw) }
+        let system = String(raw.dropFirst(4).dropLast(4))
+        return VCardEntry.knownLabel(forAppleSystemLabel: system) ?? nonEmpty(system)
     }
 
     private static func nonEmpty(_ value: String) -> String? {

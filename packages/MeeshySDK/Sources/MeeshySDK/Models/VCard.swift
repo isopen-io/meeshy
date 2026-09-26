@@ -123,6 +123,36 @@ public struct VCardEntry: Equatable, Hashable, Sendable {
     }
 
     public var isPreferred: Bool { types.contains("pref") }
+
+    /// Les clés de libellé que le client LOCALISE — mêmes clés que
+    /// `VCARD_KNOWN_LABELS` (`packages/shared/types/contact-card.ts`).
+    public static let knownLabels: [String] = ["mobile", "home", "work", "main", "iphone", "fax", "pager", "other"]
+
+    /// Le libellé à montrer : le libellé de l'auteur s'il existe (clé connue
+    /// ou texte libre), sinon la clé déduite des types (`cell` → `mobile`).
+    /// `nil` quand rien ne qualifie la valeur.
+    public var labelKey: String? {
+        if let label { return label }
+        let priority: [(String, String)] = [
+            ("fax", "fax"), ("pager", "pager"), ("iphone", "iphone"), ("cell", "mobile"),
+            ("main", "main"), ("home", "home"), ("work", "work"), ("other", "other"),
+        ]
+        return priority.first { types.contains($0.0) }?.1
+    }
+
+    static func knownLabel(forAppleSystemLabel system: String) -> String? {
+        switch system.lowercased() {
+        case "mobile": return "mobile"
+        case "home": return "home"
+        case "work": return "work"
+        case "main": return "main"
+        case "iphone": return "iphone"
+        case "homefax", "workfax", "otherfax": return "fax"
+        case "pager": return "pager"
+        case "other": return "other"
+        default: return nil
+        }
+    }
 }
 
 /// `ADR` — les sept composants du format (boîte postale ; complément ; rue ;

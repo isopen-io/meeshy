@@ -37,13 +37,38 @@ final class VCardParserTests: XCTestCase {
         XCTAssertEqual(parsed.title, "Designer")
         XCTAssertEqual(parsed.phones.map(\.value), ["+33 6 12 34 56 78", "01 23 45 67 89"])
         XCTAssertEqual(parsed.phones[0].types, ["cell", "voice", "pref"])
-        XCTAssertEqual(parsed.emails, [VCardEntry(value: "jean@example.com", types: ["internet", "home"], label: "Home")])
+        XCTAssertEqual(parsed.emails, [VCardEntry(value: "jean@example.com", types: ["internet", "home"], label: "home")])
         XCTAssertEqual(parsed.addresses.first?.street, "12 rue de la Paix")
         XCTAssertEqual(parsed.addresses.first?.formatted, "12 rue de la Paix\nBât. B\n75002 Paris\nIDF\nFrance")
         XCTAssertEqual(parsed.urls.map(\.value), ["https://meeshy.me"])
         XCTAssertEqual(parsed.birthday, "1990-05-12")
         XCTAssertEqual(parsed.birthdayComponents, DateComponents(year: 1990, month: 5, day: 12))
         XCTAssertEqual(parsed.note, "Rencontré au salon, stand 4\nRappeler lundi")
+    }
+
+    func test_parse_labels_matchTheSharedContractKeys() throws {
+        let parsed = try XCTUnwrap(card([
+            "BEGIN:VCARD", "VERSION:3.0", "FN:Awa Diallo",
+            "item1.TEL;type=CELL;type=VOICE;type=pref:+33 6 12 34 56 78",
+            "item1.X-ABLabel:_$!<Mobile>!$_",
+            "TEL;type=HOME;type=VOICE:01 23 45 67 89",
+            "item2.EMAIL;type=INTERNET;type=pref:awa@example.com",
+            "item2.X-ABLabel:Perso",
+            "EMAIL;type=INTERNET;type=WORK:awa.diallo@meeshy.me",
+            "TEL;TYPE=FAX,WORK:0100",
+            "END:VCARD",
+        ]))
+        XCTAssertEqual(parsed.phones.map(\.labelKey), ["mobile", "home", "fax"])
+        XCTAssertEqual(parsed.emails.map(\.labelKey), ["Perso", "work"])
+    }
+
+    func test_parse_duplicateOrEmptyValues_areDropped() throws {
+        let parsed = try XCTUnwrap(card([
+            "BEGIN:VCARD", "FN:A", "TEL:", "TEL:+33600000000", "TEL;TYPE=CELL:+33600000000",
+            "EMAIL:a@b.c", "EMAIL:A@B.C", "END:VCARD",
+        ], separator: "\n"))
+        XCTAssertEqual(parsed.phones, [VCardEntry(value: "+33600000000")])
+        XCTAssertEqual(parsed.emails.count, 1)
     }
 
     func test_parse_preferredPhone_isPrimaryEvenWhenNotFirst() throws {

@@ -122,6 +122,9 @@ public enum MimeTypeResolver {
         "txt":      "text/plain",
         "log":      "text/plain",
         "csv":      "text/csv",
+        // Carte de visite (#8101)
+        "vcf":      "text/vcard",
+        "vcard":    "text/vcard",
         "html":     "text/html",
         "htm":      "text/html",
         "css":      "text/css",
@@ -182,6 +185,7 @@ public enum MimeTypeResolver {
         "application/x-iwork-keynote-sffkey":     "keynote",
         "text/plain":      "txt",
         "text/csv":        "csv",
+        "text/vcard":      "vcf",
         "text/html":       "html",
         "text/css":        "css",
         "text/markdown":   "md",

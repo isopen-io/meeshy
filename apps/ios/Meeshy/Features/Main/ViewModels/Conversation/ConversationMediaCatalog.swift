@@ -87,6 +87,9 @@ protocol ConversationMediaCatalogProviding: AnyObject {
 
 @MainActor
 final class ConversationMediaCatalog: ObservableObject, ConversationMediaCatalogProviding {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     @Published private(set) var snapshot: ConversationMediaSnapshot = .empty
 
