@@ -174,25 +174,10 @@ struct ContactAccountActionRow: View {
                             HapticFeedback.success()
                         }
                     }
-                case .accept(let requestId):
-                    actionButton(String(localized: "contact-card.action.accept", defaultValue: "Accepter", bundle: .main), icon: "person.crop.circle.badge.checkmark", filled: true, disabled: isBusy) {
-                        Task {
-                            guard await model.accept(account, requestId: requestId) else {
-                                HapticFeedback.error()
-                                FeedbackToastManager.shared.showError(String(localized: "contact-card.toast.accept-failed", defaultValue: "Impossible d'accepter la demande", bundle: .main))
-                                return
-                            }
-                            HapticFeedback.success()
-                        }
-                    }
                 case .pending:
-                    Label(String(localized: "contact-card.state.request-sent", defaultValue: "Demande envoyée", bundle: .main), systemImage: "clock")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .accessibilityElement(children: .combine)
+                    stateLabel(String(localized: "contact-card.state.request-sent", defaultValue: "Demande envoyée", bundle: .main), icon: "clock")
+                case .received:
+                    stateLabel(String(localized: "contact-card.state.request-received", defaultValue: "Vous a envoyé une demande", bundle: .main), icon: "person.crop.circle.badge.questionmark")
                 case nil:
                     EmptyView()
                 }
@@ -212,6 +197,16 @@ struct ContactAccountActionRow: View {
                 }
             }
         }
+    }
+
+    private func stateLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(.secondary)
+            .lineLimit(2)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .accessibilityElement(children: .combine)
     }
 
     private func actionButton(_ title: String, icon: String, filled: Bool, disabled: Bool, action: @escaping () -> Void) -> some View {

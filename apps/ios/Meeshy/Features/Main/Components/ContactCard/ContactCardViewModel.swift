@@ -72,9 +72,7 @@ final class VCardAttachmentLoader: VCardAttachmentLoading, @unchecked Sendable {
 /// existantes, rassemblées derrière un protocole testable.
 @MainActor
 protocol ContactCardActionPerforming {
-    func pendingReceivedRequestId(from userId: String) -> String?
     func sendFriendRequest(to userId: String) async -> Bool
-    func acceptFriendRequest(requestId: String, from userId: String) async -> Bool
     func openDirectConversation(with userId: String) async -> Conversation?
 }
 
@@ -84,24 +82,16 @@ final class ContactCardActionPerformer: ContactCardActionPerforming {
 
     private let friendshipCache: FriendshipCache
     private let offlineQueue: OfflineQueueing
-    private let friendService: FriendServiceProviding
     private let conversationCreator: ConversationCreating
 
     init(
         friendshipCache: FriendshipCache = .shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
-        friendService: FriendServiceProviding = FriendService.shared,
         conversationCreator: ConversationCreating = ConversationCreator()
     ) {
         self.friendshipCache = friendshipCache
         self.offlineQueue = offlineQueue
-        self.friendService = friendService
         self.conversationCreator = conversationCreator
-    }
-
-    func pendingReceivedRequestId(from userId: String) -> String? {
-        guard case .pendingReceived(let requestId) = friendshipCache.status(for: userId) else { return nil }
-        return requestId
     }
 
     func sendFriendRequest(to userId: String) async -> Bool {
@@ -113,18 +103,6 @@ final class ContactCardActionPerformer: ContactCardActionPerforming {
             return true
         } catch {
             friendshipCache.didCancelRequest(to: userId)
-            return false
-        }
-    }
-
-    func acceptFriendRequest(requestId: String, from userId: String) async -> Bool {
-        friendshipCache.didAcceptRequest(from: userId)
-        do {
-            _ = try await friendService.respond(requestId: requestId, accepted: true)
-            await friendshipCache.invalidatePersistedFriendCaches()
-            return true
-        } catch {
-            friendshipCache.rollbackAccept(senderId: userId, requestId: requestId)
             return false
         }
     }
@@ -160,7 +138,7 @@ final class ContactCardViewModel: ObservableObject {
         loader: VCardAttachmentLoading = VCardAttachmentLoader.shared,
         resolver: ContactResolveServiceProviding = ContactResolveService.shared,
         performer: ContactCardActionPerforming? = nil,
-        defaultCountry: String? = Locale.current.region?.identifier
+        defaultCountry: String? = ContactSyncService.deviceRegionCode()
     ) {
         self.attachment = attachment
         self.loader = loader
@@ -192,10 +170,7 @@ final class ContactCardViewModel: ObservableObject {
     }
 
     func actions(for account: PublicContactAccount) -> ContactAccountActions {
-        ContactAccountActions.resolve(
-            relation: account.relation,
-            pendingReceivedRequestId: account.relation == .requestReceived ? performer.pendingReceivedRequestId(from: account.userId) : nil
-        )
+        ContactAccountActions.resolve(relation: account.relation)
     }
 
     /// Se connecter : l'état « Demande envoyée » est posé AVANT le réseau,
@@ -208,20 +183,6 @@ final class ContactCardViewModel: ObservableObject {
         defer { busyUserIds.remove(account.userId) }
         setRelation(.requestSent, for: account.userId)
         guard await performer.sendFriendRequest(to: account.userId) else {
-            setRelation(previous, for: account.userId)
-            return false
-        }
-        return true
-    }
-
-    @discardableResult
-    func accept(_ account: PublicContactAccount, requestId: String) async -> Bool {
-        guard !busyUserIds.contains(account.userId) else { return false }
-        let previous = account.relation
-        busyUserIds.insert(account.userId)
-        defer { busyUserIds.remove(account.userId) }
-        setRelation(.friend, for: account.userId)
-        guard await performer.acceptFriendRequest(requestId: requestId, from: account.userId) else {
             setRelation(previous, for: account.userId)
             return false
         }

@@ -39,27 +39,16 @@ final class MockContactResolveService: ContactResolveServiceProviding, @unchecke
 
 @MainActor
 final class MockContactCardActionPerformer: ContactCardActionPerforming {
-    var pendingRequestId: String?
     var sendResult: Result<Void, Error> = .success(())
-    var acceptResult: Result<Void, Error> = .success(())
     var openResult: Conversation?
     private(set) var sendCallCount = 0
-    private(set) var acceptCallCount = 0
     private(set) var openCallCount = 0
     var onSend: (() -> Void)?
-
-    func pendingReceivedRequestId(from userId: String) -> String? { pendingRequestId }
 
     func sendFriendRequest(to userId: String) async -> Bool {
         sendCallCount += 1
         onSend?()
         if case .success = sendResult { return true }
-        return false
-    }
-
-    func acceptFriendRequest(requestId: String, from userId: String) async -> Bool {
-        acceptCallCount += 1
-        if case .success = acceptResult { return true }
         return false
     }
 
@@ -146,10 +135,9 @@ final class ContactCardViewModelTests: XCTestCase {
 
     // MARK: - Actions
 
-    func test_actions_forwardKnownPendingRequestForReceivedRelation() {
-        let (sut, _, _, performer) = makeSUT()
-        performer.pendingRequestId = "r1"
-        XCTAssertEqual(sut.actions(for: makeAccount(relation: .requestReceived)).connect, .accept(requestId: "r1"))
+    func test_actions_requestReceived_isAStateNotAnAcceptButton() {
+        let (sut, _, _, _) = makeSUT()
+        XCTAssertEqual(sut.actions(for: makeAccount(relation: .requestReceived)).connect, .received)
     }
 
     func test_connect_success_marksRequestSentBeforeTheNetworkAnswers() async {
@@ -175,21 +163,6 @@ final class ContactCardViewModelTests: XCTestCase {
         XCTAssertFalse(ok)
         XCTAssertEqual(sut.primaryAccount?.relation, ContactRelation.none)
         XCTAssertEqual(resolver.relationUpdates.last?.1, ContactRelation.none)
-    }
-
-    func test_accept_success_makesThemFriends() async {
-        let (sut, _, _, performer) = makeSUT(cachedCard: makeCard(), cachedAccounts: [makeAccount(relation: .requestReceived)])
-        let ok = await sut.accept(makeAccount(relation: .requestReceived), requestId: "r1")
-        XCTAssertTrue(ok)
-        XCTAssertEqual(performer.acceptCallCount, 1)
-        XCTAssertEqual(sut.primaryAccount?.relation, .friend)
-    }
-
-    func test_accept_failure_restoresReceivedRequest() async {
-        let (sut, _, _, performer) = makeSUT(cachedCard: makeCard(), cachedAccounts: [makeAccount(relation: .requestReceived)])
-        performer.acceptResult = .failure(Failure())
-        _ = await sut.accept(makeAccount(relation: .requestReceived), requestId: "r1")
-        XCTAssertEqual(sut.primaryAccount?.relation, .requestReceived)
     }
 
     func test_openConversation_delegatesToTheExistingDirectConversationFlow() async {

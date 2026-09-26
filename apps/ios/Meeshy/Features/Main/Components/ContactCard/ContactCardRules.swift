@@ -36,14 +36,15 @@ extension MessageAttachment {
 /// - `self` : aucune action — c'est la carte du lecteur lui-même.
 /// - `friend` : **Écrire** seul.
 /// - `request-sent` : « Demande envoyée » (un ÉTAT, pas un bouton) + **Écrire**.
-/// - `request-received` : **Accepter** + **Écrire** — quand la demande reçue
-///   est connue localement ; sinon **Se connecter**, que le serveur traite.
+/// - `request-received` : « Vous a envoyé une demande » (un ÉTAT) + **Écrire**
+///   — le contrat ne transporte pas l'identifiant de la demande, et la
+///   carte ne l'invente pas (même règle que le web).
 /// - `none` : **Se connecter** + **Écrire**.
 struct ContactAccountActions: Equatable {
     enum Connect: Equatable {
         case connect
-        case accept(requestId: String)
         case pending
+        case received
     }
 
     let connect: Connect?
@@ -51,7 +52,7 @@ struct ContactAccountActions: Equatable {
 
     static let none = ContactAccountActions(connect: nil, canWrite: false)
 
-    static func resolve(relation: ContactRelation, pendingReceivedRequestId: String?) -> ContactAccountActions {
+    static func resolve(relation: ContactRelation) -> ContactAccountActions {
         switch relation {
         case .current:
             return .none
@@ -60,7 +61,7 @@ struct ContactAccountActions: Equatable {
         case .requestSent:
             return ContactAccountActions(connect: .pending, canWrite: true)
         case .requestReceived:
-            return ContactAccountActions(connect: pendingReceivedRequestId.map { .accept(requestId: $0) } ?? .connect, canWrite: true)
+            return ContactAccountActions(connect: .received, canWrite: true)
         case .none:
             return ContactAccountActions(connect: .connect, canWrite: true)
         }

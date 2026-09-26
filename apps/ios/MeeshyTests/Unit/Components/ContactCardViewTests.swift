@@ -45,24 +45,23 @@ final class ContactCardViewTests: XCTestCase {
     // MARK: - Actions selon la relation
 
     func test_resolveActions_self_offersNothing() {
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .current, pendingReceivedRequestId: nil), .none)
+        XCTAssertEqual(ContactAccountActions.resolve(relation: .current), .none)
     }
 
     func test_resolveActions_friend_offersWriteOnly() {
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .friend, pendingReceivedRequestId: nil), ContactAccountActions(connect: nil, canWrite: true))
+        XCTAssertEqual(ContactAccountActions.resolve(relation: .friend), ContactAccountActions(connect: nil, canWrite: true))
     }
 
     func test_resolveActions_requestSent_showsPendingStateNotAButton() {
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .requestSent, pendingReceivedRequestId: nil).connect, .pending)
+        XCTAssertEqual(ContactAccountActions.resolve(relation: .requestSent).connect, .pending)
     }
 
     func test_resolveActions_none_offersConnectAndWrite() {
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .none, pendingReceivedRequestId: nil), ContactAccountActions(connect: .connect, canWrite: true))
+        XCTAssertEqual(ContactAccountActions.resolve(relation: .none), ContactAccountActions(connect: .connect, canWrite: true))
     }
 
-    func test_resolveActions_requestReceivedWithKnownRequest_offersAccept() {
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .requestReceived, pendingReceivedRequestId: "r9").connect, .accept(requestId: "r9"))
-        XCTAssertEqual(ContactAccountActions.resolve(relation: .requestReceived, pendingReceivedRequestId: nil).connect, .connect)
+    func test_resolveActions_requestReceived_showsStateAndWriteButNoAccept() {
+        XCTAssertEqual(ContactAccountActions.resolve(relation: .requestReceived), ContactAccountActions(connect: .received, canWrite: true))
     }
 
     // MARK: - Champs de la fiche

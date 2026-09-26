@@ -113,6 +113,30 @@ final class VCardParserTests: XCTestCase {
         XCTAssertEqual(parsed.displayName, "Jürgen Müller")
         XCTAssertEqual(parsed.name?.family, "Müller")
         XCTAssertEqual(parsed.phones.first?.types, ["cell", "pref"])
+        XCTAssertEqual(parsed.phones.first?.labelKey, "mobile")
+    }
+
+    /// Même fixture que `packages/shared/utils/__tests__/vcard.test.ts`
+    /// (« vCard 2.1 exportée par Android ») : les deux parseurs rendent les
+    /// mêmes valeurs et les mêmes clés de libellé.
+    func test_parse_sharedAndroidFixture_matchesTheTypeScriptParser() throws {
+        let parsed = try XCTUnwrap(card([
+            "BEGIN:VCARD", "VERSION:2.1",
+            "N;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=C3=89lodie;Ren=C3=A9e;;;",
+            "FN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:Ren=C3=A9e =C3=89lodie",
+            "TEL;CELL;PREF:+221771234567",
+            "TEL;WORK:338001122",
+            "EMAIL;HOME:renee@example.sn",
+            "NOTE;ENCODING=QUOTED-PRINTABLE;CHARSET=UTF-8:Ligne un=0D=0ALigne deux tr=C3=A8s =",
+            "longue suite",
+            "END:VCARD",
+        ]))
+        XCTAssertEqual(parsed.displayName, "Renée Élodie")
+        XCTAssertEqual(parsed.name?.family, "Élodie")
+        XCTAssertEqual(parsed.phones.map(\.value), ["+221771234567", "338001122"])
+        XCTAssertEqual(parsed.phones.map(\.labelKey), ["mobile", "work"])
+        XCTAssertEqual(parsed.emails.map(\.labelKey), ["home"])
+        XCTAssertEqual(parsed.note, "Ligne un\r\nLigne deux très longue suite")
     }
 
     func test_parse_vcard21QuotedPrintableSoftBreak_joinsContinuation() throws {
