@@ -115,6 +115,18 @@ describe('sans numéro : l’écran du code, jamais l’application', () => {
     expect(search.get('email')).toBe('ada@meeshy.example');
     expect(search.get('next')).toBe('/chat/mshy_equipe');
   });
+
+  test('le jeton d’attente (#8083) est retenu en MÉMOIRE pour l’écran du code — jamais dans l’adresse', async () => {
+    const { el } = mount('/signup', {
+      ok: true,
+      status: 200,
+      data: { status: 'verification-required', accountCreated: true, email: 'ada@meeshy.example', pendingSessionToken: 'attente-2' },
+    });
+    type(el, '#signup-email', 'ada@meeshy.example');
+    await submitWithoutPhone(el);
+    expect(pendingVerificationFor('ada@meeshy.example')?.pendingSessionToken).toBe('attente-2');
+    expect(location()).not.toContain('attente-2');
+  });
 });
 
 describe('avec numéro : la session, comme avant', () => {

@@ -110,4 +110,18 @@ describe('/login?methode=password — e-mail inconnu ⇒ l’écran du code (#80
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
     expect(pendingVerificationFor('pseudo')).toBeNull();
   });
+
+  test('le jeton d’attente (#8083) est retenu en MÉMOIRE pour l’écran du code — jamais dans l’adresse', async () => {
+    const stub = loginStub({
+      ok: true,
+      status: 200,
+      data: { status: 'verification-required', accountCreated: true, email: 'neuf@x.io', pendingSessionToken: 'attente-1' },
+    });
+    const el = mount(stub.login);
+
+    await signInWith(el, 'neuf@x.io', 'secret-1');
+
+    expect(pendingVerificationFor('neuf@x.io')?.pendingSessionToken).toBe('attente-1');
+    expect(window.location.href).not.toContain('attente-1');
+  });
 });

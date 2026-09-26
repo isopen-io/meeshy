@@ -28,7 +28,13 @@ const arVerifyEmail = {
   'verifyEmail.resend.done': 'تمت إعادة إرسال الرمز!',
   'verifyEmail.link.checking': 'جارٍ التحقق من الرابط…',
   'verifyEmail.link.invalid': 'لم يعد هذا الرابط صالحًا. أدخل الرمز الوارد في البريد نفسه.',
+  'verifyEmail.proven': 'تم تأكيد العنوان ✓ — أدخل الرمز الذي تلقيته لتسجيل الدخول هنا.',
+  'verifyEmail.handoff.opened': 'تم فتح الرابط في تطبيق Meeshy.',
+  'verifyEmail.handoff.stay': 'المتابعة في المتصفح',
   'verifyEmail.signingIn': 'جارٍ تسجيل الدخول…',
+  'verifyEmail.arrival.title': 'تم تأكيد العنوان!',
+  'verifyEmail.arrival.lead': 'نُجهّز محادثاتك…',
+  'verifyEmail.arrival.status': 'تم تأكيد العنوان — جارٍ تسجيل الدخول…',
   'emailSent.codeOrLink': 'أدخل الرمز المكوّن من 6 أرقام المرسل إلى {email}، أو افتح الرابط في البريد نفسه.',
 };
 

@@ -6,6 +6,7 @@ import {
   displayNameDepuisEmail,
   pseudoRacine,
 } from '@meeshy/shared/utils/registration-identity';
+import { usernameRefusal, type UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
 import type { RegisterBody } from './api/auth';
 import { isReferralCodeShaped, normalizeReferralCode } from './view/referral-code';
@@ -55,6 +56,11 @@ export const DISPLAY_NAME_MAX = registerRequestSchema.properties.displayName.max
  * (#3629 : la borne serveur est passée de 6 à 12 sans que le miroir iOS le
  * suive ; ce module ne peut pas rejouer ce défaut, il LIT le schéma). */
 export const PASSWORD_MIN = registerRequestSchema.properties.password.minLength;
+
+/** Longueur maximale d'un pseudo — LUE sur `registerRequestSchema` (#8082) :
+ * `direction_recette` (17 caractères) passait l'écran et se faisait refuser
+ * par la passerelle, faute que le client connaisse la borne. */
+export const USERNAME_MAX = registerRequestSchema.properties.username.maxLength;
 
 /** Compilé depuis la source PARTAGÉE — la même regex que le schéma Ajv du
  * serveur et le Zod de `AuthSchemas.register` compilent tous deux. */
@@ -125,7 +131,8 @@ export function canSubmit(form: SignupFormState): boolean {
     isDisplayNameValid(form.displayName) &&
     isEmailValid(form.email) &&
     isPasswordValid(form.password) &&
-    isPhoneValid(form.phoneDigits)
+    isPhoneValid(form.phoneDigits) &&
+    usernameFieldRefusal(form) === null
   );
 }
 
@@ -166,6 +173,17 @@ export function effectiveUsername(form: SignupFormState): string {
   return derive === PSEUDO_DE_SECOURS ? '' : derive;
 }
 
+/**
+ * LE REFUS DU PSEUDO, PENDANT LA SAISIE (#8082) — le verdict que la passerelle
+ * rendrait (`usernameRefusal`, `@meeshy/shared/utils/username-rule`), posé sur
+ * le pseudo QUI PARTIRA. `null` quand il est recevable, ou absent : la
+ * passerelle le dérive alors elle-même.
+ */
+export function usernameFieldRefusal(form: SignupFormState): UsernameRefusal | null {
+  const pseudo = effectiveUsername(form);
+  return pseudo === '' ? null : usernameRefusal(pseudo);
+}
+
 /** Le nom affiché qui partira — tapé s'il l'a été, tiré de l'adresse sinon. */
 export function effectiveDisplayName(form: SignupFormState): string {
   const tape = (form.displayName ?? '').trim();
@@ -182,7 +200,8 @@ export function isIdentityDefined(form: SignupFormState): boolean {
     isEmailValid(form.email) &&
     effectiveDisplayName(form) !== '' &&
     isDisplayNameValid(effectiveDisplayName(form)) &&
-    effectiveUsername(form) !== ''
+    effectiveUsername(form) !== '' &&
+    usernameFieldRefusal(form) === null
   );
 }
 

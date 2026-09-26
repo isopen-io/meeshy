@@ -285,7 +285,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
         "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
-        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 0
+        // #8081 — les refus de la preuve d'adresse ont quitté le ViewModel pour
+        // la table que partagent la saisie du code, le lien et l'envoi : le
+        // cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578).
+        "apps/ios/Meeshy/Features/Auth/EmailProofErrorText.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1
@@ -779,6 +783,23 @@ final class LocalizationConsistencyTests: XCTestCase {
             "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
             + "plafond du cliquet borne une mesure partielle"
         )
+    }
+
+    /// Un `bundle:` PASSÉ EN PARAMÈTRE (`MeeshyPasswordField`, #8054) désigne le
+    /// catalogue que ses appelants lui donnent : `.module` seul ⇒ le SDK ; le
+    /// moindre `.main` ⇒ l'app, où la clé reste exigée.
+    func test_leScannerSuitUnBundlePasséEnParamètre() {
+        let forwarded = """
+        var label: String { label(bundle: .module) }
+        func label(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: forwarded).map(\.isModuleBundle), [true])
+
+        let mixed = forwarded + "\nlet b = label(bundle: .main)"
+        XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
+                       "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
     }
 
     /// Keys with at least one locale expressed as plural variations.

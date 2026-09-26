@@ -64,7 +64,7 @@ public extension AuthServiceProviding {
 /// Stateless auth API calls. All state management is in AuthManager.
 public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public static let shared = AuthService()
-    private let api: APIClientProviding
+    let api: APIClientProviding
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
     init(api: APIClientProviding = APIClient.shared) {
