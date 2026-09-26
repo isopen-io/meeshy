@@ -151842,53 +151842,6 @@
         }
       }
     },
-    "settings.privacy.hide_from_search": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إخفاء من البحث"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aus der Suche ausblenden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide from search"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ocultar de la búsqueda"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masquer de la recherche"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nascondi dalla ricerca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ocultar da busca"
-          }
-        }
-      }
-    },
     "settings.privacy.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -197418,6 +197371,758 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível participar da conversa"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.offer.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes amis sont peut-être déjà là"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends might already be here"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puede que tus amigos ya estén aquí"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Freunde sind vielleicht schon da"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi amici potrebbero essere già qui"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus amigos talvez já estejam aqui"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ربما يكون أصدقاؤك هنا بالفعل"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.offer.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrouve-les en un geste — et on te prévient dès que l'un d'eux arrive sur Meeshy."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find them in one tap — and we'll let you know the moment one of them joins Meeshy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encuéntralos con un toque, y te avisamos en cuanto uno de ellos llegue a Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finde sie mit einem Tipp – und wir sagen dir Bescheid, sobald einer von ihnen zu Meeshy kommt."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritrovali con un tocco, e ti avvisiamo appena uno di loro arriva su Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontre-os com um toque — e a gente avisa assim que um deles chegar ao Meeshy."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اعثر عليهم بلمسة واحدة — وسنخبرك فور انضمام أحدهم إلى Meeshy."
+          }
+        }
+      }
+    },
+    "onboarding.contacts.offer.find": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrouver mes amis"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find my friends"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontrar a mis amigos"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Freunde finden"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trova i miei amici"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontrar meus amigos"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اعثر على أصدقائي"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.offer.promise": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personne n'est contacté à ta place."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No one gets contacted on your behalf."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nadie recibe mensajes en tu nombre."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niemand wird in deinem Namen kontaktiert."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno viene contattato al posto tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguém é contatado em seu nome."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن يتواصل أحد مع أي شخص نيابةً عنك."
+          }
+        }
+      }
+    },
+    "onboarding.contacts.found.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes amis sont déjà là !"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends are already here!"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Tus amigos ya están aquí!"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Freunde sind schon da!"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi amici sono già qui!"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus amigos já estão aqui!"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أصدقاؤك هنا بالفعل!"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.found.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute-les en un geste. Et dès qu'un autre arrive, on te prévient."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add them in one tap. And whenever another one joins, we'll let you know."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añádelos con un toque. Y cuando llegue otro, te avisamos."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge sie mit einem Tipp hinzu. Und sobald noch jemand kommt, sagen wir dir Bescheid."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungili con un tocco. E quando ne arriva un altro, ti avvisiamo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicione-os com um toque. E quando mais alguém chegar, a gente avisa."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضفهم بلمسة واحدة. وعندما ينضم آخر، سنخبرك."
+          }
+        }
+      }
+    },
+    "onboarding.contacts.none.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu ouvres la voie !"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You're leading the way!"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Abres el camino!"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du gehst voran!"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la strada!"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você está abrindo o caminho!"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت تفتح الطريق!"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.none.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun de tes contacts n'est encore sur Meeshy. Invite-les en un message — on te prévient dès que l'un d'eux arrive."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None of your contacts are on Meeshy yet. Invite them with a message — we'll let you know as soon as one of them joins."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno de tus contactos está todavía en Meeshy. Invítalos con un mensaje: te avisamos en cuanto llegue uno de ellos."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keiner deiner Kontakte ist auf Meeshy. Lade sie mit einer Nachricht ein – wir sagen dir Bescheid, sobald einer von ihnen kommt."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno dei tuoi contatti è ancora su Meeshy. Invitali con un messaggio: ti avvisiamo appena uno di loro arriva."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum dos seus contatos está no Meeshy ainda. Convide-os com uma mensagem — a gente avisa assim que um deles chegar."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد من جهات اتصالك على Meeshy بعد. ادعُهم برسالة — وسنخبرك فور انضمام أحدهم."
+          }
+        }
+      }
+    },
+    "onboarding.contacts.invite": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter mes amis par SMS"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invite my friends by text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitar a mis amigos por SMS"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freunde per SMS einladen"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invita i miei amici via SMS"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convidar meus amigos por SMS"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ادعُ أصدقائي عبر رسالة نصية"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.invite.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viens sur Meeshy : on s'écrit chacun dans sa langue, et tout se traduit tout seul ! https://meeshy.me/download"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join me on Meeshy: we each write in our own language and everything translates itself! https://meeshy.me/download"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¡Únete a mí en Meeshy: cada uno escribe en su idioma y todo se traduce solo! https://meeshy.me/download"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komm zu Meeshy: Jeder schreibt in seiner Sprache, und alles wird automatisch übersetzt! https://meeshy.me/download"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vieni su Meeshy: ognuno scrive nella sua lingua e tutto si traduce da solo! https://meeshy.me/download"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vem pro Meeshy: cada um escreve no seu idioma e tudo se traduz sozinho! https://meeshy.me/download"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم إليّ على Meeshy: يكتب كلٌّ منا بلغته وكل شيء يُترجم تلقائيًا! https://meeshy.me/download"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes contacts n'ont pas pu être consultés. Réessayer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contacts couldn't be checked. Try again"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron consultar tus contactos. Reintentar"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Kontakte konnten nicht abgerufen werden. Erneut versuchen"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile consultare i tuoi contatti. Riprova"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível consultar seus contatos. Tentar de novo"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر الاطلاع على جهات اتصالك. أعد المحاولة"
+          }
+        }
+      }
+    },
+    "onboarding.contacts.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrouve tes amis : autorise l'accès aux contacts dans Réglages"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find your friends: allow contacts access in Settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encuentra a tus amigos: permite el acceso a los contactos en Ajustes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finde deine Freunde: Erlaube den Zugriff auf Kontakte in den Einstellungen"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritrova i tuoi amici: consenti l'accesso ai contatti in Impostazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontre seus amigos: permita o acesso aos contatos nos Ajustes"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اعثر على أصدقائك: اسمح بالوصول إلى جهات الاتصال من الإعدادات"
+          }
+        }
+      }
+    },
+    "notifications.quick.connect.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La demande n'a pas pu partir. Réessaie dans un instant."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request couldn't be sent. Try again in a moment."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo enviar la solicitud. Inténtalo de nuevo en un momento."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage konnte nicht gesendet werden. Versuch es gleich noch einmal."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare la richiesta. Riprova tra un attimo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar o pedido. Tente de novo em instantes."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال الطلب. أعد المحاولة بعد لحظات."
+          }
+        }
+      }
+    },
+    "settings.privacy.hide_from_contact_search": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't suggest me to people who have my number or email"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sugerirme a quienes tienen mi número o mi correo"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non propormi a chi ha il mio numero o la mia e-mail"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não me sugerir a quem tem meu número ou e-mail"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني"
+          }
+        }
+      }
+    },
+    "settings.privacy.hide_from_contact_search.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, your profile no longer shows up in a search by phone number or email, and your contacts aren't notified when you join Meeshy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si está activado, tu perfil ya no aparece en una búsqueda por número o correo, y tus contactos no reciben aviso de tu llegada a Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se attivo, il tuo profilo non compare più in una ricerca per numero o e-mail, e i tuoi contatti non vengono avvisati del tuo arrivo su Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativado, seu perfil não aparece mais em buscas por número ou e-mail, e seus contatos não são avisados da sua chegada ao Meeshy."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy."
+          }
+        }
+      }
+    },
+    "onboarding.contacts.none.body.nosms": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun de tes contacts n'est encore sur Meeshy. On te prévient dès que l'un d'eux arrive."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None of your contacts are on Meeshy yet. We'll let you know as soon as one of them joins."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno de tus contactos está todavía en Meeshy. Te avisamos en cuanto llegue uno de ellos."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keiner deiner Kontakte ist auf Meeshy. Wir sagen dir Bescheid, sobald einer von ihnen kommt."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuno dei tuoi contatti è ancora su Meeshy. Ti avvisiamo appena uno di loro arriva."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum dos seus contatos está no Meeshy ainda. A gente avisa assim que um deles chegar."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد من جهات اتصالك على Meeshy بعد. سنخبرك فور انضمام أحدهم."
           }
         }
       }
