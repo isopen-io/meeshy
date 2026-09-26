@@ -10,7 +10,7 @@ import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { logger } from '../utils/logger.js';
-import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
 import { validatePagination } from '../utils/pagination.js';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
@@ -21,6 +21,7 @@ import {
 } from '../validation/call-schemas.js';
 import { callSessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from './users/presence-gate';
+import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 import { CallParams, CallRouteDeps } from './calls-shared';
 
 interface ConversationParams {
@@ -308,8 +309,8 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
           description: 'Unauthorized - Authentication required',
           ...errorResponseSchema
         },
-        403: {
-          description: 'Forbidden - User not a member of conversation',
+        404: {
+          description: 'Conversation not found — or the caller is not a member (#8116: both answer the same)',
           ...errorResponseSchema
         },
         429: {
@@ -342,8 +343,9 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
         }
       });
 
+      // Un non-membre reçoit le 404 d'une conversation inexistante (#8116).
       if (!membership) {
-        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+        return refuserCommeIntrouvable(reply);
       }
 
       const callSession = await callService.getActiveCallForConversation(
