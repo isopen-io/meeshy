@@ -1,5 +1,174 @@
 # @meeshy/shared
 
+## 1.27.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - après un appel, on le note en un geste (#8072)
+  - refuser un appel avec un message rapide (#8065)
+  - le projet Xcode n'inscrit plus deux fois les témoins du partage d'écran
+  - les trois classes du partage d'écran déclarent nonisolated deinit {} — run test
+  - le pictogramme « média indisponible » de la galerie suit Dynamic Type
+  - le pictogramme de la carte de visite suit Dynamic Type, borné à son cercle de 36 pt
+  - la durée d'une tuile de l'écran Médias passe par la locale — LocalizedNumber.duration
+  - le menu d'une ligne de conversation parle la langue du lecteur (#8154)
+  - parité web du bloc de verre — verre neutre bordé d'un filet d'accent, « Lire la suite / Réduire » à l'encre du texte, souligné — run test
+  - les témoins du partage d'écran sont inscrits au projet committé
+  - le dépliage n'invalide plus le layout hors du site unique (mémo de la pastille de jour) ; garde de la matrice Focal rebornée
+  - le déplié garde son bord de lecture — recalage du défilement au tour suivant ; témoins du défaut Script alignés
+  - la cible compile de nouveau — partage d'écran sans lazy nonisolated, CoreVideo importé, SampleHandler Sendable
+  - un message long se déplie en place, sur un bloc de verre Focal, et Script devient le mode par défaut
+  - un message long se déplie sur place en Focal, sur un bloc de verre
+  - Script devient le mode de lecture par défaut
+  - appeler une conversation depuis le menu de sa ligne
+  - squelette de la loi de l'extrait d'un message long — miroir Swift de longMessageExcerpt
+  - une carte reçoit le changement de sa conversation sur le MainActor, sans saut de file — run test
+  - VoiceOver dit aussi le compte Meeshy d'une carte de visite quand il est connu
+  - la Rivière rend aussi la carte de conversation et la carte de visite — run test
+  - la rangée « est sur Meeshy » tire ses initiales du nom de l'acteur, jamais de la phrase du titre
+  - initiales de lettres et libellé VoiceOver complet sur la carte « amis trouvés » — run test
+  - VoiceOver annonce une carte de visite par son contact, jamais par un nom de fichier
+  - un média introuvable affiche un état d'erreur dessiné avec « Réessayer »
+  - l'app reconnaît les liens de l'hôte web de l'environnement sélectionné
+  - rejoindre ou quitter met à jour toutes les cartes de la même conversation
+  - la carte de conversation se rend en Focal, Script et Rivière comme en Bulles
+  - la fiche de carte de visite place « Sur Meeshy » après les champs, comme iOS
+  - un média introuvable dessine « Média indisponible » dans la visionneuse, la pellicule et la grille — jamais une image brisée
+  - Rejoindre ou Quitter depuis une carte relit toutes les cartes de la même conversation
+  - la carte de conversation résout l'avatar de l'inviteur et la bannière comme tout portrait, et retombe sur les initiales si l'image échoue
+  - les initiales d'un avatar ne retiennent que des lettres — « Théo (foot) » donne « TF », jamais « T( »
+  - un seul sélecteur d'écran à la fois, et le pair arrivé pendant un partage l'apprend
+  - partager son écran pendant un appel, sur le web
+  - le catalogue TS compte aussi les deux cartes générées (#8099)
+  - le catalogue Swift compte les deux cartes générées pour le web (#8099)
+  - le cliquet des couleurs iOS enregistre l'écran « Médias, liens et documents »
+  - l'image dans l'image s'ouvre DANS le geste — la fenêtre s'enregistre, le bouton l'appelle sans import() (#8046)
+  - l'onglet Médias devient « Médias, liens et documents » — sept segments sur l'index de la conversation, cherchables, même depuis la liste
+  - sans SMS, « Tu ouvres la voie » ne promet plus d'invitation qu'aucun bouton ne tient — run test
+  - la coque accuse la remise d'un push de message, comme le web et iOS (#8124)
+  - l'onboarding propose de retrouver ses amis, « X a rejoint Meeshy » se lit et s'actionne, et « ne pas me proposer » s'active
+  - les cliquets de catalogue TS et de couleurs iOS enregistrent la carte de visite et la carte de conversation
+  - le service de carte nomme ses deux routes — le cliquet des entrées de catalogue Swift mortes repasse à 275 (Refs #8099)
+  - carte de visite alignée sur le contrat — « demande reçue » est un état, région de l'appareil envoyée, fixture Android partagée — run test
+  - « Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail » se règle dans la confidentialité
+  - l'écran des médias rend la carte de visite (#8101) et la carte de conversation (#8099) du fil, désormais dans dev
+  - listMedia choisit ses genres et cherche — kinds= et q=, un index persisté par genre purgé en bloc
+  - « X a rejoint Meeshy » ouvre le profil de l'arrivant — cloche, bannière et coque
+  - « X a rejoint Meeshy » se range sous Contacts, à la teinte de sa famille
+  - carte de visite — état « Demande envoyée » sur une ligne, modèle injectable pour les rendus
+  - la carte 4 sait où en est la proposition « retrouver tes amis » — squelette et témoins
+  - les sept genres de l'index d'une conversation — ConversationMediaKind, partition des pièces et clé d'index par genre
+  - une carte de visite partagée s'affiche en carte, s'ouvre en fiche de verre copiable et remonte le compte Meeshy à connecter ou à qui écrire
+  - ConversationMediaCatalog déclare sa deinit non isolée — la garde MainActorDeinitSourceGuardTests repasse au vert (Refs #8095)
+  - carte — libellés d'action centrés, bannière de repli en dégradé sur la carte (Refs #8099)
+  - carte de visite partagée — vCard envoyée en pièce jointe, bulle carte + fiche Liquid Glass copiable, résolution du compte Meeshy
+  - carte de conversation sous le texte d'un message — Rejoindre, Rejoindre en anonyme, Quitter | Ouvrir (Refs #8099)
+  - l'écran « Médias, liens et documents » d'une conversation, depuis sa feuille de détails
+  - la bulle et l'image dans l'image deviennent des chunks frères de l'écran d'appel (#8046)
+  - partage d'écran pendant un appel (ReplayKit + call:toggle-screen)
+  - le témoin des accusés de fixtures appelle la fabrique avec sa vraie signature ; un choix de périphérique qui lève se dit (#8046)
+  - carte de conversation — titre sous l'avatar, statistiques sur une ligne, boutons empilés quand ils ne tiennent pas (Refs #8099)
+  - la bulle d'appel, l'image dans l'image et la feuille des périphériques (#8046)
+  - toucher une ligne du journal ouvre la fiche de l'appel
+  - carte de conversation — dégradé typé, initiales locales, témoins d'URL isolés MainActor (Refs #8099)
+  - la passerelle relaie le partage d'écran (call:toggle-screen)
+  - règles de la bulle, de l'image dans l'image et des périphériques d'appel (#8046)
+  - le port de l'index d'une conversation et la visionneuse qui feuillette toute la conversation
+  - parseur et rédacteur vCard purs (2.1/3.0/4.0) pour la carte de visite partagée
+  - la loi des sept genres de l'index d'une conversation — chaque segment ne garde que ce qui est le sien
+  - la galerie garde sa page quand l'index s'étend, et Réagir n'existe que sur une pièce chargée — run test
+  - carte de conversation dans la bulle — Rejoindre, Rejoindre en anonyme, Quitter | Ouvrir (Refs #8099)
+  - carte de conversation — modèle du contrat et règle des actions (squelette, Refs #8099)
+  - la galerie d'une conversation feuillette l'index de ses médias, même jamais chargés (Refs #8095)
+  - l'index des médias d'une conversation — MessageService.listMedia (view=media) et CacheCoordinator.conversationMedia (Refs #8095)
+  - la croix « Fermer » de l'inscription vit dans sa zone, le formulaire ne défile plus dessous — run test
+  - mise en avant et retrait d'un participant dans un appel de groupe
+  - un code de vérification refusé se dit dans la langue de l'interface, depuis le code d'erreur de la passerelle — run test
+  - un pseudo trop long se signale sous le champ pendant la saisie et ne part pas ; un refus de schéma sur le pseudo se pose sous lui — run test
+  - un seul jeu de règles d'appel, lu par la passerelle et par iOS (#8074) — run test
+  - appeler depuis une fiche, gate des appels rejoints, bannière qui se tait dans le fil
+  - le lien de validation d'e-mail est une célébration — feu d'artifice, préchargement, puis les conversations
+  - la borne du pseudo se dit pendant la saisie et bloque l'envoi ; un refus de schéma sur le pseudo parle au lecteur (Refs #8082)
+  - un lien d'invitation ouvert sur iPhone rattache le compte créé à son parrain — run test
+  - un refus de schéma nomme son champ sous la forme déclarée et n'est plus une « erreur non rattrapée » ; la borne du pseudo a une source unique (Refs #8082)
+  - fiche d'un appel, lien profond /call/:id, pavé et bandeau « Reprendre l'appel »
+  - Rejoindre sur la ligne de liste et dans l'en-tête du fil, Rappeler depuis la cloche (lot 3 des appels)
+  - l'écran du code dit « Adresse confirmée ✓ » quand le lien a été ouvert ailleurs, sans jamais connecter ce téléphone (Refs #8083) — run test
+  - presence:app-state, sessions d'appel, fiche, pavé et démarrage vers une personne — les règles (lot 3 des appels)
+  - la release de la coque Android est signée par une clé hors du dépôt, publiée dans assetlinks ; plafond de reels porté à 16 Ko
+  - le lien d'e-mail ouvert sur un téléphone est remis à l'app avant d'être consommé ; l'écran du code dit l'adresse confirmée ailleurs (Refs #8083)
+  - ouvrir le lien de l'e-mail pendant la feuille du code la referme avant d'ouvrir la session — run test
+  - le gate du journal d'appels raccroche par localisateur — l'écran change de phase sous le doigt
+  - le retour Android ne ferme que la couche du dessus quand deux feuilles sont empilées (Closes #8078)
+  - œil du mot de passe — la saisie survit au re-masquage, fusion de dev (Refs #8054) — run test
+  - re-masquer le mot de passe ne vide plus la saisie à la frappe suivante ; l'œil de l'inscription dit « Afficher le mot de passe » — run test
+  - « Rappeler » gardé par son effet ; le moteur d'appel n'éclate plus le point d'entrée
+  - un code valide referme l'écran de vérification et fait entrer dans l'app — plus de feuille figée — run test
+  - œil afficher/masquer sur chaque champ de mot de passe — fusion de dev (Refs #8054) — run test
+  - sans numéro, l'inscription mène à l'écran du code au lieu d'entrer dans l'app — run test
+  - le code de parrainage part avec l'inscription (#8058)
+  - chaque champ de mot de passe s'affiche ou se masque d'un bouton œil
+  - un lien d'e-mail à jeton est servi par le code déployé, jamais par la coquille d'une version en attente
+  - chaque champ de mot de passe porte un œil qui affiche ou masque la saisie (#8054)
+  - s'inscrire sans numéro mène à l'écran du code ; avec numéro, la session comme avant
+  - rappeler depuis le journal et la bulle d'appel, caméra de la coque Android, témoins
+  - écran d'appel, pastille, bandeau d'attente et bouton d'appel du fil
+  - moteur d'appel audio et vidéo — signalisation, WebRTC pair-à-pair, sons, magasin (squelette)
+  - s'inscrire sans numéro passe par une alerte qui dit à quoi il sert — run test
+  - s'inscrire sans numéro passe par une alerte qui dit ce que le numéro protège
+  - un email inconnu à la connexion mène au code reçu ; le code ou le lien de l'email ouvre la session
+  - un email inconnu à la connexion mène à l'écran du code, qui connecte — run test
+  - le code se saisit sous le compte à rebours, avant « Rien reçu ? » (Refs #8034)
+  - un email inconnu à la connexion mène au code ; le code ou le lien de l'email ouvre la session (Refs #8034)
+  - la touche Entrée du clavier logiciel annonce « Envoyer » dans les composeurs (Closes #8031)
+  - le retour Android ferme le tiroir de l'administration au lieu de quitter l'écran (Closes #8020)
+  - le segment de transcription du fil se mappe dans le SDK — l'app ne pouvait pas le nommer
+  - un toucher ouvre le contenu protégé dans les trois modes, l'appui long ne l'ouvre plus — run test
+  - KeyboardFirstScrollGate déclare sa deinit nonisolated — la garde iOS 26.1 repasse au vert — run test (Refs #8000)
+  - toucher d'un message protégé — média caché en plein écran direct, appui long sans fuite — run test
+  - les sons des contenus publics rejoignent de nouveau la bibliothèque, et leurs médias ne sont plus balayés — run test
+  - toucher un média flouté ou à vue unique l'ouvre directement en plein écran ; l'appui long garde la forme protégée
+  - lot 6 — 189 constats appliqués sur 31 groupes de fichiers (mort, jumelles, ré-évaluations, simplifications) — run test
+  - la coque Android déclare les permissions de position — la tuile Position demande au lieu d'être refusée (Closes #8007)
+  - les emojis partent en série — le filet de dédoublonnage par contenu épargne un message d'emojis seuls — run test (Refs #7985)
+  - la feuille de profil se referme dans le geste qui ouvre la page complète
+  - le fil iPhone cesse de s'abonner au modèle de liste qu'il ne fait que remettre à la porte de composition (#7714, point 4)
+  - deux publications redondantes retirées — un dérivé déjà couvert par son parent et une pagination des demandes envoyées que rien n'appelait
+  - huit hôtes qui ne faisaient que retransmettre le modèle de liste cessent de s'y abonner (#7714, point 4)
+  - retire deux vues jamais montées que seul un témoin de source tenait vertes, et leurs dix clés de catalogue orphelines
+  - retire 32 déclarations internes sans appelant — helpers, shims legacy, types de la liste de commentaires supprimée
+  - retire 61 membres privés et wrappers SwiftUI sans lecteur, et un fichier Swift orphelin hors cible
+  - la note d'après-appel s'enregistre et entre dans l'agrégat (#8072)
+  - le balayage du cadrage remonte le rappel d'une chaîne de tableau et un élément de Promise.all
+  - trois témoins suivent les comportements livrés par #8099, #8101 et #8105
+  - l'inscription, la preuve d'e-mail, la vérification et le changement de numéro/e-mail annoncent l'arrivée aux carnets, après la réponse (Refs #8105)
+  - « X a rejoint Meeshy » — annonce aux carnets qui contiennent l'arrivant, une fois par paire, regroupée, dans la langue du destinataire (Refs #8105)
+  - carte — requiresAccount décrit le lien ; carte publique déclarée à la couverture d'authentification (Refs #8099)
+  - « ne pas être trouvé » est honoré par toutes les résolutions identifiant → compte (Closes #8104)
+  - POST /contacts/resolve — une carte de visite partagée remonte au plus trois profils publics, sans jamais servir l'identifiant apparié
+  - carte de conversation — GET /links/:identifier/card et GET /conversations/:id/card (Refs #8099)
+  - la recherche de comptes par carnet est bornée en IDENTIFIANTS soumis, seau partagé par match, sync et /directory/contacts (Refs #8104)
+  - un lien direct ne dit rien à un non-membre — même 404 qu'une conversation inexistante (Refs #8099)
+  - l'index d'une conversation couvre audios, documents, liens, contacts, conversations et lieux, et se cherche
+  - cinquième vue de la collection — ?view=media indexe tous les médias visuels d'une conversation
+  - l'exclu d'un appel reçoit call:force-leave et quitte la room
+  - l'écran du code apprend que l'adresse est prouvée ailleurs — jeton d'attente + POST /auth/verification/status ; le lien et le code sont deux clés distinctes (Refs #8083)
+  - le code de parrainage voyage avec l'inscription — rattaché à la création du compte, actif ou non
+  - l'entrée decisions/ du 2026-09-26 suit la convention du dossier (un seul titre `## `)
+  - titre `## ` (niveau 2) pour l'entrée decisions/ du 2026-09-26
+  - sans numéro, l'inscription attend le code — aucune session avant la preuve de l'adresse
+  - un vocal enregistré sur le web est stocké en M4A et se lit sur iOS
+  - la vérification d'adresse ouvre la session ; staging marque ses e-mails
+  - une adresse inconnue devient un compte à la connexion ; la porte e-mail seul envoie code + lien (#8033, en cours)
+  - loi d'extrait d'un message long (25 %, coupé au mot) et cotes partagées du bloc de verre Focal
+  - notification.ts et notification-strings.ts repassent sous le budget de 1000 lignes
+  - catalogues d'adresses régénérés — /conversations/:id/card et /links/:identifier/card
+  - contrat de la carte de visite partagée — type PublicContactAccount, schémas de /contacts/resolve et parseVCard pur (2.1/3.0/4.0)
+  - carte de conversation — inviteur, message d'invitation, jonction anonyme (Refs #8099)
+  - contrat de la carte de conversation — type et schéma de réponse (Refs #8099)
+
 ## 1.26.0
 
 ### Minor Changes
