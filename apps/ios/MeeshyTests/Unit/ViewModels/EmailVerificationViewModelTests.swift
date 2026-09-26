@@ -5,12 +5,22 @@ import MeeshySDK
 @MainActor
 private final class MockEmailVerificationConfirmer: EmailVerificationConfirming {
     nonisolated deinit {}
-    var result: Result<Bool, Error> = .success(true)
+    static let proven = EmailProvenSession(
+        token: "jwt-proven",
+        sessionToken: "session-proven",
+        user: MeeshyUser(id: "proven-user", username: "proven", displayName: "Proven")
+    )
+    var result: Result<EmailProvenSession?, Error> = .success(MockEmailVerificationConfirmer.proven)
     private(set) var requests: [EmailVerificationRequest] = []
+    private(set) var openedSessions: [String] = []
 
-    func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
+    func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         requests.append(request)
         return try result.get()
+    }
+
+    func openSession(_ proven: EmailProvenSession) {
+        openedSessions.append(proven.token)
     }
 }
 
@@ -38,14 +48,15 @@ final class EmailVerificationViewModelTests: XCTestCase {
 
     // MARK: - verifyCode
 
-    func test_verifyCode_sessionServed_opensSessionAndSucceeds() async {
+    func test_verifyCode_sessionServed_succeedsWithoutOpeningTheSessionYet() async {
         let (sut, _, confirmer) = makeSUT()
-        confirmer.result = .success(true)
+        confirmer.result = .success(MockEmailVerificationConfirmer.proven)
 
         await sut.verifyCode("123456")
 
         XCTAssertTrue(sut.verificationSuccess)
-        XCTAssertTrue(sut.sessionOpened)
+        XCTAssertFalse(sut.sessionOpened)
+        XCTAssertEqual(confirmer.openedSessions, [])
         XCTAssertNil(sut.error)
         XCTAssertFalse(sut.isVerifying)
         XCTAssertEqual(confirmer.requests, [.code("123456", email: "test@example.com")])
@@ -61,12 +72,47 @@ final class EmailVerificationViewModelTests: XCTestCase {
 
     func test_verifyCode_verifiedWithoutSession_succeedsWithoutOpeningSession() async {
         let (sut, _, confirmer) = makeSUT()
-        confirmer.result = .success(false)
+        confirmer.result = .success(nil)
 
         await sut.verifyCode("123456")
 
         XCTAssertTrue(sut.verificationSuccess)
         XCTAssertFalse(sut.sessionOpened)
+    }
+
+    // MARK: - #8059 — la session s'ouvre une fois l'écran refermé
+
+    /// Ouvrir la session pendant que la feuille est présentée démonte l'écran de
+    /// connexion qui la présente : la feuille reste figée sur « Email vérifié ! ».
+    /// L'hôte referme d'abord, puis demande l'ouverture — une seule fois.
+    func test_openProvenSession_afterVerification_opensItOnce() async {
+        let (sut, _, confirmer) = makeSUT()
+        await sut.verifyCode("123456")
+
+        sut.openProvenSession()
+        sut.openProvenSession()
+
+        XCTAssertEqual(confirmer.openedSessions, ["jwt-proven"])
+        XCTAssertTrue(sut.sessionOpened)
+    }
+
+    func test_openProvenSession_withoutVerification_opensNothing() {
+        let (sut, _, confirmer) = makeSUT()
+
+        sut.openProvenSession()
+
+        XCTAssertEqual(confirmer.openedSessions, [])
+        XCTAssertFalse(sut.sessionOpened)
+    }
+
+    func test_openProvenSession_verifiedWithoutSession_opensNothing() async {
+        let (sut, _, confirmer) = makeSUT()
+        confirmer.result = .success(nil)
+        await sut.verifyCode("123456")
+
+        sut.openProvenSession()
+
+        XCTAssertEqual(confirmer.openedSessions, [])
     }
 
     func test_verifyCode_error_setsError() async {
@@ -87,7 +133,7 @@ final class EmailVerificationViewModelTests: XCTestCase {
         await sut.verifyCode("bad")
         XCTAssertNotNil(sut.error)
 
-        confirmer.result = .success(true)
+        confirmer.result = .success(MockEmailVerificationConfirmer.proven)
         await sut.verifyCode("good")
         XCTAssertNil(sut.error)
         XCTAssertTrue(sut.verificationSuccess)

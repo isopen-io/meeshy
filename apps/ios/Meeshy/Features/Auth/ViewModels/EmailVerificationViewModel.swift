@@ -16,6 +16,8 @@ final class EmailVerificationViewModel: ObservableObject {
     @Published var isResending = false
     @Published var resendSuccess = false
     @Published var verificationSuccess = false
+    /// La session a-t-elle été POSÉE ? Jamais par `verifyCode` (#8059) : par
+    /// `openProvenSession`, une fois l'écran refermé.
     @Published var sessionOpened = false
     @Published var error: String?
 
@@ -24,6 +26,8 @@ final class EmailVerificationViewModel: ObservableObject {
     /// Le mot de passe tapé à la connexion : tenu en MÉMOIRE le temps de la
     /// saisie du code, jamais persisté, oublié dès la vérification réussie.
     private var password: String?
+    /// La session que la preuve a rendue, en attente que l'écran se referme.
+    private var provenSession: EmailProvenSession?
     private let authService: AuthServiceProviding
     private let confirmer: EmailVerificationConfirming
 
@@ -47,12 +51,23 @@ final class EmailVerificationViewModel: ObservableObject {
         defer { isVerifying = false }
 
         do {
-            sessionOpened = try await confirmer.confirmEmail(.code(code, email: email, password: password))
+            provenSession = try await confirmer.verifyEmail(.code(code, email: email, password: password))
             password = nil
             verificationSuccess = true
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Ouvre la session prouvée — à appeler par l'HÔTE une fois la feuille
+    /// refermée (#8059). Ouvrir la session bascule la racine de l'app et
+    /// démonte l'écran de connexion : ce qu'il présente encore resterait
+    /// orphelin, figé sur « Email vérifié ! ». Idempotent.
+    func openProvenSession() {
+        guard let proven = provenSession else { return }
+        provenSession = nil
+        confirmer.openSession(proven)
+        sessionOpened = true
     }
 
     func resendCode() async {

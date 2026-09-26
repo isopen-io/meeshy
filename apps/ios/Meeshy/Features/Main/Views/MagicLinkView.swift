@@ -10,6 +10,10 @@ struct MagicLinkView: View {
     @EnvironmentObject var authManager: AuthManager
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    /// Code saisi et vérifié (#8059) : reçoit de quoi ouvrir la session, que
+    /// l'hôte pose une fois cet écran REFERMÉ — l'ouvrir pendant qu'il est
+    /// présenté démonte la connexion qui le présente, et il resterait figé.
+    var onVerified: ((@escaping ProvenSessionOpener) -> Void)?
 
     @State private var email = ""
     @State private var step: Step = .emailInput
@@ -288,6 +292,9 @@ struct MagicLinkView: View {
 
             if let codeEntry {
                 EmailCodeEntry(viewModel: codeEntry)
+                    .onReceive(codeEntry.$verificationSuccess.filter { $0 }.first()) { _ in
+                        handOff(codeEntry)
+                    }
             }
 
             if linkExpired {
@@ -371,6 +378,12 @@ struct MagicLinkView: View {
     /// information que ce compte à rebours porte.
     private var spokenCountdown: String {
         LocalizedNumber.spokenDuration(seconds: countdownRemaining)
+    }
+
+    private func handOff(_ entry: EmailVerificationViewModel) {
+        guard let onVerified else { return entry.openProvenSession() }
+        onVerified(entry.openProvenSession)
+        dismiss()
     }
 
     private func sendMagicLink() {
