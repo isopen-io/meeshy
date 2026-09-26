@@ -173,9 +173,15 @@ enum MessageAccessibilityLabelComposer {
             } else if attachment.isContactCard {
                 // #8142 — une carte de visite se dit par le contact, jamais par
                 // son fichier : la même phrase que la carte elle-même.
+                let card = VCardAttachmentLoader.shared.cachedCard(for: attachment)
+                let account = card.flatMap {
+                    ContactResolveService.shared.cachedAccounts(
+                        for: ContactResolveRequest(card: $0, defaultCountry: ContactSyncService.deviceRegionCode())
+                    )?.first
+                }
                 parts.append(ContactCardView.accessibilityLabel(
-                    card: VCardAttachmentLoader.shared.cachedCard(for: attachment),
-                    account: nil,
+                    card: card,
+                    account: account,
                     fallbackName: attachment.contactCardFallbackName
                 ))
             } else {
