@@ -20,6 +20,7 @@
       "name": "@meeshy/web",
       "version": "2.0.12",
       "dependencies": {
+        "@capacitor/push-notifications": "8.1.2",
         "@meeshy/shared": "workspace:*",
         "@tanstack/react-query": "5.102.8",
         "@tanstack/react-virtual": "3.14.13",
@@ -47,7 +48,6 @@
         "@capacitor/cli": "8.5.1",
         "@capacitor/core": "8.5.1",
         "@capacitor/ios": "8.5.1",
-        "@capacitor/push-notifications": "8.1.2",
       },
     },
     "packages/design-tokens": {
