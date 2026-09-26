@@ -27,7 +27,11 @@ enum ContactCardExporter {
     /// Écrit l'export dans un fichier temporaire, prêt pour le tiroir de
     /// pièces jointes du composer (même voie qu'un fichier importé).
     static func writeTemporaryFile(_ export: Export, directory: URL = FileManager.default.temporaryDirectory) throws -> URL {
-        let url = directory.appendingPathComponent("contact_\(UUID().uuidString)_\(export.fileName)")
+        // Le nom du fichier téléversé devient `originalName` : il porte le nom du
+        // contact et rien d'autre (#8142) — l'unicité vit dans le DOSSIER.
+        let folder = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent(export.fileName)
         try export.data.write(to: url, options: .atomic)
         return url
     }

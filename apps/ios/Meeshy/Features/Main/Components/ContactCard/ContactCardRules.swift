@@ -23,7 +23,34 @@ enum ContactCardMime {
     }
 }
 
+/// Le nom HUMAIN d'une carte de visite lu dans son nom de fichier (#8142).
+///
+/// Avant #8142 le composer téléversait `contact_<UUID>_<nom>.vcf` : le préfixe
+/// technique voyageait jusqu'à VoiceOver. Les messages déjà envoyés le gardent,
+/// d'où ce décapage — le nom tel que l'auteur l'a nommé, jamais l'UUID.
+enum ContactCardName {
+    private static let temporaryPrefix = try! NSRegularExpression(
+        pattern: "^contact_[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}_"
+    )
+
+    static func fromFileName(_ fileName: String) -> String? {
+        let lowered = fileName.lowercased()
+        let suffix = [".vcf", ".vcard"].first(where: lowered.hasSuffix)
+        let base = suffix.map { String(fileName.dropLast($0.count)) } ?? fileName
+        let range = NSRange(base.startIndex..., in: base)
+        let stripped = temporaryPrefix.stringByReplacingMatches(in: base, range: range, withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty ? nil : stripped
+    }
+}
+
 extension MessageAttachment {
+    /// Le nom sous lequel la carte se dit quand la vCard n'est pas encore lue.
+    var contactCardFallbackName: String {
+        ContactCardName.fromFileName(originalName.isEmpty ? fileName : originalName)
+            ?? String(localized: "contact-card.shared", defaultValue: "Contact partagé", bundle: .main)
+    }
+
     var isContactCard: Bool {
         ContactCardMime.isContactCard(mimeType: mimeType, fileName: originalName.isEmpty ? fileName : originalName)
     }

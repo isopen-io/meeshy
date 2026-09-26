@@ -97,7 +97,7 @@ struct ContactCardView: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(card: model.card, account: model.primaryAccount, fallbackName: attachment.originalName))
+        .accessibilityLabel(Self.accessibilityLabel(card: model.card, account: model.primaryAccount, fallbackName: attachment.contactCardFallbackName))
         .accessibilityHint(String(localized: "contact-card.a11y-hint", defaultValue: "Appuyer pour ouvrir le contact", bundle: .main))
         .accessibilityAddTraits(.isButton)
     }
@@ -122,8 +122,7 @@ struct ContactCardView: View, Equatable {
     private var displayName: String {
         if let name = model.card?.displayName, !name.isEmpty { return name }
         if model.didFailToRead { return String(localized: "contact-card.unreadable", defaultValue: "Contact illisible", bundle: .main) }
-        let base = (attachment.originalName as NSString).deletingPathExtension
-        return base.isEmpty ? String(localized: "contact-card.shared", defaultValue: "Contact partagé", bundle: .main) : base
+        return attachment.contactCardFallbackName
     }
 
     // MARK: - Accessibilité

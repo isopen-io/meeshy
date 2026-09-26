@@ -170,6 +170,14 @@ enum MessageAccessibilityLabelComposer {
         for attachment in nonMedia {
             if attachment.type == .location {
                 parts.append(String(localized: "a11y.message.location", bundle: .main))
+            } else if attachment.isContactCard {
+                // #8142 — une carte de visite se dit par le contact, jamais par
+                // son fichier : la même phrase que la carte elle-même.
+                parts.append(ContactCardView.accessibilityLabel(
+                    card: VCardAttachmentLoader.shared.cachedCard(for: attachment),
+                    account: nil,
+                    fallbackName: attachment.contactCardFallbackName
+                ))
             } else {
                 parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), attachment.originalName))
             }
