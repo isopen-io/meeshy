@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
+import arMediaHub from './catalog-ar-media-hub';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
@@ -190,6 +191,7 @@ const ar = {
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
+  ...arMediaHub,
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,

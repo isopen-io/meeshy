@@ -121,6 +121,16 @@ export type MediaViewerProps = {
    * FIN, donc la page courante ne bouge pas.
    */
   readonly onNearEnd?: () => void;
+  /** L'AUTEUR DE CHAQUE PAGE (#6303) — le rapport d'ouverture se ferme sur SA
+   * propre pièce, page par page ; prime sur `isMine` quand il est posé. */
+  readonly isMineAt?: (index: number) => boolean;
+  /**
+   * OÙ SE POSE LA COUCHE (#8103) — `document.body` par défaut. Ouverte depuis
+   * une feuille (`<dialog>` en `showModal()`), elle doit vivre DANS ce
+   * dialogue : la couche supérieure du navigateur recouvre tout ce qui est
+   * hors d'elle, et le rend inerte.
+   */
+  readonly container?: Element | null;
 };
 
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
@@ -466,6 +476,8 @@ export default function MediaViewer({
   deps,
   carrierAt,
   onNearEnd,
+  isMineAt,
+  container,
 }: MediaViewerProps) {
   const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
@@ -715,7 +727,7 @@ export default function MediaViewer({
                   languages={languages}
                   fallbackLanguage={fallbackLanguage}
                   isActive={i === index}
-                  isMine={isMine}
+                  isMine={isMineAt?.(i) ?? isMine}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                   {...(deps !== undefined ? { deps } : {})}
                 />
@@ -759,6 +771,6 @@ export default function MediaViewer({
         {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
       </div>
     </div>,
-    document.body,
+    container ?? document.body,
   );
 }
