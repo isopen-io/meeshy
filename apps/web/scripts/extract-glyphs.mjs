@@ -767,7 +767,7 @@ emit({
   role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
 });
 
-const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank'];
 
 emit({
   ids: CALLS,

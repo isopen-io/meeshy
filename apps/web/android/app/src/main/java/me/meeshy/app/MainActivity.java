@@ -21,6 +21,30 @@ import com.getcapacitor.BridgeActivity;
  */
 public class MainActivity extends BridgeActivity {
 
+    /**
+     * #8049 — l'application est-elle a l'ecran ? Alors le socket fait deja
+     * sonner l'ecran d'appel, et une poussee d'appel ne pose PAS de seconde
+     * sonnerie (`CallPush`, jumeau de `visibilityState === 'visible'` dans
+     * `public/sw-push.js`). Processus tue : faux, la notification sonne.
+     */
+    private static volatile boolean inForeground;
+
+    static boolean isInForeground() {
+        return inForeground;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        inForeground = true;
+    }
+
+    @Override
+    public void onPause() {
+        inForeground = false;
+        super.onPause();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Un plugin local s'enregistre AVANT `super.onCreate` : c'est la que
@@ -28,6 +52,7 @@ public class MainActivity extends BridgeActivity {
         // #5819).
         registerPlugin(MeeshySharePlugin.class);
         registerPlugin(MeeshyLinksPlugin.class);
+        registerPlugin(MeeshyCallPlugin.class);
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher()
             .addCallback(
