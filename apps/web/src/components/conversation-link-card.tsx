@@ -9,6 +9,7 @@ import {
   cardWithMembership,
   conversationCardQueryKey,
   conversationCardQueryOptions,
+  conversationCardsFilter,
   leaveConversation,
   type ConversationCardDeps,
 } from '@/lib/api/conversation-card';
@@ -145,6 +146,7 @@ export function ConversationLinkCard({ target, deps, language, signedIn, account
       return;
     }
     queryClient.setQueryData(key, cardWithMembership(card, { isMember: true, conversationId: result.data.conversationId }));
+    void queryClient.invalidateQueries(conversationCardsFilter(result.data.conversationId));
     void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   };
 
@@ -162,6 +164,7 @@ export function ConversationLinkCard({ target, deps, language, signedIn, account
       setFailure('leave');
       return;
     }
+    void queryClient.invalidateQueries(conversationCardsFilter(conversationId));
     void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   };
 
