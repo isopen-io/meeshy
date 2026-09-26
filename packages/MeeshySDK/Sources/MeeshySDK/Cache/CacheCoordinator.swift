@@ -12,6 +12,11 @@ public actor CacheCoordinator {
 
     public let conversations: GRDBCacheStore<String, MeeshyConversation>
     public let messages: GRDBCacheStore<String, MeeshyMessage>
+    /// #8095 — l'INDEX des messages porteurs d'image ou de vidéo, clé =
+    /// conversationId, feuilleté depuis `?view=media`. Distinct de `messages` :
+    /// celui-ci est une fenêtre plafonnée que la chronologie réécrit, l'index
+    /// tient la conversation entière pour la galerie. Chiffré comme `messages`.
+    public let conversationMedia: GRDBCacheStore<String, MeeshyMessage>
     public let participants: GRDBCacheStore<String, PaginatedParticipant>
     public let profiles: GRDBCacheStore<String, MeeshyUser>
     public let feed: GRDBCacheStore<String, FeedPost>
@@ -306,6 +311,7 @@ public actor CacheCoordinator {
 
         self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv", encrypted: true)
         self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg", encrypted: true)
+        self.conversationMedia = GRDBCacheStore(policy: .conversationMedia, db: db, namespace: "convmedia", encrypted: true)
         self.participants = GRDBCacheStore(policy: .participants, db: db, namespace: "part")
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof", encrypted: true)
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
@@ -700,7 +706,7 @@ public actor CacheCoordinator {
     /// pensé à lui. Visibilité interne pour ce témoin.
     var allGRDBStores: [any GRDBDirtyFlushing] {
         [
-            conversations, messages, notifications, feed, stories, participants, profiles,
+            conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
             comments, statuses, communities, stats, engagementProgress, drafts,
             callTranscripts, friends, friendRequests, blockedUsers, userSearch,
             phonebook, affiliates, callHistory, timeline,
