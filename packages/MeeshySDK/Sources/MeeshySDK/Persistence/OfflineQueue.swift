@@ -682,7 +682,7 @@ public actor OfflineQueue {
     /// `retrySucceeded` event that lets active ViewModels reconcile the
     /// optimistic `clientMessageId` with the authoritative `serverId` before
     /// the socket `message:new` broadcast arrives.
-    public var onRetrySend: ((OfflineQueueItem) async -> String?)?
+    public var onRetrySend: (@concurrent (OfflineQueueItem) async -> String?)?
 
     public func setRetrySend(_ handler: @escaping @Sendable (OfflineQueueItem) async -> String?) {
         onRetrySend = handler

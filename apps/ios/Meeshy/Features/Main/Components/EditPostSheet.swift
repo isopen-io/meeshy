@@ -143,7 +143,7 @@ struct EditPostSheet: View {
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
     private static let maxLength = 5000
-    let onSave: (EditPostDraft) async -> Void
+    let onSave: @MainActor (EditPostDraft) async -> Void
     let onDismiss: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }

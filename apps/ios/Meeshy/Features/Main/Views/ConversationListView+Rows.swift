@@ -52,7 +52,7 @@ struct ConversationRowItem: View {
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onLoadPreview: () async -> Void
+    let onLoadPreview: @MainActor () async -> Void
     /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
     /// a bounded PREFIX of the list (`ConversationRowMetrics
     /// .autoPreviewLoadRowLimit`, computed by the caller via

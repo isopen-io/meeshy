@@ -335,7 +335,7 @@ struct MemberManagementSection: View {
         let label: String
         let icon: String
         let isDestructive: Bool
-        let handler: () async -> Void
+        let handler: @MainActor () async -> Void
     }
 
     /// Les gestes offerts sur un membre — construits À PARTIR de

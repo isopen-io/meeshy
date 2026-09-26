@@ -39,7 +39,7 @@ struct ThreadedCommentSection: View {
     /// chargées (le endpoint replies est paginé à 20). Affiche le bouton
     /// « Voir plus de réponses » en bas du fil déplié.
     var hasMoreReplies: Bool = false
-    var onLoadMoreReplies: (() async -> Void)? = nil
+    var onLoadMoreReplies: (@MainActor () async -> Void)? = nil
     /// Réponse surlignée (cible d'une notification). Le tint de section reste
     /// porté par le parent ; ici on teinte la rangée de la RÉPONSE ciblée.
     var highlightedCommentId: String? = nil

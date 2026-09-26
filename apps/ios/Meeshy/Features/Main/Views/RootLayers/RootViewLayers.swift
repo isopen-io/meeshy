@@ -81,7 +81,7 @@ struct RootStoryDoorsLayer: ViewModifier {
     /// Le corps de `.task` de la racine — connexion socket, abonnements,
     /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
     /// tout ce qu'il touche.
-    let onStart: () async -> Void
+    let onStart: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content

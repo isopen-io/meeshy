@@ -32,8 +32,8 @@ final class MockCategoryWriter: UserCategoryWriting, @unchecked Sendable {
     /// stores-10 — hooks d'observation « pendant l'appel » : permettent au
     /// test de lire l'état du store AU MOMENT où le service est sollicité
     /// (vérifier le signal optimiste, pas seulement l'état final).
-    var onUpdateCategory: (@Sendable () async -> Void)?
-    var onDeleteCategory: (@Sendable () async -> Void)?
+    var onUpdateCategory: (@Sendable @concurrent () async -> Void)?
+    var onDeleteCategory: (@Sendable @concurrent () async -> Void)?
 
     func updateCategory(
         id: String, name: String?, color: String?, icon: String?, isExpanded: Bool?

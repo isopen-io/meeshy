@@ -10,7 +10,7 @@ public struct CategoryPickerField: View {
     public let categories: [ConversationCategory]
     @Binding public var selectedId: String?
     public let accentColor: Color
-    public let onCreateCategory: (String) async -> ConversationCategory?
+    public let onCreateCategory: @MainActor (String) async -> ConversationCategory?
 
     @State private var editing: String = ""
     @FocusState private var focused: Bool
@@ -21,7 +21,7 @@ public struct CategoryPickerField: View {
         categories: [ConversationCategory],
         selectedId: Binding<String?>,
         accentColor: Color,
-        onCreateCategory: @escaping (String) async -> ConversationCategory?
+        onCreateCategory: @escaping @MainActor (String) async -> ConversationCategory?
     ) {
         self.categories = categories
         self._selectedId = selectedId

@@ -64,14 +64,14 @@ public struct UnifiedPostComposer: View {
     /// `mentions`. Les deux entrées de référence vivent donc dans le composer
     /// que les auteurs ouvrent réellement (`FeedComposerSheet`,
     /// `StatusComposerView`), sur `POST /posts`.
-    private let publishHandler: (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void
+    private let publishHandler: @MainActor (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void
 
     /// Async-throwing repost-mode publish handler. Nil when not in repost mode.
     /// When set, takes precedence over `publishHandler` in the Publish button.
     /// `(contenu, story source, audience choisie)`. L'audience était le
     /// paramètre manquant : le sélecteur s'affichait mais sa valeur n'allait
     /// nulle part — tout repost sortait avec la visibilité de l'original.
-    private let repostPublishHandler: ((String, StoryItem, String) async throws -> Void)?
+    private let repostPublishHandler: (@MainActor (String, StoryItem, String) async throws -> Void)?
 
     public var onDismiss: () -> Void
 
@@ -129,7 +129,7 @@ public struct UnifiedPostComposer: View {
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
-        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem, _ visibility: String) async throws -> Void,
+        onPublishRepost: @escaping @MainActor (_ content: String, _ sourceStory: StoryItem, _ visibility: String) async throws -> Void,
         onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {

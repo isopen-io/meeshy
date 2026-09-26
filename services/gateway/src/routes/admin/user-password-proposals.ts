@@ -13,6 +13,9 @@
  * `canModifyUser` en second verrou. Lire le pseudo d'un membre pour lui
  * proposer un secret est un pas du même geste — il n'a pas de seuil plus bas.
  *
+ * La réponse porte des secrets en clair : `Cache-Control: no-store`, pour
+ * qu'aucun navigateur ni proxy n'en garde copie.
+ *
  * Rien n'est écrit : aucune ligne d'audit. Le geste audité reste
  * l'APPLICATION (`logResetPassword`), le seul qui change le compte.
  */
@@ -54,6 +57,7 @@ export function registerUserPasswordProposalRoutes(fastify: FastifyInstance): vo
       }
 
       const proposals: PasswordProposals = proposePasswords({ source: target });
+      reply.header('Cache-Control', 'no-store');
       sendSuccess(reply, proposals);
     } catch (error) {
       logError(fastify.log, 'Error proposing passwords', error);

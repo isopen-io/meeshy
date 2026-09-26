@@ -144,7 +144,7 @@ public struct MeeshyVideoPlayer: View {
     /// résident) ; `resolve` prend le relais quand il manque.
     public struct Poster: Sendable {
         public let initial: UIImage?
-        public let resolve: (@Sendable () async -> UIImage?)?
+        public let resolve: (@Sendable @concurrent () async -> UIImage?)?
         public init(initial: UIImage? = nil, resolve: (@Sendable () async -> UIImage?)? = nil) {
             self.initial = initial
             self.resolve = resolve

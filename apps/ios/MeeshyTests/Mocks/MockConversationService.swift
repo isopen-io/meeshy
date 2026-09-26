@@ -19,7 +19,7 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     /// une réponse spécifique (garde anti-réponse-périmée de
     /// `ForwardPickerViewModel.search`) le temps qu'une seconde recherche
     /// aboutisse en premier. Prend le pas sur `searchResult` quand défini.
-    var searchHandler: (@Sendable (String) async -> Result<[APIConversation], Error>)?
+    var searchHandler: (@Sendable @concurrent (String) async -> Result<[APIConversation], Error>)?
     var getByIdResult: Result<APIConversation, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}

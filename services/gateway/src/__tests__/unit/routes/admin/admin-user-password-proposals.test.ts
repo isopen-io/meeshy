@@ -115,6 +115,13 @@ describe('POST /admin/users/:userId/password-proposals (#8051)', () => {
     }
   });
 
+  it('interdit toute mise en cache des secrets servis — ni navigateur, ni proxy', async () => {
+    const response = await propose(app);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+  });
+
   it('ne lit que ce que la composition demande — jamais la ligne entière', async () => {
     await propose(app);
 

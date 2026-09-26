@@ -60,7 +60,7 @@ struct iPadStoryAndLifecycleLayer: ViewModifier {
     let onRevealFeed: () -> Void
     let onAppear: () -> Void
     let onDisappear: () -> Void
-    let onStart: () async -> Void
+    let onStart: @MainActor () async -> Void
 
     func body(content: Content) -> some View {
         content
