@@ -14,6 +14,13 @@ import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Pri
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES, type CallEndedEvent, type CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import {
+  CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
+  CALL_CONNECTING_GRACE_MS,
+  CALL_HEARTBEAT_TIMEOUT_MS,
+  CALL_MAX_PARTICIPANTS,
+  CALL_RING_TIMEOUT_MS
+} from '@meeshy/shared/types/call-rules';
+import {
   buildCallSummaryWithMetadata,
   buildGarbageCollectedConversion,
   buildLiveCallMetadata,
@@ -75,15 +82,6 @@ const ACTIVE_STATUSES: CallStatus[] = [
   CallStatus.active,
   CallStatus.reconnecting
 ];
-
-/**
- * Hard ceiling on simultaneously-active participants in a single call
- * (levée du verrou 1:1, 2026-08-13). Direct conversations stay naturally
- * capped at their 2 members by the conversation-membership check in
- * `joinCall`; group calls accept every active conversation member up to
- * this ceiling.
- */
-export const MAX_CALL_PARTICIPANTS = 9999;
 
 // P3 — sender include for the call-summary system message, mirroring the
 // `message:new` broadcast shape produced by the normal message path so iOS/web
@@ -230,28 +228,15 @@ export class CallService {
   // Participants that signalled call:backgrounded; they receive an extended
   // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
   private backgroundedParticipants: Map<string, Set<string>> = new Map();
-  // Étage 2 de la cascade de budgets de sonnerie (audit 2026-07-11 #7) — les
-  // trois valeurs sont VOLONTAIREMENT distinctes, chaque étage rattrape le
-  // précédent s'il ne se déclenche pas :
-  //   45s  client iOS (WebRTCTypes.outgoingRingTimeoutSeconds — fail rapide UX)
-  //   60s  serveur missed (ICI — autorité : marque l'appel missed + push)
-  //  120s  GC (CallCleanupService.MAX_INITIATED_RINGING_MS — filet VoIP lent)
-  // Toute évolution doit préserver l'ordre strict 45 < 60 < 120.
-  private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
+  // Sonnerie, grâces et battements : `@meeshy/shared/types/call-rules` (#8074).
+  private readonly RINGING_TIMEOUT_MS = CALL_RING_TIMEOUT_MS;
   private readonly RINGING_REHYDRATE_FLOOR_MS = 5_000; // item H — min budget after boot rehydration
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
-  // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
-  // stream alive. Give backgrounded participants 5 min before timing them out.
-  private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
-  // Phantom-cleanup staleness budgets (P0 fix 2026-07-06, see
-  // `isPhantomCallStale`) — intentionally mirror CallCleanupService's own
-  // tiers (MAX_CONNECTING_MS / HEARTBEAT_TIMEOUT_MS) so a call classified as
-  // "stale" here is stale by the exact same yardstick the periodic GC sweep
-  // already uses, just evaluated immediately instead of on the next 60s tick.
-  // Declared independently (not imported) to avoid a value-level dependency
-  // on CallCleanupService, which already type-imports CallService.
-  private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
-  private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
+  private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS;
+  // Phantom-cleanup staleness (`isPhantomCallStale`): the SAME yardstick the
+  // periodic GC sweep uses, evaluated immediately instead of on the next tick.
+  private readonly PHANTOM_CONNECTING_GRACE_MS = CALL_CONNECTING_GRACE_MS;
+  private readonly PHANTOM_HEARTBEAT_GRACE_MS = CALL_HEARTBEAT_TIMEOUT_MS;
   // Live-call message — initiateCall's own GC sweeps (phantom/zombie) end
   // calls with `garbageCollected` WITHOUT going through any summary path: an
   // already-posted live message would read "en cours" forever. The socket
@@ -1333,7 +1318,7 @@ export class CallService {
 
   /**
    * TOCTOU close (audit 2026-07-02): the `activeParticipants.length >=
-   * MAX_CALL_PARTICIPANTS` check below reads a snapshot fetched before this
+   * CALL_MAX_PARTICIPANTS` check below reads a snapshot fetched before this
    * method's own write, so two callers racing to join the same call (a third
    * party racing the intended callee, or the same user answering from two
    * devices within milliseconds) could both read below the cap and both
@@ -1416,13 +1401,13 @@ export class CallService {
     }
 
     const activeParticipants = call.participants.filter((p) => !p.leftAt);
-    if (activeParticipants.length >= MAX_CALL_PARTICIPANTS) {
+    if (activeParticipants.length >= CALL_MAX_PARTICIPANTS) {
       logger.error('❌ Max participants reached for call', {
         callId,
         activeParticipants: activeParticipants.length
       });
       throw new Error(
-        `${CALL_ERROR_CODES.MAX_PARTICIPANTS_REACHED}: Maximum participants (${MAX_CALL_PARTICIPANTS}) reached for this call`
+        `${CALL_ERROR_CODES.MAX_PARTICIPANTS_REACHED}: Maximum participants (${CALL_MAX_PARTICIPANTS}) reached for this call`
       );
     }
 
