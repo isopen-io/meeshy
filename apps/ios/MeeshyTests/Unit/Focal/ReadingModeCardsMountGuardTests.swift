@@ -4,9 +4,10 @@ import XCTest
 /// #8139 — la carte de conversation et la carte de visite se rendent dans
 /// TOUS les modes de lecture, par UN point chacune.
 ///
-/// Les modes qui rendent des messages ont deux hôtes de rangée, et deux
-/// seulement : `BubbleStandardLayout` (Bulles) et `FocalRow` (Focal, Script,
-/// Rivière — le Résumé ne rend aucune rangée de message, il rend un digest).
+/// Les modes qui rendent des messages ont trois hôtes de rangée :
+/// `BubbleStandardLayout` (Bulles), `FocalRow` (Focal, Script) et
+/// `RiverBubbleView` (Rivière) — le Résumé ne rend aucune rangée de message,
+/// il rend un digest.
 /// Chaque carte a UN point de rendu que les deux hôtes montent :
 /// - la carte de conversation (et l'aperçu de lien, la façade vidéo) :
 ///   `BubbleLinkEmbed` ;
@@ -34,6 +35,7 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
     private let rowHosts = [
         "Views/Bubble/BubbleStandardLayout.swift",
         "Focal/Row/FocalRow.swift",
+        "Riviere/View/RiverBubbleView.swift",
     ]
 
     func test_rowHosts_everyReadingModeHost_mountsTheLinkEmbed() throws {

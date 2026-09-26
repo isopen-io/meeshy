@@ -3,6 +3,36 @@ import MeeshySDK
 import MeeshyUI
 
 extension BubbleContent {
+    /// Le texte d'un message et ce que son PREMIER lien porte (aperçu, façade
+    /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
+    /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
+    /// par diverger au premier format de lien ajouté.
+    static func text(
+        raw: String,
+        trackedLinks: [String: String],
+        isEmojiOnly: Bool = false,
+        emojiFontSize: CGFloat? = nil
+    ) -> Text {
+        // Précalcul unique du lien (NSDataDetector) — réutilisé par
+        // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
+        let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
+        // Outbound-link tracking: resolve the embed façade destination ONCE here
+        // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
+        let embedTrackedURL: URL? = firstLinkURL
+            .flatMap { trackedLinks[$0] }
+            .flatMap { URL(string: "https://meeshy.me/l/\($0)") }
+        return Text(
+            raw: raw,
+            isEmojiOnly: isEmojiOnly,
+            emojiFontSize: emojiFontSize,
+            firstLinkURL: firstLinkURL,
+            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
+            trackedLinks: trackedLinks,
+            embedTrackedURL: embedTrackedURL,
+            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+        )
+    }
+
     /// Construit le BubbleContent depuis un Message + son contexte de traduction.
     /// Centralise toute la logique aujourd'hui inline dans ThemedMessageBubble :
     /// effectiveContent, currentDisplayLangCode, hasAnyTranslation, isEmojiOnly,
@@ -154,24 +184,11 @@ extension BubbleContent {
             return EmojiDetector.analyze(message.content)
         }()
         let isEmojiOnly = emojiResult != .notEmojiOnly
-        let firstLinkURL = LinkPreviewFetcher.firstURL(in: effective)
-        // Outbound-link tracking: resolve the embed façade destination ONCE here
-        // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
-        let embedTrackedURL: URL? = firstLinkURL
-            .flatMap { message.trackedLinkMap[$0] }
-            .flatMap { URL(string: "https://meeshy.me/l/\($0)") }
-        self.text = effective.isEmpty ? nil : Text(
+        self.text = effective.isEmpty ? nil : Self.text(
             raw: effective,
-            isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize,
-            // Précalcul unique du lien (NSDataDetector) — réutilisé par
-            // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
-            firstLinkURL: firstLinkURL,
-            // Résolution embed vidéo (YouTube) au même endroit, une seule fois.
-            embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
             trackedLinks: message.trackedLinkMap,
-            embedTrackedURL: embedTrackedURL,
-            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+            isEmojiOnly: isEmojiOnly,
+            emojiFontSize: emojiResult.fontSize
         )
 
         // --- Translation panel ---
