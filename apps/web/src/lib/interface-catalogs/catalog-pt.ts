@@ -11,6 +11,7 @@ import ptSignup from './catalog-pt-signup';
 import ptMentions from './catalog-pt-mentions';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
+import ptContactCard from './catalog-pt-contact-card';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1133,6 +1134,7 @@ const pt = {
   ...ptMentions,
   ...ptConversationCard,
   ...ptStoriesMine,
+  ...ptContactCard,
 } satisfies InterfaceCatalog;
 
 export default pt;

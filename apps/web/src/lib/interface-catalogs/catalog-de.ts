@@ -11,6 +11,7 @@ import deSignup from './catalog-de-signup';
 import deMentions from './catalog-de-mentions';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
+import deContactCard from './catalog-de-contact-card';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1129,6 +1130,7 @@ const de = {
   ...deMentions,
   ...deConversationCard,
   ...deStoriesMine,
+  ...deContactCard,
 } satisfies InterfaceCatalog;
 
 export default de;
