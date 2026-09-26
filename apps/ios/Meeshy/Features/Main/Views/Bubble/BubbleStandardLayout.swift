@@ -416,18 +416,7 @@ struct BubbleStandardLayout: View {
         hasSharedPlace: Bool,
         nonMedia: [MessageAttachment]
     ) -> [String] {
-        var parts: [String] = []
-        if hasSharedPlace {
-            parts.append(String(localized: "a11y.message.location", bundle: .main))
-        }
-        for att in nonMedia {
-            if att.type == .location {
-                parts.append(String(localized: "a11y.message.location", bundle: .main))
-            } else {
-                parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
-            }
-        }
-        return parts
+        MessageAccessibilityLabelComposer.nonMediaAccessibilityParts(hasSharedPlace: hasSharedPlace, nonMedia: nonMedia)
     }
 
     private var messageAccessibilityLabel: String {

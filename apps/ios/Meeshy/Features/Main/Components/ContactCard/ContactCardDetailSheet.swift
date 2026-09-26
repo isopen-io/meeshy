@@ -237,8 +237,8 @@ struct ContactCardDetailSheet: View {
     }
 
     static func initials(_ name: String) -> String {
-        let letters = name.split(separator: " ").prefix(2).compactMap(\.first)
-        return letters.isEmpty ? "?" : String(letters).uppercased()
+        let letters = MeeshyAvatar.initials(for: name)
+        return letters.isEmpty ? "?" : letters
     }
 }
 

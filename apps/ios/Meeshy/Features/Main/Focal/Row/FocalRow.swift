@@ -516,6 +516,20 @@ struct FocalRow: View {
             audioBlock
             nonMediaBlock
             textOrEmojiBlock
+            linkEmbedBlock
+        }
+    }
+
+    /// La carte de conversation, la façade vidéo ou l'aperçu de lien du
+    /// premier lien — le MÊME `BubbleLinkEmbed` que la bulle (#8139) : Focal,
+    /// Script et Rivière le rendaient en texte seul. Même garde que le texte
+    /// (le widget audio qui héberge la légende n'a pas de carte en bulle non
+    /// plus) ; un sticker ou un emoji seul ne porte aucun lien.
+    @ViewBuilder
+    private var linkEmbedBlock: some View {
+        if content.sticker == nil, audioMode != .hostsCaption, let text = content.text, !text.isEmojiOnly {
+            BubbleLinkEmbed(text: text, accentColor: input.accentHex, isDark: input.isDark)
+                .padding(.leading, indent)
         }
     }
 

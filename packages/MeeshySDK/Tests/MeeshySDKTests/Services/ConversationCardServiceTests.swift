@@ -107,4 +107,56 @@ final class ConversationCardServiceTests: XCTestCase {
             return XCTFail("invalidate vide l'entrée")
         }
     }
+
+    // MARK: - #8138 — une conversation, toutes ses cartes
+
+    private static func memberCard(kind: ConversationCardKind, conversationId: String) -> ConversationCard {
+        ConversationCard(
+            kind: kind, conversationId: conversationId, title: "Club", description: nil,
+            avatarUrl: nil, bannerUrl: nil, conversationType: "group",
+            stats: ConversationCardStats(memberCount: 2, messageCount: nil, languages: []),
+            viewer: ConversationCardViewer(isMember: true, canJoin: false, requiresAccount: false, canJoinAnonymously: false),
+            link: kind == .shareLink ? ConversationCardLink(identifier: "abc", isActive: true, expiresAt: nil) : nil
+        )
+    }
+
+    func test_invalidateConversation_directPrivateCard_isEmptiedByAJoinThroughTheShareLink() {
+        let service = makeService(MockAPIClient())
+        service.store(.privateConversation, for: .direct(conversationId: "c1"))
+        service.invalidate(conversationId: "c1", from: .shareLink(identifier: "abc"))
+        guard case .empty = service.cached(.direct(conversationId: "c1")) else {
+            return XCTFail("la carte directe « privée » d'une conversation rejointe doit être relue")
+        }
+    }
+
+    func test_invalidateConversation_shareLinkMemberCard_isEmptiedByALeaveThroughTheDirectLink() {
+        let service = makeService(MockAPIClient())
+        service.store(.card(Self.memberCard(kind: .shareLink, conversationId: "c1")), for: .shareLink(identifier: "abc"))
+        service.invalidate(conversationId: "c1", from: .direct(conversationId: "c1"))
+        guard case .empty = service.cached(.shareLink(identifier: "abc")) else {
+            return XCTFail("la carte de partage « membre » d'une conversation quittée doit être relue")
+        }
+    }
+
+    func test_invalidateConversation_otherConversations_areKept() {
+        let service = makeService(MockAPIClient())
+        service.store(.privateConversation, for: .direct(conversationId: "c2"))
+        service.store(.card(Self.memberCard(kind: .shareLink, conversationId: "c2")), for: .shareLink(identifier: "zz"))
+        service.invalidate(conversationId: "c1", from: .direct(conversationId: "c1"))
+        guard case .fresh = service.cached(.direct(conversationId: "c2")),
+              case .fresh = service.cached(.shareLink(identifier: "zz")) else {
+            return XCTFail("les cartes d'une AUTRE conversation ne bougent pas")
+        }
+    }
+
+    func test_invalidateConversation_announcesTheChangeWithItsOrigin() {
+        let service = makeService(MockAPIClient())
+        let posted = expectation(forNotification: ConversationCardChange.notification, object: nil) { note in
+            (note.object as? ConversationCardChange) == ConversationCardChange(
+                conversationId: "c1", origin: .shareLink(identifier: "abc")
+            )
+        }
+        service.invalidate(conversationId: "c1", from: .shareLink(identifier: "abc"))
+        wait(for: [posted], timeout: 1)
+    }
 }
