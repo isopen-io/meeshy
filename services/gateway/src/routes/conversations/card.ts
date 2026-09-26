@@ -29,17 +29,12 @@ const logger = enhancedLogger.child({ module: 'ConversationCardRoutes' });
 
 type PreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
-const cardResponseSchema = {
-  200: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean', example: true },
-      data: conversationCardSchema
-    }
-  },
-  401: errorResponseSchema,
-  404: errorResponseSchema,
-  500: errorResponseSchema
+const cardSuccessSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: conversationCardSchema
+  }
 } as const;
 
 const REFUS_DE_CARTE: MessagesDeRefusDAcces = {
@@ -61,7 +56,12 @@ export function registerShareLinkCardRoute(
         required: ['identifier'],
         properties: { identifier: { type: 'string' } }
       },
-      response: cardResponseSchema
+      response: {
+        200: cardSuccessSchema,
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
     },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
@@ -99,7 +99,12 @@ export function registerDirectConversationCardRoute(
         required: ['id'],
         properties: { id: { type: 'string' } }
       },
-      response: cardResponseSchema
+      response: {
+        200: cardSuccessSchema,
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
     },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
