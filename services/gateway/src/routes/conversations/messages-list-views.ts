@@ -1,12 +1,12 @@
 /**
- * Les QUATRE VUES de la collection de messages (#4340 critère 1).
+ * Les CINQ VUES de la collection de messages (#4340 critère 1, #8095).
  *
  * ## Ce que ce module change, et ce qu'il ne change pas
  *
  * Trois adresses lisaient la même collection : `GET .../messages` (chronologie
  * et fil de réponses), `GET .../messages/search` et `GET .../pinned-messages`.
- * Ce module fait de `?view=timeline|thread|pinned|search` le SÉLECTEUR de la
- * collection unique — sans retirer aucune adresse : les deux routes dédiées
+ * Ce module fait de `?view=timeline|thread|pinned|search|media` le SÉLECTEUR de
+ * la collection unique — sans retirer aucune adresse : les deux routes dédiées
  * restent servies, inchangées, et leur transformation en alias est un lot
  * suivant.
  *
@@ -36,10 +36,20 @@
  *   comptage, la route ne sélectionnant pas `_count`.
  *
  * Un paramètre `view` qui se contenterait de router vers ces trois formes
- * n'aurait rien unifié. Les quatre vues passent donc par le MÊME `select`, le
+ * n'aurait rien unifié. Les cinq vues passent donc par le MÊME `select`, le
  * MÊME sérialiseur et les MÊMES gardes que la chronologie ; ce module ne rend
  * que ce qui les distingue vraiment — un prédicat, un ordre, et la façon de
  * résoudre l'ensemble cherché.
+ *
+ * ## La vue des médias (#8095)
+ *
+ * `view=media` n'a PAS de route dédiée à unifier : elle est née dans la
+ * collection, pour que la galerie d'une conversation (iOS, web #6303) indexe
+ * TOUS ses médias — y compris ceux des messages qu'aucun client n'a encore
+ * chargés — sous les mêmes portes, le même plancher, le même masquage
+ * personnel et le même sérialiseur que le fil. Une route jumelle aurait dû
+ * recopier chacune de ces gardes, et la table de `messages-collection-view-parity`
+ * montre ce qu'une recopie finit par oublier.
  *
  * ## Le rang de `?replyToId=`
  *
@@ -52,11 +62,12 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
+import { GENRES_DE_MEDIA, lireGenres, predicatDeMedia } from './messages-media-kinds';
 
-/** Les quatre sous-collections que `?view=` sait désigner. */
-export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search';
+/** Les cinq sous-collections que `?view=` sait désigner. */
+export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search' | 'media';
 
-const VUES: readonly CollectionView[] = ['timeline', 'thread', 'pinned', 'search'];
+const VUES: readonly CollectionView[] = ['timeline', 'thread', 'pinned', 'search', 'media'];
 
 /** La longueur minimale d'un terme de recherche — celle du schéma de `…/messages/search`. */
 const LONGUEUR_MINIMALE_RECHERCHE = 2;
@@ -96,7 +107,42 @@ export type ParametresDeVue = {
   readonly parentId?: string;
   readonly replyToId?: string;
   readonly q?: string;
+  /** `view=media` seulement (#8098) : les genres de l'index, séparés par des virgules. */
+  readonly kinds?: string;
 };
+
+/**
+ * Un message que l'index de la conversation peut feuilleter (#8095, #8098).
+ *
+ * La vue unique est exclue aux DEUX niveaux qui la déclarent — le message et la
+ * pièce — parce qu'un index rouvre à volonté ce qu'une vue unique ne montre
+ * qu'une fois. Un message mixte (une image à vue unique, une vidéo ordinaire)
+ * entre par sa pièce ordinaire ; c'est au sérialiseur, déjà gardé, de masquer
+ * l'autre. Les genres et leur traduction en clauses vivent dans
+ * `messages-media-kinds.ts`.
+ */
+function vueDesMedias(params: ParametresDeVue): ResolutionDeVue {
+  const genres = lireGenres(params.kinds);
+  if ('genre' in genres) return genres;
+
+  const terme = params.q === undefined ? undefined : params.q.trim();
+  if (terme !== undefined && terme.length < LONGUEUR_MINIMALE_RECHERCHE) {
+    return {
+      genre: 'refus',
+      message: `view=media accepts q of at least ${LONGUEUR_MINIMALE_RECHERCHE} characters`,
+    };
+  }
+
+  return {
+    genre: 'ok',
+    view: 'media',
+    predicate: predicatDeMedia(genres, terme),
+    orderBy: { createdAt: 'desc' },
+    // Même raison que `pinned` : la fenêtre remplirait ses deux moitiés de
+    // messages hors de l'index, puis les perdrait au filtrage.
+    allowsAround: false,
+  };
+}
 
 const CHRONOLOGIE: VueResolue = {
   genre: 'ok',
@@ -121,6 +167,12 @@ export function resolveCollectionView(params: ParametresDeVue): ResolutionDeVue 
 
   // Sans `?view=`, `?replyToId=` reste le moyen historique de demander le fil
   // d'un message. Il désigne la MÊME sous-collection que `view=thread`.
+  // `?kinds=` ne sélectionne que dans l'index : ailleurs, il se REFUSE plutôt
+  // que de disparaître — même doctrine que `replyToId` plus bas.
+  if (params.kinds !== undefined && demandee !== 'media') {
+    return { genre: 'refus', message: `kinds requires view=media (got view=${demandee || 'timeline'})` };
+  }
+
   if (!demandee) {
     return params.replyToId ? filDeReponses(params.replyToId) : CHRONOLOGIE;
   }
@@ -150,6 +202,8 @@ export function resolveCollectionView(params: ParametresDeVue): ResolutionDeVue 
   }
 
   if (view === 'timeline') return CHRONOLOGIE;
+
+  if (view === 'media') return vueDesMedias(params);
 
   if (view === 'pinned') {
     return {
@@ -208,7 +262,7 @@ export const MESSAGES_VIEW_QUERY_PROPERTIES = {
   view: {
     type: 'string',
     description:
-      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q). Les quatre passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
+      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q), 'media' (#8095, #8098 — l'index de la conversation, filtré par kinds et q ; jamais un message ni une pièce à vue unique ; createdAt desc, pagination par before, around ignoré). Les cinq passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
   },
   parentId: {
     type: 'string',
@@ -216,7 +270,12 @@ export const MESSAGES_VIEW_QUERY_PROPERTIES = {
   },
   q: {
     type: 'string',
-    description: '#4340 — requis par view=search : le terme cherché dans le contenu ET les traductions (2 caractères minimum).',
+    description:
+      "#4340 — requis par view=search : le terme cherché dans le contenu ET les traductions (2 caractères minimum). #8098 — facultatif sur view=media : restreint l'index aux messages dont le contenu ou le nom d'origine d'une pièce contient le terme, sans tenir compte de la casse (2 caractères minimum, sinon 400 INVALID_VIEW). Ignoré par les autres vues.",
+  },
+  kinds: {
+    type: 'string',
+    description: `#8098 — view=media seulement : genres de l'index, séparés par des virgules, combinés en UNION — ${GENRES_DE_MEDIA.join(', ')}. visual = pièce image/* ou video/* ; audio = pièce audio/* ; contact = pièce text/vcard ou text/x-vcard ; document = toute autre pièce ; link = contenu portant http:// ou https:// ; conversation = contenu portant une adresse de conversation Meeshy (meeshy.me/chat/, /join/, /c/, /conversation/, ou meeshy://) ; location = message de type location. Absent ⇒ visual. Un genre inconnu, ou kinds sur une autre vue, est refusé en 400 INVALID_VIEW.`,
   },
 } as const;
 

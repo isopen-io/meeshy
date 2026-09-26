@@ -198,6 +198,7 @@ struct LoginView: View {
                 email: entry.pending.email,
                 password: entry.password,
                 accountCreated: entry.pending.accountCreated,
+                pendingSessionToken: entry.pending.pendingSessionToken,
                 onVerified: { sessionGate.openWhenDismissed($0) }
             )
         }

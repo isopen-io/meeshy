@@ -296,8 +296,21 @@ final class SignupViewAccessibilityTests: XCTestCase {
         let body = try code(Self.signupView)
         let hint = try code(Self.infoHint)
 
-        XCTAssertTrue(body.contains("accessibilityHint(hint?.text ?? \"\")"),
+        // #8054 a porté libellé et détail dans `FieldBlockAccessibility`, pour
+        // qu'un contenu à plusieurs éléments (mot de passe + œil) se libelle
+        // lui-même. Le détail doit toujours y ARRIVER, et y être POSÉ.
+        XCTAssertTrue(body.contains("FieldBlockAccessibility(label: label, hint: hint?.text ?? \"\", applies: labelsContent)"),
                       "le CHAMP porte le détail : VoiceOver l'énonce sans que le bouton soit trouvé")
+        XCTAssertTrue(body.contains("content.accessibilityLabel(label).accessibilityHint(hint)"),
+                      "le modificateur du bloc POSE le détail sur le champ")
+        let callSites = body.components(separatedBy: "fieldBlock(").dropFirst()
+            .map { $0.components(separatedBy: ") {").first ?? "" }
+        XCTAssertTrue(callSites.contains { $0.contains("hint:") },
+                      "au moins un champ du bloc porte un (i) — sinon ce témoin ne mesure rien")
+        for call in callSites where call.contains("hint:") {
+            XCTAssertFalse(call.contains("labelsContent: false"),
+                           "un champ qui a un (i) ne peut pas se libeller seul : son détail ne serait plus énoncé")
+        }
         XCTAssertTrue(hint.contains("accessibilityValue(hint.text)"),
                       "et le BOUTON le porte aussi — « en savoir plus » seul n'apprend rien")
         XCTAssertTrue(hint.contains("meeshyTapTarget()"),

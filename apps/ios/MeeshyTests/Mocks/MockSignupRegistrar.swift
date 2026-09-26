@@ -65,3 +65,19 @@ final class MockPushPermissionDeferral: PushPermissionDeferring {
         resolveCallCount = 0
     }
 }
+
+/// Test double pour `PendingReferralStoreProviding` (#8075) — le code
+/// d'invitation EN MÉMOIRE, sans toucher aux `UserDefaults` du simulateur.
+final class MockPendingReferralStore: PendingReferralStoreProviding {
+    private(set) var code: String?
+    private(set) var forgetCallCount = 0
+
+    init(code: String? = nil) { self.code = code }
+
+    func remember(_ code: String) { self.code = code }
+    func recall() -> String? { code }
+    func forget() {
+        forgetCallCount += 1
+        code = nil
+    }
+}

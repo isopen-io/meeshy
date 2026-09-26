@@ -14,15 +14,23 @@
  *   rend plus rien de positif ;
  * - **comparaison sur l'empreinte, en temps constant** (`./email-code`) — la
  *   requête ne porte jamais le code saisi ;
- * - **usage unique** : la paire se consomme par une écriture CONDITIONNÉE à la
- *   paire lue ; deux présentations simultanées n'en valident qu'une ;
+ * - **usage unique** : chaque clé se consomme par une écriture CONDITIONNÉE à
+ *   la paire lue ; deux présentations simultanées n'en valident qu'une ;
  * - **expiration** lue sur la ligne (15 min pour une connexion, la durée de
  *   vérification pour une inscription) ;
  * - **compte supprimé** : jamais cherché (`isActive: true`) ;
  * - **mot de passe** : posé avec le CODE seulement, et seulement sur un compte
  *   qui n'en a pas — cette porte ne remplace jamais un secret existant ;
  * - **second facteur** : l'état est RENDU, pour que l'appelant n'ouvre pas de
- *   session sur un compte qui en exige un.
+ *   session sur un compte qui en exige un ;
+ * - **deux clés distinctes** (#8083, décision porteur « si et seulement
+ *   si ») : le lien et le code ouvrent chacun UNE session, sur l'appareil qui
+ *   s'en sert, et chacun ne consomme que LUI-MÊME. Le lien s'ouvre souvent sur
+ *   un ORDINATEUR, et le téléphone qui a demandé le code ne se connecte qu'en
+ *   le saisissant : ouvrir l'un laisse l'autre valable jusqu'à l'expiration de
+ *   la paire, à usage unique, ses essais bornés par le débit de la route ;
+ * - **les appareils en attente l'apprennent** (#8083) : toute preuve marque
+ *   « prouvée » les attentes vivantes du compte — un ÉTAT, jamais une session.
  *
  * @module services/auth/email-proof.service
  */
@@ -34,6 +42,7 @@ import { normalizeEmail } from '../../utils/normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveSecondFactor, type SecondFactorState } from '../MagicLinkService';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
+import { markEmailVerificationWatchesProven, type EmailVerificationWatchStore } from './email-verification-watch';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
 
@@ -76,7 +85,7 @@ type ProofRow = {
 };
 
 export async function verifyEmailProof(
-  prisma: Pick<PrismaClient, 'user'>,
+  prisma: Pick<PrismaClient, 'user'> & EmailVerificationWatchStore,
   proof: EmailProof,
 ): Promise<EmailProofResult> {
   const parCode = typeof proof.code === 'string' && proof.code.length > 0;
@@ -120,14 +129,14 @@ export async function verifyEmailProof(
       },
       data: {
         ...(ligne.emailVerifiedAt ? {} : { emailVerifiedAt: maintenant }),
-        emailVerificationToken: null,
-        emailVerificationCode: null,
-        emailVerificationExpiry: null,
+        ...(parCode ? { emailVerificationCode: null } : { emailVerificationToken: null }),
         ...(password ? { password, lastPasswordChange: maintenant } : {}),
       },
     });
 
     if (consomme.count === 0) return invalide;
+
+    await markEmailVerificationWatchesProven(prisma, { userId: ligne.id, now: maintenant });
 
     logger.info(`adresse prouvée (${parCode ? 'code' : 'lien'})`);
     return {

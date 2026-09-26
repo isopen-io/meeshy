@@ -91,7 +91,7 @@ enum SignInLinkOpener {
             sessionGate.open { auth.openSession(proven) }
             toasts.showSuccess(signedInMessage)
         } catch {
-            toasts.showError((error as? LocalizedError)?.errorDescription ?? invalidLinkMessage)
+            toasts.showError(EmailProofErrorText.linkMessage(for: error))
             logger.error("Sign-in link validation failed")
         }
     }
@@ -108,9 +108,5 @@ enum SignInLinkOpener {
 
     private static var signedInMessage: String {
         String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main)
-    }
-
-    private static var invalidLinkMessage: String {
-        String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main)
     }
 }

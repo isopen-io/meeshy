@@ -2,9 +2,15 @@ import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
-import { verificationOpensSession, verifyEmailBody, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
+import {
+  verificationOpensSession,
+  verifyEmailBody,
+  type VerificationStatusData,
+  type VerifyEmailData,
+  type VerifyEmailRequest,
+} from './verify-email';
 
-export { verificationOpensSession, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
+export { verificationOpensSession, type VerificationStatusData, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
 
 /**
  * LE FLUX DE CONNEXION (#5605, T4) — compose les requêtes EXACTES de
@@ -44,13 +50,19 @@ type LoginTwoFactorData = {
  * UN E-MAIL INCONNU À LA CONNEXION DEVIENT UN COMPTE (#8034, contrat #8033) —
  * la passerelle crée le compte SANS mot de passe ni session et envoie un code
  * et un lien. `accountCreated:false` : le compte existait, jamais vérifié, et
- * le code vient d'être renvoyé. AUCUN jeton : la reprise est à l'écran du
- * code, jamais au magasin.
+ * le code vient d'être renvoyé. AUCUN jeton de session : la reprise est à
+ * l'écran du code, jamais au magasin.
+ *
+ * `pendingSessionToken` (#8083) : le jeton d'ATTENTE de CET appareil — il ne
+ * lit que l'état `pending` / `proven` (`verificationStatus`), jamais une
+ * session. Tenu en mémoire vive (`pending-verification.ts`), jamais stocké,
+ * jamais dans l'adresse, jamais journalisé.
  */
 export type LoginVerificationRequiredData = {
   readonly status: 'verification-required';
   readonly accountCreated: boolean;
   readonly email: string;
+  readonly pendingSessionToken?: string;
 };
 
 export type LoginResponseData = LoginSuccessData | LoginTwoFactorData | LoginVerificationRequiredData;
@@ -198,7 +210,7 @@ function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): vo
 /** `POST /auth/magic-link/request` (`routes/magic-link.ts:45-118`) —
  * `expiresInSeconds` optionnel : ABSENT sur un refus de débit dépassé
  * emballé en 200 (§ 3.1 de la spécification, § `view/magic-link.ts`). */
-export type MagicLinkRequestData = { readonly expiresInSeconds?: number };
+export type MagicLinkRequestData = { readonly expiresInSeconds?: number; readonly pendingSessionToken?: string };
 
 /** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
  * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
@@ -369,6 +381,16 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return result;
   }
 
+  /** `POST /auth/verification/status` (#8083) — un ÉTAT, AUCUNE écriture de
+   * magasin : l'appareil ne se connecte que par le code ou le lien. */
+  async function verificationStatus(pendingSessionToken: string): Promise<ApiResult<VerificationStatusData>> {
+    return transport.request<VerificationStatusData>({
+      method: 'POST',
+      path: '/api/v1/auth/verification/status',
+      body: { pendingSessionToken },
+    });
+  }
+
   /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
    * que `forgotPassword` : la passerelle répond 200 que le compte existe ou non. */
   async function resendVerification(email: string): Promise<ApiResult<ResendVerificationData>> {
@@ -433,6 +455,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     validateMagicLink,
     forgotPassword,
     verifyEmail,
+    verificationStatus,
     resendVerification,
     verifyResetToken,
     resetPassword,

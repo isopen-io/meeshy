@@ -40,3 +40,12 @@ export function verifyEmailBody(request: VerifyEmailRequest): Record<string, str
   const password = request.password ?? '';
   return { email: request.email, code: request.code, ...(password !== '' ? { password } : {}) };
 }
+
+/**
+ * `POST /auth/verification/status` (#8083) — l'adresse a-t-elle été prouvée
+ * (code ou lien, où que ce soit) depuis que CET appareil a reçu son jeton
+ * d'attente ? Un ÉTAT, jamais une session : l'appareil ne se connecte que par
+ * le code saisi sur lui ou le lien ouvert sur lui. 401 jeton inconnu, 410
+ * expiré.
+ */
+export type VerificationStatusData = { readonly status: 'pending' | 'proven' };
