@@ -5,6 +5,7 @@ import esMediaHub from './catalog-es-media-hub';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
+import esRowActions from './catalog-es-row-actions';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
 import esCallDevices from './catalog-es-call-devices';
@@ -201,6 +202,7 @@ const es = {
   ...esVerifyEmail,
   ...esPassword,
   ...esCall,
+  ...esRowActions,
   ...esCallShell,
   ...esCallJoin,
   ...esCallDevices,
@@ -1025,6 +1027,8 @@ const es = {
 
   'thread.unread-separator.one': '{count} mensaje no leído',
   'thread.unread-separator.other': '{count} mensajes no leídos',
+  'thread.long-message.read-more': 'Leer más',
+  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',

@@ -18,6 +18,7 @@ import frMediaHub from './catalog-fr-media-hub';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
+import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDevices from './catalog-fr-call-devices';
@@ -191,6 +192,7 @@ const fr = {
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
+  ...frRowActions,
   ...frCallShell,
   ...frCallJoin,
   ...frCallDevices,
@@ -1067,6 +1069,8 @@ const fr = {
 
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
+  'thread.long-message.read-more': 'Lire la suite',
+  'thread.long-message.collapse': 'Réduire',
   'message-detail.info.title': 'Infos du message',
   'message-detail.received-by': 'Reçu par',
   'message-detail.read-by': 'Vu par',

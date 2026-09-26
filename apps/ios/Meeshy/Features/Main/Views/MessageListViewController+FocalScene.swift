@@ -96,15 +96,13 @@ extension MessageListViewController {
         guard isViewLoaded else { return }
         let cells = collectionView.visibleCells
         let flatten = {
-            for cell in cells {
-                FocalScrollPerspective.reset(cell.contentView.layer)
-                FocalScrollPerspective.focusCard(in: cell.contentView)?.alpha = 0
-            }
+            for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
         }
         let finish = { [weak self] in
             guard let self, !self.focalSceneActive else { return }
-            for cell in cells { FocalScrollPerspective.hideFocusCard(in: cell.contentView) }
             self.syncFocalFocusDetails()
+            // #8147 — un message long déplié garde son effet Focal au repos.
+            self.applyLongMessageExpansionPresentation(animated: true)
         }
         if animated {
             UIView.animate(
@@ -134,6 +132,9 @@ extension MessageListViewController {
     /// anime depuis la valeur présentée (pas de saut) ; ensuite, sec.
     func applyFocalPerspectiveToVisibleCells() {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
+        // #8147 — un message long déplié ET visible est LA mise en avant : la
+        // scène lui cède les layers (une seule loupe, un seul bloc de verre).
+        guard !isLongMessageExpansionVisible else { return applyLongMessageExpansionPresentation(animated: false) }
         let focusY = focalFocusY
         let cells = collectionView.visibleCells
         // **Tant que la magnificence n'est pas armée, le fil défile comme en
@@ -207,14 +208,9 @@ extension MessageListViewController {
            FocalFocusDetailsMotionLaw.revealsDetails(speed: focalScrollSpeedMeter.speed) {
             syncFocalFocusDetails()
         }
-        // La carte du focus est le FOND SwiftUI de la rangée
-        // (`FocalRow.focusCardBackground`, posée à la reconfiguration du tick
-        // d'élection) : plus AUCUNE carte UIKit n'est posée par cette passe,
-        // donc plus rien à démonter ici. Le balayage des sous-vues qui s'y
-        // trouvait tournait par cellule et par frame pour retirer une vue
-        // qui n'existe plus. Le démontage d'une carte héritée d'un recyclage
-        // reste assuré aux deux seuls points qui en produisent l'occasion :
-        // la registration (cellule (re)configurée) et `flattenFocalScene`.
+        // La carte du focus est le FOND SwiftUI de la rangée — un bloc de
+        // verre depuis #8147 (`FocalGlassBlock`). Il n'existe plus AUCUNE
+        // carte UIKit : rien à poser ni à démonter par cellule et par frame.
     }
 
     /// Les détails du message en focus (identité, jour + heure, texte

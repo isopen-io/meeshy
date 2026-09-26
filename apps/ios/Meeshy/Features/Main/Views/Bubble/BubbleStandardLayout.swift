@@ -255,12 +255,12 @@ struct BubbleStandardLayout: View {
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
     /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
-    /// bubbles: their measured height depends on the per-cell `isExpanded`
-    /// @State of `BubbleExpandableText`, which the content-keyed cache cannot
+    /// bubbles: their measured height depends on the host's expansion state
+    /// (`longMessageExpansion`, #8147), which the content-keyed cache cannot
     /// observe — so a long message always measures live and never risks a stale
     /// collapsed/expanded height. Every other bubble keys on (id, content).
     private var heightCacheContext: BubbleHeightCacheContext? {
-        if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
+        if let raw = content.text?.raw, LongMessageExcerpt.isLong(raw) {
             return nil
         }
         // Link-preview bubbles host a self-loading OG card whose height changes

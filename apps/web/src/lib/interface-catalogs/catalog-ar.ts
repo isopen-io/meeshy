@@ -5,6 +5,7 @@ import arMediaHub from './catalog-ar-media-hub';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
+import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDevices from './catalog-ar-call-devices';
@@ -201,6 +202,7 @@ const ar = {
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,
+  ...arRowActions,
   ...arCallShell,
   ...arCallJoin,
   ...arCallDevices,
@@ -1022,6 +1024,8 @@ const ar = {
 
   'thread.unread-separator.one': '{count} رسالة غير مقروءة',
   'thread.unread-separator.other': '{count} رسائل غير مقروءة',
+  'thread.long-message.read-more': 'اقرأ المزيد',
+  'thread.long-message.collapse': 'عرض أقل',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',

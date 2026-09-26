@@ -69,7 +69,7 @@ nonisolated public enum ReadingModeOrchestrator {
     /// Son POUVOIR est nul drapeau-on : son image `.bubbles` n'appartient à
     /// aucun catalogue servi par `resolveCapabilities` hors de la branche
     /// drapeau-éteint, donc `clampToCapabilities` la rabat sur
-    /// `.focal`/`.clampedUnavailable` — le traitement exact d'un `.riviere`
+    /// `.script`/`.clampedUnavailable` — le traitement exact d’un `.riviere`
     /// mémorisé hors catalogue.
     nonisolated public enum ReadingModePreference: String, Codable, CaseIterable, Sendable, Equatable {
         case auto
@@ -233,7 +233,7 @@ nonisolated public enum ReadingModeOrchestrator {
         case .riviere: return .river
         // AMENDEMENT S1 (REV-4bis/B2) — image de `.bulles`, hors de tout
         // catalogue drapeau-on : le clamp la rabat systématiquement sur
-        // `.focal`/`.clampedUnavailable`. Voir la docstring de l'énumération.
+        // `.script`/`.clampedUnavailable`. Voir la docstring de l'énumération.
         case .bulles: return .bubbles
         }
     }
@@ -252,14 +252,17 @@ nonisolated public enum ReadingModeOrchestrator {
         return nowMs - lastOpenedMs > absenceWindowMs
     }
 
-    /// Repli du clamp : `.focal` est le PLANCHER de la loi, présent dans tous
-    /// les catalogues drapeau-on. C'est aussi pourquoi la branche par défaut
-    /// n'est pas clampée : elle rend déjà le repli, et se clamper soi-même
-    /// serait circulaire.
-    private static let clampFallbackMode: ConversationReadingMode = .focal
+    /// Repli du clamp ET mode par défaut : `.script` (directive porteur
+    /// 2026-09-26, #8147 — « ce ne doit plus être le mode par défaut, mais le
+    /// mode Script »), miroir de `CLAMP_FALLBACK_MODE` (`reading-modes.ts`).
+    /// Focal reste choisissable ; un choix collant est conservé, et « auto »
+    /// n'ayant aucune clé stockée, aucune migration n'est nécessaire. Présent
+    /// dans tous les catalogues drapeau-on : la branche par défaut n'est donc
+    /// pas clampée — se clamper soi-même serait circulaire.
+    private static let clampFallbackMode: ConversationReadingMode = .script
 
     /// Borne une décision naturelle au catalogue du lecteur. Hors catalogue
-    /// ⇒ repli `.focal` avec sa raison dédiée, pour que l'encoche
+    /// ⇒ repli `.script` avec sa raison dédiée, pour que l'encoche
     /// « AUTO · … » dise la vérité : le mode n'a pas été choisi, il a été
     /// rabattu.
     private static func clampToCapabilities(
@@ -281,7 +284,7 @@ nonisolated public enum ReadingModeOrchestrator {
     /// | 2 | `stickyChoice !== 'auto'` → `STICKY_MODE_BY_PREFERENCE[...]`/`sticky` | `stickyChoice != .auto` → `stickyMode(for:)`/`.sticky` | OUI |
     /// | 3 | `unreadCount > 25` → `'summary'`/`unread-over-cap` | `unreadCount > unreadCap` → `.summary`/`.unreadOverCap` | OUI |
     /// | 4 | absence ET `unreadCount >= 10` → `'summary'`/`stale-absence` | idem → `.summary`/`.staleAbsence` | OUI |
-    /// | 5 | défaut → `'focal'`/`default` | défaut → `.focal`/`.default` | NON (déjà le repli) |
+    /// | 5 | défaut → `'script'`/`default` | défaut → `.script`/`.default` | NON (déjà le repli) |
     ///
     /// INVARIANT (REV-1, blocage 3) : drapeau on, le mode rendu appartient
     /// TOUJOURS à `capabilities.availableModes`.

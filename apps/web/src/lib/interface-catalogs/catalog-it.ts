@@ -5,6 +5,7 @@ import itMediaHub from './catalog-it-media-hub';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
+import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDevices from './catalog-it-call-devices';
@@ -201,6 +202,7 @@ const it = {
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
+  ...itRowActions,
   ...itCallShell,
   ...itCallJoin,
   ...itCallDevices,
@@ -1025,6 +1027,8 @@ const it = {
 
   'thread.unread-separator.one': '{count} messaggio non letto',
   'thread.unread-separator.other': '{count} messaggi non letti',
+  'thread.long-message.read-more': 'Continua a leggere',
+  'thread.long-message.collapse': 'Mostra meno',
   'message-detail.info.title': 'Informazioni sul messaggio',
   'message-detail.received-by': 'Ricevuto da',
   'message-detail.read-by': 'Letto da',

@@ -107,7 +107,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         // #7953 : la carte s'allonge, en RENDU, sous le contenu d'une suite
         // descendu et sous la bande basse — jamais une hauteur de rangée.
-        XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground.padding(.bottom, -focusDrop) } }"), "carte = fond SwiftUI du contenu")
+        // #8147 : le message long DÉPLIÉ reçoit le même bloc de verre que l'élu.
+        XCTAssertTrue(row.contains(".background { if input.isFocused || input.isExpanded { focusCardBackground.padding(.bottom, -focusDrop) } }"), "carte = fond SwiftUI du contenu")
         XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
         // La colonne est MONTÉE en focus comme hors focus — elle s'efface par
@@ -223,10 +224,10 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_theFocusCard_andItsChips_carryNoBorderAnymore() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertFalse(row.contains("strokeBorder"), "ni la carte ni les chips ne tracent de bord")
-        XCTAssertTrue(
-            row.contains(".fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))"),
-            "le fond reste la couleur de la conversation"
-        )
+        // #8147 : le fond est un BLOC DE VERRE teinté de la couleur de la
+        // conversation — plus un aplat opaque.
+        XCTAssertTrue(row.contains("FocalGlassBlock(accentHex: input.accentHex)"), "le fond est le bloc de verre, teinté de l'accent")
+        XCTAssertFalse(row.contains("focusCardFillOpacity"), "plus aucun aplat opaque sous le message élu")
         let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
         XCTAssertFalse(perspective.contains("focusCardBorderOpacity"), "la teinte du cadre n'a plus de porteur")
         XCTAssertFalse(perspective.contains("focusChipRingOpacity"), "ni l'anneau des chips")
@@ -541,7 +542,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(
             Self.rowHeightIsFocusIndependent(row),
-            "le plafond de texte doit valoir la constante HISTORIQUE (`BubbleExpandableText.truncateLimit`) "
+            "le plafond de texte doit être celui de la loi partagée (`LongMessageExcerpt`, via `expansion`) "
             + "que la rangée soit élue ou non : le ternaire re-mesurait la cellule au tick d'élection, en "
             + "plein geste, et l'autre constante (`FocalMetrics.Focus.maxCharacters`, 360) tronquerait "
             + "TOUTES les rangées plates, y compris au repos — un changement visible hors directive."
@@ -563,8 +564,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "le plafond du focus appliqué à TOUTES les rangées aussi — il tronque au repos"
         )
         XCTAssertTrue(
-            Self.rowHeightIsFocusIndependent("truncateLimit: BubbleExpandableText.truncateLimit,"),
-            "…et la constante historique, elle, doit passer"
+            Self.rowHeightIsFocusIndependent("expansion: expansion"),
+            "…et la loi partagée, elle, doit passer"
         )
     }
 
@@ -587,17 +588,12 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "les géométries doivent se construire APRÈS la garde d'armement, et plus aucun balayage "
             + "de sous-vues ne doit fermer la passe. Corps lu : \(pass)"
         )
-        // Le nettoyage vit toujours aux deux SEULS points qui en produisent
-        // l'occasion : une cellule (re)configurée, et l'aplatissement.
-        XCTAssertTrue(
-            host.contains("FocalScrollPerspective.reset(cell.contentView.layer) FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
-            "registration : une cellule recyclée arrive à plat ET sans carte"
-        )
-        let flatten = try Self.body(of: "func flattenFocalScene(animated: Bool) {", in: host)
-        XCTAssertTrue(
-            flatten.contains("FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
-            "aplatissement de la scène : la carte héritée d'un recyclage est démontée là"
-        )
+        // #8147 : la carte UIKit OPAQUE n'existe plus — le bloc de verre est
+        // le fond SwiftUI de la rangée. Une cellule recyclée arrive à plat.
+        XCTAssertTrue(host.contains("FocalScrollPerspective.reset(cell.contentView.layer)"), "registration : une cellule recyclée arrive à plat")
+        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertFalse(perspective.contains("FocusCardView"), "aucune carte UIKit opaque ne revient sous le message élu")
+        XCTAssertFalse(host.contains("hideFocusCard"), "rien à démonter : il n'y a plus de carte UIKit")
     }
 
     /// **Contre-épreuve** — la garde ci-dessus rougit si la boucle par frame
@@ -625,8 +621,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     // MARK: - Prédicats partagés par les gardes et leurs contre-épreuves
 
     private static func rowHeightIsFocusIndependent(_ row: String) -> Bool {
-        !row.contains("truncateLimit: input.isFocused ?")
-            && row.contains("truncateLimit: BubbleExpandableText.truncateLimit")
+        !row.contains("truncateLimit")
+            && row.contains("expansion: expansion")
             && !row.contains("FocalMetrics.Focus.maxCharacters")
     }
 
