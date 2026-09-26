@@ -55,6 +55,11 @@ const ptCall = {
   'call.bubble.join': 'Entrar',
   'call.callBack.named': 'Ligar de volta a {name}',
   'call.you': 'Você',
+  'call.ended.removed': 'Você foi removido da chamada',
+  'call.spotlight.show': 'Destacar {name}',
+  'call.spotlight.back': 'Voltar à grade',
+  'call.remove.named': 'Remover {name} da chamada',
+  'call.remove.failed': 'Não foi possível remover este participante',
 } as const;
 
 export default ptCall;

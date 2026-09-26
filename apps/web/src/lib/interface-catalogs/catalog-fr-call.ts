@@ -55,6 +55,11 @@ const frCall = {
   'call.bubble.join': 'Rejoindre',
   'call.callBack.named': 'Rappeler {name}',
   'call.you': 'Vous',
+  'call.ended.removed': 'Vous avez été retiré de l’appel',
+  'call.spotlight.show': 'Mettre {name} en avant',
+  'call.spotlight.back': 'Revenir à la grille',
+  'call.remove.named': 'Retirer {name} de l’appel',
+  'call.remove.failed': 'Impossible de retirer ce participant',
 } as const;
 
 export default frCall;

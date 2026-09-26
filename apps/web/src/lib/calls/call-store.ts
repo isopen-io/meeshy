@@ -14,7 +14,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 export type CallMedia = 'audio' | 'video';
 
-export type CallEndReason = 'local' | 'remote' | 'rejected' | 'missed' | 'connectionLost' | 'failed' | 'busy' | 'permission';
+export type CallEndReason = 'local' | 'remote' | 'rejected' | 'missed' | 'connectionLost' | 'failed' | 'busy' | 'permission' | 'removed';
 
 export type CallPhase =
   | { readonly kind: 'outgoing' }
