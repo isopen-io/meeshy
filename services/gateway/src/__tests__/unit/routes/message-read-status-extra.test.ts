@@ -356,7 +356,7 @@ describe('GET /conversations/:conversationId/read-statuses', () => {
     expect(mockGetConversationReadStatuses).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when participant.findFirst returns null', async () => {
+  it('returns the 404 of an unknown conversation when participant.findFirst returns null (#8116)', async () => {
     mockPrisma.participant.findFirst.mockResolvedValue(null);
 
     const response = await app.inject({
@@ -365,9 +365,10 @@ describe('GET /conversations/:conversationId/read-statuses', () => {
       headers: { authorization: AUTH_HEADER }
     });
 
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(404);
     const body = response.json();
     expect(body.success).toBe(false);
+    expect(body.error).toBe('Conversation not found');
     expect(mockGetConversationReadStatuses).not.toHaveBeenCalled();
   });
 

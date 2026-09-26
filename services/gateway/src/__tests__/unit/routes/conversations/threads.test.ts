@@ -17,9 +17,10 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
-jest.mock('../../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../../services/attachments/attachmentIncludes', () => ({
   attachmentMediaSelect: {
@@ -154,11 +155,11 @@ describe('GET threads — conversation not found', () => {
 });
 
 describe('GET threads — access denied', () => {
-  it('returns 403 when user cannot access conversation', async () => {
+  it('returns the 404 of an unknown conversation when user cannot access it (#8116)', async () => {
     mockCanAccessConversation.mockResolvedValueOnce(false);
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

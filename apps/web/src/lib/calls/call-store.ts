@@ -1,3 +1,4 @@
+import type { CallFeedbackPrompt } from './call-feedback';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 /**
@@ -91,12 +92,14 @@ export type CallStoreState = {
   readonly waiting: WaitingCall | null;
   /** Un refus qui n'ouvre aucun écran (« un appel est déjà en cours »). */
   readonly notice: 'already-in-call' | null;
+  /** La note demandée après l'appel qui vient de finir (#8072), échantillonnée par `feedbackPromptFor`. */
+  readonly feedback: CallFeedbackPrompt | null;
 };
 
 export type CallStoreApi = StoreApi<CallStoreState>;
 
 export function createCallStore(): CallStoreApi {
-  return createStore<CallStoreState>(() => ({ call: null, waiting: null, notice: null }));
+  return createStore<CallStoreState>(() => ({ call: null, waiting: null, notice: null, feedback: null }));
 }
 
 export const callStore = createCallStore();

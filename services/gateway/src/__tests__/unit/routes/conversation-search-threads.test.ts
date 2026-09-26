@@ -60,9 +60,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+// La porte de lecture (`ouvrirConversationLisible`, #8116) lit le VERDICT : le
+// double partagé gouverne ses deux formes depuis le même `mockCanAccessConversation`.
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -1126,15 +1129,16 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     expect(mockCanAccessConversation).not.toHaveBeenCalled();
   });
 
-  // ── canAccessConversation returns false → 403 ────────────────────────────
+  // ── non-membre → le MÊME 404 qu'une conversation inexistante (#8116) ─────
 
-  it('returns 403 when user does not have access', async () => {
+  it('returns the same 404 as an unknown conversation when user does not have access', async () => {
     const { prisma, route, reply } = setup();
     mockCanAccessConversation.mockResolvedValue(false);
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You do not have access to this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+    expect(mockSendForbidden).not.toHaveBeenCalled();
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 

@@ -86,9 +86,12 @@ jest.mock('../../../middleware/rate-limiter', () => ({
   messageValidationHook: (...args: any[]) => mockMessageValidationHook(...args),
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+// La porte de lecture (`ouvrirConversationLisible`, #8116) lit le VERDICT : le
+// double partagé gouverne ses deux formes depuis le même `mockCanAccessConversation`.
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
@@ -2480,24 +2483,25 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('GET /conversations/:id/reactions', () => {
     const getReactionsHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/reactions');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getReactionsHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2678,24 +2682,25 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('GET /conversations/:id/status', () => {
     const getStatusHandler = (f: any) => getHandler(f, 'GET', '/conversations/:id/status');
 
-    it('returns 403 when conversation not found', async () => {
+    it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
     });
 
-    it('returns 403 when access denied', async () => {
+    it('returns the same 404 when access denied — a non-member learns nothing (#8116)', async () => {
       mockCanAccessConversation.mockResolvedValue(false);
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
 
       await getStatusHandler(fastify)(req, reply);
 
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
+      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     it('returns empty statuses when no messages', async () => {

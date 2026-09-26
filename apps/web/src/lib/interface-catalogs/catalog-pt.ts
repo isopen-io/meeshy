@@ -9,6 +9,7 @@ import ptRowActions from './catalog-pt-row-actions';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
+import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
 import ptSignup from './catalog-pt-signup';
@@ -212,6 +213,7 @@ const pt = {
   ...ptCallShell,
   ...ptCallJoin,
   ...ptCallDecline,
+  ...ptCallFeedback,
   ...ptCallDevices,
   ...ptCallScreen,
   ...ptSignup,
