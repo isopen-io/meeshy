@@ -160,36 +160,37 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         email={email}
         lead={withStrongEmail(translate(language, 'emailSent.codeOrLink', { email }), email, 'var(--ios-indigo-400)')}
         status={
-          expired ? (
-            <p role="alert" style={{ color: 'var(--ios-error)' }}>
-              Lien expiré, renvoyez-en un nouveau
-            </p>
-          ) : (
-            <p
-              role="timer"
-              aria-live="off"
-              aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
-              className="font-bold tabular-nums text-screen"
-              style={{ color: 'var(--ios-indigo-600)' }}
-            >
-              {formatCountdown(remaining, locale)}
-            </p>
-          )
+          <>
+            {expired ? (
+              <p role="alert" style={{ color: 'var(--ios-error)' }}>
+                Lien expiré, renvoyez-en un nouveau
+              </p>
+            ) : (
+              <p
+                role="timer"
+                aria-live="off"
+                aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+                className="font-bold tabular-nums text-screen"
+                style={{ color: 'var(--ios-indigo-600)' }}
+              >
+                {formatCountdown(remaining, locale)}
+              </p>
+            )}
+            {codeVerified ? (
+              <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
+                {translate(language, 'verifyEmail.verified')}
+              </p>
+            ) : (
+              <EmailCodeForm
+                email={email}
+                next={next}
+                {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
+                onVerified={() => setCodeVerified(true)}
+              />
+            )}
+          </>
         }
       >
-        {codeVerified ? (
-          <p role="status" className="text-title font-semibold" style={{ color: 'var(--ios-success)' }}>
-            {translate(language, 'verifyEmail.verified')}
-          </p>
-        ) : (
-          <EmailCodeForm
-            email={email}
-            next={next}
-            {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
-            onVerified={() => setCodeVerified(true)}
-          />
-        )}
-
         <button
           type="button"
           disabled={(!expired && remaining > 0) || submitting || !online}
