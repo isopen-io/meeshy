@@ -127,10 +127,9 @@ describe('le menu latéral d’administration', () => {
      d'historique et se ferme sur `popstate`, au lieu de quitter l'écran. */
   test('le retour Android ferme le tiroir au lieu de quitter l’écran (#8020)', async () => {
     const hote = await cadre('ADMIN');
-    const profondeur = window.history.length;
 
     act(() => hote.querySelector<HTMLButtonElement>('[data-admin-menu-open]')?.click());
-    expect(window.history.length).toBe(profondeur + 1);
+    expect(typeof (window.history.state as { readonly backDismiss?: unknown } | null)?.backDismiss).toBe('string');
 
     act(() => {
       window.dispatchEvent(new PopStateEvent('popstate'));

@@ -18,6 +18,7 @@ import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -187,6 +188,81 @@ export function AdminHeader({
   );
 }
 
+/**
+ * LE TIROIR DU PETIT ÉCRAN (#8020) — une couche modale comme les autres :
+ * `useBackDismiss` lui donne son entrée d'historique, donc le retour matériel
+ * de la coque Android le referme au lieu de quitter l'écran, comme Échap sur
+ * le web.
+ */
+function AdminDrawer({
+  language,
+  sections,
+  space,
+  active,
+  onClose,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly sections: readonly ServedAdminSection[];
+  readonly space: AdminSpace;
+  readonly active: string | null;
+  readonly onClose: () => void;
+}) {
+  useBackDismiss(onClose);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex md:hidden" data-admin-drawer>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={translateAdmin(language, 'admin.shell.menu')}
+        className="flex h-full w-[min(18rem,85vw)] flex-col pt-safe"
+        style={{ backgroundColor: SURFACE, borderRight: `1px solid ${EDGE}` }}
+      >
+        <div className="flex shrink-0 items-center gap-2 px-3" style={{ height: ADMIN_HEADER_HEIGHT }}>
+          <p className="min-w-0 flex-1 truncate text-body font-bold" style={{ color: INK }}>
+            {translate(language, 'admin.title')}
+          </p>
+          <button
+            type="button"
+            data-admin-menu-close
+            aria-label={translateAdmin(language, 'admin.shell.close')}
+            onClick={onClose}
+            className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
+            style={{ color: INK2, outlineColor: BRAND }}
+          >
+            <Glyph name="x" size={16} />
+          </button>
+        </div>
+        <AdminNav
+          language={language}
+          sections={sections}
+          space={space}
+          active={active}
+          folded={false}
+          onNavigate={onClose}
+        />
+        <BackToApp language={language} folded={false} />
+      </div>
+      <button
+        type="button"
+        aria-label={translateAdmin(language, 'admin.shell.close')}
+        tabIndex={-1}
+        onClick={onClose}
+        className="flex-1"
+        style={{ backgroundColor: 'color-mix(in srgb, black 40%, transparent)' }}
+      />
+    </div>
+  );
+}
+
 export function AdminScreenFrame({
   language,
   title,
@@ -211,15 +287,6 @@ export function AdminScreenFrame({
   const { sections, space, active } = useAdminMenu();
   const [folded, setFolded] = useState(readSidebarFolded);
   const [drawer, setDrawer] = useState(false);
-
-  useEffect(() => {
-    if (!drawer) return undefined;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDrawer(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [drawer]);
 
   const basculer = () => {
     const suivant = !folded;
@@ -258,48 +325,13 @@ export function AdminScreenFrame({
       </aside>
 
       {drawer ? (
-        <div className="fixed inset-0 z-40 flex md:hidden" data-admin-drawer>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={translateAdmin(language, 'admin.shell.menu')}
-            className="flex h-full w-[min(18rem,85vw)] flex-col pt-safe"
-            style={{ backgroundColor: SURFACE, borderRight: `1px solid ${EDGE}` }}
-          >
-            <div className="flex shrink-0 items-center gap-2 px-3" style={{ height: ADMIN_HEADER_HEIGHT }}>
-              <p className="min-w-0 flex-1 truncate text-body font-bold" style={{ color: INK }}>
-                {translate(language, 'admin.title')}
-              </p>
-              <button
-                type="button"
-                data-admin-menu-close
-                aria-label={translateAdmin(language, 'admin.shell.close')}
-                onClick={() => setDrawer(false)}
-                className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
-                style={{ color: INK2, outlineColor: BRAND }}
-              >
-                <Glyph name="x" size={16} />
-              </button>
-            </div>
-            <AdminNav
-              language={language}
-              sections={sections}
-              space={space}
-              active={active}
-              folded={false}
-              onNavigate={() => setDrawer(false)}
-            />
-            <BackToApp language={language} folded={false} />
-          </div>
-          <button
-            type="button"
-            aria-label={translateAdmin(language, 'admin.shell.close')}
-            tabIndex={-1}
-            onClick={() => setDrawer(false)}
-            className="flex-1"
-            style={{ backgroundColor: 'color-mix(in srgb, black 40%, transparent)' }}
-          />
-        </div>
+        <AdminDrawer
+          language={language}
+          sections={sections}
+          space={space}
+          active={active}
+          onClose={() => setDrawer(false)}
+        />
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
