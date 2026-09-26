@@ -72,7 +72,9 @@ final class OnboardingRecetteTests: XCTestCase {
             applyUser: { _ in },
             settled: MockOnboardingSettledStore(),
             auth: auth,
-            pause: { _ in }
+            pause: { _ in },
+            contacts: MockContactSyncService.restricted(),
+            directory: MockContactDirectoryService()
         )
         return SUT(model: model, service: service, messages: messages, progress: progress, auth: auth)
     }

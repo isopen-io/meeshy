@@ -17,28 +17,29 @@ struct ConversationInfoSheet: View {
     /// sur la valeur figée capturée à la navigation : le titre et l'avatar
     /// d'AVANT l'édition, alors que le serveur a confirmé les nouveaux.
     var onConversationUpdated: ((Conversation) -> Void)? = nil
+    /// #8103 — ce que l'hôte fait d'un élément de l'onglet Médias (galerie,
+    /// « aller au message »). L'onglet lit l'INDEX de la conversation, jamais
+    /// `messages` : depuis la liste des conversations, ce tableau est vide.
+    let mediaHubActions: ConversationMediaHubActions
     /// Dérivés UNE fois de `messages` (un `let`) — relus jusqu'à quatre fois par rendu avant.
-    private let pinnedMessages: [Message]
-    private let mediaAttachments: [MessageAttachment]
+    let pinnedMessages: [Message]
 
     init(conversation: Conversation, accentColor: String, messages: [Message],
+         mediaHubActions: ConversationMediaHubActions = .none,
          onConversationUpdated: ((Conversation) -> Void)? = nil) {
         self.conversation = conversation
         self.accentColor = accentColor
         self.messages = messages
+        self.mediaHubActions = mediaHubActions
         self.onConversationUpdated = onConversationUpdated
         pinnedMessages = messages.filter { $0.pinnedAt != nil }
             .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
-        let isVisual: (MessageAttachment) -> Bool = { [.image, .video].contains($0.type) }
-        mediaAttachments = messages.filter { $0.attachments.contains(where: isVisual) }
-            .sorted { $0.createdAt > $1.createdAt }
-            .flatMap { $0.attachments.filter(isVisual) }
     }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
+    var isDark: Bool { colorScheme == .dark }
+    var theme: ThemeManager { ThemeManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la fiche conversation.
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -51,7 +52,7 @@ struct ConversationInfoSheet: View {
     @State private var isLoadingParticipants = false
     @State private var isLoadingMoreParticipants = false
     @State private var hasMoreParticipants = true
-    @State private var appearAnimation = false
+    @State var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
@@ -71,13 +72,13 @@ struct ConversationInfoSheet: View {
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
-    @State private var showAllPinnedMessages = false
+    @State var showAllPinnedMessages = false
 
     enum InfoTab: CaseIterable {
         case members, media, plus, preferences
     }
 
-    private var accent: Color { Color(hex: accentColor) }
+    var accent: Color { Color(hex: accentColor) }
     private var isDirect: Bool { conversation.type == .direct }
     private var otherUserId: String? { conversation.participantUserId }
 
@@ -452,7 +453,7 @@ struct ConversationInfoSheet: View {
             case .members:
                 membersSection
             case .media:
-                mediaSection
+                ConversationMediaHubView(conversationId: conversation.id, accentColor: accentColor, actions: mediaHubActions)
             case .plus:
                 ConversationDashboardView(
                     conversationId: conversation.id,
@@ -665,224 +666,6 @@ struct ConversationInfoSheet: View {
             Spacer()
         }
         .shimmer()
-    }
-
-    // MARK: - Media Section
-
-    private var mediaSection: some View {
-        VStack(spacing: 0) {
-            if mediaAttachments.isEmpty {
-                emptyState(icon: "photo.on.rectangle.angled", text: String(localized: "conversation.info.no-media", defaultValue: "Aucun média partagé", bundle: .main))
-            } else {
-                let columns = [
-                    GridItem(.flexible(), spacing: 2),
-                    GridItem(.flexible(), spacing: 2),
-                    GridItem(.flexible(), spacing: 2)
-                ]
-
-                LazyVGrid(columns: columns, spacing: 2) {
-                    ForEach(mediaAttachments) { attachment in
-                        mediaGridCell(attachment)
-                    }
-                }
-                .padding(.horizontal, 2)
-                .padding(.top, 8)
-            }
-        }
-        .padding(.bottom, 32)
-    }
-
-    @ViewBuilder
-    private func mediaGridCell(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let color = Color(hex: attachment.thumbnailColor)
-
-        ZStack {
-            if thumbUrl != nil || fullUrl != nil || attachment.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl ?? thumbUrl
-                ) {
-                    color.shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-            } else {
-                color
-            }
-
-            if attachment.type == .video {
-                Image(systemName: "play.circle.fill")
-                    .font(MeeshyFont.relative(24))
-                    .foregroundStyle(.white, .black.opacity(0.3))
-            }
-        }
-        .frame(minHeight: 110)
-        .clipped()
-        .contentShape(Rectangle())
-    }
-
-    // MARK: - Pinned Preview (before tabs)
-
-    @ViewBuilder
-    private var pinnedPreview: some View {
-        let pinned = pinnedMessages
-        if !pinned.isEmpty {
-            Button {
-                HapticFeedback.light()
-                showAllPinnedMessages = true
-            } label: {
-                VStack(spacing: 0) {
-                    ForEach(pinned.prefix(2)) { msg in
-                        pinnedPreviewRow(msg)
-                    }
-                    if pinned.count > 2 {
-                        HStack(spacing: 4) {
-                            Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages épinglés", bundle: .main), pinned.count))
-                                .font(MeeshyFont.relative(11, weight: .semibold))
-                                .foregroundColor(accent)
-                            Image(systemName: "chevron.forward")
-                                .font(MeeshyFont.relative(9, weight: .bold))
-                                .foregroundColor(accent)
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(accent.opacity(isDark ? 0.08 : 0.05))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(accent.opacity(0.12), lineWidth: 1)
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-            .opacity(appearAnimation ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
-        }
-    }
-
-    private func pinnedPreviewRow(_ msg: Message) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "pin.fill")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(accent)
-                .rotationEffect(.degrees(45))
-
-            Text(msg.senderName ?? "?")
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(1)
-
-            if !msg.content.isEmpty {
-                Text(msg.content)
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(1)
-            } else if let att = msg.attachments.first {
-                HStack(spacing: 3) {
-                    Image(systemName: attachmentIcon(att.type))
-                        .font(MeeshyFont.relative(9))
-                    Text(attachmentLabel(att.type))
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                }
-                .foregroundColor(theme.textMuted)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 7)
-    }
-
-    // MARK: - All Pinned Messages Sheet
-
-    private var allPinnedMessagesSheet: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(pinnedMessages) { msg in
-                        fullPinnedRow(msg)
-                        if msg.id != pinnedMessages.last?.id {
-                            Divider()
-                                .padding(.horizontal, 20)
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            }
-            .background(theme.backgroundPrimary)
-            .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages épinglés", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAllPinnedMessages = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(MeeshyFont.relative(10, weight: .bold))
-                            .foregroundColor(theme.textMuted)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(theme.textMuted.opacity(0.12)))
-                    }
-                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                }
-            }
-        }
-        .presentationDragIndicator(.visible)
-    }
-
-    private func fullPinnedRow(_ msg: Message) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(isDark ? 0.2 : 0.12))
-                    .frame(width: 36, height: 36)
-
-                Image(systemName: "pin.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(accent)
-                    .rotationEffect(.degrees(45))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(msg.senderName ?? "?")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-
-                    MetaSeparator()
-                        .foregroundColor(theme.textMuted)
-
-                    Text(relativeTime(from: msg.createdAt))
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                if !msg.content.isEmpty {
-                    Text(msg.content)
-                        .font(MeeshyFont.relative(13))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(4)
-                } else if let att = msg.attachments.first {
-                    HStack(spacing: 4) {
-                        Image(systemName: attachmentIcon(att.type))
-                            .font(MeeshyFont.relative(10))
-                        Text(attachmentLabel(att.type))
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                    }
-                    .foregroundColor(accent)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Empty State
@@ -1126,7 +909,7 @@ struct ConversationInfoSheet: View {
         case .members:
             return nil
         case .media:
-            return mediaAttachments.count > 0 ? "\(mediaAttachments.count)" : nil
+            return nil
         case .plus:
             return nil
         case .preferences:
@@ -1150,7 +933,7 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func attachmentIcon(_ type: MessageAttachment.AttachmentType) -> String {
+    func attachmentIcon(_ type: MessageAttachment.AttachmentType) -> String {
         switch type {
         case .image: return "photo.fill"
         case .video: return "video.fill"
@@ -1160,11 +943,11 @@ struct ConversationInfoSheet: View {
         }
     }
 
-    private func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
+    func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
         MediaKindLabel.name(MediaKindLabel.kind(for: type))
     }
 
-    private func relativeTime(from date: Date) -> String {
+    func relativeTime(from date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
     }
 

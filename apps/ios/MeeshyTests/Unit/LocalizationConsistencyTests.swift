@@ -143,6 +143,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
+        // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
+        // et l'onglet Médias est devenu l'écran « Médias, liens et documents ».
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Pinned.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCopy.swift",
+        "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
@@ -470,6 +475,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
         "apps/ios/Meeshy/MeeshyApp.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/ContactCardView.swift",  // 5
+        // #8101 — la carte de visite partagée : règles (libellés des champs)
+        // et fiche. Épinglées dès leur naissance.
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardRules.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift",
         "apps/ios/Meeshy/Features/Main/Components/LanguagePickerSheet.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift",  // 5

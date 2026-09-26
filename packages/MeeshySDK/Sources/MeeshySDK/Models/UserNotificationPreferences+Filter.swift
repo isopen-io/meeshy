@@ -135,7 +135,7 @@ public extension UserNotificationPreferences {
             return reactionEnabled
         case .contactRequest, .friendRequest, .legacyFriendRequest:
             return contactRequestEnabled
-        case .contactAccepted, .friendAccepted, .legacyFriendAccepted:
+        case .contactAccepted, .friendAccepted, .legacyFriendAccepted, .contactJoined:
             return contactRequestEnabled
         case .newConversation, .newConversationDirect, .newConversationGroup,
              .addedToConversation, .removedFromConversation:

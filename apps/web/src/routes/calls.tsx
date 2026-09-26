@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
@@ -10,7 +10,6 @@ import {
   callHistoryQueryOptions,
   refreshCallHistory,
   type CallHistoryFilter,
-  type CallRecord,
 } from '@/lib/api/calls';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -27,7 +26,6 @@ import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
-import { CallDetailSheet } from '@/routes/call-detail-sheet';
 import {
   CALL_ROW_HEIGHT,
   CALLS_TOP_RESERVE,
@@ -55,9 +53,10 @@ import {
  * premier rendu ; « Manqués » jamais ouvert se peint depuis « Tous » en cache
  * (`seededCallHistory`) ; le squelette ne vient que sur un cache vide.
  *
- * **Toucher une ligne ouvre la FICHE de l'appel** (`CallDetailSheet`, #6383),
- * comme iOS : rappel vocal ou vidéo, type, date, durée, et le fil de la
- * conversation. Le bouton au bout de la ligne rappelle directement (#6382).
+ * **Ce que la ligne n'offre pas.** iOS pose un bouton « Rappeler » au bout de
+ * chaque ligne ; le web n'a aucune pile d'appel, et un bouton sans effet est un
+ * contrôle qui ment (loi 4). Il ne s'affiche pas — l'appel depuis le web est
+ * suivi par son issue (D-61). La ligne ouvre le FIL de la conversation.
  *
  * **Le couloir des disques flottants.** En-tête (64) et filtre (52) finissent
  * au-dessus du couloir 126 → 178 ; la première ligne commence SOUS lui au repos
@@ -72,9 +71,6 @@ export default function CallsScreen() {
   const online = useOnline();
   const minute = useMinute();
   const now = useMemo(() => new Date(), [minute]);
-  const [opened, setOpened] = useState<CallRecord | null>(null);
-  const onOpen = useCallback((record: CallRecord) => setOpened(record), []);
-  const onCloseDetail = useCallback(() => setOpened(null), []);
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
 
   const history = useInfiniteQuery(
@@ -124,7 +120,7 @@ export default function CallsScreen() {
       <>
         {online ? null : <CallsOfflineNotice language={language} cold={false} />}
         {records.map((record) => (
-          <CallRow key={record.callId} language={language} record={record} now={now} onOpen={onOpen} />
+          <CallRow key={record.callId} language={language} record={record} now={now} />
         ))}
         <LensPaginationFooter
           state={paginationState}
@@ -152,7 +148,6 @@ export default function CallsScreen() {
         <li aria-hidden="true" className="shrink-0" style={{ height: CALLS_TOP_RESERVE }} />
         {body}
       </ul>
-      {opened === null ? null : <CallDetailSheet language={language} record={opened} now={now} onClose={onCloseDetail} />}
     </main>
   );
 }

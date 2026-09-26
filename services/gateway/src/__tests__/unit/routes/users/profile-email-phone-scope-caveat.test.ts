@@ -116,6 +116,10 @@ function findFirstConscientDuSelect() {
 /** Un seul `findFirst`, qui enregistre TOUS ses appels dans l'ordre. */
 function prismaPartage() {
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findFirst: findFirstConscientDuSelect(),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),

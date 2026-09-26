@@ -60,11 +60,6 @@ const arCall = {
   'call.spotlight.back': 'العودة إلى الشبكة',
   'call.remove.named': 'إزالة {name} من المكالمة',
   'call.remove.failed': 'تعذّرت إزالة هذا المشارك',
-  'calls.detail.title': 'تفاصيل المكالمة',
-  'calls.detail.type': 'النوع',
-  'calls.detail.date': 'التاريخ',
-  'calls.detail.duration': 'المدة',
-  'calls.detail.open': 'فتح المحادثة',
 } as const;
 
 export default arCall;

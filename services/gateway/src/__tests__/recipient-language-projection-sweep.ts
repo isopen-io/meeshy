@@ -423,6 +423,97 @@ const verdictDe = (resolution: Resolution): VerdictDeProjection =>
       ? 'complete'
       : 'etroite';
 
+/** Les méthodes de tableau dont le rappel reçoit un ÉLÉMENT, inchangé. */
+const METHODES_DE_TABLEAU = ['map', 'filter', 'forEach', 'flatMap', 'find', 'some', 'every'] as const;
+
+/** Les noms liés par un motif de destructuration de tableau, rang par rang. */
+const nomsDuTableau = (motif: string): readonly string[] =>
+  motif.split(',').map((nom) => nom.trim().replace(/^\.\.\./, '').replace(/\s*=.*$/s, ''));
+
+/** La dernière destructuration `Promise.all` de la tranche qui LIE `ident`. */
+const dernierParalleleLiant = (
+  source: string,
+  motif: RegExp,
+  ident: string,
+  depuis: number,
+  avant: number,
+): RegExpExecArray | undefined => {
+  const balayage = new RegExp(motif.source, motif.flags);
+  let dernier: RegExpExecArray | undefined;
+  let trouve: RegExpExecArray | null;
+  while ((trouve = balayage.exec(source)) !== null) {
+    if (trouve.index >= avant) break;
+    if (trouve.index >= depuis && nomsDuTableau(trouve[1] as string).includes(ident)) dernier = trouve;
+  }
+  return dernier;
+};
+
+/** Le dernier rappel de tableau de la tranche dont le CORPS contient `avant`. */
+const dernierRappelEnglobant = (
+  source: string,
+  motif: RegExp,
+  depuis: number,
+  avant: number,
+): RegExpExecArray | undefined => {
+  const balayage = new RegExp(motif.source, motif.flags);
+  let dernier: RegExpExecArray | undefined;
+  let trouve: RegExpExecArray | null;
+  while ((trouve = balayage.exec(source)) !== null) {
+    if (trouve.index >= avant) break;
+    if (trouve.index < depuis) continue;
+    const ouvrante = source.indexOf('(', trouve.index);
+    if (finDuBloc(source, ouvrante) > avant) dernier = trouve;
+  }
+  return dernier;
+};
+
+/**
+ * La RACINE nommée d'une chaîne d'appels de tableau dont le maillon commence
+ * en `point` (le `.` de `.map(`) : `rows.filter(…).map(` → `rows`. Chaque
+ * maillon remonté doit être lui-même une méthode de tableau — un `.then(` ou
+ * un `.findMany(` changerait la nature de l'élément, et la remontée s'arrête.
+ */
+const racineDeChaine = (
+  source: string,
+  point: number,
+): { readonly nom: string; readonly index: number } | undefined => {
+  let i = point - 1;
+  while (i >= 0 && /\s/.test(source[i] as string)) i -= 1;
+  if (source[i] === ')') {
+    let profondeur = 0;
+    for (; i >= 0; i -= 1) {
+      const c = source[i] as string;
+      if (FERMANTS.includes(c)) profondeur += 1;
+      else if (OUVRANTS.includes(c)) {
+        profondeur -= 1;
+        if (profondeur === 0) break;
+      }
+    }
+    const maillon = /\.\s*([A-Za-z_$][\w$]*)\s*$/.exec(source.slice(0, i));
+    if (maillon === null) return undefined;
+    if (!(METHODES_DE_TABLEAU as readonly string[]).includes(maillon[1] as string)) return undefined;
+    return racineDeChaine(source, maillon.index);
+  }
+  const nom = /([A-Za-z_$][\w$]*)$/.exec(source.slice(0, i + 1));
+  if (nom === null || /\.\s*$/.test(source.slice(0, nom.index))) return undefined;
+  return { nom: nom[1] as string, index: nom.index };
+};
+
+/** Ce que charge l'élément de `Promise.all([…])` lié à `ident` par son rang. */
+const resoudreElementParallele = (
+  ctx: Contexte,
+  parallele: RegExpExecArray,
+  ident: string,
+  chemin: readonly string[],
+  profondeur: number,
+): Resolution => {
+  const rang = nomsDuTableau(parallele[1] as string).indexOf(ident);
+  const ouvrant = parallele.index + parallele[0].length - 1;
+  const element = partiesDe(ctx.source.slice(ouvrant + 1, finDuBloc(ctx.source, ouvrant)))[rang];
+  if (element === undefined) return { ok: false, trace: `\`${ident}\` sans élément au rang ${rang}` };
+  return resoudreInitialiseur(ctx, element, parallele.index, chemin, profondeur + 1);
+};
+
 /**
  * Remonte `ident` jusqu'à la projection qui l'a chargé, `chemin` portant les
  * relations déjà traversées.
@@ -450,18 +541,40 @@ const resoudreIdentifiant = (
     'g',
   );
 
+  // `const [a, user] = await Promise.all([q0, q1])` — l'élément lié au rang
+  // k est ce que charge la k-ième expression du tableau (#8105).
+  const enParallele =
+    /\b(?:const|let|var)\s*\[([^\]]*)\]\s*(?::[^=;]*)?=\s*(?:await\s+)?Promise\s*\.\s*all\s*\(\s*\[/g;
+  // `rows.filter(…).map((user) => …)` — le paramètre d'un rappel de tableau est
+  // un ÉLÉMENT de la racine de la chaîne : `filter`, `find`… gardent la ligne
+  // telle qu'elle a été chargée (#8105).
+  const rappels = new RegExp(
+    `\\.\\s*(?:${METHODES_DE_TABLEAU.join('|')})\\s*\\(\\s*(?:\\(\\s*${echappe}\\s*(?::[^)]*)?\\)|${echappe})\\s*=>`,
+    'g',
+  );
+
   for (const portee of porteesDe(ctx.source, avant)) {
     const depuis = portee?.debutCorps ?? 0;
     const liaison = derniereEntre(ctx.source, liaisons, depuis, avant);
     const iteration = derniereEntre(ctx.source, iterations, depuis, avant);
     const reste = derniereEntre(ctx.source, restes, depuis, avant);
+    const parallele = dernierParalleleLiant(ctx.source, enParallele, ident, depuis, avant);
+    const rappel = dernierRappelEnglobant(ctx.source, rappels, depuis, avant);
 
     // La forme la plus PROCHE de l'appel gagne : une même portée peut lier deux
     // fois le même nom, et c'est la dernière liaison avant l'appel qui vaut.
-    const plusProche = [liaison, iteration, reste]
+    const plusProche = [liaison, iteration, reste, parallele, rappel]
       .filter((m): m is RegExpExecArray => m !== undefined)
       .sort((a, b) => b.index - a.index)[0];
 
+    if (plusProche !== undefined && plusProche === rappel) {
+      const racine = racineDeChaine(ctx.source, rappel.index);
+      if (racine === undefined) return { ok: false, trace: 'rappel sur une chaîne sans racine nommée' };
+      return resoudreIdentifiant(ctx, racine.nom, racine.index, chemin, profondeur + 1);
+    }
+    if (plusProche !== undefined && plusProche === parallele) {
+      return resoudreElementParallele(ctx, parallele, ident, chemin, profondeur);
+    }
     if (plusProche !== undefined && plusProche === liaison) {
       return resoudreLiaison(ctx, liaison, chemin, profondeur);
     }
@@ -516,11 +629,24 @@ const resoudreLiaison = (
   liaison: RegExpExecArray,
   chemin: readonly string[],
   profondeur: number,
-): Resolution => {
-  const init = initialiseurApres(ctx.source, liaison.index + liaison[0].length).replace(
-    /^await\s+/,
-    '',
+): Resolution =>
+  resoudreInitialiseur(
+    ctx,
+    initialiseurApres(ctx.source, liaison.index + liaison[0].length),
+    liaison.index,
+    chemin,
+    profondeur,
   );
+
+/** Ce que charge l'expression `brut` liée en `index` — requête, propriété ou alias. */
+const resoudreInitialiseur = (
+  ctx: Contexte,
+  brut: string,
+  index: number,
+  chemin: readonly string[],
+  profondeur: number,
+): Resolution => {
+  const init = brut.trim().replace(/^await\s+/, '');
   const requete = /^[\w$.()\s]*\bprisma\b[\w$.]*\s*\(/.exec(init);
   if (requete !== null) {
     const ouvrante = init.indexOf('(', requete[0].length - 1);
@@ -534,13 +660,13 @@ const resoudreLiaison = (
     return resoudreIdentifiant(
       ctx,
       propriete[1] as string,
-      liaison.index,
+      index,
       [propriete[2] as string, ...chemin],
       profondeur + 1,
     );
   }
   if (/^[A-Za-z_$][\w$]*$/.test(init)) {
-    return resoudreIdentifiant(ctx, init, liaison.index, chemin, profondeur + 1);
+    return resoudreIdentifiant(ctx, init, index, chemin, profondeur + 1);
   }
   return { ok: false, trace: `liaison non résolue : ${init.slice(0, 60)}` };
 };

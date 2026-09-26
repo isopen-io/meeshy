@@ -22,6 +22,7 @@ import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard }
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
+import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
@@ -404,6 +405,9 @@ export function Bubble({
           plainTextHidden
         />
       ) : null}
+      {/* La carte d'un lien de conversation (#8099), SOUS le texte comme iOS
+          (`BubbleLinkEmbed.swift`). */}
+      {bareBody ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 

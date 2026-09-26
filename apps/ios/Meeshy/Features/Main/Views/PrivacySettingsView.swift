@@ -110,8 +110,17 @@ struct PrivacySettingsView: View {
                 ),
                 ToggleSpec(
                     id: "hideSearch", icon: "magnifyingglass",
-                    title: String(localized: "settings.privacy.hide_from_search", defaultValue: "Masquer de la recherche", bundle: .main),
-                    color: "FF6B6B", keyPath: \.hideProfileFromSearch
+                    title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
+                    color: "FF6B6B", keyPath: \.hideProfileFromSearch,
+                    info: SettingsInfo(
+                        id: "privacy.hide_from_contact_search",
+                        title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
+                        message: String(
+                            localized: "settings.privacy.hide_from_contact_search.info",
+                            defaultValue: "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy.",
+                            bundle: .main
+                        )
+                    )
                 ),
             ]
         )
@@ -269,8 +278,7 @@ struct PrivacySettingsView: View {
     }
 
     /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
-    /// côté gateway (`hideProfileFromSearch` exigerait un filtre serveur sur
-    /// la recherche ; `blockScreenshots` n'a pas d'API publique iOS pour
+    /// côté gateway (`blockScreenshots` n'a pas d'API publique iOS pour
     /// réellement bloquer une capture ; `allowCallsFromNonContacts` exigerait
     /// de toucher `CallManager.swift`, hors-lane ici ; `saveMediaToGallery`
     /// supposerait un pipeline d'auto-save à la réception, inexistant ;
@@ -291,7 +299,6 @@ struct PrivacySettingsView: View {
     }
 
     nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
-        \PrivacyPreferences.hideProfileFromSearch,
         \PrivacyPreferences.blockScreenshots,
         \PrivacyPreferences.allowCallsFromNonContacts,
         \PrivacyPreferences.saveMediaToGallery,

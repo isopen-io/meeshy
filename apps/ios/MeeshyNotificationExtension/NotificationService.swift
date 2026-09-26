@@ -688,7 +688,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "comment_like", "comment_reply", "comment_reaction",
         "story_new_comment", "story_thread_reply", "friend_story_comment",
         "friend_new_story", "friend_new_post", "friend_new_mood",
-        "friend_request", "contact_request"
+        "friend_request", "contact_request", "contact_joined"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content

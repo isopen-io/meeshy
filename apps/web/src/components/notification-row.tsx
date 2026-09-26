@@ -1,8 +1,10 @@
 import { memo, type CSSProperties, type ReactNode } from 'react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
+import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { notificationCallBack, type NotificationCallBack } from '@/lib/notifications/call-back';
 import { notificationAccent } from '@/lib/notifications/categories';
 import { notificationTitle, type NotificationRecord } from '@/lib/notifications/record';
 import { notificationTarget, type NotificationTarget } from '@/lib/notifications/target';
@@ -11,6 +13,8 @@ import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
+import { Glyph, GlyphSvg } from './glyph';
+import { CALLS_GLYPHS } from './glyphs-calls';
 import { NotificationRowMenu } from './notification-row-menu';
 
 /**
@@ -58,11 +62,33 @@ function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: No
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
          (#7173), la ligne ne le reconstruit pas. */
       return <Link to="discover" search={target.search} {...surface} />;
+    case 'userProfile':
+      return <Link to="userProfile" params={target.params} {...surface} />;
     case 'progression':
       return <Link to="progression" {...surface} />;
     case 'settings':
       return <Link to="settings" {...surface} />;
   }
+}
+
+/**
+ * « RAPPELER » (A6, C12) — posé à côté du menu de la ligne, HORS de son lien :
+ * un appel manqué se rappelle en un tap, du même type, sans ouvrir le fil. Le
+ * moteur d'appel n'est chargé qu'au geste (`callActions`).
+ */
+function CallBackButton({ language, callBack }: { readonly language: InterfaceLanguage; readonly callBack: NotificationCallBack }) {
+  return (
+    <button
+      type="button"
+      data-notification-call-back={callBack.media}
+      aria-label={translate(language, 'call.callBack.named', { name: callBack.title })}
+      onClick={() => callActions.start(callBack)}
+      className="absolute top-1/2 right-12 grid size-11 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+    >
+      {callBack.media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={20} /> : <Glyph name="phone" size={20} />}
+    </button>
+  );
 }
 
 function NotificationRowView({ notification, language, now, onOpen, onMarkRead, onDelete }: NotificationRowProps) {
@@ -73,10 +99,10 @@ function NotificationRowView({ notification, language, now, onOpen, onMarkRead, 
   const target = notificationTarget(notification);
   const group = context.conversationType !== undefined && context.conversationType !== 'direct' ? context.conversationTitle : undefined;
   const avatar = notification.actor?.avatar ?? null;
+  const callBack = notificationCallBack(notification);
 
   const surface: SurfaceProps = {
-    className:
-      'flex w-full items-start gap-3 py-3 pr-14 pl-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2',
+    className: `flex w-full items-start gap-3 py-3 ${callBack === null ? 'pr-14' : 'pr-24'} pl-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2`,
     style: {
       outlineColor: 'var(--color-ios-brand)',
       ...(unread ? { backgroundColor: `color-mix(in srgb, ${accent} 7%, transparent)` } : {}),
@@ -153,6 +179,7 @@ function NotificationRowView({ notification, language, now, onOpen, onMarkRead, 
       ) : (
         <TargetLink target={target} {...surface} />
       )}
+      {callBack === null ? null : <CallBackButton language={language} callBack={callBack} />}
       <NotificationRowMenu language={language} unread={unread} onMarkRead={() => onMarkRead(id)} onDelete={() => onDelete(id)} />
     </li>
   );

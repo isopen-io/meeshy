@@ -94,6 +94,11 @@ jest.mock('../../../../routes/auth/types', () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
+const mockScheduleArrival = jest.fn();
+jest.mock('../../../../services/notifications/contact-joined', () => ({
+  scheduleContactJoinedAnnouncement: (...args: unknown[]) => mockScheduleArrival(...args),
+}));
+
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -743,6 +748,28 @@ describe('POST /verify-phone — success', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('POST /verify-phone — « X a rejoint Meeshy » (#8105)', () => {
+  it('une vérification NEUVE programme l’annonce aux carnets', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({
+      verifyPhone: jest.fn<any>().mockResolvedValue({ success: true, verifiedUserId: '507f1f77bcf86cd799439011' }),
+    });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).toHaveBeenCalledWith(expect.anything(), '507f1f77bcf86cd799439011');
+    await app.close();
+  });
+
+  it('un numéro DÉJÀ vérifié n’annonce rien', async () => {
+    mockScheduleArrival.mockClear();
+    const authService = makeAuthService({ verifyPhone: jest.fn<any>().mockResolvedValue({ success: true }) });
+    const app = await buildApp({ authService });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(mockScheduleArrival).not.toHaveBeenCalled();
     await app.close();
   });
 });
