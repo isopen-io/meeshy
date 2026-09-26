@@ -9,6 +9,7 @@ import deRowActions from './catalog-de-row-actions';
 import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
+import deCallFeedback from './catalog-de-call-feedback';
 import deCallDevices from './catalog-de-call-devices';
 import deCallScreen from './catalog-de-call-screen';
 import deSignup from './catalog-de-signup';
@@ -208,6 +209,7 @@ const de = {
   ...deCallShell,
   ...deCallJoin,
   ...deCallDecline,
+  ...deCallFeedback,
   ...deCallDevices,
   ...deCallScreen,
   ...deSignup,
