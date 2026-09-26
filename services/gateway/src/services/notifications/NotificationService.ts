@@ -796,7 +796,8 @@ export class NotificationService {
       case 'contact_request':
       case 'contact_accepted':
       case 'friend_request':
-      case 'friend_accepted':   return prefs.contactRequestEnabled;
+      case 'friend_accepted':
+      case 'contact_joined':    return prefs.contactRequestEnabled;
       case 'member_joined':     return prefs.memberJoinedEnabled;
       case 'message_reply':
       case 'reply':             return prefs.replyEnabled;

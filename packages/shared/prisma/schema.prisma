@@ -506,6 +506,28 @@ model UserContact {
   /// propriétaire — c'est-à-dire exactement ce que le delta évite de
   /// retélécharger.
   @@index([ownerId, updatedAt])
+  /// « X a rejoint Meeshy » (#8105) : à l'inscription ou à la vérification d'un
+  /// numéro / e-mail, la passerelle cherche les carnets qui le contiennent.
+  /// Index multikey — sans eux, chaque arrivée balaierait la collection.
+  /// Prod : l'entrypoint ne joue aucune migration — index à créer à la main.
+  @@index([phoneNumbers])
+  @@index([emails])
+}
+
+/// Une annonce « X a rejoint Meeshy » déjà faite à un destinataire (#8105).
+///
+/// UNE ligne par paire (destinataire, arrivant) : l'unicité rend l'annonce
+/// idempotente même quand deux vérifications (téléphone puis e-mail) courent
+/// en même temps, ou quand le carnet est resynchronisé. Ne transporte aucun
+/// identifiant de contact — seulement qui a été prévenu de qui.
+model ContactJoinNotice {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  recipientId String   @db.ObjectId
+  joinerId    String   @db.ObjectId
+  createdAt   DateTime @default(now())
+
+  @@unique([recipientId, joinerId])
+  @@index([joinerId])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
