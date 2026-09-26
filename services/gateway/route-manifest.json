@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 589,
+  "routeCount": 592,
   "routes": [
     {
       "method": "DELETE",
@@ -4775,6 +4775,36 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/v1/admin/conversations/:conversationId",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/conversations/:conversationId/participants/:userId",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
       "path": "/api/v1/admin/invitations/:id",
       "module": "invitationRoutes",
       "mountPrefix": "/api/v1/admin/invitations",
@@ -5625,6 +5655,21 @@
       ],
       "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/conversations/:conversationId/participants/:userId/remove",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": true,
       "adminPrefixed": true
     },
     {
