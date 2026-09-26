@@ -5,6 +5,7 @@ import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
 import enCallJoin from './catalog-en-call-join';
+import enCallShell from './catalog-en-call-shell';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -195,6 +196,7 @@ const en = {
   ...enPassword,
   ...enCall,
   ...enCallJoin,
+  ...enCallShell,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',

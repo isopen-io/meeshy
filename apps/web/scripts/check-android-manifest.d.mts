@@ -14,6 +14,10 @@ export declare function auditManifestPermissions(
   options: Readonly<{ readonly manifest: string; readonly required?: readonly string[] }>,
 ): readonly PermissionViolation[];
 
+export declare function auditCallComponents(
+  options: Readonly<{ readonly manifest: string }>,
+): readonly string[];
+
 export declare function formatViolations(
   options: Readonly<{ readonly manifestPath: string; readonly violations: readonly PermissionViolation[] }>,
 ): string;
