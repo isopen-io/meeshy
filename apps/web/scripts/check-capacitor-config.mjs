@@ -25,7 +25,7 @@
  * (revue #6027 — falsifié, un hook rendu muet laissait ce gate VERT).
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -259,6 +259,40 @@ export function replayHookRoundtrip() {
   }
 }
 
+const NON_PLUGIN_CAPACITOR_PACKAGES = new Set(['@capacitor/core', '@capacitor/cli', '@capacitor/android', '@capacitor/ios']);
+
+/** #8090 — les plugins `@capacitor/*` que ces sources importent (statique ou `import()`). */
+export function capacitorPluginsImportedBy(sources) {
+  const found = sources.flatMap((source) =>
+    [...source.matchAll(/(?:from\s+|import\s*\(\s*)['"](@capacitor\/[a-z0-9-]+)['"]/g)].map((match) => match[1]),
+  );
+  return [...new Set(found)].filter((name) => !NON_PLUGIN_CAPACITOR_PACKAGES.has(name)).sort();
+}
+
+/**
+ * #8090 — `cap sync` ne lit que `dependencies` et `devDependencies`
+ * (`@capacitor/cli` 8.5.1, `dist/plugin.js` § `getDependencies`) : un plugin
+ * rangé ailleurs n'entre jamais dans l'APK.
+ */
+export function auditSyncedPlugins(packageJson, importedPlugins) {
+  const synced = { ...packageJson?.dependencies, ...packageJson?.devDependencies };
+  return importedPlugins
+    .filter((name) => !(name in synced))
+    .map(
+      (name) =>
+        `${name} est importé par src/ mais absent de dependencies/devDependencies : cap sync ne le ` +
+        'synchronise pas, et la coque ne l’embarque pas (#8090).',
+    );
+}
+
+function sourcesUnder(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return sourcesUnder(path);
+    return /\.(ts|tsx)$/.test(name) ? [readFileSync(path, 'utf8')] : [];
+  });
+}
+
 function run() {
   runCapLs();
 
@@ -304,8 +338,18 @@ function run() {
     console.log('✓ iOS refuse MEESHY_SHELL_START_PATH en nommant CAPBridgeViewController.loadWebView (forme admise).');
   }
 
+  const pluginViolations = auditSyncedPlugins(
+    JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')),
+    capacitorPluginsImportedBy(sourcesUnder(join(ROOT, 'src'))),
+  );
+  if (pluginViolations.length > 0) {
+    violations.push(...pluginViolations);
+  } else {
+    console.log('✓ Tout plugin Capacitor importé par src/ est synchronisé par cap sync (#8090).');
+  }
+
   if (violations.length > 0) {
-    console.error('\n  check-capacitor-config : la forme iOS de MEESHY_SHELL_START_PATH ne respecte pas #6027 :\n');
+    console.error('\n  check-capacitor-config : la configuration Capacitor ne respecte pas son contrat (#6027, #8090) :\n');
     for (const v of violations) console.error(`    ${v}`);
     console.error('');
     process.exit(1);
