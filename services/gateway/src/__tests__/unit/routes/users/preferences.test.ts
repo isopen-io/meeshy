@@ -69,6 +69,10 @@ const TARGET_USER_ID  = '507f1f77bcf86cd799439022';
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       // `computeUserStats` relit `createdAt` par `findUnique`, DANS le même

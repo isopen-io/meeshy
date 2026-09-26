@@ -172,7 +172,8 @@ class RedisStore {
     const windowKey = `ratelimit:${key}`;
 
     const pipeline = this.redis.pipeline();
-    pipeline.incrby(windowKey, amount);
+    if (amount === 1) pipeline.incr(windowKey);
+    else pipeline.incrby(windowKey, amount);
     pipeline.pttl(windowKey);
 
     const results = await pipeline.exec();

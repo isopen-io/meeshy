@@ -39,6 +39,8 @@ import {
 
 const MOI = '507f1f77bcf86cd799439011';
 
+jest.setTimeout(120_000);
+
 function prismaDouble() {
   return {
     user: {

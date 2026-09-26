@@ -83,7 +83,8 @@ export function countContactIdentifiers(contacts: readonly NormalizedContact[]):
   );
 }
 
-export type ContactBudgetVerdict = { readonly allowed: true } | { readonly allowed: false; readonly retryAfter: number };
+/** `retryAfter` vaut 0 quand le lot passe (le gateway compile sans `strictNullChecks` : pas d'union discriminée). */
+export type ContactBudgetVerdict = { readonly allowed: boolean; readonly retryAfter: number };
 
 /**
  * Débite le lot sur les deux fenêtres, et dit s'il passe.
@@ -97,12 +98,12 @@ export async function spendContactIdentifierBudget(
   userId: string,
   cost: number
 ): Promise<ContactBudgetVerdict> {
-  if (cost <= 0) return { allowed: true };
+  if (cost <= 0) return { allowed: true, retryAfter: 0 };
   const { heure, jour } = seaux(fastify);
   const cle = `user:${userId}`;
   const verdicts = await Promise.all([heure.consume(cle, cost), jour.consume(cle, cost)]);
   const depasses = verdicts.flatMap((info) => (info?.retryAfter !== undefined ? [info.retryAfter] : []));
-  if (depasses.length === 0) return { allowed: true };
+  if (depasses.length === 0) return { allowed: true, retryAfter: 0 };
   return { allowed: false, retryAfter: Math.max(...depasses) };
 }
 
