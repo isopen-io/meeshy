@@ -121,4 +121,20 @@ describe('le menu latéral d’administration', () => {
     });
     expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
   });
+
+  /* #8020 — le retour matériel de la coque Android rejoue `history.back()` :
+     comme toute couche modale (`useBackDismiss`), le tiroir pose son entrée
+     d'historique et se ferme sur `popstate`, au lieu de quitter l'écran. */
+  test('le retour Android ferme le tiroir au lieu de quitter l’écran (#8020)', async () => {
+    const hote = await cadre('ADMIN');
+    const profondeur = window.history.length;
+
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-menu-open]')?.click());
+    expect(window.history.length).toBe(profondeur + 1);
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
+  });
 });
