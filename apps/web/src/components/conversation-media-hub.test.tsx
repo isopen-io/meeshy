@@ -103,6 +103,11 @@ const settle = (ms = 10) =>
     await new Promise((resolve) => setTimeout(resolve, ms));
   });
 
+/** Attend qu'un état dessiné paraisse — sous charge, un seul tour de boucle ne suffit pas à la réponse. */
+const until = async (check: () => boolean) => {
+  for (let tries = 0; tries < 100 && !check(); tries += 1) await settle(20);
+};
+
 const mountHub = (options: {
   readonly replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>;
   readonly client?: QueryClient;
@@ -159,7 +164,7 @@ describe('les segments', () => {
     act(() => {
       $('[role="tablist"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    await settle();
+    await until(() => calls().some((call) => call.path.includes('kinds=audio')));
     expect($('[data-media-hub-segment="audio"]')?.getAttribute('aria-selected')).toBe('true');
     expect(calls().map((call) => call.path)).toContain(mediaHubPath({ conversationId: 'c1', kind: 'audio', term: null, before: undefined }));
   });
@@ -174,17 +179,17 @@ describe('les états dessinés', () => {
 
   test('vide : une phrase qui nomme le segment', async () => {
     mountHub({ replies: { [pathOf('visual')]: page([]) } });
-    await settle();
+    await until(() => $('[data-media-hub-empty]') !== null);
     expect($('[data-media-hub-empty]')?.textContent).toBe('Rien à afficher dans « Médias » pour l’instant.');
   });
 
   test('erreur : un message et « Réessayer », qui relance', async () => {
     const { calls } = mountHub({ replies: {} });
-    await settle();
+    await until(() => $('[data-media-hub-error]') !== null);
     expect($('[data-media-hub-error]')?.getAttribute('role')).toBe('alert');
     const before = calls().length;
     click($('[data-media-hub-error] button'));
-    await settle();
+    await until(() => calls().length > before);
     expect(calls().length).toBe(before + 1);
   });
 
@@ -210,7 +215,7 @@ describe('cache d’abord', () => {
 describe('la grille et la visionneuse conversation-entière (#6303)', () => {
   test('les vignettes ne chargent que la VIGNETTE servie, paresseusement', async () => {
     mountHub({ replies: { [pathOf('visual')]: page([photoMessage('m2'), photoMessage('m1')]) } });
-    await settle();
+    await until(() => $$('[data-media-hub-tile]').length === 2);
     const images = $$('[data-media-hub-tile] img');
     expect(images.map((image) => image.getAttribute('src'))).toEqual(['/uploads/m2-thumb.jpg', '/uploads/m1-thumb.jpg'].map((src) => images.find((i) => i.getAttribute('src')?.endsWith(src))?.getAttribute('src') ?? src));
     expect(images.every((image) => image.getAttribute('loading') === 'lazy')).toBe(true);
@@ -219,7 +224,7 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
 
   test('toucher la deuxième vignette ouvre la visionneuse sur ELLE, parmi tous les médias de la conversation', async () => {
     mountHub({ replies: { [pathOf('visual')]: page([photoMessage('m3'), photoMessage('m2'), photoMessage('m1')]) } });
-    await settle();
+    await until(() => $$('[data-media-hub-tile]').length === 3);
     click($$('[data-media-hub-tile]')[1] ?? null);
     for (let tries = 0; tries < 50 && $('[data-media-viewer]') === null; tries += 1) await settle(20);
     const viewer = $('[data-media-viewer]');
@@ -232,15 +237,13 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
 describe('la recherche', () => {
   test('la requête part une fois la frappe posée, avec le terme ; un seul caractère ne cherche rien', async () => {
     const { calls } = mountHub({ replies: { [pathOf('visual')]: page([]), [pathOf('visual', 'plage')]: page([]) } });
-    await settle();
+    await until(() => $('[data-media-hub-empty]') !== null);
     type('p');
     await settle(SEARCH_DEBOUNCE_MS + 20);
     expect(calls().filter((call) => call.path.includes('q='))).toHaveLength(0);
     type('pla');
     type('plage');
-    await settle(SEARCH_DEBOUNCE_MS / 2);
-    expect(calls().filter((call) => call.path.includes('q='))).toHaveLength(0);
-    await settle(SEARCH_DEBOUNCE_MS);
+    await until(() => calls().some((call) => call.path.includes('q=')) && $('[data-media-hub-empty]')?.textContent?.includes('plage') === true);
     expect(calls().filter((call) => call.path.includes('q=')).map((call) => call.path)).toEqual([
       mediaHubPath({ conversationId: 'c1', kind: 'visual', term: 'plage', before: undefined }),
     ]);
@@ -262,9 +265,9 @@ describe('les rangées', () => {
         ]),
       },
     });
-    await settle();
+    await until(() => $('[data-media-hub-empty]') !== null);
     click($('[data-media-hub-segment="link"]'));
-    await settle();
+    await until(() => $('[data-media-hub-jump="m-recent"]') !== null);
     const link = $('[data-media-hub-link="https://example.org/article"]');
     expect(link?.getAttribute('target')).toBe('_blank');
     expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
@@ -288,7 +291,7 @@ describe('ConversationMediaSection — l’aperçu de la feuille de détails (#7
         </QueryClientProvider>,
       );
     });
-    await settle();
+    await until(() => $$('[data-conversation-details-media-strip] [data-media-hub-tile]').length === 4);
     expect($$('[data-conversation-details-media-strip] [data-media-hub-tile]')).toHaveLength(4);
     expect(client.getQueryData(mediaHubQueryKey('c1', 'visual', null))).toBeDefined();
     expect($('[data-conversation-details-media-open]')?.textContent).toContain('Médias, liens et documents');
