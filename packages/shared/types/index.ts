@@ -30,6 +30,7 @@ export {
 // Export des types unifies Phase 1
 export * from './conversation.js';
 export * from './conversation-preview.js';
+export * from './conversation-card.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';

@@ -8,6 +8,8 @@ import { registerMessageRoutes } from './messages';
 import { registerAdminRoutes } from './admin';
 import { registerUserRoutes } from './user';
 import { registerLinkStatsRoutes } from './stats';
+import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { registerShareLinkCardRoute } from '../conversations/card';
 
 /**
  * Point d'entrée principal pour toutes les routes de liens de partage
@@ -24,5 +26,10 @@ export async function linksRoutes(fastify: FastifyInstance) {
   await registerMessageRoutes(fastify);
   await registerManagementRoutes(fastify);
   await registerLinkStatsRoutes(fastify);
+  registerShareLinkCardRoute(
+    fastify,
+    fastify.prisma,
+    createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: false, allowAnonymous: true })
+  );
   await registerAdminRoutes(fastify);
 }
