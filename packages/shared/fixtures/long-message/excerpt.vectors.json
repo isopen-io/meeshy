@@ -1,0 +1,252 @@
+[
+  {
+    "_label": "vide",
+    "input": {
+      "text": ""
+    },
+    "expected": {
+      "truncated": false,
+      "excerpt": ""
+    }
+  },
+  {
+    "_label": "court",
+    "input": {
+      "text": "Bonjour, tu viens ce soir ?"
+    },
+    "expected": {
+      "truncated": false,
+      "excerpt": "Bonjour, tu viens ce soir ?"
+    }
+  },
+  {
+    "_label": "exactement-512-graphemes-non-tronque",
+    "input": {
+      "text": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "expected": {
+      "truncated": false,
+      "excerpt": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  {
+    "_label": "512-graphemes-de-mots-non-tronque",
+    "input": {
+      "text": "mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9zzzzzzzzzzzzz"
+    },
+    "expected": {
+      "truncated": false,
+      "excerpt": "mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9zzzzzzzzzzzzz"
+    }
+  },
+  {
+    "_label": "513-graphemes-tronque-cible-128",
+    "input": {
+      "text": "mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4"
+    }
+  },
+  {
+    "_label": "paragraphe-francais-1000",
+    "input": {
+      "text": "Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur,"
+    }
+  },
+  {
+    "_label": "espaces-multiples",
+    "input": {
+      "text": "alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta     gamma  alpha   beta"
+    }
+  },
+  {
+    "_label": "sauts-de-ligne",
+    "input": {
+      "text": "Première ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\n"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Première ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne\n\nPremière ligne du message\nDeuxième ligne"
+    }
+  },
+  {
+    "_label": "crlf-compte-pour-un",
+    "input": {
+      "text": "Ligne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\n"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Ligne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux\r\nLigne Windows numéro un\r\nLigne deux"
+    }
+  },
+  {
+    "_label": "tabulations",
+    "input": {
+      "text": "col1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\t"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "col1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3\tcol1\tcol2\tcolonne3"
+    }
+  },
+  {
+    "_label": "emoji-zwj-famille",
+    "input": {
+      "text": "👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille 👨‍👩‍👧‍👦 famille"
+    }
+  },
+  {
+    "_label": "emoji-teintes-de-peau-et-drapeaux",
+    "input": {
+      "text": "👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲 bravo 👍🏽 🇫🇷 🇨🇲"
+    }
+  },
+  {
+    "_label": "accents-decomposes",
+    "input": {
+      "text": "été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "été café été café été café été café été café été café été café été café été café été café été café été café été café été café été café"
+    }
+  },
+  {
+    "_label": "arabe",
+    "input": {
+      "text": "مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم الرسائل تلقائيا مرحبا بك في ميشي حيث تترجم"
+    }
+  },
+  {
+    "_label": "chinois-sans-espace",
+    "input": {
+      "text": "你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是一个很长的消息你好世界这是"
+    }
+  },
+  {
+    "_label": "japonais-espace-ideographique",
+    "input": {
+      "text": "こんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　です"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "こんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界　ですこんにちは　世界"
+    }
+  },
+  {
+    "_label": "mot-geant",
+    "input": {
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "_label": "url-longue-apres-un-mot",
+    "input": {
+      "text": "Voir https://meeshy.me/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/segment/"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Voir"
+    }
+  },
+  {
+    "_label": "espaces-en-tete-puis-mot-geant",
+    "input": {
+      "text": "   zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "   zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    }
+  },
+  {
+    "_label": "parenthese-ouvrante-trainante",
+    "input": {
+      "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ( yyyyyyyyyyyyyyyyyyyy mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  },
+  {
+    "_label": "guillemet-ouvrant-trainant",
+    "input": {
+      "text": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq « rrrrrrrrrrrrrrrrrrrrrrrrrrrrrr mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9 mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+    }
+  },
+  {
+    "_label": "insecable-n-est-pas-une-frontiere",
+    "input": {
+      "text": "prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 € prix 100 €"
+    }
+  },
+  {
+    "_label": "separateur-pile-a-la-cible",
+    "input": {
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "_label": "tres-long-4000",
+    "input": {
+      "text": "Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique sert chaque message dans la langue du lecteur, sans friction ni bannière. Le Prisme Linguistique"
+    }
+  },
+  {
+    "_label": "ponctuation-finale-conservee",
+    "input": {
+      "text": "Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! "
+    },
+    "expected": {
+      "truncated": true,
+      "excerpt": "Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin. Vraiment ? Oui ! Fin."
+    }
+  }
+]

@@ -222,6 +222,16 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
     expect($('[data-media-hub-tile]')?.getAttribute('aria-label')).toContain('Nour Haddad');
   });
 
+  test('une vignette introuvable dessine l’absence, jamais une image brisée (#8141)', async () => {
+    mountHub({ replies: { [pathOf('visual')]: page([photoMessage('m1')]) } });
+    await until(() => $$('[data-media-hub-tile] img').length === 1);
+    act(() => {
+      $('[data-media-hub-tile] img')?.dispatchEvent(new Event('error'));
+    });
+    expect($$('[data-media-hub-tile] img')).toHaveLength(0);
+    expect($('[data-media-hub-tile] [data-media-unavailable]')).not.toBeNull();
+  });
+
   test('toucher la deuxième vignette ouvre la visionneuse sur ELLE, parmi tous les médias de la conversation', async () => {
     mountHub({ replies: { [pathOf('visual')]: page([photoMessage('m3'), photoMessage('m2'), photoMessage('m1')]) } });
     await until(() => $$('[data-media-hub-tile]').length === 3);

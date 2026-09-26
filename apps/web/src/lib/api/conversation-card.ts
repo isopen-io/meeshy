@@ -36,6 +36,39 @@ export const CONVERSATION_CARDS_QUERY_PREFIX = ['conversation-cards'] as const;
 export const conversationCardQueryKey = (target: ConversationLinkTarget) =>
   [...CONVERSATION_CARDS_QUERY_PREFIX, target.kind, target.identifier] as const;
 
+type CardQuery = { readonly queryKey: readonly unknown[]; readonly state: { readonly data: unknown } };
+
+const conversationIdOfCard = (data: unknown): string | null | undefined => {
+  if (typeof data !== 'object' || data === null || !('conversationId' in data)) return undefined;
+  const value = data.conversationId;
+  return typeof value === 'string' || value === null ? value : undefined;
+};
+
+/**
+ * **TOUTES LES CARTES D'UNE CONVERSATION** (#8138) — le filtre que Rejoindre et
+ * Quitter invalident. Un même fil peut porter la carte d'un lien de PARTAGE
+ * (clé `share-link/<lien>`) et celle du lien DIRECT (clé `direct/<id>`) d'une
+ * même conversation : le geste de l'une doit relire l'autre, sans quoi elles se
+ * contredisent jusqu'à l'expiration du cache.
+ *
+ * Sont relues : la carte directe de la conversation (même si elle est en cache
+ * « privée », `null`), toute carte qui la nomme, et les cartes de partage d'un
+ * NON-membre — celles-là ne disent pas leur conversation (`conversationId` est
+ * `null`, anti-énumération), donc aucune ne peut être écartée à coup sûr.
+ */
+export function conversationCardsFilter(conversationId: string) {
+  return {
+    queryKey: CONVERSATION_CARDS_QUERY_PREFIX,
+    predicate: (query: CardQuery): boolean => {
+      const [, kind, identifier] = query.queryKey;
+      if (kind === 'direct' && identifier === conversationId) return true;
+      const cardConversation = conversationIdOfCard(query.state.data);
+      if (cardConversation === conversationId) return true;
+      return kind === 'share-link' && cardConversation === null;
+    },
+  };
+}
+
 const nullableText = z.optional(z.nullable(z.string()));
 
 const WireCard = z.object({
