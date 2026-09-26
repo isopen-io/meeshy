@@ -27,10 +27,17 @@ extension MessageListViewController {
         }
     }
 
-    /// « Lire la suite » / « Réduire ». Replie le précédent déplié, anime la
-    /// hauteur de la cellule en tenant immobile le bord ancré
+    /// « Lire la suite » / « Réduire ». Replie le précédent déplié, pose la
+    /// nouvelle hauteur de la cellule en tenant immobile le bord ancré
     /// (`LongMessageExpansionLaw.anchor`) — aucun saut de défilement — puis
-    /// pose l'effet Focal. Réduire le mouvement ⇒ aucune animation.
+    /// pose l'effet Focal (animé, sauf sous Réduire le mouvement).
+    ///
+    /// La hauteur n'est PAS animée (#8162) : mesuré au simulateur en Release,
+    /// envelopper la reconfiguration dans `UIView.animate` (plus une passe de
+    /// layout forcée pour l'animer) coûtait 27–84 ms de fil principal et 2 à
+    /// 6 images perdues par bascule ; posée d'un coup, 13–29 ms et au plus
+    /// une. Le bord ancré ne bougeant pas, la suite se déroule sous l'extrait
+    /// sans que l'œil ait à suivre une glissade.
     func toggleLongMessageExpansion(_ localId: String) {
         guard isViewLoaded, dataSource != nil else { return }
         let previous = expandedLongMessageLocalId
@@ -55,35 +62,20 @@ extension MessageListViewController {
         if visibleCell(forLocalId: localId) != nil, let edge = visualEdge(ofLocalId: localId, anchor: anchor) {
             beginAnchorHold(.init(localId: localId, anchor: anchor, edge: edge))
         }
-        // La cellule re-hébergée s'auto-dimensionne dans la passe forcée — pas
-        // d'invalidation du layout ici : elle périmerait le mémo de la pastille
-        // de jour (`MessageListStickyDayMemoGuardTests`). Le bord ancré est
-        // recalé DANS la passe où la hauteur change (`holdAnchoredEdge`, sur
-        // `contentSize`), donc dans la même animation : il ne bouge à aucune
-        // image (#8157).
-        let resize = { [weak self] in
-            guard let self else { return }
-            self.applyToDataSource(snapshot) {}
-            self.collectionView.layoutIfNeeded()
-            self.holdAnchoredEdge()
+        // La cellule re-hébergée s'auto-dimensionne dans la passe de la mise à
+        // jour — pas d'invalidation du layout ici : elle périmerait le mémo de
+        // la pastille de jour (`MessageListStickyDayMemoGuardTests`). Le bord
+        // ancré est recalé DANS la passe où la hauteur change
+        // (`holdAnchoredEdge`, sur `contentSize`) : il ne bouge à aucune image.
+        UIView.performWithoutAnimation {
+            applyToDataSource(snapshot) {}
         }
-        guard !UIAccessibility.isReduceMotionEnabled else {
-            UIView.performWithoutAnimation(resize)
-            applyLongMessageExpansionPresentation(animated: false)
-            return
-        }
-        UIView.animate(
-            withDuration: FocalMetrics.Focus.expandDuration,
-            delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState, .allowUserInteraction],
-            animations: resize
-        )
-        applyLongMessageExpansionPresentation(animated: true)
+        applyLongMessageExpansionPresentation(animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     /// Tient le bord ancré du dépliage pendant que sa hauteur se pose : à
     /// chaque changement de `contentSize`, quelle que soit la passe de layout
-    /// qui le porte. La fenêtre se referme d'elle-même après l'animation.
+    /// qui le porte. La fenêtre se referme d'elle-même peu après.
     private func beginAnchorHold(_ hold: LongMessageExpansionState.Hold) {
         longMessageExpansionState.hold = hold
         longMessageExpansionState.contentSizeObservation = collectionView.observe(\.contentSize, options: [.new]) { [weak self] _, _ in

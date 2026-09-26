@@ -31,8 +31,8 @@ nonisolated enum LongMessageExpansionLaw {
         isExpanding ? .top : .bottom
     }
 
-    /// La fenêtre pendant laquelle le bord ancré est tenu : l'animation de
-    /// hauteur, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
+    /// La fenêtre pendant laquelle le bord ancré est tenu : la durée de la
+    /// mise en avant, plus la marge d'une re-mesure SwiftUI tardive. Au-delà,
     /// le fil redevient libre — une hauteur qui change plus tard (image,
     /// traduction) obéit aux lois ordinaires du fil.
     static let holdWindow: TimeInterval = FocalMetrics.Focus.expandDuration + 0.35

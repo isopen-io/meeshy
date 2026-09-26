@@ -77,12 +77,12 @@ final class LaunchSplashController: ObservableObject {
     private var pendingStep: LaunchBootStep?
 
     private let elapsed: () -> Duration
-    private let sleep: (Duration) async throws -> Void
+    private let sleep: @concurrent (Duration) async throws -> Void
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "launch")
 
     init(elapsed: (() -> Duration)? = nil,
-         sleep: ((Duration) async throws -> Void)? = nil) {
+         sleep: (@concurrent (Duration) async throws -> Void)? = nil) {
         let start = ContinuousClock.now
         self.elapsed = elapsed ?? { start.duration(to: .now) }
         self.sleep = sleep ?? { try await Task.sleep(for: $0) }
