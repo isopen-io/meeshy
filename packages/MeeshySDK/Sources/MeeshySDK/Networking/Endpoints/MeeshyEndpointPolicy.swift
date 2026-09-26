@@ -27,7 +27,7 @@ public enum MeeshyEndpointPolicy {
     /// tout en 400 (`sendBadRequest`, vérifié côté gateway), donc les y ranger
     /// affirmerait ce que le serveur ne soutient pas.
     public static func authKind(forLegacyPath path: String) -> MeeshyEndpointAuthKind {
-        if path.hasPrefix("/auth/login") { return .credentials }
+        if path.hasPrefix("/auth/login") || path == "/auth/verification/status" { return .credentials }
         if path == "/auth/refresh"
             || path.hasPrefix("/auth/register")
             || path.hasPrefix("/auth/magic-link") { return .none }
@@ -55,7 +55,10 @@ public enum MeeshyEndpointPolicy {
 public extension AuthEndpoint {
     var authKind: MeeshyEndpointAuthKind {
         switch self {
-        case .login, .loginN2Fa: return .credentials
+        // #8083 — l'état d'une attente de preuve : aucune session n'y est en
+        // jeu, un 401 y dit « jeton d'attente invalide », jamais « session
+        // expirée » (qui rafraîchirait celle d'un AUTRE compte).
+        case .login, .loginN2Fa, .verificationStatus: return .credentials
         case .refresh, .register, .magicLinkRequest, .magicLinkValidate: return .none
         default: return .bearer
         }

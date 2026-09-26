@@ -20,6 +20,14 @@ final class EmailVerificationViewModel: ObservableObject {
     /// `openProvenSession`, une fois l'écran refermé.
     @Published var sessionOpened = false
     @Published var error: String?
+    /// #8083 — l'adresse a été prouvée AILLEURS (lien ouvert sur un autre
+    /// appareil). L'écran le dit ; il ne connecte pas pour autant : décision
+    /// porteur « si et seulement si », ce téléphone n'entre que par le code
+    /// saisi sur lui ou le lien ouvert sur lui.
+    @Published var addressProvenElsewhere = false
+
+    /// Le jeton d'attente de CET appareil ; renouvelé à chaque nouvel envoi.
+    @Published var pendingSessionToken: String?
 
     let email: String
     let accountCreated: Bool
@@ -30,19 +38,55 @@ final class EmailVerificationViewModel: ObservableObject {
     private var provenSession: EmailProvenSession?
     private let authService: AuthServiceProviding
     private let confirmer: EmailVerificationConfirming
+    private let watcher: EmailVerificationWatching
+    /// ~3 s entre deux lectures de l'état, au premier plan seulement.
+    private let watchInterval: Duration
+    /// Borne d'une veille : la durée d'un code de connexion.
+    private let watchLimit: Duration
 
     init(
         email: String,
         password: String? = nil,
         accountCreated: Bool = false,
+        pendingSessionToken: String? = nil,
         authService: AuthServiceProviding = AuthService.shared,
-        confirmer: EmailVerificationConfirming = AuthManager.shared
+        confirmer: EmailVerificationConfirming = AuthManager.shared,
+        watcher: EmailVerificationWatching = AuthService.shared,
+        watchInterval: Duration = .seconds(3),
+        watchLimit: Duration = .seconds(15 * 60)
     ) {
         self.email = email
         self.password = password
         self.accountCreated = accountCreated
+        self.pendingSessionToken = pendingSessionToken
         self.authService = authService
         self.confirmer = confirmer
+        self.watcher = watcher
+        self.watchInterval = watchInterval
+        self.watchLimit = watchLimit
+    }
+
+    /// Interroge l'état de la preuve jusqu'à `proven`, la fin du jeton, la
+    /// borne, le code vérifié — ou l'annulation de la tâche qui la porte.
+    /// L'écran la lance dans un `.task` lié au premier plan : SwiftUI l'annule
+    /// au démontage et au passage en arrière-plan, et la relance au retour —
+    /// aucune lecture ne survit à l'écran.
+    func watchProof() async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: watchLimit)
+        while !Task.isCancelled, !addressProvenElsewhere, !verificationSuccess, clock.now < deadline,
+              let token = pendingSessionToken {
+            switch try? await watcher.emailVerificationStatus(pendingSessionToken: token) {
+            case .proven:
+                addressProvenElsewhere = true
+                return
+            case .ended:
+                return
+            case .pending, nil:
+                break
+            }
+            try? await Task.sleep(for: watchInterval)
+        }
     }
 
     func verifyCode(_ code: String) async {

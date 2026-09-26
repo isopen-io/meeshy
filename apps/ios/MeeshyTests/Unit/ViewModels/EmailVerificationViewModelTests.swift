@@ -24,6 +24,28 @@ private final class MockEmailVerificationConfirmer: EmailVerificationConfirming 
     }
 }
 
+/// Un état scripté par lecture ; au-delà du script, la dernière valeur se répète.
+private final class MockEmailVerificationWatcher: EmailVerificationWatching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var script: [Result<EmailVerificationWatchStatus, Error>]
+    private var _tokens: [String] = []
+
+    init(_ script: [Result<EmailVerificationWatchStatus, Error>]) {
+        self.script = script
+    }
+
+    var tokens: [String] { lock.withLock { _tokens } }
+    var callCount: Int { tokens.count }
+
+    func emailVerificationStatus(pendingSessionToken: String) async throws -> EmailVerificationWatchStatus {
+        let next: Result<EmailVerificationWatchStatus, Error> = lock.withLock {
+            _tokens.append(pendingSessionToken)
+            return script.count > 1 ? script.removeFirst() : (script.first ?? .success(.pending))
+        }
+        return try next.get()
+    }
+}
+
 @MainActor
 final class EmailVerificationViewModelTests: XCTestCase {
 
@@ -32,7 +54,10 @@ final class EmailVerificationViewModelTests: XCTestCase {
     private func makeSUT(
         email: String = "test@example.com",
         password: String? = nil,
-        accountCreated: Bool = false
+        accountCreated: Bool = false,
+        pendingSessionToken: String? = nil,
+        watcher: EmailVerificationWatching = MockEmailVerificationWatcher([]),
+        watchLimit: Duration = .seconds(5)
     ) -> (sut: EmailVerificationViewModel, authService: MockAuthServiceSDK, confirmer: MockEmailVerificationConfirmer) {
         let authService = MockAuthServiceSDK()
         let confirmer = MockEmailVerificationConfirmer()
@@ -40,8 +65,12 @@ final class EmailVerificationViewModelTests: XCTestCase {
             email: email,
             password: password,
             accountCreated: accountCreated,
+            pendingSessionToken: pendingSessionToken,
             authService: authService,
-            confirmer: confirmer
+            confirmer: confirmer,
+            watcher: watcher,
+            watchInterval: .zero,
+            watchLimit: watchLimit
         )
         return (sut, authService, confirmer)
     }
@@ -161,6 +190,99 @@ final class EmailVerificationViewModelTests: XCTestCase {
 
         XCTAssertNotNil(sut.error)
         XCTAssertFalse(sut.isResending)
+    }
+
+    // MARK: - #8083 — l'adresse prouvée AILLEURS se dit, sans jamais connecter
+
+    func test_watchProof_provenElsewhere_saysSoAndStops() async {
+        let watcher = MockEmailVerificationWatcher([.success(.pending), .success(.pending), .success(.proven)])
+        let (sut, _, confirmer) = makeSUT(pendingSessionToken: "attente", watcher: watcher)
+
+        await sut.watchProof()
+
+        XCTAssertTrue(sut.addressProvenElsewhere)
+        XCTAssertEqual(watcher.tokens, ["attente", "attente", "attente"])
+        XCTAssertEqual(confirmer.openedSessions, [], "prouvée ailleurs ne connecte JAMAIS cet appareil")
+        XCTAssertEqual(confirmer.requests, [])
+        XCTAssertFalse(sut.verificationSuccess)
+    }
+
+    func test_watchProof_withoutToken_asksNothing() async {
+        let watcher = MockEmailVerificationWatcher([.success(.proven)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: nil, watcher: watcher)
+
+        await sut.watchProof()
+
+        XCTAssertEqual(watcher.callCount, 0)
+        XCTAssertFalse(sut.addressProvenElsewhere)
+    }
+
+    func test_watchProof_endedToken_stopsWithoutClaimingProof() async {
+        let watcher = MockEmailVerificationWatcher([.success(.pending), .success(.ended)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "attente", watcher: watcher)
+
+        await sut.watchProof()
+
+        XCTAssertEqual(watcher.callCount, 2)
+        XCTAssertFalse(sut.addressProvenElsewhere)
+    }
+
+    func test_watchProof_transientFailure_keepsWatching() async {
+        let watcher = MockEmailVerificationWatcher([
+            .failure(MeeshyError.server(statusCode: 503, message: "down")),
+            .success(.proven),
+        ])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "attente", watcher: watcher)
+
+        await sut.watchProof()
+
+        XCTAssertTrue(sut.addressProvenElsewhere)
+        XCTAssertEqual(watcher.callCount, 2)
+    }
+
+    func test_watchProof_stopsAtItsLimit() async {
+        let watcher = MockEmailVerificationWatcher([.success(.pending)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "attente", watcher: watcher, watchLimit: .zero)
+
+        await sut.watchProof()
+
+        XCTAssertLessThanOrEqual(watcher.callCount, 1)
+        XCTAssertFalse(sut.addressProvenElsewhere)
+    }
+
+    /// Aucune lecture ne survit à l'écran : la tâche que SwiftUI annule au
+    /// démontage (ou au passage en arrière-plan) rend la main.
+    func test_watchProof_cancelled_returns() async {
+        let watcher = MockEmailVerificationWatcher([.success(.pending)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "attente", watcher: watcher, watchLimit: .seconds(3600))
+
+        let task = Task { await sut.watchProof() }
+        task.cancel()
+        await task.value
+
+        let apres = watcher.callCount
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(watcher.callCount, apres, "plus aucune lecture après l'annulation")
+    }
+
+    func test_watchProof_afterCodeVerified_asksNothing() async {
+        let watcher = MockEmailVerificationWatcher([.success(.proven)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "attente", watcher: watcher)
+        await sut.verifyCode("123456")
+
+        await sut.watchProof()
+
+        XCTAssertEqual(watcher.callCount, 0)
+    }
+
+    func test_watchProof_followsARenewedToken() async {
+        let watcher = MockEmailVerificationWatcher([.success(.proven)])
+        let (sut, _, _) = makeSUT(pendingSessionToken: "ancien", watcher: watcher)
+        sut.pendingSessionToken = "neuf"
+
+        await sut.watchProof()
+
+        XCTAssertEqual(watcher.tokens, ["neuf"])
     }
 
     // MARK: - properties

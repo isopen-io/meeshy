@@ -395,11 +395,15 @@ struct MagicLinkView: View {
 
         Task {
             do {
-                let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
+                let dispatch = try await AuthService.shared.requestEmailCode(email: email)
+                let expiresInSeconds = dispatch.expiresInSeconds ?? 300
 
                 if codeEntry?.email != email {
                     codeEntry = EmailVerificationViewModel(email: email)
                 }
+                // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
+                // que l'adresse a été confirmée sur un autre appareil.
+                codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false

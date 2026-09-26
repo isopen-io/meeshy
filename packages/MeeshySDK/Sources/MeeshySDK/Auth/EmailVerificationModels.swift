@@ -9,12 +9,17 @@ import Foundation
 public struct PendingEmailVerification: Equatable, Sendable, Identifiable {
     public let email: String
     public let accountCreated: Bool
+    /// #8083 — le jeton d'attente de CET appareil : il dit à l'écran du code si
+    /// l'adresse a été prouvée ailleurs (`pending` / `proven`), jamais plus.
+    /// `nil` quand la passerelle ne l'a pas servi : l'écran s'en passe.
+    public let pendingSessionToken: String?
 
     public var id: String { email }
 
-    public init(email: String, accountCreated: Bool) {
+    public init(email: String, accountCreated: Bool, pendingSessionToken: String? = nil) {
         self.email = email
         self.accountCreated = accountCreated
+        self.pendingSessionToken = pendingSessionToken
     }
 }
 
@@ -49,7 +54,8 @@ public extension LoginResponseData {
             ? typedIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
             : served
         guard !address.isEmpty else { return nil }
-        return PendingEmailVerification(email: address, accountCreated: accountCreated ?? false)
+        let token = pendingSessionToken.flatMap { $0.isEmpty ? nil : $0 }
+        return PendingEmailVerification(email: address, accountCreated: accountCreated ?? false, pendingSessionToken: token)
     }
 }
 

@@ -39,6 +39,9 @@ public struct LoginResponseData: Decodable, Sendable {
     public let status: String?
     public let accountCreated: Bool?
     public let email: String?
+    /// #8083 — servi avec `verification-required` : le jeton d'attente de cet
+    /// appareil, pour `POST /auth/verification/status`.
+    public let pendingSessionToken: String?
 
     public init(
         user: MeeshyUser?,
@@ -50,7 +53,8 @@ public struct LoginResponseData: Decodable, Sendable {
         phoneOwnershipConflict: Bool? = nil,
         status: String? = nil,
         accountCreated: Bool? = nil,
-        email: String? = nil
+        email: String? = nil,
+        pendingSessionToken: String? = nil
     ) {
         self.user = user
         self.token = token
@@ -62,6 +66,7 @@ public struct LoginResponseData: Decodable, Sendable {
         self.status = status
         self.accountCreated = accountCreated
         self.email = email
+        self.pendingSessionToken = pendingSessionToken
     }
 }
 
