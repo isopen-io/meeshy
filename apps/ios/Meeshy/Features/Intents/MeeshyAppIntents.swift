@@ -113,14 +113,10 @@ struct SendMessageIntent: AppIntent {
 
 // MARK: - Call Contact Intent
 
-/// Raccourci « Appeler un contact sur Meeshy ».
-///
-/// STATUT : NON ROUTÉ (délibéré). Le deep link émis (`meeshy://call?contactId=…&type=…`)
-/// n'a pas de case dans `DeepLinkParser` → `.external` : l'app s'ouvre sans
-/// effet. Amorcer un appel depuis un lien demande une surface produit qui
-/// n'existe pas encore. Le brancher = ajouter le case au parseur ET retirer
-/// `call` de `deliberatelyUnroutedHosts` (`DeepLinkSurfaceRoutingGuardTests`),
-/// qui rougit sinon.
+/// Raccourci « Appeler un contact sur Meeshy ». `contactId` est l'identifiant
+/// de la conversation directe épinglée (`favorite_contacts`) :
+/// `DeepLinkParser` le lit en `.call`, et `CallBackDialer` résout le
+/// correspondant puis compose par `CallStarter` (#8067).
 @available(iOS 18.0, *)
 struct CallContactIntent: AppIntent {
     static let title: LocalizedStringResource = "Call Contact"

@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { boundApnsPayload } from './boundApnsPayload';
 import { ephemeralPushFields } from './ephemeralPushFields';
+import { callBackPushFields } from './callBackPushFields';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { AttachmentTranslationTrack } from '@meeshy/shared/types/attachment-audio';
 import type {
@@ -1176,6 +1177,7 @@ export class NotificationService {
                 // l'échéance, qui est par destinataire. `effectFlags` dit à la
                 // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
                 ...ephemeralPushFields(params.context),
+                ...(await callBackPushFields({ type: params.type, metadata: params.metadata, language: recipientLang })),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis
                 // encryptedContent et attache le média d'attachmentUrl — les

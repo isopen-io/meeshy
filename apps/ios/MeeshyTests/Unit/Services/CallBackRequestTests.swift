@@ -1,6 +1,7 @@
 import Intents
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// « Rappeler » compose vraiment l'appel (#8067, #7735) — la TRADUCTION de
@@ -189,6 +190,27 @@ final class CallBackRequestTests: XCTestCase {
             .dial(CallBackRequest(userId: "u-ada", displayName: "Ada", isVideo: false, conversationId: nil))
 
         XCTAssertEqual(recorder.profiles, ["u-ada"])
+    }
+
+    func test_dialFromProfile_placesTheCallThroughTheStarter_withTheSharedConversation() {
+        let recorder = Recorder()
+
+        dialer(recorder: recorder).dialFromProfile(
+            ProfileCallRequest(userId: "u-ada", displayName: "Ada", isVideo: true, conversationId: "c-ada")
+        )
+
+        XCTAssertEqual(recorder.started, [CallBackRequest(userId: "u-ada", displayName: "Ada", isVideo: true, conversationId: "c-ada")])
+    }
+
+    func test_dialFromProfile_withoutDirectConversation_saysSo_insteadOfReopeningTheProfile() {
+        let recorder = Recorder()
+
+        dialer(recorder: recorder, conversationExists: false).dialFromProfile(
+            ProfileCallRequest(userId: "u-ada", displayName: "Ada", isVideo: false, conversationId: nil)
+        )
+
+        XCTAssertEqual(recorder.unavailable, 1)
+        XCTAssertTrue(recorder.profiles.isEmpty)
     }
 
     func test_dialConversation_cachedPeer_dialsWithoutNetwork() async {

@@ -152,6 +152,12 @@ struct iPadSheetsLayer: ViewModifier {
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
                         }))
+                    },
+                    onCall: { request in
+                        router.deepLinkProfileUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            CallBackDialer.shared.dialFromProfile(request)
+                        }
                     }
                 )
                 .presentationDetents([.large, .medium])

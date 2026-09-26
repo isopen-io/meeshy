@@ -32,6 +32,7 @@ public struct UserProfileSheet: View {
     public var storyRingState: StoryRingState? = nil
     /// Tap sur l'anneau → l'app présente son viewer de story.
     public var onViewStory: (() -> Void)? = nil
+    public var onCall: ((ProfileCallRequest) -> Void)? = nil
 
     @State var isBlocked: Bool = false
     @State var isBlockedByTarget: Bool = false
@@ -84,7 +85,8 @@ public struct UserProfileSheet: View {
         presenceProvider: ((String) -> PresenceState?)? = nil,
         storyRingState: StoryRingState? = nil,
         onViewStory: (() -> Void)? = nil,
-        postsContent: ((String) -> AnyView)? = nil
+        postsContent: ((String) -> AnyView)? = nil,
+        onCall: ((ProfileCallRequest) -> Void)? = nil
     ) {
         self.user = user
         self.onDismiss = onDismiss
@@ -96,6 +98,7 @@ public struct UserProfileSheet: View {
         self.storyRingState = storyRingState
         self.onViewStory = onViewStory
         self.postsContent = postsContent
+        self.onCall = onCall
     }
 
     var resolvedAccent: String {

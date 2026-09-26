@@ -217,6 +217,9 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/calls/call-answer-intent').then(({ listenCallAnswerIntentsInBrowser }) =>
       listenCallAnswerIntentsInBrowser(),
     );
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
+      listenCallBackIntentsInBrowser(),
+    );
     /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
      * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun

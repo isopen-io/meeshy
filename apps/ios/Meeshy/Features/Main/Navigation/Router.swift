@@ -527,7 +527,7 @@ final class Router: ObservableObject {
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
 
-            case .referral, .external:
+            case .referral, .call, .external:
                 break
             }
         }
