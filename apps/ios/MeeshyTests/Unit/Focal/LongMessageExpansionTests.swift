@@ -52,6 +52,30 @@ final class LongMessageExpansionTests: XCTestCase {
         )
     }
 
+    // MARK: - Le verre épouse la BULLE (#8161)
+
+    func test_glassFrame_bubblesMode_hugsTheBubble_withTheSharedOverhangs() {
+        let bubble = CGRect(x: 120, y: 40, width: 240, height: 600)
+        let row = CGRect(x: 0, y: 0, width: 402, height: 680)
+        let glass = LongMessageExpansionLaw.glassFrame(bubble: bubble, row: row)
+        XCTAssertEqual(glass, CGRect(x: 114, y: 37, width: 252, height: 606), "débords 6/3 de FOCAL_METRICS autour de la bulle, jamais la rangée entière")
+        XCTAssertEqual(bubble.minX - glass.minX, FocalScrollPerspective.focusCardHorizontalInset)
+        XCTAssertEqual(bubble.minY - glass.minY, FocalScrollPerspective.focusCardInnerMargin)
+    }
+
+    func test_glassFrame_withoutABubble_fallsBackToTheRowMinusItsGutter() {
+        let row = CGRect(x: 0, y: 0, width: 402, height: 680)
+        XCTAssertEqual(
+            LongMessageExpansionLaw.glassFrame(bubble: nil, row: row),
+            CGRect(x: 6, y: 0, width: 390, height: 680)
+        )
+        XCTAssertEqual(
+            LongMessageExpansionLaw.glassFrame(bubble: .zero, row: row),
+            CGRect(x: 6, y: 0, width: 390, height: 680),
+            "une bulle pas encore mesurée ne réduit pas le verre à un point"
+        )
+    }
+
     // MARK: - L'effet Focal du déplié
 
     func test_alpha_expandedVisible_dimsTheNeighbours_only() {
@@ -103,6 +127,17 @@ final class LongMessageExpansionTests: XCTestCase {
             XCTAssertFalse(code.contains("ReadMorePayload"), "\(path) : plus de charge de feuille de lecture")
             XCTAssertFalse(code.contains("onReadMore"), "\(path) : plus de chaîne vers une feuille — le dépliage se fait en place")
         }
+    }
+
+    func test_bubblesMode_theGlassReadsTheBubbleFrame_notTheRow() throws {
+        let background = try source("Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift")
+        XCTAssertTrue(
+            background.contains("anchorPreference(key: LongMessageBubbleBoundsKey.self"),
+            "le fond de la bulle remonte son cadre au verre du déplié (#8161)"
+        )
+        let focus = try source("Meeshy/Features/Main/Views/Bubble/LongMessageFocus.swift")
+        XCTAssertTrue(focus.contains("backgroundPreferenceValue(LongMessageBubbleBoundsKey.self)"))
+        XCTAssertTrue(focus.contains("LongMessageExpansionLaw.glassFrame("), "le cadre du verre passe par la loi, jamais par une marge recopiée")
     }
 
     func test_everyReadingMode_mountsTheInPlaceExpansion() throws {
