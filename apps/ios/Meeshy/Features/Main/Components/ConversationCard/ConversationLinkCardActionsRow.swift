@@ -48,24 +48,39 @@ struct ConversationLinkCardActionsRow: View {
             case .none:
                 EmptyView()
             case .join(_, let allowsAnonymous):
-                HStack(spacing: MeeshySpacing.sm) {
-                    if allowsAnonymous {
-                        secondary(ConversationLinkCardCopy.joinAnonymously, icon: "theatermasks.fill",
-                                  tint: accent, id: "conversation-link-card-join-anonymous", action: onJoinAnonymously)
-                    }
-                    primary(ConversationLinkCardCopy.join, icon: "person.badge.plus",
-                            busy: pending == .joining, id: "conversation-link-card-join", action: onJoin)
+                // Côte à côte quand les deux libellés tiennent entiers ; sinon
+                // empilés, « Rejoindre en anonyme » toujours en premier.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: MeeshySpacing.sm) { joinButtons(allowsAnonymous: allowsAnonymous) }
+                    VStack(spacing: MeeshySpacing.sm) { joinButtons(allowsAnonymous: allowsAnonymous) }
                 }
             case .leaveOrOpen:
-                HStack(spacing: MeeshySpacing.sm) {
-                    secondary(ConversationLinkCardCopy.leave, icon: "rectangle.portrait.and.arrow.right",
-                              tint: MeeshyColors.error, busy: pending == .leaving,
-                              id: "conversation-link-card-leave", action: onLeave)
-                    primary(ConversationLinkCardCopy.open, icon: "arrow.up.forward",
-                            busy: false, id: "conversation-link-card-open", action: onOpen)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: MeeshySpacing.sm) { memberButtons }
+                    VStack(spacing: MeeshySpacing.sm) { memberButtons }
                 }
             }
         }
+    }
+
+    /// Quitter EN PREMIER, puis Ouvrir (directive porteur 2026-09-26).
+    @ViewBuilder
+    private var memberButtons: some View {
+        secondary(ConversationLinkCardCopy.leave, icon: "rectangle.portrait.and.arrow.right",
+                  tint: MeeshyColors.error, busy: pending == .leaving,
+                  id: "conversation-link-card-leave", action: onLeave)
+        primary(ConversationLinkCardCopy.open, icon: "arrow.up.forward",
+                busy: false, id: "conversation-link-card-open", action: onOpen)
+    }
+
+    @ViewBuilder
+    private func joinButtons(allowsAnonymous: Bool) -> some View {
+        if allowsAnonymous {
+            secondary(ConversationLinkCardCopy.joinAnonymously, icon: "theatermasks.fill",
+                      tint: accent, id: "conversation-link-card-join-anonymous", action: onJoinAnonymously)
+        }
+        primary(ConversationLinkCardCopy.join, icon: "person.badge.plus",
+                busy: pending == .joining, id: "conversation-link-card-join", action: onJoin)
     }
 
     private func primary(_ title: String, icon: String, busy: Bool, id: String,
@@ -111,7 +126,7 @@ struct ConversationLinkCardActionsRow: View {
             }
             Text(title)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .fixedSize()
         }
         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
         .foregroundColor(foreground)

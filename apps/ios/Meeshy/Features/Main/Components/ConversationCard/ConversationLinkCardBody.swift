@@ -87,18 +87,17 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var identity: some View {
-        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
+        VStack(alignment: .leading, spacing: 4) {
             avatar
+                .padding(.top, -Self.avatarSide * 0.5)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .heavy, design: .rounded))
                 .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 2)
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.top, -Self.avatarSide * 0.5)
     }
 
     private var avatar: some View {
@@ -187,6 +186,7 @@ struct ConversationInviteQuote: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("conversation-link-card-invite")
     }
@@ -199,28 +199,39 @@ struct ConversationCardStatsRow: View {
     let accent: Color
     let isDark: Bool
 
-    private static let visibleLanguages = 4
-
     var body: some View {
+        // Les pastilles de langue cèdent la place avant les nombres : une
+        // bulle étroite ou un Dynamic Type élevé garde membres et messages
+        // lisibles sur une ligne.
+        ViewThatFits(in: .horizontal) {
+            row(languages: 4)
+            row(languages: 2)
+            row(languages: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(languages visible: Int) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             metric(icon: "person.2.fill", value: stats.memberCount)
             if let messages = stats.messageCount {
                 metric(icon: "bubble.left.and.bubble.right.fill", value: messages)
             }
-            ForEach(Array(stats.languages.prefix(Self.visibleLanguages)), id: \.self) { code in
+            ForEach(Array(stats.languages.prefix(visible)), id: \.self) { code in
                 Text(verbatim: code.uppercased())
                     .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(accent)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(accent.opacity(0.14)))
+                    .fixedSize()
             }
-            if stats.languages.count > Self.visibleLanguages {
-                Text(verbatim: "+\(stats.languages.count - Self.visibleLanguages)")
+            if stats.languages.count > visible {
+                Text(verbatim: "+\(stats.languages.count - visible)")
                     .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                    .fixedSize()
             }
-            Spacer(minLength: 0)
         }
     }
 
@@ -232,6 +243,7 @@ struct ConversationCardStatsRow: View {
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .monospacedDigit()
         }
+        .fixedSize()
         .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
     }
 }
