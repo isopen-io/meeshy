@@ -171,7 +171,7 @@ extension BubbleContent {
             embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
             trackedLinks: message.trackedLinkMap,
             embedTrackedURL: embedTrackedURL,
-            conversationCardTarget: firstLinkURL.flatMap(ConversationLinkTarget.target(for:))
+            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
         )
 
         // --- Translation panel ---
