@@ -39,7 +39,9 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
-import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
+import { collectCaptureTracks } from './posts/collectCaptureTracks';
+import { withCanvasMedia } from './posts/canvasMediaClaims';
+import { videoSoundExtractionAllowed } from './posts/soundEligibility';
 import { orchestrateSoundCapture, type SoundCaptureVerdict } from './posts/soundCaptureVerdict';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
@@ -309,6 +311,9 @@ export class PostService {
     // UnifiedPostComposer) retombe aussi sur POST. Les PostMedia sont lus AVANT
     // `post.create`, avec la MÊME garde de propriété que le rattachement plus
     // bas, pour classifier exactement ce qui sera réellement attaché.
+    // Médias que seul le canvas référence (#8012) — posts/canvasMediaClaims.ts.
+    // Jamais sur une republication : son canvas désigne les médias de la SOURCE.
+    if (!repostOfId) data = { ...data, mediaIds: withCanvasMedia(data.mediaIds, data.storyEffects) };
     let effectiveType = data.type;
     if (data.type === PostType.REEL) {
       const claimableMedia = data.mediaIds?.length
@@ -344,7 +349,7 @@ export class PostService {
         detectedLanguage,
         communityId: data.communityId,
         storyEffects: (data.storyEffects as any) ?? undefined,
-        allowSoundExtraction: data.allowSoundExtraction ?? false,
+        allowSoundExtraction: videoSoundExtractionAllowed(data.allowSoundExtraction),
         commentsDisabled: data.commentsDisabled ?? false,
         moodEmoji: data.moodEmoji,
         audioUrl: data.audioUrl,
@@ -431,8 +436,8 @@ export class PostService {
     // avec opt-in d'extraction — `collectCaptureTracks`, résiliente).
     // HORS de la garde médias — une story peut réutiliser un média déjà attaché
     // — et fire-and-forget : publier ne dépend jamais de la bibliothèque.
-    const captureTracks = await this.collectCaptureTracks(
-      post.id, data.storyEffects, data.allowSoundExtraction ?? false,
+    const captureTracks = await collectCaptureTracks(this.prisma,
+      post.id, data.storyEffects, videoSoundExtractionAllowed(data.allowSoundExtraction),
       Boolean(data.mediaIds?.length));
     // Éligibilité + capture fire-and-forget + verdict synchrone (#6603) — voir posts/soundCaptureVerdict.ts.
     const soundLibrary = orchestrateSoundCapture({
@@ -1014,40 +1019,6 @@ export class PostService {
   }
 
   /**
-   * Pistes de capture COMPLÈTES d'un post : celles du blob `storyEffects`
-   * (composer riche) + celles synthétisées depuis ses médias attachés (posts
-   * vocaux sans blob, vidéos sous opt-in d'extraction). Les médias déjà
-   * référencés par une piste du blob restent à cette piste-là
-   * (`mediaCaptureTracks` les exclut).
-   */
-  private async collectCaptureTracks(
-    postId: string,
-    storyEffects: Record<string, unknown> | undefined,
-    allowVideoExtraction: boolean,
-    /** Épargne la lecture Prisma quand l'appelant SAIT qu'aucun média n'est attaché. */
-    hasAttachedMedia: boolean,
-  ) {
-    const effectTracks = extractCaptureTracks(storyEffects);
-    if (!hasAttachedMedia) return effectTracks;
-    try {
-      const media = await this.prisma.postMedia.findMany({
-        where: { postId },
-        select: { id: true, mimeType: true, duration: true },
-      });
-      return [
-        ...effectTracks,
-        ...mediaCaptureTracks({ media, storyEffectsTracks: effectTracks, allowVideoExtraction }),
-      ];
-    } catch (error) {
-      // RÉSILIENTE : publier/éditer ne dépend jamais de la bibliothèque. Sans
-      // la lecture des médias, les pistes du blob restent capturables.
-      log.error('collectCaptureTracks: lecture des médias impossible',
-        error instanceof Error ? error : new Error(String(error)), { postId });
-      return effectTracks;
-    }
-  }
-
-  /**
    * Entrées « audio » synthétiques pour `qualifiesAsReel` : les sons EMPRUNTÉS
    * du blob (pistes `soundId`), avec la même garde d'autorisation que
    * `recordBorrowed` — un son privé d'autrui ou coupé ne qualifie pas plus un
@@ -1152,7 +1123,7 @@ export class PostService {
     // another post's media is silently ignored (never cross-deletes).
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
-    const mediaIdsToAttach = mediaIds ?? [];
+    const mediaIdsToAttach = withCanvasMedia(mediaIds, data.storyEffects, ownMediaIds) ?? [];
     const finalType = requestedType ?? post.type;
 
     // Liste FINALE des médias après édition : (médias du post − retraits) +
@@ -1413,7 +1384,7 @@ export class PostService {
     if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
       const effectiveEffects = data.storyEffects
         ?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined;
-      const editedTracks = await this.collectCaptureTracks(
+      const editedTracks = await collectCaptureTracks(this.prisma,
         updated.id, effectiveEffects, updated.allowSoundExtraction === true,
         finalMedia.length > 0);
       soundLibrary = orchestrateSoundCapture({

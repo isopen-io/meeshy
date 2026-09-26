@@ -300,14 +300,15 @@ struct FocalRow: View {
             // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
             // jusqu'au toucher qui le consomme.
             if let chip = content.viewOnceChipState {
-                ViewOnceChip(state: chip, isDark: input.isDark) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+                ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
             } else if content.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
                     isViewOnce: content.isViewOnce,
                     isDark: input.isDark,
                     messageId: content.messageId,
-                    onConsumeViewOnce: actions.onConsumeViewOnce
+                    onConsumeViewOnce: actions.onConsumeViewOnce,
+                    tap: content.protectedTap(), onMediaTap: actions.onMediaTap
                 ) {
                     contentSections
                 }

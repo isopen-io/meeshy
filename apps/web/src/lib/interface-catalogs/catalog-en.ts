@@ -1085,6 +1085,7 @@ const en = {
   'attachment.protected.video': 'Protected video',
   'attachment.protected.audio': 'Protected voice message',
   'attachment.protected.file': 'Protected attachment',
+  'attachment.protected.open.hint': 'tap to view it full screen',
   'media.reactions.badge.a11y': 'Reactions',
   'media.reactions.badge.mine.a11y': 'including yours',
   'attachment.kind.image': 'Photo',

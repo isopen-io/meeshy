@@ -190,7 +190,7 @@ struct MessageOverlayMenu: View {
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce
+            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur
         )
     }
 
@@ -657,8 +657,19 @@ struct MessageOverlayMenu: View {
         }
     }
 
+    /// #8009 — un message protégé montre sa forme protégée, jamais son contenu.
     @ViewBuilder
     private var previewContent: some View {
+        let protection = OverlayPreviewProtection.form(for: message)
+        if protection != .clear {
+            OverlayProtectedPreview(form: protection, message: message, isDark: isDark, accentHex: bubbleAccentHex)
+        } else {
+            clearPreviewContent
+        }
+    }
+
+    @ViewBuilder
+    private var clearPreviewContent: some View {
         let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // Family dispatch via `AttachmentKind` — single source of truth.
         let images = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .image }
@@ -668,7 +679,7 @@ struct MessageOverlayMenu: View {
 
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
             if !images.isEmpty {
-                previewImageGrid(images)
+                OverlayPreviewMediaGrid(attachments: images, masked: false)
             }
 
             if !videos.isEmpty {
@@ -784,57 +795,6 @@ struct MessageOverlayMenu: View {
                     lineWidth: 0.75
                 )
         )
-    }
-
-    // MARK: - Preview Image Grid
-
-    @ViewBuilder
-    private func previewImageGrid(_ images: [MessageAttachment]) -> some View {
-        let maxPreview = Array(images.prefix(4))
-        let count = maxPreview.count
-
-        Group {
-            if count == 1 {
-                previewSingleImage(maxPreview[0])
-            } else if count == 2 {
-                HStack(spacing: 3) {
-                    previewSingleImage(maxPreview[0])
-                    previewSingleImage(maxPreview[1])
-                }
-            } else if count == 3 {
-                HStack(spacing: 3) {
-                    previewSingleImage(maxPreview[0])
-                        .frame(maxHeight: 160)
-                    VStack(spacing: 3) {
-                        previewSingleImage(maxPreview[1])
-                        previewSingleImage(maxPreview[2])
-                    }
-                }
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 3), GridItem(.flexible(), spacing: 3)], spacing: 3) {
-                    ForEach(maxPreview) { img in
-                        previewSingleImage(img)
-                            .frame(height: 100)
-                    }
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func previewSingleImage(_ attachment: MessageAttachment) -> some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        return ProgressiveCachedImage(
-            thumbHash: attachment.thumbHash,
-            thumbnailUrl: thumbUrl,
-            fullUrl: fullUrl ?? thumbUrl
-        ) {
-            Color(hex: attachment.thumbnailColor).opacity(0.3)
-        }
-        .aspectRatio(contentMode: .fill)
-        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 200)
-        .clipped()
     }
 
     // MARK: - Preview File Row
@@ -1049,8 +1009,9 @@ private struct PreviewVideoPlayer: View {
                 ) {
                     Color(hex: contactColor).opacity(0.2)
                 }
-                .aspectRatio(16/9, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: 200)
+                // #8009 — le rapport d'aspect ORIGINAL de la vidéo, ni rognée ni étirée.
+                .aspectRatio(OverlayPreviewMediaLayout.aspectRatio(of: attachment), contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 320)
                 .clipped()
 
                 if showThumbnail {

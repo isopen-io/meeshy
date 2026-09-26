@@ -122,6 +122,22 @@ export function messageMenuContextOf(
 }
 
 /**
+ * CE QUE LA FEUILLE « PLUS… » PEUT MONTRER D'UN MESSAGE (#8008, complément
+ * porteur du 2026-09-26) — les actions du menu ne font pas fuir un contenu
+ * non ouvert. La feuille liste les LANGUES à explorer et les PIÈCES (avec leur
+ * nom d'origine, `AttachmentReceiptCard`) : pour un message flouté, à vue
+ * unique, éphémère expiré ou supprimé, les deux se taisent — le nom d'un
+ * fichier est un contenu (leçon 275), et « Traduire » est déjà retiré du menu
+ * (`messageMenuItems`). La loi est `protectionOf`, jamais une seconde.
+ */
+export function messageDetailExposureOf(
+  message: Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt'>,
+  input: { readonly now: number },
+): boolean {
+  return protectionOf(message, input.now) === 'standard';
+}
+
+/**
  * `MessageActionResolver.primaryActions` réduit : `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
  * (`translate` de plus par `languageCount > 1`), `forward` gardé par

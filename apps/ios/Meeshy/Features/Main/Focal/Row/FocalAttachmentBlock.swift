@@ -188,13 +188,13 @@ nonisolated enum FocalMediaProtection {
 /// `private` — non réutilisables (même RE-PREUVE que `BubbleGridCell`
 /// lui-même). Reconstruits NATIVEMENT ici (même approche que
 /// `Focal/Row/FocalSystemRows.swift`) : mêmes clés i18n
-/// (`bubble.media.viewOnce`/`.masked`/`.holdToView`/`.a11y.*`, un seul
-/// domicile — jamais dupliquées), même geste (`onLongPressGesture(minimumDuration: 0.3)`),
-/// et la VRAIE machine à états de révélation (`BubbleBlurRevealController`,
-/// `Bubble/BubbleBlurRevealLifecycle.swift` — `internal`, PAS `fileprivate`,
-/// vérifié avant réutilisation) plutôt qu'un booléen local reconstruit à la
-/// main. La décision (« flouter ou pas ») est PURE (`FocalMediaProtection`,
-/// ci-dessus), testable sans rendu.
+/// (`bubble.media.viewOnce`/`.masked`/`.tapToView`/`.a11y.*`, un seul
+/// domicile — jamais dupliquées), même geste : depuis #8009, un TOUCHER ouvre
+/// le plein écran sur la pièce (`ProtectedContentTap`), sans dévoilement dans la
+/// rangée — l'appui long qui la dévoilait sur place a disparu, et avec lui le
+/// contrôleur de révélation que chaque cellule instanciait. La décision
+/// (« flouter ou pas ») est PURE (`FocalMediaProtection`, ci-dessus), testable
+/// sans rendu.
 ///
 /// **La PASTILLE des réactions est entrée dans le périmètre le 2026-09-16**
 /// (#6793, directive porteur : « Les reactions des medias doivent etre remonté
@@ -226,10 +226,8 @@ struct FocalGridCell: View {
     /// d'appel : succès → révélation).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
-    @StateObject private var revealController = BubbleBlurRevealController()
-
     private var protectionState: FocalMediaProtectionState {
-        FocalMediaProtection.state(for: attachment, isRevealed: revealController.isRevealed)
+        FocalMediaProtection.state(for: attachment, isRevealed: false)
     }
 
     var body: some View {
@@ -245,7 +243,8 @@ struct FocalGridCell: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            guard case .none = protectionState else { return }
+            // #8009 — protégée ou non, le toucher ouvre le plein écran sur
+            // CETTE pièce : aucun dévoilement préalable dans la rangée.
             onTap?(attachment)
         }
         .overlay { protectionOverlay }
@@ -350,7 +349,7 @@ struct FocalGridCell: View {
                         : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(.white)
-                    Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
+                    Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
                         .font(MeeshyFont.relative(9))
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -360,13 +359,11 @@ struct FocalGridCell: View {
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-            .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
-            .onLongPressGesture(minimumDuration: 0.3) {
+            .accessibilityHint(ProtectedContentTap.openFullscreenHint)
+            .accessibilityAddTraits(.isButton)
+            .onTapGesture {
                 HapticFeedback.medium()
-                revealController.requestReveal(
-                    request: BubbleBlurRevealLifecycle.RevealRequest(messageId: attachment.id, isViewOnce: isViewOnce),
-                    consumeViewOnce: onConsumeViewOnce
-                )
+                onTap?(attachment)
             }
         }
     }

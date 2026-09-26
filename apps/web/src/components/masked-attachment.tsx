@@ -3,6 +3,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
+import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 
 import { Glyph } from './glyph';
 
@@ -30,14 +31,26 @@ import { Glyph } from './glyph';
  * de ses voisines — un `rounded-2xl` y laissait voir la boîte noire de la
  * bulle dans ses quatre coins.
  *
- * PAS D'AFFORDANCE DE RÉVÉLATION dans ce lot : la fenêtre de 5 s d'iOS
- * (`FocalAttachmentBlock.swift`, `isRevealed`) suppose une consommation
- * serveur par PIÈCE que le web n'appelle pas encore. Un bouton qui ne
- * révèle rien serait un contrôle inerte — la loi 4 l'interdit. Suivi #6189.
+ * `onOpen` (#8008, demande porteur du 2026-09-26) — « un contenu média
+ * caché s'ouvre directement en plein écran ». Quand l'hôte sait OUVRIR la
+ * pièce (une image ou une vidéo, que la visionneuse sait peindre), le
+ * substitut devient un `<button>` natif — Entrée et Espace l'activent — dont
+ * le nom dit ce que fait le toucher. Sans `onOpen` (vocal, fichier), il reste
+ * une image inerte : un bouton qui n'ouvrirait rien serait un contrôle sans
+ * effet, que la loi 4 interdit. Le fichier n'entre dans le document qu'APRÈS
+ * le toucher, dans la visionneuse, jamais sous ce substitut.
  */
 const MASKED_TILE_SIZE = 140;
 
-export function MaskedAttachment({ attachment, fill = false }: { readonly attachment: Attachment; readonly fill?: boolean }) {
+export function MaskedAttachment({
+  attachment,
+  fill = false,
+  onOpen,
+}: {
+  readonly attachment: Attachment;
+  readonly fill?: boolean;
+  readonly onOpen?: () => void;
+}) {
   const kind = kindOf(attachment);
   /* LE VOILE DIT SA NATURE, DANS LA LANGUE DU LECTEUR (#7337) — les trois
      libellés étaient EN DUR, en français, sur un substitut servi en sept
@@ -50,8 +63,9 @@ export function MaskedAttachment({ attachment, fill = false }: { readonly attach
      plein cadre (`ViewerMaskedPage`). C'est un ÉCART de vocabulaire, pas une
      question de langue — le corriger changerait ce qui s'AFFICHE, ce qu'un lot
      d'internationalisation n'a pas à faire. Suivi : #7339. */
+  const language = currentInterfaceLanguage();
   const libelle = translate(
-    currentInterfaceLanguage(),
+    language,
     kind === 'audio'
       ? PROTECTED_ATTACHMENT_KEY.audio
       : kind === 'image'
@@ -60,34 +74,52 @@ export function MaskedAttachment({ attachment, fill = false }: { readonly attach
   );
   const glyphe = kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
 
+  /* EN GRILLE, OPAQUE ET ENCRÉE (#7881) — la bulle pose une boîte NOIRE sous
+     sa grille (`BubbleStandardLayout.swift:784-787`) : sur transparent, la
+     tuile y devenait sombre sur sombre. Mêlée à la surface, elle se lit dans
+     les trois modes, clair comme sombre, et dans la bulle indigo « mine »
+     comme ailleurs. */
+  const style = fill
+    ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, var(--ios-surface))', color: 'var(--color-ios-ink)' }
+    : {
+        width: MASKED_TILE_SIZE,
+        height: MASKED_TILE_SIZE,
+        maxWidth: '100%',
+        backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+      };
+  const className = `flex items-center justify-center gap-2 ${fill ? 'size-full' : 'rounded-2xl'}`;
+  const face = (
+    <span className="flex flex-col items-center gap-1" style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}>
+      <Glyph name={glyphe} size={24} />
+      <Glyph name="eyeSlash" size={14} />
+      <span className="text-mini">{libelle}</span>
+    </span>
+  );
+  const ratio = { [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) };
+
+  if (onOpen !== undefined) {
+    return (
+      <button
+        type="button"
+        data-media-tile
+        data-protected-attachment="hidden"
+        {...ratio}
+        aria-label={`${libelle}, ${translate(language, 'attachment.protected.open.hint')}`}
+        className={`${className} cursor-pointer appearance-none border-0 p-0`}
+        style={style}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+      >
+        {face}
+      </button>
+    );
+  }
+
   return (
-    <div
-      data-media-tile
-      data-protected-attachment="hidden"
-      role="img"
-      aria-label={libelle}
-      className={`flex items-center justify-center gap-2 ${fill ? 'size-full' : 'rounded-2xl'}`}
-      style={
-        /* EN GRILLE, OPAQUE ET ENCRÉE (#7881) — la bulle pose une boîte
-           NOIRE sous sa grille (`BubbleStandardLayout.swift:784-787`) : sur
-           transparent, la tuile y devenait sombre sur sombre. Mêlée à la
-           surface, elle se lit dans les trois modes, clair comme sombre, et
-           dans la bulle indigo « mine » comme ailleurs. */
-        fill
-          ? { backgroundColor: 'color-mix(in srgb, var(--accent) 10%, var(--ios-surface))', color: 'var(--color-ios-ink)' }
-          : {
-              width: MASKED_TILE_SIZE,
-              height: MASKED_TILE_SIZE,
-              maxWidth: '100%',
-              backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-            }
-      }
-    >
-      <span className="flex flex-col items-center gap-1" style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}>
-        <Glyph name={glyphe} size={24} />
-        <Glyph name="eyeSlash" size={14} />
-        <span className="text-mini">{libelle}</span>
-      </span>
+    <div data-media-tile data-protected-attachment="hidden" {...ratio} role="img" aria-label={libelle} className={className} style={style}>
+      {face}
     </div>
   );
 }

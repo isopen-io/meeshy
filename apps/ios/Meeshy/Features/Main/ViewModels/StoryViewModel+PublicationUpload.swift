@@ -333,9 +333,13 @@ extension StoryViewModel {
             }
 
             onPhase(.publishing)
-            var allMediaIds: [String] = []
-            if let id = uploadResult?.id { allMediaIds.append(id) }
-            allMediaIds.append(contentsOf: foregroundMediaIds)
+            // Les médias PRÉ-téléversés par le composer ne passent pas par
+            // l'upload de ce dispatch : sans eux, ils ne sont jamais rattachés
+            // au post (#8012) — `CanvasMediaAdoption.publicationMediaIds`.
+            let allMediaIds = CanvasMediaAdoption.publicationMediaIds(
+                uploaded: [uploadResult?.id].compactMap { $0 } + foregroundMediaIds,
+                effects: updatedEffects
+            )
 
             let postAudioCount = updatedEffects.audioPlayerObjects?.count ?? 0
             let postAudioIds = (updatedEffects.audioPlayerObjects ?? [])

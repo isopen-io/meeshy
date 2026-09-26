@@ -26,3 +26,13 @@ export function feedsSoundLibrary(input: {
   return input.visibility === PostVisibility.PUBLIC
     || input.visibility === PostVisibility.COMMUNITY;
 }
+
+/**
+ * La bande-son des vidéos (fond ET scène) d'un contenu qui alimente la
+ * bibliothèque y est versée, sauf REFUS EXPLICITE de l'auteur (directive
+ * porteur 2026-09-26, #8012). Les clients n'envoient `allowSoundExtraction` que
+ * si l'interrupteur a été touché : l'absence vaut accord.
+ */
+export function videoSoundExtractionAllowed(choice: boolean | null | undefined): boolean {
+  return choice !== false;
+}

@@ -16,6 +16,7 @@ import {
   type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
+import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import { READER_LOCALE } from '@/lib/reader';
 
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
@@ -83,6 +84,7 @@ export function ImageTile({
   return (
     <figure
       data-attachment={attachment.id}
+      {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}
       /* `relative` + enfants `absolute inset-0` (revue #5805) — voir le
          doc-comment historique (le motif de la pile d'empilement) : NE PAS
          revenir à `grid` avec deux enfants au même `col-start-1 row-start-1`. */
@@ -155,11 +157,17 @@ export const MediaGrid = memo(function MediaGrid({
   readonly onOpen: (index: number) => void;
 }) {
   const maskedAttachment = useAttachmentMasked();
+  /* UNE CASE MASQUÉE S'OUVRE SI ELLE A QUELQUE CHOSE À OUVRIR (#8008) — la
+     même règle qu'`ImageTile` : sans URL (la lecture souveraine retient le
+     fichier au serveur, #6862), aucun bouton, faute de quoi le toucher
+     promettrait une visionneuse vide (loi 4). */
+  const openable = (attachment: Attachment, index: number) =>
+    typeof attachment.fileUrl === 'string' && attachment.fileUrl !== '' ? { onOpen: () => onOpen(index) } : {};
   if (items.length === 0) return null;
 
   if (items.length === 1) {
     const only = items[0]!;
-    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} />;
+    if (maskedAttachment(only)) return <MaskedAttachment attachment={only} {...openable(only, 0)} />;
     if (kindOf(only) === 'video') {
       return <VideoTile attachment={only} solo onExpand={() => onOpen(0)} />;
     }
@@ -191,14 +199,18 @@ export const MediaGrid = memo(function MediaGrid({
   const cellShape = (index: number) => ({
     'data-slot-width': cellSizes[index]!.width,
     'data-slot-height': cellSizes[index]!.height,
+    [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(items[index]!),
   });
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
     const overflowCount = slots[index]!.overflowCount;
     if (maskedAttachment(attachment)) {
+      /* LA CASE MASQUÉE S'OUVRE (#8008) : son toucher ouvre la visionneuse
+         sur ELLE, et la visionneuse reçoit la pièce en clair (`Attachments`,
+         `revealedAttachment`). */
       return (
-        <div key={attachment.id} className={CELL_CLASS[frame]}>
-          <MaskedAttachment attachment={attachment} fill />
+        <div key={attachment.id} className={CELL_CLASS[frame]} {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}>
+          <MaskedAttachment attachment={attachment} fill {...openable(attachment, index)} />
         </div>
       );
     }

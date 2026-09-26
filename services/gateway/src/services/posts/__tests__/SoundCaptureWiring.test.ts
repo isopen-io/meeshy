@@ -159,15 +159,16 @@ describe('PostService — câblage de la capture', () => {
    * `extractCaptureTracks` seul ferait sortir ces posts de la bibliothèque.
    */
   it('test_bothCaptureSites_collectMediaTracksToo', () => {
-    expect(code.split('this.collectCaptureTracks(').length).toBe(3);
+    expect(code.split('collectCaptureTracks(this.prisma').length).toBe(3);
   });
 
   /**
-   * L'extraction vidéo est un OPT-IN par post : le drapeau transmis à la
-   * collecte doit venir du champ persisté/demandé, jamais d'une constante.
+   * L'extraction vidéo suit le CHOIX de l'auteur (#8012 : l'absence vaut
+   * accord, le refus explicite est respecté) : le drapeau transmis à la
+   * collecte vient du champ persisté/demandé, jamais d'une constante.
    */
-  it('test_videoExtraction_isGatedOnTheAuthorOptIn', () => {
-    expect(code).toContain('data.allowSoundExtraction ?? false');
+  it('test_videoExtraction_followsTheAuthorChoice', () => {
+    expect(code.split('videoSoundExtractionAllowed(data.allowSoundExtraction)').length).toBe(3);
     expect(code).toContain('updated.allowSoundExtraction === true');
   });
 });
