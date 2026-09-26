@@ -103,20 +103,21 @@ export class TrackingLinkService {
    * Génère un token unique qui n'existe pas encore
    */
   private async generateUniqueToken(): Promise<string> {
-    let token: string;
-    let attempts = 0;
     const maxAttempts = 10;
 
-    do {
-      token = this.generateToken();
-      attempts++;
-
-      if (attempts >= maxAttempts) {
-        throw new Error('Unable to generate unique token after maximum attempts');
+    // Le garde-fou se pose APRÈS la vérification, jamais avant : la forme
+    // `do { … if (attempts >= maxAttempts) throw } while (exists)` jetait le
+    // dixième jeton SANS consulter `tokenExists`, donc refusait un lien alors
+    // qu'un jeton libre venait d'être tiré — et n'offrait que neuf essais
+    // réels pour dix annoncés (#8187).
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const token = this.generateToken();
+      if (!(await this.tokenExists(token))) {
+        return token;
       }
-    } while (await this.tokenExists(token));
+    }
 
-    return token;
+    throw new Error('Unable to generate unique token after maximum attempts');
   }
 
   /**
