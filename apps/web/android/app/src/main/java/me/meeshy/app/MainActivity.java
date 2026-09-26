@@ -40,8 +40,12 @@ public class MainActivity extends BridgeActivity {
                             webView.goBack();
                             return;
                         }
+                        // #7988 — depuis Android 12, ce retour ne detruit plus
+                        // l'activite : rouverte, elle doit retrouver ce callback,
+                        // sinon le retour fermerait l'app depuis n'importe quel ecran.
                         setEnabled(false);
                         getOnBackPressedDispatcher().onBackPressed();
+                        setEnabled(true);
                     }
                 }
             );
