@@ -170,7 +170,8 @@ extension BubbleContent {
             // Résolution embed vidéo (YouTube) au même endroit, une seule fois.
             embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
             trackedLinks: message.trackedLinkMap,
-            embedTrackedURL: embedTrackedURL
+            embedTrackedURL: embedTrackedURL,
+            conversationCardTarget: firstLinkURL.flatMap(ConversationLinkTarget.target(for:))
         )
 
         // --- Translation panel ---
