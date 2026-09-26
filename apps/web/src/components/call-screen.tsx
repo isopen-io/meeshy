@@ -1,16 +1,15 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { elapsedSeconds, formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, gridColumns, hasVideo, orderedMembers, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { useCallRemoval } from '@/lib/calls/use-call-removal';
+import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, hasVideo, orderedMembers, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
 
 /**
  * **L'ÉCRAN D'APPEL** (#6382, #8045) — miroir de `CallView.swift` et
@@ -83,33 +82,14 @@ function RoundButton({
 
 const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
-function Portrait({ name, avatar, size, pulse }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean }) {
-  return (
-    <div className="relative grid place-items-center" style={{ width: size + 24, height: size + 24 }}>
-      {pulse ? <span aria-hidden className="absolute inset-0 animate-ping rounded-full" style={{ background: 'rgba(255,255,255,0.10)' }} /> : null}
-      <Avatar initials={initialsOf(name)} color={colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
-    </div>
-  );
-}
 
-function MemberTile({ member, stream, t }: { readonly member: CallMember; readonly stream: MediaStream | undefined; readonly t: (key: PlainCallKey) => string }) {
-  const showVideo = member.cameraOn && hasVideo(stream);
-  return (
-    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card" style={{ background: 'rgba(255,255,255,0.06)' }} data-call-tile={member.userId}>
-      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={64} pulse={false} />}
-      <span className="absolute bottom-2 left-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini" style={{ background: 'rgba(0,0,0,0.45)', color: INK }}>
-        {member.micMuted ? screenGlyph('microphoneSlash', 12) : null}
-        {member.name}
-        {member.link === 'connected' ? null : ` · ${t(member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting')}`}
-      </span>
-    </div>
-  );
-}
 
 export function CallScreen({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [swapped, setSwapped] = useState(false);
+  const [featuredId, setFeaturedId] = useState<string | null>(null);
+  const removal = useCallRemoval(call);
   const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
   const statusKey = callStatusKey(call);
@@ -181,19 +161,16 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
 
   const stage = (() => {
     if (layout === 'grid') {
-      const columns = gridColumns(members.length + 1);
       return (
-        <div className="grid min-h-0 flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
-          {members.map((member) => (
-            <MemberTile key={member.userId} member={member} stream={call.remoteStreams[member.userId]} t={t} />
-          ))}
-          <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-card" style={{ background: 'rgba(255,255,255,0.06)' }}>
-            {call.cameraOn ? <StreamVideo stream={call.localStream} mirrored={call.facing === 'user'} className="absolute inset-0 size-full" label={t('call.you')} /> : <Portrait name={t('call.you')} avatar={null} size={64} pulse={false} />}
-            <span className="absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'rgba(0,0,0,0.45)', color: INK }}>
-              {t('call.you')}
-            </span>
-          </div>
-        </div>
+        <CallGrid
+          members={members}
+          remoteStreams={call.remoteStreams}
+          self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: call.facing === 'user' }}
+          featuredId={featuredId}
+          onFeature={setFeaturedId}
+          removal={removal}
+          language={language}
+        />
       );
     }
     if (layout === 'video-duo') {

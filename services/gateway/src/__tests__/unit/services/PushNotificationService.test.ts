@@ -158,6 +158,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { NOTIFICATION_REVOCATION_TTL_MS } from '../../../services/notifications/notificationRevocationPush';
+import { CALL_PUSH_TTL_MS } from '@meeshy/shared/types/call-rules';
 import type { PushNotificationPayload } from '../../../services/PushNotificationService';
 
 // Store original environment variables
@@ -992,11 +993,11 @@ describe('PushNotificationService', () => {
       expect(sentNotification.payload).toEqual(
         expect.objectContaining({ type: 'call_cancel', callId: 'call-123' })
       );
-      // Expiration ~60 s (fenêtre de sonnerie) : un stop-ring livré plus tard
+      // Expiration = la fenêtre de sonnerie : un stop-ring livré plus tard
       // n'a plus rien à éteindre — miroir du TTL FCM Android.
       const nowSec = Math.floor(Date.now() / 1000);
-      expect(sentNotification.expiry).toBeGreaterThanOrEqual(nowSec + 55);
-      expect(sentNotification.expiry).toBeLessThanOrEqual(nowSec + 65);
+      expect(sentNotification.expiry).toBeGreaterThanOrEqual(nowSec + CALL_PUSH_TTL_MS / 1000 - 5);
+      expect(sentNotification.expiry).toBeLessThanOrEqual(nowSec + CALL_PUSH_TTL_MS / 1000 + 5);
     });
 
     it('should filter tokens by type when specified', async () => {
@@ -2525,8 +2526,8 @@ describe('PushNotificationService', () => {
     // #8043 — le web suit la même règle : le service worker compose la
     // notification d'appel (Répondre / Refuser) depuis `data`.
     const ringWindow = {
-      android: (m: any) => expect(m?.android).toEqual({ priority: 'high', ttl: 60_000 }),
-      web: (m: any) => expect(m?.webpush).toEqual({ headers: { TTL: '60', Urgency: 'high' } }),
+      android: (m: any) => expect(m?.android).toEqual({ priority: 'high', ttl: CALL_PUSH_TTL_MS }),
+      web: (m: any) => expect(m?.webpush).toEqual({ headers: { TTL: String(CALL_PUSH_TTL_MS / 1000), Urgency: 'high' } }),
     } as const;
     const sendCallPush = async (platform: keyof typeof ringWindow, payload: object) => {
       const service = await getFCMService();

@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { CallService } from '../../../services/CallService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CALL_RING_TIMEOUT_MS } from '@meeshy/shared/types/call-rules';
 
 describe('CallService — rescheduleRingingTimeout (boot rehydration)', () => {
   let service: CallService;
@@ -29,9 +30,9 @@ describe('CallService — rescheduleRingingTimeout (boot rehydration)', () => {
     const callback = jest.fn();
     const startedAt = new Date(Date.now() - 10_000); // rang 10s before the restart
     service.rescheduleRingingTimeout('call-rh-1', startedAt, callback);
-    jest.advanceTimersByTime(49_000); // 49s < 50s remaining
+    jest.advanceTimersByTime(CALL_RING_TIMEOUT_MS - 10_000 - 1_000);
     expect(callback).not.toHaveBeenCalled();
-    jest.advanceTimersByTime(2_000);  // 51s ≥ 50s remaining
+    jest.advanceTimersByTime(2_000);
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
@@ -45,11 +46,11 @@ describe('CallService — rescheduleRingingTimeout (boot rehydration)', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the nominal 60s budget for a call that started exactly at restart time', () => {
+  it('keeps the nominal ringing budget for a call that started exactly at restart time', () => {
     const callback = jest.fn();
     const startedAt = new Date();
     service.rescheduleRingingTimeout('call-rh-3', startedAt, callback);
-    jest.advanceTimersByTime(59_000);
+    jest.advanceTimersByTime(CALL_RING_TIMEOUT_MS - 1_000);
     expect(callback).not.toHaveBeenCalled();
     jest.advanceTimersByTime(2_000);
     expect(callback).toHaveBeenCalledTimes(1);
@@ -59,7 +60,7 @@ describe('CallService — rescheduleRingingTimeout (boot rehydration)', () => {
     const callback = jest.fn();
     service.rescheduleRingingTimeout('call-rh-4', new Date(), callback);
     service.clearRingingTimeout('call-rh-4');
-    jest.advanceTimersByTime(61_000);
+    jest.advanceTimersByTime(CALL_RING_TIMEOUT_MS + 1_000);
     expect(callback).not.toHaveBeenCalled();
   });
 
@@ -68,7 +69,7 @@ describe('CallService — rescheduleRingingTimeout (boot rehydration)', () => {
     const cb2 = jest.fn();
     service.rescheduleRingingTimeout('call-rh-5', new Date(), cb1);
     service.rescheduleRingingTimeout('call-rh-5', new Date(), cb2);
-    jest.advanceTimersByTime(61_000);
+    jest.advanceTimersByTime(CALL_RING_TIMEOUT_MS + 1_000);
     expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
   });
