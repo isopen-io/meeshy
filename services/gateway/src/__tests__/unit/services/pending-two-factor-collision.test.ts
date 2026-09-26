@@ -188,7 +188,7 @@ describe('collision entre le défi d\'étape 2 et la vérification de téléphon
 
     const verification = await auth.verifyPhone(PHONE, sentCode as unknown as string);
 
-    expect(verification).toEqual({ success: true });
+    expect(verification).toEqual({ success: true, verifiedUserId: seedUser().id });
   });
 
   it('un défi 2FA EN COURS survit à une demande de vérification de téléphone', async () => {
@@ -237,7 +237,7 @@ describe('collision entre le défi d\'étape 2 et la vérification de téléphon
 
     const verification = await auth.verifyPhone(PHONE, sentCode as unknown as string);
 
-    expect(verification).toEqual({ success: true });
+    expect(verification).toEqual({ success: true, verifiedUserId: seedUser().id });
   });
 
   it('le code SMS à 6 chiffres n\'est JAMAIS accepté comme jeton d\'étape 2', async () => {
