@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { analyticsPayload, createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withSample } from './call-analytics';
+import { analyticsPayload, createTelemetry, deviceLabel, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withSample } from './call-analytics';
 
 const context = { callId: 'c1', isVideo: true, endReason: 'local', platform: 'web', deviceModel: 'Chrome · Linux' } as const;
 
@@ -57,6 +57,14 @@ describe('le rapport de fin d’appel `call:analytics` (#8047)', () => {
     expect(payload.transcriptionUsed).toBe(true);
     expect(payload.effectsUsed).toEqual([]);
     expect(payload.filtersUsed).toBe(false);
+  });
+
+  test('l’appareil est nommé par son navigateur et son système, jamais par l’agent entier', () => {
+    expect(deviceLabel('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36')).toBe('Chrome · Android');
+    expect(deviceLabel('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1')).toBe('Safari · iOS');
+    expect(deviceLabel('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0')).toBe('Edge · Windows');
+    expect(deviceLabel('Mozilla/5.0 (Macintosh; Intel Mac OS X 14.6; rv:130.0) Gecko/20100101 Firefox/130.0')).toBe('Firefox · macOS');
+    expect(deviceLabel('')).toBe('web');
   });
 
   test('la mémoire reste bornée : un appel de cent heures ne garde aucun historique', () => {

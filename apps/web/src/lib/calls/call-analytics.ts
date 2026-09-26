@@ -63,6 +63,30 @@ export function withSample(telemetry: Telemetry, sample: TelemetrySample): Telem
   };
 }
 
+const BROWSERS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/Edg\//, 'Edge'],
+  [/OPR\//, 'Opera'],
+  [/Firefox\/|FxiOS\//, 'Firefox'],
+  [/Chrome\/|CriOS\//, 'Chrome'],
+  [/Safari\//, 'Safari'],
+];
+
+const SYSTEMS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/Android/, 'Android'],
+  [/iPhone|iPad|iPod/, 'iOS'],
+  [/CrOS/, 'ChromeOS'],
+  [/Mac OS X/, 'macOS'],
+  [/Windows/, 'Windows'],
+  [/Linux/, 'Linux'],
+];
+
+/** « Chrome · Android » : ce que `deviceModel` dit d'un navigateur, sans recopier l'agent entier (empreinte). */
+export function deviceLabel(userAgent: string): string {
+  const pick = (table: ReadonlyArray<readonly [RegExp, string]>): string | null => table.find(([pattern]) => pattern.test(userAgent))?.[1] ?? null;
+  const parts = [pick(BROWSERS), pick(SYSTEMS)].filter((part): part is string => part !== null);
+  return parts.length === 0 ? 'web' : parts.join(' · ');
+}
+
 const share = (count: number, total: number): number => (total === 0 ? 0 : count / total);
 
 export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext): CallAnalyticsEvent {

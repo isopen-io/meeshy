@@ -13,7 +13,7 @@ import { callLayout, canShareScreen, screenSharer, statusPills } from './call-vi
  * le bouton n'y est donc jamais promis.
  */
 
-const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
 
 const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }] } as unknown as MediaStream;
 
