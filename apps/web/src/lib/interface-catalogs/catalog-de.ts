@@ -4,6 +4,7 @@ import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
+import deCallJoin from './catalog-de-call-join';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -193,6 +194,7 @@ const de = {
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,
+  ...deCallJoin,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
