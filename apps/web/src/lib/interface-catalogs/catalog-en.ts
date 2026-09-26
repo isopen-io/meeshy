@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enVerifyEmail from './catalog-en-verify-email';
+import enCall from './catalog-en-call';
 
 import enMentions from './catalog-en-mentions';
 import enStoriesMine from './catalog-en-stories-mine';
@@ -188,6 +189,7 @@ const en = {
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
   ...enVerifyEmail,
+  ...enCall,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
   'report.body': 'Choose what prompts your report. Our moderation team will receive it.',

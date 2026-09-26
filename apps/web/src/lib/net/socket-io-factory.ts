@@ -51,6 +51,7 @@ export const createSocketIOClient: SocketFactory = ({ base, auth }) => {
     emit: (event, payload) => {
       socket.emit(event, payload);
     },
+    emitWithAck: (event, payload, timeoutMs) => socket.timeout(timeoutMs).emitWithAck(event, payload),
   };
   return client;
 };

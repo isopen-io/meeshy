@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
 import itVerifyEmail from './catalog-it-verify-email';
+import itCall from './catalog-it-call';
 
 import itMentions from './catalog-it-mentions';
 import itStoriesMine from './catalog-it-stories-mine';
@@ -188,6 +189,7 @@ const it = {
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
   ...itVerifyEmail,
+  ...itCall,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
   'report.body': 'Scegli il motivo della segnalazione. Il nostro team di moderazione la riceverà.',
