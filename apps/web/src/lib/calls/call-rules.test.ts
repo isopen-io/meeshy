@@ -14,7 +14,7 @@ import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statu
 
 afterEach(() => resetCallTransportForTests());
 
-const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, link: 'connected', ...overrides });
+const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
 
 describe('décodage', () => {
   test('call:initiated : appelant, type, groupe', () => {
@@ -77,8 +77,8 @@ describe('ce que l’écran dit', () => {
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
-    expect(statusPills({ micMuted: true, members: { a: member({ micMuted: true }) }, quality: 'poor', isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
-    expect(statusPills({ micMuted: false, members: { a: member({ micMuted: true }) }, quality: 'good', isGroup: true })).toEqual([]);
+    expect(statusPills({ micMuted: true, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'poor', isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
+    expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'good', isGroup: true })).toEqual([]);
   });
 
   test('la grille range les connectés d’abord, puis par nom', () => {

@@ -11,7 +11,7 @@ import { CallGrid, type CallGridProps } from './call-grid';
  * un modérateur y trouve « Retirer de l'appel ».
  */
 
-const member = (userId: string, name: string): CallMember => ({ userId, name, avatar: null, micMuted: false, cameraOn: false, link: 'connected' });
+const member = (userId: string, name: string): CallMember => ({ userId, name, avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected' });
 
 const grid = (overrides: Partial<CallGridProps> = {}) =>
   renderToStaticMarkup(

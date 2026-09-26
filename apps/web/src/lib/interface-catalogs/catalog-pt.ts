@@ -10,6 +10,7 @@ import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
 import ptCallDevices from './catalog-pt-call-devices';
+import ptCallScreen from './catalog-pt-call-screen';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
@@ -212,6 +213,7 @@ const pt = {
   ...ptCallJoin,
   ...ptCallDecline,
   ...ptCallDevices,
+  ...ptCallScreen,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',

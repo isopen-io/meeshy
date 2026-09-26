@@ -31,6 +31,8 @@ export const callActions = {
   toggleMic: (): void => run((engine) => engine.toggleMic()),
   toggleCamera: (): void => run((engine) => engine.toggleCamera()),
   switchCamera: (): void => run((engine) => engine.switchCamera()),
+  /** Partager l'écran ou arrêter (#8063) — le sélecteur du navigateur s'ouvre dans le geste. */
+  toggleScreen: (): void => run((engine) => engine.toggleScreen()),
   minimize: (): void => run((engine) => engine.setDisplay('pill')),
   expand: (): void => run((engine) => engine.setDisplay('full')),
   /** La pastille repliée en bulle déplaçable (#8046, `CallBubbleView.swift`). */

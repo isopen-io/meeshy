@@ -788,6 +788,18 @@ jobs:
           cd apps/web
           node scripts/check-calls-during.mjs
 
+      # #8063 — on partage son écran pendant un appel : un pair de fixtures
+      # décroche vraiment (RTCPeerConnection dans la page), getDisplayMedia est
+      # simulé par un canevas ; l'écran arrive au pair (renégociation d'un appel
+      # vocal), la fin de la piste arrête le partage, la caméra revient, et
+      # l'écran du pair s'affiche entier sous sa bannière. Sans getDisplayMedia
+      # (coque Android), aucun bouton.
+      - name: Gate partage d'écran pendant un appel
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-screen.mjs
+
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
       # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
       # retirent la ligne et font baisser le compte de l'onglet ET du barreau au

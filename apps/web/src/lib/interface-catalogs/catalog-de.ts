@@ -10,6 +10,7 @@ import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
 import deCallDevices from './catalog-de-call-devices';
+import deCallScreen from './catalog-de-call-screen';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -208,6 +209,7 @@ const de = {
   ...deCallJoin,
   ...deCallDecline,
   ...deCallDevices,
+  ...deCallScreen,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',

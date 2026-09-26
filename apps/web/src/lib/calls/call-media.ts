@@ -9,6 +9,8 @@ export type Facing = 'user' | 'environment';
 
 export type MediaDevicesLike = Pick<MediaDevices, 'getUserMedia'>;
 
+export type DisplayDevicesLike = { readonly getDisplayMedia?: MediaDevices['getDisplayMedia'] };
+
 export const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: true,
   noiseSuppression: true,
@@ -97,5 +99,21 @@ export async function acquireChosenInput(options: { readonly kind: 'camera' | 'm
       : await source.getUserMedia({ audio: false, video: { ...videoInputConstraints('user', options.deviceId), ...exact } });
   const track = (options.kind === 'microphone' ? stream.getAudioTracks() : stream.getVideoTracks())[0];
   if (track === undefined) throw Object.assign(new Error('no-device'), { name: 'NotFoundError' });
+  return track;
+}
+
+/**
+ * L'écran, la fenêtre ou l'onglet que l'utilisateur choisit (#8063) — le
+ * sélecteur est celui du navigateur. Vidéo seule : le son de l'appel reste
+ * celui du micro. `contentHint: 'detail'` dit à l'encodeur de garder le texte
+ * net plutôt que la fluidité, comme ReplayKit côté iOS.
+ */
+export async function acquireDisplay(options: { readonly mediaDevices?: DisplayDevicesLike | null } = {}): Promise<MediaStreamTrack> {
+  const source = options.mediaDevices === undefined ? (devices() as DisplayDevicesLike | null) : options.mediaDevices;
+  if (source === null || typeof source.getDisplayMedia !== 'function') throw Object.assign(new Error('display-media-missing'), { name: 'NotSupportedError' });
+  const stream = await source.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+  const track = stream.getVideoTracks()[0];
+  if (track === undefined) throw Object.assign(new Error('no-display'), { name: 'NotFoundError' });
+  track.contentHint = 'detail';
   return track;
 }

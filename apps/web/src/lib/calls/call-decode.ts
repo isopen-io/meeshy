@@ -134,11 +134,11 @@ export function decodeForceLeave(payload: unknown): { readonly callId: string; r
   return callId === null ? null : { callId, removed: payload.reason === 'removed' };
 }
 
-export function decodeMediaToggled(payload: unknown): { readonly callId: string; readonly userId: string | null; readonly participantId: string | null; readonly mediaType: 'audio' | 'video'; readonly enabled: boolean } | null {
+export function decodeMediaToggled(payload: unknown): { readonly callId: string; readonly userId: string | null; readonly participantId: string | null; readonly mediaType: 'audio' | 'video' | 'screen'; readonly enabled: boolean } | null {
   if (!isRecord(payload)) return null;
   const callId = str(payload.callId);
   const enabled = bool(payload.enabled);
-  if (callId === null || enabled === null || (payload.mediaType !== 'audio' && payload.mediaType !== 'video')) return null;
+  if (callId === null || enabled === null || (payload.mediaType !== 'audio' && payload.mediaType !== 'video' && payload.mediaType !== 'screen')) return null;
   return { callId, userId: str(payload.userId), participantId: str(payload.participantId), mediaType: payload.mediaType, enabled };
 }
 

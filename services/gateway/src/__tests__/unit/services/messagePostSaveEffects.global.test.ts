@@ -132,6 +132,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
 
     run({ prisma, engagementService: makeEngagementService() });
     await flush();
+    const after = Date.now();
 
     expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
     const args = prisma.message.findMany.mock.calls[0][0];
@@ -139,8 +140,8 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     expect(args.where.id).toEqual({ not: MSG_ID });
     expect(args.where.deletedAt).toBeNull();
     const since = (args.where.createdAt.gte as Date).getTime();
-    expect(before - since).toBeGreaterThanOrEqual(10 * 60 * 1000 - 50);
-    expect(before - since).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
+    expect(since).toBeGreaterThanOrEqual(before - 10 * 60 * 1000);
+    expect(since).toBeLessThanOrEqual(after - 10 * 60 * 1000);
     expect(args.orderBy).toEqual({ createdAt: 'desc' });
     expect(args.take).toBe(50);
     expect(args.select).toEqual({ content: true });

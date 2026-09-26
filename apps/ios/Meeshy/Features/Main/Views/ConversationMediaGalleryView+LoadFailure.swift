@@ -36,7 +36,7 @@ struct GalleryMediaUnavailableView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "photo.badge.exclamationmark")
-                .font(.system(size: 44))
+                .font(MeeshyFont.relative(44))
                 .foregroundColor(.white.opacity(0.55))
                 .accessibilityHidden(true)
             Text(String(localized: "gallery.media.unavailable", defaultValue: "Ce média n'est plus disponible", bundle: .main))
