@@ -29,6 +29,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   micMuted: false,
   cameraOn: false,
   facing: 'user',
+  screenSharing: false,
   members: {},
   display: 'full',
   localStream: null,

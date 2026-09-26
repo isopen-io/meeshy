@@ -30,6 +30,8 @@ export type CallMember = {
   readonly avatar: string | null;
   readonly micMuted: boolean;
   readonly cameraOn: boolean;
+  /** Le pair partage son écran (#8063) : sa piste vidéo porte l'écran, pas sa caméra. */
+  readonly screenSharing: boolean;
   readonly link: 'waiting' | 'connecting' | 'connected' | 'reconnecting';
 };
 
@@ -63,6 +65,8 @@ export type ActiveCall = {
   readonly micMuted: boolean;
   readonly cameraOn: boolean;
   readonly facing: 'user' | 'environment';
+  /** J'émets mon écran (#8063) : la caméra est éteinte le temps du partage et revient à son arrêt. */
+  readonly screenSharing: boolean;
   readonly members: Readonly<Record<string, CallMember>>;
   readonly display: CallDisplay;
   readonly localStream: MediaStream | null;

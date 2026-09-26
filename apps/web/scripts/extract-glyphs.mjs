@@ -790,17 +790,18 @@ emit({
  * | `arrow.down.right.and.arrow.up.left` (reduire) | `arrows-in-simple` |
  * | `captions.bubble` (sous-titres) | `closed-captioning` |
  * | `wifi.exclamationmark` (connexion instable) | `cell-signal-low` |
+ * | `rectangle.on.rectangle` (partager l'ecran, #8063) | `monitor-arrow-up` |
  *
  * `phone` et `microphone` restent au SOCLE. Charge avec l'ecran d'appel, jamais dans le socle.
  */
-const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low'];
+const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low', 'monitor-arrow-up'];
 
 emit({
   ids: CALL_SCREEN,
   output: join(HERE, '../src/components/glyphs-call-screen.ts'),
   constant: 'CALL_SCREEN_GLYPHS',
   type: 'CallScreenGlyphName',
-  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres et qualite, charge avec l'ecran d'appel, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres, qualite et partage d'ecran, charge avec l'ecran d'appel, jamais dans le socle.",
 });
 
 /**

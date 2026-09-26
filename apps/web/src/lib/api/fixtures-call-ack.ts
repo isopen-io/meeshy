@@ -1,5 +1,16 @@
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+/** Le drapeau qu'un gate pose pour qu'un pair DÉCROCHE (`fixtures-call-peer.ts`, #8063). */
+export const CALL_PEER_FLAG = 'meeshy.fixtures.callPeer';
+
+export function callPeerArmed(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(CALL_PEER_FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * **LES ACCUSÉS D'APPEL DES FIXTURES** (#8046) — sans eux, le bouchon de
  * socket (`fixtures-realtime.ts`) ne savait pas accuser : chaque appel lancé

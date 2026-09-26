@@ -22,7 +22,20 @@ function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null) {
   return ref;
 }
 
-export function StreamVideo({ stream, mirrored, className, label }: { readonly stream: MediaStream | null; readonly mirrored: boolean; readonly className?: string; readonly label?: string }) {
+/** `fit` : `cover` remplit le cadre (un visage) ; `contain` montre TOUT (un écran partagé, #8063 — rogner un écran en cache le texte). */
+export function StreamVideo({
+  stream,
+  mirrored,
+  className,
+  label,
+  fit = 'cover',
+}: {
+  readonly stream: MediaStream | null;
+  readonly mirrored: boolean;
+  readonly className?: string;
+  readonly label?: string;
+  readonly fit?: 'cover' | 'contain';
+}) {
   const ref = useSrcObject<HTMLVideoElement>(stream);
   return (
     <video
@@ -32,7 +45,7 @@ export function StreamVideo({ stream, mirrored, className, label }: { readonly s
       muted
       aria-label={label}
       className={className}
-      style={{ objectFit: 'cover', transform: mirrored ? 'scaleX(-1)' : undefined, backgroundColor: '#000' }}
+      style={{ objectFit: fit, transform: mirrored ? 'scaleX(-1)' : undefined, backgroundColor: '#000' }}
     />
   );
 }

@@ -9,6 +9,7 @@ import itRowActions from './catalog-it-row-actions';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDevices from './catalog-it-call-devices';
+import itCallScreen from './catalog-it-call-screen';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
@@ -206,6 +207,7 @@ const it = {
   ...itCallShell,
   ...itCallJoin,
   ...itCallDevices,
+  ...itCallScreen,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',

@@ -24,6 +24,7 @@ const ringingCall = (callId: string, phase: CallPhase = { kind: 'incoming' }): A
   micMuted: false,
   cameraOn: false,
   facing: 'user',
+  screenSharing: false,
   members: {},
   display: 'full',
   localStream: null,

@@ -22,6 +22,7 @@ import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDevices from './catalog-fr-call-devices';
+import frCallScreen from './catalog-fr-call-screen';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
@@ -196,6 +197,7 @@ const fr = {
   ...frCallShell,
   ...frCallJoin,
   ...frCallDevices,
+  ...frCallScreen,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',

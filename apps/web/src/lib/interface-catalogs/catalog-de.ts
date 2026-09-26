@@ -9,6 +9,7 @@ import deRowActions from './catalog-de-row-actions';
 import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDevices from './catalog-de-call-devices';
+import deCallScreen from './catalog-de-call-screen';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -206,6 +207,7 @@ const de = {
   ...deCallShell,
   ...deCallJoin,
   ...deCallDevices,
+  ...deCallScreen,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',

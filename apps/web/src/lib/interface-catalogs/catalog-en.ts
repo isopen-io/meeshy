@@ -9,6 +9,7 @@ import enRowActions from './catalog-en-row-actions';
 import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
 import enCallDevices from './catalog-en-call-devices';
+import enCallScreen from './catalog-en-call-screen';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -206,6 +207,7 @@ const en = {
   ...enCallShell,
   ...enCallJoin,
   ...enCallDevices,
+  ...enCallScreen,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',

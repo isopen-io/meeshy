@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { createCallStore, type CallStoreApi } from './call-store';
+import { callLayout } from './call-view';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from './call-transport';
 import { createCallEngine, OUTGOING_RING_TIMEOUT_MS, type CallEngineDeps, type StartCallRequest } from './engine';
 import type { LinkState, PeerLink, PeerLinkDeps } from './peer-link';
@@ -16,10 +17,10 @@ import type { LinkState, PeerLink, PeerLinkDeps } from './peer-link';
 const ME = 'u-me';
 const PEER = 'u-peer';
 
-type FakeTrack = { kind: 'audio' | 'video'; enabled: boolean; readyState: 'live' | 'ended'; stop: () => void };
+type FakeTrack = { kind: 'audio' | 'video'; enabled: boolean; readyState: 'live' | 'ended'; onended: (() => void) | null; stop: () => void };
 
 const track = (kind: 'audio' | 'video'): FakeTrack => {
-  const self: FakeTrack = { kind, enabled: true, readyState: 'live', stop: () => (self.readyState = 'ended') };
+  const self: FakeTrack = { kind, enabled: true, readyState: 'live', onended: null, stop: () => (self.readyState = 'ended') };
   return self;
 };
 
@@ -38,7 +39,7 @@ const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error } = {}) {
+function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -46,6 +47,8 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
   const links: FakeLink[] = [];
   const timers = new Map<number, { fn: () => void; at: number }>();
   const tones: string[] = [];
+  const displays: FakeTrack[] = [];
+  const cameras: FakeTrack[] = [];
   let clock = 1_000;
   let nextTimer = 1;
   const acks: Record<string, unknown> = { [CLIENT_EVENTS.CALL_INITIATE]: { success: true, data: { callId: 'call-1', mode: 'p2p', iceServers: [{ urls: 'stun:stun.example' }] } }, [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { participants: [] }, iceServers: [] } }, ...options.acks };
@@ -69,7 +72,17 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
       if (options.mediaError !== undefined) throw options.mediaError;
       return stream(video ? [track('audio'), track('video')] : [track('audio')]);
     },
-    acquireCamera: async () => track('video') as unknown as MediaStreamTrack,
+    acquireCamera: async () => {
+      const camera = track('video');
+      cameras.push(camera);
+      return camera as unknown as MediaStreamTrack;
+    },
+    acquireDisplay: async () => {
+      if (options.displayError !== undefined) throw options.displayError;
+      const display = track('video');
+      displays.push(display);
+      return display as unknown as MediaStreamTrack;
+    },
     createLink: (linkDeps) => {
       const link: FakeLink = {
         deps: linkDeps,
@@ -117,7 +130,7 @@ function harness(options: { readonly acks?: Record<string, unknown>; readonly ac
   const names = (list: ReadonlyArray<readonly [string, unknown]>) => list.map(([event]) => event);
   const linkState = (link: FakeLink, state: LinkState) => link.deps.onState(state);
 
-  return { engine, store, emitted, requested, links, tones, advance, call, names, linkState, binding };
+  return { engine, store, emitted, requested, links, tones, displays, cameras, advance, call, names, linkState, binding };
 }
 
 const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };
@@ -445,3 +458,138 @@ describe('appel de groupe', () => {
     expect(h.call()?.phase.kind).toBe('connected');
   });
 });
+
+describe('partage d’écran (#8063)', () => {
+  const connected = async (request: StartCallRequest = DIRECT) => {
+    const h = harness();
+    await h.engine.start(request);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    return h;
+  };
+
+  test('dans un appel vocal, partager envoie l’écran sur chaque lien et l’annonce', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    const display = h.displays[0];
+    expect(display).toBeDefined();
+    expect(h.links[0]?.sent.at(-1)).toBe(display);
+    expect(h.call()?.screenSharing).toBe(true);
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([display] as unknown as MediaStreamTrack[]);
+    expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }]);
+  });
+
+  test('arrêter un partage d’appel vocal retire la piste vidéo et repasse en audio', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    const display = h.displays[0] as FakeTrack;
+    await h.engine.toggleScreen();
+    expect(display.readyState).toBe('ended');
+    expect(h.links[0]?.sent.at(-1)).toBeNull();
+    expect(h.call()?.screenSharing).toBe(false);
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([]);
+    expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: false }]);
+  });
+
+  test('la caméra qui tournait avant le partage revient à son arrêt', async () => {
+    const h = await connected({ ...DIRECT, media: 'video' });
+    const before = h.call()?.localStream?.getVideoTracks()[0] as unknown as FakeTrack;
+    await h.engine.toggleScreen();
+    expect(before.readyState).toBe('ended');
+    expect(h.call()?.cameraOn).toBe(false);
+    await h.engine.toggleScreen();
+    const camera = h.cameras.at(-1);
+    expect(camera).toBeDefined();
+    expect(h.links[0]?.sent.at(-1)).toBe(camera);
+    expect(h.call()?.cameraOn).toBe(true);
+    expect(h.call()?.screenSharing).toBe(false);
+  });
+
+  test('« Arrêter le partage » du navigateur (fin de la piste) arrête le partage comme le bouton', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    const display = h.displays[0] as FakeTrack;
+    display.readyState = 'ended';
+    display.onended?.();
+    await flush();
+    expect(h.call()?.screenSharing).toBe(false);
+    expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: false }]);
+  });
+
+  test('un choix d’écran annulé ne change rien et n’annonce rien', async () => {
+    const h = harness({ displayError: Object.assign(new Error('cancel'), { name: 'NotAllowedError' }) });
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    const before = h.emitted.length;
+    await h.engine.toggleScreen();
+    expect(h.call()?.screenSharing).toBe(false);
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(h.emitted.length).toBe(before);
+  });
+
+  test('avant la connexion, le partage n’est pas offert', async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    await h.engine.toggleScreen();
+    expect(h.displays).toHaveLength(0);
+    expect(h.call()?.screenSharing).toBe(false);
+  });
+
+  test('la caméra ne se rallume pas par-dessus un partage', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    await h.engine.toggleCamera();
+    expect(h.call()?.screenSharing).toBe(true);
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([h.displays[0]] as unknown as MediaStreamTrack[]);
+  });
+
+  test('raccrocher pendant un partage relâche la piste de l’écran', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    h.engine.hangup();
+    expect((h.displays[0] as FakeTrack).readyState).toBe('ended');
+  });
+
+  test('le partage du pair se lit sur son membre, et sa fin rend l’état de sa caméra', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId: 'call-1', participantId: 'p-2', mediaType: 'screen', enabled: true });
+    expect(h.call()?.members[PEER]?.screenSharing).toBe(true);
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(false);
+    h.engine.handle(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId: 'call-1', participantId: 'p-2', mediaType: 'screen', enabled: false });
+    expect(h.call()?.members[PEER]?.screenSharing).toBe(false);
+  });
+
+  test('deux touchers pendant que le sélecteur est ouvert n’ouvrent qu’un sélecteur', async () => {
+    const h = await connected();
+    await Promise.all([h.engine.toggleScreen(), h.engine.toggleScreen()]);
+    expect(h.displays).toHaveLength(1);
+    expect(h.call()?.screenSharing).toBe(true);
+  });
+
+  test('un pair qui arrive pendant le partage apprend qu’il regarde un écran', async () => {
+    const h = await connected({ ...DIRECT, isGroup: true });
+    await h.engine.toggleScreen();
+    const announced = () => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_SCREEN);
+    expect(announced()).toHaveLength(1);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-3', userId: 'u-late', username: 'late' } });
+    expect(announced()).toEqual([
+      [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
+      [CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }],
+    ]);
+  });
+
+  test('en appel vocal, pair sans caméra : l’écran reçu s’affiche dès que screen arrive, dans un ordre comme dans l’autre', async () => {
+    const h = await connected();
+    const link = h.links[0] as FakeLink;
+    h.engine.handle(SERVER_EVENTS.CALL_MEDIA_TOGGLED, { callId: 'call-1', participantId: 'p-2', mediaType: 'screen', enabled: true });
+    expect(callLayout(h.call() as NonNullable<ReturnType<typeof h.call>>)).toBe('portrait');
+    link.deps.onRemoteStream(stream([track('audio'), track('video')]));
+    expect(h.call()?.members[PEER]?.cameraOn).toBe(false);
+    expect(callLayout(h.call() as NonNullable<ReturnType<typeof h.call>>)).toBe('screen');
+  });
+});
+

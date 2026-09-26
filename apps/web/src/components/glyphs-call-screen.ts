@@ -1,7 +1,7 @@
 /* GENERE par scripts/extract-glyphs.mjs depuis @phosphor-icons/core.
  * Ne pas editer a la main : relancer `node scripts/extract-glyphs.mjs`.
  * La liste des glyphes employes vit dans ce script, pas ici.
- * LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres et qualite, charge avec l'ecran d'appel, jamais dans le socle. */
+ * LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres, qualite et partage d'ecran, charge avec l'ecran d'appel, jamais dans le socle. */
 
 export const CALL_SCREEN_GLYPHS = {
   phoneDisconnect: { viewBox: "0 0 256 256", body: "<path d=\"M231.59,90.13h0C175.44,34,80.56,34,24.41,90.13c-20,20-21.92,49.49-4.69,71.71A16,16,0,0,0,32.35,168a15.8,15.8,0,0,0,5.75-1.08l49-17.37.29-.11a16,16,0,0,0,9.75-11.73l5.9-29.52a76.52,76.52,0,0,1,49.68-.11h0l6.21,29.75a16,16,0,0,0,9.72,11.59l.29.11,49,17.39a16,16,0,0,0,18.38-5.06C253.51,139.62,251.58,110.13,231.59,90.13ZM223.67,152l-.3-.12-48.82-17.33-6.21-29.74A16,16,0,0,0,158,93a92.56,92.56,0,0,0-60.34.13,16,16,0,0,0-10.32,12l-5.9,29.51L32.63,151.86c-.1,0-.17.13-.27.17-12.33-15.91-11-36.23,3.36-50.58,25-25,58.65-37.53,92.28-37.53s67.27,12.51,92.28,37.53C234.61,115.8,236,136.12,223.67,152Zm.32,48a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,200Z\"/>" },
@@ -12,6 +12,7 @@ export const CALL_SCREEN_GLYPHS = {
   arrowsInSimple: { viewBox: "0 0 256 256", body: "<path d=\"M213.66,53.66,163.31,104H192a8,8,0,0,1,0,16H144a8,8,0,0,1-8-8V64a8,8,0,0,1,16,0V92.69l50.34-50.35a8,8,0,0,1,11.32,11.32ZM112,136H64a8,8,0,0,0,0,16H92.69L42.34,202.34a8,8,0,0,0,11.32,11.32L104,163.31V192a8,8,0,0,0,16,0V144A8,8,0,0,0,112,136Z\"/>" },
   closedCaptioning: { viewBox: "0 0 256 256", body: "<path d=\"M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192ZM118.92,151.71A8,8,0,0,1,116,162.64a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58A8,8,0,0,1,118.92,151.71Zm80,0A8,8,0,0,1,196,162.64a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58A8,8,0,0,1,198.92,151.71Z\"/>" },
   cellSignalLow: { viewBox: "0 0 256 256", body: "<path d=\"M88,152v48a8,8,0,0,1-16,0V152a8,8,0,0,1,16,0ZM40,184a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-8A8,8,0,0,0,40,184Z\"/>" },
+  monitorArrowUp: { viewBox: "0 0 256 256", body: "<path d=\"M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H208a8,8,0,0,1,8,8Zm-48,48a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,224ZM157.66,106.34a8,8,0,0,1-11.32,11.32L136,107.31V152a8,8,0,0,1-16,0V107.31l-10.34,10.35a8,8,0,0,1-11.32-11.32l24-24a8,8,0,0,1,11.32,0Z\"/>" },
 } as const;
 
 export type CallScreenGlyphName = keyof typeof CALL_SCREEN_GLYPHS;
