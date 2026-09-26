@@ -1179,6 +1179,14 @@ jobs:
           cd apps/web
           node scripts/build-shells.mjs --target android
 
+      # #8049 — les décisions PURES de l'appel natif (routage de la poussée,
+      # sorties audio, type du service au premier plan, refus sans socket) se
+      # testent sur la JVM : `app/src/test/java/me/meeshy/app/`.
+      - name: Tests JVM de la coque (testDebugUnitTest)
+        run: |
+          cd apps/web/android
+          ./gradlew testDebugUnitTest
+
       # L'APK de recette, installable tel quel (`adb install -r`) : la
       # régression se voit sur le runner, et le build vert se pose sur le
       # téléphone sans machine outillée.
