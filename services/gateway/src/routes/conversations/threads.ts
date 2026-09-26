@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { canAccessConversation } from './utils/access-control';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding,
@@ -11,7 +10,7 @@ import {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
-import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -227,6 +226,10 @@ function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): 
 const formatThreadMessage = <T extends Record<string, unknown>>(message: T): T =>
   hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message)));
 
+const REFUS_DE_FIL = {
+  sansSession: 'Authentication required to read this thread'
+} as const;
+
 export function registerThreadsRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -272,14 +275,15 @@ export function registerThreadsRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const authContext = authRequest.authContext;
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext,
+        identifiant: id,
+        messages: REFUS_DE_FIL
+      });
       if (!conversationId) {
-        return sendNotFound(reply, 'Conversation not found');
-      }
-
-      const hasAccess = await canAccessConversation(prisma, authContext, conversationId, id);
-      if (!hasAccess) {
-        return sendForbidden(reply, 'You do not have access to this conversation');
+        return;
       }
 
       // La racine du fil est soumise au même masquage que ses réponses : un

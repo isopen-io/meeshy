@@ -318,9 +318,10 @@ describe('GET /links?conversationId= — non-member', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 — jamais un 500 — quand le lecteur n\'est pas membre de la conversation', async () => {
+  it('returns the 404 of an unknown conversation — jamais un 500, jamais un 403 qui dirait qu\'elle existe (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
   });
 });
 
