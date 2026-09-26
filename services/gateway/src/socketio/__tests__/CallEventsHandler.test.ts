@@ -1346,7 +1346,7 @@ describe('CallEventsHandler', () => {
           expect.objectContaining({
             userId: USER_ID,
             types: ['apns', 'fcm'],
-            platforms: ['ios', 'android'],
+            platforms: ['ios', 'android', 'web'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_answered_elsewhere', callId: CALL_ID }),
@@ -1919,7 +1919,7 @@ describe('CallEventsHandler', () => {
           expect.objectContaining({
             userId: 'ringing-callee-id',
             types: ['apns', 'fcm'],
-            platforms: ['ios', 'android'],
+            platforms: ['ios', 'android', 'web'],
             payload: expect.objectContaining({
               silent: true,
               data: expect.objectContaining({ type: 'call_cancel', callId: CALL_ID }),

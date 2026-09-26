@@ -7,7 +7,7 @@
  * depuis « Tous », ce qu'une ligne annonce et où elle mène. Aucun ne traverse le
  * CÂBLAGE ni la FEUILLE DE STYLE — une ligne qu'un disque flottant recouvre, un
  * nom manqué rouge illisible en clair, un filtre qui attend le réseau alors que
- * le cache répond, ou un « Rappeler » qui réapparaîtrait sans effet les laissent
+ * le cache répond, ou un « Rappeler » qui disparaîtrait de sa ligne les laissent
  * tous verts. Ce gate les mesure dans un navigateur réel, sur le `dist`
  * construit (source fixtures : cinq appels), dans les DEUX schémas et aux deux
  * gabarits de la charte (390 × 844, 320 × 568) :
@@ -19,8 +19,8 @@
  *     chaque contrôle fait au moins 44 de haut ; chaque ligne s'atteint une fois
  *     amenée au milieu de l'écran ;
  *  3. les trois directions se distinguent par un glyphe PROPRE et un libellé
- *     VISIBLE, et aucune ligne ne porte de bouton (« Rappeler » n'a pas d'effet
- *     sur le web) ;
+ *     VISIBLE, et chaque ligne porte un seul bouton, « Rappeler », qui relance
+ *     l'appel depuis le journal (#8056) ;
  *  4. chaque texte tient AA dans les deux schémas — le nom ROUGE d'un manqué
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
@@ -151,7 +151,7 @@ try {
       const rows = await reachRows(page);
       check(rows.length === 5 && rows.every((r) => r.ok && r.hauteur >= TAP_FLOOR), `${label} : chaque ligne s'atteint — ${JSON.stringify(rows)}`);
 
-      // ------------------------------------------------ 3. trois directions, sans la couleur, sans « Rappeler »
+      // ------------------------------------------------ 3. trois directions, sans la couleur, et « Rappeler »
       const directions = await page.$$eval('[data-call]', (els) =>
         els.map((el) => ({
           ligne: el.getAttribute('data-call'),
@@ -159,6 +159,7 @@ try {
           libelle: (el.querySelector('[data-call-direction]')?.textContent ?? '').trim(),
           glyphe: el.querySelector('[data-call-meta] svg')?.innerHTML ?? '',
           boutons: el.querySelectorAll('button').length,
+          rappeler: el.querySelectorAll('button[data-call-back]').length,
         })),
       );
       const byDirection = (d) => directions.filter((row) => row.direction === d);
@@ -168,7 +169,7 @@ try {
       );
       const glyphs = new Set(['missed', 'incoming', 'outgoing'].map((d) => byDirection(d)[0]?.glyphe ?? ''));
       check(glyphs.size === 3 && !glyphs.has(''), `${label} : les trois directions ont trois glyphes distincts`);
-      check(directions.every((r) => r.boutons === 0), `${label} : aucune ligne ne porte de bouton — « Rappeler » n'a pas d'effet sur le web`);
+      check(directions.every((r) => r.boutons === 1 && r.rappeler === 1), `${label} : chaque ligne porte UN bouton, « Rappeler » (#8056) — ${JSON.stringify(directions.map(({ ligne, boutons, rappeler }) => ({ ligne, boutons, rappeler })))}`);
       const videos = await page.$$eval('[data-call-video]', (els) => els.map((el) => el.closest('[data-call]')?.getAttribute('data-call')));
       check(JSON.stringify(videos) === JSON.stringify(['call-kwame-video', 'call-fatou-manque']), `${label} : les appels vidéo portent leur glyphe (${JSON.stringify(videos)})`);
       check(
