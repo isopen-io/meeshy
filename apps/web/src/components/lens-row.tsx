@@ -1,13 +1,16 @@
 import { memo } from 'react';
+import { useStore } from 'zustand/react';
 
+import { apiConfig } from '@/lib/api/config';
 import type { ListConversation } from '@/lib/api/list-preview';
+import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
-import type { RowActionId } from '@/lib/view/row-actions';
+import { isRowCallAction, type RowActionId } from '@/lib/view/row-actions';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
@@ -165,6 +168,13 @@ function LensRowImpl({
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
   const liveCall = (conversation as ListConversation).activeCall ?? null;
+  /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
+     à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
+  const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  const onAction = (id: RowActionId) => {
+    if (!isRowCallAction(id)) return onRowAction(conversation.id, id);
+    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
+  };
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -516,7 +526,8 @@ function LensRowImpl({
         flags={flags}
         unread={unread}
         magnified={status.magnified}
-        onAction={(id) => onRowAction(conversation.id, id)}
+        {...(canCall ? { call: { language: currentInterfaceLanguage() } } : {})}
+        onAction={onAction}
       />
     </li>
   );
