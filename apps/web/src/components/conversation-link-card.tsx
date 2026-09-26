@@ -18,6 +18,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { languageName } from '@/lib/languages';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
+import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { ConfirmDialog } from './confirm-dialog';
@@ -252,14 +253,6 @@ function ClosedNotice({ kind, title, body }: { readonly kind: 'private' | 'notFo
     </div>
   );
 }
-
-const initialsOf = (name: string): string =>
-  name
-    .split(/\s+/u)
-    .filter((word) => word !== '')
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? '')
-    .join('');
 
 function InviteQuote({
   inviter,
