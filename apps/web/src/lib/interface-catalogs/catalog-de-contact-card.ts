@@ -16,6 +16,7 @@ const deContactCard = {
   'contactCard.state.requestSent': 'Anfrage gesendet',
   'contactCard.state.requestReceived': 'Hat dir eine Anfrage gesendet',
   'contactCard.sheet.title': 'Visitenkarte',
+  'contactCard.shared': 'Geteilter Kontakt',
   'contactCard.close': 'Schließen',
   'contactCard.copy': 'Kopieren: {field}',
   'contactCard.copied': 'In die Zwischenablage kopiert',

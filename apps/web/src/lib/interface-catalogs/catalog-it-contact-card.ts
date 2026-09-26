@@ -16,6 +16,7 @@ const itContactCard = {
   'contactCard.state.requestSent': 'Richiesta inviata',
   'contactCard.state.requestReceived': 'Ti ha inviato una richiesta',
   'contactCard.sheet.title': 'Biglietto da visita',
+  'contactCard.shared': 'Contatto condiviso',
   'contactCard.close': 'Chiudi',
   'contactCard.copy': 'Copia: {field}',
   'contactCard.copied': 'Copiato negli appunti',

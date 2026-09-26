@@ -16,6 +16,7 @@ const enContactCard = {
   'contactCard.state.requestSent': 'Request sent',
   'contactCard.state.requestReceived': 'Sent you a request',
   'contactCard.sheet.title': 'Contact card',
+  'contactCard.shared': 'Shared contact',
   'contactCard.close': 'Close',
   'contactCard.copy': 'Copy: {field}',
   'contactCard.copied': 'Copied to clipboard',
