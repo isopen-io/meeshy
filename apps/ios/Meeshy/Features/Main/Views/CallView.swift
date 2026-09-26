@@ -52,6 +52,7 @@ struct CallView: View {
     // false ⇒ remote is primary + local in the PiP; true ⇒ swapped. Tapping
     // the PiP toggles it.
     @State private var swapStreams = false
+    @State private var screenSharePicker = ScreenSharePickerLauncher()
     // §7.2/f — watchdog: after a delay with no remote video, the "Connexion
     // vidéo…" spinner turns into a calmer, informative state instead of
     // spinning forever (the media auto-repair / ICE-restart is §5.8).
@@ -780,6 +781,9 @@ struct CallView: View {
                 transcriptOverlay
             }
 
+            CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
+                .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
+
             // Live captions toggle — floating vertical control on the trailing
             // edge, kept OUT of controlButtonsRow (user feedback 2026-07-10:
             // the main horizontal row — mute/speaker/camera/video/PiP/end —
@@ -851,20 +855,6 @@ struct CallView: View {
         }
     }
 
-    /// User-facing translation of `TranscriptionError` — `errorDescription` on
-    /// the error type itself is an untranslated diagnostic string for logs,
-    /// never meant for display (see its own doc comment).
-    private func transcriptionErrorMessage(for error: TranscriptionError) -> String {
-        switch error {
-        case .permissionDenied:
-            return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
-        case .recognizerUnavailable, .onDeviceNotSupported:
-            return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
-        case .recognitionFailed, .audioEngineFailed, .tapFormatUnavailable:
-            return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
-        }
-    }
-
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
     /// (controls are persistent on desktop), never for audio-only (no video to
     /// reveal), never while the effects tray is open, and never while VoiceOver
@@ -903,7 +893,7 @@ struct CallView: View {
     /// fit (letterbox) on Mac where the window is resizable and cropping the
     /// peer is undesirable.
     private var primaryVideoContentMode: UIView.ContentMode {
-        isOnMac ? .scaleAspectFit : .scaleAspectFill
+        isOnMac || callManager.screenShare.isRemoteSharing ? .scaleAspectFit : .scaleAspectFill
     }
 
     private var audioCallLayout: some View {
@@ -1188,7 +1178,7 @@ struct CallView: View {
     /// for `swapStreams == false` — until the local track returns, at which
     /// point the user's swap choice is restored automatically.
     private var effectiveSwapStreams: Bool {
-        swapStreams && callManager.hasLocalVideoTrack
+        swapStreams && callManager.hasLocalVideoTrack && !callManager.screenShare.isRemoteSharing
     }
 
     /// §7.2 — renders one call stream. `local == true` shows the (mirrored)
@@ -1715,6 +1705,14 @@ struct CallView: View {
             ) {
                 callManager.toggleVideo()
             }
+            .disabled(callManager.screenShare.isSharing)
+
+            if !isOnMac, case .connected = callManager.callState {
+                callControlButton(icon: callManager.screenShare.isSharing ? "rectangle.on.rectangle.slash" : "rectangle.on.rectangle", color: MeeshyColors.indigo400, bgColor: MeeshyColors.indigo400, isActive: callManager.screenShare.isSharing, toggleValue: callManager.screenShare.isSharing, caption: CallScreenShareCopy.caption, label: CallScreenShareCopy.label(isSharing: callManager.screenShare.isSharing), hint: CallScreenShareCopy.hint, isToggle: true) {
+                    screenSharePicker.toggle(controller: callManager.screenShare)
+                }
+                .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
+            }
 
             // PiP système — réduire en fenêtre vidéo flottante. Visible seulement
             // si éligible (appel vidéo + track distant + caméra distante allumée +
@@ -2162,25 +2160,6 @@ struct CallView: View {
     private func stopPulseAnimation() {
         withTransaction(Transaction(animation: nil)) {
             pulseScale = 1.0
-        }
-    }
-
-    private func endReasonText(_ reason: CallEndReason) -> String {
-        switch reason {
-        case .local: return String(localized: "call.ended.local")
-        case .remote: return String(localized: "call.ended.remote")
-        case .rejected: return String(localized: "call.ended.rejected")
-        case .missed: return String(localized: "call.ended.missed")
-        case .connectionLost: return String(localized: "call.ended.connectionLost")
-        case .failed(let msg):
-            // Use a static key with the message as a separate interpolation
-            // arg via String.LocalizationValue. Putting `\(msg)` directly in
-            // the key argument violates the StaticString requirement of
-            // String(localized:) under Swift 6 strict mode.
-            return String(
-                localized: "call.ended.failed",
-                defaultValue: "Échec de l'appel : \(msg)"
-            )
         }
     }
 }

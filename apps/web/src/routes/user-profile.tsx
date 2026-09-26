@@ -26,6 +26,7 @@ import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 import { ReportSheet } from '@/components/report-sheet';
+import { ProfileCall } from '@/routes/user-profile-call';
 import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { useProfileController } from '@/routes/user-profile-controller';
 import { ProfileHero } from '@/routes/user-profile-header';
@@ -196,6 +197,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
 
   const onFilter = useCallback((tap: ProfilePostsFilterTap) => setFilter((current) => toggledFilter(current, tap)), []);
   const onSignIn = useCallback(() => navigate(href('login')), []);
+  const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
+  const callPerson = useMemo(
+    () => ({ id: person?.id ?? '', name, avatar: person?.avatar ?? null }),
+    [person?.id, person?.avatar, name],
+  );
 
   /**
    * **« CHARGER PLUS » RENDAIT LE FOCUS AU NÉANT ET N'ANNONÇAIT RIEN**
@@ -295,6 +301,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     onAction={onAction}
                     onSignIn={onSignIn}
                   />
+                )}
+                {view.data?.isSelf === true || !signedIn ? null : (
+                  <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                 )}
                 <GroupedSection
                   id="user-profile-posts"

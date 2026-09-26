@@ -861,6 +861,11 @@ export default function ThreadScreen() {
         deps={apiDeps}
         origin={webOriginOf(apiConfig.base, window.location.origin)}
         onClose={() => setDetailsOpen(false)}
+        onJumpToMessage={(messageId) => {
+          setDetailsOpen(false);
+          jump.requestJump(messageId);
+        }}
+        canJumpTo={(messageId) => messages.some((message) => message.id === messageId)}
       />
 
       <ThreadMessageSheets

@@ -663,7 +663,7 @@ private final class BareMessageService: MessageServiceProviding, @unchecked Send
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     }
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
-    func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
+    func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { throw MeeshyError.network(.timeout) }
     func edit(messageId: String, content: String) async throws -> APIMessage { throw MeeshyError.network(.timeout) }
     func delete(conversationId: String, messageId: String) async throws {}

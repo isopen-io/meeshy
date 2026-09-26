@@ -202,4 +202,48 @@ describe('une rangée', () => {
     expect(html).not.toContain('Non lue');
     expect(html).toContain('aria-label="Actions de la notification"');
   });
+
+  test('un appel manqué porte « Rappeler <nom> », du même type, HORS du lien de la rangée (A6, C12)', () => {
+    const html = row(
+      record({ type: 'missed_call', title: null, content: '📹 Appel vidéo manqué', context: { conversationId: 'c-kwame', conversationType: 'direct' }, metadata: { callType: 'video' } }),
+    );
+    const button = html.match(/<button[^>]*data-notification-call-back="([a-z]+)"[^>]*>/);
+    expect(button?.[1]).toBe('video');
+    expect(button?.[0]).toContain('aria-label="Rappeler Kwame Mensah"');
+    const at = html.indexOf(button?.[0] ?? '<none>');
+    expect(html.lastIndexOf('</a>', at)).toBeGreaterThan(html.lastIndexOf('<a ', at));
+  });
+
+  test('une notification qui n’est pas un appel manqué ne propose pas de rappeler', () => {
+    expect(row(record({}))).not.toContain('data-notification-call-back');
+  });
+});
+
+/**
+ * « X EST SUR MEESHY » (#8143, recette 2026-09-26) — le titre persisté est une
+ * PHRASE (« Marie est sur Meeshy ! ») : des initiales tirées du titre y lisaient
+ * « ME » (Marie, est). Elles viennent du NOM de l'acteur, en lettres seules, et
+ * la rangée s'annonce en entier au lecteur d'écran : qui, ce qui arrive, et
+ * l'invitation à lui écrire.
+ */
+describe('la rangée « a rejoint Meeshy »', () => {
+  const joined = (displayName: string) =>
+    record({
+      type: 'contact_joined',
+      title: `${displayName} est sur Meeshy !`,
+      content: 'Dites-lui bonjour 👋',
+      actor: { id: 'u-marie', username: 'marie', displayName, avatar: null },
+      context: {},
+    });
+
+  test('les initiales viennent du nom de l’acteur, jamais de la phrase du titre', () => {
+    expect(row(joined('Marie'))).toContain('>MA</span>');
+    expect(row(joined('Théo (foot)'))).toContain('>TF</span>');
+  });
+
+  test('le libellé lu dit qui, ce qui arrive et l’invitation', () => {
+    const html = row(joined('Marie'));
+    expect(html).toContain('Marie est sur Meeshy !');
+    expect(html).toContain('Dites-lui bonjour 👋');
+  });
 });

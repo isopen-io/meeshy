@@ -1,3 +1,4 @@
+import type { CallFeedbackPrompt } from './call-feedback';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 /**
@@ -30,6 +31,8 @@ export type CallMember = {
   readonly avatar: string | null;
   readonly micMuted: boolean;
   readonly cameraOn: boolean;
+  /** Le pair partage son écran (#8063) : sa piste vidéo porte l'écran, pas sa caméra. */
+  readonly screenSharing: boolean;
   readonly link: 'waiting' | 'connecting' | 'connected' | 'reconnecting';
 };
 
@@ -43,7 +46,8 @@ export type CallCaption = {
   readonly at: number;
 };
 
-export type CallDisplay = 'full' | 'pill';
+/** `full` : l'écran d'appel ; `pill` : la pastille du haut ; `bubble` : la bulle déplaçable (`CallBubbleView.swift`). */
+export type CallDisplay = 'full' | 'pill' | 'bubble';
 
 export type ActiveCall = {
   readonly callId: string | null;
@@ -62,6 +66,8 @@ export type ActiveCall = {
   readonly micMuted: boolean;
   readonly cameraOn: boolean;
   readonly facing: 'user' | 'environment';
+  /** J'émets mon écran (#8063) : la caméra est éteinte le temps du partage et revient à son arrêt. */
+  readonly screenSharing: boolean;
   readonly members: Readonly<Record<string, CallMember>>;
   readonly display: CallDisplay;
   readonly localStream: MediaStream | null;
@@ -86,12 +92,14 @@ export type CallStoreState = {
   readonly waiting: WaitingCall | null;
   /** Un refus qui n'ouvre aucun écran (« un appel est déjà en cours »). */
   readonly notice: 'already-in-call' | null;
+  /** La note demandée après l'appel qui vient de finir (#8072), échantillonnée par `feedbackPromptFor`. */
+  readonly feedback: CallFeedbackPrompt | null;
 };
 
 export type CallStoreApi = StoreApi<CallStoreState>;
 
 export function createCallStore(): CallStoreApi {
-  return createStore<CallStoreState>(() => ({ call: null, waiting: null, notice: null }));
+  return createStore<CallStoreState>(() => ({ call: null, waiting: null, notice: null, feedback: null }));
 }
 
 export const callStore = createCallStore();

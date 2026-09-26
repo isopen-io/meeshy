@@ -255,12 +255,12 @@ struct BubbleStandardLayout: View {
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
     /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
-    /// bubbles: their measured height depends on the per-cell `isExpanded`
-    /// @State of `BubbleExpandableText`, which the content-keyed cache cannot
+    /// bubbles: their measured height depends on the host's expansion state
+    /// (`longMessageExpansion`, #8147), which the content-keyed cache cannot
     /// observe — so a long message always measures live and never risks a stale
     /// collapsed/expanded height. Every other bubble keys on (id, content).
     private var heightCacheContext: BubbleHeightCacheContext? {
-        if let raw = content.text?.raw, raw.count > BubbleExpandableText.truncateLimit {
+        if let raw = content.text?.raw, LongMessageExcerpt.isLong(raw) {
             return nil
         }
         // Link-preview bubbles host a self-loading OG card whose height changes
@@ -416,18 +416,7 @@ struct BubbleStandardLayout: View {
         hasSharedPlace: Bool,
         nonMedia: [MessageAttachment]
     ) -> [String] {
-        var parts: [String] = []
-        if hasSharedPlace {
-            parts.append(String(localized: "a11y.message.location", bundle: .main))
-        }
-        for att in nonMedia {
-            if att.type == .location {
-                parts.append(String(localized: "a11y.message.location", bundle: .main))
-            } else {
-                parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
-            }
-        }
-        return parts
+        MessageAccessibilityLabelComposer.nonMediaAccessibilityParts(hasSharedPlace: hasSharedPlace, nonMedia: nonMedia)
     }
 
     private var messageAccessibilityLabel: String {
@@ -1041,19 +1030,8 @@ struct BubbleStandardLayout: View {
                     }
                 }
 
-                // Inline OpenGraph preview for the first URL in the
-                // effective (possibly translated) content. Self-loading.
-                // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let video = content.text?.embeddedVideo {
-                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
-                        .padding(.top, 4)
-                } else if let url = content.text?.firstLinkURL {
-                    LinkPreviewCard(
-                        urlString: url,
-                        accentColor: contactColor,
-                        isDark: isDark
-                    )
-                    .padding(.top, 4)
+                if let text = content.text {
+                    BubbleLinkEmbed(text: text, accentColor: contactColor, isDark: isDark)
                 }
 
                 secondaryContentView

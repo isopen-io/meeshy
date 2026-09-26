@@ -1,13 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 
 import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
+import { CallScreenTools } from '@/components/call-screen-tools';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
 import { useCallRemoval } from '@/lib/calls/use-call-removal';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, hasVideo, orderedMembers, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -19,8 +20,10 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * locale en coin, une grille pour un groupe, la barre de contrôles en bas.
  *
  * Les contrôles suivent l'ordre d'iOS : Micro, Vidéo, Caméra (quand elle
- * tourne), Sous-titres (quand l'autre en envoie), Raccrocher. La vignette
- * locale s'inverse d'un toucher avec la vidéo distante, comme sur iOS.
+ * tourne), Écran (#8063, là où le navigateur sait partager), Sous-titres
+ * (quand l'autre en envoie), Raccrocher. La vignette locale s'inverse d'un
+ * toucher avec la vidéo distante, comme sur iOS. L'écran partagé d'un pair
+ * prend la scène ENTIER (`contain`), sous une bannière qui le nomme.
  */
 
 const INK = '#ffffff';
@@ -48,6 +51,10 @@ function RoundButton({
   pressed,
   size = 56,
   caption,
+  popup = false,
+  disabled = false,
+  control,
+  marker,
 }: {
   readonly label: string;
   readonly glyph: ReactNode;
@@ -56,6 +63,10 @@ function RoundButton({
   readonly pressed?: boolean;
   readonly size?: number;
   readonly caption?: string;
+  readonly popup?: boolean;
+  readonly disabled?: boolean;
+  readonly control?: string;
+  readonly marker?: string;
 }) {
   const background = tone === 'danger' ? HANGUP : tone === 'accept' ? ANSWER : tone === 'active' ? INK : PILL;
   const color = tone === 'active' ? '#111' : INK;
@@ -65,8 +76,12 @@ function RoundButton({
         type="button"
         aria-label={label}
         {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
+        {...(popup ? { 'aria-haspopup': 'dialog' as const } : {})}
+        {...(control === undefined ? {} : { 'data-call-control': control })}
         onClick={onPress}
-        className="grid place-items-center rounded-full transition-transform active:scale-95"
+        disabled={disabled}
+        {...(marker === undefined ? {} : { [marker]: '' })}
+        className="grid place-items-center rounded-full transition-transform active:scale-95 disabled:opacity-40"
         style={{ width: size, height: size, background, color }}
       >
         {glyph}
@@ -80,15 +95,20 @@ function RoundButton({
   );
 }
 
+const CallDeclineSheet = lazy(() => import('./call-decline-entry').then((module) => ({ default: module.ConnectedCallDeclineSheet })));
+
 const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
 
 
-export function CallScreen({ call }: { readonly call: ActiveCall }) {
+const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canShareScreen(navigator.mediaDevices);
+
+export function CallScreen({ call, canShare = browserCanShare() }: { readonly call: ActiveCall; readonly canShare?: boolean }) {
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [swapped, setSwapped] = useState(false);
   const [featuredId, setFeaturedId] = useState<string | null>(null);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const removal = useCallRemoval(call);
   const now = useSecondTick(call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
   const phase = call.phase.kind;
@@ -102,6 +122,8 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
   const clock = call.connectedAt === null ? null : formatCallClock(elapsedSeconds(call, now));
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
   const caption = call.captionsOn ? call.captions.at(-1) : undefined;
+  const sharer = layout === 'screen' ? screenSharer(call.members) : null;
+  const selfMirrored = call.facing === 'user' && !call.screenSharing;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -125,7 +147,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           {translate(language, 'call.members', { count: String(Object.keys(call.members).length + 1) })}
         </span>
       ) : null}
-      <span className="size-11" />
+      <CallScreenTools call={call} />
     </div>
   );
 
@@ -165,12 +187,30 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
         <CallGrid
           members={members}
           remoteStreams={call.remoteStreams}
-          self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: call.facing === 'user' }}
+          self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfMirrored }}
           featuredId={featuredId}
           onFeature={setFeaturedId}
           removal={removal}
           language={language}
         />
+      );
+    }
+    if (layout === 'screen' && sharer !== null) {
+      return (
+        <div className="absolute inset-0" data-call-shared-screen="">
+          <StreamVideo
+            stream={call.remoteStreams[sharer.userId] ?? null}
+            mirrored={false}
+            fit="contain"
+            className="absolute inset-0 size-full"
+            label={translate(language, 'call.screen.peerSharing', { name: sharer.name })}
+          />
+          {call.cameraOn ? (
+            <div className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg" style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }} data-call-corner="">
+              <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" />
+            </div>
+          ) : null}
+        </div>
       );
     }
     if (layout === 'video-duo') {
@@ -181,7 +221,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
       return (
         <div className="absolute inset-0">
           {mainOn ? (
-            <StreamVideo stream={main} mirrored={swapped && call.facing === 'user'} className="absolute inset-0 size-full" label={swapped ? t('call.you') : call.title} />
+            <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? t('call.you') : call.title} />
           ) : (
             <div className="absolute inset-0 grid place-items-center">
               <div className="flex flex-col items-center gap-3">
@@ -201,7 +241,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
               style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}
               data-call-corner=""
             >
-              <StreamVideo stream={corner} mirrored={!swapped && call.facing === 'user'} className="size-full" />
+              <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} className="size-full" />
             </button>
           ) : null}
         </div>
@@ -213,6 +253,18 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
   const controls = (() => {
     if (phase === 'incoming') {
       return (
+        <div className="flex flex-col gap-6">
+          <div className="flex justify-center">
+            <RoundButton
+              label={translate(language, 'callDecline.title')}
+              caption={translate(language, 'callDecline.open')}
+              size={48}
+              glyph={screenGlyph('chatCircleText', 22)}
+              onPress={() => setDeclineOpen(true)}
+              popup
+              control="decline-message"
+            />
+          </div>
         <div className="flex items-start justify-around gap-6 px-8">
           <RoundButton label={t('call.decline')} caption={t('call.decline')} tone="danger" size={68} glyph={screenGlyph('phoneDisconnect', 30)} onPress={callActions.decline} />
           {call.media === 'video' ? (
@@ -227,6 +279,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
             onPress={() => callActions.accept()}
           />
         </div>
+        </div>
       );
     }
     if (phase === 'ended') {
@@ -238,6 +291,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
       );
     }
     const hasCaptions = call.captions.length > 0;
+    const shareOffered = canShare && (phase === 'connected' || phase === 'reconnecting');
     return (
       <div className="flex flex-wrap items-start justify-center gap-4 px-4">
         <RoundButton
@@ -253,8 +307,19 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           tone={call.cameraOn ? 'active' : 'plain'}
           glyph={screenGlyph(call.cameraOn ? 'videoCamera' : 'videoCameraSlash')}
           onPress={callActions.toggleCamera}
+          disabled={call.screenSharing}
         />
         {call.cameraOn ? <RoundButton label={t('call.camera.switch')} glyph={screenGlyph('cameraRotate')} onPress={callActions.switchCamera} /> : null}
+        {shareOffered || call.screenSharing ? (
+          <RoundButton
+            label={t(call.screenSharing ? 'call.screen.stop' : 'call.screen.share')}
+            pressed={call.screenSharing}
+            tone={call.screenSharing ? 'active' : 'plain'}
+            glyph={screenGlyph('monitorArrowUp')}
+            onPress={callActions.toggleScreen}
+            marker="data-call-screen-share"
+          />
+        ) : null}
         {hasCaptions ? (
           <RoundButton
             label={t(call.captionsOn ? 'call.captions.off' : 'call.captions.on')}
@@ -269,7 +334,7 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
     );
   })();
 
-  const overlayVideo = layout === 'video-duo';
+  const overlayVideo = layout === 'video-duo' || layout === 'screen';
 
   return (
     <div
@@ -294,6 +359,11 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
               {call.title}
               {clock === null ? null : ` · ${clock}`}
             </span>
+            {sharer === null ? null : (
+              <span className="rounded-full px-3 py-1 text-mini" style={{ background: 'rgba(0,0,0,0.55)', color: INK }} role="status" data-call-screen-banner="">
+                {translate(language, 'call.screen.peerSharing', { name: sharer.name })}
+              </span>
+            )}
             {pillRow}
           </div>
         ) : (
@@ -310,6 +380,11 @@ export function CallScreen({ call }: { readonly call: ActiveCall }) {
           </p>
         )}
         <div className="pb-6">{controls}</div>
+        {declineOpen && phase === 'incoming' ? (
+          <Suspense fallback={null}>
+            <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   );

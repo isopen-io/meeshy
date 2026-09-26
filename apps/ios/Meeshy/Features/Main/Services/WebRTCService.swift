@@ -738,3 +738,30 @@ extension WebRTCService: WebRTCClientDelegate {
         }
     }
 }
+
+// MARK: - Screen share (#8063)
+
+extension WebRTCService: ScreenShareVideoRouting {
+    func beginScreenShareTrack() async throws -> ScreenShareTrackActivation {
+        #if canImport(WebRTC)
+        guard let client = client as? P2PWebRTCClient else { throw WebRTCError.notSupported }
+        return try await client.beginScreenShareTrack()
+        #else
+        throw WebRTCError.notSupported
+        #endif
+    }
+
+    func endScreenShareTrack(restoreCamera: Bool) async -> Bool {
+        #if canImport(WebRTC)
+        guard let client = client as? P2PWebRTCClient else { return false }
+        let needsRenegotiation = await client.endScreenShareTrack(restoreCamera: restoreCamera)
+        // La caméra rebranchée reprend le palier de qualité COURANT (et le gel
+        // de survie s'il est actif), jamais l'encodage par défaut — même
+        // raison que `upgradeToVideo`.
+        if restoreCamera { applyVideoQuality(currentQualityLevel) }
+        return needsRenegotiation
+        #else
+        return false
+        #endif
+    }
+}

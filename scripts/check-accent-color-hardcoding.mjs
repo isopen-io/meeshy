@@ -146,8 +146,26 @@
 // propre `accentColor`. Même vocabulaire que #6793 ci-dessus (la CHAÎNE, par
 // opposition à la COULEUR) : relever plutôt que renommer. Aucun littéral ne
 // bouge (118).
+//
+// 2026-09-26 (#8099, #8101) — variables inconnues 432 → 437. CINQ appels neufs,
+// tous sous le nom ÉTABLI `accentHex` (la CHAÎNE, par opposition à la COULEUR,
+// même vocabulaire que #6793 et #7945 ci-dessus) : la carte de conversation
+// dans la bulle (`ConversationLinkCard`, `ConversationLinkCardBody` — dont
+// l'accent est CALCULÉ depuis la carte par `accentHex(for:)` —,
+// `ConversationLinkCardActionsRow`) et la carte de visite
+// (`ContactCardView`, deux appels, `ContactCardDetailSheet`). Chacun peint
+// l'accent de la carte reçu de son hôte, jamais une couleur en dur. Aucun
+// littéral ne bouge (118). Valeur MESURÉE sur `dev` le 2026-09-26.
+//
+// 2026-09-26 (#8103) — variables inconnues 437 → 439. DEUX appels neufs dans
+// `MediaHub/ConversationMediaHubCells.swift`, l'écran « Médias, liens et
+// documents » : l'icône d'une ligne de document et la capsule du segment
+// choisi, toutes deux à l'accent de la conversation reçu sous le nom ÉTABLI
+// `accentHex` (même vocabulaire que #6793, #7945, #8099). La vignette
+// `attachment.thumbnailColor` n'est qu'un DÉPLACEMENT depuis
+// `ConversationInfoSheet` (compte inchangé). Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 432;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 439;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

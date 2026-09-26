@@ -208,6 +208,47 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertFalse(items.contains { $0.name == "languages" }, "\(items)")
     }
 
+    // MARK: - listMedia kinds / q (#8103)
+
+    func test_listMedia_visualOnly_sendsNoKindsSoAPre8098GatewayStillAnswers() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.visual], query: nil, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(items.contains { $0.name == "kinds" }, "\(items)")
+        XCTAssertFalse(items.contains { $0.name == "q" }, "\(items)")
+    }
+
+    func test_listMedia_withKinds_sendsTheUnionDeduplicatedInOrder() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.document, .audio, .document], query: nil, before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "kinds", value: "document,audio")), "\(items)")
+    }
+
+    func test_listMedia_withQuery_sendsTheTrimmedTerm() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.link], query: "  facture ", before: "m9", limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(items.contains(URLQueryItem(name: "q", value: "facture")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "kinds", value: "link")), "\(items)")
+        XCTAssertTrue(items.contains(URLQueryItem(name: "before", value: "m9")), "\(items)")
+    }
+
+    func test_listMedia_withQueryShorterThanTheGatewayMinimum_sendsNoQ() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listMedia(conversationId: convId, kinds: [.document], query: " a ", before: nil, limit: 30, languages: nil)
+
+        let items = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(items.contains { $0.name == "q" }, "\(items)")
+    }
+
     // MARK: - listAfter
 
     func testListAfterCallsWithCorrectEndpoint() async throws {

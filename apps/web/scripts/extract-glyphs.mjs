@@ -698,6 +698,20 @@ emit({
  * `caretLeft`, `lock` et `warningCircle` restent au SOCLE. Charge avec la route
  * `/me/starred-messages`, jamais dans le socle.
  */
+/**
+ * LE JEU DE LA NOTE D'APRÈS-APPEL (#8072) — les étoiles de la carte qui
+ * suit un appel ; chargé avec cette carte, jamais dans le socle.
+ */
+const CALL_FEEDBACK = ['star', 'star-fill', 'x'];
+
+emit({
+  ids: CALL_FEEDBACK,
+  output: join(HERE, '../src/components/glyphs-call-feedback.ts'),
+  constant: 'CALL_FEEDBACK_GLYPHS',
+  type: 'CallFeedbackGlyphName',
+  role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
+});
+
 const STARRED = ['star', 'star-fill', 'chats-circle'];
 
 emit({
@@ -767,7 +781,7 @@ emit({
   role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
 });
 
-const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing', 'dots-nine', 'backspace', 'arrows-down-up', 'calendar-blank'];
 
 emit({
   ids: CALLS,
@@ -790,17 +804,39 @@ emit({
  * | `arrow.down.right.and.arrow.up.left` (reduire) | `arrows-in-simple` |
  * | `captions.bubble` (sous-titres) | `closed-captioning` |
  * | `wifi.exclamationmark` (connexion instable) | `cell-signal-low` |
+ * | `rectangle.on.rectangle` (partager l'ecran, #8063) | `monitor-arrow-up` |
  *
  * `phone` et `microphone` restent au SOCLE. Charge avec l'ecran d'appel, jamais dans le socle.
  */
-const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low'];
+const CALL_SCREEN = ['phone-disconnect', 'microphone-slash', 'video-camera', 'video-camera-slash', 'camera-rotate', 'arrows-in-simple', 'closed-captioning', 'cell-signal-low', 'monitor-arrow-up', 'chat-circle-text'];
 
 emit({
   ids: CALL_SCREEN,
   output: join(HERE, '../src/components/glyphs-call-screen.ts'),
   constant: 'CALL_SCREEN_GLYPHS',
   type: 'CallScreenGlyphName',
-  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres et qualite, charge avec l'ecran d'appel, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de l'appel audio et video (#6382) : raccrocher, micro, camera, reduire, sous-titres, qualite et partage d'ecran, charge avec l'ecran d'appel, jamais dans le socle.",
+});
+
+/**
+ * CONTINUER A DISCUTER PENDANT L'APPEL (#8046) — miroir de `CallBubbleView.swift`
+ * et `PiPCallController.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pip.enter` (image dans l'image) | `picture-in-picture` |
+ * | `slider.horizontal.3` (peripheriques) | `sliders-horizontal` |
+ * | `arrow.down.right` (replier la pastille en bulle) | `arrow-down-right` |
+ *
+ * Un jeu a part plutot qu'une ligne de plus au jeu d'ecran : charge avec la
+ * couche d'appel, comme lui, sans reecrire un fichier que d'autres lots touchent.
+ */
+emit({
+  ids: ['picture-in-picture', 'sliders-horizontal', 'arrow-down-right'],
+  output: join(HERE, '../src/components/glyphs-call-devices.ts'),
+  constant: 'CALL_DEVICES_GLYPHS',
+  type: 'CallDevicesGlyphName',
+  role: "LE JEU DE LA BULLE, DE L'IMAGE DANS L'IMAGE ET DES PERIPHERIQUES (#8046), charge avec la couche d'appel, jamais dans le socle.",
 });
 
 /**

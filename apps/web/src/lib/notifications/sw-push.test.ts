@@ -300,6 +300,18 @@ describe('le worker AFFICHE ce que le serveur a composé — il ne re-résout ri
     expect(worker.shown[0]?.options['data']).toEqual({ notificationId: 'n1', conversationId: 'abc' });
   });
 
+  test('« X a rejoint Meeshy » garde le pseudonyme qui route son tap, jamais son avatar (#8105)', async () => {
+    const worker = mount();
+    await worker.dispatch(
+      'push',
+      push({
+        notification: { title: 'Maman a rejoint Meeshy', body: 'Dites-lui bonjour' },
+        data: { notificationId: 'n2', type: 'contact_joined', senderUsername: 'awa', senderAvatar: 'https://gate.meeshy.me/a.png' },
+      }),
+    );
+    expect(worker.shown[0]?.options['data']).toEqual({ notificationId: 'n2', type: 'contact_joined', senderUsername: 'awa' });
+  });
+
   test('`unreadCount` pose le badge de l’application', async () => {
     const worker = mount({ clients: [windowClient('visible')] });
     await worker.dispatch('push', push(banner({ notificationId: 'n1', conversationId: 'abc', unreadCount: '7' })));
@@ -457,6 +469,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/discover?onglet=requests&demandes=received']);
   });
 
+  test('« X a rejoint Meeshy » ouvre le profil de l’arrivant (#8105)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'contact_joined', senderUsername: 'awa' }).event);
+    expect(worker.opened).toEqual(['/u/awa']);
+  });
+
   test('sans destination, le tap ouvre la liste des notifications — il atterrit toujours', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'un_type_sans_ecran' }).event);
@@ -469,6 +487,7 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       story: '/story/$post',
       post: '/post/$post',
       discover: '/discover',
+      userProfile: '/u/$username',
       progression: '/me/progression',
       settings: '/settings',
       notifications: '/notifications',

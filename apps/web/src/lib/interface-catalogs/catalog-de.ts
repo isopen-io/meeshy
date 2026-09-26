@@ -1,13 +1,23 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
+import deMediaHub from './catalog-de-media-hub';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
+import deRowActions from './catalog-de-row-actions';
+import deCallShell from './catalog-de-call-shell';
+import deCallJoin from './catalog-de-call-join';
+import deCallDecline from './catalog-de-call-decline';
+import deCallFeedback from './catalog-de-call-feedback';
+import deCallDevices from './catalog-de-call-devices';
+import deCallScreen from './catalog-de-call-screen';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
+import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
+import deContactCard from './catalog-de-contact-card';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -99,6 +109,7 @@ const de = {
   'feed.post.media.next': 'Nächstes Medium',
   'feed.post.media.mosaic': 'Mosaik aus {count} Medien',
   'media.unavailable': 'Medium nicht verfügbar',
+  'media.retry': 'Erneut versuchen',
   'feed.post.see_more': 'mehr anzeigen',
   'feed.post.see_less': 'weniger anzeigen',
   'feed.post.more_options': 'Weitere Optionen',
@@ -190,9 +201,17 @@ const de = {
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
+  ...deMediaHub,
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,
+  ...deRowActions,
+  ...deCallShell,
+  ...deCallJoin,
+  ...deCallDecline,
+  ...deCallFeedback,
+  ...deCallDevices,
+  ...deCallScreen,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
@@ -425,6 +444,9 @@ const de = {
   'settings.privacy.read_receipts.info':
     'Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.',
   'settings.privacy.typing_indicator': 'Schreibanzeige',
+  'settings.privacy.hide_from_search': 'Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben',
+  'settings.privacy.hide_from_search.info':
+    'Deine Kontakte finden dich nicht über deine Nummer oder E-Mail und werden nicht benachrichtigt, wenn du beitrittst.',
   'settings.section.appearance': 'Erscheinungsbild',
   'settings.theme': 'Design',
   'settings.theme.auto': 'Auto',
@@ -1011,6 +1033,8 @@ const de = {
 
   'thread.unread-separator.one': '{count} ungelesene Nachricht',
   'thread.unread-separator.other': '{count} ungelesene Nachrichten',
+  'thread.long-message.read-more': 'Weiterlesen',
+  'thread.long-message.collapse': 'Weniger anzeigen',
   'message-detail.info.title': 'Nachrichteninfo',
   'message-detail.received-by': 'Erhalten von',
   'message-detail.read-by': 'Gelesen von',
@@ -1119,7 +1143,9 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deConversationCard,
   ...deStoriesMine,
+  ...deContactCard,
 } satisfies InterfaceCatalog;
 
 export default de;

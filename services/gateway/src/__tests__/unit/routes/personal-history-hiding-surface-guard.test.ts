@@ -362,6 +362,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "l'appliquer rendrait une statistique différente par lecteur, pour une " +
       'valeur qui est stockée une fois et lue par tout le monde.',
   },
+  'conversationCard.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Décompte des messages d'une carte de conversation (#8099) — un AGRÉGAT " +
+      "affiché à côté du nombre de membres, identique pour tout lecteur, jamais " +
+      'une liste : aucun message ne sort, seul le nombre. Même raison que ' +
+      '`ConversationMessageStatsService.ts`.',
+  },
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
     reads: 1,

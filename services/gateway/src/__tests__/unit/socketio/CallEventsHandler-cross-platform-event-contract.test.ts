@@ -28,6 +28,7 @@ const REPO_ROOT = join(__dirname, '../../../../../..');
 const CALL_SIGNALING_SOURCE_FILES = [
   'apps/ios/Meeshy/Features/Main/Services/CallManager.swift',
   'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift',
+  'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ScreenShare.swift',
   'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
 ];
 

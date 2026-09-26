@@ -1,4 +1,5 @@
 import Foundation
+import Contacts
 import MeeshySDK
 import os
 
@@ -47,6 +48,8 @@ final class OnboardingViewModel: ObservableObject {
     /// Ce que le serveur a VRAIMENT crédité pour le salut et la story (#7908).
     @Published private(set) var greetingReward: Int?
     @Published private(set) var storyReward: Int?
+    /// La proposition « retrouver tes amis » de la carte 4 (#8105).
+    @Published private(set) var contactsPhase: OnboardingContactsPhase = .unavailable
 
     private(set) var storyDefaultVisibility: OnboardingStoryVisibility = .friends
     private(set) var globalConversationId: String?
@@ -65,6 +68,8 @@ final class OnboardingViewModel: ObservableObject {
     private let settled: any OnboardingSettledStoring
     private let auth: any AuthServiceProviding
     private let pause: (Duration) async -> Void
+    private let contacts: any ContactSyncProviding
+    private let directory: any ContactDirectoryServiceProviding
 
     private var queue: [OnboardingStepId] = []
     private var producedSomething = false
@@ -100,7 +105,9 @@ final class OnboardingViewModel: ObservableObject {
         applyUser: ((MeeshyUser) -> Void)? = nil,
         settled: any OnboardingSettledStoring = UserDefaultsOnboardingSettledStore(),
         auth: any AuthServiceProviding = AuthService.shared,
-        pause: ((Duration) async -> Void)? = nil
+        pause: ((Duration) async -> Void)? = nil,
+        contacts: any ContactSyncProviding = ContactSyncService.shared,
+        directory: any ContactDirectoryServiceProviding = ContactDirectoryService.shared
     ) {
         self.service = service
         self.messages = messages
@@ -113,6 +120,8 @@ final class OnboardingViewModel: ObservableObject {
         self.settled = settled
         self.auth = auth
         self.pause = pause ?? { try? await Task.sleep(for: $0) }
+        self.contacts = contacts
+        self.directory = directory
     }
 
     // MARK: - Lecture
@@ -221,7 +230,12 @@ final class OnboardingViewModel: ObservableObject {
         suggestions = state.suggestions
         storyNeedsEmailVerification = state.canPublishStory == false
         servedStepRewards = state.stepRewards
-        queue = OnboardingFlow.pendingGestureSteps(for: state)
+        let contactsStatus = contacts.authorizationStatus()
+        contactsPhase = OnboardingContacts.initialPhase(for: contactsStatus)
+        queue = OnboardingFlow.pendingGestureSteps(
+            for: state,
+            contactsOfferable: OnboardingContacts.isOfferable(contactsStatus)
+        )
         producedSomething = OnboardingFlow.alreadyProduced(state)
         let notificationsUnseen = !state.seenSteps.contains(.notifications)
         notificationsPending = notificationsUnseen ? await permission.currentStatus() == .notDetermined : false
@@ -517,6 +531,70 @@ final class OnboardingViewModel: ObservableObject {
             requestedProfileIds.remove(id)
             failedProfileId = id
         }
+    }
+
+    /// La carte 4 est à l'écran. Un accès aux contacts DÉJÀ accordé lance la
+    /// recherche sans rien demander : la permission a été consentie ailleurs,
+    /// et proposer un bouton pour un geste déjà acquis serait un détour.
+    func friendsCardAppeared() async {
+        guard card == .step(.friends), contactsPhase == .offer,
+              OnboardingContacts.searchesOnArrival(contacts.authorizationStatus()) else { return }
+        await findFriendsInContacts()
+    }
+
+    /// « Retrouver mes amis » : la fenêtre système si elle n'a jamais servi,
+    /// puis la synchronisation du Répertoire (le chemin de l'onglet Contacts)
+    /// et la lecture des contacts qui ont un compte.
+    func findFriendsInContacts() async {
+        guard card == .step(.friends) else { return }
+        switch contactsPhase {
+        case .offer, .failed: break
+        default: return
+        }
+        contactsPhase = .searching
+        guard await contacts.requestAccess() else {
+            await contactsDeclined()
+            return
+        }
+        do {
+            _ = try await contacts.syncDirectory(mode: .replace)
+            let listed = try await directory.listAll(filter: .meeshy, query: nil)
+            contactsPhase = .found(OnboardingContacts.friends(from: listed, excluding: user?.id))
+            // « On te prévient dès qu'un ami arrive » : la promesse appelle la
+            // carte notifications, comme tout geste qui peut appeler une réponse.
+            producedSomething = true
+        } catch {
+            Self.logger.error("onboarding contacts sync failed: \(error.localizedDescription, privacy: .public)")
+            contactsPhase = .failed
+        }
+    }
+
+    /// « Plus tard » sur la proposition : les suggestions, inchangées — ou,
+    /// s'il n'y en a aucune, la carte suivante.
+    func declineContacts() async {
+        guard card == .step(.friends), contactsPhase == .offer else { return }
+        await contactsDeclined()
+    }
+
+    private func contactsDeclined() async {
+        contactsPhase = .declined
+        guard suggestions.isEmpty else { return }
+        await continueFromFriends()
+    }
+
+    /// Retour de Réglages : un accès rendu relance la recherche.
+    func refreshContactsAccess() async {
+        guard card == .step(.friends), contactsPhase == .deniedBySystem else { return }
+        let status = contacts.authorizationStatus()
+        guard OnboardingContacts.searchesOnArrival(status) else { return }
+        contactsPhase = .offer
+        await findFriendsInContacts()
+    }
+
+    /// Les rangées de la carte 4 : amis du carnet d'abord, suggestions ensuite.
+    var friendRows: [APIOnboardingSuggestion] {
+        guard case .found(let found) = contactsPhase else { return suggestions }
+        return OnboardingContacts.rows(found: found, suggestions: suggestions)
     }
 
     func continueFromFriends() async {

@@ -527,14 +527,17 @@ public struct MeeshyAvatar: View {
         makeInitials(from: name)
     }
 
+    /// Seules les LETTRES comptent (#8143) : un nom de carnet « Théo (foot) »
+    /// donne « TF », jamais « T( » ; un mot sans lettre (emoji, ponctuation)
+    /// est sauté. Sans aucune lettre, le premier caractère reste le repli.
     nonisolated static func makeInitials(from name: String) -> String {
-        let parts = name.components(separatedBy: " ")
+        let parts = name.split(whereSeparator: \.isWhitespace)
+            .compactMap { $0.first(where: \.isLetter) }
             .prefix(2)
-            .compactMap(\.first)
             .map(String.init)
             .joined()
             .uppercased()
-        return parts.isEmpty ? String(name.prefix(1)).uppercased() : parts
+        return parts.isEmpty ? String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased() : parts
     }
 
 }

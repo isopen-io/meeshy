@@ -616,6 +616,7 @@ export const CLIENT_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_TOGGLE_AUDIO: 'call:toggle-audio',
   CALL_TOGGLE_VIDEO: 'call:toggle-video',
+  CALL_TOGGLE_SCREEN: 'call:toggle-screen',
   CALL_END: 'call:end',
   CALL_HEARTBEAT: 'call:heartbeat',
   CALL_QUALITY_REPORT: 'call:quality-report',

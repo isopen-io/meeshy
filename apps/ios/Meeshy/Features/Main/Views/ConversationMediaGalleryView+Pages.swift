@@ -68,6 +68,9 @@ struct GalleryImagePage: View, Equatable {
     @State private var committedScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var committedOffset: CGSize = .zero
+    /// Un fichier introuvable (404/410/refus) sort de l'état « chargement »
+    /// vers un état dessiné avec « Réessayer » (#8141).
+    @State private var loadPhase = GalleryImageLoadPhase()
 
     private static let maxScale: CGFloat = 5
     private static let dismissThreshold: CGFloat = 150
@@ -128,7 +131,9 @@ struct GalleryImagePage: View, Equatable {
                                                    thumbHash: attachment.thumbHash)
             )
 
-            if hasRenderableSource {
+            if hasRenderableSource, rendersFullPixels, loadPhase.isFailed {
+                GalleryMediaUnavailableView(onRetry: { loadPhase.retry() })
+            } else if hasRenderableSource {
                 imageLayer
                     /*
                      **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
@@ -255,14 +260,17 @@ struct GalleryImagePage: View, Equatable {
                 isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
             )
             if let mount {
+                let attempt = loadPhase.attempt
                 ProgressiveCachedImage(
                     thumbHash: mount.backdropThumbHash,
                     thumbnailUrl: mount.isResident ? nil : thumbnailURL,
                     fullUrl: mount.fullURL,
-                    autoLoad: true
+                    autoLoad: true,
+                    onFullImageFailure: { loadPhase.fail(attempt: attempt) }
                 ) {
                     ProgressView().tint(.white)
                 }
+                .id(attempt)
             } else {
                 emptyStateGlyph
             }

@@ -204,6 +204,10 @@ function makeSelectAwareUserUpdate(fullUser: Record<string, any>) {
  */
 function makePrisma(overrides: Record<string, any> = {}) {
   const base: Record<string, any> = {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),

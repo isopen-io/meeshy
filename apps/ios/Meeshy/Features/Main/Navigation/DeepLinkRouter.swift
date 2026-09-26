@@ -59,6 +59,17 @@ enum DeepLinkParser {
 
     private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
 
+    /// Un hôte Meeshy : ceux de la production, plus l'hôte web de
+    /// l'environnement SÉLECTIONNÉ (`staging.meeshy.me` sur staging) — la
+    /// recette voit ce que la production verra (#8140). Égalité EXACTE : un
+    /// hôte qui ne fait que commencer ou finir comme celui-ci reste étranger.
+    static func isMeeshyHost(_ host: String, environmentWebOrigin: String) -> Bool {
+        let host = host.lowercased()
+        if meeshyHosts.contains(host) { return true }
+        guard let environmentHost = URL(string: environmentWebOrigin)?.host?.lowercased() else { return false }
+        return host == environmentHost || host == "www.\(environmentHost)"
+    }
+
     /// Segments accepted as the "post" keyword in any deep link shape. The
     /// short alias `p` mirrors the long form `post` so handwritten/dictated
     /// `meeshy://p/<id>` or `meeshy://feeds/p/<id>` URLs resolve to the
@@ -139,12 +150,12 @@ enum DeepLinkParser {
     /// - `meeshy://auth/magic-link?token=...`
     ///
     /// Everything else -> `.external` (caller opens in Safari).
-    static func parse(_ url: URL) -> DeepLinkDestination {
+    static func parse(_ url: URL, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> DeepLinkDestination {
         if url.scheme?.lowercased() == "meeshy" {
             return parseCustomScheme(url)
         }
 
-        if let host = url.host?.lowercased(), meeshyHosts.contains(host) {
+        if let host = url.host, isMeeshyHost(host, environmentWebOrigin: environmentWebOrigin) {
             return parseMeeshyWeb(url)
         }
 

@@ -176,7 +176,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // d'accueil). Aucun alias, aucune route retirée ni renommée.
     // 69 : #7938 ajoute `me-stickers` — quatre routes NEUVES sous
     // `/api/v1/me/stickers` (la bibliothèque « Mes stickers »). Aucun alias.
-    expect(ROUTE_TABLE.length).toBe(69);
+    // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
+    // /api/v1/contacts/resolve` (la carte de visite partagée), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(70);
   });
 });
 

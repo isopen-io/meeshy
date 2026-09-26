@@ -28,6 +28,7 @@ const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({
   isVideo: false,
   startedAt: '2026-09-13T09:00:00.000Z',
   durationSec: 185,
+  bytes: null,
   peer: { userId: 'u-amina', username: 'amina', displayName: 'Amina Diallo', avatar: null },
   ...overrides,
 });
@@ -42,6 +43,12 @@ describe('l’en-tête et le filtre', () => {
     expect(html).toContain('Appels');
   });
 
+  test('le pavé (#6454) s’atteint depuis l’en-tête, nommé', () => {
+    const html = renderToStaticMarkup(<CallsHeader language="fr" />);
+    expect(html).toContain('href="/calls/keypad"');
+    expect(html).toContain('aria-label="Composer un numéro"');
+  });
+
   test('« Tous » et « Manqués » sont deux boutons dont l’état se lit', () => {
     const html = renderToStaticMarkup(<CallFilterRail language="fr" selected="missed" onSelect={noop} />);
     expect(html).toContain('aria-label="Filtrer le journal d’appels"');
@@ -51,9 +58,9 @@ describe('l’en-tête et le filtre', () => {
 });
 
 describe('une ligne du journal', () => {
-  test('ouvre le fil de SA conversation', () => {
-    expect(row()).toContain('href="/c/c-amina"');
-    expect(row({ conversationId: 'c-annonces' })).toContain('href="/c/c-annonces"');
+  test('ouvre la FICHE de son appel (#6383), comme la feuille de détail d’iOS', () => {
+    expect(row()).toContain('href="/call/call-amina"');
+    expect(row({ callId: 'call-annonces' })).toContain('href="/call/call-annonces"');
   });
 
   test('manqué, reçu et émis se distinguent par le GLYPHE et par le LIBELLÉ, pas par la couleur seule', () => {

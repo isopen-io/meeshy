@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type { HttpRequest } from '@/lib/api/http';
 import type { SessionState } from '@/lib/api/session';
-import type { PushTapTarget } from '@/lib/notifications/target';
+import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
   SHELL_PUSH_CHANNEL_ID,
@@ -214,6 +214,13 @@ describe('ce que la coque lit de la charge', () => {
     expect(Object.values(input)).not.toContain('Bonjour');
     expect(Object.values(input)).not.toContain('Hello');
     expect(input.conversationId).toBe('c1');
+  });
+
+  test('« X a rejoint Meeshy » mène la coque au profil de l’arrivant (#8105)', () => {
+    expect(pushTapTarget(shellPushTargetInput({ type: 'contact_joined', senderUsername: 'awa' }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'awa' },
+    });
   });
 
   test('une remise sans message ni conversation n’est pas une remise', () => {

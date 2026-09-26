@@ -18,9 +18,9 @@ import type { ApiResult, HttpRequest, HttpTransport } from './http';
  * Il ne lit et n'écrit QUE les réglages que l'écran montre, et que la
  * passerelle OBÉIT : le thème (relu par iOS, `ThemeManager.observeRemoteThemeSync`),
  * les notifications poussées et leur son (`PushNotificationService`), et les
- * quatre bascules de visibilité (`PresenceVisibilityService`,
+ * quatre bascules de visibilité, et la discrétion de la recherche par identifiant (#8105) (`PresenceVisibilityService`,
  * `MeeshySocketIOManager`, `MessageReadStatusService`). Le cache de requêtes
- * est persisté : rien d'autre que ces sept valeurs n'y entre.
+ * est persisté : rien d'autre que ces huit valeurs n'y entre.
  */
 
 const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
@@ -31,6 +31,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     showLastSeen: true,
     showReadReceipts: true,
     showTypingIndicator: false,
+    hideProfileFromSearch: true,
     allowAnalytics: true,
     ...overrides.privacy,
   },
@@ -44,6 +45,7 @@ const expected: AppPreferences = {
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: false,
+  hideProfileFromSearch: true,
 };
 
 const transportAnswering = (answer: ApiResult<unknown>) => {
@@ -58,7 +60,7 @@ const transportAnswering = (answer: ApiResult<unknown>) => {
 };
 
 describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () => {
-  test('rend exactement les sept réglages de l’écran', () => {
+  test('rend exactement les huit réglages de l’écran', () => {
     expect(decodeAppPreferences(wire())).toEqual(expected);
   });
 
@@ -100,13 +102,17 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
     });
   });
 
+  test('« ne pas me proposer » part sous `privacy`, là où la recherche par identifiant la lit (#8105)', () => {
+    expect(preferencesPatchBody({ hideProfileFromSearch: true })).toEqual({ privacy: { hideProfileFromSearch: true } });
+  });
+
   test('une catégorie que le geste ne touche pas ne part pas', () => {
     expect(Object.keys(preferencesPatchBody({ soundEnabled: true }))).toEqual(['notification']);
   });
 });
 
 describe('loadAppPreferences — une seule lecture, bornée à ce que l’écran montre', () => {
-  test('demande les sept champs, et rien d’autre', async () => {
+  test('demande les huit champs, et rien d’autre', async () => {
     const { calls, transport } = transportAnswering({ ok: true, data: wire() });
     const result = await loadAppPreferences({ source: 'gateway', transport });
     expect(calls).toHaveLength(1);
@@ -142,7 +148,7 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls[0]?.body).toEqual({ privacy: { showTypingIndicator: true } });
     expect(result).toEqual({
       ok: true,
-      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false },
+      data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false, hideProfileFromSearch: true },
     });
   });
 

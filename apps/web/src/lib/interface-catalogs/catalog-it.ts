@@ -1,13 +1,23 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
+import itMediaHub from './catalog-it-media-hub';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
+import itRowActions from './catalog-it-row-actions';
+import itCallShell from './catalog-it-call-shell';
+import itCallJoin from './catalog-it-call-join';
+import itCallDecline from './catalog-it-call-decline';
+import itCallFeedback from './catalog-it-call-feedback';
+import itCallDevices from './catalog-it-call-devices';
+import itCallScreen from './catalog-it-call-screen';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
+import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
+import itContactCard from './catalog-it-contact-card';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -99,6 +109,7 @@ const it = {
   'feed.post.media.next': 'Media successivo',
   'feed.post.media.mosaic': 'Mosaico di {count} media',
   'media.unavailable': 'Contenuto non disponibile',
+  'media.retry': 'Riprova',
   'feed.post.see_more': 'mostra altro',
   'feed.post.see_less': 'mostra meno',
   'feed.post.more_options': 'Altre opzioni',
@@ -190,9 +201,17 @@ const it = {
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
+  ...itMediaHub,
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
+  ...itRowActions,
+  ...itCallShell,
+  ...itCallJoin,
+  ...itCallDecline,
+  ...itCallFeedback,
+  ...itCallDevices,
+  ...itCallScreen,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
@@ -425,6 +444,9 @@ const it = {
   'settings.privacy.read_receipts.info':
     'È reciproco: se non invii conferme di lettura, non vedrai nemmeno se i tuoi messaggi sono stati letti.',
   'settings.privacy.typing_indicator': 'Indicatore di digitazione',
+  'settings.privacy.hide_from_search': 'Non propormi a chi ha il mio numero o la mia email',
+  'settings.privacy.hide_from_search.info':
+    'I tuoi contatti non ti troveranno tramite il tuo numero o la tua email, e non saranno avvisati del tuo arrivo.',
   'settings.section.appearance': 'Aspetto',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1011,6 +1033,8 @@ const it = {
 
   'thread.unread-separator.one': '{count} messaggio non letto',
   'thread.unread-separator.other': '{count} messaggi non letti',
+  'thread.long-message.read-more': 'Continua a leggere',
+  'thread.long-message.collapse': 'Mostra meno',
   'message-detail.info.title': 'Informazioni sul messaggio',
   'message-detail.received-by': 'Ricevuto da',
   'message-detail.read-by': 'Letto da',
@@ -1119,7 +1143,9 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itConversationCard,
   ...itStoriesMine,
+  ...itContactCard,
 } satisfies InterfaceCatalog;
 
 export default it;

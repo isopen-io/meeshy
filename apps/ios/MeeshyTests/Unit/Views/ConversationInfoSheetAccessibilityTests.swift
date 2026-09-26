@@ -4,13 +4,13 @@ import XCTest
 @MainActor
 final class ConversationInfoSheetAccessibilityTests: XCTestCase {
 
-    private func sheetSource() throws -> String {
+    private func sheetSource(named file: String = "ConversationInfoSheet.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/\(file)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -49,7 +49,8 @@ final class ConversationInfoSheetAccessibilityTests: XCTestCase {
         // Anchored on the pinned sheet's navigation title (unique) rather than
         // `showAllPinnedMessages = false` — the latter first matches the @State
         // declaration far above the toolbar button.
-        let source = try sheetSource()
+        // #8103 — la feuille des épinglés a quitté la fiche pour son extension.
+        let source = try sheetSource(named: "ConversationInfoSheet+Pinned.swift")
         let nearClose = try vicinity(after: "conversation.info.pinned.title", in: source, span: 900)
         XCTAssertTrue(
             nearClose.contains("common.close"),

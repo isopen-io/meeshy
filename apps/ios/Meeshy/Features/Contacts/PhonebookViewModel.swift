@@ -288,7 +288,11 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Message d'invitation pour un contact hors plateforme.
     func invitationMessage(for contact: DirectoryContact) -> String {
-        let name = contact.resolvedName
+        Self.invitationMessage(name: contact.resolvedName)
+    }
+
+    /// Le texte d'invitation UNIQUE — répertoire et carte de visite (#8101).
+    nonisolated static func invitationMessage(name: String) -> String {
         let greeting = name.isEmpty ? "Salut" : "Salut \(name)"
         return "\(greeting) ! Rejoins-moi sur Meeshy : https://meeshy.me/download"
     }

@@ -144,7 +144,11 @@ struct iPadPanelDestination: View {
                 onNotificationTap: { notification in
                     onNotificationTap(notification)
                 },
-                onDismiss: { rightPanelRoute = nil }
+                onDismiss: { rightPanelRoute = nil },
+                onQuickAction: { action in
+                    await NotificationQuickActionPerformer(openConversation: onOpenConversation)
+                        .perform(action)
+                }
             )
                         .navigationBarHidden(true)
             .onDisappear {

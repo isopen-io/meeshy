@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { normalizeEmail, normalizePhoneNumber } from '../../utils/normalize';
@@ -490,6 +491,8 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       });
 
       logger.info(`[EMAIL_CHANGE] Email changed successfully for user ${userId} to ${user.pendingEmail}`);
+      // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
+      scheduleContactJoinedAnnouncement(fastify.prisma, userId);
 
       return sendSuccess(reply, {
         message: 'Email changed successfully',
@@ -913,6 +916,8 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       await oublierEssais(userId);
 
       logger.info(`[PHONE_CHANGE] Phone changed successfully for user ${userId} to ${user.pendingPhoneNumber}`);
+      // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
+      scheduleContactJoinedAnnouncement(fastify.prisma, userId);
 
       return sendSuccess(reply, {
         message: 'Phone number changed successfully',

@@ -115,19 +115,17 @@ export interface RateLimitInfo {
 class MemoryStore {
   private store = new Map<string, { count: number; resetAt: number }>();
 
-  async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
+  async increment(key: string, windowMs: number, amount = 1): Promise<{ count: number; resetAt: number }> {
     const now = Date.now();
     const existing = this.store.get(key);
 
     if (existing && existing.resetAt > now) {
-      // Within window, increment count
-      existing.count++;
+      existing.count += amount;
       return existing;
     }
 
-    // New window
     const resetAt = now + windowMs;
-    const record = { count: 1, resetAt };
+    const record = { count: amount, resetAt };
     this.store.set(key, record);
 
     // Cleanup old entries periodically (prevent memory leak)
@@ -169,13 +167,13 @@ class MemoryStore {
 class RedisStore {
   constructor(private redis: Redis) {}
 
-  async increment(key: string, windowMs: number): Promise<{ count: number; resetAt: number }> {
+  async increment(key: string, windowMs: number, amount = 1): Promise<{ count: number; resetAt: number }> {
     const now = Date.now();
     const windowKey = `ratelimit:${key}`;
 
-    // Use Redis transaction for atomic increment
     const pipeline = this.redis.pipeline();
-    pipeline.incr(windowKey);
+    if (amount === 1) pipeline.incr(windowKey);
+    else pipeline.incrby(windowKey, amount);
     pipeline.pttl(windowKey);
 
     const results = await pipeline.exec();
@@ -187,8 +185,7 @@ class RedisStore {
     const count = results[0]?.[1] as number;
     const ttl = results[1]?.[1] as number;
 
-    // Set expiry if this is first request in window
-    if (count === 1 || ttl === -1) {
+    if (count === amount || ttl === -1) {
       await this.redis.pexpire(windowKey, windowMs);
     }
 
@@ -256,9 +253,9 @@ export class RateLimiter {
   /**
    * Get rate limit info for a key
    */
-  private async getRateLimitInfo(key: string): Promise<RateLimitInfo> {
+  private async getRateLimitInfo(key: string, cost = 1): Promise<RateLimitInfo> {
     const fullKey = `${this.config.keyPrefix}:${key}`;
-    const result = await this.store.increment(fullKey, this.config.windowMs);
+    const result = await this.store.increment(fullKey, this.config.windowMs, cost);
 
     const remaining = Math.max(0, this.config.max - result.count);
     const reset = Math.ceil(result.resetAt / 1000); // Convert to seconds
@@ -316,6 +313,29 @@ export class RateLimiter {
         // Continue request processing
       }
     };
+  }
+
+  /**
+   * Décompte PONDÉRÉ, hors middleware (#8104).
+   *
+   * Le middleware compte des REQUÊTES ; certaines portes doivent compter ce
+   * qu'une requête TRANSPORTE. Une recherche de contacts par lot porte jusqu'à
+   * des dizaines de milliers d'identifiants : la compter pour « une requête »
+   * laissait un oracle d'énumération à grande échelle derrière un plafond
+   * nominalement bas. L'appelant, qui seul connaît le coût après avoir lu le
+   * corps, le passe ici.
+   *
+   * `null` quand la limitation est désactivée ou que le magasin est en panne —
+   * même repli que `middleware()`, qui laisse passer sur une panne du magasin.
+   */
+  async consume(key: string, cost: number): Promise<RateLimitInfo | null> {
+    if (rateLimitDisabled()) return null;
+    try {
+      return await this.getRateLimitInfo(key, Math.max(0, Math.floor(cost)));
+    } catch (error) {
+      logger.error('Rate limiter consume error', error as Error);
+      return null;
+    }
   }
 
   /**

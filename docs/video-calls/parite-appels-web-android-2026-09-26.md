@@ -76,12 +76,12 @@ Relevé du 2026-09-26 sur `dev` (`38e1eca5`) et sur le tag `legacy-web-final`. C
 | D2 | Couper le micro (+ `call:toggle-audio`, « le pair a coupé ») | ✅ | ✅ | ❌ | ❌ | 2 | |
 | D3 | Caméra on/off, passage audio → vidéo en cours d'appel | ✅ | ✅ | ❌ | ❌ | 2 | iOS `CallManager.swift:2635` · legacy `use-webrtc-p2p.ts` |
 | D4 | Caméra avant / arrière | ✅ | ✅ | ❌ | ❌ | 2 | |
-| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra | ❌ | ❌ | ❌ | 4 | web : `enumerateDevices` + `setSinkId` |
-| D6 | Haut-parleur / écouteur / Bluetooth | ✅ | 🟡 faux (coupe la vidéo) | ❌ | ❌ | 4 + 7 | coque : plugin natif de routage audio |
+| D5 | Choix d'une caméra, d'un micro, d'une sortie audio | 🟡 caméra | ❌ | ✅ | ✅ | 4 | web : `enumerateDevices` + `setSinkId` (`call-devices-sheet.tsx`, #8046) |
+| D6 | Haut-parleur / écouteur / Bluetooth | ✅ | 🟡 faux (coupe la vidéo) | ✅ `setSinkId` | ✅ routes natives | 4 + 7 | coque : plugin natif de routage audio |
 | D7 | Durée, nom, compteur de participants | ✅ | ✅ | ❌ | ❌ | 2 | legacy `CallInfoOverlay.tsx` |
 | D8 | Inverser vignette locale / distante, vignette déplaçable | ✅ | ✅ | ❌ | ❌ | 2 | legacy `LocalVideoTile.tsx`, `use-draggable.ts` |
-| D9 | **Réduire l'appel et continuer à discuter** (pastille, bulle déplaçable) | ✅ | ❌ | ❌ | ❌ | 4 | iOS `FloatingCallPillView.swift`, `CallBubbleView.swift` |
-| D10 | Image dans l'image système | ✅ | ❌ | ❌ | ❌ | 4 | iOS `PiPCallController.swift` · web : `requestPictureInPicture` / Document PiP |
+| D9 | **Réduire l'appel et continuer à discuter** (pastille, bulle déplaçable) | ✅ | ❌ | ✅ | ✅ | 4 | iOS `FloatingCallPillView.swift`, `CallBubbleView.swift` |
+| D10 | Image dans l'image système | ✅ | ❌ | ✅ | ❌ (WebView) | 4 | iOS `PiPCallController.swift` · web : `requestPictureInPicture` / Document PiP |
 | D11 | Mise en attente | ✅ CallKit | — | — | — | — | |
 | D12 | Filtres vidéo (5 préréglages, flou d'arrière-plan, lissage, basse lumière) | ✅ | 🟡 réglages jamais lus | ❌ | ❌ | 8 | iOS `VideoFilterPipeline.swift` |
 | D13 | Effets de voix | ❌ retirés | ✅ | ❌ | ❌ | 8 | legacy `use-audio-effects.ts` — décision produit |

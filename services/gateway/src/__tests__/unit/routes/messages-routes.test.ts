@@ -612,18 +612,19 @@ describe('GET /conversations/:id/messages', () => {
   const getMessagesHandler = () =>
     fastify._routes['GET']['/conversations/:id/messages'];
 
-  it('returns 403 when resolveConversationId returns null', async () => {
+  it('returns 404 when resolveConversationId returns null', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
-  it('returns 403 when canAccessConversation returns false', async () => {
+  it('returns the same 404 when canAccessConversation returns false (#8099)', async () => {
     mockCanAccessConversation.mockResolvedValue(false);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('returns empty messages list for authenticated user (happy path)', async () => {
@@ -1984,11 +1985,12 @@ describe('GET /conversations/:id/messages/search', () => {
     expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
-  it('403 when no access', async () => {
+  it('404 when no access — indistinguishable from a missing conversation (#8099)', async () => {
     mockCanAccessConversation.mockResolvedValue(false);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('returns content matches with transformed sender', async () => {

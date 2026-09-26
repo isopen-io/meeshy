@@ -12,17 +12,13 @@ import {
   conversationParticipantSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import {
-  refuserAccesConversation,
-  verdictAccesConversation,
-  type MessagesDeRefusDAcces
-} from './utils/access-control';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
+import type { MessagesDeRefusDAcces } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   disclosableEntryRights,
   resolveEntryRights,
 } from '../../services/participantRights';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
@@ -41,21 +37,17 @@ const logger = enhancedLogger.child({ module: 'ConversationParticipantReadRoutes
 /**
  * LES DEUX REFUS DE CES DEUX ROUTES NE SONT PAS LE MÊME REFUS (#4792).
  *
- * Les phrases `nonMembre` sont celles que les deux routes servaient déjà, avec
- * leur `code: 'CONVERSATION_ACCESS_DENIED'` — elles étaient JUSTES, et elles ne
- * changent pas. Ce que le booléen de `canAccessConversation` leur faisait servir
- * EN PLUS était le refus d'une session absente ou morte, qui n'est pas un refus
- * de droit : les deux routes sont montées en `optionalAuth`, une garde qui ne
- * refuse rien, donc l'appelant sans identité arrivait ici et repartait en 403.
+ * Session absente ou morte ⇒ 401 : les deux routes sont montées en
+ * `optionalAuth`, une garde qui ne refuse rien. Non-membre ⇒ le même 404 qu'un
+ * identifiant inexistant (#8099) — la liste des membres est précisément ce
+ * qu'un lien direct ne doit jamais dire à qui n'en est pas.
  */
 const REFUS_DE_LISTING: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to list the members of this conversation',
-  nonMembre: 'Access denied: you are not a member of this conversation or it no longer exists'
+  sansSession: 'Authentication required to list the members of this conversation'
 };
 
 const REFUS_DE_FICHE: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to read this member profile',
-  nonMembre: 'Access denied: you are not a member of this conversation'
+  sansSession: 'Authentication required to read this member profile'
 };
 
 /**
@@ -131,6 +123,7 @@ export function registerParticipantReadRoutes(
         },
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -141,14 +134,15 @@ export function registerParticipantReadRoutes(
       const { onlineOnly, role, search, limit, cursor } = request.query;
       const authRequest = request as UnifiedAuthRequest;
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_LISTING
+      });
       if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
-      if (acces.genre !== 'ok') {
-        return refuserAccesConversation(reply, acces, REFUS_DE_LISTING);
+        return;
       }
 
       // SSOT guard: a malformed `?limit` (string schema, no AJV coercion)
@@ -426,14 +420,15 @@ export function registerParticipantReadRoutes(
       const { id, participantId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_FICHE
+      });
       if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
-      if (acces.genre !== 'ok') {
-        return refuserAccesConversation(reply, acces, REFUS_DE_FICHE);
+        return;
       }
 
       // Chargé SANS filtre d'activité, puis trié : un avis d'arrivée reste dans

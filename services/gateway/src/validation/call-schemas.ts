@@ -249,12 +249,12 @@ export const socketSignalSchema = z.object({
 });
 
 /**
- * Socket.IO Event: call:toggle-audio / call:toggle-video
+ * Socket.IO Event: call:toggle-audio / call:toggle-video / call:toggle-screen
  */
 export const socketMediaToggleSchema = z.object({
   callId: objectIdSchema,
   enabled: z.boolean(),
-  mediaType: z.enum(['audio', 'video']).optional(),
+  mediaType: z.enum(['audio', 'video', 'screen']).optional(),
   participantId: z.string().optional()
 });
 
@@ -468,3 +468,13 @@ export const socketCallAnalyticsSchema = z.object({
   endReason: z.string().max(50),
 });
 export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;
+
+/** La note d'après-appel (#8072) — la forme de `CallQualityFeedbackEvent`. */
+export const CALL_FEEDBACK_ISSUES = ['audio_quality', 'video_quality', 'dropped', 'echo', 'sync', 'other'] as const;
+export const socketCallQualityFeedbackSchema = z.object({
+  callId: objectIdSchema,
+  rating: z.number().int().min(1).max(5),
+  issues: z.array(z.enum(CALL_FEEDBACK_ISSUES)).max(CALL_FEEDBACK_ISSUES.length).optional(),
+  comment: z.string().trim().max(500).optional(),
+});
+export type SocketCallQualityFeedbackInput = z.infer<typeof socketCallQualityFeedbackSchema>;

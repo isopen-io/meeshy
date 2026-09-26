@@ -93,7 +93,13 @@ struct BubbleAttachmentView: View {
             }
 
         case .file:
-            if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
+            // Une vCard n'est pas un document : c'est une carte de visite
+            // (#8101). Testée AVANT la détection de code, qui lirait le
+            // `text/vcard` comme du texte brut.
+            if attachment.isContactCard {
+                ContactCardView(attachment: attachment, isMe: isMe, accentHex: accentHex)
+                    .equatable()
+            } else if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
                 CodeViewerView(
                     attachment: attachment,
                     language: lang,

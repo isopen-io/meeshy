@@ -86,7 +86,7 @@ extension ConversationSyncEngine {
         let removedSet = Set(removedIds)
         for removedId in removedIds {
             await cache.messages.invalidate(for: removedId)
-            await cache.conversationMedia.invalidate(for: removedId)
+            await cache.invalidateConversationMedia(conversationId: removedId)
             await SearchIndex.shared.removeConversation(id: removedId)
         }
         await saveSorted(merged, to: "list", baseline: existing)

@@ -1,7 +1,7 @@
 import type { MeeshySocket as Socket } from './typed-socket';
 import type { CallService } from '../services/CallService';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import type { CallError, CallMediaToggleClientEvent, CallMediaToggleEvent } from '@meeshy/shared/types/video-call';
+import type { CallError, CallMediaToggleClientEvent, CallMediaToggleEvent, CallMediaType } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import { socketMediaToggleSchema } from '../validation/call-schemas';
 import { checkSocketRateLimit, SOCKET_RATE_LIMITS, type SocketRateLimiter } from '../utils/socket-rate-limiter';
@@ -43,7 +43,7 @@ export async function handleMediaToggle(
   socket: Socket,
   getUserId: (socketId: string) => string | undefined,
   data: CallMediaToggleClientEvent,
-  mediaType: 'audio' | 'video'
+  mediaType: CallMediaType
 ): Promise<void> {
   try {
     const userId = getUserId(socket.id);
@@ -100,12 +100,18 @@ export async function handleMediaToggle(
       return;
     }
     const { participantId } = resolved;
-    await deps.callService.updateParticipantMedia(
-      data.callId,
-      participantId,
-      mediaType,
-      data.enabled
-    );
+    // #8063 — le partage d'écran est un état de DIFFUSION, pas la caméra : il
+    // n'a pas de colonne, et l'écrire dans `isVideoEnabled` ferait croire à un
+    // pair qui rejoint que la caméra est allumée. Le partageur le ré-annonce à
+    // chaque arrivée (client), la passerelle ne fait que relayer.
+    if (mediaType !== 'screen') {
+      await deps.callService.updateParticipantMedia(
+        data.callId,
+        participantId,
+        mediaType,
+        data.enabled
+      );
+    }
 
     // P0-3 — broadcast to the OTHER participants only. The sender already
     // updated its own state locally and must NOT receive its own echo:
@@ -134,7 +140,7 @@ export async function handleMediaToggle(
       toggleEvent
     );
 
-    logger.info(`✅ Socket: ${mediaType === 'audio' ? 'Audio' : 'Video'} toggled`, {
+    logger.info(`✅ Socket: ${mediaType} toggled`, {
       callId: data.callId,
       userId,
       enabled: data.enabled
@@ -144,4 +150,43 @@ export async function handleMediaToggle(
 
     socket.emit(CALL_EVENTS.ERROR, { ...deps.mapMediaToggleError(error, `Failed to toggle ${mediaType}`), callId: data?.callId } as CallError);
   }
+}
+
+/**
+ * CallService lève des `Error` simples au format `"<CODE>: <description>"`
+ * (ex. `CALL_NOT_FOUND: Call session not found`, quand le pair raccroche
+ * pendant qu'une bascule est en vol). Le code réel est relayé quand il
+ * appartient à `CALL_ERROR_CODES`, pour que le client réagisse juste (nettoyage
+ * silencieux sur CALL_NOT_FOUND plutôt qu'un toast générique) ; tout le reste
+ * retombe sur le code générique, sans jamais fuir un message interne.
+ *
+ * Sorti de `CallEventsHandler` le 2026-09-26 (#8063) avec les inscriptions
+ * ci-dessous : c'est ce qui paie l'ajout de `call:toggle-screen` dans un
+ * fichier hors budget.
+ */
+export function mapMediaToggleError(error: unknown, fallbackMessage: string): CallError {
+  const message = error instanceof Error ? error.message : undefined;
+  if (!message) {
+    return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
+  }
+  const match = message.match(/^([A-Z_]+):\s*(.+)$/);
+  const knownCodes = new Set<string>(Object.values(CALL_ERROR_CODES));
+  if (match && knownCodes.has(match[1])) {
+    return { code: match[1], message: match[2] } as CallError;
+  }
+  return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
+}
+
+/**
+ * Les trois bascules de média d'un socket — micro, caméra, partage d'écran —
+ * inscrites ensemble : CVE-002 (limitation) et CVE-006 (validation) valent à
+ * l'identique pour les trois, par le corps partagé `handleMediaToggle`.
+ */
+export function registerMediaToggleListeners(
+  socket: Socket,
+  toggle: (data: CallMediaToggleClientEvent, mediaType: CallMediaType) => Promise<void>
+): void {
+  socket.on(CALL_EVENTS.TOGGLE_AUDIO, (data: CallMediaToggleClientEvent) => toggle(data, 'audio'));
+  socket.on(CALL_EVENTS.TOGGLE_VIDEO, (data: CallMediaToggleClientEvent) => toggle(data, 'video'));
+  socket.on(CALL_EVENTS.TOGGLE_SCREEN, (data: CallMediaToggleClientEvent) => toggle(data, 'screen'));
 }

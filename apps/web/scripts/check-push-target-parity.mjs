@@ -27,7 +27,7 @@
  *     `PUSH_ROUTE_PATTERNS` doit être, au caractère, celui que
  *     `route-table.tsx` déclare pour la même clé. Une route renommée ou
  *     déplacée dans l'application rougit ici.
- *  2. **Le jumeau contre le RÉSOLVEUR.** Les six tables de types de
+ *  2. **Le jumeau contre le RÉSOLVEUR.** Les sept tables de types de
  *     `target.ts` (et les deux paramètres de recherche de `discover/view.ts`)
  *     doivent être identiques dans le worker. Un type ajouté d'un seul côté
  *     rougit ici.
@@ -54,11 +54,12 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les six tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les sept tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
   'REQUEST_TYPES',
+  'PROFILE_TYPES',
   'PROGRESSION_TYPES',
   'SECURITY_TYPES',
   'HINTED_ROUTES',
@@ -126,6 +127,7 @@ const ADRESSES = [
   [{ postId: 'p1', postType: 'STORY' }, '/story/p1'],
   [{ postId: 'p1', postType: 'REEL' }, '/post/p1'],
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
+  [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],

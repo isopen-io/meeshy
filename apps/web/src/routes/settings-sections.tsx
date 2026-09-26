@@ -339,6 +339,13 @@ const PRIVACY_TOGGLES = [
     tint: 'var(--color-ios-brand)',
   },
   { key: 'showTypingIndicator', label: 'settings.privacy.typing_indicator', icon: { set: 'ecran', name: 'keyboard' }, tint: 'var(--ios-indigo-300)' },
+  {
+    key: 'hideProfileFromSearch',
+    label: 'settings.privacy.hide_from_search',
+    caption: 'settings.privacy.hide_from_search.info',
+    icon: { set: 'ecran', name: 'shieldCheck' },
+    tint: 'var(--ios-indigo-500)',
+  },
 ] as const satisfies readonly ToggleSpec[];
 
 const NOTIFICATION_TOGGLES = [

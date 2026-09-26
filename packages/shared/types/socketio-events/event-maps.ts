@@ -505,6 +505,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_SCREEN]: (data: CallMediaToggleClientEvent) => void;
   /**
    * L'ack est OPTIONNEL, et il l'est dans l'autre sens que celui de
    * `CallMediaToggleClientEvent` (cycle 107 bis) — même symptôme, résolution

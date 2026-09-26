@@ -1,13 +1,23 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
+import ptMediaHub from './catalog-pt-media-hub';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
+import ptRowActions from './catalog-pt-row-actions';
+import ptCallShell from './catalog-pt-call-shell';
+import ptCallJoin from './catalog-pt-call-join';
+import ptCallDecline from './catalog-pt-call-decline';
+import ptCallFeedback from './catalog-pt-call-feedback';
+import ptCallDevices from './catalog-pt-call-devices';
+import ptCallScreen from './catalog-pt-call-screen';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
+import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
+import ptContactCard from './catalog-pt-contact-card';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -103,6 +113,7 @@ const pt = {
   'feed.post.media.next': 'Próxima mídia',
   'feed.post.media.mosaic': 'Mosaico de {count} mídias',
   'media.unavailable': 'Mídia indisponível',
+  'media.retry': 'Tentar novamente',
   'feed.post.see_more': 'ver mais',
   'feed.post.see_less': 'ver menos',
   'feed.post.more_options': 'Mais opções',
@@ -194,9 +205,17 @@ const pt = {
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
+  ...ptMediaHub,
   ...ptVerifyEmail,
   ...ptPassword,
   ...ptCall,
+  ...ptRowActions,
+  ...ptCallShell,
+  ...ptCallJoin,
+  ...ptCallDecline,
+  ...ptCallFeedback,
+  ...ptCallDevices,
+  ...ptCallScreen,
   ...ptSignup,
   'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
@@ -429,6 +448,9 @@ const pt = {
   'settings.privacy.read_receipts.info':
     'É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas.',
   'settings.privacy.typing_indicator': 'Indicador de digitação',
+  'settings.privacy.hide_from_search': 'Não me sugerir a quem tem meu número ou e-mail',
+  'settings.privacy.hide_from_search.info':
+    'Seus contatos não vão te encontrar pelo seu número ou e-mail, e não serão avisados da sua chegada.',
   'settings.section.appearance': 'Aparência',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1015,6 +1037,8 @@ const pt = {
 
   'thread.unread-separator.one': '{count} mensagem não lida',
   'thread.unread-separator.other': '{count} mensagens não lidas',
+  'thread.long-message.read-more': 'Ler mais',
+  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Informações da mensagem',
   'message-detail.received-by': 'Recebido por',
   'message-detail.read-by': 'Lido por',
@@ -1123,7 +1147,9 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptConversationCard,
   ...ptStoriesMine,
+  ...ptContactCard,
 } satisfies InterfaceCatalog;
 
 export default pt;

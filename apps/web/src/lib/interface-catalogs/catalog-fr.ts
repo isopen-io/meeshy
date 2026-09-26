@@ -10,15 +10,25 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
+import frMediaHub from './catalog-fr-media-hub';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
+import frRowActions from './catalog-fr-row-actions';
+import frCallShell from './catalog-fr-call-shell';
+import frCallJoin from './catalog-fr-call-join';
+import frCallDecline from './catalog-fr-call-decline';
+import frCallFeedback from './catalog-fr-call-feedback';
+import frCallDevices from './catalog-fr-call-devices';
+import frCallScreen from './catalog-fr-call-screen';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
+import frContactCard from './catalog-fr-contact-card';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -123,6 +133,7 @@ const fr = {
      taille) ; ces deux-ci restent ICI parce qu'elles ne portent pas ce
      préfixe. */
   'media.unavailable': 'Média indisponible',
+  'media.retry': 'Réessayer',
   'report.post.title': 'Signaler cette publication',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publications enregistrées',
@@ -180,9 +191,17 @@ const fr = {
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
+  ...frMediaHub,
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
+  ...frRowActions,
+  ...frCallShell,
+  ...frCallJoin,
+  ...frCallDecline,
+  ...frCallFeedback,
+  ...frCallDevices,
+  ...frCallScreen,
   ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
@@ -423,6 +442,9 @@ const fr = {
   'settings.privacy.read_receipts.info':
     "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus.",
   'settings.privacy.typing_indicator': 'Indicateur de frappe',
+  'settings.privacy.hide_from_search': 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail',
+  'settings.privacy.hide_from_search.info':
+    'Vos contacts ne vous retrouveront pas par votre numéro ou votre e-mail, et ne seront pas prévenus de votre arrivée.',
   'settings.section.appearance': 'Apparence',
   'settings.theme': 'Thème',
   'settings.theme.auto': 'Auto',
@@ -1053,6 +1075,8 @@ const fr = {
 
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
+  'thread.long-message.read-more': 'Lire la suite',
+  'thread.long-message.collapse': 'Réduire',
   'message-detail.info.title': 'Infos du message',
   'message-detail.received-by': 'Reçu par',
   'message-detail.read-by': 'Vu par',
@@ -1116,6 +1140,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
@@ -1148,6 +1173,7 @@ const fr = {
 
   ...frStoriesMine,
   ...frFeedPost,
+  ...frContactCard,
 } as const;
 
 export default fr;

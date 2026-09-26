@@ -121,7 +121,11 @@ struct RootRouteDestination: View {
                 onNotificationTap: { notification in
                     onNotificationTap(notification)
                 },
-                onDismiss: { router.pop() }
+                onDismiss: { router.pop() },
+                onQuickAction: { action in
+                    await NotificationQuickActionPerformer(openConversation: { router.navigateToConversation($0) })
+                        .perform(action)
+                }
             )
             .navigationBarHidden(true)
             .onDisappear {

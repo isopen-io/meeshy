@@ -1,13 +1,23 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import esComposerAttach from './catalog-es-composer-attach';
 import esIdentity from './catalog-es-identity';
+import esMediaHub from './catalog-es-media-hub';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
+import esRowActions from './catalog-es-row-actions';
+import esCallShell from './catalog-es-call-shell';
+import esCallJoin from './catalog-es-call-join';
+import esCallDecline from './catalog-es-call-decline';
+import esCallFeedback from './catalog-es-call-feedback';
+import esCallDevices from './catalog-es-call-devices';
+import esCallScreen from './catalog-es-call-screen';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
+import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
+import esContactCard from './catalog-es-contact-card';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -99,6 +109,7 @@ const es = {
   'feed.post.media.next': 'Media siguiente',
   'feed.post.media.mosaic': 'Mosaico de {count} medios',
   'media.unavailable': 'Medio no disponible',
+  'media.retry': 'Reintentar',
   'feed.post.see_more': 'ver más',
   'feed.post.see_less': 'ver menos',
   'feed.post.more_options': 'Más opciones',
@@ -190,9 +201,17 @@ const es = {
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
   ...esIdentity,
+  ...esMediaHub,
   ...esVerifyEmail,
   ...esPassword,
   ...esCall,
+  ...esRowActions,
+  ...esCallShell,
+  ...esCallJoin,
+  ...esCallDecline,
+  ...esCallFeedback,
+  ...esCallDevices,
+  ...esCallScreen,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
@@ -425,6 +444,9 @@ const es = {
   'settings.privacy.read_receipts.info':
     'Es recíproco: si no envías confirmaciones de lectura, tampoco verás si han leído tus mensajes.',
   'settings.privacy.typing_indicator': 'Indicador de escritura',
+  'settings.privacy.hide_from_search': 'No sugerirme a quien tenga mi número o mi correo',
+  'settings.privacy.hide_from_search.info':
+    'Tus contactos no te encontrarán por tu número o tu correo, y no se les avisará de tu llegada.',
   'settings.section.appearance': 'Apariencia',
   'settings.theme': 'Tema',
   'settings.theme.auto': 'Auto',
@@ -1011,6 +1033,8 @@ const es = {
 
   'thread.unread-separator.one': '{count} mensaje no leído',
   'thread.unread-separator.other': '{count} mensajes no leídos',
+  'thread.long-message.read-more': 'Leer más',
+  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',
@@ -1119,7 +1143,9 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esConversationCard,
   ...esStoriesMine,
+  ...esContactCard,
 } satisfies InterfaceCatalog;
 
 export default es;

@@ -44,6 +44,10 @@ describe('initialsOf', () => {
     expect(initialsOf('Club de lecture')).toBe('CD');
     expect(initialsOf('polyglottes')).toBe('P');
   });
+
+  test('des lettres seulement : la ponctuation d’un nom ne devient jamais une initiale (#8131)', () => {
+    expect(initialsOf('(Club) « lecture »')).toBe('CL');
+  });
 });
 
 describe('conversationTitleOf', () => {

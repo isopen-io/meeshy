@@ -63,6 +63,10 @@ const MATCHED_USER = {
 
 function makePrisma(users: any[] = []) {
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       // Le double DISTINGUE « qui m'a bloqué ? » (`blockedUserIds: { has }`,
       // la requête POSITIVE de `blockedIdsAroundViewer`) des CANDIDATS du

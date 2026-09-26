@@ -195,7 +195,10 @@ struct OnboardingHost: ViewModifier {
             // Le lien de vérification se touche dans l'app Mail : au retour,
             // l'état se relit et la carte en attente avance d'elle-même.
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task { await model.refreshVerification() }
+                Task {
+                    await model.refreshVerification()
+                    await model.refreshContactsAccess()
+                }
             }
             // Les célébrations plein écran attendent que le calque parte
             // (#7914) : elles lisent ce signal, jamais le modèle.

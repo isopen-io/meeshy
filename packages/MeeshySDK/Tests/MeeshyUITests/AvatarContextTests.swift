@@ -333,4 +333,21 @@ final class AvatarContextTests: XCTestCase {
     func test_makeInitials_emptyName_returnsEmpty() {
         XCTAssertEqual(MeeshyAvatar.makeInitials(from: ""), "")
     }
+
+    // #8143 — un nom de carnet porte parenthèses, emojis, ponctuation : les
+    // initiales ne retiennent que des LETTRES.
+
+    func test_makeInitials_parenthesizedNickname_keepsOnlyLetters() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "Théo (foot)"), "TF")
+    }
+
+    func test_makeInitials_emojiAndPunctuation_areSkipped() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "🎉 Nadia"), "N")
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "\"Maman\" ❤️"), "M")
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "  Lina   Diallo "), "LD")
+    }
+
+    func test_makeInitials_noLetterAtAll_fallsBackToTheFirstCharacter() {
+        XCTAssertEqual(MeeshyAvatar.makeInitials(from: "😀"), "😀")
+    }
 }

@@ -506,6 +506,28 @@ model UserContact {
   /// propriétaire — c'est-à-dire exactement ce que le delta évite de
   /// retélécharger.
   @@index([ownerId, updatedAt])
+  /// « X a rejoint Meeshy » (#8105) : à l'inscription ou à la vérification d'un
+  /// numéro / e-mail, la passerelle cherche les carnets qui le contiennent.
+  /// Index multikey — sans eux, chaque arrivée balaierait la collection.
+  /// Prod : l'entrypoint ne joue aucune migration — index à créer à la main.
+  @@index([phoneNumbers])
+  @@index([emails])
+}
+
+/// Une annonce « X a rejoint Meeshy » déjà faite à un destinataire (#8105).
+///
+/// UNE ligne par paire (destinataire, arrivant) : l'unicité rend l'annonce
+/// idempotente même quand deux vérifications (téléphone puis e-mail) courent
+/// en même temps, ou quand le carnet est resynchronisé. Ne transporte aucun
+/// identifiant de contact — seulement qui a été prévenu de qui.
+model ContactJoinNotice {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  recipientId String   @db.ObjectId
+  joinerId    String   @db.ObjectId
+  createdAt   DateTime @default(now())
+
+  @@unique([recipientId, joinerId])
+  @@index([joinerId])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -2310,9 +2332,6 @@ model CallSession {
   /// Call metadata
   metadata Json? // { maxParticipants, recordingEnabled, etc. }
 
-  /// Post-call quality feedback (rating + issues)
-  feedback Json?
-
   /// Optimistic locking version. Incremented on every status transition.
   /// Pattern: where: { id, version: known }, data: { ..., version: { increment: 1 } }.
   /// See docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.7.
@@ -2352,6 +2371,14 @@ model CallParticipant {
   /// never clobber each other. Null when the client never reported
   /// (missed call, old build, crash).
   analytics Json?
+
+  /// La note d'après-appel de CE participant (`call:quality-feedback`,
+  /// #8072) : `{ rating: 1..5, issues: string[], comment?, ratedAt }`.
+  /// Une ligne par participant, comme `analytics` : deux notes d'un même
+  /// appel ne s'écrasent pas. Null quand il n'a pas noté (la demande est
+  /// échantillonnée). `CallSession.feedback`, qui ne pouvait porter qu'UNE
+  /// note, n'a jamais reçu d'écriture et a été retiré le 2026-09-26.
+  feedback Json?
 
   /// Media state
   isAudioEnabled Boolean @default(true)

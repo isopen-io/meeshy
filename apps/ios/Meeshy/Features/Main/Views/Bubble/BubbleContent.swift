@@ -105,6 +105,10 @@ nonisolated struct BubbleContent: Equatable {
         /// builder from `firstLinkURL` → `trackedLinks[firstLinkURL]` →
         /// `https://meeshy.me/l/<token>`. `nil` → façade opens the canonical watchURL.
         let embedTrackedURL: URL?
+        /// Conversation désignée par `firstLinkURL` (lien de partage ou lien
+        /// direct), précalculée une fois par le builder. Non-nil → la bulle
+        /// rend la carte de conversation (#8099) au lieu de l'aperçu OpenGraph.
+        var conversationCardTarget: ConversationCardTarget? = nil
     }
 
     struct Translation: Equatable {

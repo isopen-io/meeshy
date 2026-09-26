@@ -303,7 +303,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 275 → 276 → 275 (#8083) : `AuthEndpoint.verificationStatus`, générée par la
 // phase passerelle avant son appelant, consommée par la phase iOS
 // (`AuthService.emailVerificationStatus`).
-const BASELINE_DEAD_ENTRIES = 275;
+// 275 → 277 (#8099) : `ConversationsEndpoint.byIdCard` et
+// `LinksEndpoint.byIdentifierCard` — GÉNÉRÉES depuis `route-manifest.json` ;
+// `ConversationCardService` (iOS) passe encore par l'enum écrit à la main
+// `ConversationCardEndpoint`, dont l'en-tête annonce le retrait au profit de
+// ces cas générés. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 277;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

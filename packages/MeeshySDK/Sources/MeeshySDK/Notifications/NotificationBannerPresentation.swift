@@ -83,7 +83,8 @@ public extension SocketNotificationEvent {
              .messageReaction, .reaction, .legacyMessageReaction:
             return .conversation
         case .friendRequest, .contactRequest, .legacyFriendRequest,
-             .friendAccepted, .contactAccepted, .legacyFriendAccepted:
+             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
+             .contactJoined:
             return .relation
         default:
             return .action

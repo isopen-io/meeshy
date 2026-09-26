@@ -26,6 +26,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byConversationIdRestoreForMe(conversationId: String)
     case byId(id: String)
     case byIdAnalysis(id: String)
+    case byIdCard(id: String)
     case byIdDeleteForMe(id: String)
     case byIdInvite(id: String)
     case byIdLeave(id: String)
@@ -71,6 +72,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byConversationIdRestoreForMe(let conversationId): return "/api/v1/conversations/\(conversationId)/restore-for-me"
         case .byId(let id): return "/api/v1/conversations/\(id)"
         case .byIdAnalysis(let id): return "/api/v1/conversations/\(id)/analysis"
+        case .byIdCard(let id): return "/api/v1/conversations/\(id)/card"
         case .byIdDeleteForMe(let id): return "/api/v1/conversations/\(id)/delete-for-me"
         case .byIdInvite(let id): return "/api/v1/conversations/\(id)/invite"
         case .byIdLeave(let id): return "/api/v1/conversations/\(id)/leave"

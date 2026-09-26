@@ -1,4 +1,5 @@
 import XCTest
+import Contacts
 import MeeshySDK
 @testable import Meeshy
 
@@ -49,6 +50,8 @@ final class OnboardingViewModelTests: XCTestCase {
         let permission: MockOnboardingNotificationPermission
         let appliedUsers: AppliedUsers
         let settled: MockOnboardingSettledStore
+        let contacts: MockContactSyncService
+        let directory: MockContactDirectoryService
     }
 
     final class AppliedUsers {
@@ -58,7 +61,8 @@ final class OnboardingViewModelTests: XCTestCase {
     private func makeSUT(
         state: APIOnboardingState? = nil,
         permission: OnboardingNotificationStatus = .notDetermined,
-        settled: MockOnboardingSettledStore = MockOnboardingSettledStore()
+        settled: MockOnboardingSettledStore = MockOnboardingSettledStore(),
+        contactsStatus: CNAuthorizationStatus = .restricted
     ) -> SUT {
         let service = MockOnboardingService()
         service.fetchStateResult = .success(state ?? makeState())
@@ -70,6 +74,9 @@ final class OnboardingViewModelTests: XCTestCase {
         let notif = MockOnboardingNotificationPermission()
         notif.status = permission
         let applied = AppliedUsers()
+        let contacts = MockContactSyncService()
+        contacts.authorizationStatusResult = contactsStatus
+        let directory = MockContactDirectoryService()
         let model = OnboardingViewModel(
             service: service,
             messages: messages,
@@ -80,11 +87,13 @@ final class OnboardingViewModelTests: XCTestCase {
             pickTemplate: { _ in 0 },
             applyUser: { applied.users.append($0) },
             settled: settled,
-            pause: { _ in }
+            pause: { _ in },
+            contacts: contacts,
+            directory: directory
         )
         return SUT(model: model, service: service, messages: messages, friends: friends,
                    users: users, progress: progress, permission: notif, appliedUsers: applied,
-                   settled: settled)
+                   settled: settled, contacts: contacts, directory: directory)
     }
 
     // MARK: - Présentation

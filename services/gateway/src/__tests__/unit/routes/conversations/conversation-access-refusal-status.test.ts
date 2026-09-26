@@ -26,7 +26,7 @@
  *    témoin lit `response.json()` — le corps tel qu'il part sur le fil.
  * 3. **Les deux refus restent DISCERNABLES.** Un correctif qui ferait tout
  *    passer en 401 serait aussi faux que le défaut : un NON-MEMBRE
- *    AUTHENTIFIÉ doit rester `403 CONVERSATION_ACCESS_DENIED`. Les cinq
+ *    AUTHENTIFIÉ reçoit le 404 d'une conversation inexistante (#8099). Les cinq
  *    derniers témoins exercent donc la vraie chaîne d'authentification — JWT
  *    signé, session vivante, ligne `User` active — pour atteindre cette
  *    branche.
@@ -220,19 +220,19 @@ describe('une session ABSENTE ou MORTE rend 401 UNAUTHORIZED (#4792)', () => {
   });
 });
 
-describe('un non-membre AUTHENTIFIÉ reste refusé en 403 — l\'autre refus, l\'autre statut', () => {
-  it.each(ROUTES)('%s — 403 CONVERSATION_ACCESS_DENIED', async (_nom, appel) => {
+describe('un non-membre AUTHENTIFIÉ reçoit le 404 d\'une conversation inexistante (#8099)', () => {
+  it.each(ROUTES)('%s — 404 Conversation not found, sans code', async (_nom, appel) => {
     const { statut, corps } = await appeler(appel, JETON_VIVANT, prismaMembreInconnu());
 
-    expect(statut).toBe(403);
-    expect(corps.code).toBe('CONVERSATION_ACCESS_DENIED');
+    expect(statut).toBe(404);
+    expect(corps.error).toBe('Conversation not found');
+    expect(corps.code).toBeUndefined();
   });
 
   /**
-   * LE CODE EST LE SIGNAL, PAS LA PROSE. Sans ce témoin, le lot passerait en
-   * mettant TOUT en 401 — il ne serait pas discriminant. Les deux refus doivent
-   * rester séparés par une valeur MACHINE : c'est tout ce qu'un client peut
-   * brancher (`APIClient.mapUnauthorized`, iOS, ne regarde QUE le statut).
+   * LE STATUT EST LE SIGNAL. Sans ce témoin, le lot passerait en mettant TOUT
+   * en 401 — il ne serait pas discriminant (`APIClient.mapUnauthorized`, iOS,
+   * ne regarde QUE le statut).
    */
   it.each(ROUTES)('%s — deux statuts ET deux codes différents pour les deux refus', async (_nom, appel) => {
     const sansSession = await appeler(appel);

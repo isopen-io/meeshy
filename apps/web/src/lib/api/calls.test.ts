@@ -51,7 +51,7 @@ const gatewayReplying = (reply: { readonly status: number; readonly body: unknow
 };
 
 describe('un appel décodé est une PROJECTION', () => {
-  test('ni le numéro, ni la présence, ni les octets du pair n’entrent dans le cache persisté', () => {
+  test('ni le numéro ni la présence du pair n’entrent dans le cache persisté ; les octets de l’appel, si', () => {
     expect(decodeCallRecord(wireRecord())).toEqual({
       callId: '64f0c0ffee00000000000a01',
       conversationId: '64f0c0ffee00000000000c01',
@@ -62,6 +62,7 @@ describe('un appel décodé est une PROJECTION', () => {
       isVideo: false,
       startedAt: '2026-09-13T09:00:00.000Z',
       durationSec: 185,
+      bytes: 238000,
       peer: { userId: '64f0c0ffee0000000000abcd', username: 'ada', displayName: 'Ada Lovelace', avatar: 'https://cdn.test/ada.jpg' },
     });
   });

@@ -3923,7 +3923,9 @@ final class CallManagerProximityMonitoringTests: XCTestCase {
 
     func test_updateProximityMonitoring_isCalledWhenRemoteVideoToggleReceived() throws {
         let source = try callManagerSource()
-        guard let caseRange = source.range(of: "case \"video\":") else {
+        // #8063 — le partage d'écran (`"screen"`) partage la branche vidéo :
+        // il fait basculer la même visibilité du flux distant.
+        guard let caseRange = source.range(of: "case \"video\", \"screen\":") else {
             XCTFail("callMediaToggled \"video\" case not found"); return
         }
         let after = String(source[caseRange.upperBound...])
@@ -3932,7 +3934,7 @@ final class CallManagerProximityMonitoringTests: XCTestCase {
         }
         let block = String(after[after.startIndex..<nextCase.lowerBound])
         XCTAssertTrue(
-            block.contains("self.isRemoteVideoEnabled = event.enabled"),
+            block.contains("self.screenShare.applyRemoteCamera(enabled: event.enabled)"),
             "sanity: expected to be scoped to the callMediaToggled video branch"
         )
         XCTAssertTrue(
@@ -6619,7 +6621,7 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         guard let toggledRange = source.range(of: "socket.callMediaToggled") else {
             XCTFail("callMediaToggled subscription not found"); return
         }
-        guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
+        guard let videoCaseRange = source.range(of: "case \"video\", \"screen\":", range: toggledRange.lowerBound..<source.endIndex) else {
             XCTFail("\"video\" case not found in callMediaToggled handler"); return
         }
         // Borné sur la fin réelle du `case "video":` plutôt que sur un nombre de
@@ -6628,12 +6630,15 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         let rest = source[videoCaseRange.lowerBound...]
         let caseEnd = rest.range(of: "case \"audio\":")?.lowerBound ?? rest.endIndex
         let body = String(rest[..<caseEnd])
+        // #8063 — la visibilité du flux distant est désormais « caméra OU
+        // écran partagé » (`CallScreenShareController.isRemoteVideoVisible`) :
+        // le PiP suit la valeur RÉSOLUE, jamais l'événement brut.
         XCTAssertTrue(
-            body.contains("self.isRemoteVideoEnabled = event.enabled"),
+            body.contains("self.isRemoteVideoEnabled = event.mediaType == \"screen\""),
             "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
         )
         XCTAssertTrue(
-            body.contains("self.pip.setRemoteVideoMuted(!event.enabled)"),
+            body.contains("self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)"),
             "The video case must forward the inverse of event.enabled to the system PiP controller so it swaps " +
             "to a generic placeholder instead of freezing on the peer's last frame"
         )

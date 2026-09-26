@@ -6,6 +6,8 @@
  * pour la feature d'appels vidéo avec traduction automatique
  */
 
+import type { AudioEffectType } from './call-audio-effects.js';
+
 // ===== CALL MODES & STATUS =====
 
 /**
@@ -148,96 +150,9 @@ export interface CallControls {
   readonly screenShareEnabled: boolean;
 }
 
-// ===== AUDIO EFFECTS =====
+// ===== AUDIO EFFECTS — ./call-audio-effects.ts =====
 
-/**
- * Types d'effets audio disponibles
- */
-export type AudioEffectType = 'voice-coder' | 'baby-voice' | 'demon-voice' | 'back-sound';
-
-/**
- * Mode de loop pour le back sound
- */
-export type LoopMode = 'N_TIMES' | 'N_MINUTES';
-
-/**
- * Paramètres pour l'effet Voice Coder (auto-tune)
- */
-export interface VoiceCoderParams {
-  readonly pitch: number;           // -12 à +12 semitones (transpose)
-  readonly harmonization: boolean;  // Ajouter harmonies
-  readonly strength: number;        // 0-100%, intensité correction (mix)
-  readonly retuneSpeed: number;     // 0-100%, vitesse de correction (0=lent/naturel, 100=rapide/robotique)
-  readonly scale: 'chromatic' | 'major' | 'minor' | 'pentatonic'; // Gamme musicale
-  readonly key: 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B'; // Tonalité
-  readonly naturalVibrato: number;  // 0-100%, préservation du vibrato naturel
-}
-
-/**
- * Presets pour Perfect Voice
- */
-export type VoiceCoderPreset =
-  | 'voix-naturelle'
-  | 'pop-star'
-  | 'effet-robot'
-  | 'correction-subtile'
-  | 'custom';
-
-/**
- * Paramètres pour l'effet Baby Voice
- */
-export interface BabyVoiceParams {
-  readonly pitch: number;           // +6 à +12 semitones
-  readonly formant: number;         // 1.2-1.5x shift formantique
-  readonly breathiness: number;     // 0-100%, ajout de souffle
-}
-
-/**
- * Paramètres pour l'effet Demon Voice
- */
-export interface DemonVoiceParams {
-  readonly pitch: number;           // -8 à -12 semitones
-  readonly distortion: number;      // 0-100%, saturation
-  readonly reverb: number;          // 0-100%, echo cathedral
-}
-
-/**
- * Paramètres pour l'effet Back Sound Code
- */
-export interface BackSoundParams {
-  readonly soundFile: string;       // Nom du fichier son
-  readonly volume: number;          // 0-100%
-  readonly loopMode: LoopMode;      // Mode de loop
-  readonly loopValue: number;       // Nombre de fois ou minutes
-}
-
-/**
- * Union des paramètres d'effets audio
- */
-export type AudioEffectParams =
-  | VoiceCoderParams
-  | BabyVoiceParams
-  | DemonVoiceParams
-  | BackSoundParams;
-
-/**
- * Configuration d'un effet audio
- */
-export interface AudioEffect {
-  readonly type: AudioEffectType;
-  readonly enabled: boolean;
-  readonly params: AudioEffectParams;
-}
-
-/**
- * État des effets audio
- */
-export interface AudioEffectsState {
-  readonly voiceCoder: AudioEffect & { params: VoiceCoderParams };
-  readonly babyVoice: AudioEffect & { params: BabyVoiceParams };
-  readonly demonVoice: AudioEffect & { params: DemonVoiceParams };
-  readonly backSound: AudioEffect & { params: BackSoundParams };
-}
+export * from './call-audio-effects.js';
 
 // ===== CONNECTION QUALITY =====
 
@@ -637,7 +552,7 @@ export interface CallModeChangedEvent {
  * Event: call:media-toggled (Server → Client)
  */
 /**
- * Client → Server: `call:toggle-audio` / `call:toggle-video`.
+ * Client → Server: `call:toggle-audio` / `call:toggle-video` / `call:toggle-screen`.
  *
  * À ne pas confondre avec `CallMediaToggleEvent`, qui est la DIFFUSION
  * serveur→client du même geste. Le listener de la passerelle a déclaré le type
@@ -666,11 +581,21 @@ export interface CallModeChangedEvent {
  * l'aurait attendu indéfiniment — déclarer un ack qui n'existe pas est une
  * promesse, pas une tolérance.
  */
+/**
+ * Les médias qu'un participant bascule. `screen` (#8063) est le partage
+ * d'écran : il voyage sur la MÊME diffusion `call:media-toggled`, et il est
+ * INERTE pour les clients publiés avant lui — le décodeur web
+ * (`decodeMediaToggled`) rend `null` hors `audio`/`video`, iOS tombe dans
+ * `default: break`. Ce n'est PAS la caméra : la passerelle n'écrit jamais
+ * `isVideoEnabled` pour lui.
+ */
+export type CallMediaType = 'audio' | 'video' | 'screen';
+
 export interface CallMediaToggleClientEvent {
   readonly callId: string;
   readonly enabled: boolean;
   /** Toléré par le schéma, jamais lu : le NOM de l'événement porte le média. */
-  readonly mediaType?: 'audio' | 'video';
+  readonly mediaType?: CallMediaType;
   /** Toléré par le schéma, jamais lu : la passerelle résout le participant. */
   readonly participantId?: string;
 }
@@ -684,7 +609,7 @@ export interface CallMediaToggleEvent {
   // this value — only `.userId`/`.participantId` roster lookups do.
   /** See `CallScreenCaptureEvent.userId` — same rationale, added Vague 140. */
   readonly userId?: string;
-  readonly mediaType: 'audio' | 'video';
+  readonly mediaType: CallMediaType;
   readonly enabled: boolean;
 }
 
@@ -1101,6 +1026,8 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
+  /** Partage d'écran (#8063) — même charge que `call:toggle-video`, même diffusion. */
+  TOGGLE_SCREEN: 'call:toggle-screen',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)

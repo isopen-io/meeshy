@@ -53,7 +53,7 @@ jest.mock('../../../utils/logger', () => ({
 // Mock Prisma
 jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
-    user: {
+    userPreferences: { findMany: jest.fn(async () => []) }, userPreference: { findMany: jest.fn(async () => []) }, user: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
     },

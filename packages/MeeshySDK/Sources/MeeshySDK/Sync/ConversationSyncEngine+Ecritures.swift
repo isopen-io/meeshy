@@ -103,7 +103,7 @@ extension ConversationSyncEngine {
             conversations.filter { $0.id != event.conversationId }
         }
         await cache.messages.invalidate(for: event.conversationId)
-        await cache.conversationMedia.invalidate(for: event.conversationId)
+        await cache.invalidateConversationMedia(conversationId: event.conversationId)
         _conversationsDidChange.send()
         await recomputeTotalUnread()
     }

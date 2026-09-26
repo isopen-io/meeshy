@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
@@ -6,8 +6,11 @@ import { useRovingMenu } from '@/lib/view/roving-menu';
 import { rowMenuItems, type RowActionId } from '@/lib/view/row-actions';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { CALLS_GLYPHS } from './glyphs-calls';
 
 /**
  * LES ACTIONS DE RANGÉE — bouton + popover (#5559 §5.6), l'ADAPTATION web du
@@ -93,16 +96,23 @@ export function RowActions({
   flags,
   unread,
   magnified,
+  language,
+  canCall = false,
   onAction,
 }: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
+  /** La langue d'interface du lecteur : chaque libellé du menu la parle (#8150). */
+  readonly language: InterfaceLanguage;
+  /** Vrai quand l'appel est permis : le menu ouvre alors sur « Appel vocal » et « Appel vidéo » (#8109). */
+  readonly canCall?: boolean;
   /** Élue par la bande de focus — seule rangée où le bouton reste visible
    * SANS survol ni focus (`status.magnified` de `LensRow`). */
   readonly magnified: boolean;
   readonly onAction: (id: RowActionId) => void;
 }) {
-  const items = rowMenuItems({ flags, unread });
+  const items = rowMenuItems({ flags, unread, language, canCall });
+  const menuLabel = translate(language, 'rowActions.menu');
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
 
   /**
@@ -154,6 +164,24 @@ export function RowActions({
     onResize: () => setOpen(false),
   });
 
+  /**
+   * LE MENU CONTEXTUEL DE LA LIGNE (#8109) — clic droit à la souris, appui
+   * long au doigt (Chromium Android émet `contextmenu` sur l'appui long) :
+   * iOS ouvre son menu par l'appui long, le web ouvre le MÊME panneau que le
+   * bouton, jamais le menu du navigateur.
+   */
+  useEffect(() => {
+    const row = buttonRef.current?.closest('li');
+    if (row === null || row === undefined) return;
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      measure();
+      setOpen(true);
+    };
+    row.addEventListener('contextmenu', onContextMenu);
+    return () => row.removeEventListener('contextmenu', onContextMenu);
+  });
+
   const choose = (id: RowActionId) => {
     onAction(id);
     closeAndFocusButton();
@@ -175,7 +203,7 @@ export function RowActions({
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Actions de conversation"
+        aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={(event) => {
@@ -241,7 +269,7 @@ export function RowActions({
             <div
               ref={menuRef}
               role="menu"
-              aria-label="Actions de conversation"
+              aria-label={menuLabel}
               onKeyDown={onMenuKeyDown}
               className="fixed z-30 overflow-hidden rounded-card py-1 shadow-cast"
               style={{
@@ -270,7 +298,13 @@ export function RowActions({
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
                   style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}
                 >
-                  <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />
+                  {item.glyph === 'videoCamera' ? (
+                    <span className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
+                      <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} />
+                    </span>
+                  ) : (
+                    <Glyph name={item.glyph} size={16} style={{ color: 'var(--color-ios-ink-2)' }} />
+                  )}
                   {item.label}
                 </button>
               ))}

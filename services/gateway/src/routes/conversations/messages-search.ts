@@ -16,7 +16,6 @@ import {
   loadReaderHistoryFloor
 } from '../../services/historyFloor';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
@@ -27,13 +26,10 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import {
-  refuserAccesConversation,
-  verdictAccesConversation,
-  type MessagesDeRefusDAcces
-} from './utils/access-control';
+import type { MessagesDeRefusDAcces } from './utils/access-control';
+import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import type { ConversationParams } from './types';
-import { sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -46,16 +42,13 @@ import { servePostReplyCitations } from '../../services/messaging/servedPostRepl
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
  *
- * `nonMembre` garde le mot que la route servait — `'Unauthorized'`, une prose
- * qui disait déjà « authentification » sous le statut d'un refus de DROIT, et
- * qui reste juste pour un non-membre AUTHENTIFIÉ. Ce qui change est le sort de
- * la session ABSENTE ou MORTE : montée en `optionalAuth`, cette route la
+ * Session ABSENTE ou MORTE ⇒ 401 : montée en `optionalAuth`, cette route la
  * laissait entrer jusqu'ici puis lui répondait 403, le seul statut qu'aucun
- * client ne lit comme « rafraîchis ta session ».
+ * client ne lit comme « rafraîchis ta session ». Non-membre ⇒ le même 404
+ * qu'un identifiant inexistant (#8099).
  */
 const REFUS_DE_RECHERCHE: MessagesDeRefusDAcces = {
-  sansSession: 'Authentication required to search this conversation',
-  nonMembre: 'Unauthorized'
+  sansSession: 'Authentication required to search this conversation'
 };
 
 /**
@@ -135,21 +128,15 @@ export function registerMessageSearchRoute(
       // NEGATIVE Prisma `take`. Search is cursor-based, so only the limit is used.
       const { limit: searchLimit } = validatePagination('0', limitStr, { maxLimit: 50 });
 
-      const conversationId = await resolveConversationId(prisma, id);
+      const conversationId = await ouvrirConversationLisible({
+        prisma,
+        reply,
+        authContext: authRequest.authContext,
+        identifiant: id,
+        messages: REFUS_DE_RECHERCHE
+      });
       if (!conversationId) {
-        // #4856 — le statut disait « refusé » pendant que le texte disait
-        // « absent » : l'un des deux mentait. `resolveConversationId` ne rend
-        // `null` que pour un identifiant qui ne résout à AUCUNE conversation
-        // (un ObjectId valide passe tel quel, existence non vérifiée ici) —
-        // ce n'est pas une décision anti-énumération, c'est un « je ne
-        // trouve pas », comme le rendent déjà `threads.ts` et
-        // `messages-read-status.ts` pour le même appel.
-        return sendNotFound(reply, 'Conversation not found');
-      }
-
-      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
-      if (acces.genre !== 'ok') {
-        return refuserAccesConversation(reply, acces, REFUS_DE_RECHERCHE);
+        return;
       }
 
       const queryLower = q.toLowerCase().trim();

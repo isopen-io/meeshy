@@ -1,4 +1,5 @@
 import { primeTones } from './call-tones';
+import type { CallFeedbackIssue, CallFeedbackRating } from './call-feedback';
 import type { CallEngine, JoinCallRequest, StartCallRequest } from './engine';
 
 /**
@@ -31,11 +32,18 @@ export const callActions = {
   toggleMic: (): void => run((engine) => engine.toggleMic()),
   toggleCamera: (): void => run((engine) => engine.toggleCamera()),
   switchCamera: (): void => run((engine) => engine.switchCamera()),
+  /** Partager l'écran ou arrêter (#8063) — le sélecteur du navigateur s'ouvre dans le geste. */
+  toggleScreen: (): void => run((engine) => engine.toggleScreen()),
   minimize: (): void => run((engine) => engine.setDisplay('pill')),
   expand: (): void => run((engine) => engine.setDisplay('full')),
+  /** La pastille repliée en bulle déplaçable (#8046, `CallBubbleView.swift`). */
+  collapse: (): void => run((engine) => engine.setDisplay('bubble')),
   toggleCaptions: (): void => run((engine) => engine.toggleCaptions()),
   answerWaiting: (): void => run((engine) => engine.answerWaiting()),
   declineWaiting: (): void => run((engine) => engine.declineWaiting()),
   retry: (): void => run((engine) => engine.retry()),
   dismiss: (): void => run((engine) => engine.dismiss()),
+  /** La note d'après-appel (#8072). */
+  rate: (rating: CallFeedbackRating, issues: readonly CallFeedbackIssue[]): void => run((engine) => engine.rate(rating, issues)),
+  skipRating: (): void => run((engine) => engine.skipRating()),
 };

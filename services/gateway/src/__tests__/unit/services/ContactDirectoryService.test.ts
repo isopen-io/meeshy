@@ -70,6 +70,10 @@ function makePrisma(options: {
     count = existing.length,
   } = options;
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       // Le double DISTINGUE les deux requêtes : « qui m'a bloqué ? »
       // (`blockedUserIds: { has }`) et les CANDIDATS du carnet. Un double qui

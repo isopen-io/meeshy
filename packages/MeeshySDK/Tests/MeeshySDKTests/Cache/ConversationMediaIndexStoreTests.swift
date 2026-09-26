@@ -60,4 +60,37 @@ final class ConversationMediaIndexStoreTests: XCTestCase {
             return XCTFail("L'index des médias du compte sortant survit à reset(). Reçu : \(remaining)")
         }
     }
+
+    // MARK: - Un index par genre (#8103)
+
+    func test_invalidateConversationMedia_purgesEveryKindOfTheConversation() async throws {
+        let coordinator = makeCoordinator(db: try makeDB())
+        for kind in ConversationMediaKind.allCases {
+            try await coordinator.conversationMedia.save([carrier(1)], for: kind.indexKey(conversationId: "conv-1"))
+        }
+        try await coordinator.conversationMedia.save([carrier(2)], for: "conv-2")
+
+        await coordinator.invalidateConversationMedia(conversationId: "conv-1")
+
+        for kind in ConversationMediaKind.allCases {
+            let left = await coordinator.conversationMedia.load(for: kind.indexKey(conversationId: "conv-1"))
+            guard case .empty = left else { return XCTFail("\(kind) survit à la purge : \(left)") }
+        }
+        let other = await coordinator.conversationMedia.load(for: "conv-2").snapshot()
+        XCTAssertEqual(other?.map(\.id), ["msg-2"], "une autre conversation n'est pas touchée")
+    }
+
+    func test_dropFromConversationMedia_removesTheMessageFromEveryKind() async throws {
+        let coordinator = makeCoordinator(db: try makeDB())
+        let documentKey = ConversationMediaKind.document.indexKey(conversationId: "conv-1")
+        try await coordinator.conversationMedia.save([carrier(1), carrier(2)], for: "conv-1")
+        try await coordinator.conversationMedia.save([carrier(1)], for: documentKey)
+
+        await coordinator.dropFromConversationMedia(conversationId: "conv-1", messageId: "msg-1")
+
+        let visual = await coordinator.conversationMedia.load(for: "conv-1").snapshot()
+        let documents = await coordinator.conversationMedia.load(for: documentKey).snapshot()
+        XCTAssertEqual(visual?.map(\.id), ["msg-2"])
+        XCTAssertEqual(documents?.map(\.id), [])
+    }
 }

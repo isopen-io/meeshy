@@ -186,12 +186,25 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     var listMediaCallCount = 0
     var listMediaCursors: [String?] = []
     var lastListMediaLanguages: [String]?
+    /// #8103 — les genres et la recherche de chaque appel, dans l'ordre.
+    var listMediaKinds: [[ConversationMediaKind]] = []
+    var listMediaQueries: [String?] = []
+    /// Si posé, rend la page du genre demandé (premier genre de l'appel),
+    /// avant la file et le résultat par défaut.
+    var listMediaResultsByKind: [ConversationMediaKind: [Result<MessagesAPIResponse, Error>]] = [:]
 
-    nonisolated func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
+    nonisolated func listMedia(conversationId: String, kinds: [ConversationMediaKind], query: String?, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
         try await MainActor.run {
             listMediaCallCount += 1
             listMediaCursors.append(before)
+            listMediaKinds.append(kinds)
+            listMediaQueries.append(query)
             lastListMediaLanguages = languages
+            if let kind = kinds.first, var queue = listMediaResultsByKind[kind], !queue.isEmpty {
+                let next = queue.removeFirst()
+                listMediaResultsByKind[kind] = queue
+                return try next.get()
+            }
             if !listMediaResults.isEmpty { return try listMediaResults.removeFirst().get() }
             return try listMediaResult.get()
         }

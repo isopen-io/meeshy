@@ -14,6 +14,7 @@ import type { UsernameParams } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
+import { undiscoverableAmong } from '../../services/profile-discoverability';
 import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter';
@@ -112,10 +113,14 @@ const QUERYSTRING_FIELDS = {
  * essai basculant entre email et téléphone rouvrirait le quota. Le cache par
  * instance `fastify` ci-dessous garantit UN SEUL `RateLimiter`, donc UN SEUL
  * compteur, quel que soit le backend.
+ *
+ * `POST /contacts/resolve` (#8101, carte de visite partagée) répond à la même
+ * question — « ces identifiants sont-ils un compte ? » — et puise dans le MÊME
+ * seau : alterner les trois routes n'ouvre aucun quota.
  */
 const LIMITEURS_ANNUAIRE_INVERSE = new WeakMap<FastifyInstance, ReturnType<typeof createCustomRateLimiter>>();
 
-function contactLookupRateLimiter(fastify: FastifyInstance) {
+export function contactLookupRateLimiter(fastify: FastifyInstance) {
   let limiteur = LIMITEURS_ANNUAIRE_INVERSE.get(fastify);
   if (!limiteur) {
     limiteur = createCustomRateLimiter(
@@ -343,7 +348,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         select: publicUserSelect
       });
 
-      if (!user) {
+      if (!user || (await undiscoverableAmong(fastify.prisma, viewerId, [user.id])).has(user.id)) {
         return sendNotFound(reply, 'User not found');
       }
 
@@ -477,7 +482,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         select: publicUserSelect
       });
 
-      if (!user) {
+      if (!user || (await undiscoverableAmong(fastify.prisma, viewerId, [user.id])).has(user.id)) {
         return sendNotFound(reply, 'User not found');
       }
 

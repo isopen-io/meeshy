@@ -72,6 +72,10 @@ const STORED_ENTRY = {
 function makePrisma(options: { users?: any[]; entries?: any[]; total?: number } = {}) {
   const { users = [], entries = [], total = entries.length } = options;
   return {
+    // « Ne pas être trouvé » (#8104) : la loi de découvrabilité lit les
+    // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
+    userPreferences: { findMany: jest.fn<any>(async () => []) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findMany: jest.fn<any>().mockResolvedValue(users),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),

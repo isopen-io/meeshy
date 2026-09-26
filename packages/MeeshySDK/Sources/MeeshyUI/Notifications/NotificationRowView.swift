@@ -7,6 +7,11 @@ public struct NotificationRowView: View, Equatable {
     public var onTap: (() -> Void)?
     public var onMarkRead: (() -> Void)?
     public var onDelete: (() -> Void)?
+    /// Les gestes de la rangée (`APINotification.quickActions`) — exécutés par
+    /// l'hôte. `nil` : la rangée n'en propose aucun.
+    public var onQuickAction: ((NotificationQuickAction) -> Void)?
+    /// « Se connecter » déjà envoyé depuis cette rangée : le bouton le dit.
+    public var isConnectRequested: Bool
 
     /// Les closures capturent la notification par valeur : à contenu égal
     /// (`APINotification` Equatable synthétisé), leur comportement est
@@ -16,7 +21,9 @@ public struct NotificationRowView: View, Equatable {
         lhs.notification == rhs.notification &&
         (lhs.onTap == nil) == (rhs.onTap == nil) &&
         (lhs.onMarkRead == nil) == (rhs.onMarkRead == nil) &&
-        (lhs.onDelete == nil) == (rhs.onDelete == nil)
+        (lhs.onDelete == nil) == (rhs.onDelete == nil) &&
+        (lhs.onQuickAction == nil) == (rhs.onQuickAction == nil) &&
+        lhs.isConnectRequested == rhs.isConnectRequested
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -26,18 +33,30 @@ public struct NotificationRowView: View, Equatable {
         notification: APINotification,
         onTap: (() -> Void)? = nil,
         onMarkRead: (() -> Void)? = nil,
-        onDelete: (() -> Void)? = nil
+        onDelete: (() -> Void)? = nil,
+        onQuickAction: ((NotificationQuickAction) -> Void)? = nil,
+        isConnectRequested: Bool = false
     ) {
         self.notification = notification
         self.onTap = onTap
         self.onMarkRead = onMarkRead
         self.onDelete = onDelete
+        self.onQuickAction = onQuickAction
+        self.isConnectRequested = isConnectRequested
     }
 
     private var notifType: MeeshyNotificationType { notification.notificationType }
     private var accentColor: Color { Color(hex: notifType.accentHex) }
 
     public var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rowButton
+            quickActionsRow
+        }
+        .background(notification.isRead ? Color.clear : accentColor.opacity(0.05))
+    }
+
+    private var rowButton: some View {
         Button { onTap?() } label: {
             HStack(alignment: .top, spacing: 12) {
                 iconView
@@ -50,7 +69,7 @@ public struct NotificationRowView: View, Equatable {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(notification.isRead ? Color.clear : accentColor.opacity(0.05))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // Pas de `.swipeActions` ici : ce modifier n'a d'effet que dans une
@@ -60,6 +79,65 @@ public struct NotificationRowView: View, Equatable {
         // futur hôte `List`.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
+    }
+
+    // MARK: - Gestes de la rangée (#8105)
+
+    /// Hors du bouton de la rangée : un bouton dans un bouton ne reçoit pas
+    /// ses touches. Aligné sur le texte, sous l'avatar.
+    @ViewBuilder
+    private var quickActionsRow: some View {
+        let actions = notification.quickActions
+        if let onQuickAction, !actions.isEmpty {
+            HStack(spacing: 8) {
+                ForEach(actions, id: \.self) { action in
+                    quickActionButton(action, perform: onQuickAction)
+                }
+            }
+            .padding(.leading, 16 + 44 + 12)
+            .padding(.trailing, 16)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func quickActionButton(_ action: NotificationQuickAction,
+                                   perform: @escaping (NotificationQuickAction) -> Void) -> some View {
+        let label: String
+        let icon: String
+        let isPrimary: Bool
+        switch action {
+        case .connect:
+            label = isConnectRequested
+                ? String(localized: "notifications.quick.connect.sent", defaultValue: "Demande envoyée", bundle: .module)
+                : String(localized: "notifications.quick.connect", defaultValue: "Se connecter", bundle: .module)
+            icon = isConnectRequested ? "checkmark" : "person.badge.plus"
+            isPrimary = !isConnectRequested
+        case .write:
+            label = String(localized: "notifications.quick.write", defaultValue: "Écrire", bundle: .module)
+            icon = "bubble.left.fill"
+            isPrimary = false
+        }
+        return Button {
+            if case .connect = action, isConnectRequested { return }
+            perform(action)
+        } label: {
+            Label(label, systemImage: icon)
+                .font(MeeshyFont.relative(13, weight: .semibold))
+                .foregroundColor(isPrimary ? .white : (colorScheme == .dark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(0.14)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(quickActionIdentifier(action))
+    }
+
+    private func quickActionIdentifier(_ action: NotificationQuickAction) -> String {
+        switch action {
+        case .connect: return "notification.quick.connect.\(notification.id)"
+        case .write: return "notification.quick.write.\(notification.id)"
+        }
     }
 
     // MARK: - Icon

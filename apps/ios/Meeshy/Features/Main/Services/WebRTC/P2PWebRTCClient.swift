@@ -37,12 +37,13 @@ private enum WebRTCSharedFactory {
 final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendable {
     weak var delegate: (any WebRTCClientDelegate)?
 
-    private var peerConnection: RTCPeerConnection?
-    private let factory: RTCPeerConnectionFactory
+    var peerConnection: RTCPeerConnection?
+    let factory: RTCPeerConnectionFactory
     private var localAudioTrack: RTCAudioTrack?
     private var audioTransceiver: RTCRtpTransceiver?
-    private var videoTransceiver: RTCRtpTransceiver?
-    private var localVideoTrack_: RTCVideoTrack?
+    var videoTransceiver: RTCRtpTransceiver?
+    var localVideoTrack_: RTCVideoTrack?
+    var screenShareFeed: ScreenShareVideoFeed?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
     /// C3 — observateurs d'interruption de la session de capture de CET appel.
@@ -464,7 +465,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // - H264: hardware-accelerated on iOS (VideoToolbox), supported by Chrome 80+, Safari 13+
     // - VP8: software but ubiquitous, fallback for clients without H264 HW
     // - VP9: better compression, software-only on most iOS, optional fallback
-    private func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
+    func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
         // Audit P1-5 — see applyAudioCodecPreferences for rationale.
         let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
 
@@ -671,7 +672,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    private func forceSendRecv(_ transceiver: RTCRtpTransceiver) {
+    func forceSendRecv(_ transceiver: RTCRtpTransceiver) {
         // `setDirection:error:` returns void → Swift imports it as a NON-throwing
         // func taking an NSErrorPointer (no return value to bridge to `throws`).
         // Passing `error: nil` would silently drop any failure; capture it instead.
@@ -785,23 +786,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         try await setRemoteDescription(rtcAnswer, on: pc)
         Logger.webrtc.info("remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
         Logger.webrtc.info("Remote answer set")
-    }
-
-    /// Extracts per-m-section direction (sendrecv/sendonly/recvonly/inactive)
-    /// from an SDP string. Used in logs to diagnose one-way media: a peer whose
-    /// answer is `recvonly`/`inactive` for a given m-section is not sending RTP
-    /// for that track, which appears as zero inbound packets on our side.
-    static func sdpDirections(_ sdp: String) -> String {
-        var out: [String] = []
-        var media = "?"
-        for line in sdp.components(separatedBy: "\r\n") {
-            if line.hasPrefix("m=") {
-                media = String(line.dropFirst(2).split(separator: " ").first ?? "?")
-            } else if line == "a=sendrecv" || line == "a=sendonly" || line == "a=recvonly" || line == "a=inactive" {
-                out.append("\(media)=\(line.dropFirst(2))")
-            }
-        }
-        return out.isEmpty ? "(none)" : out.joined(separator: " ")
     }
 
     func addIceCandidate(_ candidate: IceCandidate) async throws {

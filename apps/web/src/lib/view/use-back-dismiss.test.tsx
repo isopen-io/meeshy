@@ -272,3 +272,56 @@ describe('useBackDismiss - une couche qui en REMPLACE une autre ADOPTE son entre
     expect(closedB).toBe(1);
   });
 });
+
+/**
+ * DEUX COUCHES EMPILÉES (#8078) — la fiche d'un membre (`ProfilePeekSheet`)
+ * s'ouvre PAR-DESSUS les détails de la conversation, qui restent montés.
+ * Chaque couche écoutait TOUS les `popstate` : le retour Android fermait les
+ * deux feuilles et laissait l'entrée de la première orpheline (le retour
+ * suivant ne faisait plus rien) ; et fermer la fiche par son bouton rendait
+ * son entrée par un `history.back()` que les détails prenaient pour le leur.
+ * Seule la couche du DESSUS répond au retour. `history.back()` est ici le
+ * vrai (happy-dom dépile l'entrée puis dispatche `popstate`).
+ */
+function Stacked({ top, onCloseA, onCloseB }: { top: boolean; onCloseA: () => void; onCloseB: () => void }) {
+  return (
+    <>
+      <Modal onClose={onCloseA} />
+      {top ? <SheetLayer onClose={onCloseB} /> : null}
+    </>
+  );
+}
+
+function mountStacked(onCloseA: () => void, onCloseB: () => void): void {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<Stacked top={false} onCloseA={onCloseA} onCloseB={onCloseB} />);
+  });
+  act(() => {
+    root.render(<Stacked top onCloseA={onCloseA} onCloseB={onCloseB} />);
+  });
+}
+
+describe('useBackDismiss — deux couches EMPILÉES : le retour ferme celle du DESSUS (#8078)', () => {
+  test('le retour matériel ferme la couche du dessus, et celle du dessous reste ouverte', async () => {
+    const closed: string[] = [];
+    mountStacked(() => closed.push('dessous'), () => closed.push('dessus'));
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(closed).toEqual(['dessus']);
+  });
+
+  test('fermer la couche du dessus AUTREMENT (son bouton) ne ferme pas celle du dessous', async () => {
+    const closed: string[] = [];
+    mountStacked(() => closed.push('dessous'), () => closed.push('dessus'));
+    await act(async () => {
+      root.render(<Stacked top={false} onCloseA={() => closed.push('dessous')} onCloseB={() => closed.push('dessus')} />);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(closed).toEqual([]);
+  });
+});

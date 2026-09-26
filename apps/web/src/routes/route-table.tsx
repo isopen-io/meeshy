@@ -312,6 +312,13 @@ export const ROUTES = {
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
+  /* LE PAVÉ ET LA FICHE D'UN APPEL (lot 3 — #6454, #6383) — le pavé est
+     l'onglet `.keypad` de `ContactsHubView` (iOS), servi comme un écran frère
+     du journal (D-61 : `/calls` reste un écran seul). `/call/:callId` est
+     l'adresse du legacy (`app/call/[callId]`, D-5) : un appel VIVANT s'y
+     rejoint, un appel fini s'y lit (`CallDetailSheet`). */
+  callKeypad: { pattern: '/calls/keypad', screen: () => import('@/routes/calls-keypad') },
+  call: { pattern: '/call/$callId', screen: () => import('@/routes/call-detail') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
   communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
   /* CRÉER, PUIS UNE COMMUNAUTÉ (#6364, D-60) — miroir `Route.communityCreate` et

@@ -4,7 +4,7 @@ import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../utils/response';
 import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { spokenLanguagesOf, SPOKEN_LANGUAGES_SAMPLE_CAP } from '../services/conversationCard';
 import { linkJoinProfileSchema } from '@meeshy/shared/types/link-join';
 import {
   errorResponseSchema,
@@ -48,14 +48,9 @@ export type AnonymousRoutesOptions = {
   readonly optionalAuth?: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
 };
 
-// #4165 — plafond de l'échantillon de participants actifs lu par
-// `GET /anonymous/link/:identifier` pour estimer les langues parlées d'un
-// lien AVANT de le rejoindre (voir le `findMany` de ce handler). Aligné sur
-// le plafond de `validatePagination` (`utils/pagination.ts`) : ce n'est pas
-// une pagination cliente (aucun `offset`/`limit` en entrée), donc pas
-// d'appel à l'utilitaire lui-même, mais le MÊME nombre — un aperçu avant de
-// rejoindre n'a pas besoin d'un échantillon plus large qu'une page de liste.
-const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = 100;
+// #4165 — plafond de l'échantillon lu pour estimer les langues parlées d'un
+// lien AVANT de le rejoindre : partagé avec la carte de conversation (#8099).
+const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = SPOKEN_LANGUAGES_SAMPLE_CAP;
 
 // Schemas de validation
 //
@@ -725,22 +720,9 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
 
       const totalParticipants = memberCount + anonymousCount;
 
-      const languageSet = new Set<string>();
-
-      allActiveParticipants.forEach(p => {
-        if (p.type === 'user' && p.user) {
-          // Canonicalise BCP-47/casse via le SSOT : 'en', 'EN' et 'en-US' comptent
-          // pour UNE langue (`.toLowerCase()` brut laissait 'en-us' ≠ 'en' → stat gonflée)
-          if (p.user.systemLanguage) languageSet.add(normalizeLanguageForDedup(p.user.systemLanguage));
-          if (p.user.regionalLanguage) languageSet.add(normalizeLanguageForDedup(p.user.regionalLanguage));
-          if (p.user.customDestinationLanguage) languageSet.add(normalizeLanguageForDedup(p.user.customDestinationLanguage));
-        } else {
-          if (p.language) languageSet.add(normalizeLanguageForDedup(p.language));
-        }
-      });
-
-      // Convertir en tableau et trier
-      const spokenLanguages = Array.from(languageSet).sort();
+      // Canonicalise BCP-47/casse via le SSOT : 'en', 'EN' et 'en-US' comptent
+      // pour UNE langue — site unique partagé avec la carte (#8099).
+      const spokenLanguages = spokenLanguagesOf(allActiveParticipants);
       const languageCount = spokenLanguages.length;
 
       return sendSuccess(reply, {

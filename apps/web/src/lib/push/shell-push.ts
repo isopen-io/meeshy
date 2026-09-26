@@ -88,6 +88,7 @@ export function shellPushTargetInput(raw: unknown): NotificationTargetInput {
     postType: data.postType,
     contentType: data.contentType,
     friendRequestId: data.friendRequestId,
+    senderUsername: data.senderUsername,
     route: data.route,
   };
 }

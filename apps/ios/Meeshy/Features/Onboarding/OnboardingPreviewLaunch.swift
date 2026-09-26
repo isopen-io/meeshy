@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import Contacts
 import MeeshySDK
 import MeeshyUI
 
@@ -18,6 +19,9 @@ import MeeshyUI
 /// `-MeeshyOnboardingPreviewStory publishing|failed` montre la carte 3 pendant
 /// l'upload ou après son échec. `-MeeshyOnboardingPreviewSuggestions 6` sert
 /// six profils (le plafond du contrat) au lieu de quatre.
+/// `-MeeshyOnboardingPreviewContacts offer|found|none|denied|failed` joue la
+/// proposition « retrouver tes amis » de la carte 4 (#8105) sur un carnet
+/// fictif : jamais le vrai carnet, jamais le réseau.
 ///
 /// Rien de ceci n'existe dans un build Release : le fichier entier est sous
 /// `#if DEBUG`, et son seul site d'appel aussi.
@@ -51,6 +55,21 @@ enum OnboardingPreviewLaunch {
         default: return nil
         }
     }
+
+    /// Le carnet fictif de la carte 4 (#8105). Absent : l'offre, sur un accès
+    /// jamais demandé.
+    nonisolated static var contactsScenario: String {
+        UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewContacts") ?? "offer"
+    }
+
+    nonisolated static let fixtureContacts: [DirectoryContact] = [
+        DirectoryContact(id: "c1", contactKey: "k1", displayName: "Maman", isOnMeeshy: true,
+                         matchedUser: MatchedContactUser(id: "f1", username: "awa.d", displayName: "Awa")),
+        DirectoryContact(id: "c2", contactKey: "k2", displayName: "Théo (foot)", isOnMeeshy: true,
+                         matchedUser: MatchedContactUser(id: "f2", username: "theo_b", displayName: "Théo")),
+        DirectoryContact(id: "c3", contactKey: "k3", displayName: "Nadia", isOnMeeshy: true,
+                         matchedUser: MatchedContactUser(id: "f3", username: "nadia.k", displayName: "Nadia")),
+    ]
 
     static var isProtected: Bool {
         UserDefaults.standard.bool(forKey: "MeeshyOnboardingPreviewProtected")
@@ -96,7 +115,9 @@ struct OnboardingPreviewScreen: View {
     @StateObject private var model = OnboardingViewModel(
         service: PreviewOnboardingService(),
         progress: PreviewEngagementProgress(),
-        permission: PreviewNotificationPermission()
+        permission: PreviewNotificationPermission(),
+        contacts: PreviewContactSync(),
+        directory: PreviewContactDirectory()
     )
 
     var body: some View {
@@ -157,6 +178,48 @@ nonisolated private final class PreviewEngagementProgress: EngagementProgressPro
     func mintMeesh(requestId: String) async throws -> APIMeeshMintResult {
         APIMeeshMintResult(status: "insufficient")
     }
+}
+
+/// Le carnet fictif : l'accès et la synchronisation répondent selon
+/// `-MeeshyOnboardingPreviewContacts`, sans fenêtre système ni réseau.
+nonisolated private final class PreviewContactSync: ContactSyncProviding, @unchecked Sendable {
+    private var granted = false
+
+    func authorizationStatus() -> CNAuthorizationStatus {
+        switch OnboardingPreviewLaunch.contactsScenario {
+        case "denied": return .denied
+        case "found", "none", "failed": return .authorized
+        default: return granted ? .authorized : .notDetermined
+        }
+    }
+
+    func requestAccess() async -> Bool {
+        granted = true
+        return OnboardingPreviewLaunch.contactsScenario != "denied"
+    }
+
+    func findFriendsFromContacts() async throws -> [ContactMatch] { [] }
+
+    func syncDirectory(mode: DirectorySyncMode) async throws -> DirectorySyncResult {
+        try await Task.sleep(nanoseconds: 700_000_000)
+        guard OnboardingPreviewLaunch.contactsScenario != "failed" else { throw URLError(.notConnectedToInternet) }
+        return DirectorySyncResult(totalContacts: 3, processedContacts: 3, syncedCount: 3, matchedCount: 3, removedCount: 0)
+    }
+}
+
+nonisolated private final class PreviewContactDirectory: ContactDirectoryServiceProviding, @unchecked Sendable {
+    func sync(_ request: DirectorySyncRequest) async throws -> DirectorySyncResult {
+        DirectorySyncResult(totalContacts: 0, processedContacts: 0, syncedCount: 0, matchedCount: 0, removedCount: 0)
+    }
+
+    func page(cursor: String?, limit: Int, filter: DirectoryFilter, query: String?, updatedSince: Date?) async throws
+        -> PaginatedAPIResponse<[DirectoryContact]> {
+        let contacts = OnboardingPreviewLaunch.contactsScenario == "none" ? [] : OnboardingPreviewLaunch.fixtureContacts
+        return PaginatedAPIResponse(success: true, data: contacts,
+                                    pagination: CursorPagination(nextCursor: nil, hasMore: false, limit: limit), error: nil)
+    }
+
+    func clear() async throws -> DirectoryClearResult { DirectoryClearResult(removedCount: 0) }
 }
 
 private final class PreviewNotificationPermission: OnboardingNotificationPermitting {

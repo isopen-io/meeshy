@@ -19,10 +19,13 @@ import MeeshySDK
 /// la création de demande d'ami ou d'invitation de groupe.
 final class PrivacySettingsViewComingSoonTests: XCTestCase {
 
-    // MARK: - The 7 flagged placebo toggles
+    // MARK: - Les bascules encore sans effet (six depuis #8105)
 
-    func test_isComingSoon_hideProfileFromSearch_returnsTrue() {
-        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
+    /// Appliqué par la passerelle à toute recherche par identifiant, et à
+    /// l'annonce « X a rejoint Meeshy » (#8104, #8105) : l'interrupteur a un
+    /// effet, il n'est plus « bientôt ».
+    func test_isComingSoon_hideProfileFromSearch_isLiveSinceTheGatewayAppliesIt() {
+        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
     }
 
     func test_isComingSoon_blockScreenshots_returnsTrue() {

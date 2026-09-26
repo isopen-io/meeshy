@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #8049 — l'appel natif de la coque : notification d'appel entrant,
+     service au premier plan. Sept langues, les memes cles partout. -->
+<resources>
+    <string name="call_channel_incoming_name">Chiamate in arrivo</string>
+    <string name="call_channel_incoming_description">Fa squillare le chiamate Meeshy, anche con l’app chiusa</string>
+    <string name="call_channel_ongoing_name">Chiamata in corso</string>
+    <string name="call_incoming_fallback_title">Chiamata in arrivo</string>
+    <string name="call_incoming_audio">Chiamata vocale</string>
+    <string name="call_incoming_video">Videochiamata</string>
+    <string name="call_action_answer">Rispondi</string>
+    <string name="call_action_decline">Rifiuta</string>
+    <string name="call_ongoing_audio">Chiamata vocale in corso</string>
+    <string name="call_ongoing_video">Videochiamata in corso</string>
+    <string name="call_ongoing_return">Tocca per tornare alla chiamata</string>
+</resources>

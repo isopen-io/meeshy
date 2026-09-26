@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Le socket Unix du partage d'écran (#8063) vit dans ce conteneur :
+	     l'app l'ouvre pendant un appel, l'extension s'y connecte. Même groupe
+	     que l'app (Meeshy.entitlements) ; impose la capability App Groups sur
+	     l'App ID me.meeshy.app.broadcast au portail Apple. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.me.meeshy.apps</string>
+	</array>
+</dict>
+</plist>

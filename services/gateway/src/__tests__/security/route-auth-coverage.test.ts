@@ -369,6 +369,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'PATCH', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/refresh' },
   { method: 'DELETE', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/leave' },
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
+  { method: 'GET', url: '/api/v1/links/:identifier/card', why: "carte d'un lien de partage (#8099) : ce que le lien autorise déjà, sans participant ni message" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },

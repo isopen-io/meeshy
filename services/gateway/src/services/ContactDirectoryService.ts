@@ -20,6 +20,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { NormalizedContact } from '../utils/contact-identifiers.js';
 import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking.js';
 import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService.js';
+import { undiscoverableAmong } from './profile-discoverability.js';
 
 const logger = enhancedLogger.child({ module: 'ContactDirectory' });
 
@@ -243,10 +244,15 @@ export class ContactDirectoryService {
       select: MATCH_USER_SELECT,
     });
 
+    // « Ne pas être trouvé » (#8104) : un compte caché ne se rapproche d'aucun
+    // carnet, sauf de celui d'un ami accepté.
+    const hidden = await undiscoverableAmong(this.prisma, excludeUserId, candidates.map((candidate) => candidate.id));
+    const discoverable = candidates.filter((candidate) => !hidden.has(candidate.id));
+
     const byPhone = new Map<string, typeof candidates[number]>();
     const byEmail = new Map<string, typeof candidates[number]>();
     const byUsername = new Map<string, typeof candidates[number]>();
-    for (const candidate of candidates) {
+    for (const candidate of discoverable) {
       if (candidate.phoneNumber) byPhone.set(candidate.phoneNumber, candidate);
       if (candidate.email) byEmail.set(candidate.email.toLowerCase(), candidate);
       byUsername.set(candidate.username.toLowerCase(), candidate);
@@ -527,7 +533,13 @@ export class ContactDirectoryService {
     const blocked = matchedIds.length > 0
       ? await getBlockedUserIdsAmong(this.prisma, ownerId, matchedIds)
       : new Set<string>();
-    const visibleIds = matchedIds.filter((id) => !blocked.has(id));
+    // `hideProfileFromSearch` bouge, lui aussi, entre deux synchronisations : la
+    // lecture rejoue la loi de découvrabilité comme elle rejoue le blocage.
+    const hidden = matchedIds.length > 0
+      ? await undiscoverableAmong(this.prisma, ownerId, matchedIds.filter((id) => !blocked.has(id)))
+      : new Set<string>();
+    const severedIds = new Set([...blocked, ...hidden]);
+    const visibleIds = matchedIds.filter((id) => !severedIds.has(id));
     const visibility = visibleIds.length > 0
       ? await getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, visibleIds)
       : new Map<string, PresenceVisibility>();
@@ -538,7 +550,7 @@ export class ContactDirectoryService {
         // pour ce contact (`matchedUserId`/`matchedBy`/`matchedAt` à null) : la
         // ligne du carnet reste — c'est l'entrée de l'utilisateur, pas celle du
         // compte bloqué — mais elle redevient « à inviter ».
-        const severed = profile !== null && blocked.has(profile.id);
+        const severed = profile !== null && severedIds.has(profile.id);
         const matchedUser = profile === null || severed
           ? null
           : applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id));

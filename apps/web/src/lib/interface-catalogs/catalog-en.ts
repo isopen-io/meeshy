@@ -1,13 +1,23 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
+import enMediaHub from './catalog-en-media-hub';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
+import enRowActions from './catalog-en-row-actions';
+import enCallShell from './catalog-en-call-shell';
+import enCallJoin from './catalog-en-call-join';
+import enCallDecline from './catalog-en-call-decline';
+import enCallFeedback from './catalog-en-call-feedback';
+import enCallDevices from './catalog-en-call-devices';
+import enCallScreen from './catalog-en-call-screen';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
+import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
+import enContactCard from './catalog-en-contact-card';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -99,6 +109,7 @@ const en = {
   'feed.post.media.next': 'Next media',
   'feed.post.media.mosaic': 'Mosaic of {count} media',
   'media.unavailable': 'Media unavailable',
+  'media.retry': 'Try again',
   'feed.post.see_more': 'see more',
   'feed.post.see_less': 'show less',
   'feed.post.more_options': 'More options',
@@ -190,9 +201,17 @@ const en = {
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
+  ...enMediaHub,
   ...enVerifyEmail,
   ...enPassword,
   ...enCall,
+  ...enRowActions,
+  ...enCallShell,
+  ...enCallJoin,
+  ...enCallDecline,
+  ...enCallFeedback,
+  ...enCallDevices,
+  ...enCallScreen,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
@@ -425,6 +444,9 @@ const en = {
   'settings.privacy.read_receipts.info':
     "This works both ways: if you don't send read receipts, you won't see whether your own messages were read.",
   'settings.privacy.typing_indicator': 'Typing indicator',
+  'settings.privacy.hide_from_search': 'Don\'t suggest me to people who have my number or email',
+  'settings.privacy.hide_from_search.info':
+    'Your contacts won\'t find you by your number or email, and won\'t be told when you join.',
   'settings.section.appearance': 'Appearance',
   'settings.theme': 'Theme',
   'settings.theme.auto': 'Auto',
@@ -1011,6 +1033,8 @@ const en = {
 
   'thread.unread-separator.one': '{count} unread message',
   'thread.unread-separator.other': '{count} unread messages',
+  'thread.long-message.read-more': 'Read more',
+  'thread.long-message.collapse': 'Show less',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',
@@ -1119,7 +1143,9 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enConversationCard,
   ...enStoriesMine,
+  ...enContactCard,
 } satisfies InterfaceCatalog;
 
 export default en;

@@ -24,7 +24,7 @@ import XCTest
 /// `$(…)` énonce l'invariant — le plist ne PORTE pas le numéro, il le RÉSOUT.
 final class BundleVersionVariableGuardTests: XCTestCase {
 
-    /// Les quatre cibles qui embarquent un Info.plist : leurs `CFBundleVersion`
+    /// Les cinq cibles qui embarquent un Info.plist : leurs `CFBundleVersion`
     /// doivent toujours coïncider, sans quoi App Store Connect rejette le
     /// paquet. C'est la raison d'être de la variable partagée.
     private static let plistRelativePaths = [
@@ -32,6 +32,7 @@ final class BundleVersionVariableGuardTests: XCTestCase {
         "MeeshyNotificationExtension/Info.plist",
         "MeeshyShareExtension/Info.plist",
         "MeeshyWidgets/Info.plist",
+        "MeeshyBroadcastExtension/Info.plist",
     ]
 
     private static let buildVersionVariable = "$(CURRENT_PROJECT_VERSION)"

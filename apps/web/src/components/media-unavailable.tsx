@@ -24,10 +24,11 @@ import { Glyph } from './glyph';
  * chaque média manquant. Mesuré au premier jet du lecteur de story (§ A de la
  * revue #6801).
  *
- * SILENCIEUX, PAS MUET. Aucune alerte et aucun « réessayer » : les octets ont
- * disparu (8 fichiers sur 2912, mesurés le 2026-09-18 dans le conteneur qui
- * les sert), et un bouton qui rejouerait le 404 serait un contrôle sans effet
- * — la loi 4. Mais la boîte porte `role="img"` et son libellé traduit : un
+ * SILENCIEUX, PAS MUET. Aucune alerte, et aucun « réessayer » quand les octets
+ * ont disparu (8 fichiers sur 2912, mesurés le 2026-09-18 dans le conteneur
+ * qui les sert) : un bouton qui rejouerait le 404 serait un contrôle sans effet
+ * — la loi 4. Il n'apparaît que sur un échec TRANSITOIRE, que l'hôte déclare
+ * par `onRetry` (#8141). Mais la boîte porte `role="img"` et son libellé traduit : un
  * lecteur d'écran doit savoir qu'il manque quelque chose (dimension 5), dans
  * la langue de l'interface (dimension 9).
  *
@@ -39,6 +40,7 @@ export function MediaUnavailable({
   language,
   tone = 'over-media',
   compact = false,
+  onRetry,
 }: {
   readonly language: InterfaceLanguage;
   /**
@@ -57,6 +59,13 @@ export function MediaUnavailable({
    * portée par la boîte et non par le texte.
    */
   readonly compact?: boolean;
+  /**
+   * « RÉESSAYER », SEULEMENT QUAND L'ÉCHEC EST TRANSITOIRE (#8141) — coupure
+   * réseau, passerelle en panne. L'hôte le sait par `classifyMediaFailure`
+   * (`lib/media/media-failure.ts`) ; pour un fichier purgé (404/410), il ne le
+   * passe pas, et la boîte reste silencieuse (loi 4, voir plus haut).
+   */
+  readonly onRetry?: () => void;
 }) {
   const label = translate(language, 'media.unavailable');
   const ink = tone === 'over-media' ? 'rgba(255,255,255,0.75)' : 'var(--color-ios-ink-3)';
@@ -67,11 +76,13 @@ export function MediaUnavailable({
        dépôt a déjà payé le prix inverse : un gate qui comptait les enfants de
        `.avatar-root` serait passé au ROUGE en annonçant « présence absente »
        le jour où un anneau de story s'y ajoute (revue #5935). */
+    /* Avec « Réessayer », la boîte devient un GROUPE nommé : un `role="img"`
+       rend ses enfants présentationnels, et le bouton y serait muet. */
     <div
       data-media-unavailable={tone}
-      role="img"
+      role={onRetry === undefined ? 'img' : 'group'}
       aria-label={label}
-      className={compact ? 'grid size-full place-items-center' : 'grid size-full place-items-center gap-2 px-8 text-center'}
+      className={compact ? 'grid size-full place-items-center' : 'grid size-full place-content-center place-items-center gap-2 px-8 text-center'}
       style={tone === 'on-card' ? { backgroundColor: 'var(--color-ios-card)' } : undefined}
     >
       <Glyph name="image" size={compact ? 18 : 38} style={{ color: ink }} aria-hidden />
@@ -79,6 +90,21 @@ export function MediaUnavailable({
         <p className="text-body" style={{ color: ink }} aria-hidden>
           {label}
         </p>
+      )}
+      {compact || onRetry === undefined ? null : (
+        <button
+          type="button"
+          data-media-retry
+          onClick={(event) => {
+            event.stopPropagation();
+            onRetry();
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ minHeight: 44, border: `1px solid ${ink}`, color: tone === 'over-media' ? '#fff' : 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'media.retry')}
+        </button>
       )}
     </div>
   );

@@ -97,6 +97,7 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
         },
         400: errorResponseSchema,
         401: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     }

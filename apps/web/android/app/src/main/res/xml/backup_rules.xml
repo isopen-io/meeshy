@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #8049 — le credential du refus d'appel sans socket (CallShellStore) ne
+     quitte jamais l'appareil : ni sauvegarde, ni restauration ailleurs. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="meeshy_call_shell.xml" />
+</full-backup-content>

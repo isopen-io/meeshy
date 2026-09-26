@@ -30,6 +30,7 @@ export const CALL_SERVER_EVENTS: readonly string[] = [
 ];
 
 export function bridgeCallEvents(socket: SocketClient): () => void {
+  if (__SHELL__) void import('./shell-call-runtime').then(({ startShellCall }) => startShellCall());
   const binding = bindCallTransport({
     connected: () => socket.connected,
     emit: (event, payload) => socket.emit(event, payload),

@@ -13,4 +13,7 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // #8049 — la version du plugin @capacitor/push-notifications 8.1.2, pour que
+    // la coque (MeeshyMessagingService) et le plugin partagent UNE firebase-messaging.
+    firebaseMessagingVersion = '25.0.1'
 }

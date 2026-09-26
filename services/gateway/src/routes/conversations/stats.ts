@@ -1,10 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 /**
@@ -143,7 +143,7 @@ export function registerStatsRoutes(
 
       const hasAccess = await canAccessConversation(prisma, authContext, conversationId, id);
       if (!hasAccess) {
-        return sendForbidden(reply, 'You do not have access to this conversation');
+        return refuserCommeIntrouvable(reply);
       }
 
       const stats = await conversationMessageStatsService.getStats(prisma, conversationId);

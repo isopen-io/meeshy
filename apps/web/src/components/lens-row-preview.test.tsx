@@ -169,11 +169,46 @@ describe('LensRow — ce que la ligne n’affiche pas (#7547)', () => {
     expect(line.textContent).not.toContain('4242');
   });
 
-  /** D-61 : le web n'a pas de pile d'appel (#6382) — « Rejoindre » n'aurait
-   * aucun effet, et un contrôle sans effet est un contrôle qui ment (loi 4). */
-  test('un appel en cours se dit, sans bouton « Rejoindre » tant que le web n’appelle pas', () => {
-    const line = renderCase(CASES.find((c) => c.id === 'active-call')!);
+  /** H4 (lot 3) : le web appelle (#6382) — « Rejoindre » est posé au bout de
+   * la rangée, HORS du lien, et la ligne 2 elle-même reste sans bouton. */
+  test('un appel en cours se dit sur la ligne 2, et « Rejoindre » vit hors du lien de la rangée', () => {
+    const entry = CASES.find((c) => c.id === 'active-call')!;
+    const line = renderCase(entry);
     expect(line.textContent).toContain('Appel en cours');
     expect(line.querySelector('button')).toBeNull();
+
+    const html = renderToStaticMarkup(
+      <LensRow
+        conversation={conversationOf(entry.input)}
+        languages={entry.input.preferredLanguages}
+        viewerId={entry.input.viewerId}
+        flags={FLAGS}
+        unreadCount={0}
+        onRowAction={() => {}}
+        interfaceLanguage={entry.input.language}
+        now={() => Date.parse(String(entry.input.now))}
+      />,
+    );
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    const join = host.querySelector('button[data-lens-join]');
+    expect(join?.getAttribute('data-lens-join')).toBe(entry.input.activeCall?.id ?? '');
+    expect(join?.getAttribute('aria-label')).toBe('Rejoindre l’appel avec Cas');
+    expect(join?.textContent).toContain('Rejoindre');
+    expect(join?.closest('a')).toBeNull();
+  });
+
+  test('sans appel en cours, aucune rangée ne porte « Rejoindre »', () => {
+    const html = renderToStaticMarkup(
+      <LensRow
+        conversation={conversationOf(CASES.find((c) => c.id === 'voice')!.input)}
+        languages={['fr']}
+        viewerId="u-viewer"
+        flags={FLAGS}
+        unreadCount={0}
+        onRowAction={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-lens-join');
   });
 });

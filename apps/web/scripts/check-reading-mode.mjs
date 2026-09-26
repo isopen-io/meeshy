@@ -5,15 +5,15 @@
  *
  * CE QU'IL MESURE
  *
- * 1. Le fil s'ouvre en mode FOCAL par défaut (D-7) : des rangées PLATES
- *    (`data-reading-mode="focal"`), AUCUNE bulle.
+ * 1. Le fil s’ouvre en mode SCRIPT par défaut (#8147, Focal jusqu’au 2026-09-26) : des rangées PLATES
+ *    (`data-reading-mode="script"`), AUCUNE bulle.
  * 2. Le menu du chip liste les CINQ modes + « Automatique » ; `Résumé` est
  *    DISPONIBLE pour un inscrit depuis #5695 (D-21) ; `Rivière` reste
  *    désactivée et MOTIVÉE (D-8) — ses deux raisons, sous le seuil et déjà
  *    éligible, sont mesurées par `lib/check-river-menu.mjs` (#5696).
  * 3. Sélectionner « Bulles » change RÉELLEMENT le rendu (l'effet), la
  *    sélection SURVIT à un rechargement (persistance), et « Automatique »
- *    revient au focal.
+ *    revient au Script.
  * 4. Les DEUX schémas sont capturés et LUS (outil Read, en dehors de ce
  *    script — il produit les fichiers, ne les regarde pas).
  * 5. `prefers-reduced-motion: reduce` : aucune transformation de perspective
@@ -130,6 +130,28 @@ const setScheme = (context, scheme) =>
       /* navigation privée : le schéma tient pour la page seule (repli HTML). */
     }
   }, scheme);
+
+/**
+ * FOCAL EST DÉSORMAIS UN CHOIX, PLUS LE DÉFAUT (#8147, directive porteur
+ * 2026-09-26 : « par défaut Script »). Les sous-tests qui mesurent la SCÈNE
+ * Focal (élection, révélé, second schéma, écran étroit, mouvement réduit) le
+ * choisissent donc comme le ferait le lecteur : une préférence mémorisée,
+ * posée AVANT le rendu et seulement si aucune n'existe — un choix fait
+ * pendant le sous-test (Script, Bulles) survit ainsi au rechargement, et
+ * `localStorage.clear()` rend bien le fil à Focal.
+ */
+const FOCAL_CONVERSATIONS = ['c-salon-riviere', 'c-deploiement'];
+const preferFocal = (context) =>
+  context.addInitScript((ids) => {
+    try {
+      for (const id of ids) {
+        const key = `meeshy.reading-mode.u_u-viewer.${id}`;
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, 'focal');
+      }
+    } catch {
+      /* navigation privée : le sous-test verra le défaut, et le dira. */
+    }
+  }, FOCAL_CONVERSATIONS);
 
 const QUOTE_TEXT = 'main li [data-reading-mode] button[aria-label^="Aller au message"] .line-clamp-2';
 
@@ -286,7 +308,7 @@ const noRowCarriesContinuousPerspective = (page) =>
     return offenders;
   });
 
-// --- 1 : le défaut est FOCAL, mesuré au DOM.
+// --- 1 : le défaut est SCRIPT (#8147, directive porteur 2026-09-26), mesuré au DOM.
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
@@ -296,8 +318,12 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.waitForTimeout(400);
 
   expect(
-    (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
-    'la rangée plate FOCALE est rendue par défaut (D-7)',
+    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
+    'la rangée plate SCRIPT est rendue par défaut (#8147)',
+  );
+  expect(
+    (await page.locator('main li [data-reading-mode="focal"]').count()) === 0,
+    'Focal n’est plus le défaut (#8147) — il reste un choix',
   );
   expect(
     (await page.locator('main li .rounded-bubble').count()) === 0,
@@ -415,7 +441,7 @@ const noRowCarriesContinuousPerspective = (page) =>
   );
   expect(highlighted, 'cliquer une citation met en évidence le message cité (le contrôle a un effet)');
 
-  await page.screenshot({ path: join(CAPTURES, 'thread-focal-dark.png') });
+  await page.screenshot({ path: join(CAPTURES, 'thread-script-dark.png') });
 
   // --- 2 : le menu du chip.
   await page.getByRole('button', { name: /Mode de lecture/ }).click();
@@ -530,8 +556,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.getByRole('menuitem', { name: 'Automatique' }).click();
   await page.waitForTimeout(300);
   expect(
-    (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
-    '« Automatique » revient au focal',
+    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
+    '« Automatique » revient au Script (#8147)',
   );
 
   /**
@@ -567,14 +593,14 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.keyboard.press('ArrowDown');
   const afterArrow = await page.evaluate(() => document.activeElement?.textContent ?? '');
   expect(
-    afterArrow.startsWith('Script'),
+    afterArrow.startsWith('Bulles'),
     `ArrowDown déplace RÉELLEMENT le focus vers la ligne suivante (« ${afterArrow} »)`,
   );
   await page.keyboard.press('Enter');
   await page.waitForTimeout(300);
   expect(
-    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
-    'au clavier, Entrée sur la ligne atteinte par les flèches change RÉELLEMENT le mode (Script)',
+    (await page.locator('main li .rounded-bubble').count()) > 0,
+    'au clavier, Entrée sur la ligne atteinte par les flèches change RÉELLEMENT le mode (Bulles)',
   );
   expect(
     await page.evaluate(() => document.activeElement?.getAttribute('aria-haspopup') === 'menu'),
@@ -585,8 +611,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.waitForTimeout(200);
   const focusedAfterReopen = await page.evaluate(() => document.activeElement?.textContent ?? '');
   expect(
-    focusedAfterReopen.startsWith('Script'),
-    're-ouvert, le focus se pose de nouveau sur la ligne COURANTE (Script)',
+    focusedAfterReopen.startsWith('Bulles'),
+    're-ouvert, le focus se pose de nouveau sur la ligne COURANTE (Bulles)',
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
@@ -611,6 +637,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -657,6 +684,17 @@ const noRowCarriesContinuousPerspective = (page) =>
     cardBg !== 'rgba(0, 0, 0, 0)' && cardBg !== 'transparent',
     `la carte de la rangée élue porte un fond calculé ≠ transparent (${cardBg})`,
   );
+  /* #8147 — la carte de l'élue est un BLOC DE VERRE : la matière de
+     `glass.css` (flou d'arrière-plan), posée SOUS le texte de la rangée. */
+  const cardGlass = await elected.locator('.focus-card').evaluate((el) => ({
+    backdrop: getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter,
+    zIndex: getComputedStyle(el).zIndex,
+  }));
+  expect(
+    /blur\(/.test(cardGlass.backdrop) && cardGlass.zIndex === '-1',
+    `la carte de l'élue est un bloc de VERRE flouté, passé sous le texte (${JSON.stringify(cardGlass)})`,
+  );
+  await page.screenshot({ path: join(CAPTURES, 'thread-focal-elected-glass-dark.png') });
 
   const identity = await elected.locator('.focus-identity').evaluate((el) => {
     const avatar = el.querySelector('.avatar-root');
@@ -987,6 +1025,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1059,6 +1098,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'light');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1091,6 +1131,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 320, height: 780 } });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1121,6 +1162,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await setScheme(context, 'dark');
+  await preferFocal(context);
   const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
@@ -1315,5 +1357,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `\n  Le mode de lecture tient : focal par défaut, menu à cinq lignes motivées, sélection avec effet et persistance, deux schémas capturés dans ${CAPTURES}.\n`,
+  `\n  Le mode de lecture tient : Script par défaut (#8147), Focal au choix, menu à cinq lignes motivées, sélection avec effet et persistance, deux schémas capturés dans ${CAPTURES}.\n`,
 );

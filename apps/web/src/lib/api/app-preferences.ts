@@ -20,11 +20,13 @@ import type { ApiResult, HttpTransport } from './http';
  *    et l'audience de `user:status` (`socketio/presence-audience.ts`) ;
  *  - `privacy.showReadReceipts` — `MessageReadStatusService`,
  *    `MeeshySocketIOManager` ;
- *  - `privacy.showTypingIndicator` — `PrivacyPreferencesService`.
+ *  - `privacy.showTypingIndicator` — `PrivacyPreferencesService` ;
+ *  - `privacy.hideProfileFromSearch` — toutes les recherches par identifiant
+ *    (numéro, e-mail, carnet) et l'annonce « X a rejoint Meeshy » (#8104, #8105).
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces sept
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces huit
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -45,6 +47,7 @@ const Privacy = z.object({
   showLastSeen: z.boolean(),
   showReadReceipts: z.boolean(),
   showTypingIndicator: z.boolean(),
+  hideProfileFromSearch: z.boolean(),
 });
 
 const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
@@ -73,6 +76,7 @@ export const APP_PREFERENCE_FIELDS = {
   showLastSeen: 'privacy',
   showReadReceipts: 'privacy',
   showTypingIndicator: 'privacy',
+  hideProfileFromSearch: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
 type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;

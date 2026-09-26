@@ -28,6 +28,7 @@ export * from './api-schemas/message-attachment.js';
 export * from './api-schemas/message.js';
 export * from './api-schemas/conversation.js';
 export * from './api-schemas/conversation-preview.js';
+export * from './api-schemas/conversation-card.js';
 export * from './api-schemas/conversation-request.js';
 export * from './api-schemas/conversation-response.js';
 export * from './api-schemas/auth.js';
