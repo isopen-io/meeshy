@@ -19,10 +19,11 @@ final class SignupViewModelTests: XCTestCase {
     // MARK: - Fabrique
 
     private func makeSUT(
-        locale: Locale = Locale(identifier: "fr_FR")
+        locale: Locale = Locale(identifier: "fr_FR"),
+        referrals: MockPendingReferralStore = MockPendingReferralStore()
     ) -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
         let registrar = MockSignupRegistrar()
-        let sut = SignupViewModel(registrar: registrar, locale: locale)
+        let sut = SignupViewModel(registrar: registrar, locale: locale, referrals: referrals)
         return (sut, registrar)
     }
 
@@ -66,6 +67,87 @@ final class SignupViewModelTests: XCTestCase {
         fillValidForm(sut)
         XCTAssertTrue(sut.form.phoneDigits.isEmpty)
         XCTAssertTrue(sut.canSubmit)
+    }
+
+    // MARK: - Parrainage (#8075)
+
+    func test_submit_rememberedReferral_travelsWithTheRegistration() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateSessionKey, "iOS ne tient aucune clé de visite")
+    }
+
+    func test_submit_withPhone_referralStillTravels() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+        sut.form.phoneDigits = "0612345678"
+
+        await sut.submit()
+
+        XCTAssertNotNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+    }
+
+    func test_submit_withoutReferral_sendsNoAffiliateToken() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateToken)
+    }
+
+    func test_submit_accountCreatedWithSession_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.authenticated)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(referrals.code)
+        XCTAssertEqual(referrals.forgetCallCount, 1)
+    }
+
+    func test_submit_accountCreatedAwaitingVerification_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNotNil(sut.pendingVerification)
+        XCTAssertNil(referrals.code, "le compte existe déjà, rattaché : le code a servi")
+    }
+
+    func test_submit_rejected_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42", "aucun compte créé : le code attend le prochain essai")
+        XCTAssertEqual(referrals.forgetCallCount, 0)
+    }
+
+    func test_submit_phoneConflict_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(PhoneOwnershipConflict())
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42")
     }
 
     // MARK: - Envoi

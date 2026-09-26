@@ -123,12 +123,16 @@ final class SignupViewModel: ObservableObject {
     @Published var pendingVerification: PendingEmailVerification?
 
     private let registrar: any SignupRegistering
+    /// Le code du lien d'invitation ouvert avant l'inscription (#8075).
+    private let referrals: PendingReferralStoreProviding
 
     init(
         registrar: any SignupRegistering = AuthManagerSignupRegistrar.shared,
-        locale: Locale = .current
+        locale: Locale = .current,
+        referrals: PendingReferralStoreProviding = PendingReferralStore.shared
     ) {
         self.registrar = registrar
+        self.referrals = referrals
         self.form = SignupForm(locale: locale)
     }
 
@@ -185,7 +189,14 @@ final class SignupViewModel: ObservableObject {
         defer { isSubmitting = false }
 
         do {
-            if case .verificationRequired(let pending) = try await registrar.register(form.registerRequest()) {
+            // Le code d'invitation VOYAGE avec l'inscription (#8058) : la
+            // passerelle rattache le compte au parrain, et un code invalide ne
+            // bloque jamais la création. Le compte existe dès qu'elle répond —
+            // session ouverte ou code à saisir — donc le code a servi.
+            let request = form.registerRequest().referred(byCode: referrals.recall())
+            let outcome = try await registrar.register(request)
+            referrals.forget()
+            if case .verificationRequired(let pending) = outcome {
                 pendingVerification = pending
             }
             return true
