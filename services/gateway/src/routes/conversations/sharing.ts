@@ -29,6 +29,7 @@ import {
 // lien (`isActive`, `expiresAt`, `maxUses`, `allowedIpRanges`, …) : la garde
 // `link-admission-single-source-guard.test.ts` interdit d'y revenir.
 import { performLinkJoin, resolveClientIp } from './link-admission';
+import { refuserCommeIntrouvable } from './utils/access-control';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -327,7 +328,7 @@ export function registerSharingRoutes(
           }
         },
         401: errorResponseSchema,
-        403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -351,8 +352,9 @@ export function registerSharingRoutes(
         }
       });
 
+      // Un non-membre reçoit le 404 d'une conversation inexistante (#8116).
       if (!membership) {
-        return sendForbidden(reply, 'You must be a member of this conversation to see its sharing links');
+        return refuserCommeIntrouvable(reply);
       }
 
       // Vérifier si l'utilisateur est modérateur/admin de la conversation

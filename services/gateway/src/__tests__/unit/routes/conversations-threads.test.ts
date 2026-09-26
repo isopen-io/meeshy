@@ -31,9 +31,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...a: any[]) => mockCanAccessConversation(...a),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...a: any[]) => mockCanAccessConversation(...a)));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -155,9 +156,9 @@ describe('GET /conversations/:id/threads/:messageId — access denied', () => {
     await app.close();
   });
 
-  it('returns 403 when user has no access to the conversation', async () => {
+  it('returns the 404 of an unknown conversation when user has no access to it (#8116)', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 
