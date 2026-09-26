@@ -43,7 +43,8 @@ export type CallCaption = {
   readonly at: number;
 };
 
-export type CallDisplay = 'full' | 'pill';
+/** `full` : l'écran d'appel ; `pill` : la pastille du haut ; `bubble` : la bulle déplaçable (`CallBubbleView.swift`). */
+export type CallDisplay = 'full' | 'pill' | 'bubble';
 
 export type ActiveCall = {
   readonly callId: string | null;

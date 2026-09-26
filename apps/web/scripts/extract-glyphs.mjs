@@ -804,6 +804,27 @@ emit({
 });
 
 /**
+ * CONTINUER A DISCUTER PENDANT L'APPEL (#8046) — miroir de `CallBubbleView.swift`
+ * et `PiPCallController.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pip.enter` (image dans l'image) | `picture-in-picture` |
+ * | `slider.horizontal.3` (peripheriques) | `sliders-horizontal` |
+ * | `arrow.down.right` (replier la pastille en bulle) | `arrow-down-right` |
+ *
+ * Un jeu a part plutot qu'une ligne de plus au jeu d'ecran : charge avec la
+ * couche d'appel, comme lui, sans reecrire un fichier que d'autres lots touchent.
+ */
+emit({
+  ids: ['picture-in-picture', 'sliders-horizontal', 'arrow-down-right'],
+  output: join(HERE, '../src/components/glyphs-call-devices.ts'),
+  constant: 'CALL_DEVICES_GLYPHS',
+  type: 'CallDevicesGlyphName',
+  role: "LE JEU DE LA BULLE, DE L'IMAGE DANS L'IMAGE ET DES PERIPHERIQUES (#8046), charge avec la couche d'appel, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
  * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
  * `CreateShareLinkView.swift` :

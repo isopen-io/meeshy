@@ -1,0 +1,66 @@
+import { hasVideo } from './call-view';
+import type { ActiveCall } from './call-store';
+
+/**
+ * **L'IMAGE DANS L'IMAGE D'UN APPEL** (#8046, D10) — les règles de
+ * `PiPCallController.swift` pour le web, sans DOM. Deux mécanismes :
+ *
+ * - **Document Picture-in-Picture** (Chromium 116+) : une vraie fenêtre, qui
+ *   porte la vidéo ET les boutons de l'appel (micro, raccrocher, revenir) —
+ *   c'est l'équivalent le plus proche de la PiP d'iOS ;
+ * - **`requestPictureInPicture`** d'une `<video>` : la vidéo seule, partout
+ *   où la première manque (Safari, Firefox).
+ *
+ * La coque Android (WebView) n'offre ni l'un ni l'autre : le bouton n'y est
+ * pas dessiné. La bascule AUTOMATIQUE quand l'onglet se masque passe par
+ * l'action Media Session `enterpictureinpicture` : un navigateur refuse toute
+ * image dans l'image sans geste, sauf par ce chemin.
+ */
+
+export type PipSupport = 'document' | 'video' | 'none';
+
+export type PipEnvironment = { readonly documentPictureInPicture?: unknown; readonly pictureInPictureEnabled?: boolean };
+
+export function pipSupport(env: PipEnvironment): PipSupport {
+  if (env.documentPictureInPicture !== undefined && env.documentPictureInPicture !== null) return 'document';
+  return env.pictureInPictureEnabled === true ? 'video' : 'none';
+}
+
+export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean };
+
+type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'>;
+
+/** Ce qui flotte : la vidéo du premier pair qui en envoie, sinon ma caméra (en miroir, comme la vignette). */
+export function pipSource(call: PipCall): PipSource | null {
+  const remote = Object.values(call.members)
+    .filter((member) => member.cameraOn)
+    .map((member) => call.remoteStreams[member.userId])
+    .find((stream) => hasVideo(stream));
+  if (remote !== undefined) return { stream: remote, mirrored: false };
+  return call.cameraOn && call.localStream !== null && hasVideo(call.localStream) ? { stream: call.localStream, mirrored: true } : null;
+}
+
+export function shouldOfferPip(call: PipCall, support: PipSupport): boolean {
+  return support !== 'none' && call.phase.kind !== 'ended' && call.phase.kind !== 'incoming' && pipSource(call) !== null;
+}
+
+type ActionSession = { readonly setActionHandler: (action: string, handler: (() => void) | null) => void };
+
+/**
+ * Arme la bascule automatique ; rend ce qui la désarme. Une action inconnue
+ * lève un `TypeError` (Firefox, Safari) : la bascule manque, l'appel non.
+ */
+export function armAutoPip(session: ActionSession | undefined, enter: () => void): () => void {
+  const set = (handler: (() => void) | null): boolean => {
+    try {
+      session?.setActionHandler('enterpictureinpicture', handler);
+      return session !== undefined;
+    } catch {
+      return false;
+    }
+  };
+  const armed = set(enter);
+  return () => {
+    if (armed) set(null);
+  };
+}

@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  audioInputConstraints,
   CALL_DEVICES_KEY,
   groupCallDevices,
   preferredDevice,
   readDevicePreferences,
   sinkSelectionSupported,
-  videoInputConstraints,
   writeDevicePreference,
 } from './call-devices';
+import { acquireChosenInput, audioInputConstraints, videoInputConstraints } from './call-media';
 
 /**
  * **LES PÉRIPHÉRIQUES D'UN APPEL** (#8046, D5) — la caméra, le micro et la
@@ -99,5 +98,33 @@ describe('sinkSelectionSupported', () => {
     expect(sinkSelectionSupported({ prototype: { setSinkId: () => undefined } })).toBe(true);
     expect(sinkSelectionSupported({ prototype: {} })).toBe(false);
     expect(sinkSelectionSupported(undefined)).toBe(false);
+  });
+});
+
+describe('acquireChosenInput', () => {
+  const recorder = () => {
+    const asked: MediaStreamConstraints[] = [];
+    const mediaDevices = {
+      getUserMedia: async (constraints: MediaStreamConstraints) => {
+        asked.push(constraints);
+        const tracks = [{ kind: constraints.audio === false ? 'video' : 'audio' }];
+        return { getAudioTracks: () => tracks.filter((t) => t.kind === 'audio'), getVideoTracks: () => tracks.filter((t) => t.kind === 'video') } as unknown as MediaStream;
+      },
+    };
+    return { asked, mediaDevices };
+  };
+
+  test('un appareil choisi au sélecteur est EXIGÉ : occupé, il échoue au lieu d’ouvrir son voisin', async () => {
+    const r = recorder();
+    await acquireChosenInput({ kind: 'microphone', deviceId: 'mic-2', mediaDevices: r.mediaDevices });
+    await acquireChosenInput({ kind: 'camera', deviceId: 'cam-2', mediaDevices: r.mediaDevices });
+    expect(r.asked[0]).toMatchObject({ audio: { deviceId: { exact: 'mic-2' }, echoCancellation: true }, video: false });
+    expect(r.asked[1]).toMatchObject({ audio: false, video: { deviceId: { exact: 'cam-2' } } });
+  });
+
+  test('« Par défaut » rouvre l’appareil du système', async () => {
+    const r = recorder();
+    await acquireChosenInput({ kind: 'microphone', deviceId: null, mediaDevices: r.mediaDevices });
+    expect(r.asked[0]?.audio).not.toHaveProperty('deviceId');
   });
 });

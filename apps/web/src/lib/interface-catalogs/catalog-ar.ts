@@ -6,6 +6,7 @@ import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
 import arCallJoin from './catalog-ar-call-join';
 import arCallShell from './catalog-ar-call-shell';
+import arCallDevices from './catalog-ar-call-devices';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -197,6 +198,7 @@ const ar = {
   ...arCall,
   ...arCallJoin,
   ...arCallShell,
+  ...arCallDevices,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

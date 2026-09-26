@@ -25,6 +25,7 @@ import {
   type DecodedPerson,
 } from './call-decode';
 import { fetchActiveCallId } from './active-call';
+import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, mediaFailureOf, stopStream, type Facing } from './call-media';
 import {
   callStore,
@@ -108,6 +109,8 @@ export type CallEngine = {
   readonly toggleMic: () => void;
   readonly toggleCamera: () => Promise<void>;
   readonly switchCamera: () => Promise<void>;
+  /** Un périphérique choisi en cours d'appel (#8046) : la piste, déjà acquise, remplace l'actuelle. */
+  readonly replaceInput: (kind: 'camera' | 'microphone', track: MediaStreamTrack) => Promise<void>;
   readonly setDisplay: (display: ActiveCall['display']) => void;
   readonly toggleCaptions: () => void;
   readonly answerWaiting: () => Promise<void>;
@@ -731,6 +734,34 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     update((current) => ({ ...current, facing }));
   };
 
+  const replaceMicrophone = async (track: MediaStreamTrack, muted: boolean): Promise<void> => {
+    const stream = localStream;
+    if (stream === null) return;
+    for (const old of stream.getAudioTracks()) {
+      stream.removeTrack(old);
+      old.stop();
+    }
+    track.enabled = !muted;
+    stream.addTrack(track);
+    await Promise.all([...session.links.values()].map((link) => link.setAudioTrack(track).catch(() => undefined)));
+    update((call) => ({ ...call, localStream: deps.createStream(stream.getTracks()) }));
+  };
+
+  const replaceInput = async (kind: 'camera' | 'microphone', track: MediaStreamTrack): Promise<void> => {
+    const call = read();
+    const usable = call !== null && isCallLive(call) && call.phase.kind !== 'incoming' && localStream !== null && (kind === 'microphone' || call.cameraOn);
+    if (!usable) {
+      track.stop();
+      return;
+    }
+    if (kind === 'microphone') {
+      await replaceMicrophone(track, call.micMuted);
+      return;
+    }
+    await setCamera(track);
+    update((current) => ({ ...current, facing: 'user' }));
+  };
+
   const answerWaiting = async (): Promise<void> => {
     const waiting = store.getState().waiting;
     if (waiting === null) return;
@@ -794,6 +825,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     toggleMic,
     toggleCamera,
     switchCamera,
+    replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
     toggleCaptions: () => update((call) => ({ ...call, captionsOn: !call.captionsOn })),
     answerWaiting,
@@ -830,8 +862,8 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     transport: currentCallTransport,
     viewerId: () => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '',
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
-    acquireMedia: (options) => acquireCallMedia(options),
-    acquireCamera: (facing) => acquireCamera({ facing }),
+    acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs() }),
+    acquireCamera: (facing) => acquireCamera({ facing, cameraId: preferredInputs().cameraId }),
     createLink: createPeerLink,
     createStream: defaultCreateStream,
     now: Date.now,
