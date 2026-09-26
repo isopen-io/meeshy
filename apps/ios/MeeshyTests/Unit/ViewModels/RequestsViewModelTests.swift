@@ -345,27 +345,6 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(collected.first, .exhausted(cmid: cmid))
     }
 
-    // MARK: - Pagination
-
-    func test_loadMoreReceived_appendsResults() async {
-        let (sut, mock, _) = makeSUTWithQueue()
-        let first = FriendRequestFixture.make(id: "r1", status: "pending")
-        let second = FriendRequestFixture.make(id: "r2", status: "pending")
-        // `loadMoreReceived` only fires when the previous page filled
-        // (`receivedHasMore`). Seed that state directly instead of via
-        // `loadReceived`, which is cache-first through CacheCoordinator.shared
-        // and derives `hasMore` from page-fill (a 1-item first page would set
-        // hasMore=false and short-circuit loadMore).
-        sut.receivedRequests = [first]
-        sut.receivedHasMore = true
-
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [second], hasMore: false))
-        await sut.loadMoreReceived()
-
-        XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1", "r2"])
-        XCTAssertFalse(sut.receivedHasMore, "hasMore must reflect the last page's pagination flag")
-    }
-
     // MARK: - Cache-First Behavior
 
     /// Fresh cache for the received list short-circuits the network call.

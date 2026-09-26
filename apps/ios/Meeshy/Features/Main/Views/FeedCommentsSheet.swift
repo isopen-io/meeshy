@@ -336,8 +336,7 @@ struct CommentsSheetView: View {
         comments.filter { $0.parentId == nil }
     }
 
-    /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
-    /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
+    /// Sème `likedIds` depuis les commentaires domaine (`FeedComment`) de
     /// `post.comments` (et des réponses chargées) qui portent désormais
     /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
     /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.

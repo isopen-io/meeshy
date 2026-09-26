@@ -4,11 +4,11 @@ import XCTest
 @MainActor
 final class ForwardTargetMergeTests: XCTestCase {
     private func conv(_ id: String, userId: String? = nil, title: String = "C") -> ForwardTarget {
-        ForwardTarget(id: "conv:\(id)", kind: .conversation, conversationId: id, userId: userId,
+        ForwardTarget(id: "conv:\(id)", conversationId: id, userId: userId,
                       title: title, subtitle: nil, avatarURL: nil)
     }
     private func contact(_ userId: String, title: String = "P") -> ForwardTarget {
-        ForwardTarget(id: "user:\(userId)", kind: .contact, conversationId: nil, userId: userId,
+        ForwardTarget(id: "user:\(userId)", conversationId: nil, userId: userId,
                       title: title, subtitle: nil, avatarURL: nil)
     }
 

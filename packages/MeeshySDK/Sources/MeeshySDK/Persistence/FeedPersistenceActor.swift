@@ -4,31 +4,6 @@ import os
 
 private let feedPersistenceLog = Logger(subsystem: "com.meeshy.sdk", category: "feed-persistence")
 
-/// Notification posted after FeedPersistenceActor commits a write that may
-/// have changed the feed posts or comments. `FeedStore` and `CommentStore`
-/// listen for this notification instead of using GRDB observation, which
-/// crashes under Swift 6 strict concurrency interop with the GRDB Swift
-/// module: passing any `@Sendable` closure to GRDB triggers
-/// `_swift_task_checkIsolatedSwift` at invocation from GRDB's dispatch
-/// queues. See the explanatory comment in
-/// `apps/ios/Meeshy/Features/Main/Stores/MessageStore.swift` for context.
-public extension Notification.Name {
-    static let feedStoreShouldRefresh = Notification.Name("me.meeshy.feedStore.shouldRefresh")
-}
-
-/// Posts the `feedStoreShouldRefresh` notification on the main thread after
-/// any write through `FeedPersistenceActor` that may affect the displayed
-/// feed or comment list. The feed is a single global stream, so no scope
-/// payload is required.
-fileprivate func postFeedStoreRefresh() {
-    DispatchQueue.main.async {
-        NotificationCenter.default.post(
-            name: .feedStoreShouldRefresh,
-            object: nil
-        )
-    }
-}
-
 public actor FeedPersistenceActor {
     private let dbWriter: any DatabaseWriter
 
@@ -52,12 +27,10 @@ public actor FeedPersistenceActor {
             try db.execute(sql: "DELETE FROM feed_comments")
             try db.execute(sql: "DELETE FROM feed_translations")
         }
-        postFeedStoreRefresh()
     }
 
     public func insertPost(_ record: PostRecord) throws {
         try dbWriter.write { db in try record.save(db) }
-        postFeedStoreRefresh()
     }
 
     public func insertPosts(_ records: [PostRecord]) throws {
@@ -83,7 +56,6 @@ public actor FeedPersistenceActor {
                 try record.save(db)
             }
         }
-        postFeedStoreRefresh()
     }
 
     /// grdb-03 — ids de posts porteurs d'une mutation optimiste PENDING dans
@@ -150,7 +122,6 @@ public actor FeedPersistenceActor {
                 arguments: [count, isLikedByMe, postId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     /// stores-03 — variante pour un like/unlike émis par un TIERS : met à jour
@@ -167,7 +138,6 @@ public actor FeedPersistenceActor {
                 arguments: [count, postId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     public func updateCommentCount(postId: String, count: Int) throws {
@@ -180,28 +150,24 @@ public actor FeedPersistenceActor {
                 arguments: [count, postId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     public func deletePost(id: String) throws {
         try dbWriter.write { db in
             try db.execute(sql: "DELETE FROM feed_posts WHERE id = ?", arguments: [id])
         }
-        postFeedStoreRefresh()
     }
 
     // MARK: - Comment Writes
 
     public func insertComment(_ record: CommentRecord) throws {
         try dbWriter.write { db in try record.save(db) }
-        postFeedStoreRefresh()
     }
 
     public func deleteComment(id: String) throws {
         try dbWriter.write { db in
             try db.execute(sql: "DELETE FROM feed_comments WHERE id = ?", arguments: [id])
         }
-        postFeedStoreRefresh()
     }
 
     /// Réécrit le blob média d'un commentaire (`comment:media-updated` : le
@@ -218,7 +184,6 @@ public actor FeedPersistenceActor {
                 arguments: [mediaJson, commentId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     public func updateCommentLikeCount(commentId: String, count: Int) throws {
@@ -231,7 +196,6 @@ public actor FeedPersistenceActor {
                 arguments: [count, commentId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     /// Met à jour le compteur d'UNE réaction emoji d'un post dans le cache local
@@ -260,7 +224,6 @@ public actor FeedPersistenceActor {
                 arguments: [updatedData, postId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     /// Met à jour le compteur d'UNE réaction emoji d'un commentaire dans le cache
@@ -288,7 +251,6 @@ public actor FeedPersistenceActor {
                 arguments: [updatedData, commentId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     /// Remplace l'INTÉGRALITÉ du dict de réactions d'un commentaire — reçu via le
@@ -306,7 +268,6 @@ public actor FeedPersistenceActor {
                 arguments: [updatedData, commentId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     public func upsertPostTranslation(postId: String, language: String, translatedText: String) throws {
@@ -328,7 +289,6 @@ public actor FeedPersistenceActor {
                 arguments: [updatedData, postId]
             )
         }
-        postFeedStoreRefresh()
     }
 
     // MARK: - Reads (nonisolated)

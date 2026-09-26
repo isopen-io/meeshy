@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import os
 import MeeshySDK
 import MeeshyUI
 
@@ -9,14 +8,12 @@ final class RequestsViewModel: ObservableObject {
     @Published var receivedRequests: [FriendRequest] = []
     @Published var sentRequests: [FriendRequest] = []
     @Published var loadState: LoadState = .idle
-    @Published var receivedHasMore = true
 
     private let friendService: FriendServiceProviding
     /// Injected so tests can drive the accept/reject outbox path (enqueue
     /// success/failure + terminal outcome) deterministically, mirroring the
     /// pattern used by FeedViewModel / StatusViewModel / EditProfileViewModel.
     private let offlineQueue: OfflineQueueing
-    private var receivedOffset = 0
     private let pageSize = 30
 
     /// In-flight silent revalidation tasks, kicked off when the cache returns
@@ -27,8 +24,6 @@ final class RequestsViewModel: ObservableObject {
 
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "requests")
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
@@ -46,7 +41,6 @@ final class RequestsViewModel: ObservableObject {
     // MARK: - Load Received
 
     func loadReceived(forceNetwork: Bool = false) async {
-        receivedOffset = 0
         let friendService = self.friendService
         let pageSize = self.pageSize
         let store = await CacheCoordinator.shared.friendRequests
@@ -62,28 +56,12 @@ final class RequestsViewModel: ObservableObject {
         let apply: @MainActor @Sendable ([FriendRequest]) -> Void = { [weak self] requests in
             guard let self else { return }
             self.receivedRequests = requests
-            self.receivedOffset = requests.count
-            // hasMore: assume more if we filled the page; refined by network response
-            self.receivedHasMore = requests.count >= pageSize
         }
         if forceNetwork {
             await loader.refresh(fetch: fetch, setLoadState: setLoadState, apply: apply)
             return
         }
         receivedRevalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
-    }
-
-    func loadMoreReceived() async {
-        guard receivedHasMore else { return }
-        do {
-            let response = try await friendService.receivedRequests(offset: receivedOffset, limit: pageSize)
-            receivedRequests.append(contentsOf: response.data)
-            receivedHasMore = response.pagination?.hasMore ?? false
-            receivedOffset += response.data.count
-        } catch {
-            Self.logger.error("loadMoreReceived failed: \(error.localizedDescription)")
-            receivedHasMore = false
-        }
     }
 
     // MARK: - Load Sent

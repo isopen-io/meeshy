@@ -55,16 +55,6 @@ enum GallerySceneStage {
     struct Frame: Equatable {
         /// La réponse de la loi, telle quelle.
         let layout: SceneShape.Layout
-
-        /// Les cotes de la SCÈNE — toujours contenues dans la région, puisque
-        /// la loi AJUSTE. C'est ce que la carte mesure.
-        var sceneSize: CGSize { layout.sceneFrame.size }
-
-        var cornerRadius: CGFloat { layout.cornerRadius }
-
-        /// Le fond que la CARTE peint dedans, élu par la loi — jamais par
-        /// l'hôte, qui en élisait un autre que le lecteur de stories.
-        var backdrop: SceneShape.Backdrop { layout.backdrop }
     }
 
     /// La région dans laquelle la scène se pose — **le SEUL paramètre par

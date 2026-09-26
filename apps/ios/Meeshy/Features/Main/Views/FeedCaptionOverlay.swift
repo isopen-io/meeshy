@@ -66,10 +66,10 @@ struct FeedCaptionOverlay: View {
     /// Elle se demande à la règle plutôt qu'en comparant deux chaînes : une
     /// comparaison `abrégé != complet` répondrait aussi « oui » pour une
     /// légende inchangée dont on aurait seulement rogné les espaces.
-    static func isTruncated(_ caption: String) -> Bool {
+    static func isTruncated(_ caption: String, words: Int = wordCount) -> Bool {
         let propre = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !propre.isEmpty else { return false }
-        return MediaCaptionRule.collapse(propre, words: wordCount).1
+        return MediaCaptionRule.collapse(propre, words: words).1
     }
 
     /// Le texte complet, débarrassé de ses bords.
@@ -100,7 +100,7 @@ struct FeedCaptionOverlay: View {
 
     @ViewBuilder
     private func contenu(caption: String, abrege: String) -> some View {
-        let tronquee = Self.isTruncated(caption)
+        let tronquee = Self.isTruncated(caption, words: words)
         VStack(alignment: .leading, spacing: 2) {
             Text(deplie ? Self.full(caption) : abrege)
                 .font(.subheadline.weight(.medium))

@@ -85,7 +85,7 @@ struct ConversationDashboardView: View {
         .padding(.top, 12)
         .padding(.bottom, 32)
         .task { await loadAgentAnalysis() }
-        .task(id: messages.count) {
+        .task(id: ConversationDashboardClientStats.snapshotKey(for: messages)) {
             let snapshot = messages
             let stats = await Task.detached(priority: .utility) {
                 ConversationDashboardClientStats(messages: snapshot)

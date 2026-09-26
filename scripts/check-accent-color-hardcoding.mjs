@@ -146,7 +146,12 @@
 // propre `accentColor`. Même vocabulaire que #6793 ci-dessus (la CHAÎNE, par
 // opposition à la COULEUR) : relever plutôt que renommer. Aucun littéral ne
 // bouge (118).
-const REFERENCE_LITERAL_COLOR_COUNT = 118;
+//
+// 2026-09-26 (#7945, lot 6, second passage) — littéraux 118 → 117. Aucun
+// littéral n'est remplacé : `MemberManagementSection`, jamais construite ni
+// testée, part en bloc (vue morte), et le doré `Color(hex: "F8B500")` de son
+// badge « Créateur » part avec elle. Aucune variable ne bouge (432).
+const REFERENCE_LITERAL_COLOR_COUNT = 117;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 432;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

@@ -14,7 +14,7 @@ import XCTest
 /// depuis `Riviere/View/` : il n'existait aucun moyen de monter la MÊME vue
 /// sans en déclarer une seconde. `RiverStreamHost` reçoit désormais le roster
 /// de son hôte (`typingParticipants`, dit par `ConversationView` depuis
-/// `ConversationViewModel.typingUsernames`) et le rend en OVERLAY BAS du pane,
+/// `ConversationViewModel.typingParticipants.displayNames`) et le rend en OVERLAY BAS du pane,
 /// au-dessus du composeur.
 ///
 /// Ce que cette suite verrouille, c'est le risque que le brief nomme et qui

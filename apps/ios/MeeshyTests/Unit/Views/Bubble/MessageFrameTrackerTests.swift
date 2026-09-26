@@ -77,19 +77,6 @@ final class MessageFrameTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.frame(for: "d"), makeFrame(4))
     }
 
-    // MARK: - Removal
-
-    func test_removeFrame_clearsBothDictAndAccessOrder() {
-        var tracker = makeTracker()
-        tracker.update(["a": makeFrame(1), "b": makeFrame(2)])
-        tracker.removeFrame(for: "a")
-
-        XCTAssertNil(tracker.frame(for: "a"))
-        XCTAssertEqual(tracker.frame(for: "b"), makeFrame(2))
-        XCTAssertFalse(tracker.accessOrder.contains("a"),
-                       "LRU queue stays consistent after explicit removal")
-    }
-
     // MARK: - #3946 — la boîte qui empêche la mesure de réveiller la racine
 
     /// La boîte ne réécrit pas la loi : elle la PORTE. Si elle la
@@ -104,13 +91,6 @@ final class MessageFrameTrackerTests: XCTestCase {
         XCTAssertNil(box.frame(for: "a"), "le plus ancien sort au-delà du plafond — la loi de la valeur")
         XCTAssertEqual(box.frame(for: "b"), makeFrame(2))
         XCTAssertEqual(box.frame(for: "c"), makeFrame(3))
-    }
-
-    func test_theBox_forgetsAFrameOnDemand() {
-        let box = MessageFrameBox()
-        box.update(["a": makeFrame(1)])
-        box.removeFrame(for: "a")
-        XCTAssertNil(box.frame(for: "a"))
     }
 
     /// **Une RÉFÉRENCE, jamais une valeur.** Une valeur tenue en `@State`

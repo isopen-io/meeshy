@@ -43,6 +43,20 @@ nonisolated struct ConversationDashboardClientStats: Sendable {
         sentiment = Self.computeSentiment(of: messages)
     }
 
+    /// What the view keys its recompute on: the CONTENT of `messages`, not
+    /// only their number — an edit (`markEdited`) or an attachment enriched
+    /// in place (`applyAttachmentUpdate`) bumps `updatedAt` without changing
+    /// `messages.count`, and keying on the count left the snapshot stale.
+    static func snapshotKey(for messages: [Message]) -> Int {
+        var hasher = Hasher()
+        hasher.combine(messages.count)
+        for msg in messages {
+            hasher.combine(msg.id)
+            hasher.combine(msg.updatedAt)
+        }
+        return hasher.finalize()
+    }
+
     private static func countWords(in messages: [Message]) -> Int {
         messages.reduce(0) { total, msg in
             total + msg.content.split(whereSeparator: \.isWhitespace).count

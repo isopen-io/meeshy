@@ -12,7 +12,7 @@ final class DiscoverViewModelTests: XCTestCase {
         // Suggestions list goes through `CacheCoordinator.shared.userSearch`.
         // Reset between tests so state from a previous run never bleeds in.
         await CacheCoordinator.shared.userSearch.invalidate(for: "discover:suggestions")
-        // `sendRequest` flips this singleton — reset so a prior test's
+        // `FriendshipCache` is process-global — reset so a prior test's
         // `.pendingSent` entry never bleeds into the next (mirrors
         // RequestsViewModelTests' setUp/tearDown for the same cache).
         FriendshipCache.shared.clear()

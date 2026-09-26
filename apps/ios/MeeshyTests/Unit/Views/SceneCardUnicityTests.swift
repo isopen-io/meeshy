@@ -48,7 +48,7 @@ final class SceneCardUnicityTests: XCTestCase {
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, SceneShape.cardedBackdrop)
         XCTAssertEqual(GallerySceneStage.frame(viewport: CGSize(width: 402, height: 874),
                                                presentation: .carded,
-                                               corridors: Self.corridors).backdrop,
+                                               corridors: Self.corridors).layout.backdrop,
                        SceneShape.cardedBackdrop)
     }
 
@@ -61,7 +61,7 @@ final class SceneCardUnicityTests: XCTestCase {
                        SceneShape.cardedCornerRadius)
         XCTAssertEqual(GallerySceneStage.frame(viewport: viewport,
                                                presentation: .carded,
-                                               corridors: Self.corridors).cornerRadius,
+                                               corridors: Self.corridors).layout.cornerRadius,
                        SceneShape.cardedCornerRadius)
         XCTAssertEqual(Self.cadrageDuLecteur(viewport: viewport).cornerRadius,
                        SceneShape.cardedCornerRadius,
@@ -74,12 +74,14 @@ final class SceneCardUnicityTests: XCTestCase {
     /// site délègue à la loi » de « ce site a recopié la même constante à la
     /// main » — les deux rendent le même verdict tant que personne ne change
     /// rien. Ce témoin lit le TEXTE : `readerSceneBackdrop` doit contenir
-    /// `SceneShape.cardedBackdrop`, `GallerySceneStage` doit lire
-    /// `layout.backdrop` et `layout.cornerRadius` (jamais une valeur à lui),
-    /// et le lecteur doit passer `SceneShape.cardedCornerRadius` au cadrage
-    /// qu'il anime — un site qui recommencerait à ÉLIRE sa propre constante
-    /// (même identique aujourd'hui) le ferait rougir, ce qu'aucune comparaison
-    /// de valeurs ne peut faire.
+    /// `SceneShape.cardedBackdrop`, et le lecteur doit passer
+    /// `SceneShape.cardedCornerRadius` au cadrage qu'il anime — un site qui
+    /// recommencerait à ÉLIRE sa propre constante (même identique
+    /// aujourd'hui) le ferait rougir, ce qu'aucune comparaison de valeurs ne
+    /// peut faire. **`GallerySceneStage.Frame` n'a plus de valeur à lui à
+    /// élire** : ses projections `backdrop`/`cornerRadius` étaient mortes
+    /// (aucun lecteur de production) et ont été retirées — il n'expose plus
+    /// que `layout`, ce que ce témoin vérifie à son tour.
     func test_leFondEtLeRayon_sontDeleguesALaSource_pasElisLocalement() throws {
         let lecteur = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift"))
@@ -93,10 +95,10 @@ final class SceneCardUnicityTests: XCTestCase {
 
         let galerie = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/GallerySceneStage.swift"))
-        XCTAssertTrue(galerie.contains("layout.backdrop"),
-                      "la galerie lit le fond DEPUIS la loi, jamais une élection à elle")
-        XCTAssertTrue(galerie.contains("layout.cornerRadius"),
-                      "la galerie lit le rayon DEPUIS la loi, jamais un littéral à elle")
+        XCTAssertTrue(galerie.contains("let layout: SceneShape.Layout"),
+                      "la galerie expose la carte de la loi telle quelle")
+        XCTAssertFalse(galerie.contains("var backdrop") || galerie.contains("var cornerRadius"),
+                       "aucune projection locale ne doit réélire ce que layout rend déjà")
     }
 
     /// **Un seul cadre.** Les deux surfaces cadrent le 9:16 dans une RÉGION
@@ -105,7 +107,7 @@ final class SceneCardUnicityTests: XCTestCase {
     func test_leCadre_estCeluiDeLaLoi_surLesDeuxSurfaces() {
         let viewport = CGSize(width: 402, height: 874)
         let galerie = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
-                                              corridors: Self.corridors).sceneSize
+                                              corridors: Self.corridors).layout.sceneFrame.size
         let lecteur = SceneShape.layout(in: viewport, immersive: false)
             .sceneFrame.size
 
@@ -141,17 +143,17 @@ final class SceneCardUnicityTests: XCTestCase {
         let immersif = GallerySceneStage.frame(viewport: viewport, presentation: .full(pausedOnEntry: false),
                                                corridors: Self.corridors)
 
-        XCTAssertEqual(immersif.backdrop, cadre.backdrop)
+        XCTAssertEqual(immersif.layout.backdrop, cadre.layout.backdrop)
         // **Le RAYON, lui, n'est plus partagé** (directive B du 2026-09-18) :
         // « lorsqu'on met en plein écran, il faut enlever l'arrondi sur le
         // composant et garder les bords angle exacte ! ». C'est la SEULE chose
         // que l'état change — le cadre et le fond restent ceux de la story, et
         // les assertions qui les tiennent ci-dessous n'ont pas bougé.
-        XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius)
-        XCTAssertEqual(immersif.cornerRadius, SceneShape.immersiveCornerRadius)
-        XCTAssertGreaterThan(immersif.sceneSize.width, cadre.sceneSize.width,
+        XCTAssertEqual(cadre.layout.cornerRadius, SceneShape.cardedCornerRadius)
+        XCTAssertEqual(immersif.layout.cornerRadius, SceneShape.immersiveCornerRadius)
+        XCTAssertGreaterThan(immersif.layout.sceneFrame.size.width, cadre.layout.sceneFrame.size.width,
                              "sans couloir, la MÊME carte est plus grande")
-        for cote in [cadre.sceneSize, immersif.sceneSize] {
+        for cote in [cadre.layout.sceneFrame.size, immersif.layout.sceneFrame.size] {
             XCTAssertEqual(cote.width / cote.height, SceneShape.aspect, accuracy: 0.0001)
             XCTAssertLessThanOrEqual(cote.width, viewport.width + 0.01,
                                      "aucune des deux ne ROGNE la scène")

@@ -329,6 +329,7 @@ struct PostSceneMosaicContainer: View {
             isActive: coordinator.activeReelId == post.id,
             onTapScene: onTapScene
         )
+        .equatable()
     }
 }
 
@@ -362,6 +363,7 @@ struct PostSceneMosaicSurface: View {
                 isActive: false,
                 onTapScene: onTapScene
             )
+            .equatable()
         }
     }
 }

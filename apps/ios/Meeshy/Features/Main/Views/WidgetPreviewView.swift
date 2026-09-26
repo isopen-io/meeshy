@@ -174,7 +174,8 @@ struct WidgetPreviewView: View {
     // MARK: - Recent Conversations Card
 
     private var recentConversationsCard: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+        let recent = recentConversations   // filtre + tri de TOUTES les conversations : 1 fois, pas 2 + 1 par ligne
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(MeeshyFont.relative(14, weight: .semibold))
@@ -185,7 +186,7 @@ struct WidgetPreviewView: View {
                 Spacer()
             }
 
-            if recentConversations.isEmpty {
+            if recent.isEmpty {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
                     title: String(localized: "widget.preview.noConversations", defaultValue: "Aucune conversation", bundle: .main),
@@ -193,9 +194,9 @@ struct WidgetPreviewView: View {
                 )
                 .padding(.vertical, 16)
             } else {
-                ForEach(Array(recentConversations.enumerated()), id: \.element.id) { index, conv in
+                ForEach(Array(recent.enumerated()), id: \.element.id) { index, conv in
                     recentConversationRow(conv, index: index)
-                    if index < recentConversations.count - 1 {
+                    if index < recent.count - 1 {
                         Divider()
                             .overlay(theme.textMuted.opacity(0.1))
                     }

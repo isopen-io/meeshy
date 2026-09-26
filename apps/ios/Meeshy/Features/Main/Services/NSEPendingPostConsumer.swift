@@ -105,8 +105,7 @@ final class NSEPendingPostConsumer {
     /// renders the triggering comment from local data on a cold start.
     ///
     /// - GRDB `feed_comments` (via the shared `FeedPersistenceActor`): an additive
-    ///   upsert-by-id — never clobbers, and feeds both the `CommentStore` read path
-    ///   and the per-comment reaction summary.
+    ///   upsert-by-id — never clobbers, and feeds the per-comment reaction summary.
     /// - `CacheCoordinator.comments` (what `PostDetailViewModel.loadComments` reads
     ///   first): seeded ONLY when that key is currently empty, so a richer set the
     ///   user already paginated is never overwritten by this recent-comments subset.

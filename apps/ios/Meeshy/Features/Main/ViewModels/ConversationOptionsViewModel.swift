@@ -127,15 +127,6 @@ final class ConversationOptionsViewModel: ObservableObject {
     }
 
     @discardableResult
-    func addTag(_ tag: String) -> Task<Void, Never> {
-        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return Task {} }
-        let current = prefs.tags ?? []
-        guard !current.contains(trimmed) else { return Task {} }
-        return setTags(current + [trimmed])
-    }
-
-    @discardableResult
     func removeTag(_ tag: String) -> Task<Void, Never> {
         let current = prefs.tags ?? []
         return setTags(current.filter { $0 != tag })

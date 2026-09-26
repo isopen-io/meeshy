@@ -1139,8 +1139,6 @@ struct FeedView: View {
                     socketHandler: deps.feedSocketHandler,
                     persistence: deps.feedPersistence
                 )
-                store.startObserving()
-                await store.loadInitial()
             }
 
             if viewModel.posts.isEmpty {
@@ -1254,7 +1252,6 @@ struct FeedView: View {
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
-            viewModel.feedStore?.stopObserving()
             // Flush, PAS cancel : annuler ici jetait le lot en cours de
             // groupement à chaque sortie du feed.
             Task { await impressions.flushNow() }

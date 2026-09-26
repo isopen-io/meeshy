@@ -248,66 +248,62 @@ public struct NotificationListView: View {
 
     // MARK: - List
 
-    private var filteredNotifications: [APINotification] {
-        viewModel.filteredNotifications
-    }
-
+    @ViewBuilder
     private var notificationList: some View {
-        Group {
-            if viewModel.isLoading && viewModel.notifications.isEmpty {
-                NotificationListSkeleton()
-            } else if viewModel.loadDidFail && viewModel.notifications.isEmpty {
-                // La panne AVANT le vide : sans cet ordre, une erreur réseau
-                // se lit « Aucune notification ».
-                NotificationListErrorState(brandColor: brandColor) {
-                    Task { await viewModel.loadInitial() }
+        let filtered = viewModel.filteredNotifications   // UNE descente du filtre par rendu
+        if viewModel.isLoading && viewModel.notifications.isEmpty {
+            NotificationListSkeleton()
+        } else if viewModel.loadDidFail && viewModel.notifications.isEmpty {
+            // La panne AVANT le vide : sans cet ordre, une erreur réseau
+            // se lit « Aucune notification ».
+            NotificationListErrorState(brandColor: brandColor) {
+                Task { await viewModel.loadInitial() }
+            }
+        } else if filtered.isEmpty {
+            emptyState
+        } else {
+            ScrollView {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: geo.frame(in: .named("scroll")).minY
+                    )
                 }
-            } else if filteredNotifications.isEmpty {
-                emptyState
-            } else {
-                ScrollView {
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("scroll")).minY
+                .frame(height: 0)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(filtered) { notification in
+                        NotificationRowView(
+                            notification: notification,
+                            onTap: {
+                                Task { await viewModel.markRead(notification) }
+                                onNotificationTap?(notification)
+                            },
+                            onMarkRead: {
+                                Task { await viewModel.markRead(notification) }
+                            },
+                            onDelete: {
+                                Task { await viewModel.deleteNotification(notification) }
+                            }
                         )
+                        .equatable()
                     }
-                    .frame(height: 0)
 
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredNotifications) { notification in
-                            NotificationRowView(
-                                notification: notification,
-                                onTap: {
-                                    Task { await viewModel.markRead(notification) }
-                                    onNotificationTap?(notification)
-                                },
-                                onMarkRead: {
-                                    Task { await viewModel.markRead(notification) }
-                                },
-                                onDelete: {
-                                    Task { await viewModel.deleteNotification(notification) }
-                                }
-                            )
-                            .equatable()
-                        }
-
-                        if viewModel.hasMore && viewModel.selectedCategory == .all {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .onAppear {
-                                    Task { await viewModel.loadMore() }
-                                }
-                        }
+                    if viewModel.hasMore && viewModel.selectedCategory == .all {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .onAppear {
+                                Task { await viewModel.loadMore() }
+                            }
                     }
                 }
-                .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
-                .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
-                .refreshable {
-                    await viewModel.loadInitial()
-                }
+            }
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
+            .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
+            .refreshable {
+                await viewModel.loadInitial()
             }
         }
     }

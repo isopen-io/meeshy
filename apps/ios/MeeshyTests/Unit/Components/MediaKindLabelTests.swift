@@ -79,15 +79,6 @@ final class MediaKindLabelTests: XCTestCase {
         XCTAssertEqual(MediaKindLabel.kind(for: MessageAttachment.AttachmentType.location), .location)
     }
 
-    /// `.text` n'est pas un média : la table rend `nil` plutôt qu'un libellé
-    /// inventé. C'est ce `nil` qui fait rendre la chaîne vide à l'aperçu d'un
-    /// message texte sans contenu, au lieu de « 📎 Pièce jointe ».
-    func test_kindDepuisTypeDeMessage_texteNEstPasUnMedia() {
-        XCTAssertNil(MediaKindLabel.kind(for: Message.MessageType.text))
-        XCTAssertEqual(MediaKindLabel.kind(for: Message.MessageType.image), .photo)
-        XCTAssertEqual(MediaKindLabel.kind(for: Message.MessageType.location), .location)
-    }
-
     func test_kindDepuisVocabulaireSerialise_etJetonInconnu() {
         XCTAssertEqual(MediaKindLabel.kind(forAttachmentRawValue: "image"), .photo)
         XCTAssertEqual(MediaKindLabel.kind(forAttachmentRawValue: "location"), .location)

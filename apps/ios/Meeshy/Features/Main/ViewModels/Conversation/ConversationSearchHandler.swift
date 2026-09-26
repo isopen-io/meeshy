@@ -18,13 +18,15 @@ final class ConversationSearchHandler {
     private let conversationId: String
     private let messageService: MessageServiceProviding
     private let persistence: MessagePersistenceActor
+    private let languageProvider: LanguageProviding
     private var nextCursor: String?
 
-    init(state: ConversationStateStore, conversationId: String, messageService: MessageServiceProviding = MessageService.shared, persistence: MessagePersistenceActor) {
+    init(state: ConversationStateStore, conversationId: String, messageService: MessageServiceProviding = MessageService.shared, persistence: MessagePersistenceActor, languageProvider: LanguageProviding = AuthManagerLanguageProvider()) {
         self.state = state
         self.conversationId = conversationId
         self.messageService = messageService
         self.persistence = persistence
+        self.languageProvider = languageProvider
     }
 
     /// Fresh search: resets the cursor, hydrates `state.searchResults`
@@ -49,7 +51,7 @@ final class ConversationSearchHandler {
             // Persist the matched messages so the in-situ filtered-conversation
             // view can render them as real bubbles — including matches that fall
             // outside the currently-loaded window.
-            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: languageProvider.preferredLanguages)
             state.searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -74,7 +76,7 @@ final class ConversationSearchHandler {
                 query: trimmed,
                 cursor: cursor
             )
-            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            try? await persistence.upsertFromAPIMessages(response.data, preferredLanguages: languageProvider.preferredLanguages)
             state.searchResults.append(contentsOf: response.data.map { buildSearchResult($0, query: trimmed) })
             nextCursor = response.cursorPagination?.nextCursor
             state.searchHasMore = response.cursorPagination?.hasMore ?? false
@@ -90,20 +92,12 @@ final class ConversationSearchHandler {
         let content = apiMsg.content ?? ""
         let queryLower = query.lowercased()
 
-        // Original content match takes precedence — that's what the bubble
-        // ultimately renders.
-        if content.lowercased().contains(queryLower) {
-            return SearchResultItem(
-                id: apiMsg.id, conversationId: apiMsg.conversationId,
-                content: content, matchedText: content, matchType: "content",
-                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-            )
-        }
-
         // Translation match — surface the translation snippet so the user
         // sees why the message matched even if they don't speak the
-        // original language.
-        if let translations = apiMsg.translations {
+        // original language. Original content match takes precedence; when
+        // it already matches (or no translation matches either) the
+        // untouched-content result below covers it.
+        if !content.lowercased().contains(queryLower), let translations = apiMsg.translations {
             for t in translations where t.translatedContent.lowercased().contains(queryLower) {
                 return SearchResultItem(
                     id: apiMsg.id, conversationId: apiMsg.conversationId,
@@ -113,8 +107,6 @@ final class ConversationSearchHandler {
             }
         }
 
-        // Defensive fallback (the gateway shouldn't return a non-matching
-        // hit, but if it does we still render the content untouched).
         return SearchResultItem(
             id: apiMsg.id, conversationId: apiMsg.conversationId,
             content: content, matchedText: content, matchType: "content",

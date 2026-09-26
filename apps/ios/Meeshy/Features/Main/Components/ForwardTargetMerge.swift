@@ -1,15 +1,7 @@
 import Foundation
 
-/// Une cible que le sélecteur de transfert peut proposer — soit une conversation
-/// existante, soit un contact sans conversation encore ouverte.
-enum ForwardTargetKind: Equatable {
-    case conversation
-    case contact
-}
-
 struct ForwardTarget: Identifiable, Equatable {
     let id: String              // "conv:<id>" ou "user:<id>" — clé d'état stable
-    let kind: ForwardTargetKind
     let conversationId: String? // nil pour un contact sans conversation
     let userId: String?         // identifiant de la personne, nil pour un groupe
     let title: String
@@ -18,8 +10,6 @@ struct ForwardTarget: Identifiable, Equatable {
 }
 
 /// Fusion PURE des cibles du sélecteur de transfert — conversations et contacts.
-/// RÈGLE JUMELLE : apps/web/lib/forward-target-merge.ts — toute évolution touche
-/// les deux sites.
 enum ForwardTargetMerge {
     /// Ordre : conversations (dans l'ordre reçu), puis contacts non absorbés.
     /// Un contact dont `userId` correspond au `userId` d'une conversation

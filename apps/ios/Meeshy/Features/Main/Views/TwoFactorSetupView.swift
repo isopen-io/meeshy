@@ -21,6 +21,8 @@ struct TwoFactorSetupView: View {
     }
 
     @State private var step: SetupStep = .loading
+    /// Décodé UNE fois à la réponse du serveur — pas à chaque rendu de l'étape secret.
+    @State private var qrImage: UIImage?
     @State private var verificationCode = ""
     @State private var verifying = false
     @State private var codeError: String?
@@ -90,9 +92,7 @@ struct TwoFactorSetupView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
-            if let base64String = setup.qrCodeDataUrl.components(separatedBy: ",").last,
-               let data = Data(base64Encoded: base64String),
-               let uiImage = UIImage(data: data) {
+            if let uiImage = qrImage {
                 Image(uiImage: uiImage)
                     .resizable()
                     .interpolation(.none)
@@ -369,11 +369,18 @@ struct TwoFactorSetupView: View {
         Task {
             await viewModel.beginSetup()
             if let setup = viewModel.setupData {
+                qrImage = Self.decodeQRImage(setup.qrCodeDataUrl)
                 step = .showSecret(setup)
             } else {
                 step = .error(viewModel.error ?? String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main))
             }
         }
+    }
+
+    private static func decodeQRImage(_ dataUrl: String) -> UIImage? {
+        guard let base64 = dataUrl.components(separatedBy: ",").last,
+              let data = Data(base64Encoded: base64) else { return nil }
+        return UIImage(data: data)
     }
 
     private func submitVerification() {

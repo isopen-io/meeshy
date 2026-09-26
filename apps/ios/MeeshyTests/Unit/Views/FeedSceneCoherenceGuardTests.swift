@@ -253,13 +253,16 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
                       "PostSceneCard doit être Equatable.")
         XCTAssertTrue(embed.contains("extension StoryRepostEmbedCell: Equatable"),
                       "StoryRepostEmbedCell doit être Equatable — elle est montée .equatable().")
+        let mosaic = try source(of: "Meeshy/Features/Main/Views/PostSceneMosaic.swift")
+        XCTAssertTrue(mosaic.contains("extension PostSceneMosaic: Equatable"),
+                      "PostSceneMosaic doit être Equatable — elle est montée .equatable().")
         // **Un COMPTE se périme à chaque montage neuf ; une PROPRIÉTÉ non.** Le
         // témoin a d'abord épinglé « exactement 2 `.equatable()` », et il est
         // devenu faux dès que le choix container/feuille est descendu dans ce
         // fichier — sans qu'aucune règle ait bougé. Ce qui compte est que TOUT
         // montage d'une feuille de scène court-circuite : un container qui
         // observe sans court-circuiter coûte plus qu'il ne rapporte.
-        for leaf in ["PostSceneCard(", "StoryRepostEmbedCell("] {
+        for leaf in ["PostSceneCard(", "StoryRepostEmbedCell(", "PostSceneMosaic("] {
             var searchStart = autoplay.startIndex
             var mounts = 0
             while let call = autoplay.range(of: leaf, range: searchStart..<autoplay.endIndex) {

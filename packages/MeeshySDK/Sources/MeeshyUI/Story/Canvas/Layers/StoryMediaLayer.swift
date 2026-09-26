@@ -69,7 +69,7 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
 /// variable, because it may change at runtime »). La boîte porte la mutabilité
 /// que `weak` exige et se capture, elle, comme une constante.
 ///
-/// NOTE — NON GÉNÉRIQUE délibérément, comme `WeakBox`/`FeedStoreWeakBox`
+/// NOTE — NON GÉNÉRIQUE délibérément, comme `WeakBox` (`MessageStore`)
 /// côté app : la forme générique a fait tomber l'optimiseur Swift 6.3.2
 /// (`EarlyPerfInliner`) sur le `deinit` synthétisé en Release
 /// `-O -whole-module-optimization`. Un autre call site = une autre copie typée.

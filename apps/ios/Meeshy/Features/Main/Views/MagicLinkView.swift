@@ -66,9 +66,10 @@ struct MagicLinkView: View {
         )
     }
 
+    private static let emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+
     private var isValidEmail: Bool {
-        let pattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
-        return email.wholeMatch(of: pattern) != nil
+        email.wholeMatch(of: Self.emailPattern) != nil
     }
 
     var body: some View {

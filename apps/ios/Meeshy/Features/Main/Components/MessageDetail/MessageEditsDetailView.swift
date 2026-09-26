@@ -28,7 +28,8 @@ struct MessageEditsDetailView: View {
                     ? String(localized: "message-detail.edits.none-detail", defaultValue: "Ce message n'a pas été modifié", bundle: .main)
                     : previousVersionsDetail(revisions.count),
                 count: revisions.isEmpty ? nil : "\(revisions.count)",
-                accent: accent
+                accent: accent,
+                countIsSpelledInDetail: true
             )
 
             if revisions.isEmpty {

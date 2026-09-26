@@ -60,10 +60,6 @@ struct BackgroundSoundBadge: View, Equatable {
         }
     }
 
-    static func == (lhs: BackgroundSoundBadge, rhs: BackgroundSoundBadge) -> Bool {
-        lhs.announcement == rhs.announcement && lhs.accentHex == rhs.accentHex
-    }
-
     var body: some View {
         switch announcement {
         case .none:

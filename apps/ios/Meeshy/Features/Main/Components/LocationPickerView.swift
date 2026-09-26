@@ -497,7 +497,9 @@ struct LocationPickerView: View {
     // MARK: - Bottom Card
 
     private var bottomCard: some View {
-        VStack(spacing: 12) {
+        let place = displayedPlace
+        let title = place.flatMap { LocationSharingLabels.placeTitle(name: $0.name, address: $0.address) }
+        return VStack(spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "location.fill")
                     .font(MeeshyFont.relative(14, weight: .semibold))
@@ -512,7 +514,7 @@ struct LocationPickerView: View {
                     // imagerie satellite sombre. `.primary`/`.secondary`
                     // s'adaptent à la vibrance du matériau — c'est déjà ce que
                     // fait `LocationFullscreenView` sur sa propre carte du bas.
-                    if let title = displayedTitle {
+                    if let title {
                         Text(title)
                             .font(MeeshyFont.relative(13, weight: .medium))
                             .foregroundColor(.primary)
@@ -531,7 +533,7 @@ struct LocationPickerView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    if let place = displayedPlace {
+                    if let place {
                         HStack(spacing: 6) {
                             // Une paire de coordonnées est une valeur ATOMIQUE :
                             // coupée en plusieurs lignes elle devient illisible.
@@ -570,7 +572,7 @@ struct LocationPickerView: View {
             .accessibilityElement(children: .combine)
 
             Button {
-                guard let place = displayedPlace else { return }
+                guard let place else { return }
                 Logger(subsystem: "me.meeshy.app", category: "location")
                     .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
                 onSelect(place)
@@ -599,8 +601,8 @@ struct LocationPickerView: View {
                         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 6, y: 3)
                 )
             }
-            .disabled(displayedPlace == nil)
-            .opacity(displayedPlace == nil ? 0.5 : 1)
+            .disabled(place == nil)
+            .opacity(place == nil ? 0.5 : 1)
         }
         .padding(16)
         // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
@@ -617,15 +619,6 @@ struct LocationPickerView: View {
     /// dégradée en silence au moment du tap.
     private var displayedPlace: SharedPlace? {
         viewModel.sharedPlace(at: precision)
-    }
-
-    /// Nom ET adresse, dédupliqués. Ne montrer que l'adresse perdrait le nom du
-    /// quartier aux niveaux grossiers (« Gros-Caillou » disparaîtrait derrière
-    /// « Paris, France ») ; ne montrer que le nom perdrait l'adresse complète
-    /// au niveau exact.
-    private var displayedTitle: String? {
-        guard let place = displayedPlace else { return nil }
-        return LocationSharingLabels.placeTitle(name: place.name, address: place.address)
     }
 
     /// Le nombre de décimales suit le niveau : afficher `20.00000` pour une

@@ -14,7 +14,6 @@ import MeeshyUI
 /// dépendent déjà. Le composer a donc son PROPRE fichier.
 struct ComposerMentionStrip: View {
     @ObservedObject var controller: MentionComposerController
-    var accentColor: String = MeeshyColors.brandPrimaryHex
     let currentText: String
     let onSelect: (String) -> Void
 
@@ -54,7 +53,7 @@ struct ComposerMentionStrip: View {
                             MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
-                                accentColor: accentColor,
+                                accentColor: MeeshyColors.brandPrimaryHex,
                                 avatarURL: candidate.avatarURL
                             )
                             // **`isDark: true` n'est pas un oubli, c'est une

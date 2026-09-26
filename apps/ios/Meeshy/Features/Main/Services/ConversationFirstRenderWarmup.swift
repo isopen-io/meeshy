@@ -218,7 +218,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.translatingTextLanguages
         _ = vm.unreadSeparatorCount
         _ = vm.voiceConsentMissing
-        NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed (47)")
+        NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed")
     }
 
     /// Même patron que `warmUpViewModelKeyPaths`, pour `ReadingModeController`

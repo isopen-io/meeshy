@@ -9,7 +9,7 @@ struct LicensesView: View {
 
     private let accentColor = "6366F1"
 
-    private let licenses: [OpenSourceLicense] = [
+    private static let licenses: [OpenSourceLicense] = [
         OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),
         OpenSourceLicense(name: "Firebase iOS SDK", author: "Google", licenseType: "Apache 2.0", url: "https://github.com/firebase/firebase-ios-sdk"),
         OpenSourceLicense(name: "Kingfisher", author: "onevcat", licenseType: "MIT", url: "https://github.com/onevcat/Kingfisher"),
@@ -45,7 +45,7 @@ struct LicensesView: View {
                 .padding(.leading, 4)
                 .textSelection(.enabled)
 
-            ForEach(licenses) { license in
+            ForEach(Self.licenses) { license in
                 licenseCard(license)
             }
 
@@ -135,7 +135,7 @@ struct LicensesView: View {
 // MARK: - Model
 
 private struct OpenSourceLicense: Identifiable {
-    let id = UUID()
+    var id: String { url }
     let name: String
     let author: String
     let licenseType: String

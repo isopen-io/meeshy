@@ -55,15 +55,18 @@ final class ConversationStateStoreDeadLoadingBooleansSourceGuardTests: XCTestCas
     }
 
     func test_stateStore_keepsUnrelatedPublishedProperties_untouchedByThisRemoval() throws {
-        // Regression guard against an overzealous sweep: only the 4 dead pagination booleans go,
-        // everything else on the store (including the similarly-named but UNRELATED
-        // `isLoadingReactions`, a real reader-backed flag for the reaction detail sheet) stays.
+        // Regression guard against an overzealous sweep: only the 4 dead pagination booleans go.
+        // `hasOlderMessages`, `hasNewerMessages`, `isSending` and `isLoadingReactions` used to be
+        // listed here as properties to KEEP — a later audit found all four are themselves dead
+        // scaffolding on this store (never read or written through any `ConversationStateStore`-typed
+        // value, unlike their live, identically-named siblings on `ConversationViewModel`) and removed
+        // them. `messages` and `typingParticipants` are the only ones this test still guarantees.
         let body = try classBody()
-        for keep in ["hasOlderMessages", "hasNewerMessages", "isSending", "isLoadingReactions", "messages"] {
+        for keep in ["messages", "typingParticipants"] {
             XCTAssertTrue(
                 body.contains(keep),
-                "ConversationStateStore must keep declaring '\(keep)' — this removal only targets " +
-                "the 4 dead pagination booleans, nothing else."
+                "ConversationStateStore must keep declaring '\(keep)' — it is read by a real " +
+                "consumer, not dead scaffolding."
             )
         }
     }

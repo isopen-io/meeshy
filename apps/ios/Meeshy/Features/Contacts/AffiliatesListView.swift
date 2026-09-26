@@ -28,9 +28,10 @@ struct AffiliatesListView: View {
 
     @ViewBuilder
     private var content: some View {
+        let visible = viewModel.visibleReferrals
         if viewModel.loadState == .loading && viewModel.isEmpty {
             ContactsSkeletonList()
-        } else if viewModel.visibleReferrals.isEmpty {
+        } else if visible.isEmpty {
             EmptyStateView(
                 icon: "person.badge.shield.checkmark",
                 title: viewModel.isEmpty
@@ -44,7 +45,7 @@ struct AffiliatesListView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
-                    ForEach(viewModel.visibleReferrals) { referral in
+                    ForEach(visible) { referral in
                         DirectoryPersonRow(
                             name: referral.resolvedName,
                             subtitle: referral.referredUser.map { "@\($0.username)" },

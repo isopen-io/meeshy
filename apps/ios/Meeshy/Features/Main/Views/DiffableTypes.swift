@@ -34,12 +34,3 @@ nonisolated enum MessageListItem: Hashable, Sendable {
     /// l'état gelé du contrôleur à la configuration de la cellule.
     case firstUnreadSeparator(afterLocalId: String)
 }
-
-nonisolated enum FeedListSection: Hashable, Sendable { case main }
-nonisolated enum FeedListItem: Hashable, Sendable {
-    case textPost(id: String)
-    case mediaPost(id: String)
-}
-
-// Type aliases for DiffableDataSource to suppress @MainActor inference
-typealias FeedListDataSource = UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>

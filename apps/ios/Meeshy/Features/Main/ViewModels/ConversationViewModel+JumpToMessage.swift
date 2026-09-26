@@ -7,7 +7,7 @@ import os
 // budget). Le lot #4823 ajoute le sticker à `sendMessage` : on extrait
 // d'abord, on ajoute ensuite. Responsabilité tenue ici : SAUTER vers un
 // message hors fenêtre (citation tapée, résultat de recherche) et revenir au
-// présent — la fenêtre GRDB centrée, la pagination vers le plus récent et le
+// présent — la fenêtre GRDB centrée et le
 // retour à la dernière page. Rien d'autre.
 //
 // Membres de l'hôte ouverts (`private` → interne) pour cette extension :

@@ -28,7 +28,6 @@ struct LoginView: View {
     // Environment selector
     @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
     @State private var customHost: String = MeeshyConfig.shared.customHost
-    @State private var showCustomInput = false
 
     @FocusState private var focusedField: Field?
 
@@ -355,11 +354,7 @@ struct LoginView: View {
             }
 
             // Password field
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "lock.fill")
-                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: MeeshySpacing.xl)
-                    .accessibilityHidden(true)
+            credentialField(icon: "lock.fill", focused: focusedField == .accountPassword) {
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $accountPassword)
                     .textContentType(.password)
                     .focused($focusedField, equals: .accountPassword)
@@ -368,22 +363,6 @@ struct LoginView: View {
                     .onSubmit { attemptAccountLogin() }
                     .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(
-                                focusedField == .accountPassword
-                                    ? MeeshyColors.purple600.opacity(0.6)
-                                    : theme.inputBorder.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .bounceOnFocus(focusedField == .accountPassword)
 
             errorRow
 
@@ -419,11 +398,7 @@ struct LoginView: View {
             }
 
             // Username
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "person.fill")
-                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: MeeshySpacing.xl)
-                    .accessibilityHidden(true)
+            credentialField(icon: "person.fill", focused: focusedField == .username) {
                 TextField(String(localized: "auth.username.placeholder", bundle: .main), text: $username)
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
@@ -434,29 +409,9 @@ struct LoginView: View {
                     .onSubmit { focusedField = .password }
                     .accessibilityLabel(String(localized: "auth.username.placeholder", bundle: .main))
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(
-                                focusedField == .username
-                                    ? MeeshyColors.purple600.opacity(0.6)
-                                    : theme.inputBorder.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .bounceOnFocus(focusedField == .username)
 
             // Password
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "lock.fill")
-                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: MeeshySpacing.xl)
-                    .accessibilityHidden(true)
+            credentialField(icon: "lock.fill", focused: focusedField == .password) {
                 SecureField(String(localized: "auth.password.placeholder", bundle: .main), text: $password)
                     .textContentType(.password)
                     .focused($focusedField, equals: .password)
@@ -465,22 +420,6 @@ struct LoginView: View {
                     .onSubmit { attemptLogin() }
                     .accessibilityLabel(String(localized: "auth.password.placeholder", bundle: .main))
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(
-                                focusedField == .password
-                                    ? MeeshyColors.purple600.opacity(0.6)
-                                    : theme.inputBorder.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .bounceOnFocus(focusedField == .password)
 
             errorRow
 
@@ -538,6 +477,38 @@ struct LoginView: View {
         }
     }
 
+    /// Chrome partagé par les quatre champs d'authentification : icône teintée
+    /// + champ, fond arrondi, liseré qui suit le focus, rebond au focus.
+    private func credentialField<Content: View>(
+        icon: String,
+        focused: Bool,
+        @ViewBuilder field: () -> Content
+    ) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: icon)
+                .foregroundColor(MeeshyColors.purple600.opacity(0.7))
+                .frame(width: MeeshySpacing.xl)
+                .accessibilityHidden(true)
+            field()
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(theme.inputBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(
+                            focused
+                                ? MeeshyColors.purple600.opacity(0.6)
+                                : theme.inputBorder.opacity(0.3),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .bounceOnFocus(focused)
+    }
+
     private func loginButton(action: @escaping () -> Void, disabled: Bool) -> some View {
         Button(action: action) {
             ZStack {
@@ -589,7 +560,6 @@ struct LoginView: View {
                         HapticFeedback.light()
                         withAnimation(MeeshyAnimation.springFast) {
                             selectedEnv = env
-                            showCustomInput = env == .custom
                         }
                         if env != .custom {
                             MeeshyConfig.shared.applyEnvironment(env)
@@ -612,7 +582,7 @@ struct LoginView: View {
                 }
             }
 
-            if showCustomInput || selectedEnv == .custom {
+            if selectedEnv == .custom {
                 HStack(spacing: MeeshySpacing.sm) {
                     TextField("gate.example.com", text: $customHost)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
@@ -696,11 +666,7 @@ struct LoginView: View {
                 .padding(.bottom, MeeshySpacing.md)
 
             // Code Input
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "key.fill")
-                    .foregroundColor(MeeshyColors.purple600.opacity(0.7))
-                    .frame(width: MeeshySpacing.xl)
-                    .accessibilityHidden(true)
+            credentialField(icon: "key.fill", focused: focusedField == .twoFactorCode) {
                 TextField(String(localized: "auth.login.two_factor.placeholder", bundle: .main), text: $twoFactorCode)
                     .keyboardType(.numberPad)
                     .focused($focusedField, equals: .twoFactorCode)
@@ -709,22 +675,6 @@ struct LoginView: View {
                     .onSubmit { attempt2FALogin() }
                     .accessibilityLabel(String(localized: "auth.login.two_factor.label", bundle: .main))
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.inputBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(
-                                focusedField == .twoFactorCode
-                                    ? MeeshyColors.purple600.opacity(0.6)
-                                    : theme.inputBorder.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    )
-            )
-            .bounceOnFocus(focusedField == .twoFactorCode)
 
             errorRow
 

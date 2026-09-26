@@ -42,7 +42,7 @@ final class MessageForwardServiceTests: XCTestCase {
     }
 
     private func makeContactTarget(userId: String = "u1", title: String = "Alice") -> ForwardTarget {
-        ForwardTarget(id: "user:\(userId)", kind: .contact, conversationId: nil, userId: userId,
+        ForwardTarget(id: "user:\(userId)", conversationId: nil, userId: userId,
                       title: title, subtitle: nil, avatarURL: nil)
     }
 
@@ -231,7 +231,7 @@ final class MessageForwardServiceTests: XCTestCase {
     func test_forward_toExistingConversationTarget_skipsCreationAndSends() async throws {
         let (sut, api, _, creator) = makeSUT()
         stubSendSuccess(api, target: target)
-        let existing = ForwardTarget(id: "conv:\(target)", kind: .conversation, conversationId: target,
+        let existing = ForwardTarget(id: "conv:\(target)", conversationId: target,
                                       userId: nil, title: "Équipe", subtitle: nil, avatarURL: nil)
 
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: existing)
@@ -305,7 +305,7 @@ final class MessageForwardServiceTests: XCTestCase {
     /// plutôt que de forcer un unwrap.
     func test_forward_targetWithNeitherConversationNorUser_failsWithoutCreatingOrSending() async {
         let (sut, api, _, creator) = makeSUT()
-        let emptyTarget = ForwardTarget(id: "user:orphan", kind: .contact, conversationId: nil,
+        let emptyTarget = ForwardTarget(id: "user:orphan", conversationId: nil,
                                          userId: nil, title: "?", subtitle: nil, avatarURL: nil)
 
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: emptyTarget)

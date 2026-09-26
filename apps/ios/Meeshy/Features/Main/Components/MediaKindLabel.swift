@@ -186,28 +186,10 @@ nonisolated enum MediaKindLabel {
         }
     }
 
-    /// Depuis le type d'un message. Rend `nil` pour `.text`, qui n'est pas un
-    /// média : c'est à l'appelant de dire ce qu'il affiche à la place, pas à
-    /// cette table d'inventer un libellé.
-    static func kind(for type: Message.MessageType) -> Kind? {
-        switch type {
-        case .image: return .photo
-        case .video: return .video
-        case .audio: return .audio
-        case .file: return .file
-        case .location: return .location
-        case .text: return nil
-        }
-    }
-
     /// Depuis le vocabulaire SÉRIALISÉ (`"image"`, `"video"`, `"audio"`,
     /// `"file"`, `"location"`) que portent les instantanés persistés.
     /// Rend `nil` sur un jeton inconnu — jamais un libellé par défaut.
     static func kind(forAttachmentRawValue raw: String) -> Kind? {
-        // Appel APPLIQUÉ, jamais `.map(kind(for:))` : `kind(for:)` est surchargé
-        // sur deux types de départ, et une référence non appliquée l'expose à
-        // une résolution ambiguë.
-        guard let type = MessageAttachment.AttachmentType(rawValue: raw) else { return nil }
-        return kind(for: type)
+        MessageAttachment.AttachmentType(rawValue: raw).map(kind(for:))
     }
 }

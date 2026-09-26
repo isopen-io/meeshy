@@ -29,7 +29,7 @@ struct MessageFramePreferenceKey: PreferenceKey {
 /// on overflow.
 struct MessageFrameTracker: Equatable {
     private(set) var frames: [String: CGRect] = [:]
-    private(set) var accessOrder: [String] = []
+    private var accessOrder: [String] = []
 
     let maxEntries: Int
 
@@ -58,13 +58,6 @@ struct MessageFrameTracker: Equatable {
 
     func frame(for messageId: String) -> CGRect? {
         frames[messageId]
-    }
-
-    /// Targeted cleanup invoked on dismiss when the underlying message has
-    /// been deleted between the long-press start and the overlay close.
-    mutating func removeFrame(for messageId: String) {
-        frames.removeValue(forKey: messageId)
-        accessOrder.removeAll(where: { $0 == messageId })
     }
 }
 
@@ -118,9 +111,5 @@ final class MessageFrameBox {
 
     func frame(for messageId: String) -> CGRect? {
         tracker.frame(for: messageId)
-    }
-
-    func removeFrame(for messageId: String) {
-        tracker.removeFrame(for: messageId)
     }
 }

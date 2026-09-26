@@ -102,7 +102,7 @@ struct ContactsListTab: View {
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
-                    ForEach(friends, id: \.id) { friend in
+                    ForEach(Array(friends.enumerated()), id: \.element.id) { index, friend in
                         ContactRow(
                             user: friend,
                             moodEmoji: statusViewModel.statusForUser(userId: friend.id)?.moodEmoji,
@@ -112,6 +112,7 @@ struct ContactsListTab: View {
                             onMoodTap: statusViewModel.moodTapHandler(for: friend.id)
                         )
                         .equatable()
+                        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: friends.count)
                     }
                 }
                 .padding(.top, 4)

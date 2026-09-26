@@ -22,45 +22,12 @@ final class ConversationStateStore: ObservableObject {
     /// on an active conversation. A plain stored property serves the readers
     /// without that churn.
     var messages: [Message] = []
-    @Published var hasOlderMessages = true
-    @Published var hasNewerMessages = false
-    @Published var isSending = false
-    @Published var error: String?
-    @Published var scrollAnchorId: String?
+    var error: String?
     @Published var typingParticipants: [TypingParticipant] = []
-    
-    @Published var messageTranslations: [String: [MessageTranslation]] = [:]
-    @Published var messageTranscriptions: [String: MessageTranscription] = [:]
-    @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
-    @Published var activeTranslationOverrides: [String: MessageTranslation?] = [:]
-    @Published var activeAudioLanguageOverrides: [String: String?] = [:]
-    
-    @Published var preferredLanguageRevision: Int = 0
-    @Published var activeLiveLocations: [ActiveLiveLocation] = []
-    @Published var lastUnreadMessage: Message?
-    @Published var otherConversationsUnread: Int = 0
-    
-    @Published var reactionDetails: [ReactionGroup] = []
-    @Published var isLoadingReactions = false
-    @Published var firstUnreadMessageId: String?
-    @Published var isConversationClosed = false
-    @Published var accessRevoked: Bool = false
-    
-    @Published var ephemeralDuration: EphemeralDuration?
-    @Published var isBlurEnabled: Bool = false
-    @Published var pendingEffects: MessageEffects = .none
-    
-    @Published var searchResults: [SearchResultItem] = []
-    @Published var isSearching = false
-    @Published var searchHasMore = false
-    @Published var currentSearchQuery: String?
-    @Published var isInJumpedState = false
-    @Published var isSearchingQuotedMessage = false
-    @Published var quotedMessageSearchTarget: String? = nil
-    
-    var isCurrentlyNearBottom: Bool = true
-    var isProgrammaticScroll = false
-    var pendingServerIds: [String: String] = [:]
+    var searchResults: [SearchResultItem] = []
+    var isSearching = false
+    var searchHasMore = false
+    var currentSearchQuery: String?
 
     init() {}
 }

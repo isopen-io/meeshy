@@ -16,35 +16,40 @@ final class FeedPipelineIntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func test_postInsert_appearsInFeedStore() async throws {
+    func test_loadInitial_readsPersistedPost() async throws {
         let store = FeedStore(persistence: feedActor)
-        store.startObserving()
+        try await feedActor.insertPost(PostRecordFactory.make(id: "feed_int_1", content: "Integration test"))
 
-        let post = PostRecordFactory.make(id: "feed_int_1", content: "Integration test")
-        try await feedActor.insertPost(post)
+        await store.loadInitial()
 
-        try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(store.posts.count, 1)
         XCTAssertEqual(store.posts[0].content, "Integration test")
-
-        store.stopObserving()
     }
 
     @MainActor
-    func test_likeUpdate_reflectedInStore() async throws {
+    func test_loadInitial_readsPersistedLikeUpdate() async throws {
         let store = FeedStore(persistence: feedActor)
-        store.startObserving()
-
         try await feedActor.insertPost(PostRecordFactory.make(id: "feed_like"))
-        try await Task.sleep(for: .milliseconds(50))
-
         try await feedActor.updateLikeCount(postId: "feed_like", count: 42, isLikedByMe: true)
-        try await Task.sleep(for: .milliseconds(100))
+
+        await store.loadInitial()
 
         XCTAssertEqual(store.posts[0].likeCount, 42)
         XCTAssertTrue(store.posts[0].isLikedByMe)
+    }
 
-        store.stopObserving()
+    /// Le magasin lit À LA DEMANDE : un commit du feed ne relit plus toute la
+    /// fenêtre chargée (il n'y avait plus aucun abonné pour la lire, #7945).
+    @MainActor
+    func test_feedCommit_doesNotReReadTheLoadedWindow() async throws {
+        let store = FeedStore(persistence: feedActor)
+        try await feedActor.insertPost(PostRecordFactory.make(id: "feed_first"))
+        await store.loadInitial()
+
+        try await feedActor.insertPost(PostRecordFactory.make(id: "feed_second"))
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(store.posts.map(\.id), ["feed_first"])
     }
 
     @MainActor

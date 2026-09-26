@@ -14,6 +14,7 @@ struct MessageDetailTimelineBanner: View {
     let detail: String
     var count: String? = nil
     let accent: Color
+    var countIsSpelledInDetail: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
@@ -46,9 +47,11 @@ struct MessageDetailTimelineBanner: View {
                         Capsule()
                             .fill(accent.opacity(0.12))
                     )
-                    // Numeric badge duplicates the count already spelled out in
-                    // `detail` ("3 versions précédentes") — hidden from VoiceOver.
-                    .accessibilityHidden(true)
+                    // Hidden from VoiceOver only where `detail` already spells
+                    // the count (Edits: "3 versions précédentes"). The Views
+                    // hosts keep it announced: their `detail` is a clock time,
+                    // or a count without the "/total" the badge adds.
+                    .accessibilityHidden(countIsSpelledInDetail)
             }
         }
         .padding(12)
@@ -73,10 +76,11 @@ struct MessageDetailEmptyState: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Decorative empty-state glyph — kept at a fixed 28pt (illustration,
-            // not text) and hidden from VoiceOver via the `.combine` parent.
+            // 28pt (< 40pt hero freeze) paired with a footnote caption →
+            // scale it with Dynamic Type so icon and caption grow in
+            // proportion. Hidden from VoiceOver via the `.combine` parent.
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)

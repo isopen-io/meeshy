@@ -412,7 +412,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
-        "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15

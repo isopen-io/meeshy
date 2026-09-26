@@ -92,4 +92,25 @@ final class ComposerReturnKeyTests: XCTestCase {
     func test_unSeulSautEstRetire() {
         XCTAssertEqual(ComposerReturnKey.stripped("a\n\n"), "a\n")
     }
+
+    // MARK: - Le câblage : après `handleSend()`, rien ne réécrit le champ
+
+    /// Après l'envoi par Retour, le champ ne doit plus être réaffecté : la règle
+    /// `host ?? local` ressuscitait le texte envoyé chez les hôtes qui passent
+    /// `textBinding:` sans `onCustomSend:` (commentaires de post, feuille de
+    /// commentaires, canvas de story), dont l'envoi ne vide pas la source hôte.
+    func test_toucheRetour_neReaffectePasLeChampApresHandleSend() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let submits = try XCTUnwrap(source.range(of: "ComposerReturnKey.submits("))
+        let send = try XCTUnwrap(source.range(of: "handleSend()", range: submits.upperBound..<source.endIndex))
+        let end = try XCTUnwrap(source.range(of: "return", range: send.upperBound..<source.endIndex))
+        XCTAssertFalse(source[send.upperBound..<end.lowerBound].contains("text ="),
+                       "Après handleSend(), le chemin Retour ne doit plus réaffecter `text` : le vidage passe par handleSend et la synchro text → textBinding.")
+        XCTAssertFalse(source.contains("ComposerFieldAfterSend"),
+                       "La règle `host ?? local` a été retirée (#5326) : elle ressuscitait le texte envoyé chez les hôtes sans onCustomSend.")
+    }
 }

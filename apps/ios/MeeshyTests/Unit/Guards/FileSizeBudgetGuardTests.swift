@@ -501,7 +501,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // que #7990 allège de son code mort pendant que #8009 en extrait la grille
     // d'aperçu, repasse SOUS le budget (1 194 lignes comptées) : il quitte la
     // liste, plafond compris.
-    private static let legacyLineCeiling = 50_721
+    //
+    // **50 286 depuis le second passage du lot 6 (#7945).** Le premier passage
+    // (fafd48f2) a retiré 521 lignes à quinze fichiers de la liste (code mort,
+    // jumelles, simplifications) ; la réunion ci-dessus n'en a repris que les
+    // 90 de G014. Le lot reprend ici les 431 restantes, et les 4 que son second
+    // passage retire (`FeedView` −3 : l'observation morte du `FeedStore` et la
+    // lecture qu'elle faisait attendre au premier chargement ; `FeedCommentsSheet`
+    // −1 : un doc-comment). Aucun fichier ne quitte la liste. Le mou antérieur
+    // (1 461 lignes) n'est PAS repris : il appartient aux lots qui l'ont créé.
+    private static let legacyLineCeiling = 50_286
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

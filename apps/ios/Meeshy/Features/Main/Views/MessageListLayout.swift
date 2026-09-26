@@ -328,14 +328,11 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// repère de la fenêtre — la première rangée que l'utilisateur voit,
     /// quelle que soit sa position dans l'historique.
     private func topmostVisibleAnchor(in collectionView: UICollectionView) -> (indexPath: IndexPath, minY: CGFloat)? {
-        var best: (indexPath: IndexPath, minY: CGFloat)?
-        for indexPath in collectionView.indexPathsForVisibleItems {
-            guard let minY = layoutAttributesForItem(at: indexPath)?.frame.minY else { continue }
-            if best == nil || minY < best!.minY {
-                best = (indexPath, minY)
+        collectionView.indexPathsForVisibleItems
+            .compactMap { indexPath in
+                layoutAttributesForItem(at: indexPath).map { (indexPath: indexPath, minY: $0.frame.minY) }
             }
-        }
-        return best
+            .min { $0.minY < $1.minY }
     }
 
     private var recoveryRetryScheduled = false

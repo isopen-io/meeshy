@@ -276,6 +276,9 @@ extension ConversationViewModel {
         // Stop typing emission on send
         socketHandler?.stopTypingEmission()
 
+        // Langue de composition, résolue UNE fois : la détection NL est pure et coûteuse, et six sites la recalculaient sur le même texte.
+        let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
+
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket
         // connection state. The send path is a plain REST POST which works
@@ -333,7 +336,7 @@ extension ConversationViewModel {
                 localId: offlineTempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                originalLanguage: resolvedOriginalLanguage,
                 messageType: "text", messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
                 isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
@@ -486,7 +489,7 @@ extension ConversationViewModel {
                 localId: tempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                originalLanguage: resolvedOriginalLanguage,
                 messageType: optimisticMessageType.rawValue,
                 messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
@@ -582,7 +585,7 @@ extension ConversationViewModel {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                originalLanguage: resolvedOriginalLanguage,
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -636,7 +639,7 @@ extension ConversationViewModel {
                     attachmentIds: [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                    originalLanguage: resolvedOriginalLanguage,
                     isEncrypted: false,
                     clientMessageId: tempId,
                     // Le canal socket accepte le lieu (MessageHandler.ts) : le
@@ -734,7 +737,7 @@ extension ConversationViewModel {
                     attachmentIds: attachmentIds ?? [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                    originalLanguage: resolvedOriginalLanguage,
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId,
                     location: location,
@@ -778,7 +781,7 @@ extension ConversationViewModel {
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
-                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                originalLanguage: resolvedOriginalLanguage,
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
                 attachmentKinds: retryKinds,

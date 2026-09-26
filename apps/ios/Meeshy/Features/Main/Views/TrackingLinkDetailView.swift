@@ -410,8 +410,24 @@ class TrackingDetailViewModel: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    @Published var clicks: [TrackingLinkClick] = []
+    @Published var clicks: [TrackingLinkClick] = [] {
+        didSet {
+            topCountries = Self.ranked(clicks.compactMap(\.country))
+            topDevices = Self.ranked(clicks.compactMap(\.device))
+            topBrowsers = Self.ranked(clicks.compactMap(\.browser))
+        }
+    }
     @Published var isLoadingMore = false
+    /// Dérivés à l'écriture de `clicks` (déjà `@Published` : la vue se re-rend) — pas trois regroupements + tris par rendu.
+    private(set) var topCountries: [(String, Int)] = []
+    private(set) var topDevices: [(String, Int)] = []
+    private(set) var topBrowsers: [(String, Int)] = []
+
+    private static func ranked(_ values: [String]) -> [(String, Int)] {
+        Dictionary(grouping: values, by: { $0 })
+            .map { ($0.key, $0.value.count) }
+            .sorted { $0.1 > $1.1 }
+    }
 
     let token: String
 
@@ -423,23 +439,5 @@ class TrackingDetailViewModel: ObservableObject {
         if let detail = try? await TrackingLinkService.shared.fetchClicks(token: token) {
             clicks = detail.clicks
         }
-    }
-
-    var topCountries: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.country), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
-    }
-
-    var topDevices: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.device), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
-    }
-
-    var topBrowsers: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.browser), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
     }
 }

@@ -320,7 +320,6 @@ final class ForwardPickerViewModel: ObservableObject {
     private static func makeTarget(from conversation: MeeshyConversation) -> ForwardTarget {
         ForwardTarget(
             id: "conv:\(conversation.id)",
-            kind: .conversation,
             conversationId: conversation.id,
             userId: conversation.type == .direct ? conversation.participantUserId : nil,
             title: conversation.displayName,
@@ -332,7 +331,6 @@ final class ForwardPickerViewModel: ObservableObject {
     private static func makeContactTarget(from user: FriendRequestUser) -> ForwardTarget {
         ForwardTarget(
             id: "user:\(user.id)",
-            kind: .contact,
             conversationId: nil,
             userId: user.id,
             title: user.name,
@@ -351,7 +349,6 @@ final class ForwardPickerViewModel: ObservableObject {
         guard let user = contact.matchedUser else { return nil }
         return ForwardTarget(
             id: "user:\(user.id)",
-            kind: .contact,
             conversationId: nil,
             userId: user.id,
             title: contact.resolvedName,

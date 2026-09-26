@@ -7,9 +7,7 @@ import MeeshyUI
 /// Design : docs/superpowers/specs/2026-08-03-post-hashtags-and-rich-content-design.md §4
 struct HashtagResultsView: View {
     @StateObject private var viewModel: HashtagResultsViewModel
-    /// `@StateObject` sur le singleton, PAS `@EnvironmentObject` — ni `RootView`
-    /// ni `iPadRootView` n'injectent `ThemeManager` (même piège que `BookmarksView`).
-    @StateObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
 
     init(tag: String) {
         _viewModel = StateObject(wrappedValue: HashtagResultsViewModel(tag: tag))

@@ -119,11 +119,6 @@ extension UniversalComposerBar {
                             text = sansRetour
                             textBinding?.wrappedValue = sansRetour
                             handleSend()
-                            // Et le champ vaut ensuite ce que l'HÔTE dit qu'il
-                            // vaut : vidé s'il a pris le texte, intact s'il a
-                            // refusé l'envoi (#5326, `ComposerFieldAfterSend`).
-                            text = ComposerFieldAfterSend.resolve(local: text,
-                                                                  host: textBinding?.wrappedValue)
                             return
                         }
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {

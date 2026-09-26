@@ -100,12 +100,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // NotificationCoordinator must be wired as early as possible so unread/badge
         // state stays aligned even if no view is yet in the hierarchy.
-        // Accessing @MainActor state requires an explicit hop since the delegate
-        // method's isolation is inferred from UIKit preconcurrency annotations.
-        Task { @MainActor in
-            NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
-            NotificationCoordinator.shared.start()
-        }
+        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+        NotificationCoordinator.shared.start()
 
         return true
     }
@@ -123,18 +119,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        Task { @MainActor in
-            PushNotificationManager.shared.registerDeviceToken(deviceToken)
-        }
+        PushNotificationManager.shared.registerDeviceToken(deviceToken)
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        Task { @MainActor in
-            PushNotificationManager.shared.handleRegistrationError(error)
-        }
+        PushNotificationManager.shared.handleRegistrationError(error)
     }
 
     /// Silent / content-available push: refresh unread counts + widgets without UI.
@@ -314,19 +306,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
               let scheme = url.scheme?.lowercased(),
               scheme == "https" || scheme == "http" else { return false }
 
-        // The Universal Link router is @MainActor, so the actual
-        // pendingDeepLink mutation has to hop. We can still answer iOS
-        // synchronously by parsing the URL ourselves first: if it isn't
-        // a route we know, return `false` so iOS falls back to opening
-        // the URL in Safari instead of silently swallowing it. Returning
-        // `true` for an unrecognised URL would tell iOS we handled it
-        // and the user would just see the app land on the home screen.
+        // AppDelegate and DeepLinkRouter are both @MainActor, so this runs
+        // inline — no Task hop needed. We parse the URL ourselves first so
+        // we can still answer iOS synchronously: if it isn't a route we
+        // know, return `false` so iOS falls back to opening the URL in
+        // Safari instead of silently swallowing it. Returning `true` for
+        // an unrecognised URL would tell iOS we handled it and the user
+        // would just see the app land on the home screen.
         let recognised = DeepLinkParser.isMeeshyDeepLink(url)
-        if recognised {
-            Task { @MainActor in
-                _ = DeepLinkRouter.shared.handle(url: url)
-            }
-        }
+        if recognised { _ = DeepLinkRouter.shared.handle(url: url) }
         return recognised
     }
 
@@ -659,12 +647,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
                 }
             }
         }
-        let type = userInfo["type"] as? String ?? "unknown"
-        let conversationId = userInfo["conversationId"] as? String
+        let rawType = userInfo["type"] as? String
         let postId = userInfo["postId"] as? String
 
         let socketConnected = MessageSocketManager.shared.isConnected
-        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-") socketConnected=\(socketConnected)")
+        logger.info("Foreground notification: type=\(rawType ?? "unknown") conversation=\(convId ?? "-") postId=\(postId ?? "-") socketConnected=\(socketConnected)")
 
         // Socket vivant → le toast in-app (gaté par les préférences) prend le
         // relais, pas de bannière native. Socket down → bannière système
@@ -673,9 +660,9 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         completionHandler(NotificationPresentationResolver.options(
             socketConnected: socketConnected,
             prefs: UserPreferencesManager.shared.notification,
-            rawType: userInfo["type"] as? String,
+            rawType: rawType,
             conversationType: userInfo["conversationType"] as? String,
-            conversationId: conversationId,
+            conversationId: convId,
             activeConversationId: MessageSocketManager.shared.activeConversationId
         ))
     }

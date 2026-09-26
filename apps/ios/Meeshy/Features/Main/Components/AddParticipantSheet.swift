@@ -4,36 +4,6 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - User Search Result
-
-private struct UserSearchResult: Identifiable, Decodable {
-    let id: String
-    let username: String
-    let firstName: String?
-    let lastName: String?
-    let displayName: String?
-    let avatar: String?
-    let isOnline: Bool?
-    let lastActiveAt: Date?
-
-    var name: String {
-        displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmptyFallback(username)
-    }
-}
-
-private extension String {
-    func ifEmptyFallback(_ fallback: String) -> String {
-        isEmpty ? fallback : self
-    }
-}
-
-// MARK: - User Search Response
-
-private struct UserSearchResponse: Decodable {
-    let success: Bool
-    let data: [UserSearchResult]
-}
-
 // MARK: - AddParticipantSheet
 
 struct AddParticipantSheet: View {
@@ -305,16 +275,7 @@ struct AddParticipantSheet: View {
         errorMessage = nil
 
         do {
-            let response: UserSearchResponse = try await APIClient.shared.request(
-                UsersEndpoint.search,
-                queryItems: [
-                    URLQueryItem(name: "q", value: trimmed),
-                    URLQueryItem(name: "limit", value: "20"),
-                ]
-            )
-            if response.success {
-                searchResults = response.data
-            }
+            searchResults = try await UserService.shared.searchUsers(query: trimmed, limit: 20, offset: 0)
         } catch {
             Logger.participants.error("User search failed: \(error.localizedDescription)")
             searchResults = []

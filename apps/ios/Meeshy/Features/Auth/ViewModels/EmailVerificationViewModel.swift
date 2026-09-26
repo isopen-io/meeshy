@@ -30,8 +30,6 @@ final class EmailVerificationViewModel: ObservableObject {
         do {
             try await authService.verifyEmailWithCode(code: code, email: email)
             verificationSuccess = true
-        } catch let meeshyError as MeeshyError {
-            error = meeshyError.localizedDescription
         } catch {
             self.error = error.localizedDescription
         }

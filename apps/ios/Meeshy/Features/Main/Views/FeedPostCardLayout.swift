@@ -21,13 +21,9 @@ import SwiftUI
 /// depuis la forme du carrousel, elle-même pure, comme depuis tout test
 /// synchrone. Une règle qu'on ne peut pas interroger hors du fil principal
 /// finit recopiée ailleurs : c'est ainsi qu'un site unique cesse d'en être un.
-nonisolated func postCardMediaHeight(
-    mediaWidth: Int?,
-    mediaHeight: Int?,
-    cardWidth: CGFloat,
-    maxTallRatio: CGFloat = 1.4,
-    minRatio: CGFloat = 0.75
-) -> CGFloat {
+nonisolated func postCardMediaHeight(mediaWidth: Int?, mediaHeight: Int?, cardWidth: CGFloat) -> CGFloat {
+    let maxTallRatio: CGFloat = 1.4
+    let minRatio: CGFloat = 0.75
     guard let w = mediaWidth, let h = mediaHeight, w > 0, h > 0 else {
         return (cardWidth * minRatio).rounded()
     }

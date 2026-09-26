@@ -626,3 +626,21 @@ struct PostSceneMosaic: View {
 // demande maintenant d'atteindre (« permettre donc le défilement continu »).
 // Un `ScrollView` les offre au lieu de les masquer, et le modificateur n'avait
 // plus de consommateur — une vue sans appelant ne rougit nulle part.
+
+extension PostSceneMosaic: Equatable {
+    /// Ne se re-rend que si son ÉLECTION ou son contenu change — le churn
+    /// d'élection des AUTRES cartes laisse celle-ci intacte, comme ses deux
+    /// jumelles `PostSceneCard` et `StoryRepostEmbedCell`. `onTapScene`
+    /// (fermeture) et `page` (`@State`, propre à l'instance montée) restent
+    /// hors comparaison — ni l'un ni l'autre ne conforme à `Equatable`.
+    nonisolated static func == (lhs: PostSceneMosaic, rhs: PostSceneMosaic) -> Bool {
+        lhs.post.id == rhs.post.id
+            && lhs.document == rhs.document
+            && lhs.accentColor == rhs.accentColor
+            && lhs.preferredContentLanguages == rhs.preferredContentLanguages
+            && lhs.isActive == rhs.isActive
+            && lhs.host == rhs.host
+            && lhs.isMuted == rhs.isMuted
+            && lhs.maxBoxHeight == rhs.maxBoxHeight
+    }
+}

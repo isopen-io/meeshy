@@ -61,10 +61,12 @@ public struct CommunityMembersView: View {
     }
 
     private var memberList: some View {
-        ScrollView {
+        let grouped = groupedMembers                                   // UN regroupement par rendu (deux avant)
+        let roles = grouped.keys.sorted(by: { $0.level > $1.level })
+        return ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(groupedMembers.keys.sorted(by: { $0.level > $1.level }), id: \.self) { role in
-                    if let members = groupedMembers[role] {
+                ForEach(roles, id: \.self) { role in
+                    if let members = grouped[role] {
                         Section {
                             ForEach(members) { member in
                                 MemberRow(

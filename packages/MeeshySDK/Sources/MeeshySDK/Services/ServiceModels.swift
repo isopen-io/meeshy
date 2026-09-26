@@ -525,19 +525,36 @@ public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendab
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+    /// Servis par `/users/search` ; optionnels et ADDITIFS — aucune clé existante ne change.
+    public let firstName: String?
+    public let lastName: String?
+    public let lastActiveAt: Date?
+
+    /// Nom affiché, sinon « Prénom Nom », sinon le pseudo.
+    public var name: String {
+        if let displayName { return displayName }
+        let full = [firstName, lastName].compactMap { $0 }.joined(separator: " ")
+        return full.isEmpty ? username : full
+    }
 
     public init(
         id: String,
         username: String,
         displayName: String? = nil,
         avatar: String? = nil,
-        isOnline: Bool? = nil
+        isOnline: Bool? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        lastActiveAt: Date? = nil
     ) {
         self.id = id
         self.username = username
         self.displayName = displayName
         self.avatar = avatar
         self.isOnline = isOnline
+        self.firstName = firstName
+        self.lastName = lastName
+        self.lastActiveAt = lastActiveAt
     }
 }
 

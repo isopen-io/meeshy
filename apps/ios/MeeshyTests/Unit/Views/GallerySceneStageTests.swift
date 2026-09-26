@@ -43,12 +43,12 @@ final class GallerySceneStageTests: XCTestCase {
                                             presentation: .carded,
                                             corridors: corridors)
 
-        XCTAssertEqual(cadre.sceneSize.width, 378, accuracy: 0.5)
-        XCTAssertEqual(cadre.sceneSize.height, 672, accuracy: 0.5)
-        XCTAssertEqual(cadre.sceneSize.width / cadre.sceneSize.height,
+        XCTAssertEqual(cadre.layout.sceneFrame.size.width, 378, accuracy: 0.5)
+        XCTAssertEqual(cadre.layout.sceneFrame.size.height, 672, accuracy: 0.5)
+        XCTAssertEqual(cadre.layout.sceneFrame.size.width / cadre.layout.sceneFrame.size.height,
                        SceneShape.aspect, accuracy: 0.0001,
                        "une scène est 9:16, quelle que soit la surface qui la porte")
-        XCTAssertLessThanOrEqual(cadre.sceneSize.width, viewport.width,
+        XCTAssertLessThanOrEqual(cadre.layout.sceneFrame.size.width, viewport.width,
                                  "cadrée, la scène tient entière : rien n'est rogné")
     }
 
@@ -57,10 +57,10 @@ final class GallerySceneStageTests: XCTestCase {
                                             presentation: .carded,
                                             corridors: corridors)
 
-        XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop,
+        XCTAssertEqual(cadre.layout.backdrop, SceneShape.cardedBackdrop,
                        "le fond d'une carte de scène est celui de la LOI, le même que le lecteur de stories")
-        XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius)
-        XCTAssertEqual(cadre.backdrop, StoryCardView.readerSceneBackdrop,
+        XCTAssertEqual(cadre.layout.cornerRadius, SceneShape.cardedCornerRadius)
+        XCTAssertEqual(cadre.layout.backdrop, StoryCardView.readerSceneBackdrop,
                        "et c'est celui du lecteur de stories, parce qu'il n'y en a qu'un")
     }
 
@@ -81,13 +81,13 @@ final class GallerySceneStageTests: XCTestCase {
                                                presentation: .full(pausedOnEntry: false),
                                                corridors: corridors)
 
-        XCTAssertEqual(immersif.sceneSize.width, viewport.width, accuracy: 0.5,
+        XCTAssertEqual(immersif.layout.sceneFrame.size.width, viewport.width, accuracy: 0.5,
                        "le viewport entier borne la carte par sa LARGEUR sur un iPhone")
-        XCTAssertEqual(immersif.sceneSize.height, viewport.width / SceneShape.aspect,
+        XCTAssertEqual(immersif.layout.sceneFrame.size.height, viewport.width / SceneShape.aspect,
                        accuracy: 0.5, "714,7 pt — la scène AJUSTÉE, jamais les 874 d'un remplissage")
-        XCTAssertGreaterThan(immersif.sceneSize.width, cadree.sceneSize.width,
+        XCTAssertGreaterThan(immersif.layout.sceneFrame.size.width, cadree.layout.sceneFrame.size.width,
                              "sans couloir, la MÊME carte est plus grande")
-        XCTAssertEqual(immersif.sceneSize.width / immersif.sceneSize.height,
+        XCTAssertEqual(immersif.layout.sceneFrame.size.width / immersif.layout.sceneFrame.size.height,
                        SceneShape.aspect, accuracy: 0.0001)
     }
 
@@ -117,8 +117,8 @@ final class GallerySceneStageTests: XCTestCase {
                                             presentation: .full(pausedOnEntry: false),
                                             corridors: corridors)
 
-        XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop)
-        XCTAssertEqual(cadre.cornerRadius, SceneShape.immersiveCornerRadius,
+        XCTAssertEqual(cadre.layout.backdrop, SceneShape.cardedBackdrop)
+        XCTAssertEqual(cadre.layout.cornerRadius, SceneShape.immersiveCornerRadius,
                        "plein écran : aucun arrondi, des angles droits exacts")
     }
 
@@ -136,9 +136,9 @@ final class GallerySceneStageTests: XCTestCase {
                                                presentation: .full(pausedOnEntry: false),
                                                corridors: corridors)
 
-        XCTAssertEqual(cadree.cornerRadius, SceneShape.cardedCornerRadius)
-        XCTAssertEqual(immersive.cornerRadius, 0)
-        XCTAssertNotEqual(cadree.cornerRadius, immersive.cornerRadius,
+        XCTAssertEqual(cadree.layout.cornerRadius, SceneShape.cardedCornerRadius)
+        XCTAssertEqual(immersive.layout.cornerRadius, 0)
+        XCTAssertNotEqual(cadree.layout.cornerRadius, immersive.layout.cornerRadius,
                           "fusible : sans cet écart, les deux témoins ci-dessus " +
                           "verdiraient sur une loi qui ignore son état")
     }
@@ -153,9 +153,9 @@ final class GallerySceneStageTests: XCTestCase {
                                                 presentation: .full(pausedOnEntry: false),
                                                 corridors: corridors)
 
-        XCTAssertGreaterThan(immersive.sceneSize.height, cadree.sceneSize.height)
-        XCTAssertEqual(immersive.sceneSize.width / immersive.sceneSize.height,
-                       cadree.sceneSize.width / cadree.sceneSize.height, accuracy: 0.0001,
+        XCTAssertGreaterThan(immersive.layout.sceneFrame.size.height, cadree.layout.sceneFrame.size.height)
+        XCTAssertEqual(immersive.layout.sceneFrame.size.width / immersive.layout.sceneFrame.size.height,
+                       cadree.layout.sceneFrame.size.width / cadree.layout.sceneFrame.size.height, accuracy: 0.0001,
                        "seule la TAILLE change d'un état à l'autre, jamais la forme")
     }
 }

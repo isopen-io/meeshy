@@ -4192,7 +4192,7 @@ final class CallManager: ObservableObject {
         // appel démarré plus tard héritait d'`isRemoteVideoEnabled == false`
         // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
         // vidéo potentiellement suspendu — violation du contrat documenté de
-        // `VideoSurvivalControlling.reset()`.
+        // `VideoSurvivalController.reset()`.
         isRemoteVideoEnabled = true
         isRemoteAudioEnabled = true
         isRemoteScreenCapturing = false

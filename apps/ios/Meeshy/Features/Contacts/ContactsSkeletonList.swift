@@ -12,12 +12,7 @@ import MeeshyUI
 /// the calculated `ThemeManager.shared` accessor already used by every other
 /// skeleton in `MeeshySDK/Primitives/SkeletonView.swift`.
 private struct ContactsSkeletonRow: View {
-    private let accentColor: String
     private var theme: ThemeManager { ThemeManager.shared }
-
-    init(accentColor: String) {
-        self.accentColor = accentColor
-    }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
@@ -40,7 +35,7 @@ private struct ContactsSkeletonRow: View {
         .padding(.vertical, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: accentColor))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
         )
         .shimmer()
         .accessibilityHidden(true)
@@ -52,21 +47,13 @@ private struct ContactsSkeletonRow: View {
 /// across `ContactsListTab`, `CallsTab`, and `BlockedTab`. Per the Instant App
 /// bible: skeleton rows on an empty cache, never a bare spinner.
 ///
-/// `accentColor` defaults to the brand indigo — the same tint every one of
-/// these tabs already uses for its `ProgressView().tint(...)`.
+/// Tinted with the brand indigo — the same tint every one of these tabs
+/// already uses for its `ProgressView().tint(...)`.
 struct ContactsSkeletonList: View {
-    private let count: Int
-    private let accentColor: String
-
-    init(count: Int = 5, accentColor: String = MeeshyColors.brandPrimaryHex) {
-        self.count = count
-        self.accentColor = accentColor
-    }
-
     var body: some View {
         VStack(spacing: MeeshySpacing.md) {
-            ForEach(0..<count, id: \.self) { _ in
-                ContactsSkeletonRow(accentColor: accentColor)
+            ForEach(0..<5, id: \.self) { _ in
+                ContactsSkeletonRow()
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)

@@ -173,7 +173,7 @@ struct FriendRequestListView: View {
                         .lineLimit(2)
                 }
 
-                Text(relativeTime(from: request.createdAt))
+                Text(RelativeTimeFormatter.longString(for: request.createdAt))
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
@@ -226,11 +226,5 @@ struct FriendRequestListView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-    }
-
-    // MARK: - Helpers
-
-    private func relativeTime(from date: Date) -> String {
-        RelativeTimeFormatter.longString(for: date)
     }
 }

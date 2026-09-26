@@ -132,14 +132,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ForwardPickerSheet.swift",
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
-        "Features/Main/Components/MemberManagementSection.swift",
-        // RELOCALISATION pure : `MessageEditsDetailView.emptyStateView` (son
-        // seul site figé, un glyphe 28pt dans un cadre fixe) a fusionné avec sa
-        // jumelle de `MessageViewsDetailView` dans `MessageDetailChrome.swift`
-        // (dédoublonnage audit L3-17). La POPULATION ne bouge pas — ni
-        // `totalCeiling` ni `textCeiling` — seul le NOM change ; le fichier
-        // d'origine n'en porte plus aucun et sort de la liste.
-        "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
         "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageDetailSentimentTab.swift",
@@ -403,7 +395,18 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // d'invitation de MeeshyUI ; ses deux glyphes figés (20 et 13 pt, sur des
     // `Image`, donc le texte figé ne bouge pas) partent avec elle.
     // `ShareLinkIdentitySheet.swift` sort de `bearingFiles` (règle 4).
-    private static let totalCeiling = 211
+    // 211 → 209 (audit L3-2) : `MemberManagementSection.swift` — jamais
+    // construite, jamais testée — est retirée en bloc (vue morte). Ses deux
+    // glyphes figés (13 et 28 pt, tous deux sur une `Image`, donc le texte
+    // figé ne bouge pas) partent avec elle ; le fichier sort de
+    // `bearingFiles` dans le même commit (règle 4).
+    // 209 → 208 (audit L3-17) : l'état vide que `MessageEditsDetailView` et
+    // `MessageViewsDetailView` partagent désormais dans
+    // `MessageDetailChrome.swift` avait gardé le glyphe 28 pt figé de la
+    // première ; il suit Dynamic Type, comme le faisait déjà celui de la
+    // seconde (un GLYPHE : le texte figé ne bouge pas). Le fichier sort de
+    // `bearingFiles` dans le même commit (règle 4).
+    private static let totalCeiling = 208
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

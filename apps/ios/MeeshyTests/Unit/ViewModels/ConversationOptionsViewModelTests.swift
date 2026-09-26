@@ -200,41 +200,6 @@ final class ConversationOptionsViewModelTests: XCTestCase {
 
     // MARK: - Tags
 
-    func test_addTag_appendsAndPersists() async {
-        let conv = makeConversation(id: "conv-1")
-        let s = makeSUT(conversation: conv)
-        await s.store.hydrateMetadata([conv])
-
-        await s.vm.addTag("urgent").value
-
-        XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
-        XCTAssertTrue(s.vm.allTags.contains("urgent"))
-        let stored = await s.store.conversation(id: "conv-1")
-        XCTAssertEqual(stored?.userState.tags, ["urgent"])
-    }
-
-    func test_addTag_dedupes_noStoreMutation() async {
-        let conv = makeConversation(id: "conv-1", tags: ["urgent"])
-        let s = makeSUT(conversation: conv)
-        await s.store.hydrateMetadata([conv])
-
-        await s.vm.addTag("urgent").value
-
-        XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
-        let stored = await s.store.conversation(id: "conv-1")
-        XCTAssertEqual(stored?.userState.version, 0, "Dedupe must not apply a mutation")
-    }
-
-    func test_addTag_trimsWhitespace() async {
-        let conv = makeConversation(id: "conv-1")
-        let s = makeSUT(conversation: conv)
-        await s.store.hydrateMetadata([conv])
-
-        await s.vm.addTag("  important  ").value
-
-        XCTAssertEqual(s.vm.prefs.tags, ["important"])
-    }
-
     func test_removeTag_persists() async {
         let conv = makeConversation(id: "conv-1", tags: ["urgent", "work"])
         let s = makeSUT(conversation: conv)

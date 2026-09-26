@@ -156,19 +156,10 @@ protocol VideoSurvivalActuating: AnyObject, Sendable {
     func resumeOutboundVideo() async -> Bool
 }
 
-protocol VideoSurvivalControlling: AnyObject {
-    var isVideoSuspended: Bool { get }
-    /// Feed one quality sample (one per monitor tick).
-    func handle(level: VideoQualityLevel, userWantsVideo: Bool)
-    /// Forget all survival state — call on camera-off and on call teardown so
-    /// state never leaks across calls over the device's lifetime.
-    func reset()
-}
-
 // MARK: - Controller
 
 @MainActor
-final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling {
+final class VideoSurvivalController: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).

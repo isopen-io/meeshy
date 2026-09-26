@@ -137,16 +137,29 @@ extension StoryCanvasUIView {
     /// touche le haut de la scène. Un badge qui sort du canvas serait rogné par
     /// le masque et ne dirait plus rien ; le rabattre le garde lisible sans
     /// jamais recouvrir un autre objet que le sien.
+    ///
+    /// Attributs construits UNE fois : `refreshSelectionMarker()` rejoue
+    /// `makeSelectionBadge` à chaque `rebuildLayers()`, jusqu'à 120 Hz en `.edit`.
+    private static let selectionBadgeAttributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
+        .foregroundColor: Self.selectionMarkerTint,
+        .kern: 0.7
+    ]
+    /// Largeur mesurée par texte de badge (quelques chaînes distinctes par session).
+    private static var selectionBadgeWidths: [String: CGFloat] = [:]
+
     private func makeSelectionBadge(_ texte: String, above cadre: CGRect) -> CALayer? {
-        let police = UIFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-        let attributs: [NSAttributedString.Key: Any] = [.font: police,
-                                                        .foregroundColor: Self.selectionMarkerTint,
-                                                        .kern: 0.7]
-        let mesure = (texte as NSString).size(withAttributes: attributs)
-        guard mesure.width > 0 else { return nil }
+        let attributs = Self.selectionBadgeAttributes
+        let largeurTexte = Self.selectionBadgeWidths[texte] ?? {
+            let mesure = (texte as NSString).size(withAttributes: attributs).width
+            if Self.selectionBadgeWidths.count > 64 { Self.selectionBadgeWidths.removeAll(keepingCapacity: true) }
+            Self.selectionBadgeWidths[texte] = mesure
+            return mesure
+        }()
+        guard largeurTexte > 0 else { return nil }
 
         let hauteur = Self.selectionMarkerBadgeHeight
-        let largeur = ceil(mesure.width) + 14
+        let largeur = ceil(largeurTexte) + 14
         let dessus = cadre.minY - hauteur - Self.selectionMarkerBadgeGap
         let y = dessus >= 0 ? dessus : cadre.minY + Self.selectionMarkerBadgeGap
 
@@ -164,7 +177,5 @@ extension StoryCanvasUIView {
     /// contexte de conversation : il désigne un objet dans un éditeur, où la
     /// teinte doit rester la même d'une publication à l'autre pour que le geste
     /// s'apprenne.
-    static var selectionMarkerTint: UIColor {
-        UIColor(red: 0.561, green: 0.490, blue: 0.973, alpha: 1)
-    }
+    static let selectionMarkerTint = UIColor(red: 0.561, green: 0.490, blue: 0.973, alpha: 1)
 }

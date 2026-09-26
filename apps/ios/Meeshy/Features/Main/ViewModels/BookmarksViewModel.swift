@@ -82,17 +82,17 @@ class BookmarksViewModel: ObservableObject {
             let newPosts = await Task.detached(priority: .userInitiated) {
                 payload.map { $0.toFeedPost(preferredLanguages: preferred) }
             }.value
-            let existingIds = Set(posts.map(\.id))
-            let unique = newPosts.filter { !existingIds.contains($0.id) }
+            let appendsToEmptyList = !replacingExisting && posts.isEmpty
             if replacingExisting {
                 posts = newPosts
             } else {
-                posts.append(contentsOf: unique)
+                let existingIds = Set(posts.map(\.id))
+                posts.append(contentsOf: newPosts.filter { !existingIds.contains($0.id) })
             }
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? false
 
-            if replacingExisting || nextCursor == nil || posts.count == unique.count {
+            if replacingExisting || nextCursor == nil || appendsToEmptyList {
                 try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
             }
         } catch {

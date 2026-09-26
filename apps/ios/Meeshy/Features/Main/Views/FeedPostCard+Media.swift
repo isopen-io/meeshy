@@ -68,7 +68,7 @@ extension FeedPostCard {
     }
 
     // Compact media preview for a reposted POST/STATUS quote block (RF1). Reuses
-    // `galleryImageView` (image fill + video play glyph / audio waveform overlay)
+    // `FeedMediaTile` (image fill + video play glyph / audio waveform overlay)
     // bounded to a short thumbnail, with a "+N" badge when the repost carries more
     // than one media. No tap gesture and no AVPlayer: the enclosing repost Button
     // already routes the tap to the ORIGINAL reposted post, so the media is hidden
@@ -76,7 +76,7 @@ extension FeedPostCard {
     @ViewBuilder
     func repostMediaPreview(_ model: FeedPostCard.RepostMediaPreview) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            galleryImageView(model.primary)
+            FeedMediaTile(media: model.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -92,14 +92,6 @@ extension FeedPostCard {
             }
         }
         .accessibilityHidden(true)
-    }
-
-    // Gallery-specific image view (no individual rounding)
-    /// Délégation mince vers `FeedMediaTile` (#4096) : le visuel d'un média de
-    /// carte est décrit à UN seul endroit, que le carrousel et l'aperçu d'une
-    /// republication montent tous deux.
-    func galleryImageView(_ media: FeedMedia) -> some View {
-        FeedMediaTile(media: media)
     }
 
     /// **Ouvrir le plein écran d'une SCÈNE** — sans média d'entrée, parce
@@ -253,8 +245,7 @@ extension FeedPostCard {
     }
 
     func documentMediaView(_ media: FeedMedia) -> some View {
-        let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
+        HStack(spacing: 14) {
             // Document icon
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
