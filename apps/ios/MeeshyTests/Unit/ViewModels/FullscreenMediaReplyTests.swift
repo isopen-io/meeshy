@@ -219,6 +219,35 @@ final class FullscreenMediaReplyTests: XCTestCase {
                        "rien ne part : une pièce protégée ne se cite pas")
     }
 
+    // MARK: - #8095 — une pièce dont le porteur n'est pas dans la fenêtre
+
+    /// La galerie feuillette désormais des pièces dont le message n'a jamais
+    /// été chargé : l'hôte le résout dans l'index des médias et le PASSE. La
+    /// citation se compose alors sur ce porteur, comme sur un porteur chargé.
+    func test_citationDuPleinEcran_porteurHorsFenetreFourniParLHote_nommeLaPiece() {
+        let sut = makeSUT()
+        let carrousel = makeCarousel()
+        sut.messages = []
+
+        let citation = sut.fullscreenReplyCitation(for: "piece-3", carrier: carrousel)
+
+        XCTAssertEqual(citation?.attachmentId, "piece-3")
+        XCTAssertEqual(citation?.messageId, "carrousel")
+    }
+
+    func test_envoiEnPlace_porteurHorsFenetreFourniParLHote_partAvecSonAncre() async {
+        let sut = makeSUT()
+        let carrousel = makeCarousel()
+        sut.messages = []
+
+        let envoye = await sut.sendReplyToAttachment(
+            attachmentId: "piece-3", text: "retrouvée", language: "fr", carrier: carrousel
+        )
+
+        XCTAssertTrue(envoye)
+        XCTAssertEqual(messageService.lastSendRequest?.replyToId, "carrousel")
+    }
+
     // MARK: - Témoin 2 — l'ancre atteint le CORPS, et ne prend pas le socket
 
     func test_envoiEnPlace_porteLAncreDeLaTroisiemePiece_dansLeCorpsREST() async {

@@ -589,6 +589,23 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertFalse(deleted, "une expiration n'est pas une suppression : l'hôte ne l'applique pas pareil")
     }
 
+    /// #8095 — un message échu quitte l'INDEX des médias : sa photo ne se
+    /// feuillette plus depuis la galerie, fenêtre chargée ou non.
+    func test_messageExpired_removesCarrierFromConversationMediaIndex() async throws {
+        let (engine, socket, cache) = try makeEngine()
+        let kept = TestFactories.makeMessage(id: "m-media-keep", conversationId: "c-media-exp", content: "")
+        let doomed = TestFactories.makeMessage(id: "m-media-exp", conversationId: "c-media-exp", content: "")
+        try await cache.conversationMedia.save([kept, doomed], for: "c-media-exp")
+        await engine.startSocketRelay()
+
+        socket.messageExpired.send(MessageExpiredEvent(messageId: "m-media-exp", conversationId: "c-media-exp"))
+
+        let swept = await waitUntil {
+            await cache.conversationMedia.load(for: "c-media-exp").snapshot()?.map(\.id) == ["m-media-keep"]
+        }
+        XCTAssertTrue(swept, "un message échu ne doit plus se feuilleter depuis l'index des médias")
+    }
+
     // MARK: - #7969 — la story citée retirée
 
     func test_citedPostWithdrawnRelay_carriesWithdrawalAndPatchesCache() async throws {

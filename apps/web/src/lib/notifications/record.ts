@@ -54,9 +54,9 @@ type ConversationType = NonNullable<NotificationContext['conversationType']>;
 
 const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'public', 'global', 'broadcast'];
 
-type MetadataField = 'postType' | 'contentType' | 'postThumbnailUrl';
+type MetadataField = 'postType' | 'contentType' | 'postThumbnailUrl' | 'callType';
 
-const METADATA_FIELDS: readonly MetadataField[] = ['postType', 'contentType', 'postThumbnailUrl'];
+const METADATA_FIELDS: readonly MetadataField[] = ['postType', 'contentType', 'postThumbnailUrl', 'callType'];
 
 export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType'>;
 

@@ -156,21 +156,14 @@ extension ConversationViewModel {
 
     // MARK: - Conversation-Wide Media
 
+    /// La fiche d'auteur vient de `ConversationMediaRules.senderInfo(of:)` —
+    /// la même règle que l'index des médias (#8095) applique aux porteurs que
+    /// la fenêtre n'a pas chargés.
     var mediaSenderInfoMap: [String: MediaSenderInfo] {
         if let cached = _mediaSenderInfoMap { return cached }
         var map = [String: MediaSenderInfo](minimumCapacity: messages.count)
         for msg in messages {
-            // Qualifié explicitement : un `MediaSenderInfo` top-level homonyme
-            // existe (ConversationStateStore.swift, non utilisé ici) et la
-            // forme non qualifiée s'y résout côté ce fichier — #7362 l'a
-            // révélé en ajoutant `isMe`, absent de ce doublon.
-            let info = ConversationViewModel.MediaSenderInfo(
-                senderName: msg.senderName ?? "?",
-                senderAvatarURL: msg.senderAvatarURL,
-                senderColor: msg.senderColor ?? "#999",
-                sentAt: msg.createdAt,
-                isMe: msg.isMe
-            )
+            let info = ConversationMediaRules.senderInfo(of: msg)
             for att in msg.attachments {
                 map[att.id] = info
             }
@@ -223,24 +216,17 @@ extension ConversationViewModel {
         return index
     }
 
+    /// La règle de légende est `ConversationMediaRules.captions(of:servedText:)`
+    /// (#8095), partagée avec l'index des médias ; le texte servi est celui du
+    /// Prisme de la fenêtre, bascules manuelles comprises.
     var mediaCaptionMap: [String: String] {
         if let cached = _mediaCaptionMap { return cached }
-        var map: [String: String] = [:]
-        for msg in messages {
-            let visuals = msg.attachments.filter { [.image, .video].contains($0.type) }
-            for att in visuals {
-                if let caption = att.caption, !caption.isEmpty {
-                    map[att.id] = caption
-                } else if visuals.count == 1 && !msg.content.isEmpty {
-                    // Single visual + message text -> show as caption
-                    // Use translation if available, otherwise original content
-                    if let preferred = preferredTranslation(for: msg.id) {
-                        map[att.id] = preferred.translatedContent
-                    } else {
-                        map[att.id] = msg.content
-                    }
-                }
-            }
+        let map = messages.reduce(into: [String: String]()) { map, msg in
+            let captions = ConversationMediaRules.captions(
+                of: msg,
+                servedText: self.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+            )
+            map.merge(captions) { _, latest in latest }
         }
         _mediaCaptionMap = map
         return map

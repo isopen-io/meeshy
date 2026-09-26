@@ -64,7 +64,9 @@ struct ConversationMediaGalleryView: View {
     /// La langue choisie PAR MÉDIA. Par média et non globale : deux pièces d'un
     /// même lot peuvent porter des légendes de provenances différentes, et une
     /// langue choisie sur l'une ne dit rien de l'autre.
-    @State private var captionLanguage: [String: String] = [:]
+    /// `internal` — la légende servie se lit depuis `+Captions.swift`, et
+    /// `private` est une portée de FICHIER.
+    @State var captionLanguage: [String: String] = [:]
     /// Le sélecteur complet d'émojis, ouvert par le « + » de la rangée. Un `Bool`
     /// et non la pièce elle-même : la rangée ne s'affiche QUE pour la page
     /// courante, donc la cible se relit au moment du choix — deux états
@@ -166,6 +168,11 @@ struct ConversationMediaGalleryView: View {
     /// un média de commentaire : sans cible, pas de bouton (loi 4).
     var composableMedia: ((MessageAttachment) -> Bool)?
 
+    /// **« Réagir » existe-t-il sur CETTE pièce ?** (#8095) `nil` ⇒ sur toutes.
+    /// Une pièce dont le porteur n'est pas chargé ne peut pas refléter sa
+    /// réaction : le bouton n'y existe pas (loi 4).
+    var reactableMedia: ((MessageAttachment) -> Bool)?
+
     /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce
     /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
     /// Elle décide du fond que la colonne a sous elle
@@ -265,6 +272,7 @@ struct ConversationMediaGalleryView: View {
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
+        reactableMedia: ((MessageAttachment) -> Bool)? = nil,
         sceneContext: GallerySceneContext? = nil
     ) {
         self.allAttachments = allAttachments
@@ -281,6 +289,7 @@ struct ConversationMediaGalleryView: View {
         self.onReactToMedia = onReactToMedia
         self.replyableMedia = replyableMedia
         self.composableMedia = composableMedia
+        self.reactableMedia = reactableMedia
         self.sceneContext = sceneContext
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
@@ -300,68 +309,6 @@ struct ConversationMediaGalleryView: View {
     var currentIndex: Int {
         guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
         return index
-    }
-
-    /// **Le texte de la légende, dans la langue courante** — source UNIQUE pour
-    /// l'affichage ET pour VoiceOver (#4934).
-    ///
-    /// Les deux la partagent parce qu'un lecteur d'écran qui énoncerait une
-    /// autre langue que celle affichée serait pire qu'un lecteur muet : il
-    /// affirmerait quelque chose de faux. C'est la leçon de
-    /// `reference_one_string_for_sight_and_for_voiceover_serves_one_of_them`,
-    /// prise par l'autre bout.
-    private func servedCaption(_ id: String) -> String? {
-        if let serving = captionServings[id] {
-            if let chosen = captionLanguage[id], let texte = serving.alternatives[chosen] {
-                return texte.isEmpty ? nil : texte
-            }
-            return serving.text.isEmpty ? nil : serving.text
-        }
-        guard let simple = captionMap[id], !simple.isEmpty else { return nil }
-        return simple
-    }
-
-    /// Les langues offertes pour CE média — vides quand il n'y a rien à
-    /// basculer. Ordonnées pour que la rangée ne danse pas d'un rendu à l'autre :
-    /// un dictionnaire n'a pas d'ordre, et une rangée de drapeaux qui se
-    /// réarrange à chaque redessin serait illisible.
-    private func captionLanguages(_ id: String) -> [String] {
-        guard let serving = captionServings[id], serving.alternatives.count > 1 else { return [] }
-        return serving.alternatives.keys.sorted()
-    }
-
-    /// La langue ACTIVE : celle que le lecteur a choisie, sinon celle dont le
-    /// texte est servi. Déduire l'active du TEXTE plutôt que de la supposer
-    /// évite qu'un drapeau se dise actif au-dessus d'une autre langue.
-    private func activeCaptionLanguage(_ id: String) -> String? {
-        if let chosen = captionLanguage[id] { return chosen }
-        guard let serving = captionServings[id] else { return nil }
-        return serving.alternatives.first(where: { $0.value == serving.text })?.key
-    }
-
-    /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
-    /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
-    private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
-        if let caption = servedCaption(attachment.id) {
-            return caption
-        }
-        return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
-    }
-
-    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
-    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
-    private func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
-        var parts: [String] = []
-        if let w = att.width, let h = att.height, w > 0, h > 0 {
-            parts.append(String(
-                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
-                w, h
-            ))
-        }
-        if att.fileSize > 0 {
-            parts.append(att.fileSizeFormatted)
-        }
-        return ListFormatter.localizedString(byJoining: parts)
     }
 
     var body: some View {
@@ -562,6 +509,9 @@ struct ConversationMediaGalleryView: View {
         .padding(.top, plateauTopInset)
         .padding(.bottom, plateauBottomInset)
         .ignoresSafeArea()
+        .adaptiveOnChange(of: GallerySourceSignature(allAttachments)) { _, _ in
+            keepCurrentPageAcrossGrowth()
+        }
         .adaptiveOnChange(of: currentPageID) { oldID, newID in
             handlePageChange(from: oldID, to: newID)
         }
@@ -956,7 +906,7 @@ struct ConversationMediaGalleryView: View {
         // plus qu'un endroit où la protection pourrait être oubliée.
         if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
                                                   attachment: att,
-                                                  hasHandler: onReactToMedia != nil) {
+                                                  hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true)) {
             Button {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

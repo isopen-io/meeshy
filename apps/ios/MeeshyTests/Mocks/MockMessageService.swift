@@ -173,6 +173,30 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listAroundResult.get()
     }
 
+    // MARK: - listMedia (#8095)
+
+    var listMediaResult: Result<MessagesAPIResponse, Error> = .success(
+        JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    )
+    /// File des pages, consommée avant `listMediaResult` : un test y pose une
+    /// suite de pages pour prouver que la remontée s'arrête à l'épuisement.
+    var listMediaResults: [Result<MessagesAPIResponse, Error>] = []
+    var listMediaCallCount = 0
+    var listMediaCursors: [String?] = []
+    var lastListMediaLanguages: [String]?
+
+    nonisolated func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
+        try await MainActor.run {
+            listMediaCallCount += 1
+            listMediaCursors.append(before)
+            lastListMediaLanguages = languages
+            if !listMediaResults.isEmpty { return try listMediaResults.removeFirst().get() }
+            return try listMediaResult.get()
+        }
+    }
+
     nonisolated func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
         await MainActor.run {
             sendCallCount += 1
