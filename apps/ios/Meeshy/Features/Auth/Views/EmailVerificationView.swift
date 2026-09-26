@@ -7,16 +7,20 @@ struct EmailVerificationView: View {
     @StateObject private var viewModel: EmailVerificationViewModel
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
-    @State private var code = ""
 
-    init(email: String, authService: AuthServiceProviding = AuthService.shared) {
+    init(
+        email: String,
+        password: String? = nil,
+        accountCreated: Bool = false,
+        authService: AuthServiceProviding = AuthService.shared
+    ) {
         _viewModel = StateObject(wrappedValue: EmailVerificationViewModel(
             email: email,
+            password: password,
+            accountCreated: accountCreated,
             authService: authService
         ))
     }
-
-    private var isCodeComplete: Bool { code.count == 6 }
 
     var body: some View {
         NavigationStack {
@@ -28,9 +32,7 @@ struct EmailVerificationView: View {
                     headerIcon
                     titleSection
                     subtitleSection
-                    codeField
-                    errorView
-                    verifyButton
+                    EmailCodeEntry(viewModel: viewModel)
                     resendSection
                     Spacer()
                     Spacer()
@@ -82,113 +84,23 @@ struct EmailVerificationView: View {
     // MARK: - Subtitle
 
     private var subtitleSection: some View {
-        Text(String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code a 6 chiffres envoye a **\(viewModel.email)**"))
+        Text(Self.markdown(subtitle))
             .font(.subheadline)
             .multilineTextAlignment(.center)
             .foregroundStyle(theme.textSecondary)
             .padding(.horizontal, 16)
     }
 
-    // MARK: - Code Field
-
-    private var codeField: some View {
-        TextField(
-            String(localized: "emailVerification.codePlaceholder", defaultValue: "000000"),
-            text: $code
-        )
-        .keyboardType(.numberPad)
-        .textContentType(.oneTimeCode)
-        .font(.system(.title, design: .monospaced).weight(.semibold))
-        .multilineTextAlignment(.center)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 24)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.inputBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(isCodeComplete ? MeeshyColors.indigo500 : theme.inputBorder, lineWidth: 1.5)
-        )
-        .padding(.horizontal, 32)
-        .adaptiveOnChange(of: code) { _, newValue in
-            let filtered = newValue.filter(\.isNumber)
-            let limited = String(filtered.prefix(6))
-            if limited != newValue {
-                code = limited
-            }
-        }
-        .disabled(viewModel.isVerifying || viewModel.verificationSuccess)
-        // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
-        // champ — inintelligible. On pose un label + un indice explicites.
-        .accessibilityLabel(String(localized: "emailVerification.code.a11yLabel", defaultValue: "Code de vérification"))
-        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par email"))
+    /// Un compte NÉ de cette connexion le dit (#8035) : l'utilisateur a tapé
+    /// une adresse inconnue, il doit comprendre qu'un compte l'attend.
+    private var subtitle: String {
+        viewModel.accountCreated
+            ? String(localized: "emailVerification.subtitle.accountCreated", defaultValue: "Votre compte est créé. Un code et un lien de validation ont été envoyés à **\(viewModel.email)**.")
+            : String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code à 6 chiffres envoyé à **\(viewModel.email)**")
     }
 
-    // MARK: - Error View
-
-    @ViewBuilder
-    private var errorView: some View {
-        if let errorMessage = viewModel.error {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.subheadline)
-                Text(errorMessage)
-                    .font(.subheadline.weight(.medium))
-            }
-            .foregroundStyle(MeeshyColors.error)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(MeeshyColors.error.opacity(0.1))
-            )
-            .transition(.opacity.combined(with: .move(edge: .top)))
-            // Glyphe d'alerte décoratif + message fusionnés en un seul élément :
-            // VoiceOver annonce le message d'erreur, pas le triangle isolé.
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    // MARK: - Verify Button
-
-    private var verifyButton: some View {
-        Button {
-            Task { await viewModel.verifyCode(code) }
-        } label: {
-            HStack(spacing: 8) {
-                if viewModel.isVerifying {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
-                } else {
-                    Text(String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier"))
-                }
-            }
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isCodeComplete && !viewModel.isVerifying
-                          ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.3)))
-            )
-        }
-        .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)
-        .accessibilityIdentifier("emailVerification.submit")
-        .padding(.horizontal, 8)
-        // Pendant la vérification le label se réduit à un spinner (aucun texte) →
-        // VoiceOver lirait un bouton anonyme. Label stable et explicite dans les
-        // deux états.
-        .accessibilityLabel(verifyButtonAccessibilityLabel)
-    }
-
-    private var verifyButtonAccessibilityLabel: String {
-        viewModel.isVerifying
-            ? String(localized: "emailVerification.verifying.a11y", defaultValue: "Vérification en cours")
-            : String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier")
+    private static func markdown(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text)) ?? AttributedString(text)
     }
 
     // MARK: - Resend Section

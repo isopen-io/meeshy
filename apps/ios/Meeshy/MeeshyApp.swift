@@ -226,18 +226,16 @@ struct MeeshyApp: App {
                         Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
                         return
                     }
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
+                    if let link = SignInLink(DeepLinkParser.parse(url)) {
+                        Task { await SignInLinkOpener.open(link) }
                         return
                     }
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
                     guard let url = userActivity.webpageURL else { return }
-                    let destination = DeepLinkParser.parse(url)
-                    if case .magicLink = destination {
-                        handleAppLevelDeepLink(url)
+                    if let link = SignInLink(DeepLinkParser.parse(url)) {
+                        Task { await SignInLinkOpener.open(link) }
                         return
                     }
                     let _ = deepLinkRouter.handle(url: url)
@@ -977,15 +975,17 @@ struct MeeshyApp: App {
         case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
             deepLinkRouter.consumePendingDeepLink()
-        case .magicLink(let token):
-            // Cold-launch Universal Link magic link. `AppDelegate
+        case .magicLink, .emailVerificationLink:
+            // Cold-launch Universal Link sign-in link. `AppDelegate
             // .application(_:continue:)` set `pendingDeepLink = .magicLink`
             // before any view mounted, and `RootView` (the warm consumer)
             // never mounts while unauthenticated — so this is the ONLY place
             // a cold-launch magic link gets validated. Consume first so the
             // `.task` + `.onChange` callers don't double-fire the request.
             deepLinkRouter.consumePendingDeepLink()
-            validateMagicLinkToken(token)
+            if let signIn = SignInLink(link) {
+                Task { await SignInLinkOpener.open(signIn) }
+            }
         case .externalLink(let url):
             // `/l/<token>` de cible EXTERNAL reçu SANS compte : `RootView` n'est
             // pas monté, donc personne d'autre ne l'ouvrirait. Le lien vise le
@@ -994,43 +994,6 @@ struct MeeshyApp: App {
             UIApplication.shared.open(url)
         default:
             break
-        }
-    }
-
-    // MARK: - App-Level Deep Link (handles magic link when not authenticated)
-
-    private func handleAppLevelDeepLink(_ url: URL) {
-        let destination = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = destination else { return }
-        validateMagicLinkToken(token)
-    }
-
-    /// Validate a passwordless magic-link token and surface the outcome.
-    /// Shared by the warm path (`.onOpenURL` / `.onContinueUserActivity` via
-    /// `handleAppLevelDeepLink`) and the cold-launch path
-    /// (`handleGuestDeepLink`) so both report success/failure identically.
-    private func validateMagicLinkToken(_ token: String) {
-        Task {
-            // P0 — a magic link tapped while ALREADY authenticated (possibly
-            // as a DIFFERENT account) must never `applySession(B)` on top of
-            // account A without a full teardown first: A's caches, sockets
-            // (still carrying A's JWT), and E2EE session keys would all leak
-            // into B's session. `applySession`'s `isTokenRotation` only
-            // special-cases the SAME user re-authenticating — a magic link
-            // for a different account is a genuine account switch, so we log
-            // out completely before validating. The cold-launch path
-            // (`handleGuestDeepLink`) already only reaches here while
-            // unauthenticated, so this is a no-op there.
-            if authManager.isAuthenticated {
-                await authManager.logout()
-            }
-            await authManager.validateMagicLink(token: token)
-
-            if authManager.isAuthenticated {
-                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main))
-            } else {
-                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main))
-            }
         }
     }
 }
