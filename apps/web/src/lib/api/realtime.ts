@@ -8,6 +8,8 @@ import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
+import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
+import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
@@ -153,6 +155,9 @@ syncConnection();
  * alors dans un socket détruit.
  */
 setTypingEmitter((conversationId, isTyping) => connection?.emitTyping(conversationId, isTyping));
+
+/** La réaction à une PIÈCE (#6303) — même inversion que la frappe : la visionneuse appelle le port, jamais ce module. */
+setAttachmentReactionEmitter((request) => sendAttachmentReaction(connection?.socket ?? null, request));
 
 /**
  * UN APPEL REÇU CHARGE LE MOTEUR (#6382) — le port d'appel garde en file tout

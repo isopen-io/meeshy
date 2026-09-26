@@ -535,6 +535,7 @@ export const FocalRow = memo(function FocalRow({
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="tiles"
           isMine={isMine}
+          message={message}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}

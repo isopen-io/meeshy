@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
 import ptMediaHub from './catalog-pt-media-hub';
+import ptMediaViewer from './catalog-pt-media-viewer';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
@@ -208,6 +209,7 @@ const pt = {
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
   ...ptMediaHub,
+  ...ptMediaViewer,
   ...ptVerifyEmail,
   ...ptPassword,
   ...ptCall,
