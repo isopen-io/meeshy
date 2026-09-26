@@ -25,14 +25,10 @@
  * @module services/auth/registration-identity
  */
 
-import { pseudoRacine } from '@meeshy/shared/utils/registration-identity';
+import { PSEUDO_MAX, PSEUDO_MIN, pseudoRacine } from '@meeshy/shared/utils/registration-identity';
 
 import { candidatsDePseudo } from '../../utils/username-candidates';
 
-/** Longueur maximale d'un `username` — bornée par `registerRequestSchema`. */
-const PSEUDO_MAX = 16;
-/** En deçà, un pseudo n'est pas recevable (borne basse du même schéma). */
-const PSEUDO_MIN = 2;
 /**
  * Longueur de la racine quand il faut lui coller quatre chiffres : 12 + 4 = 16,
  * la borne exacte. Tronquer APRÈS coup couperait les chiffres et rendrait des

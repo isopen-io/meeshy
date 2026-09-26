@@ -2399,6 +2399,8 @@ Le poids : `first_paint` était mesuré à 40,5 Ko (plafond 41, D-53) avant ce t
 
 ## D-61 · Le journal d'appels est un écran SEUL à `/calls`, pas l'onglet d'un hub ; il ne montre pas « Rappeler » tant que le web n'appelle pas ; la direction se lit par un glyphe ET un libellé — 2026-09-13 (#6362)
 
+> **Amendé par D-129 (2026-09-26)** : le web appelle ; le Clavier, la fiche d'un appel et « Rejoindre » sont servis.
+
 **Le constat.** `/calls` était un écran d'attente (#6214). Sur iOS, le troisième barreau ouvre `Route.contacts(.calls)` : l'onglet **Appels** de `ContactsHubView`, un hub à trois onglets — Appels, Clavier, Contacts — sous un en-tête repliable (`ContactsHubView.swift`, `CallsTab.swift`).
 
 **L'adresse tranchée : un écran seul, `/calls`.** Trois raisons, mesurées sur ce que web-v2 sert.
@@ -3881,6 +3883,8 @@ C'est l'INVERSE de `/status/new` (D. « Mon humeur »), et pour une raison qui t
 
 ## D-113 — La ligne 2 de la Lentille est celle du composeur partagé ; « Rejoindre » attend que le web appelle (2026-09-23, #7547)
 
+> **Amendé par D-129 (2026-09-26)** : le web appelle ; le Clavier, la fiche d'un appel et « Rejoindre » sont servis.
+
 **Le constat.** `lens-row.tsx` composait sa ligne 2 lui-même, en français codé en dur : ni durée, ni taille, ni « Vous », ni appels, ni réactions, ni brouillon, un « +N » toujours nul depuis REST. Et quatre chemins temps réel écrivaient le dernier message sans garde d'ordre ni masquage.
 
 **Ce qui est tranché.**
@@ -4102,3 +4106,38 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 **L'appui long** — l'aperçu du menu est un CLONE de la rangée (#5814). Il passe désormais par `projectMessagePreview` (`lib/view/message-preview.ts`) : une fenêtre de lecture ouverte y est remplacée par sa forme au repos (`[data-protected-rest]`, posée cachée et sans contenu par `ProtectedContent`), et chaque pièce reprend son rapport d'aspect d'origine (`data-piece-ratio`, repli carré), la grille se dépliant en colonne. La feuille « Plus… » d'un message protégé ne liste ni langues ni pièces (`messageDetailExposureOf`).
 
 **Écart iOS** — iOS dévoile encore un média FLOUTÉ dans la bulle (`handleReveal`, et un appui long en Focal) : la demande porteur vaut pour les deux plateformes, la jumelle est #8009.
+
+## D-127 — Le lien d'e-mail ouvert sur un téléphone est d'abord REMIS À L'APP, avant d'être consommé ; l'écran du code lit l'état de l'adresse, jamais une session (2026-09-26, #8083)
+
+**Décision porteur « si et seulement si »** — un appareil ne se connecte que par le code saisi SUR LUI ou le lien ouvert SUR LUI ; lien et code sont deux clés distinctes, chacune consommée à l'usage. Aucune session ne passe d'un appareil à l'autre.
+
+- **Page d'arrivée du lien (`/auth/verify-email?token=…`)** : sur un navigateur Android, le lien est d'abord remis à l'app par un `intent://` vers le schéma `meeshy://` de la coque (`lib/links/app-handoff.ts`, même chemin, même jeton), AVANT toute validation — le jeton est à usage unique. La page reste visible ~1,5 s ⇒ l'app ne s'est pas ouverte : le navigateur valide et se connecte, sans message. La page passe en arrière-plan ⇒ l'app a le lien : rien n'est consommé, « Continuer dans le navigateur » reste offert. Sans l'app, Chrome suit `S.browser_fallback_url` — cette page, marquée `handoff=browser` — jamais le Play Store.
+- **iPhone : aucune tentative par schéma** — Safari afficherait « adresse non valide » à chaque visiteur sans l'app. `/auth/verify-email` (avec `token` et `email`) entre dans l'`apple-app-site-association` : iOS ouvre l'app AVANT que Safari ne charge la page (`DeepLinkRouter.swift` le lit depuis #8035). Même chemin réclamé par les App Links de la coque (`AndroidManifest.xml`).
+- **Ordinateur et coque Capacitor** : inchangés — le navigateur (ou la coque) consomme le lien et se connecte.
+- **Écran du code** (connexion d'un e-mail inconnu, inscription sans numéro, e-mail seul) : le `pendingSessionToken` rendu par la passerelle vit en MÉMOIRE (`pending-verification.ts`, état du panneau), jamais en stockage, dans l'adresse ni dans un journal ; `lib/view/verification-watch.ts` interroge `POST /auth/verification/status` toutes les 3 s onglet visible, aussitôt au retour, s'arrête à `proven`, au démontage, à 401/410. `proven` ⇒ « Adresse confirmée ✓ — saisissez le code reçu pour vous connecter ici » ; aucune session n'est ouverte.
+
+## D-128 — La release de la coque Android est signée par une clé de release tenue HORS du dépôt ; son empreinte est publiée dans assetlinks.json (2026-09-26, #8085)
+
+**Contexte.** `assetlinks.json` portait `REPLACE_WITH_RELEASE_SHA256` pour `me.meeshy.app` : Android ne vérifiait pas les App Links, et un lien d'e-mail (#8083) ouvrait le navigateur au lieu de l'app. Aucune clé de release n'existait, ni dans le dépôt ni dans la CI.
+
+**Décision.** Une clé RSA 4096 (PKCS#12, alias `meeshy-release`, 30 ans) est générée et gardée hors du dépôt. `android/app/build.gradle` la LIT, dans l'ordre : fichier désigné par `MEESHY_ANDROID_KEYSTORE_PROPERTIES`, puis `android/keystore.properties` (ignoré par git), puis les variables `MEESHY_ANDROID_STORE_FILE` / `_STORE_PASSWORD` / `_KEY_ALIAS` / `_KEY_PASSWORD` (CI). Sans source, la release reste non signée, comme avant. L'empreinte SHA-256 publique est écrite dans `public/.well-known/assetlinks.json`. `auditAndroidReleaseSigning` (`scripts/build-shells.mjs`) refuse une release non reliée à `signingConfigs.release` et tout mot de passe en littérale.
+
+**Conséquences.** Perdre la clé interdit toute mise à jour de l'app signée par elle : elle se sauvegarde dans le gestionnaire de mots de passe de production. Si l'app est publiée sur Google Play avec Play App Signing, cette clé devient la clé d'IMPORTATION, et l'empreinte de la clé de signature de Play s'AJOUTE à la liste d'`assetlinks.json`.
+
+
+## D-129 — Rejoindre, rappeler, composer : la fiche d'un appel a une ADRESSE (`/call/:callId`), le pavé est un écran frère du journal (`/calls/keypad`), et le numéro du pair n'entre jamais dans le client — amendement de D-61 et de D-113 (2026-09-26, #6383, #6454, #3586, #6382)
+
+**Le constat.** Le moteur d'appel du web existe (#6382) : D-61 (« le web n'appelle pas », pas de Clavier) et D-113 (« Rejoindre attend que le web appelle ») décrivaient un web qui ne pouvait pas appeler. Ce qu'ils retenaient se livre ici.
+
+**Ce qui est tranché.**
+- **La fiche d'un appel est une adresse, pas une feuille.** iOS présente `CallDetailSheet` par-dessus le journal ; le web sert `/call/:callId`, parce que le lien profond du legacy y menait déjà et qu'une feuille n'a pas d'adresse à partager. Même contenu, même ordre (avatar, nom, direction · heure, Appel vocal / Appel vidéo, Type · Date · Durée · Données), même geste principal. La ligne du journal ouvre désormais la FICHE ; « Ouvrir la conversation » y mène au fil (amende D-61, qui faisait ouvrir le fil par la ligne).
+- **Cache d'abord.** Venue du journal, la fiche se peint depuis la ligne du cache persisté, sans requête — un appel terminé ne change plus. À froid, `GET /calls/:callId` ; un appel VIVANT s'y REJOINT (le fil s'ouvre, l'écran d'appel par-dessus) ; un appel introuvable ou interdit se dit « introuvable », sans distinguer les deux.
+- **Le numéro du pair n'est ni décodé, ni persisté, ni affiché.** `callHistory` le sert ; `lib/api/calls.ts` le laisse sur le fil. iOS le montre sur la fiche, le web non : un numéro est une donnée de contact que le cache persisté (localStorage) garderait après la déconnexion d'un appareil partagé, et rien du parcours web ne s'en sert (on rappelle par la conversation). Les octets échangés, eux, entrent dans la projection (`bytes`), pour la ligne « Données ».
+- **Le pavé est un écran frère, `/calls/keypad`** (amende D-61, qui l'écartait faute d'appel) : un bouton de l'en-tête du journal y mène. Une saisie, deux recherches classées SEULES (`classifyKeypadInput`) — un numéro par `GET /users/phone/:phone`, un nom par l'annuaire —, 300 ms après la dernière frappe ; la requête est CLÉE par la saisie, donc une réponse dépassée ne s'affiche jamais. États : invitation, recherche, aucun, erreur (réessayable), hors ligne. Aucun résultat ne porte de présence : `decodePerson` l'écarte, et la loi de visibilité ne la sert qu'aux amis.
+- **Appeler une PERSONNE** (pavé, fiche `/u/:username`) ouvre ou retrouve le direct (`POST /conversations`, idempotent) puis appelle dedans (`startCallWithPerson`, miroir `CallStarter.swift`) ; les tonalités s'amorcent DANS le geste, avant l'aller-retour.
+- **« Rejoindre » existe** (amende D-113) : sur la ligne de la Lentille (appel en cours servi par la liste), en pastille dans l'en-tête du fil (`GET /conversations/:id/active-call`, relu toutes les 15 s tant que le fil est ouvert), et par le lien profond. Les boutons vivent HORS des liens : un contrôle interactif ne s'imbrique pas dans un autre.
+- **« Reprendre l'appel »** (#3586) : une bannière globale, nourrie par `GET /calls/active` (persistée, relue au montage, au focus et toutes les 30 s), paraît quand la passerelle tient le lecteur pour membre d'un appel vivant que l'onglet ne porte pas — rechargement, plantage. La reprise demande un TAP : un navigateur ne rend ni micro ni son sans geste, une reprise automatique partirait muette. Elle se tait dans le fil de l'appel, où la pastille de l'en-tête dit la même chose sous le doigt.
+- **« Rappeler » depuis la cloche** : une notification d'appel manqué porte le bouton, du type de l'appel d'origine.
+- **`presence:app-state {foreground}`** part à l'authentification du socket et à chaque changement de visibilité (`lib/api/app-state-presence.ts`) : la passerelle sait si l'onglet est au premier plan.
+
+**Ce qui n'est pas fait.** L'appel depuis le menu contextuel d'une ligne de liste (A3) : `row-actions` n'est pas dans le périmètre de ce lot.

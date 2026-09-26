@@ -19,10 +19,11 @@ final class SignupViewModelTests: XCTestCase {
     // MARK: - Fabrique
 
     private func makeSUT(
-        locale: Locale = Locale(identifier: "fr_FR")
+        locale: Locale = Locale(identifier: "fr_FR"),
+        referrals: MockPendingReferralStore = MockPendingReferralStore()
     ) -> (sut: SignupViewModel, registrar: MockSignupRegistrar) {
         let registrar = MockSignupRegistrar()
-        let sut = SignupViewModel(registrar: registrar, locale: locale)
+        let sut = SignupViewModel(registrar: registrar, locale: locale, referrals: referrals)
         return (sut, registrar)
     }
 
@@ -66,6 +67,87 @@ final class SignupViewModelTests: XCTestCase {
         fillValidForm(sut)
         XCTAssertTrue(sut.form.phoneDigits.isEmpty)
         XCTAssertTrue(sut.canSubmit)
+    }
+
+    // MARK: - Parrainage (#8075)
+
+    func test_submit_rememberedReferral_travelsWithTheRegistration() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateSessionKey, "iOS ne tient aucune clé de visite")
+    }
+
+    func test_submit_withPhone_referralStillTravels() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        fillValidForm(sut)
+        sut.form.phoneDigits = "0612345678"
+
+        await sut.submit()
+
+        XCTAssertNotNil(registrar.lastRegisterRequest?.phoneNumber)
+        XCTAssertEqual(registrar.lastRegisterRequest?.affiliateToken, "aff_42")
+    }
+
+    func test_submit_withoutReferral_sendsNoAffiliateToken() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(registrar.lastRegisterRequest?.affiliateToken)
+    }
+
+    func test_submit_accountCreatedWithSession_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.authenticated)
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNil(referrals.code)
+        XCTAssertEqual(referrals.forgetCallCount, 1)
+    }
+
+    func test_submit_accountCreatedAwaitingVerification_forgetsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .success(.verificationRequired(PendingEmailVerification(email: "awa@example.com", accountCreated: true)))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertNotNil(sut.pendingVerification)
+        XCTAssertNil(referrals.code, "le compte existe déjà, rattaché : le code a servi")
+    }
+
+    func test_submit_rejected_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(rejection(status: 409, code: "EMAIL_TAKEN", field: "email"))
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42", "aucun compte créé : le code attend le prochain essai")
+        XCTAssertEqual(referrals.forgetCallCount, 0)
+    }
+
+    func test_submit_phoneConflict_keepsTheReferral() async {
+        let referrals = MockPendingReferralStore(code: "aff_42")
+        let (sut, registrar) = makeSUT(referrals: referrals)
+        registrar.registerResult = .failure(PhoneOwnershipConflict())
+        fillValidForm(sut)
+
+        await sut.submit()
+
+        XCTAssertEqual(referrals.code, "aff_42")
     }
 
     // MARK: - Envoi
@@ -523,5 +605,60 @@ final class SignupViewModelTests: XCTestCase {
         await sut.submit()
 
         XCTAssertNil(sut.pendingVerification)
+    }
+
+    // MARK: - La borne du pseudo (#8082)
+
+    /// Recette 2026-09-26 : `direction_recette` (17 caractères) passait l'écran,
+    /// la passerelle le refusait, et l'app disait « réessayez ». La borne se
+    /// dit désormais PENDANT la saisie, sous le pseudo, et rien ne part.
+    func test_tooLongUsername_showsTheBoundUnderTheFieldWhileTyping() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recette"
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRefusalMessage(.tooLong))
+        XCTAssertTrue(sut.error(for: .username)?.contains("16") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+    }
+
+    func test_tooLongUsername_submitSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.username = "direction_recette"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_validUsername_hasNoFieldMessage() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recett"
+
+        XCTAssertNil(sut.error(for: .username))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
+    /// La passerelle sert `violations: [{ path: "username", message: "must NOT
+    /// have more than 16 characters" }]` : le refus se pose SOUS le pseudo,
+    /// dans la langue du lecteur — jamais le texte d'Ajv, jamais « réessayez ».
+    func test_schemaRefusalOnUsername_landsUnderTheFieldInTheReadersLanguage() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .failure(
+            rejection(code: "VALIDATION_ERROR", message: "body/username must NOT have more than 16 characters", violations: [
+                .init(path: "username", message: "must NOT have more than 16 characters"),
+            ])
+        )
+
+        _ = await sut.submit()
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRuleMessage)
+        XCTAssertNil(sut.bannerError)
     }
 }

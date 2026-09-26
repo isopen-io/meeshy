@@ -17,6 +17,9 @@ import Fastify, { FastifyInstance } from 'fastify';
 const mockRequestMagicLink = jest.fn() as jest.Mock<any>;
 const mockValidateMagicLink = jest.fn() as jest.Mock<any>;
 
+jest.mock('../../../services/auth/email-verification-watch', () => ({
+  pendingSessionTokenFor: jest.fn(async () => ({ pendingSessionToken: 'attente-opaque' })),
+}));
 jest.mock('../../../services/MagicLinkService', () => ({
   MagicLinkService: jest.fn().mockImplementation(() => ({
     requestMagicLink: (...args: unknown[]) => mockRequestMagicLink(...args),
@@ -171,7 +174,11 @@ describe('MagicLink Routes', () => {
       const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@example.com' } });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ success: true, message: MESSAGE, data: { expiresInSeconds: 900 } });
+      expect(response.json()).toEqual({
+        success: true,
+        message: MESSAGE,
+        data: { expiresInSeconds: 900, pendingSessionToken: 'attente-opaque' },
+      });
     });
 
     it('passe par la porte « e-mail seul », avec le contexte et la locale de la requête', async () => {

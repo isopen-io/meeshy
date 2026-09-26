@@ -14,11 +14,17 @@
  * `password` est ABSENT après une inscription sans numéro (#8055) : le mot
  * de passe y est déjà enregistré sur le compte, il ne voyage pas une seconde
  * fois avec le code.
+ *
+ * `pendingSessionToken` (#8083) : le jeton d'ATTENTE que la passerelle remet
+ * à CET appareil — il ne lit que l'état `pending` / `proven` de l'adresse
+ * (`verification-watch.ts`), jamais une session. Même régime que le mot de
+ * passe : mémoire vive seulement, jamais l'adresse, jamais journalisé.
  */
 export type PendingVerification = {
   readonly email: string;
   readonly password?: string;
   readonly accountCreated: boolean;
+  readonly pendingSessionToken?: string;
 };
 
 let pending: PendingVerification | null = null;

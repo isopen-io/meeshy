@@ -11,6 +11,8 @@
 import { describe, it, expect } from 'vitest';
 import { AuthSchemas } from '../utils/validation.js';
 import {
+  verificationStatusRequestSchema,
+  verificationStatusResponseSchema,
   verifyEmailRequestSchema,
   verifyEmailResponseSchema,
   loginVerificationRequiredProperties,
@@ -60,12 +62,19 @@ describe('les réponses déclarent ce qu’elles servent', () => {
   });
 
   it('login déclare la branche « vérification requise »', () => {
-    expect(Object.keys(loginVerificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email']);
+    expect(Object.keys(loginVerificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email', 'pendingSessionToken']);
     expect(loginVerificationRequiredProperties.status.enum).toEqual(['verification-required']);
   });
 
   it('register et login servent la MÊME branche « vérification requise » (#8055)', () => {
     expect(verificationRequiredProperties).toBe(loginVerificationRequiredProperties);
-    expect(Object.keys(verificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email']);
+    expect(Object.keys(verificationRequiredProperties)).toEqual(['status', 'accountCreated', 'email', 'pendingSessionToken']);
+  });
+
+  it('le jeton d’attente ne sert qu’un ÉTAT (#8083) : la réponse d’état ne déclare ni session ni adresse', () => {
+    expect(verificationRequiredProperties.pendingSessionToken.type).toBe('string');
+    expect(Object.keys(verificationStatusResponseSchema.properties.data.properties)).toEqual(['status']);
+    expect(verificationStatusResponseSchema.properties.data.properties.status.enum).toEqual(['pending', 'proven']);
+    expect(verificationStatusRequestSchema.required).toEqual(['pendingSessionToken']);
   });
 });

@@ -28,7 +28,13 @@ const enVerifyEmail = {
   'verifyEmail.resend.done': 'Code sent again!',
   'verifyEmail.link.checking': 'Checking the link…',
   'verifyEmail.link.invalid': 'This link is no longer valid. Enter the code from the same email.',
+  'verifyEmail.proven': 'Address confirmed ✓ — enter the code you received to sign in here.',
+  'verifyEmail.handoff.opened': 'The link was opened in the Meeshy app.',
+  'verifyEmail.handoff.stay': 'Continue in the browser',
   'verifyEmail.signingIn': 'Signing in…',
+  'verifyEmail.arrival.title': 'Address confirmed!',
+  'verifyEmail.arrival.lead': 'Getting your conversations ready…',
+  'verifyEmail.arrival.status': 'Address confirmed — signing in…',
   'emailSent.codeOrLink': 'Enter the 6-digit code sent to {email}, or open the link in the same email.',
 };
 

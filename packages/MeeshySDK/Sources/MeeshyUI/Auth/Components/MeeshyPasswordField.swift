@@ -56,6 +56,45 @@ public struct MeeshyPasswordReveal: Equatable, Sendable {
     ]
 }
 
+/// UIKit VIDE un champ sécurisé à la première frappe qui suit sa prise de
+/// focus. Re-masquer remonte un `SecureField` neuf qui reprend le focus : sans
+/// reprise, la frappe suivante effaçait toute la saisie (#8054). `restore`
+/// recompose ce que l'utilisateur voulait depuis la saisie d'avant la bascule,
+/// et laisse passer tel quel un changement que UIKit n'a pas remis à zéro.
+public enum MeeshySecureEntryResume {
+    public static func restore(snapshot: String, received: String) -> String {
+        guard !snapshot.isEmpty else { return received }
+        if received.hasPrefix(snapshot) || (snapshot.hasPrefix(received) && received.count == snapshot.count - 1) {
+            return received
+        }
+        return received.isEmpty ? String(snapshot.dropLast()) : snapshot + received
+    }
+}
+
+/// La bascule remonte une autre saisie : le focus passe par `nil` avant
+/// d'être rendu. La reprise attend donc le RETOUR du focus avant de s'armer,
+/// et ne se désarme que sur une perte de focus survenue APRÈS.
+private enum ResumePhase: Equatable {
+    case idle
+    case awaitingFocus(String)
+    case armed(String)
+
+    var snapshot: String? {
+        switch self {
+        case .idle: return nil
+        case .awaitingFocus(let snapshot), .armed(let snapshot): return snapshot
+        }
+    }
+
+    func focusChanged(isFocused: Bool) -> ResumePhase {
+        switch self {
+        case .awaitingFocus(let snapshot) where isFocused: return .armed(snapshot)
+        case .armed where !isFocused: return .idle
+        default: return self
+        }
+    }
+}
+
 /// Focus possédé par le champ quand l'hôte n'en déclare pas.
 public enum MeeshyPasswordFieldOwnFocus: Hashable {
     case field
@@ -79,6 +118,7 @@ public struct MeeshyPasswordField<Field: Hashable>: View {
     private let eyeColor: Color
 
     @State private var reveal = MeeshyPasswordReveal()
+    @State private var resumePhase = ResumePhase.idle
     @FocusState private var ownFocus: Field?
 
     public init(
@@ -110,6 +150,17 @@ public struct MeeshyPasswordField<Field: Hashable>: View {
 
             eyeButton
         }
+        .adaptiveOnChange(of: text) { _, received in resume(received) }
+        .adaptiveOnChange(of: focusBinding.wrappedValue) { _, focused in
+            resumePhase = resumePhase.focusChanged(isFocused: focused == field)
+        }
+    }
+
+    private func resume(_ received: String) {
+        guard let snapshot = resumePhase.snapshot else { return }
+        resumePhase = .idle
+        let restored = MeeshySecureEntryResume.restore(snapshot: snapshot, received: received)
+        if restored != received { text = restored }
     }
 
     private var focusBinding: FocusState<Field?>.Binding {
@@ -143,6 +194,7 @@ public struct MeeshyPasswordField<Field: Hashable>: View {
         let wasFocused = binding.wrappedValue == field
         reveal.toggle()
         guard wasFocused else { return }
+        if !reveal.isRevealed { resumePhase = .awaitingFocus(text) }
         let target = field
         Task { @MainActor in binding.wrappedValue = target }
     }

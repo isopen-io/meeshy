@@ -25,7 +25,8 @@
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
- *  6. une ligne ouvre le fil de SA conversation, et le retour ramène au journal ;
+ *  6. une ligne ouvre la fiche de SON appel (#6383), la fiche le fil de sa
+ *     conversation, et le retour ramène au journal ;
  *  6 bis. « Rappeler » a un EFFET (loi : un contrôle n'existe que s'il agit) —
  *     il ouvre l'écran d'appel vers la personne de la ligne, au-dessus du
  *     journal, et « Raccrocher » l'en retire ;
@@ -223,10 +224,16 @@ try {
       await page.waitForFunction(() => document.querySelectorAll('[data-call]').length === 5);
       check(new URL(page.url()).search === '', `${label} : « Tous » retire le paramètre et rend les cinq`);
 
-      // ------------------------------------------------ 6. une ligne ouvre SON fil
+      // ------------------------------------------------ 6. une ligne ouvre SA fiche (#6383), la fiche SON fil
       await page.click('[data-call="call-kwame-video"] a');
+      await page.waitForURL('**/call/call-kwame-video');
+      await page.waitForSelector('[data-call-detail-name]', { timeout: 5000 }).catch(() => null);
+      check((await textOf(page, '[data-call-detail-name]')) === 'Kwame Mensah', `${label} : une ligne ouvre la fiche de son appel`);
+      await page.click('[data-call-detail-open]');
       await page.waitForURL('**/c/c-kwame');
-      check(true, `${label} : une ligne ouvre le fil de sa conversation`);
+      check(true, `${label} : la fiche ouvre le fil de sa conversation`);
+      await page.goBack();
+      await page.waitForURL('**/call/call-kwame-video');
       await page.goBack();
       await page.waitForURL('**/calls');
       await page.waitForSelector('[data-call]');
@@ -252,10 +259,17 @@ try {
         );
         check(new URL(page.url()).pathname === '/calls', `${label} : l'appel se pose AU-DESSUS du journal, sans quitter /calls (${new URL(page.url()).pathname})`);
         await capture(page, `appels-rappel-${ligne}-${slug}`);
-        const hangup = await page.$('[data-call-screen] button[aria-label="Raccrocher"]');
-        if (hangup !== null) await hangup.click();
-        const close = await page.waitForSelector('[data-call-screen] button[aria-label="Fermer"]', { timeout: 3000 }).catch(() => null);
-        if (close !== null) await close.click();
+        /* L'écran change de phase sous le doigt (sortant, échec d'accès aux
+           médias sur un runner sans caméra, fin) : on vise par LOCATEUR, qui
+           se re-résout, jamais par une poignée d'élément qui peut se détacher. */
+        const tap = (name) =>
+          page
+            .locator(`[data-call-screen] button[aria-label="${name}"]`)
+            .first()
+            .click({ timeout: 2000 })
+            .then(() => true, () => false);
+        await tap('Raccrocher');
+        if ((await page.$('[data-call-screen]')) !== null) await tap('Fermer');
         const gone = await page.waitForSelector('[data-call-screen]', { state: 'detached', timeout: 8000 }).then(() => true, () => false);
         check(opened && gone, `${label} : raccrocher retire l'écran d'appel de ${ligne} et rend le journal`);
       }

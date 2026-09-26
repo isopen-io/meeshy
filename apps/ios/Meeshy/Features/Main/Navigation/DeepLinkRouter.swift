@@ -46,6 +46,10 @@ enum DeepLinkDestination: Equatable {
     /// `meeshy://conversations/unread` — widgets « Non lus » (#7811).
     case unreadConversations
     case hashtag(tag: String)
+    /// Lien d'invitation (#8075) — `/signup/affiliate/<code>` (le lien que la
+    /// passerelle grave) ou `/signup?ref=<code>` : un CODE à mémoriser jusqu'à
+    /// l'inscription, pas un lieu de l'app.
+    case referral(code: String)
     case external(URL)
 }
 
@@ -231,6 +235,7 @@ enum DeepLinkParser {
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
         case "auth": return authLink(id: id, components: components, url: url)
+        case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
         case "join": return id.map { .joinLink(identifier: $0) }
@@ -272,6 +277,24 @@ enum DeepLinkParser {
         if isStorySegment(head) { return id.map { .storyDetail(postId: $0) } }
         if isUserSegment(head) { return id.map { .userProfile(username: $0) } }
         return nil
+    }
+
+    /// Les clés d'adresse qui portent un code d'invitation, dans l'ordre du web
+    /// (`REFERRAL_SEARCH_KEYS`, `apps/web/src/lib/view/referral-code.ts`).
+    static let referralQueryKeys = ["ref", "parrain", "affiliate"]
+
+    /// Le code d'un lien d'invitation : `/signup/affiliate/<code>`, ou
+    /// `/signup?ref=<code>`. `nil` sans code bien formé (`ReferralCode`).
+    static func referralCode(components: [String], url: URL) -> String? {
+        switch components.count {
+        case 3 where components[1] == "affiliate":
+            return ReferralCode.normalized(components[2])
+        case 1:
+            let raw = referralQueryKeys.lazy.compactMap { queryValue($0, in: url) }.first
+            return raw.flatMap(ReferralCode.normalized)
+        default:
+            return nil
+        }
     }
 
     /// Un identifiant de communauté, jamais le segment réservé `new` (création).
@@ -416,9 +439,18 @@ final class DeepLinkRouter: ObservableObject {
     /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
     /// soit observable en test sans toucher aux `UserDefaults` du simulateur.
     private let drafts: DraftStore
+    /// Le code d'invitation mémorisé jusqu'à l'inscription (#8075).
+    private let referrals: PendingReferralStoreProviding
+    private let isAuthenticated: @MainActor () -> Bool
 
-    init(drafts: DraftStore = .shared) {
+    init(
+        drafts: DraftStore = .shared,
+        referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
+        isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated }
+    ) {
         self.drafts = drafts
+        self.referrals = referrals
+        self.isAuthenticated = isAuthenticated
     }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
@@ -522,7 +554,7 @@ final class DeepLinkRouter: ObservableObject {
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
         case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
-        case .trackedLink, .share, .external: return nil
+        case .trackedLink, .share, .referral, .external: return nil
         }
     }
 
@@ -543,6 +575,8 @@ final class DeepLinkRouter: ObservableObject {
             stageDraft(draftText, for: id)
             pendingDeepLink = .conversation(id: id)
             return true
+        case .referral(let code):
+            return captureReferral(code)
         case .share, .external:
             return false
         case let destination:
@@ -550,6 +584,16 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = link
             return true
         }
+    }
+
+    /// Sans compte, l'invitation MÉMORISE son code et ouvre l'inscription, qui
+    /// le fera voyager (`affiliateToken`, #8058). Un compte déjà connecté ne se
+    /// rattache à personne : rien ne change, et le lien n'est pas revendiqué.
+    private func captureReferral(_ code: String) -> Bool {
+        guard !isAuthenticated() else { return false }
+        referrals.remember(code)
+        requestedAccountEntry = .signUp
+        return true
     }
 
     /// Dépose le texte d'un raccourci dans le brouillon de la conversation.

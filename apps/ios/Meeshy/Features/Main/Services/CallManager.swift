@@ -30,33 +30,6 @@ fileprivate func applyBestEffortAudioSetting(
 }
 
 
-
-// MARK: - Call End Reason Mapping
-
-/// Maps the gateway's raw `call:ended` reason string to the CallKit
-/// `CXCallEndedReason` (drives the Recents UX) and the local `CallEndReason`
-/// (drives analytics + in-app UI). Pure + `nonisolated` so the mapping is unit
-/// tested at behaviour instead of by string-matching the switch source — a
-/// wrong mapping (e.g. `"missed" → .rejected`) previously slipped past the
-/// source-string tests. Handles both camelCase and snake_case gateway variants;
-/// any unknown/`nil` reason is a plain remote hang-up.
-nonisolated enum CallEndReasonMapper {
-    static func map(_ raw: String?) -> (cx: CXCallEndedReason, local: CallEndReason) {
-        switch raw?.lowercased() {
-        case "missed", "no_answer", "unanswered":
-            return (.unanswered, .missed)
-        case "rejected", "declined":
-            return (.declinedElsewhere, .rejected)
-        case "answeredelsewhere", "answered_elsewhere":
-            return (.answeredElsewhere, .remote)
-        case "failed", "connectionlost":
-            return (.failed, .connectionLost)
-        default:
-            return (.remoteEnded, .remote)
-        }
-    }
-}
-
 // MARK: - Call State
 
 enum CallState: Equatable, Sendable {
@@ -5035,23 +5008,16 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
-                let updated = event.iceServers.map { s in
-                    IceServer(urls: s.urls.asArray, username: s.username, credential: s.credential)
-                }
-                self.webRTCService.updateIceServers(updated)
-                Logger.calls.info("TURN credentials refreshed — \(updated.count) ICE servers updated")
+                self.webRTCService.updateIceServers(event.iceServers.map {
+                    IceServer(urls: $0.urls.asArray, username: $0.username, credential: $0.credential)
+                })
                 self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
-                // Audit #9 — `updateIceServers` is setConfiguration-only. When
-                // these credentials were requested BY a reconnection cycle
-                // (attemptReconnection → requestFreshTurnCredentials), the
-                // in-flight restart may already be gathering with the
-                // near-expiry ones; re-arm it now (same coalesce path as a
-                // redundant network edge — no budget burned) so the re-gather
-                // runs with the credentials just applied instead of idling
-                // until the `.reconnecting` watchdog escalates.
-                if CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(state: self.callState) {
-                    Logger.calls.info("fresh TURN credentials mid-reconnect — re-arming ICE restart (attempt \(self.reconnectAttempt))")
-                    self.scheduleICERestart(attempt: self.reconnectAttempt, backoffSeconds: 0)
+                // #8074 — `updateIceServers` ne fait que `setConfiguration` : sans
+                // relance, les allocations gardent des identifiants qui expirent.
+                switch TurnCredentialRefreshPolicy.iceAction(after: self.callState) {
+                case .inert: return
+                case .rearmReconnect: self.scheduleICERestart(attempt: self.reconnectAttempt, backoffSeconds: 0)
+                case .restartIce: self.restartIceOnLiveCall()
                 }
             }
             .store(in: &cancellables)
@@ -5078,6 +5044,25 @@ final class CallManager: ObservableObject {
             try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
             guard !Task.isCancelled else { return }
             self?.isRemoteQualityDegraded = false
+        }
+    }
+
+    /// #8074 — identifiants TURN frais sur un appel ÉTABLI : relance ICE
+    /// discrète, chaînée derrière les mêmes renégociations que
+    /// `scheduleICERestart` (même risque de collision sur `createOffer()`).
+    private func restartIceOnLiveCall() {
+        let previous = [videoToggleTask, holdVideoTask, iceRestartTask, signalOfferAnswerTask, cameraSwitchTask]
+        let previousSurvival = survivalVideoTask
+        iceRestartTask?.cancel()
+        iceRestartTask = Task { @MainActor [weak self] in
+            for task in previous { await task?.value }
+            _ = await previousSurvival?.value
+            guard let self, !Task.isCancelled, self.callState == .connected,
+                  let callId = self.currentCallId, let userId = self.remoteUserId,
+                  let offer = await self.webRTCService.performICERestart(),
+                  !Task.isCancelled, self.callState == .connected else { return }
+            Logger.calls.info("fresh TURN credentials on a live call — ICE restarted")
+            self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
         }
     }
 

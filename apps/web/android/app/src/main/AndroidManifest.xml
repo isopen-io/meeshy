@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -44,6 +47,7 @@
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
                 <data android:pathPrefix="/auth/magic-link" />
+                <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
                 <data android:path="/links" />
                 <data android:path="/reels" />
@@ -68,6 +72,35 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- #8049 — l'appel natif de la coque. Le MessagingService du plugin
+             @capacitor/push-notifications est RETIRÉ à la fusion : deux services
+             MESSAGING_EVENT se concurrencent (FCM n'en sert qu'un). Le nôtre
+             l'ÉTEND (MeeshyMessagingService) : il sonne un appel entrant data-only
+             et remet tout autre message au plugin, inchangé. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".MeeshyMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- #8049 — l'appel en cours tient au premier plan (micro, caméra) : sans
+             lui, Android coupe le micro de la WebView dès que l'écran s'éteint
+             ou que l'utilisateur quitte l'app. -->
+        <service
+            android:name=".CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+
+        <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
+        <receiver
+            android:name=".DeclineCallReceiver"
+            android:exported="false" />
     </application>
 
     <!-- Permissions -->
@@ -104,6 +137,21 @@
          caméra reste FACULTATIVE : l'appel vocal sert les appareils sans. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- #8049 — l'appel natif de la coque (C10, C11, D6, D15, D16, D19, J1, J2).
+         FOREGROUND_SERVICE + ses deux types : l'appel en cours tient micro et
+         caméra écran éteint (CallForegroundService). USE_FULL_SCREEN_INTENT :
+         la sonnerie plein écran d'un appel reçu app tuée. BLUETOOTH_CONNECT :
+         router l'appel vers un casque (API 31+). WAKE_LOCK : le capteur de
+         proximité éteint l'écran contre l'oreille. VIBRATE : l'haptique aux
+         transitions de l'appel. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- #7930 — la tuile « Appareil photo » du composeur (<input capture>)
          passe par BridgeWebChromeClient.showImageCapturePicker, qui ne lance

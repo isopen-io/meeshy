@@ -632,6 +632,7 @@ extension ConversationSyncEngine {
             let removedSet = Set(removedIds)
             for removedId in removedIds {
                 await cache.messages.invalidate(for: removedId)
+                await cache.conversationMedia.invalidate(for: removedId)
                 // Une conversation sortie de la vue doit aussi cesser d'être
                 // TROUVABLE : l'index FTS local est une projection, et rien ne
                 // le purgeait — la ligne y survivait au retrait de la liste, et
@@ -786,6 +787,7 @@ extension ConversationSyncEngine {
             let removedSet = Set(removedIds)
             for removedId in removedIds {
                 await cache.messages.invalidate(for: removedId)
+                await cache.conversationMedia.invalidate(for: removedId)
                 await SearchIndex.shared.removeConversation(id: removedId)
             }
             await saveSorted(merged, to: "list", baseline: existing)

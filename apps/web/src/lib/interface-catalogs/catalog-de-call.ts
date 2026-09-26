@@ -55,6 +55,11 @@ const deCall = {
   'call.bubble.join': 'Beitreten',
   'call.callBack.named': '{name} zurückrufen',
   'call.you': 'Du',
+  'call.ended.removed': 'Sie wurden aus dem Anruf entfernt',
+  'call.spotlight.show': '{name} hervorheben',
+  'call.spotlight.back': 'Zurück zum Raster',
+  'call.remove.named': '{name} aus dem Anruf entfernen',
+  'call.remove.failed': 'Teilnehmer konnte nicht entfernt werden',
 } as const;
 
 export default deCall;

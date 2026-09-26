@@ -55,34 +55,39 @@ struct SignupView: View {
             theme.backgroundGradient
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                    header
-                    // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
-                    // puis l'adresse, puis l'identité — qui DÉCOULE de
-                    // l'adresse et n'a rien à montrer avant elle.
-                    phoneField
-                    emailField
-                    derivedIdentityBlock
-                    if isPasswordRevealed {
-                        passwordField
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+            // La croix vit dans SA zone (#8080) : empilée au-dessus du
+            // défilement, jamais en inset sans fond sous lequel le formulaire
+            // glissait.
+            VStack(spacing: 0) {
+                closeBar
+                ScrollView {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                        header
+                        // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
+                        // puis l'adresse, puis l'identité — qui DÉCOULE de
+                        // l'adresse et n'a rien à montrer avant elle.
+                        phoneField
+                        emailField
+                        derivedIdentityBlock
+                        if isPasswordRevealed {
+                            passwordField
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                        languageChip
+                        submitSection
+                        switchToLoginRow
                     }
-                    languageChip
-                    submitSection
-                    switchToLoginRow
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.xxl)
+                    .padding(.bottom, MeeshySpacing.xxxl)
+                    .iPadFormWidth()
                 }
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.xxl)
-                .padding(.bottom, MeeshySpacing.xxxl)
-                .iPadFormWidth()
+                // Le clavier suit le doigt et remonte si on relâche avant la fin —
+                // le mécanisme système, jamais un `DragGesture.onEnded` maison
+                // (directive porteur 2026-08-30).
+                .scrollDismissesKeyboard(.interactively)
             }
-            // Le clavier suit le doigt et remonte si on relâche avant la fin —
-            // le mécanisme système, jamais un `DragGesture.onEnded` maison
-            // (directive porteur 2026-08-30).
-            .scrollDismissesKeyboard(.interactively)
         }
-        .safeAreaInset(edge: .top) { closeBar }
         // Le mot de passe paraît quand l'identité est DÉFINIE (#7897) et ne se
         // referme plus : corriger son adresse ne fait pas disparaître ce
         // qu'on y a tapé.
@@ -115,6 +120,7 @@ struct SignupView: View {
             EmailVerificationView(
                 email: pending.email,
                 accountCreated: pending.accountCreated,
+                pendingSessionToken: pending.pendingSessionToken,
                 onVerified: { provenSessionOpener = $0 }
             )
         }
@@ -446,7 +452,8 @@ struct SignupView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             fieldBlock(
                 field: .password,
-                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
+                label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
+                labelsContent: false
             ) {
                 MeeshyPasswordField(
                     String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
@@ -454,6 +461,7 @@ struct SignupView: View {
                     role: .new,
                     focus: $focusedField,
                     equals: .password,
+                    accessibilityLabel: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main),
                     eyeColor: theme.textMuted
                 )
                 .submitLabel(.go)
@@ -700,6 +708,7 @@ struct SignupView: View {
         field: SignupField,
         label: String,
         hint: AuthInfoHint? = nil,
+        labelsContent: Bool = true,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -708,9 +717,11 @@ struct SignupView: View {
                 .foregroundColor(theme.textMuted)
 
             HStack(spacing: 0) {
+                // Un contenu qui porte plusieurs éléments (le champ de mot de
+                // passe et son œil, #8054) se libelle lui-même : un libellé
+                // posé ici écraserait celui de chacun.
                 content()
-                    .accessibilityLabel(label)
-                    .accessibilityHint(hint?.text ?? "")
+                    .modifier(FieldBlockAccessibility(label: label, hint: hint?.text ?? "", applies: labelsContent))
                 if let hint {
                     AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
                 }
@@ -824,6 +835,21 @@ struct SignupCountrySheet: View {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private struct FieldBlockAccessibility: ViewModifier {
+    let label: String
+    let hint: String
+    let applies: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if applies {
+            content.accessibilityLabel(label).accessibilityHint(hint)
+        } else {
+            content
         }
     }
 }

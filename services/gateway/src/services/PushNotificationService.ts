@@ -14,9 +14,10 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
+import { CALL_PUSH_TTL_MS } from '@meeshy/shared/types/call-rules';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
-import { webPushConfig } from './web-push-config';
+import { webPushFor } from './web-push-config';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -170,13 +171,6 @@ function isTransientFcmErrorCode(code: string | undefined): boolean {
 // transient failure is surfaced as a real delivery failure.
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
-
-/**
- * TTL FCM des pushes d'appel Android (ring data-only + stop-ring silencieux),
- * aligné sur la fenêtre de sonnerie serveur (scheduleRingingTimeout 60 s) :
- * un ring livré après elle sonnerait pour un appel déjà missed.
- */
-const CALL_PUSH_TTL_MS = 60_000;
 
 /**
  * Les types de données des pushes d'APPEL : la sonnerie et ses deux stop-ring.
@@ -560,7 +554,7 @@ export class PushNotificationService {
       // l'utilisateur (Prisme).
       const isCallPush = isCallPushDataType(payload.data?.type);
       const dataOnly =
-        payload.silent === true || (tokenRecord.platform === 'android' && isCallPush);
+        payload.silent === true || ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush);
 
       const message: any = dataOnly
         ? {
@@ -630,7 +624,7 @@ export class PushNotificationService {
         // which otherwise leaves the Android badge frozen when the app is closed.
         // Data-only : pas de sous-bloc notification non plus — il
         // réintroduirait le rendu système que le data-only vient d'éviter.
-        // TTL aligné sur la fenêtre de sonnerie serveur (60 s) pour les
+        // TTL aligné sur la fenêtre de sonnerie serveur (call-rules) pour les
         // APPELS : sans lui FCM garde le message ~4 semaines et un téléphone
         // qui resurgit du hors-réseau sonne plein écran pour un appel mort
         // depuis longtemps (et un stop-ring plus vieux que la sonnerie n'a
@@ -655,8 +649,8 @@ export class PushNotificationService {
                 ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
               },
             };
-      } else if (tokenRecord.platform === 'web' && !dataOnly) {
-        message.webpush = webPushConfig(payload);
+      } else if (tokenRecord.platform === 'web') {
+        Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));
       }
 
       if (payload.collapseId) {
@@ -802,7 +796,7 @@ export class PushNotificationService {
         notification.priority = 5;
       }
 
-      // Expiration alignée sur la fenêtre de sonnerie (60 s), miroir du TTL
+      // Expiration alignée sur la fenêtre de sonnerie (call-rules), miroir du TTL
       // FCM Android : sans elle APNs peut livrer un ring VoIP ou un stop-ring
       // périmé à la reconnexion — CallKit fait sonner le téléphone pour un
       // appel missed depuis longtemps. Classé par le TYPE de données, pas par

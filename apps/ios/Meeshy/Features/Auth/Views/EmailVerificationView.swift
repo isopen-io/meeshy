@@ -21,6 +21,7 @@ struct EmailVerificationView: View {
         email: String,
         password: String? = nil,
         accountCreated: Bool = false,
+        pendingSessionToken: String? = nil,
         authService: AuthServiceProviding = AuthService.shared,
         onVerified: @escaping (@escaping ProvenSessionOpener) -> Void
     ) {
@@ -29,6 +30,7 @@ struct EmailVerificationView: View {
             email: email,
             password: password,
             accountCreated: accountCreated,
+            pendingSessionToken: pendingSessionToken,
             authService: authService
         ))
     }

@@ -298,6 +298,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/login/2fa', why: 'étape 2FA du flux de connexion, protégée par le twoFactorToken transmis dans le corps — aucune session au moment de cet appel' },
   { method: 'POST', url: '/api/v1/auth/verify-email', why: "vérification d'email par token à usage limité, pré-session" },
   { method: 'POST', url: '/api/v1/auth/resend-verification', why: "renvoi d'email de vérification, pré-session" },
+  { method: 'POST', url: '/api/v1/auth/verification/status', why: "état pending/proven d'une attente de preuve d'adresse, pré-session, par jeton opaque (#8083)" },
   { method: 'POST', url: '/api/v1/auth/send-phone-code', why: 'envoi de code SMS, pré-session (flux de vérification tél.)' },
   { method: 'POST', url: '/api/v1/auth/verify-phone', why: 'vérification de code SMS, pré-session' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/check', why: 'flux de transfert de numéro, pré-session (rate-limité)' },

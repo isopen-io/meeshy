@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #8049 — l'appel natif de la coque : notification d'appel entrant,
+     service au premier plan. Sept langues, les memes cles partout. -->
+<resources>
+    <string name="call_channel_incoming_name">Incoming calls</string>
+    <string name="call_channel_incoming_description">Rings for Meeshy calls, even when the app is closed</string>
+    <string name="call_channel_ongoing_name">Ongoing call</string>
+    <string name="call_incoming_fallback_title">Incoming call</string>
+    <string name="call_incoming_audio">Voice call</string>
+    <string name="call_incoming_video">Video call</string>
+    <string name="call_action_answer">Answer</string>
+    <string name="call_action_decline">Decline</string>
+    <string name="call_ongoing_audio">Voice call in progress</string>
+    <string name="call_ongoing_video">Video call in progress</string>
+    <string name="call_ongoing_return">Tap to return to the call</string>
+</resources>

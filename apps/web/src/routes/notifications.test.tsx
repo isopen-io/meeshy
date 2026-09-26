@@ -202,4 +202,19 @@ describe('une rangée', () => {
     expect(html).not.toContain('Non lue');
     expect(html).toContain('aria-label="Actions de la notification"');
   });
+
+  test('un appel manqué porte « Rappeler <nom> », du même type, HORS du lien de la rangée (A6, C12)', () => {
+    const html = row(
+      record({ type: 'missed_call', title: null, content: '📹 Appel vidéo manqué', context: { conversationId: 'c-kwame', conversationType: 'direct' }, metadata: { callType: 'video' } }),
+    );
+    const button = html.match(/<button[^>]*data-notification-call-back="([a-z]+)"[^>]*>/);
+    expect(button?.[1]).toBe('video');
+    expect(button?.[0]).toContain('aria-label="Rappeler Kwame Mensah"');
+    const at = html.indexOf(button?.[0] ?? '<none>');
+    expect(html.lastIndexOf('</a>', at)).toBeGreaterThan(html.lastIndexOf('<a ', at));
+  });
+
+  test('une notification qui n’est pas un appel manqué ne propose pas de rappeler', () => {
+    expect(row(record({}))).not.toContain('data-notification-call-back');
+  });
 });

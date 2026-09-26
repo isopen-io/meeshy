@@ -16,6 +16,8 @@ import {
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
+  usernameMaxLength,
+  usernameMinLength,
   usernamePatternSource
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest } from './types';
@@ -199,8 +201,8 @@ export const updateUsernameBodySchema = {
   properties: {
     newUsername: {
       type: 'string',
-      minLength: 2,
-      maxLength: 16,
+      minLength: usernameMinLength,
+      maxLength: usernameMaxLength,
       pattern: usernamePatternSource,
       description: 'New username (2-16 chars: letters, digits, - and _ only — no spaces)'
     },

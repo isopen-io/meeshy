@@ -49,48 +49,64 @@ enum SignInLink: Equatable {
     }
 }
 
+/// Ce dont l'ouverture d'un lien de connexion a besoin : déconnecter un autre
+/// compte, PROUVER le lien sans poser la session, puis la poser (#8076).
+@MainActor
+protocol SignInLinkAuthorizing: AnyObject {
+    var isAuthenticated: Bool { get }
+    var currentUser: MeeshyUser? { get }
+    func logout() async
+    func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
+    func verifyMagicLink(token: String) async throws -> EmailProvenSession
+    func openSession(_ proven: EmailProvenSession)
+}
+
+extension AuthManager: SignInLinkAuthorizing {}
+
 /// Le site UNIQUE qui valide un lien de connexion et en dit l'issue — partagé
 /// par la voie système (`MeeshyApp`, à froid comme à chaud) et la voie in-app
 /// (`Router`, lien tapé dans un message).
+///
+/// Le lien suit la séquence du code (#8059) : prouver → refermer → ouvrir. La
+/// session passe par `SessionOpeningGate`, qui la retient tant que l'écran de
+/// connexion présente une porte d'accès et lui demande de la refermer (#8076).
 @MainActor
 enum SignInLinkOpener {
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "sign-in-link")
 
     static func open(
         _ link: SignInLink,
-        auth: AuthManager = .shared,
-        toasts: FeedbackToastSurfacing = FeedbackToastManager.shared
+        auth: SignInLinkAuthorizing = AuthManager.shared,
+        toasts: FeedbackToastSurfacing = FeedbackToastManager.shared,
+        sessionGate: SessionOpeningGate = .shared
     ) async {
         if link.requiresSignOut(isAuthenticated: auth.isAuthenticated, currentEmail: auth.currentUser?.email) {
             await auth.logout()
         }
+        do {
+            guard let proven = try await prove(link, auth: auth) else {
+                toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
+                return
+            }
+            sessionGate.open { auth.openSession(proven) }
+            toasts.showSuccess(signedInMessage)
+        } catch {
+            toasts.showError(EmailProofErrorText.linkMessage(for: error))
+            logger.error("Sign-in link validation failed")
+        }
+    }
+
+    /// `nil` ⇒ adresse vérifiée sans session (passerelle antérieure à #8035).
+    private static func prove(_ link: SignInLink, auth: SignInLinkAuthorizing) async throws -> EmailProvenSession? {
         switch link {
         case .magic(let token):
-            await auth.validateMagicLink(token: token)
-            if auth.isAuthenticated {
-                toasts.showSuccess(signedInMessage)
-            } else {
-                toasts.showError(auth.errorMessage ?? invalidLinkMessage)
-                logger.error("Magic link validation failed")
-            }
+            return try await auth.verifyMagicLink(token: token)
         case .emailVerification(let token, let email):
-            do {
-                let opened = try await auth.confirmEmail(.link(token: token, email: email))
-                toasts.showSuccess(opened
-                    ? signedInMessage
-                    : String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
-            } catch {
-                toasts.showError((error as? LocalizedError)?.errorDescription ?? invalidLinkMessage)
-                logger.error("Email verification link failed")
-            }
+            return try await auth.verifyEmail(.link(token: token, email: email))
         }
     }
 
     private static var signedInMessage: String {
         String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main)
-    }
-
-    private static var invalidLinkMessage: String {
-        String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main)
     }
 }

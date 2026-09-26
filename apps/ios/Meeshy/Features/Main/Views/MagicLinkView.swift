@@ -395,11 +395,15 @@ struct MagicLinkView: View {
 
         Task {
             do {
-                let expiresInSeconds = try await AuthService.shared.requestMagicLink(email: email)
+                let dispatch = try await AuthService.shared.requestEmailCode(email: email)
+                let expiresInSeconds = dispatch.expiresInSeconds ?? 300
 
                 if codeEntry?.email != email {
                     codeEntry = EmailVerificationViewModel(email: email)
                 }
+                // #8083 — le jeton d'attente de CET envoi : l'écran saura dire
+                // que l'adresse a été confirmée sur un autre appareil.
+                codeEntry?.pendingSessionToken = dispatch.pendingSessionToken
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false
@@ -408,12 +412,8 @@ struct MagicLinkView: View {
 
                 startCountdown(expiresInSeconds)
                 Self.logger.info("Magic link sent to \(email, privacy: .private)")
-            } catch let error as APIError {
-                errorMessage = error.errorDescription
-                isLoading = false
-                Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: .main)
+                errorMessage = EmailProofErrorText.sendMessage(for: error)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }

@@ -1,5 +1,30 @@
 apply plugin: 'com.android.application'
 
+// Clé de release (#8085) : lue HORS du dépôt, jamais écrite ici. Ordre :
+//   1. MEESHY_ANDROID_KEYSTORE_PROPERTIES — chemin d'un fichier .properties ;
+//   2. android/keystore.properties — fichier local, ignoré par git ;
+//   3. MEESHY_ANDROID_STORE_FILE + MEESHY_ANDROID_STORE_PASSWORD +
+//      MEESHY_ANDROID_KEY_ALIAS + MEESHY_ANDROID_KEY_PASSWORD (CI).
+// Sans aucune source, la release se construit NON signée, comme avant.
+def meeshyReleaseSigningProperties() {
+    def props = new Properties()
+    def explicit = System.getenv('MEESHY_ANDROID_KEYSTORE_PROPERTIES')
+    def candidate = explicit ? file(explicit) : rootProject.file('keystore.properties')
+    if (candidate.exists()) {
+        candidate.withInputStream { props.load(it) }
+        return props
+    }
+    if (System.getenv('MEESHY_ANDROID_STORE_FILE')) {
+        props['storeFile'] = System.getenv('MEESHY_ANDROID_STORE_FILE')
+        props['storeType'] = System.getenv('MEESHY_ANDROID_STORE_TYPE') ?: 'pkcs12'
+        props['storePassword'] = System.getenv('MEESHY_ANDROID_STORE_PASSWORD')
+        props['keyAlias'] = System.getenv('MEESHY_ANDROID_KEY_ALIAS')
+        props['keyPassword'] = System.getenv('MEESHY_ANDROID_KEY_PASSWORD')
+        return props
+    }
+    return null
+}
+
 android {
     namespace = "me.meeshy.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -19,8 +44,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            def props = meeshyReleaseSigningProperties()
+            if (props != null) {
+                storeFile file(props['storeFile'])
+                storeType props['storeType'] ?: 'pkcs12'
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (meeshyReleaseSigningProperties() != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -39,6 +79,9 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // #8049 — MeeshyMessagingService (l'appel entrant data-only, app tuee) : la
+    // coque recoit FCM elle-meme, le plugin n'etant atteint que par reflexion.
+    implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

@@ -6,6 +6,8 @@ import type { DataSource } from '@/lib/api/config';
 import { ONBOARDING_QUERY_KEY, ONBOARDING_STALE_TIME } from '@/lib/api/onboarding';
 import type { SessionState } from '@/lib/api/session';
 
+import { takeOnboardingWaiver } from './landing-waiver';
+
 /**
  * **L'ACCUEIL POST-INSCRIPTION SE PROPOSE À L'ARRIVÉE, UNE FOIS** (#7729).
  *
@@ -74,6 +76,10 @@ export function createOnboardingLanding(deps: OnboardingLandingDeps): Onboarding
     offer: async (input) => {
       if (input.viewerId === null || decided.has(input.viewerId)) return;
       if (!isLandingMoment(input)) return;
+      if (takeOnboardingWaiver()) {
+        decided.add(input.viewerId);
+        return;
+      }
       const state = await stateOf();
       if (state === undefined || decided.has(input.viewerId)) return;
       decided.add(input.viewerId);

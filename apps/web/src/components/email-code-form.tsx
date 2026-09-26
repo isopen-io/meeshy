@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import { auth } from '@/lib/api/auth';
 import { translate } from '@/lib/i18n-catalog';
@@ -7,6 +7,7 @@ import { useOnline } from '@/lib/net/online';
 import { forgetPendingVerification, pendingVerificationFor } from '@/lib/pending-verification';
 import { landingAfterSession } from '@/lib/session-guard';
 import { resolveVerifyEmailOutcome, type VerifyEmailOutcome } from '@/lib/view/auth-feedback';
+import { watchVerificationStatus, type VerificationStatusReader } from '@/lib/view/verification-watch';
 import { href, navigate } from '@/routes/route-table';
 
 import { AuthSubmitButton } from './auth-chrome';
@@ -29,11 +30,27 @@ import { Field } from './field';
  * **Le mot de passe tapé à la connexion** (`pending-verification.ts`) voyage
  * AVEC le code, jamais avec un lien, et s'oublie dès que la session s'ouvre.
  * Un code refusé le garde : l'essai suivant doit pouvoir le porter.
+ *
+ * **L'adresse confirmée AILLEURS** (#8083, « si et seulement si ») : avec le
+ * jeton d'attente de CET appareil, le formulaire lit l'état de l'adresse
+ * (`verification-watch.ts`) et, `proven`, le DIT — le lien ouvert sur un autre
+ * appareil ne fige plus cet écran. Il n'ouvre aucune session : le code saisi
+ * ici reste la seule clé de cet appareil.
  */
 
 export type EmailCodeFormDeps = {
   readonly verifyEmail: typeof auth.verifyEmail;
+  readonly verificationStatus: VerificationStatusReader;
 };
+
+function useAddressProvenElsewhere(pendingSessionToken: string | null, read: VerificationStatusReader): boolean {
+  const [proven, setProven] = useState(false);
+  useEffect(() => {
+    if (pendingSessionToken === null || pendingSessionToken === '') return;
+    return watchVerificationStatus({ token: pendingSessionToken, read, view: window, onProven: () => setProven(true) });
+  }, [pendingSessionToken, read]);
+  return proven;
+}
 
 const VERIFY_TINT = 'var(--color-ios-brand)';
 
@@ -75,6 +92,8 @@ export function EmailCodeForm({
   next,
   onVerified,
   verifyEmail = auth.verifyEmail,
+  verificationStatus = auth.verificationStatus,
+  pendingSessionToken = null,
   autoFocus = false,
   initialError = null,
 }: {
@@ -83,6 +102,9 @@ export function EmailCodeForm({
   /** Vérifié SANS session (passerelle antérieure) — l'hôte décide de la suite. */
   readonly onVerified: () => void;
   readonly verifyEmail?: EmailCodeFormDeps['verifyEmail'];
+  readonly verificationStatus?: EmailCodeFormDeps['verificationStatus'];
+  /** Le jeton d'attente de CET appareil (#8083) — `null` : rien à surveiller. */
+  readonly pendingSessionToken?: string | null;
   readonly autoFocus?: boolean;
   readonly initialError?: string | null;
 }) {
@@ -92,6 +114,7 @@ export function EmailCodeForm({
   const [focused, setFocused] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  const provenElsewhere = useAddressProvenElsewhere(pendingSessionToken, verificationStatus);
 
   const isComplete = code.length === 6;
 
@@ -118,6 +141,11 @@ export function EmailCodeForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid w-full gap-4" noValidate>
+      {provenElsewhere ? (
+        <p role="status" className="text-caption font-semibold" style={{ color: 'var(--ios-success)' }}>
+          {translate(language, 'verifyEmail.proven')}
+        </p>
+      ) : null}
       <Field id="verify-email-code" tint={VERIFY_TINT} focused={focused} error={error ?? undefined}>
         {({ id, describedBy }) => (
           <input
