@@ -24,3 +24,14 @@ export declare function auditHookDeclaration(
 ): readonly string[];
 
 export declare function replayHookRoundtrip(): readonly string[];
+
+export declare function capacitorPluginsImportedBy(sources: readonly string[]): readonly string[];
+
+export declare function auditSyncedPlugins(
+  packageJson: Readonly<{
+    readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+    readonly optionalDependencies?: Readonly<Record<string, string>>;
+  }>,
+  importedPlugins: readonly string[],
+): readonly string[];

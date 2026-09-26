@@ -10,7 +10,9 @@ import esCallJoin from './catalog-es-call-join';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
+import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
+import esContactCard from './catalog-es-contact-card';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1125,7 +1127,9 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esConversationCard,
   ...esStoriesMine,
+  ...esContactCard,
 } satisfies InterfaceCatalog;
 
 export default es;

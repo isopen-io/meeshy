@@ -66,8 +66,30 @@ import { openModalLayer } from './modal-layers';
  * aucun `pushState`, donc aucun `popstate` à égarer. Sans successeur, la
  * micro-tâche la rend comme avant, en revérifiant qu'elle est toujours
  * l'entrée courante (une navigation entre-temps annule le retour, § #6313).
+ *
+ * **SEULE LA COUCHE DU DESSUS RÉPOND AU RETOUR** (#8078). La fiche d'un membre
+ * s'ouvre PAR-DESSUS les détails de la conversation, restés montés : chaque
+ * couche écoutant tous les `popstate`, le retour Android fermait les deux
+ * feuilles et laissait l'entrée du dessous orpheline (le retour suivant ne
+ * faisait plus rien), et la fiche fermée par son bouton rendait son entrée
+ * par un `back()` que les détails prenaient pour le leur. Les couches
+ * s'empilent donc dans l'ordre où elles posent leur entrée ; une couche qui
+ * rend la sienne reste sur la pile jusqu'au `popstate` de ce retour, pour que
+ * celle du dessous ne le prenne pas pour elle.
  */
 let nextMarker = 0;
+
+/** Les couches ouvertes, dans l'ordre où elles ont posé (ou adopté) leur
+ * entrée : la dernière est celle que le retour ferme (#8078). */
+let layerStack: readonly symbol[] = [];
+
+function isTopLayer(layer: symbol): boolean {
+  return layerStack[layerStack.length - 1] === layer;
+}
+
+function dropLayer(layer: symbol): void {
+  layerStack = layerStack.filter((open) => open !== layer);
+}
 
 /** L'entrée qu'une couche démontée a laissée, tant qu'aucune autre ne l'a
  * adoptée et que la micro-tâche ne l'a pas rendue (#7527). */
@@ -77,12 +99,20 @@ function carriesMarker(state: unknown, marker: string): boolean {
   return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
 }
 
-function leaveEntry(marker: string): void {
+function leaveEntry(marker: string, layer: symbol): void {
   pendingRelease = marker;
   queueMicrotask(() => {
-    if (pendingRelease !== marker) return;
+    if (pendingRelease !== marker) {
+      dropLayer(layer);
+      return;
+    }
     pendingRelease = null;
-    if (carriesMarker(window.history.state, marker)) window.history.back();
+    if (!carriesMarker(window.history.state, marker)) {
+      dropLayer(layer);
+      return;
+    }
+    window.addEventListener('popstate', () => dropLayer(layer), { once: true });
+    window.history.back();
   });
 }
 
@@ -112,8 +142,11 @@ export function useBackDismiss(onClose: () => void): void {
       window.history.pushState({ backDismiss: marker }, '');
     }
     const ownMarker = marker;
+    const layer = Symbol(ownMarker);
+    layerStack = [...layerStack, layer];
     let consumedByHistory = false;
     const onPopState = () => {
+      if (!isTopLayer(layer)) return;
       consumedByHistory = true;
       onCloseRef.current();
     };
@@ -122,7 +155,11 @@ export function useBackDismiss(onClose: () => void): void {
     return () => {
       releaseModalLayer();
       window.removeEventListener('popstate', onPopState);
-      if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) leaveEntry(ownMarker);
+      if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {
+        leaveEntry(ownMarker, layer);
+        return;
+      }
+      dropLayer(layer);
     };
   }, []);
 }

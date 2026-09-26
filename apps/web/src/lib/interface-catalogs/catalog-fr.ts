@@ -10,6 +10,7 @@
  * où un site d'appel le concatène.
  */
 import frMentions from './catalog-fr-mentions';
+import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
@@ -22,6 +23,7 @@ import frCallJoin from './catalog-fr-call-join';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
+import frContactCard from './catalog-fr-contact-card';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1122,6 +1124,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frConversationCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en
@@ -1154,6 +1157,7 @@ const fr = {
 
   ...frStoriesMine,
   ...frFeedPost,
+  ...frContactCard,
 } as const;
 
 export default fr;

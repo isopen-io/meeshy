@@ -40,6 +40,7 @@ import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard }
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { RichText } from './rich-text';
+import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
@@ -579,6 +580,7 @@ export const FocalRow = memo(function FocalRow({
           plainTextHidden
         />
       ) : null}
+      <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />
     </>
   );
 

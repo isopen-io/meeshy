@@ -137,6 +137,7 @@ import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { directoryContactsRoutes } from './directory/contacts';
+import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
 import communityPreferencesRoutes from './community-preferences';
@@ -311,6 +312,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'directory-blocks', prefix: `${API_PREFIX}/directory`, module: directoryBlocksRoutes },
   { name: 'directory-friend-requests', prefix: `${API_PREFIX}/directory`, module: directoryFriendRequestsRoutes },
   { name: 'directory-contacts', prefix: `${API_PREFIX}/directory`, module: directoryContactsRoutes },
+  // La carte de visite partagée (#8101) — vCard → profils publics. Montage
+  // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
+  { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },
 
   // ── Préférences, préférences dérivées, sécurité applicative ──────────
   { name: 'push-tokens', prefix: API_PREFIX, module: pushTokenRoutes },
