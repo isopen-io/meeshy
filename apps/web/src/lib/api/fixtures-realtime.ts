@@ -1,9 +1,10 @@
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 
 import type { Conversation } from './types';
-import { fixtureCallAck } from './fixtures-call-ack';
+import { callPeerArmed, fixtureCallAck } from './fixtures-call-ack';
+import type { FixtureCallPeer } from './fixtures-call-peer';
 import { CONVERSATION_ID, VIEWER_ID, conversationDefaults, kwame, viewer } from './fixtures-base';
 import { recordSurgedConversation } from './fixtures';
 import {
@@ -488,6 +489,24 @@ export const createFixturesSocketClient: SocketFactory = () => {
     for (const handler of handlers.get(event) ?? []) handler(payload);
   };
 
+  let callPeer: Promise<FixtureCallPeer> | null = null;
+  /* Le pair qui décroche (#8063) : chargé à la demande, seulement quand un
+     gate l'arme ; les événements passent par la même promesse, dans l'ordre. */
+  const peer = (): Promise<FixtureCallPeer> | null => {
+    if (!callPeerArmed()) return null;
+    callPeer ??= import('./fixtures-call-peer').then(({ canvasScreenTrack, createFixtureCallPeer }) => {
+      const created = createFixtureCallPeer({
+        fire,
+        createConnection: () => new RTCPeerConnection(),
+        createScreenTrack: canvasScreenTrack,
+        schedule: (fn, ms) => void timeouts.push(setTimeout(fn, ms)),
+      });
+      if (typeof window !== 'undefined') Object.assign(window, { __meeshyFixtureCallPeer: created.probe });
+      return created;
+    });
+    return callPeer;
+  };
+
   const clearAllTimers = (): void => {
     for (const handle of timeouts.splice(0)) clearTimeout(handle);
     for (const handle of intervals.splice(0)) clearInterval(handle);
@@ -535,11 +554,18 @@ export const createFixturesSocketClient: SocketFactory = () => {
     off: (event, handler) => {
       handlers.get(event)?.delete(handler as SocketHandler);
     },
-    emit: () => {
-      /* Voir le doc-comment du fichier — aucun correspondant réel. */
+    emit: (event, payload) => {
+      /* Voir le doc-comment du fichier — aucun correspondant réel, sauf le
+         pair d'appel qu'un gate arme (#8063). */
+      void peer()?.then((armed) => armed.emitted(event, payload));
     },
     /* Les seuls accusés que le client demande sont ceux des appels (#8046). */
-    emitWithAck: (event, payload) => Promise.resolve(fixtureCallAck(event, payload)),
+    emitWithAck: (event, payload) => {
+      const ack = fixtureCallAck(event, payload);
+      const callId = event === CLIENT_EVENTS.CALL_INITIATE ? (ack as { readonly data?: { readonly callId?: unknown } }).data?.callId : undefined;
+      if (typeof callId === 'string') void peer()?.then((armed) => armed.initiated(callId));
+      return Promise.resolve(ack);
+    },
   };
   return client;
 };
