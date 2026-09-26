@@ -303,3 +303,79 @@ final class EmailVerificationViewModelTests: XCTestCase {
         XCTAssertNil(sut.error)
     }
 }
+
+// MARK: - #8186 — ce que l'écran DIT selon d'où il vient
+
+@MainActor
+final class EmailVerificationLeadTests: XCTestCase {
+
+    private func makeSUT(password: String?, accountCreated: Bool) -> EmailVerificationViewModel {
+        EmailVerificationViewModel(
+            email: "grace@icloud.example",
+            password: password,
+            accountCreated: accountCreated,
+            authService: MockAuthServiceSDK(),
+            confirmer: MockEmailVerificationConfirmer(),
+            watcher: MockEmailVerificationWatcher([])
+        )
+    }
+
+    func test_lead_existingAccountAfterProvenPassword_isActivationRequired() {
+        let sut = makeSUT(password: "typed-at-login", accountCreated: false)
+
+        XCTAssertEqual(sut.lead, .activationRequired)
+        XCTAssertTrue(sut.lead.subtitle(email: sut.email).contains("**grace@icloud.example**"))
+        XCTAssertNotNil(sut.lead.inboxHint)
+    }
+
+    func test_lead_accountCreatedByLogin_keepsTheSignupText() {
+        let sut = makeSUT(password: "typed-at-login", accountCreated: true)
+
+        XCTAssertEqual(sut.lead, .accountCreated)
+        XCTAssertTrue(sut.lead.subtitle(email: sut.email).contains("**grace@icloud.example**"))
+        XCTAssertNil(sut.lead.inboxHint)
+    }
+
+    func test_lead_withoutPassword_isThePlainCodePrompt() {
+        let sut = makeSUT(password: nil, accountCreated: false)
+
+        XCTAssertEqual(sut.lead, .codeSent)
+        XCTAssertNil(sut.lead.inboxHint)
+    }
+
+    func test_lead_outlivesThePasswordForgottenOnVerification() async {
+        let sut = makeSUT(password: "typed-at-login", accountCreated: false)
+
+        await sut.verifyCode("123456")
+
+        XCTAssertEqual(sut.lead, .activationRequired)
+    }
+
+    func test_catalog_activationTextsShipInEveryLocale() throws {
+        let catalog = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Localizable.xcstrings")
+        guard let data = try? Data(contentsOf: catalog) else {
+            throw XCTSkip("Catalogue introuvable depuis \(catalog.path)")
+        }
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let expected: [String: [String: String]] = [
+            "emailVerification.subtitle.activationRequired": ["fr": "mot de passe est bon", "en": "password is correct"],
+            "emailVerification.inboxHint": ["fr": "indésirables", "en": "spam"],
+        ]
+        for (key, needles) in expected {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], key)
+            XCTAssertEqual(Set(localizations.keys), ["ar", "de", "en", "es", "fr", "it", "pt-BR"], key)
+            for (locale, needle) in needles {
+                let unit = (localizations[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
+                let value = unit?["value"] as? String ?? ""
+                XCTAssertTrue(value.contains(needle), "\(key)[\(locale)] = \(value)")
+            }
+        }
+    }
+}

@@ -31,6 +31,7 @@ final class EmailVerificationViewModel: ObservableObject {
 
     let email: String
     let accountCreated: Bool
+    let lead: EmailVerificationLead
     /// Le mot de passe tapé à la connexion : tenu en MÉMOIRE le temps de la
     /// saisie du code, jamais persisté, oublié dès la vérification réussie.
     private var password: String?
@@ -58,6 +59,7 @@ final class EmailVerificationViewModel: ObservableObject {
         self.email = email
         self.password = password
         self.accountCreated = accountCreated
+        self.lead = EmailVerificationLead(accountCreated: accountCreated, passwordProven: password != nil)
         self.pendingSessionToken = pendingSessionToken
         self.authService = authService
         self.confirmer = confirmer
@@ -128,5 +130,38 @@ final class EmailVerificationViewModel: ObservableObject {
         }
 
         isResending = false
+    }
+}
+
+/// Ce que l'écran du code DIT de la situation (#8186). Un mot de passe tapé à la
+/// connexion sans compte créé est celui d'un compte EXISTANT dont l'adresse n'est
+/// pas prouvée (#8055) : la passerelle a reconnu le mot de passe et attend le code.
+enum EmailVerificationLead: Equatable {
+    case accountCreated
+    case activationRequired
+    case codeSent
+
+    init(accountCreated: Bool, passwordProven: Bool) {
+        switch (accountCreated, passwordProven) {
+        case (true, _): self = .accountCreated
+        case (false, true): self = .activationRequired
+        case (false, false): self = .codeSent
+        }
+    }
+
+    func subtitle(email: String) -> String {
+        switch self {
+        case .accountCreated:
+            String(localized: "emailVerification.subtitle.accountCreated", defaultValue: "Votre compte est créé. Un code et un lien de validation ont été envoyés à **\(email)**.")
+        case .activationRequired:
+            String(localized: "emailVerification.subtitle.activationRequired", defaultValue: "Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code à **\(email)**.")
+        case .codeSent:
+            String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code à 6 chiffres envoyé à **\(email)**")
+        }
+    }
+
+    var inboxHint: String? {
+        guard self == .activationRequired else { return nil }
+        return String(localized: "emailVerification.inboxHint", defaultValue: "Ouvrez votre boîte mail, et pensez à regarder dans les indésirables.")
     }
 }
