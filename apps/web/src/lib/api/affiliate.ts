@@ -2,32 +2,25 @@ import { httpTransport } from './client';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * LE PORT DU PARRAINAGE (#6584) — les DEUX appels que l'inscription fait, et
- * rien de plus.
+ * LE PORT DU PARRAINAGE (#6584, #8058) — ce que l'écran d'inscription demande
+ * à la passerelle AVANT de créer le compte, et rien de plus.
  *
- * ## Ce que la passerelle offre déjà, et pourquoi `/auth/register` n'est pas
- * touché
+ * ## Où la relation se noue
  *
- * `POST /auth/register` ne porte AUCUN champ de parrainage, et n'a pas à en
- * porter : `POST /affiliate/register` noue la relation sur l'APPELANT
- * AUTHENTIFIÉ (`routes/affiliate.ts:658-666` — le `referredUserId` du corps
- * est explicitement IGNORÉ, c'est la garde qui empêche de forger une relation
- * vers un tiers). Or l'inscription authentifie déjà (#4264, `auth.register`
- * établit la session). La relation se noue donc APRÈS le compte, sans qu'une
- * seule ligne de la passerelle change.
+ * Dans la création du compte elle-même (#8058) : le code part en
+ * `affiliateToken` dans le corps de `POST /auth/register`
+ * (`composeRegisterBody`, `lib/signup-form.ts`), et la passerelle rattache le
+ * compte à son parrain, activé ou non. L'appel AUTHENTIFIÉ
+ * `POST /affiliate/register` d'après-inscription a disparu du web : depuis
+ * #8055, une inscription sans numéro ne rend aucune session, il ne pouvait
+ * plus partir.
  *
- * ## Les deux appels
+ * ## Ce qui reste ici
  *
- * | appel | quand | ce qu'il coûte s'il échoue |
- * |---|---|---|
- * | `GET /affiliate/validate/:token` | à la saisie du code, pour NOMMER qui invite | rien : l'écran reste muet et l'inscription continue |
- * | `POST /affiliate/register` | après la création du compte | un parrainage perdu, JAMAIS une inscription perdue |
- *
- * Cette asymétrie est la décision de fond de ce port : **un code d'invitation
- * n'est jamais une condition d'entrée.** Un jeton expiré, une limite d'usage
- * atteinte, une passerelle qui répond 500 — aucun de ces cas ne doit empêcher
- * quelqu'un de créer son compte. Ce serait refuser un utilisateur pour la
- * défaillance de celui qui l'a invité.
+ * `GET /affiliate/validate/:token`, à la saisie du code, pour NOMMER qui
+ * invite. S'il échoue, l'écran reste muet et l'inscription continue : **un code
+ * d'invitation n'est jamais une condition d'entrée.** Ce serait refuser un
+ * utilisateur pour la défaillance de celui qui l'a invité.
  */
 
 /** `GET /affiliate/validate/:token` (`routes/affiliate.ts:449`) — rend TOUJOURS
@@ -53,27 +46,6 @@ export function validateReferralCode(code: string, deps: AffiliateDeps = default
   return deps.transport.request<ReferralValidation>({
     method: 'GET',
     path: `/api/v1/affiliate/validate/${encodeURIComponent(code)}`,
-  });
-}
-
-/**
- * `POST /affiliate/register` (`routes/affiliate.ts:658`) — AUTHENTIFIÉ, donc
- * appelé après que l'inscription a établi la session.
- *
- * `referredUserId` est dans le schéma REQUIS de la route alors qu'elle
- * l'ignore (le champ « reste accepté pour ne pas casser les clients
- * existants », dit son commentaire) : la clé part donc, vide de sens et de
- * conséquence, parce qu'un corps sans elle serait refusé par la validation
- * AVANT d'atteindre le code qui l'ignore.
- */
-export function convertReferral(
-  params: { readonly code: string; readonly userId: string },
-  deps: AffiliateDeps = defaultDeps,
-): Promise<ApiResult<{ readonly id?: string; readonly status?: string }>> {
-  return deps.transport.request<{ readonly id?: string; readonly status?: string }>({
-    method: 'POST',
-    path: '/api/v1/affiliate/register',
-    body: { token: params.code, referredUserId: params.userId },
   });
 }
 

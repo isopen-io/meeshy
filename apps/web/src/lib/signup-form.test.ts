@@ -253,6 +253,23 @@ describe('composeRegisterBody — la charge EXACTE de POST /auth/register (regis
     expect('phoneCountryCode' in body).toBe(false);
   });
 
+  test('un code de parrainage BIEN FORMÉ part en `affiliateToken`, normalisé (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: '  aff_abc123 ' });
+    expect(body.affiliateToken).toBe('aff_abc123');
+    expect('affiliateSessionKey' in body).toBe(false);
+  });
+
+  test('la clé de session d’affiliation accompagne le jeton quand elle est connue (#8058)', () => {
+    const body = composeRegisterBody(baseForm(), { referralCode: 'aff_abc123', referralSessionKey: 'sk-1' });
+    expect(body.affiliateSessionKey).toBe('sk-1');
+  });
+
+  test('un code vide ou mal formé ⇒ AUCUNE clé de parrainage (#8058)', () => {
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: '' })).toBe(false);
+    expect('affiliateToken' in composeRegisterBody(baseForm(), { referralCode: 'deux mots' })).toBe(false);
+    expect('affiliateSessionKey' in composeRegisterBody(baseForm(), { referralCode: '', referralSessionKey: 'sk-1' })).toBe(false);
+  });
+
   test('les chiffres non numériques (espaces, points) sont filtrés avant envoi', () => {
     const body = composeRegisterBody(baseForm({ phoneDigits: '06 12.34 56 78' }));
     expect(body.phoneNumber).toBe('0612345678');
