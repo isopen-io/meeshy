@@ -13,6 +13,14 @@ public struct MessageTranscriptionSegment: Identifiable, Sendable, Codable, Equa
         self.id = UUID()
         self.text = text; self.startTime = startTime; self.endTime = endTime; self.speakerId = speakerId
     }
+
+    /// Segment reçu par REST ou socket. Vit dans le SDK parce que l'app
+    /// déclare son propre `TranscriptionSegment` d'appel : elle ne peut pas
+    /// nommer celui-ci (`MeeshySDK.` désigne l'enum `MeeshySDK`, pas le module).
+    public nonisolated init(_ segment: TranscriptionSegment) {
+        self.init(text: segment.text, startTime: segment.startTime,
+                  endTime: segment.endTime, speakerId: segment.speakerId)
+    }
 }
 
 // MARK: - Message Transcription
