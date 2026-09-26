@@ -19,7 +19,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_fullSendLifecycle_stateTransitionsReachStore() async throws {
         let store = MessageStore(conversationId: "conv_int", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         // 1. Insert optimistic
         let record = MessageRecordFactory.make(
@@ -66,8 +66,8 @@ final class MessagePipelineIntegrationTests: XCTestCase {
 
         // Create store, load, verify
         let store = MessageStore(conversationId: "conv_survive", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
-        await store.loadInitial()
+        store.startObserving()
+        await store.refreshFromDB()
         try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(store.messages.count, 1)
@@ -79,7 +79,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_editReflectedInStore() async throws {
         let store = MessageStore(conversationId: "conv_edit", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let record = MessageRecordFactory.make(
             localId: "edit_int", conversationId: "conv_edit", content: "Original")
@@ -98,7 +98,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_deleteReflectedInStore() async throws {
         let store = MessageStore(conversationId: "conv_del", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let record = MessageRecordFactory.make(
             localId: "del_int", conversationId: "conv_del", content: "Delete me")
@@ -124,7 +124,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     func test_bufferIncoming_surfacesInStore_withoutPathAWrite() async throws {
 
         let store = MessageStore(conversationId: "conv_t14_incoming", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let incoming = MessagePersistenceActor.IncomingMessageData(
             id: "t14_msg_001",
@@ -155,7 +155,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_appendReaction_surfacesInStore() async throws {
         let store = MessageStore(conversationId: "conv_t14_react", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let record = MessageRecordFactory.make(
             localId: "t14_react_001", conversationId: "conv_t14_react")
@@ -187,7 +187,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_removeReaction_surfacesInStore() async throws {
         let store = MessageStore(conversationId: "conv_t14_rmreact", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let record = MessageRecordFactory.make(
             localId: "t14_rmreact_001", conversationId: "conv_t14_rmreact")
@@ -221,7 +221,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_touchUpdatedAt_triggersStoreObservation() async throws {
         let store = MessageStore(conversationId: "conv_t14_touch", persistence: actor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let record = MessageRecordFactory.make(
             localId: "t14_touch_001", conversationId: "conv_t14_touch",

@@ -10,7 +10,7 @@ import MeeshyUI
 struct LinksHubView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     // Sheets de création rapide
     @State private var showCreateShareLink = false
@@ -67,7 +67,7 @@ struct LinksHubView: View {
         // Sheets de création rapide
         .sheet(isPresented: $showCreateShareLink) {
             CreateShareLinkView { _ in }
-                .environmentObject(conversationListViewModel)
+                .conversationListObject(conversationListViewModel)
         }
         .sheet(isPresented: $showCreateTrackingLink) {
             CreateTrackingLinkView { _ in }

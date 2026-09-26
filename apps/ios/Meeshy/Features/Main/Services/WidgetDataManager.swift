@@ -135,6 +135,11 @@ final class WidgetDataManager: NotificationWidgetSink {
         UserDefaults(suiteName: suiteName)
     }()
 
+    /// Miroir en mémoire du dernier `publishConversationSnapshots` — évite de
+    /// redécoder le blob App Group pour une donnée que ce manager vient tout
+    /// juste d'écrire (`conversationToastPresentation`).
+    private var lastPublishedSnapshots: [String: ConversationSnapshotPayload] = [:]
+
     private let encoder: JSONEncoder = {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -161,20 +166,15 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// horodatage REST reste la meilleure donnée disponible.
     private let presenceStateProvider: @MainActor (String) -> PresenceState?
 
-    private init() {
-        self.suiteName = "group.me.meeshy.apps"
-        self.stagingDirectoriesOverride = nil
-        self.preferredContentLanguagesProvider = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        }
-        self.presenceStateProvider = { PresenceManager.shared.knownPresenceState(for: $0) }
+    private convenience init() {
+        self.init(suiteName: UserPreferencesManager.appGroupSuiteName)
     }
 
     /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
     /// staging injectés pour vérifier `wipeAll()` sans toucher l'App Group réel.
     init(
         suiteName: String,
-        stagingDirectories: [URL],
+        stagingDirectories: [URL]? = nil,
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
             AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         },
@@ -205,6 +205,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             for key in accountKeys {
                 defaults.removeObject(forKey: key)
             }
+            lastPublishedSnapshots = [:]
         }
         let stagingDirs = stagingDirectoriesOverride ?? [
             SharePendingSendConsumer.directoryURL(),
@@ -274,7 +275,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = encoder.encodeOrLog(Array(widgetConversations), field: "widget conversations", logger: Logger.widgetData) else { return }
+              let data = encoder.encodeOrLog(widgetConversations, field: "widget conversations", logger: Logger.widgetData) else { return }
 
         writingToSharedContainer {
             defaults.set(data, forKey: conversationsKey)
@@ -327,6 +328,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     unreadCount: conv.userState.unreadCount
                 )
             }
+        lastPublishedSnapshots = snapshots
         guard let data = encoder.encodeOrLog(snapshots, field: "widget snapshots", logger: Logger.widgetData) else { return }
         writingToSharedContainer { defaults.set(data, forKey: snapshotsKey) }
     }
@@ -340,13 +342,20 @@ final class WidgetDataManager: NotificationWidgetSink {
     func conversationToastPresentation(
         forId id: String
     ) -> NotificationToastManager.ConversationPresentation? {
-        guard let defaults = sharedDefaults,
-              let data = defaults.data(forKey: snapshotsKey),
-              let snapshots = JSONDecoder().decodeOrLog(
-                  [String: ConversationSnapshotPayload].self, from: data,
-                  field: "widget snapshots", logger: Logger.widgetData
-              ),
-              let payload = snapshots[id] else { return nil }
+        let payload: ConversationSnapshotPayload?
+        if let cached = lastPublishedSnapshots[id] {
+            payload = cached
+        } else {
+            guard let defaults = sharedDefaults,
+                  let data = defaults.data(forKey: snapshotsKey),
+                  let snapshots = JSONDecoder().decodeOrLog(
+                      [String: ConversationSnapshotPayload].self, from: data,
+                      field: "widget snapshots", logger: Logger.widgetData
+                  ) else { return nil }
+            lastPublishedSnapshots = snapshots
+            payload = snapshots[id]
+        }
+        guard let payload else { return nil }
 
         let custom = payload.customName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let canonical = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -389,7 +398,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = encoder.encodeOrLog(Array(favorites), field: "widget favorites", logger: Logger.widgetData) else { return }
+              let data = encoder.encodeOrLog(favorites, field: "widget favorites", logger: Logger.widgetData) else { return }
 
         writingToSharedContainer { defaults.set(data, forKey: favoritesKey) }
     }
@@ -400,25 +409,6 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     func reloadTimelines() {
         WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    // MARK: - Legacy shim (kept for callers still using the old API)
-
-    func updateConversations(_ conversations: [MeeshyConversation]) {
-        publishConversations(conversations)
-        publishFavoriteContacts(conversations)
-        let totalUnread = conversations.reduce(0) { $0 + $1.userState.unreadCount }
-        publishUnreadCount(totalUnread)
-        reloadTimelines()
-    }
-
-    func updateFavoriteContacts(_ conversations: [MeeshyConversation]) {
-        publishFavoriteContacts(conversations)
-    }
-
-    func updateUnreadCount(_ count: Int) {
-        publishUnreadCount(count)
-        reloadTimelines()
     }
 
     // MARK: - Private

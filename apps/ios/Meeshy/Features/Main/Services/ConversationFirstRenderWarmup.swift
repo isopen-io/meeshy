@@ -181,7 +181,6 @@ enum ConversationFirstRenderWarmup {
         _ = vm.bubbleLanguageSelections
         _ = vm.currentConversation
         _ = vm.currentSearchQuery
-        _ = vm.editInProgress
         _ = vm.ephemeralDuration
         _ = vm.error
         _ = vm.firstUnreadMessageId
@@ -211,10 +210,8 @@ enum ConversationFirstRenderWarmup {
         _ = vm.otherConversationsUnread
         _ = vm.pendingEffects
         _ = vm.preferredLanguageRevision
-        _ = vm.quotedMessageSearchTarget
         _ = vm.reactionDetails
         _ = vm.revealedViewOnceIds
-        _ = vm.scrollAnchorId
         _ = vm.searchHasMore
         _ = vm.searchResults
         _ = vm.translatingAudioLanguages

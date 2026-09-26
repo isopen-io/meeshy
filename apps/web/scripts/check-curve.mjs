@@ -592,7 +592,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
 // rail et les 20 sur la feuille « Ajouter ». Recopiés à la main une fois, ils
 // dériveraient en silence : on les compare.
 {
-  const block = /private let defaultEmojis = \[([\s\S]*?)\]/.exec(overlaySwift);
+  const block = /static let defaultEmojis = \[([\s\S]*?)\]/.exec(overlaySwift);
   const DOWNSTREAM_ACTIONS = `${ROOT}apps/web/src/lib/view/message-actions.ts`;
   const actionsSource = readFileSync(DOWNSTREAM_ACTIONS, 'utf8');
   const emojisOf = (text) => (text.match(/'([^']+)'|"([^"]+)"/g) ?? []).map((t) => t.slice(1, -1));

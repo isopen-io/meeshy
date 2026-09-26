@@ -1,47 +1,16 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
-import Combine
-import os
-
-// MARK: - User Search Models (Preferences)
-
-private struct PrefsUserSearchResult: Identifiable, Decodable {
-    let id: String
-    let username: String
-    let firstName: String?
-    let lastName: String?
-    let displayName: String?
-    let avatar: String?
-    let isOnline: Bool?
-
-    var name: String {
-        displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").prefsIfEmptyFallback(username)
-    }
-}
-
-private extension String {
-    func prefsIfEmptyFallback(_ fallback: String) -> String {
-        isEmpty ? fallback : self
-    }
-}
-
-private struct PrefsUserSearchResponse: Decodable {
-    let success: Bool
-    let data: [PrefsUserSearchResult]
-}
 
 // MARK: - ConversationPreferencesTab
 
 struct ConversationPreferencesTab: View {
     let conversation: Conversation
-    let participants: [PaginatedParticipant]
     let accentColor: String
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var viewModel: ConversationOptionsViewModel
@@ -52,45 +21,14 @@ struct ConversationPreferencesTab: View {
     @State private var showEmojiPicker: Bool = false
     @State private var customNameLocal: String = ""
 
-    @State private var memberSearchQuery: String = ""
-    @State private var platformSearchResults: [PrefsUserSearchResult] = []
-    @State private var isSearchingPlatform: Bool = false
-    @State private var addingUserId: String? = nil
-    @State private var addedUserIds: Set<String> = []
-    @State private var memberCancellable: AnyCancellable?
-
-    private let memberSearchSubject = PassthroughSubject<String, Never>()
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-prefs")
-    private var presenceManager: PresenceManager { PresenceManager.shared }
-
     private var isDirect: Bool { conversation.type == .direct }
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
     private var accent: Color { Color(hex: accentColor) }
 
     private var canLeave: Bool { !isDirect && !isCreator }
 
-    private var canManageMembers: Bool {
-        guard let role = conversation.currentUserRole?.lowercased() else { return false }
-        return ["creator", "admin", "moderator"].contains(role)
-    }
-
-    private var filteredParticipants: [PaginatedParticipant] {
-        let trimmed = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty else { return participants }
-        return participants.filter { p in
-            p.name.lowercased().contains(trimmed) ||
-            (p.username?.lowercased().contains(trimmed) ?? false)
-        }
-    }
-
-    private var existingMemberIds: Set<String> {
-        Set(participants.compactMap(\.userId))
-    }
-
-    init(conversation: Conversation, participants: [PaginatedParticipant], accentColor: String) {
+    init(conversation: Conversation, accentColor: String) {
         self.conversation = conversation
-        self.participants = participants
         self.accentColor = accentColor
         self._viewModel = StateObject(wrappedValue: ConversationOptionsViewModel(conversation: conversation))
     }
@@ -122,7 +60,6 @@ struct ConversationPreferencesTab: View {
             await viewModel.load()
             customNameLocal = viewModel.prefs.customName ?? ""
         }
-        .onAppear { setupMemberSearchDebounce() }
         .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
         .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .alert(
@@ -468,44 +405,5 @@ struct ConversationPreferencesTab: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Member Search (unchanged behavior)
-
-    private func setupMemberSearchDebounce() {
-        guard memberCancellable == nil else { return }
-        let manage = canManageMembers
-        memberCancellable = memberSearchSubject
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { query in
-                guard manage else { return }
-                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard trimmed.count >= 3 else {
-                    platformSearchResults = []
-                    return
-                }
-                Task { await searchPlatformUsers(query: trimmed) }
-            }
-    }
-
-    private func searchPlatformUsers(query: String) async {
-        isSearchingPlatform = true
-        defer { isSearchingPlatform = false }
-
-        do {
-            let response: PrefsUserSearchResponse = try await APIClient.shared.request(
-                UsersEndpoint.search,
-                queryItems: [
-                    URLQueryItem(name: "q", value: query),
-                    URLQueryItem(name: "limit", value: "10"),
-                ]
-            )
-            if response.success {
-                platformSearchResults = response.data.filter { !existingMemberIds.contains($0.id) && !addedUserIds.contains($0.id) }
-            }
-        } catch {
-            Self.logger.error("Platform user search failed: \(error.localizedDescription)")
-            platformSearchResults = []
-        }
     }
 }

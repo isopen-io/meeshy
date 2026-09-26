@@ -284,13 +284,6 @@ struct BubbleSticker: View, Equatable {
         )
     }
 
-    // MARK: - L'image
-
-    private var source: RenderSource {
-        RenderSource.resolve(sticker: sticker) { StickerTemplateRenderer.drawer(for: $0) != nil }
-    }
-
-
     // MARK: - Méta-ligne, réactions, espacement
 
     /// Heure + coche de livraison, sans drapeaux ni bouton translate — le

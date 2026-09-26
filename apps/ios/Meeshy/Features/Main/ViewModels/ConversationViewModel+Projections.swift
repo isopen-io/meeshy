@@ -23,11 +23,11 @@ import os
 // Responsabilité tenue ici : les PROJECTIONS — tout ce qui se DÉDUIT de l'état
 // sans jamais le modifier : index O(1) des messages, derniers messages reçu et
 // envoyé, phase de pagination, roster de frappe, avatar déjà connu, identité de
-// la conversation pour le mini-player, groupes par date, médias et vocaux de
-// toute la conversation, légendes, mentions et membres les plus actifs.
+// la conversation pour le mini-player, médias et vocaux de toute la
+// conversation, légendes, mentions et membres les plus actifs.
 //
-// Les ARDOISES de cache (`_messagesByDate`, `_allAudioItems`, …) restent chez
-// l'hôte, où `invalidateCaches(previousMessages:)` les efface : ce sont des
+// Les ARDOISES de cache (`_allVisualAttachments`, `_allAudioItems`, …) restent
+// chez l'hôte, où `invalidateCaches(previousMessages:)` les efface : ce sont des
 // propriétés stockées, et leur invalidation est une propriété du CHAMP, pas une
 // discipline d'appelant.
 
@@ -42,11 +42,6 @@ extension ConversationViewModel {
     enum IndexCache {
         case uncomputed
         case resolved(Int?)
-
-        var index: Int? {
-            if case .resolved(let i) = self { return i }
-            return nil
-        }
     }
 
     // MARK: - Derniers messages reçu / envoyé
@@ -102,11 +97,6 @@ extension ConversationViewModel {
         set { stateStore.typingParticipants = newValue }
     }
 
-    /// Projection en noms seuls — libellés d'accessibilité et empreinte de
-    /// roster. Dérivée, jamais stockée : une seconde copie divergerait du
-    /// roster dès qu'un frappeur entre ou sort.
-    var typingUsernames: [String] { typingParticipants.displayNames }
-
     /// Combine publisher for the typing roster — used by UIKit consumers (MessageListViewController).
     var typingParticipantsPublisher: AnyPublisher<[TypingParticipant], Never> {
         stateStore.$typingParticipants.eraseToAnyPublisher()
@@ -140,16 +130,8 @@ extension ConversationViewModel {
         currentConversation?.avatar
     }
 
-    /// Brand accent for the audio mini-player. Defaults to the Meeshy
-    /// indigo500 brand hex when the conversation isn't hydrated yet so the
-    /// player never paints with a flash of an unrelated color.
-    var currentAccentColorHex: String {
-        currentConversation?.accentColor ?? "6366F1"
-    }
-
     // MARK: - Mention Forwarding (backwards compat for ConversationView)
 
-    var mentionSuggestions: [MentionCandidate] { mentionController.suggestions }
     var activeMentionQuery: String? { mentionController.activeQuery }
 
     // MARK: - O(1) Message Index
@@ -170,29 +152,6 @@ extension ConversationViewModel {
 
     func containsMessage(id: String) -> Bool {
         messageIdIndex[id] != nil || pendingServerIdSet.contains(id)
-    }
-
-    // MARK: - Date-Grouped Messages
-
-    var messagesByDate: [DateGroup] {
-        if let cached = _messagesByDate { return cached }
-        // Exclude rows the user deleted locally (WhatsApp "Delete for me"
-        // behaviour) so they never reappear across cache reloads, REST
-        // refreshes, or new socket arrivals of older messages.
-        let hiddenIds = LocallyHiddenMessagesStore.shared.allHiddenIds
-        let visible = hiddenIds.isEmpty ? messages : messages.filter { !hiddenIds.contains($0.id) }
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: visible) { msg -> DateComponents in
-            calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
-        }
-        let result = grouped.map { (comps, msgs) in
-            let dateKey = "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
-            let representativeDate = msgs.first?.createdAt ?? Date()
-            return DateGroup(id: dateKey, date: representativeDate, messages: msgs)
-        }
-        .sorted { $0.date < $1.date }
-        _messagesByDate = result
-        return result
     }
 
     // MARK: - Conversation-Wide Media
@@ -252,6 +211,16 @@ extension ConversationViewModel {
         }
         _allAudioItems = result
         return result
+    }
+
+    /// Les pistes audio d'UN message — la tranche que `ThemedMessageBubble.==`
+    /// refiltrait depuis la liste de TOUTE la conversation à chaque comparaison.
+    /// Invalidé avec `_allAudioItems` (son `didSet`).
+    var audioItemsByMessageId: [String: [AudioItem]] {
+        if let cached = _audioItemsByMessageId { return cached }
+        let index = Dictionary(grouping: allAudioItems, by: \.message.id)
+        _audioItemsByMessageId = index
+        return index
     }
 
     var mediaCaptionMap: [String: String] {

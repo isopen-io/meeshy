@@ -287,8 +287,6 @@ struct NearbyDiscoverabilityControl: View {
     /// spec ne demande rien à mémoriser d'une ouverture à l'autre.
     @State private var isExpanded = false
 
-    private var theme: ThemeManager { ThemeManager.shared }
-
     /// Le `Toggle` reçoit un binding qui passe par le geste du modèle plutôt
     /// que d'écrire le champ : la règle reste au même endroit, et aucun
     /// `.onChange` n'est nécessaire pour la faire respecter.

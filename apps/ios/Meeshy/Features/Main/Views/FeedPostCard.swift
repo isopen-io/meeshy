@@ -19,7 +19,6 @@ struct FeedPostCard: View {
     /// raccourci vers une coordonnée DÉJÀ affichée publiquement, pas une
     /// autorisation.
     var onSeeNearby: ((SharedPlace) -> Void)? = nil
-    var isCommentsExpanded: Bool = false
     /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
     var isLiked: Bool? = nil
     /// Display like count with optimistic delta already applied. When nil, falls back to post.likes.
@@ -41,7 +40,6 @@ struct FeedPostCard: View {
     var isRepostInFlight: Bool = false
     /// True while a share request is in-flight (mint short link).
     var isShareInFlight: Bool = false
-    var onToggleComments: (() -> Void)? = nil
     /// Hoiste la présentation de la feuille de commentaires chez l'HÔTE. La
     /// carte empile déjà plusieurs `.sheet`/`.fullScreenCover` sur sa propre
     /// vue : présentée à l'intérieur d'une feuille (profil), la sheet interne
@@ -273,13 +271,6 @@ struct FeedPostCard: View {
         }
     }
 
-    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
-    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
-    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
-    private var embeddedVideo: EmbeddedVideo? {
-        EmbeddableVideoResolver.resolve(in: effectiveContent)
-    }
-
     /// Teinte des liens cliquables dans le corps du post.
     private var postLinkTint: Color { Color(hex: accentColor) }
 
@@ -406,14 +397,6 @@ struct FeedPostCard: View {
                      defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
             : String(localized: "a11y.feed.post.open.hint",
                      defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main)
-    }
-
-    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
-    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
-    private var embedTrackedURL: URL? {
-        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
-              let token = post.trackedLinkMap[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
     }
 
     var body: some View {
@@ -544,10 +527,8 @@ struct FeedPostCard: View {
 
                 // Embed vidéo (YouTube) détecté dans le contenu : player façade
                 // (vignette → lecture inline), hors du geste d'ouverture du post.
-                if let embeddedVideo {
-                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                        .padding(.top, 8)
-                }
+                FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap)
+                    .equatable()
 
                 // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
                 // (composé, pas reposté) — la scène le remplace entièrement, elle
@@ -841,7 +822,7 @@ struct FeedPostCard: View {
                     MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
-                    Text(timeAgo(from: repost.timestamp))
+                    Text(RelativeTimeFormatter.shortString(for: repost.timestamp))
                         .font(.caption)
                         .foregroundColor(theme.textMuted)
                 }
@@ -1328,7 +1309,7 @@ struct FeedPostCard: View {
                         Spacer()
 
                         // Timestamp
-                        Text(timeAgo(from: comment.timestamp))
+                        Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
                             .font(.caption2)
                             .foregroundColor(theme.textMuted)
                     }
@@ -1345,10 +1326,6 @@ struct FeedPostCard: View {
                     .padding(.top, 10)
             }
         }
-    }
-
-    func timeAgo(from date: Date) -> String {
-        RelativeTimeFormatter.shortString(for: date)
     }
 }
 
@@ -1377,7 +1354,6 @@ extension FeedPostCard: Equatable {
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
-            && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
     }

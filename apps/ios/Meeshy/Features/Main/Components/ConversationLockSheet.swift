@@ -32,9 +32,7 @@ struct ConversationLockSheet: View {
 
     private var pinLength: Int {
         switch mode {
-        case .setupMasterPin, .removeMasterPin, .unlockAll:
-            return 6
-        case .changeMasterPin:
+        case .setupMasterPin, .removeMasterPin, .unlockAll, .changeMasterPin:
             return 6
         case .lockConversation:
             return step == 0 ? 6 : 4
@@ -189,20 +187,14 @@ struct ConversationLockSheet: View {
 
     private var iconName: String {
         switch mode {
-        case .setupMasterPin:
+        case .setupMasterPin, .lockConversation:
             return step == 2 ? "lock.shield.fill" : "lock.fill"
         case .changeMasterPin:
             return step == 0 ? "lock.fill" : (step == 2 ? "lock.shield.fill" : "lock.rotation")
-        case .removeMasterPin:
-            return "lock.open.fill"
-        case .lockConversation:
-            return step == 2 ? "lock.shield.fill" : "lock.fill"
-        case .unlockConversation:
+        case .removeMasterPin, .unlockConversation, .unlockAll:
             return "lock.open.fill"
         case .openConversation:
             return "lock.fill"
-        case .unlockAll:
-            return "lock.open.fill"
         }
     }
 

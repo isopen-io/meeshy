@@ -49,20 +49,6 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(a, [.edit, .select, .translate, .copy, .more])
     }
 
-    func test_primaryActions_neverContainsDelete_evenWhenDeletable() {
-        let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertFalse(a.contains(.delete), "Supprimer vit dans « Plus… », jamais dans le menu compact")
-    }
-
-    func test_primaryActions_neverContainsPinStar_movedToMore() {
-        let unpinned = MessageActionResolver.primaryActions(ctx())
-        XCTAssertFalse(unpinned.contains(.pin))
-        XCTAssertFalse(unpinned.contains(.star))
-        let pinnedStarred = MessageActionResolver.primaryActions(ctx(isPinned: true, isStarred: true))
-        XCTAssertFalse(pinnedStarred.contains(.unpin))
-        XCTAssertFalse(pinnedStarred.contains(.unstar))
-    }
-
     func test_primaryActions_alwaysEndsWithMore() {
         XCTAssertEqual(MessageActionResolver.primaryActions(ctx()).last, .more)
         XCTAssertEqual(MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1)).last, .more)

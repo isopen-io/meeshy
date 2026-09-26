@@ -78,7 +78,7 @@ struct RiverStreamHost: View {
     var bottomInset: CGFloat = 0
     /// L2b/2b-7 — le roster de frappe, DIT par l'appelant
     /// (`ConversationView` → `RiverConversationHost`, qui lit
-    /// `ConversationViewModel.typingUsernames`).
+    /// `ConversationViewModel.typingParticipants.displayNames`).
     ///
     /// **Décoration de PEAU, jamais une entrée de la LOI.** Il n'entre ni
     /// dans `RiverLaneResolver` ni dans `lanesInput` : une voix qui n'a encore

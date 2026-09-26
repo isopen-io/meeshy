@@ -9,8 +9,6 @@ import os
 /// `MessageDetailSheet.languageTabContent`. Aucun changement de comportement.
 struct MessageLanguageDetailView: View {
     let message: Message
-    let contactColor: String
-    let conversationId: String
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []

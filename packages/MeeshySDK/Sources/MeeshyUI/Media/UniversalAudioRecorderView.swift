@@ -26,9 +26,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     @ObservedObject private var theme: ThemeManager = .shared
 
     @State private var recordedURL: URL?
-    @State private var showEditor = false
     @State private var showPreview = false
-    @State private var wavePhase: CGFloat = 0
     /// Refus micro : le tap sur « Enregistrer » retournait en silence, laissant
     /// l'écran inerte sans la moindre explication. Rendu sous les contrôles.
     @State private var permissionMessage: String?

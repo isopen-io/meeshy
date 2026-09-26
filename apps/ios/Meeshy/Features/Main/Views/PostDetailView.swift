@@ -859,11 +859,8 @@ struct PostDetailView: View {
         .navigationBarHidden(true)
         .task {
             // Wire persistence layer on first appearance
-            if viewModel.commentStore == nil {
-                let deps = DependencyContainer.shared
-                let commentStore = CommentStore(postId: postId, persistence: deps.feedPersistence)
-                viewModel.setupPersistence(commentStore: commentStore, persistence: deps.feedPersistence)
-                await commentStore.loadInitial()
+            if viewModel.feedPersistence == nil {
+                viewModel.setupPersistence(persistence: DependencyContainer.shared.feedPersistence)
             }
 
             if viewModel.post == nil {

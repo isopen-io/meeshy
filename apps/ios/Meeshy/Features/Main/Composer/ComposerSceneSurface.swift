@@ -289,28 +289,6 @@ struct ComposerSceneSurface: View {
         }
     }
 
-    /// **Borne un contenu AU DESSIN** (#4080) — ni au-dessus, ni en dessous :
-    /// DEDANS.
-    ///
-    /// `ancreAuDessin` pose au BAS du dessin ; celle-ci lui donne exactement le
-    /// rectangle du dessin, de sorte que ce qu'on y met flotte sur l'image et
-    /// jamais dans le letterbox. C'est ce que le viseur exige : ses contrôles
-    /// posés sur la frame paraîtraient hors de la scène, ce que la directive du
-    /// 2026-09-04 corrige mot pour mot.
-    @ViewBuilder
-    private func ancreDansLeDessin<Contenu: View>(_ contenu: Contenu) -> some View {
-        GeometryReader { geo in
-            let inset = ComposerRailGeometry.sceneBottomInset(
-                overlay: geo.size,
-                ratio: aspectRatio,
-                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true))
-            contenu
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, inset)
-                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
-        }
-    }
-
     /// **Ancre un contenu JUSTE AU-DESSUS du dessin** (#5017) — la jumelle
     /// haute de `ancreAuDessin`, et pour la même raison.
     ///

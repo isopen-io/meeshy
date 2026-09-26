@@ -40,11 +40,6 @@ struct IceServer: Sendable {
     ]
 }
 
-struct MediaTracks: Sendable {
-    let audioEnabled: Bool
-    let videoEnabled: Bool
-}
-
 enum CallMediaType: Sendable {
     case audioOnly
     case audioVideo
@@ -55,10 +50,8 @@ enum CallMediaType: Sendable {
 enum PeerConnectionState: String, Sendable {
     case new
     case connecting
-    case checking      // ICE checking — UX warning lors d'une nouvelle tentative de connexion
     case connected
     case disconnected
-    case reconnecting  // ICE restart en cours après perte de connectivité
     case failed
     case closed
 }
@@ -767,7 +760,6 @@ enum VideoDegradationPreference: String, Sendable, Equatable {
 
 protocol WebRTCClientProviding: AnyObject {
     var delegate: (any WebRTCClientDelegate)? { get set }
-    var isConnected: Bool { get }
     var localVideoTrack: Any? { get }
     var remoteVideoTrack: Any? { get }
 
@@ -1182,7 +1174,6 @@ nonisolated enum QualityThresholds {
     /// are NOT debounced (terminal/decisive).
     static let disconnectDebounceSeconds: TimeInterval = 3.5
 
-    static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
     /// Frame-rate floor applied when `VideoQualityLevel.critical.targetFPS == 0`.

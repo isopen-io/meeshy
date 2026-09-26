@@ -34,10 +34,6 @@ extension ConversationAudioCoordinator {
         static let currentTimeThrottle: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(250)
     }
 
-    private static let nowPlayingLog = Logger(
-        subsystem: "me.meeshy.app", category: "audio-nowplaying"
-    )
-
     /// Activates the system NowPlaying + RemoteCommand bridge. Idempotent —
     /// subsequent calls are no-ops. Call once at app root mount (from the
     /// root view's `.task { ... }`).

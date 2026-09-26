@@ -59,7 +59,6 @@ final class LentilleGroupingGraftTests: XCTestCase {
         let store = ConversationListViewModelTests.makeTestStore()
         let categoryStore = UserCategoryStore(service: ConvListTestCategoryWriter())
         return ConversationListViewModel(
-            api: MockAPIClientForApp(),
             conversationService: MockConversationService(),
             preferenceService: MockPreferenceService(),
             messageSocket: MockMessageSocket(),

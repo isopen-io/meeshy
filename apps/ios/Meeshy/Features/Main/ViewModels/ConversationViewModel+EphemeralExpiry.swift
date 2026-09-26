@@ -41,8 +41,8 @@ final class EphemeralExpiryCoordinator {
     /// Idempotent : rappelé avec le même prochain réveil, il ne replanifie
     /// rien — sans quoi chaque frappe au clavier (qui touche `messages`)
     /// annulerait et recréerait la tâche.
-    func refresh(deadlines: [String: Date], now: Date = Date()) {
-        let plan = EphemeralExpirySchedule.plan(deadlines: deadlines, now: now)
+    func refresh(deadlines: [String: Date]) {
+        let plan = EphemeralExpirySchedule.plan(deadlines: deadlines, now: Date())
 
         if !plan.expired.isEmpty {
             let expired = plan.expired
@@ -127,8 +127,9 @@ extension ConversationViewModel {
     /// tenir cette liste à jour entre deux réveils.
     func expireEphemeralsIfNeeded(_ ids: [String] = []) {
         let now = Date()
+        let deadlines = ephemeralDeadlines
         let due = Set(ids)
-            .union(ephemeralDeadlines.compactMap { $0.value <= now ? $0.key : nil })
+            .union(deadlines.compactMap { $0.value <= now ? $0.key : nil })
             // #7552 — ce qui est DÉJÀ échu n'a plus d'échéance future : sans
             // cette union, un éphémère expiré hors ligne restait à l'écran.
             .union(elapsedEphemeralIds)
@@ -140,8 +141,8 @@ extension ConversationViewModel {
             // Réassigner la ligne telle quelle est donc le geste juste : il ne
             // ment sur rien et fait re-résoudre `protection()` avec un `now`
             // frais, qui rendra `.imminent` au lieu de `.running`.
-            restampMessagesEnteringLastMinute(now: now)
-            refreshEphemeralExpirySchedule()
+            restampMessagesEnteringLastMinute(deadlines, now: now)
+            ephemeralExpiry.refresh(deadlines: deadlines)
             return
         }
 
@@ -167,17 +168,16 @@ extension ConversationViewModel {
         }
 
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
-        let burning = Set(fresh)
         Task { @MainActor [weak self] in
             let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard let self else { return }
-            for id in burning { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
+            for id in fresh { EphemeralReceiptLedger.shared.noteDestruction(of: id) }
             // Le repli des voisins est ANIMÉ : c'est la seconde moitié de
             // l'effet — la combustion montre la destruction, le repli montre
             // que la place est rendue.
             withAnimation(.easeInOut(duration: 0.25)) {
-                self.messages.removeAll { burning.contains($0.id) }
+                self.messages.removeAll { fresh.contains($0.id) }
             }
             self.refreshEphemeralExpirySchedule()
         }
@@ -188,8 +188,8 @@ extension ConversationViewModel {
     /// Bornée aux messages CONCERNÉS — jamais la liste entière : réassigner
     /// tout le fil à chaque réveil coûterait une reconstruction complète pour
     /// un badge.
-    private func restampMessagesEnteringLastMinute(now: Date) {
-        for (id, deadline) in ephemeralDeadlines {
+    private func restampMessagesEnteringLastMinute(_ deadlines: [String: Date], now: Date) {
+        for (id, deadline) in deadlines {
             let remaining = deadline.timeIntervalSince(now)
             guard remaining > 0, remaining <= EphemeralDeadline.countdownThreshold else { continue }
             guard let index = messageIndex(for: id) else { continue }

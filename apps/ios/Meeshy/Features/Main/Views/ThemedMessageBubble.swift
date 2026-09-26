@@ -162,6 +162,8 @@ struct ThemedMessageBubble: View {
     /// Nil-default keeps preview / overlay call sites unchanged.
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
+    /// Tranche de `allAudioItems` pour CE message (`ConversationViewModel.audioItemsByMessageId`) : `==` la balaie en O(k) au lieu d'un O(N) sur toute la conversation.
+    var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
     /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
@@ -605,7 +607,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
     private static func audioEnrichmentSignature(_ bubble: ThemedMessageBubble) -> [AudioEnrichmentKey] {
         let ownedIds = Set(bubble.message.attachments.filter { $0.type == .audio }.map(\.id))
         guard !ownedIds.isEmpty else { return [] }
-        return bubble.allAudioItems
+        return bubble.messageAudioItems
             .filter { ownedIds.contains($0.id) }
             .sorted { $0.id < $1.id }
             .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }

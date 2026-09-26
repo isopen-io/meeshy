@@ -42,7 +42,7 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
             XCTFail("`func updateUIView(` introuvable dans CameraView.swift — la garde ne mesure plus rien.")
             throw XCTSkip("marker")
         }
-        guard let end = src.range(of: "\n    func makeCoordinator()", range: start.upperBound..<src.endIndex) else {
+        guard let end = src.range(of: "\n}\n", range: start.upperBound..<src.endIndex) else {
             XCTFail("Fin du corps de updateUIView introuvable — CameraView.swift a changé de forme.")
             throw XCTSkip("marker")
         }

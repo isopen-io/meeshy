@@ -107,13 +107,6 @@ struct EditablePostMedia: Identifiable, Equatable {
         }
     }
 
-    init(id: String, kind: Kind, previewURL: URL?, durationMs: Int? = nil) {
-        self.id = id
-        self.kind = kind
-        self.previewURL = previewURL
-        self.durationMs = durationMs
-    }
-
     init(_ media: FeedMedia) {
         self.id = media.id
         switch media.type {
@@ -149,12 +142,11 @@ struct EditPostSheet: View {
     var originalVisibilityUserIds: [String] = []
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
-    var maxLength: Int = 5000
+    private static let maxLength = 5000
     let onSave: (EditPostDraft) async -> Void
     let onDismiss: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
     @State private var draftContent: String = ""
     @State private var selectedLanguage: String = ""
     @State private var selectedType: String = "POST"
@@ -231,7 +223,7 @@ struct EditPostSheet: View {
     private var remainingMediaCount: Int { media.count - removedMediaIds.count }
 
     private var isValid: Bool {
-        guard trimmedContent.count <= maxLength else { return false }
+        guard trimmedContent.count <= Self.maxLength else { return false }
         // La garde ne mord que sur un choix ACTIF : un post déjà en ONLY dont
         // la liste n'a pas pu être hydratée ne doit pas interdire de corriger
         // son texte — rien ne partira sur l'audience dans ce cas.
@@ -243,7 +235,7 @@ struct EditPostSheet: View {
     }
 
     private var remainingChars: Int {
-        max(0, maxLength - draftContent.count)
+        max(0, Self.maxLength - draftContent.count)
     }
 
     private var selectedLanguageInfo: LanguageInfo? {

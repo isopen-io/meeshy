@@ -36,17 +36,11 @@ protocol ConversationSocketDelegate: AnyObject {
     var isConversationClosed: Bool { get set }
     var pendingServerIds: [String: String] { get set }
 
-    /// `true` when the message list is scrolled to (or near) the bottom, where a
-    /// newly arrived message is visible. Read-receipt precision gate: an inbound
-    /// message is only auto-marked read when the user could actually see it.
-    var isViewportAtBottom: Bool { get }
-
     /// O(1) index lookup by message ID (backed by dictionary)
     func messageIndex(for id: String) -> Int?
     /// O(1) membership check by message ID
     func containsMessage(id: String) -> Bool
 
-    func evictViewOnceMedia(message: Message)
     /// Évince les traductions d'un message dont le CONTENU vient de changer —
     /// dictionnaire en mémoire, cache de résolution du Prisme ET les deux
     /// caches PERSISTANTS (CacheCoordinator, GRDB). Un site unique côté
@@ -98,11 +92,6 @@ final class ConversationSocketHandler {
     // it (not `self`) to the MainActor `Task` that clears it — self is
     // uniquely referenced at that point, so there's no real race.
     nonisolated(unsafe) weak var delegate: ConversationSocketDelegate?
-
-    /// Foreground/active probe for the read-receipt precision gate. Injected so
-    /// the XCTest host — which never reaches `.active` — can force a known value.
-    /// Production reads the real application state on the main actor.
-    private let isApplicationActive: @MainActor () -> Bool
 
     /// Optional persistence actor — when set, message-related socket events
     /// write through the actor in addition to updating the delegate/ViewModel.
@@ -164,15 +153,11 @@ final class ConversationSocketHandler {
     init(
         conversationId: String,
         currentUserId: String,
-        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        isApplicationActive: @escaping @MainActor () -> Bool = {
-            UIApplication.shared.applicationState == .active
-        }
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared
     ) {
         self.conversationId = conversationId
         self.currentUserId = currentUserId
         self.messageSocket = messageSocket
-        self.isApplicationActive = isApplicationActive
     }
 
     /// Side-effects d'ouverture : join de la room socket + publication de la
@@ -904,11 +889,7 @@ final class ConversationSocketHandler {
                 // ne vaut JAMAIS `currentUserId`, donc l'écho de sa propre
                 // réaction re-déclenchait la comète une seconde fois.
                 if (event.userId ?? event.participantId) != self.currentUserId {
-                    let animMessageId = event.messageId
-                    let animEmoji = event.emoji
-                    Task { @MainActor in
-                        ReactionAnimationGate.markAdded(messageId: animMessageId, emoji: animEmoji)
-                    }
+                    ReactionAnimationGate.markAdded(messageId: event.messageId, emoji: event.emoji)
                 }
                 // Write through persistence; store observation surfaces the reaction.
                 // Pass the server's authoritative `aggregation.count` as a cap so an

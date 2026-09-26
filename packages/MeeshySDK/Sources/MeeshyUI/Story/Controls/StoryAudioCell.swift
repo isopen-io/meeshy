@@ -34,7 +34,6 @@ struct StoryAudioCell: View {
     @State private var localVolume: Float = 1.0
     @State private var didStartWaveform = false
 
-    private var primaryText: Color { colorScheme == .dark ? .white : MeeshyColors.indigo950 }
     private var secondaryText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.78) }
     private var rowBgFill: Color {
         isBackground

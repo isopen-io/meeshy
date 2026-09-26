@@ -22,7 +22,6 @@ private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", cat
 struct DatabaseInitDiagnostics: Sendable, Equatable {
     var firstAttemptError: String?
     var recoveryAttempted: Bool = false
-    var recoveredFromCorruption: Bool = false
     var quarantinedFilePath: String?
     var fellBackToSecondaryPath: Bool = false
     var fellBackToEphemeralStorage: Bool = false
@@ -46,7 +45,6 @@ final class DependencyContainer {
     /// feed n'était pas affiché (post créé, commentaire, réaction, traduction).
     /// La persistance disque ne doit dépendre d'aucune vue.
     let feedSocketHandler: FeedSocketHandler
-    let thumbnailPrefetcher: ThumbnailPrefetcher
 
     /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
     /// Aujourd'hui : un seul abonnement sur `AuthManager.isAuthenticated` pour
@@ -91,7 +89,6 @@ final class DependencyContainer {
         let feed = FeedPersistenceActor(dbWriter: pool)
         self.feedPersistence = feed
         self.feedSocketHandler = FeedSocketHandler(persistence: feed)
-        self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
         self.initDiagnostics = diagnostics
 
         Task {
@@ -468,7 +465,6 @@ final class DependencyContainer {
         )
         do {
             let pool = try DatabasePool(path: path, configuration: config)
-            diagnostics.recoveredFromCorruption = true
             containerLogger.info("Database recovered with a fresh file at \(path, privacy: .public)")
             return pool
         } catch {

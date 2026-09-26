@@ -325,30 +325,6 @@ actor MediaCompressor {
         return outputURL
     }
 
-    // MARK: - Legacy preset-based compression (fallback)
-
-    func compressVideoLegacy(_ url: URL, preset: String = AVAssetExportPresetMediumQuality) async throws -> URL {
-        let asset = AVURLAsset(url: url)
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
-
-        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
-            throw CompressionError.exportSessionFailed
-        }
-
-        session.outputURL = outputURL
-        session.outputFileType = .mp4
-        session.shouldOptimizeForNetworkUse = true
-
-        await session.export()
-
-        guard session.status == .completed else {
-            throw session.error ?? CompressionError.exportSessionFailed
-        }
-
-        return outputURL
-    }
-
     // MARK: - ImageIO hardware-accelerated downsampling
 
     private func downsample(data: Data, maxDimension: CGFloat) -> UIImage? {

@@ -156,8 +156,6 @@ struct GallerySceneCaptionBlock: View {
                         senderAvatarURL: post.authorAvatarURL,
                         senderUserId: post.authorId
                     ),
-                    contactColor: post.authorColor,
-                    conversationId: "",
                     textTranslations: displayedTranslations,
                     onSelectTranslation: { traduction in
                         withAnimation(.easeInOut(duration: 0.2)) {

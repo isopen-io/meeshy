@@ -11,11 +11,10 @@ struct KeypadTab: View {
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
-    private let keys: [[KeypadKey]] = [
+    private static let keys: [[KeypadKey]] = [
         [.init("1", ""), .init("2", "ABC"), .init("3", "DEF")],
         [.init("4", "GHI"), .init("5", "JKL"), .init("6", "MNO")],
         [.init("7", "PQRS"), .init("8", "TUV"), .init("9", "WXYZ")],
@@ -167,7 +166,7 @@ struct KeypadTab: View {
             .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name, presence: presence))
             .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvrir le profil", bundle: .main))
 
-            dialMenu(for: user, displayName: name)
+            CallRowDialButton(userId: user.id, displayName: name, onUnavailable: { openProfile(user) }, accessibilityLabel: String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -189,38 +188,6 @@ struct KeypadTab: View {
         return parts.joined(separator: ", ")
     }
 
-    private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {
-        Menu {
-            Button {
-                startCall(user, displayName: displayName, isVideo: false)
-            } label: {
-                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
-            }
-            Button {
-                startCall(user, displayName: displayName, isVideo: true)
-            } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
-            }
-        } label: {
-            Image(systemName: "phone.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
-        }
-        .accessibilityLabel(String(localized: "calls.call", defaultValue: "Appeler", bundle: .main))
-    }
-
-    private func startCall(_ user: UserSearchResult, displayName: String, isVideo: Bool) {
-        HapticFeedback.medium()
-        CallStarter.start(
-            userId: user.id,
-            displayName: displayName,
-            isVideo: isVideo,
-            onUnavailable: { openProfile(user) }
-        )
-    }
-
     private func openProfile(_ user: UserSearchResult) {
         router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
         HapticFeedback.light()
@@ -230,9 +197,9 @@ struct KeypadTab: View {
 
     private var keypad: some View {
         VStack(spacing: 14) {
-            ForEach(keys.indices, id: \.self) { row in
+            ForEach(Self.keys.indices, id: \.self) { row in
                 HStack(spacing: 28) {
-                    ForEach(keys[row]) { key in
+                    ForEach(Self.keys[row]) { key in
                         keyButton(key)
                     }
                 }

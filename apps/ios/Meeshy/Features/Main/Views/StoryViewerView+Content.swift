@@ -1763,12 +1763,11 @@ struct StoryCommentsOverlayView: View {
             if isStoryExpired {
                 expiredStoryBanner
             }
-            commentsList
+            let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
+            commentsList(topLevel)
                 // Les médias de TOUS les commentaires de la story (racines +
                 // réponses dépliées) se feuillettent ensemble en plein écran.
-                .commentMediaGallery(
-                    topLevel: topLevelComments, replies: storyCommentRepliesMap
-                )
+                .commentMediaGallery(topLevel: topLevel, replies: storyCommentRepliesMap)
                 .frame(maxHeight: listMaxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
@@ -1844,11 +1843,11 @@ struct StoryCommentsOverlayView: View {
 
     // MARK: - Comments List
 
-    private var commentsList: some View {
+    private func commentsList(_ topLevel: [FeedComment]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(topLevelComments.enumerated()), id: \.element.id) { idx, comment in
+                    ForEach(Array(topLevel.enumerated()), id: \.element.id) { idx, comment in
                         // Separator between top-level comments — `Divider()`
                         // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
                         // RoundedRectangle box autour de chaque row (user spec
@@ -1885,7 +1884,7 @@ struct StoryCommentsOverlayView: View {
                         .padding(.vertical, 8)
                     }
 
-                    if topLevelComments.isEmpty && !isLoadingComments {
+                    if topLevel.isEmpty && !isLoadingComments {
                         emptyPlaceholder
                     }
                 }

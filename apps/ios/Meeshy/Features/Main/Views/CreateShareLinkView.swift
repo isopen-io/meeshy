@@ -553,8 +553,9 @@ private struct ConversationPickerSheet: View {
             (String(localized: "share.link.create.picker.section.communities", defaultValue: "Communautés", bundle: .main), [.community]),
             (String(localized: "share.link.create.picker.section.channels_public", defaultValue: "Canaux & Public", bundle: .main), [.channel, .public, .global]),
         ]
+        let base = filtered   // UN filtre de recherche par rendu, pas un par section
         return groups.compactMap { g in
-            let items = filtered.filter { g.types.contains($0.type) }
+            let items = base.filter { g.types.contains($0.type) }
             return items.isEmpty ? nil : (label: g.label, items: items)
         }
     }

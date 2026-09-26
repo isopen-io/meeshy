@@ -129,35 +129,42 @@ extension ConversationViewModel {
         await nsePendingDrained
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
+
+        // Surface GRDB data immediately (fast path for returning to a
+        // conversation) — for EVERY cache state. vm-conv-expired-metadata-01 —
+        // .fresh and .stale/.expired/.empty all paint from GRDB first, network
+        // revalidates after: the old network-only branch left bubbles without
+        // transcription/translations when the fetch failed (offline). Only the
+        // revalidation POLICY below differs per state.
+        // Pré-hydrate les traductions AVANT loadInitial : les bulles
+        // s'affichent dès le premier rendu avec le Prisme Linguistique.
+        // Overlap the two independent pre-paint GRDB reads instead of
+        // awaiting them in series: persisted translations (must land before
+        // `apply` so bubbles paint with the Prisme already applied — no
+        // untranslated flash) and the message snapshot. They touch disjoint
+        // state (the translations dict vs the message store) and are pure
+        // reads on the WAL pool, so they run concurrently; awaiting BOTH
+        // before `apply` keeps the exact ordering invariant while cutting the
+        // sequential read latency when reopening a cached conversation.
+        async let translationsHydrated: Void = hydratePersistedTranslations()
+        // Atomic publish — read off-MainActor, then apply messages +
+        // dependent metadata in a single MainActor slice so no
+        // intermediate frame ever renders audio bubbles without their
+        // transcription / translated audios dictionaries.
+        let snapshot = await messageStore.loadInitialSnapshot()
+        await translationsHydrated
+        // Merge the volatile (CacheCoordinator) translations for THESE exact
+        // messages into the dict BEFORE apply. `hydratePersistedTranslations`
+        // only pre-loads GRDB-persisted rows, so freshly-received translations
+        // that haven't been persisted yet would otherwise land only in the
+        // post-apply pass — popping the language flags in a frame AFTER the
+        // bubbles paint. Hydrating here makes the first paint carry the flags.
+        await hydrateTranslationsFromCache(messageIds: snapshot.map(\.localId))
+        messageStore.apply(records: snapshot)
+        hydrateMetadataFromGRDB(from: snapshot)
+
         switch cached {
         case .fresh:
-            // Surface GRDB data immediately (fast path for returning to a conversation).
-            // Pré-hydrate les traductions AVANT loadInitial : les bulles
-            // s'affichent dès le premier rendu avec le Prisme Linguistique.
-            // Overlap the two independent pre-paint GRDB reads instead of
-            // awaiting them in series: persisted translations (must land before
-            // `apply` so bubbles paint with the Prisme already applied — no
-            // untranslated flash) and the message snapshot. They touch disjoint
-            // state (the translations dict vs the message store) and are pure
-            // reads on the WAL pool, so they run concurrently; awaiting BOTH
-            // before `apply` keeps the exact ordering invariant while cutting the
-            // sequential read latency when reopening a cached conversation.
-            async let translationsHydrated: Void = hydratePersistedTranslations()
-            // Atomic publish — read off-MainActor, then apply messages +
-            // dependent metadata in a single MainActor slice so no
-            // intermediate frame ever renders audio bubbles without their
-            // transcription / translated audios dictionaries.
-            let freshSnapshot = await messageStore.loadInitialSnapshot()
-            await translationsHydrated
-            // Merge the volatile (CacheCoordinator) translations for THESE exact
-            // messages into the dict BEFORE apply. `hydratePersistedTranslations`
-            // only pre-loads GRDB-persisted rows, so freshly-received translations
-            // that haven't been persisted yet would otherwise land only in the
-            // post-apply pass — popping the language flags in a frame AFTER the
-            // bubbles paint. Hydrating here makes the first paint carry the flags.
-            await hydrateTranslationsFromCache(messageIds: freshSnapshot.map(\.localId))
-            messageStore.apply(records: freshSnapshot)
-            hydrateMetadataFromGRDB(from: freshSnapshot)
             // Background revalidation — catches anything the local store missed
             // while the conversation was closed (edits, reactions, translations,
             // and any received message not already surfaced locally). The common
@@ -174,26 +181,10 @@ extension ConversationViewModel {
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
                 await self.syncMissedMessagesOnOpen()
-                await MainActor.run { self.isRevalidating = false }
+                self.isRevalidating = false
             }
 
         case .stale, .expired, .empty:
-            // vm-conv-expired-metadata-01 — .expired/.empty suivent le même
-            // chemin que .stale : GRDB est TOUJOURS peint d'abord (messages +
-            // traductions + métadonnées audio), le réseau revalide ensuite.
-            // L'ancienne branche réseau-only laissait les bulles sans
-            // transcription/traductions quand le fetch échouait (offline).
-            // Surface GRDB data immediately, then revalidate in background.
-            // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
-            // Lectures GRDB indépendantes parallélisées (cf. branche .fresh).
-            async let translationsHydrated: Void = hydratePersistedTranslations()
-            let staleSnapshot = await messageStore.loadInitialSnapshot()
-            await translationsHydrated
-            // Pre-apply volatile-cache merge (see .fresh) so the language flags
-            // paint with the bubbles instead of a frame later.
-            await hydrateTranslationsFromCache(messageIds: staleSnapshot.map(\.localId))
-            messageStore.apply(records: staleSnapshot)
-            hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
                 await refreshMessagesFromAPI()
@@ -204,10 +195,9 @@ extension ConversationViewModel {
                     guard let self else { return }
                     await self.refreshMessagesFromAPI()
                     await self.syncMissedMessagesOnOpen()
-                    await MainActor.run { self.isRevalidating = false }
+                    self.isRevalidating = false
                 }
             }
-
         }
 
         // If the refresh discovered we no longer have access, the View is
@@ -436,8 +426,6 @@ extension ConversationViewModel {
         lastOlderPaginationTime = now
 
         isLoadingOlder = true
-        // Save anchor BEFORE prepend so the view can restore scroll position
-        scrollAnchorId = oldestId
 
         let beforeValue = nextMessageCursor ?? oldestId
 
@@ -705,9 +693,8 @@ extension ConversationViewModel {
     /// buttons on the very first render frame.
     ///
     /// - Parameters:
-    ///   - records: explicit record list to read from. When nil, falls
-    ///     back to `messageStore.messages` (legacy path). Pass an
-    ///     explicit list to ensure atomicity with a same-runloop `apply`.
+    ///   - records: the snapshot to read from — pass the list applied in
+    ///     the same runloop so hydration stays atomic with `apply`.
     ///   - forceOverwrite: when `true`, replaces existing entries in
     ///     `messageTranscriptions` / `messageTranslatedAudios`. Default
     ///     `false` preserves any in-memory state already written by a
@@ -716,12 +703,11 @@ extension ConversationViewModel {
     ///     re-transcription propagates to the UI even when the message
     ///     already had a (stale) transcription cached.
     func hydrateMetadataFromGRDB(
-        from records: [MessageRecord]? = nil,
+        from records: [MessageRecord],
         forceOverwrite: Bool = false
     ) {
         let decoder = JSONDecoder()
-        let source = records ?? messageStore.messages
-        for record in source {
+        for record in records {
             let msgId = record.serverId ?? record.localId
             guard let data = record.attachmentsJson,
                   let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
@@ -730,14 +716,7 @@ extension ConversationViewModel {
             for att in attachments {
                 // Hydrate transcription
                 if let t = att.transcription {
-                    let segments = (t.segments ?? []).map {
-                        MessageTranscriptionSegment(
-                            text: $0.text,
-                            startTime: $0.startTime,
-                            endTime: $0.endTime,
-                            speakerId: $0.speakerId
-                        )
-                    }
+                    let segments = (t.segments ?? []).map(MessageTranscriptionSegment.init)
                     let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.text,
@@ -759,26 +738,18 @@ extension ConversationViewModel {
                 if let translations = att.audioTranslations, !translations.isEmpty {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
-                        let segments = (trans.segments ?? []).map {
-                            MessageTranscriptionSegment(
-                                text: $0.text,
-                                startTime: $0.startTime,
-                                endTime: $0.endTime,
-                                speakerId: $0.speakerId
-                            )
-                        }
+                        let segments = (trans.segments ?? []).map(MessageTranscriptionSegment.init)
                         audios.append(MessageTranslatedAudio(
-                            id: "\(att.id)_\(lang)",
                             attachmentId: att.id,
-                            targetLanguage: lang,
+                            language: lang,
                             url: trans.url,
-                            transcription: trans.transcription ?? "",
-                            durationMs: trans.durationMs ?? 0,
-                            format: trans.format ?? "mp3",
-                            cloned: trans.cloned ?? false,
-                            quality: trans.quality ?? 0,
+                            transcription: trans.transcription,
+                            durationMs: trans.durationMs,
+                            format: trans.format,
+                            cloned: trans.cloned,
+                            quality: trans.quality,
                             voiceModelId: trans.voiceModelId,
-                            ttsModel: trans.ttsModel ?? "xtts",
+                            ttsModel: trans.ttsModel,
                             segments: segments
                         ))
                     }

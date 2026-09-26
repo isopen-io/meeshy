@@ -29,7 +29,7 @@ extension UniversalComposerBar {
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
         HStack(spacing: 6) {
             // Type icon
-            Image(systemName: iconForType(attachment.type))
+            Image(systemName: attachment.type.glyph)
                 .font(.caption)
                 .foregroundColor(Color(hex: attachment.thumbnailColor))
 
@@ -506,16 +506,6 @@ extension UniversalComposerBar {
     }
 
     // MARK: - Helpers
-
-    func iconForType(_ type: ComposerAttachmentType) -> String {
-        switch type {
-        case .voice: return "mic.fill"
-        case .location: return "location.fill"
-        case .image: return "photo.fill"
-        case .file: return "doc.fill"
-        case .video: return "video.fill"
-        }
-    }
 
     func formatFileSize(_ bytes: Int) -> String {
         Int64(bytes).formatted(.byteCount(style: .file))

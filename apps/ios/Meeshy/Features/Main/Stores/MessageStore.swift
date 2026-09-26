@@ -160,11 +160,9 @@ private final class ObservationTokens: @unchecked Sendable {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     nonisolated(unsafe) var regionCancellable: AnyDatabaseCancellable?
-    nonisolated(unsafe) var refreshTask: Task<Void, Never>?
 
     nonisolated func cancelAll() {
         regionCancellable?.cancel()
-        refreshTask?.cancel()
     }
 }
 
@@ -187,7 +185,6 @@ public final class MessageStore: ObservableObject {
     /// Number of messages fetched on initial load (no anchor). Once the user
     /// scrolls and an anchor is set, the window grows dynamically without cap.
     static let initialWindowSize = 200
-    static let prefetchThreshold = 30
 
     /// Plafond de la relecture ANCRÉE en temps réel (#4943, D-RT-02). Après
     /// une remontée profonde du fil, la fenêtre `.latest` ancrée n'avait
@@ -214,10 +211,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Public State
 
-    @Published private(set) var messages: [MessageRecord] = []
-    @Published private(set) var sections: [MessageSection] = []
-    @Published private(set) var unreadBelowCount: Int = 0
-    var currentVisibleMessageIds: Set<String> = []
+    private(set) var messages: [MessageRecord] = []
     var isUserScrolling = false
 
     // MARK: - Window Mode
@@ -265,11 +259,6 @@ public final class MessageStore: ObservableObject {
     private(set) var windowReadsForTesting: Int = 0
     #endif
 
-    struct MessageSection: Sendable {
-        let date: DateComponents
-        let messageIds: [String]
-    }
-
     init(conversationId: String, persistence: MessagePersistenceActor) {
         self.conversationId = conversationId
         self.persistence = persistence
@@ -277,7 +266,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseWriter) {
+    func startObserving() {
         stopObserving()
         let convId = conversationId
 
@@ -326,8 +315,6 @@ public final class MessageStore: ObservableObject {
 
     func stopObserving() {
         tokens.regionCancellable = nil
-        tokens.refreshTask?.cancel()
-        tokens.refreshTask = nil
     }
 
     // MARK: - Lifecycle
@@ -419,7 +406,7 @@ public final class MessageStore: ObservableObject {
             guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
         }
 
-        publish(records: newRecords, mergeInMemory: mergeInMemory)
+        publishUnchecked(records: newRecords, mergeInMemory: mergeInMemory)
     }
 
     /// Génération monotone des lectures de fenêtre — depuis que la lecture
@@ -456,10 +443,10 @@ public final class MessageStore: ObservableObject {
         }
     }
 
-    /// Publishes a freshly-read window into `@Published messages` and fires the
-    /// downstream side-effects (id index reset, section recompute, change
-    /// signal). Shared by `refreshFromDB` (real-time) and `apply` (REST/cold
-    /// load) so both paths agree on the protective-merge rule.
+    /// Publishes a freshly-read window into `messages` and fires the
+    /// downstream side-effects (id index reset, change signal). Shared by
+    /// `refreshFromDB` (real-time) and `apply` (REST/cold load) so both paths
+    /// agree on the protective-merge rule.
     ///
     /// Protective merge (`mergeInMemory == true` AND `.latest` window only):
     /// any in-memory record whose `localId` is absent from `records` is
@@ -468,17 +455,28 @@ public final class MessageStore: ObservableObject {
     /// erased by a later window read that races the commit ordering. Disabled
     /// in `.around(date:)` mode (jump-to-message) and on explicit straight
     /// replaces (window transitions) so a stale slice never pollutes the view.
+    ///
+    /// Une publication qui rendrait EXACTEMENT le tableau déjà affiché n'est
+    /// pas gratuite : elle réveille le sink du ViewModel, la cartographie de
+    /// la fenêtre et un `applySnapshot()` O(n) de la liste. `refreshFromDB`
+    /// s'en gardait depuis toujours (`newRecords != messages`), `apply` pas
+    /// du tout — d'où les deux à trois re-dispositions de la liste dans la
+    /// seconde qui suivait l'ouverture d'une conversation déjà en cache
+    /// (#4943, D-OPEN-01). La règle vit ici, au seul point de publication,
+    /// pour que les deux chemins ne puissent plus diverger.
     private func publish(records: [MessageRecord], mergeInMemory: Bool) {
-        // Une publication qui rendrait EXACTEMENT le tableau déjà affiché n'est
-        // pas gratuite : elle réveille le sink du ViewModel, la cartographie de
-        // la fenêtre et un `applySnapshot()` O(n) de la liste. `refreshFromDB`
-        // s'en gardait depuis toujours (`newRecords != messages`), `apply` pas
-        // du tout — d'où les deux à trois re-dispositions de la liste dans la
-        // seconde qui suivait l'ouverture d'une conversation déjà en cache
-        // (#4943, D-OPEN-01). La règle vit ici, au seul point de publication,
-        // pour que les deux chemins ne puissent plus diverger.
         guard !publishWouldBeNoOp(records: records, mergeInMemory: mergeInMemory) else { return }
+        publishUnchecked(records: records, mergeInMemory: mergeInMemory)
+    }
 
+    /// Phase de mutation de `publish`, SANS la garde `publishWouldBeNoOp` —
+    /// réservée aux appelants qui l'ont déjà évaluée. `refreshFromDB` vérifie
+    /// `publishWouldBeNoOp` avant le yield de runloop et de nouveau après (le
+    /// temps réel, `skipRunLoopYield: true`, ne l'évalue qu'une fois) ; appeler
+    /// `publish` depuis là rejouerait cette même comparaison O(n) une seconde
+    /// fois, sur le chemin chaud. `apply(records:)` n'a pas cette garantie et
+    /// continue d'appeler `publish`.
+    private func publishUnchecked(records: [MessageRecord], mergeInMemory: Bool) {
         let next: [MessageRecord]
         if mergeInMemory, windowMode == .latest {
             let snapshotIds = Set(records.map(\.localId))
@@ -562,7 +560,6 @@ public final class MessageStore: ObservableObject {
                 _domainCache = _domainCache.filter { liveIds.contains($0.key) }
             }
         }
-        recomputeSections()
         messagesDidChange.send()
     }
 
@@ -645,20 +642,6 @@ public final class MessageStore: ObservableObject {
         }
     }
 
-    // MARK: - Load Initial
-
-    /// Lecture de fenêtre + publication en un appel.
-    ///
-    /// Plus AUCUN appelant de production depuis #4943 : l'ouverture d'une
-    /// conversation passe par `loadInitialSnapshot()` + `apply(records:)`, qui
-    /// séparent la lecture de la publication et permettent de poser messages
-    /// ET métadonnées audio dans le MÊME slice MainActor (discipline
-    /// d'atomicité). Conservée parce qu'elle reste le chemin le plus court
-    /// pour amorcer un magasin dans un harnais de test.
-    func loadInitial() async {
-        await refreshFromDB()
-    }
-
     // MARK: - Atomic Snapshot Hydration
     //
     // Splits the legacy `loadInitial()` flow into two phases so the caller
@@ -713,8 +696,8 @@ public final class MessageStore: ObservableObject {
     }
 
     /// Synchronously publishes previously-fetched records into the store.
-    /// Recomputes sections, clears the id index, fires `messagesDidChange` —
-    /// the same side-effects as `refreshFromDB`'s publish phase. Safe to
+    /// Clears the id index, fires `messagesDidChange` — the same
+    /// side-effects as `refreshFromDB`'s publish phase. Safe to
     /// call inside a single `Task { @MainActor }` block after `await`-ing
     /// `loadInitialSnapshot()`, with no other `await` in between.
     ///
@@ -832,36 +815,5 @@ public final class MessageStore: ObservableObject {
         let msg = record.toMessage(currentUserId: currentUserId)
         _domainCache[record.localId] = (record.changeVersion, msg)
         return msg
-    }
-
-    func post(for id: String) -> MessageRecord? {
-        message(for: id)
-    }
-
-    // MARK: - Sections
-
-    private func recomputeSections() {
-        let calendar = Calendar.current
-        var grouped: [(DateComponents, [String])] = []
-        var currentDate: DateComponents?
-        var currentIds: [String] = []
-
-        for msg in messages {
-            let components = calendar.dateComponents([.year, .month, .day], from: msg.createdAt)
-            if components == currentDate {
-                currentIds.append(msg.localId)
-            } else {
-                if let date = currentDate {
-                    grouped.append((date, currentIds))
-                }
-                currentDate = components
-                currentIds = [msg.localId]
-            }
-        }
-        if let date = currentDate {
-            grouped.append((date, currentIds))
-        }
-
-        sections = grouped.map { MessageSection(date: $0.0, messageIds: $0.1) }
     }
 }

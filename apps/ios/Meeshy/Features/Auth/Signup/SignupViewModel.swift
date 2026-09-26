@@ -38,9 +38,7 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
 
     private let authManager: AuthManager
 
-    init(authManager: AuthManager = .shared) {
-        self.authManager = authManager
-    }
+    private init() { self.authManager = .shared }
 
     func register(_ request: RegisterRequest) async throws {
         try await authManager.registerThrowing(request: request)
@@ -221,7 +219,6 @@ final class SignupViewModel: ObservableObject {
     static let emailTakenCode = "EMAIL_TAKEN"
     static let usernameTakenCode = "USERNAME_TAKEN"
     static let phoneInvalidCode = "PHONE_INVALID"
-    static let validationErrorCode = "VALIDATION_ERROR"
 
     /// Le champ SERVEUR → la saisie qui le porte à l'écran.
     ///
@@ -252,7 +249,7 @@ final class SignupViewModel: ObservableObject {
     static func field(forCode code: String?) -> SignupField? {
         switch code {
         case emailTakenCode: return .email
-        case usernameTakenCode: return .displayName
+        case usernameTakenCode: return .username
         case phoneInvalidCode: return .phoneNumber
         default: return nil
         }

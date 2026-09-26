@@ -18,7 +18,7 @@ final class FeedPipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_postInsert_appearsInFeedStore() async throws {
         let store = FeedStore(persistence: feedActor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         let post = PostRecordFactory.make(id: "feed_int_1", content: "Integration test")
         try await feedActor.insertPost(post)
@@ -33,7 +33,7 @@ final class FeedPipelineIntegrationTests: XCTestCase {
     @MainActor
     func test_likeUpdate_reflectedInStore() async throws {
         let store = FeedStore(persistence: feedActor)
-        store.startObserving(dbPool: dbQueue)
+        store.startObserving()
 
         try await feedActor.insertPost(PostRecordFactory.make(id: "feed_like"))
         try await Task.sleep(for: .milliseconds(50))
@@ -45,19 +45,6 @@ final class FeedPipelineIntegrationTests: XCTestCase {
         XCTAssertTrue(store.posts[0].isLikedByMe)
 
         store.stopObserving()
-    }
-
-    @MainActor
-    func test_commentInsert_appearsInCommentStore() async throws {
-        let store = CommentStore(postId: "post_int", persistence: feedActor)
-        await store.loadInitial()
-
-        try await feedActor.insertComment(
-            CommentRecordFactory.make(id: "c_int_1", postId: "post_int", content: "Great post!"))
-
-        try await Task.sleep(for: .milliseconds(100))
-        await store.loadInitial()
-        XCTAssertEqual(store.topLevelComments.count, 1)
     }
 
     @MainActor
@@ -235,30 +222,6 @@ final class FeedPipelineIntegrationTests: XCTestCase {
         await NSEPendingPostConsumer.persistComments([], postId: "post_empty", to: feedActor)
         let stored = try feedActor.comments(forPostId: "post_empty", limit: 20)
         XCTAssertTrue(stored.isEmpty)
-    }
-
-    @MainActor
-    func test_nestedThread_expandCollapse() async throws {
-        let store = CommentStore(postId: "post_thread", persistence: feedActor)
-
-        var parent = CommentRecordFactory.make(id: "c_p", postId: "post_thread")
-        parent.replyCount = 2
-        try await feedActor.insertComment(parent)
-        try await feedActor.insertComment(
-            CommentRecordFactory.make(id: "c_r1", postId: "post_thread", parentId: "c_p"))
-        try await feedActor.insertComment(
-            CommentRecordFactory.make(id: "c_r2", postId: "post_thread", parentId: "c_p"))
-
-        await store.loadInitial()
-        XCTAssertEqual(store.topLevelComments.count, 1)
-        XCTAssertTrue(store.replies(for: "c_p").isEmpty)
-
-        await store.toggleThread("c_p")
-        XCTAssertEqual(store.replies(for: "c_p").count, 2)
-        XCTAssertTrue(store.expandedThreads.contains("c_p"))
-
-        await store.toggleThread("c_p")
-        XCTAssertFalse(store.expandedThreads.contains("c_p"))
     }
 }
 

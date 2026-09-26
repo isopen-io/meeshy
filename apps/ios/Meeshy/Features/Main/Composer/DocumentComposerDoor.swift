@@ -94,7 +94,7 @@ struct DocumentComposerDoor: View {
     /// d'environnement, pas un aperçu.
     let storyViewModel: StoryViewModel
     let router: Router
-    let conversationListViewModel: ConversationListViewModel
+    let conversationListViewModel: ConversationListViewModel?
     let statusViewModel: StatusViewModel
 
     @Environment(\.dismiss) private var dismiss
@@ -227,7 +227,7 @@ struct DocumentComposerDoor: View {
             preloadedAudioURLs: assets.audioURLs
         )
         .environmentObject(router)
-        .environmentObject(conversationListViewModel)
+        .conversationListObject(conversationListViewModel)
         .environmentObject(statusViewModel)
     }
 

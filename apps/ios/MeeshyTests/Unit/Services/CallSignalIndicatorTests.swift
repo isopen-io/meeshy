@@ -37,8 +37,8 @@ final class CallSignalStrengthTests: XCTestCase {
         XCTAssertEqual(CallSignalStrength.from(level: nil, connection: .connected), .good)
     }
 
-    func test_from_nilLevel_reconnecting_returnsFair() {
-        XCTAssertEqual(CallSignalStrength.from(level: nil, connection: .reconnecting), .fair)
+    func test_from_nilLevel_new_returnsFair() {
+        XCTAssertEqual(CallSignalStrength.from(level: nil, connection: .new), .fair)
     }
 
     func test_from_nilLevel_failed_returnsLost() {

@@ -8,7 +8,7 @@ import MeeshyUI
 struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     @EnvironmentObject var router: Router
     // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
     // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
@@ -608,7 +608,7 @@ struct GlobalSearchView: View {
                         .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
 
-                    Text(conversationTypeLabel(result.type))
+                    Text(result.type.displayName)
                         .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
@@ -759,7 +759,7 @@ struct GlobalSearchView: View {
     private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
         let lastMessageLabel = String(localized: "accessibility.last_message", defaultValue: "dernier message")
 
-        var parts = [result.name, conversationTypeLabel(result.type)]
+        var parts = [result.name, result.type.displayName]
         if result.memberCount > 2 {
             parts.append(MembersCountLabel.text(result.memberCount))
         }
@@ -798,7 +798,7 @@ struct GlobalSearchView: View {
         dismiss()
 
         // Find the conversation in the list or create a minimal one for navigation
-        if let conv = conversationListViewModel.conversations.first(where: { $0.id == result.conversationId }) {
+        if let conv = conversationListViewModel?.conversations.first(where: { $0.id == result.conversationId }) {
             router.push(.conversation(conv))
         }
     }
@@ -846,23 +846,9 @@ struct GlobalSearchView: View {
         case .direct: return Image(systemName: "person.fill")
         case .group: return Image(systemName: "person.2.fill")
         case .public, .global: return Image(systemName: "globe")
-        case .broadcast: return Image(systemName: "megaphone.fill")
+        case .broadcast, .channel: return Image(systemName: "megaphone.fill")
         case .community: return Image(systemName: "person.3.fill")
-        case .channel: return Image(systemName: "megaphone.fill")
         case .bot: return Image(systemName: "cpu.fill")
-        }
-    }
-
-    private func conversationTypeLabel(_ type: MeeshyConversation.ConversationType) -> String {
-        switch type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct")
-        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe")
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Public")
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Global")
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute")
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel")
-        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot")
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication")
         }
     }
 }

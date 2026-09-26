@@ -67,7 +67,7 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Les 4 sites qui déclenchaient la suppression appellent tous `requestDeleteMessage`
+    // MARK: - Les sites qui déclenchent la suppression appellent tous `requestDeleteMessage`
 
     func test_allDeleteTriggerSites_callRequestDeleteMessage_notTheOverlayStateDirectly() throws {
         let messageRow = try source("Features/Main/Views/ConversationView+MessageRow.swift")
@@ -90,14 +90,19 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
                 + "appeler `requestDeleteMessage(_:)`."
         )
 
-        let requestCallSites = (messageRow + conversationView)
-            .components(separatedBy: "requestDeleteMessage(")
-            .count - 1
-        // 1 déclaration de la fonction + au moins 4 sites d'appel connus
-        // (barre de réaction rapide, bulle/menu custom, menu natif, menu "Plus…").
-        XCTAssertGreaterThanOrEqual(
-            requestCallSites, 5,
-            "les 4 sites de déclenchement connus doivent appeler `requestDeleteMessage(_:)`."
+        // Deux sites déclenchent la suppression : la barre de réaction rapide
+        // et la feuille « Plus… » (`onDeleteMessage`). Le menu compact
+        // (`MessageActionResolver.primaryActions`) ne propose plus jamais
+        // `.delete` — ses deux branches mortes (overlay `onDelete`, `.delete`
+        // du menu contextuel) ont quitté `ConversationView` avec le cas de
+        // l'énumération (#7990).
+        XCTAssertTrue(
+            messageRow.contains("requestDeleteMessage(messageId)"),
+            "la barre de réaction rapide doit appeler `requestDeleteMessage(_:)`."
+        )
+        XCTAssertTrue(
+            conversationView.contains("onDeleteMessage: { requestDeleteMessage(msg.id) }"),
+            "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)`."
         )
     }
 }

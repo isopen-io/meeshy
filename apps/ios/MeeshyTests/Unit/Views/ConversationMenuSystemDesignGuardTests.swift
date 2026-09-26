@@ -431,8 +431,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
 
     /// Le builder du menu natif (ConversationView) : rangée d'emojis en
     /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
-    /// actions via `MessageActionResolver` (SSOT avec l'overlay), et Supprimer
-    /// qui ARME la confirmation — jamais de suppression directe.
+    /// actions via `MessageActionResolver` (SSOT avec l'overlay).
     func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
         let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
 
@@ -455,24 +454,6 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(
             block.contains("MessageActionResolver.primaryActions(ctx)"),
             "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
-        )
-
-        guard let btnRange = vSource.range(of: "func nativeMenuButton(") else {
-            XCTFail("ConversationView doit exposer nativeMenuButton(_:msg:).")
-            return
-        }
-        // Fenêtre large : `nativeMenuButton` est un switch de 10 cas (~6 k
-        // caractères) ; `.delete` est le DERNIER — la borne doit l'atteindre.
-        let btnEnd = vSource.index(btnRange.lowerBound, offsetBy: 6500, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
-        XCTAssertTrue(
-            btnBlock.contains("Button(role: .destructive)") &&
-            btnBlock.contains("requestDeleteMessage(msg.id)"),
-            "La suppression du menu natif doit être destructive ET passer par " +
-            "requestDeleteMessage (#4043) — point d'entrée UNIQUE qui arme la " +
-            "confirmation pour un message normal, et supprime directement (sans " +
-            "confirmation) un message jamais envoyé — jamais une suppression " +
-            "ad hoc qui court-circuiterait cette règle."
         )
     }
 

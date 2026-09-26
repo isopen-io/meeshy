@@ -225,7 +225,6 @@ extension ConversationView {
             headerState.showSearch = false
             headerState.searchQuery = ""
         }
-        viewModel.searchNextCursor = nil as String?
         isSearchFocused = false
         // Restore the full conversation window + clear search state.
         Task { await viewModel.endSearch() }

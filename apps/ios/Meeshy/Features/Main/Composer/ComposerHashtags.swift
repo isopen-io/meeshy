@@ -148,16 +148,6 @@ nonisolated enum ComposerAudienceCopy {
                bundle: .main)
     }
 
-    static var noMentions: String {
-        String(localized: "composer.audience.mentions.none",
-               defaultValue: "Aucune mention", bundle: .main)
-    }
-
-    static var noHashtags: String {
-        String(localized: "composer.audience.hashtags.none",
-               defaultValue: "Aucun hashtag", bundle: .main)
-    }
-
     /// Le mode d'une mention, en toutes lettres. Le porteur l'a demandé
     /// explicitement : « avec précision du mode ».
     static func mentionMode(_ display: PostReferenceDisplay) -> String {

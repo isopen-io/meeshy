@@ -19,25 +19,9 @@ import CoreVideo
 import UIKit
 import os
 
-// MARK: - Protocol
-
-/// Construit des `CMSampleBuffer` à partir de pixel buffers vidéo décodés, prêts
-/// à être enfilés sur une `AVSampleBufferDisplayLayer`. La `CMVideoFormatDescription`
-/// est cachée par (dimensions, pixelFormat) : elle n'est reconstruite qu'au
-/// changement de palier de résolution (adaptation réseau WebRTC).
-protocol VideoSampleBufferMaking: AnyObject {
-    /// - Returns: un `CMSampleBuffer` marqué `DisplayImmediately` (frame live, pas
-    ///   de timebase), ou `nil` si la création échoue (la frame est alors droppée
-    ///   — jamais un crash).
-    /// `nonisolated` : appelé depuis le thread de décodage WebRTC (le target est
-    /// en `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`, qui inférerait `@MainActor`).
-    nonisolated func makeSampleBuffer(pixelBuffer: CVPixelBuffer, timeStampNs: Int64) -> CMSampleBuffer?
-    nonisolated func reset()
-}
-
 // MARK: - Converter
 
-nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked Sendable {
+nonisolated final class VideoFrameConverter: @unchecked Sendable {
 
     private struct FormatKey: Hashable {
         let width: Int
@@ -75,15 +59,6 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
         }
         markDisplayImmediately(sample)
         return sample
-    }
-
-    func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        formatCache.removeAll(keepingCapacity: true)
-        nv12Pool = nil
-        nv12PoolWidth = 0
-        nv12PoolHeight = 0
     }
 
     /// Fond neutre + silhouette générique — remplace le flux live du PiP système
@@ -200,12 +175,6 @@ nonisolated final class VideoFrameConverter: VideoSampleBufferMaking, @unchecked
         guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer) == kCVReturnSuccess else { return nil }
         return buffer
     }
-}
-
-// MARK: - Logger
-
-private extension Logger {
-    nonisolated static let pip = Logger(subsystem: "me.meeshy.app", category: "pip")
 }
 
 // MARK: - WebRTC bridging

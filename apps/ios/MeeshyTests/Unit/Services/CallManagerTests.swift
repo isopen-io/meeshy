@@ -272,7 +272,6 @@ final class WebRTCTypesTests: XCTestCase {
 
 nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
-    var isConnected: Bool = false
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
     let videoFilterPipeline = VideoFilterPipeline()
@@ -337,7 +336,7 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
-    func disconnect() { disconnectCallCount += 1; isConnected = false }
+    func disconnect() { disconnectCallCount += 1 }
     private(set) var disconnectAfterFlushingPendingSendCallCount = 0
     func disconnectAfterFlushingPendingSend() {
         disconnectAfterFlushingPendingSendCallCount += 1
@@ -368,9 +367,7 @@ final class MockWebRTCClientTests: XCTestCase {
 
     func test_mockDisconnect_updatesState() {
         let mock = MockWebRTCClient()
-        mock.isConnected = true
         mock.disconnect()
-        XCTAssertFalse(mock.isConnected)
         XCTAssertEqual(mock.disconnectCallCount, 1)
     }
 }

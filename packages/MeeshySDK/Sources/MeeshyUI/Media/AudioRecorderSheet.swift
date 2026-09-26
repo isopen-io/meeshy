@@ -47,7 +47,6 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // ré-évaluation du panel remplaçait l'instance observée mid-recording et
     // orphelinait un AVAudioRecorder live (micro chaud, enregistrement perdu).
     @StateObject private var recorder: Recorder
-    @State private var wavePhase: CGFloat = 0
     @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
     @State private var hasCompleted = false

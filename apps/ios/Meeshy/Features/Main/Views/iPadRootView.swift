@@ -74,7 +74,6 @@ struct iPadRootView: View {
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
     @ObservedObject var reelsPresenter = ReelsPresenter.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
-    @Environment(\.colorScheme) var systemColorScheme
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
