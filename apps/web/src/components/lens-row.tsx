@@ -526,7 +526,8 @@ function LensRowImpl({
         flags={flags}
         unread={unread}
         magnified={status.magnified}
-        {...(canCall ? { call: { language: currentInterfaceLanguage() } } : {})}
+        language={currentInterfaceLanguage()}
+        canCall={canCall}
         onAction={onAction}
       />
     </li>

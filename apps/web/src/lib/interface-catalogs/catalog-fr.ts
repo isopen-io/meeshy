@@ -18,6 +18,7 @@ import frMediaHub from './catalog-fr-media-hub';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
+import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDevices from './catalog-fr-call-devices';
@@ -191,6 +192,7 @@ const fr = {
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
+  ...frRowActions,
   ...frCallShell,
   ...frCallJoin,
   ...frCallDevices,

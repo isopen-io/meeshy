@@ -5,6 +5,7 @@ import arMediaHub from './catalog-ar-media-hub';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
+import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDevices from './catalog-ar-call-devices';
@@ -201,6 +202,7 @@ const ar = {
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,
+  ...arRowActions,
   ...arCallShell,
   ...arCallJoin,
   ...arCallDevices,
