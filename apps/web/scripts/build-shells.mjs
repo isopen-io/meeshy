@@ -438,6 +438,32 @@ export function auditAndroidVersionCodeForm(gradleText) {
 }
 
 /**
+ * La release de la coque Android est signée par la clé de release (#8085),
+ * dont l'empreinte SHA-256 est publiée dans `public/.well-known/assetlinks.json`
+ * — sans elle, Android ne vérifie pas les App Links et un lien d'e-mail ouvre
+ * le navigateur au lieu de l'app. La clé et ses mots de passe vivent HORS du
+ * dépôt (fichier `keystore.properties` ignoré, ou variables d'environnement de
+ * la CI) : `build.gradle` ne fait que les LIRE, jamais les porter.
+ */
+const ANDROID_SIGNING_SECRET_LITERAL_RE = /^\s*(storePassword|keyPassword)\s*=?\s*['"]/m;
+
+export function auditAndroidReleaseSigning(gradleText) {
+  const text = stripGradleComments(gradleText);
+  const violations = [];
+  if (!/signingConfigs\s*\{[\s\S]*?\brelease\s*\{/.test(text)) {
+    violations.push('build.gradle ne déclare aucun signingConfigs.release — la release de la coque ne peut pas être signée par la clé de release (#8085).');
+  }
+  if (!/signingConfig\s*=?\s*signingConfigs\.release/.test(text)) {
+    violations.push('le buildType release ne pointe pas « signingConfig signingConfigs.release » — la release partirait non signée ou signée en debug (#8085).');
+  }
+  const literal = ANDROID_SIGNING_SECRET_LITERAL_RE.exec(text);
+  if (literal !== null) {
+    violations.push(`${literal[1]} est écrit en LITTÉRALE dans build.gradle — un secret de signature se lit hors du dépôt (keystore.properties ignoré ou variable d'environnement), jamais dans un fichier suivi (#8085).`);
+  }
+  return violations;
+}
+
+/**
  * Ce que les deux fichiers SUIVIS annoncent quand la construction ne passe PAS
  * par le site unique (Android Studio, Xcode, `./gradlew` à la main) : `1`, et
  * `1` seulement (D-45). C'est la moitié de la doctrine qu'aucune garde ne

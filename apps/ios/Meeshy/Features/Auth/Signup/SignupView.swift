@@ -115,6 +115,7 @@ struct SignupView: View {
             EmailVerificationView(
                 email: pending.email,
                 accountCreated: pending.accountCreated,
+                pendingSessionToken: pending.pendingSessionToken,
                 onVerified: { provenSessionOpener = $0 }
             )
         }

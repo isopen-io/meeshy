@@ -28,7 +28,13 @@ const itVerifyEmail = {
   'verifyEmail.resend.done': 'Codice inviato di nuovo!',
   'verifyEmail.link.checking': 'Controllo del link…',
   'verifyEmail.link.invalid': 'Questo link non è più valido. Inserisci il codice ricevuto nella stessa e-mail.',
+  'verifyEmail.proven': 'Indirizzo confermato ✓ — inserisci il codice ricevuto per accedere qui.',
+  'verifyEmail.handoff.opened': 'Il link è stato aperto nell’app Meeshy.',
+  'verifyEmail.handoff.stay': 'Continua nel browser',
   'verifyEmail.signingIn': 'Accesso in corso…',
+  'verifyEmail.arrival.title': 'Indirizzo confermato!',
+  'verifyEmail.arrival.lead': 'Stiamo preparando le tue conversazioni…',
+  'verifyEmail.arrival.status': 'Indirizzo confermato — accesso in corso…',
   'emailSent.codeOrLink': 'Inserisci il codice a 6 cifre ricevuto su {email} oppure apri il link della stessa e-mail.',
 };
 

@@ -44,6 +44,7 @@
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
                 <data android:pathPrefix="/auth/magic-link" />
+                <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
                 <data android:path="/links" />
                 <data android:path="/reels" />

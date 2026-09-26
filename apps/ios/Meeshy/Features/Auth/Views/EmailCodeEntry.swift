@@ -12,15 +12,64 @@ struct EmailCodeEntry: View {
     @ObservedObject var viewModel: EmailVerificationViewModel
     @State private var code = ""
     @FocusState private var isFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var isCodeComplete: Bool { code.count == 6 }
 
+    /// Ce qui relance la veille : le retour au premier plan, un jeton renouvelé.
+    private struct ProofWatchKey: Equatable {
+        let active: Bool
+        let token: String?
+    }
+
     var body: some View {
         VStack(spacing: 20) {
+            proofBanner
             codeField
             errorView
             verifyButton
+        }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.addressProvenElsewhere)
+        // #8083 — au premier plan seulement : SwiftUI annule cette tâche au
+        // démontage et à l'arrière-plan, la relance (lecture immédiate) au
+        // retour. Aucune lecture ne survit à l'écran.
+        .task(id: ProofWatchKey(active: scenePhase == .active, token: viewModel.pendingSessionToken)) {
+            guard scenePhase == .active else { return }
+            await viewModel.watchProof()
+        }
+    }
+
+    // MARK: - Proof Banner (#8083)
+
+    /// Le lien a été ouvert sur un autre appareil : l'adresse est confirmée,
+    /// mais CE téléphone n'entre que par le code saisi ici (décision porteur).
+    @ViewBuilder
+    private var proofBanner: some View {
+        if viewModel.addressProvenElsewhere {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title3)
+                    .foregroundStyle(MeeshyColors.success)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "emailVerification.provenElsewhere.title", defaultValue: "Adresse confirmée ✓"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.textPrimary)
+                    Text(String(localized: "emailVerification.provenElsewhere.body", defaultValue: "Saisissez le code reçu pour vous connecter sur ce téléphone."))
+                        .font(.footnote)
+                        .foregroundStyle(theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(MeeshyColors.success.opacity(0.1))
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("emailVerification.provenElsewhere")
         }
     }
 

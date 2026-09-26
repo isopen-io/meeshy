@@ -14370,6 +14370,100 @@
         }
       }
     },
+    "emailVerification.provenElsewhere.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل الرمز الذي تلقيته لتسجيل الدخول على هذا الهاتف."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib den erhaltenen Code ein, um dich auf diesem Telefon anzumelden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the code you received to sign in on this phone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce el código recibido para iniciar sesión en este teléfono."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez le code reçu pour vous connecter sur ce téléphone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci il codice ricevuto per accedere su questo telefono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite o código recebido para entrar neste telefone."
+          }
+        }
+      }
+    },
+    "emailVerification.provenElsewhere.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تأكيد العنوان ✓"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse bestätigt ✓"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Address confirmed ✓"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dirección confirmada ✓"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresse confirmée ✓"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indirizzo confermato ✓"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endereço confirmado ✓"
+          }
+        }
+      }
+    },
     "location.nearby": {
       "extractionState": "manual",
       "localizations": {

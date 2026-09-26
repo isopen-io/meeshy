@@ -56,6 +56,16 @@ describe('App Links de la coque Android', () => {
     expect(cheminDuLienEntrant('meeshy://c/c-deploiement', isAppPath)).toBe('/c/c-deploiement');
   });
 
+  test('le lien de vérification d’e-mail ouvert sur le téléphone arrive à la coque, jeton compris (#8083)', () => {
+    expect(cheminsReclames()).toContain('/auth/verify-email');
+    expect(cheminDuLienEntrant('https://meeshy.me/auth/verify-email?token=t-1&email=a%40x.io', isAppPath)).toBe(
+      '/auth/verify-email?token=t-1&email=a%40x.io',
+    );
+    expect(cheminDuLienEntrant('meeshy://auth/verify-email?token=t-1&email=a%40x.io', isAppPath)).toBe(
+      '/auth/verify-email?token=t-1&email=a%40x.io',
+    );
+  });
+
   test('le schéma court meeshy:// est déclaré, sans vérification (aucun domaine à prouver)', () => {
     expect(schemaCourt?.corps).toContain('android.intent.action.VIEW');
     expect(schemaCourt?.attributs ?? '').not.toContain('autoVerify');
