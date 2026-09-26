@@ -23,7 +23,7 @@ public final class EngagementOutboxSink: EngagementSinking {
 /// `PostServiceProviding` is not Sendable (app mock is a mutable class), so it
 /// cannot be stored in a Sendable struct captured by the @Sendable flush closure.
 public struct EngagementDispatcher: Sendable {
-    private let record: @Sendable ([EngagementSession]) async throws -> Void
+    private let record: @Sendable @concurrent ([EngagementSession]) async throws -> Void
     private let currentUserId: @Sendable () -> String?
     public init(record: @escaping @Sendable ([EngagementSession]) async throws -> Void,
                 currentUserId: @escaping @Sendable () -> String?) {

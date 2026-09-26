@@ -31,9 +31,9 @@ final class MentionContactsStore: MentionContactsProviding {
 
     private(set) var snapshot: [MentionCandidate] = []
 
-    private let loadCache: () async -> CacheResult<[FriendRequestUser]>
-    private let saveCache: ([FriendRequestUser]) async -> Void
-    private let fetchFriends: () async throws -> [FriendRequestUser]
+    private let loadCache: @MainActor () async -> CacheResult<[FriendRequestUser]>
+    private let saveCache: @MainActor ([FriendRequestUser]) async -> Void
+    private let fetchFriends: @MainActor () async throws -> [FriendRequestUser]
     private let currentUserId: () -> String?
     private let now: () -> Date
     private var freshAt: Date?
@@ -51,9 +51,9 @@ final class MentionContactsStore: MentionContactsProviding {
     private static let fetchCap = 500
 
     init(
-        loadCache: @escaping () async -> CacheResult<[FriendRequestUser]> = MentionContactsStore.loadFriendsCache,
-        saveCache: @escaping ([FriendRequestUser]) async -> Void = MentionContactsStore.saveFriendsCache,
-        fetchFriends: (() async throws -> [FriendRequestUser])? = nil,
+        loadCache: @escaping @MainActor () async -> CacheResult<[FriendRequestUser]> = MentionContactsStore.loadFriendsCache,
+        saveCache: @escaping @MainActor ([FriendRequestUser]) async -> Void = MentionContactsStore.saveFriendsCache,
+        fetchFriends: (@MainActor () async throws -> [FriendRequestUser])? = nil,
         friendService: FriendServiceProviding = FriendService.shared,
         currentUserId: @escaping () -> String? = { AuthManager.shared.currentUser?.id },
         now: @escaping () -> Date = Date.init

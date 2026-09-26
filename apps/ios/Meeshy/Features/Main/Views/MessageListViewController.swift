@@ -141,7 +141,7 @@ final class MessageListViewController: UIViewController {
     /// (see `ConversationViewModel.loadOlderMessages`). Going through the
     /// store directly would bypass the network fallback and silently
     /// stall pagination once the local GRDB window is exhausted.
-    var onLoadOlder: (() async -> Void)?
+    var onLoadOlder: (@MainActor () async -> Void)?
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?

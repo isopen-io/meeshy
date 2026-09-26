@@ -361,7 +361,7 @@ public actor StoryPublishQueue {
     ///   - throws an `Error` to signal a retryable failure (network, 5xx)
     ///   - throws `StoryPublishUnrecoverableError` to signal a permanent
     ///     failure (4xx, validation) that should NOT be retried
-    public var onPublish: ((StoryPublishQueueItem) async throws -> String)?
+    public var onPublish: (@concurrent (StoryPublishQueueItem) async throws -> String)?
 
     /// Registers the publish handler and immediately drains any items that
     /// were restored from disk at init time. Without this trigger there is

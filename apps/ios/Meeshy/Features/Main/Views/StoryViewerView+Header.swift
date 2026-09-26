@@ -92,7 +92,7 @@ struct StoryHeaderView: View {
     let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
-    let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
+    let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     /// Toggle mode plein écran (session-scoped) exposé dans le menu hamburger.
     /// Quand `true`, le chrome est caché par défaut pour la session entière
     /// jusqu'au prochain toggle. Reseté par le parent quand le viewer se

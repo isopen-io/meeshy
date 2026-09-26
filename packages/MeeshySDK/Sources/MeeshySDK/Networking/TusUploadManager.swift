@@ -142,7 +142,7 @@ public actor TusUploadManager {
     /// (`AuthManager.refreshSession(force:)`) rather than reimplementing it —
     /// injectable so tests can stub success/failure without touching the
     /// real `AuthManager.shared` singleton.
-    private let refreshAuthSession: @Sendable (_ force: Bool) async throws -> String
+    private let refreshAuthSession: @Sendable @concurrent (_ force: Bool) async throws -> String
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
         progressSubject.eraseToAnyPublisher()

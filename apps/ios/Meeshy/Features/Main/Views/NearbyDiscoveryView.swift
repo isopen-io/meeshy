@@ -495,8 +495,8 @@ struct NearbyDiscoveryView: View {
 struct NearbyEmptyStateCard: View {
     let reason: NearbyEmptyReason
     let radiusKm: Double
-    let action: () async -> Void
-    let secondaryAction: () async -> Void
+    let action: @MainActor () async -> Void
+    let secondaryAction: @MainActor () async -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
 

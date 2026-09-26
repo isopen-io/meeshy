@@ -56,7 +56,7 @@ public final class ConversationStoreSocketBridge {
     private let categoryStore: UserCategoryStore
     /// Resolves the signed-in user's id for the read-receipt identity gate.
     /// Injected for testability; production reads it from `AuthManager`.
-    private let currentUserId: @Sendable () async -> String?
+    private let currentUserId: @Sendable @concurrent () async -> String?
 
     /// La lecture BORNÉE d'UNE conversation (#4389).
     ///
@@ -74,7 +74,7 @@ public final class ConversationStoreSocketBridge {
     /// `toConversation(currentUserId:)`. Rend `nil` quand la lecture échoue —
     /// une restauration ratée laisse la liste telle quelle, elle ne fabrique
     /// pas de ligne.
-    private let fetchConversation: @Sendable (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation?
+    private let fetchConversation: @Sendable @concurrent (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation?
 
     /// La conversation actuellement VISIBLE, lue au moment où un compteur
     /// arrive (#6997).

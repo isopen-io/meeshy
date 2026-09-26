@@ -15,7 +15,7 @@ import MeeshySDK
 struct AuthActionButton: View {
     let title: String
     let isLoading: Bool
-    let action: () async -> Void
+    let action: @MainActor () async -> Void
 
     var body: some View {
         Button {
