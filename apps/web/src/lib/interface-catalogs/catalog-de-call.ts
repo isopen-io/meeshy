@@ -32,7 +32,7 @@ const deCall = {
   'call.hangup': 'Auflegen',
   'call.minimize': 'Anruf minimieren',
   'call.expand': 'Zurück zum Anruf',
-  'call.captions.on': 'Untertitel anzeigen',
+  'call.captions.on': 'Übersetzte Untertitel anzeigen',
   'call.captions.off': 'Untertitel ausblenden',
   'call.quality.poor': 'Instabile Verbindung',
   'call.ended.local': 'Anruf beendet',

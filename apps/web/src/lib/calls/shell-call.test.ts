@@ -40,7 +40,9 @@ const call = (phase: CallPhase, media: CallMedia = 'audio', callId: string | nul
   localStream: null,
   remoteStreams: {},
   captions: [],
-  captionsOn: false,
+  captionsMode: 'off',
+  captionPeers: [],
+  transcription: 'idle',
   quality: null,
 });
 

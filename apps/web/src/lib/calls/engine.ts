@@ -14,7 +14,6 @@ import {
   decodeParticipantLeft,
   decodeSessionMembers,
   decodeSignal,
-  decodeTranslatedSegment,
   mapServerEndReason,
   type DecodedInitiated,
   type DecodedPerson,
@@ -26,7 +25,6 @@ import {
   isCallLive,
   meshPhase,
   patchMember,
-  withCaption,
   withMember,
   withoutMember,
   type ActiveCall,
@@ -35,6 +33,7 @@ import {
   type CallStoreApi,
   type WaitingCall,
 } from './call-store';
+import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { feedbackPayload, feedbackPromptFor, type CallFeedbackIssue, type CallFeedbackRating } from './call-feedback';
 import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
@@ -106,6 +105,8 @@ export type CallEngineDeps = {
   readonly deviceModel: () => string;
   /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
   readonly random?: () => number;
+  /** Les sous-titres d'un appel (#8048) — un chunk à part, chargé au premier besoin. */
+  readonly createCaptions: (ctx: CaptionsContext) => CaptionsPort;
 };
 
 export type CallEngine = {
@@ -152,6 +153,7 @@ type Session = {
   unwatchNetwork: (() => void) | null;
   /** L'appel a souffert (qualité mauvaise ou reprise) : sa note est toujours demandée (#8072). */
   troubled: boolean;
+  captions: CaptionsPort | null;
 };
 
 const emptySession = (): Session => ({
@@ -169,6 +171,7 @@ const emptySession = (): Session => ({
   alertTimers: new Map(),
   unwatchNetwork: null,
   troubled: false,
+  captions: null,
 });
 
 function baseCall(request: StartCallRequest, direction: ActiveCall['direction'], phase: ActiveCall['phase']): ActiveCall {
@@ -193,7 +196,9 @@ function baseCall(request: StartCallRequest, direction: ActiveCall['direction'],
     localStream: null,
     remoteStreams: {},
     captions: [],
-    captionsOn: false,
+    captionsMode: 'off',
+    captionPeers: [],
+    transcription: 'idle',
     quality: null,
   };
 }
@@ -240,6 +245,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.unwatchNetwork = null;
     for (const timer of session.alertTimers.values()) deps.cancel(timer);
     session.alertTimers.clear();
+    session.captions?.stop(false);
     incomingTimer = clear(incomingTimer);
   };
 
@@ -383,6 +389,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       onState: (state) => {
         if (token === generation) onLinkState(userId, state);
       },
+      onChannel: (channel) => (token === generation ? captions()?.attach(userId, channel) : undefined),
     });
     session.links.set(userId, link);
     return link;
@@ -424,6 +431,16 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (deps.now() - session.lastQualityReport < QUALITY_REPORT_MS) return;
     session.lastQualityReport = deps.now();
     emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, qualityReport(callId, total, deps.now()));
+  };
+
+  /** Le contrôleur des sous-titres de CET appel (#8048), construit au premier besoin : un segment, le bouton, un canal de données. */
+  const captions = (): CaptionsPort | null => {
+    const callId = read()?.callId ?? null;
+    if (callId === null) return null;
+    const shown = (): void => void (session.telemetry = markCaptions(session.telemetry));
+    const bye = (): void => (read()?.callId === callId ? finish('remote') : undefined);
+    session.captions ??= deps.createCaptions({ callId, read, update, emit, viewerId: deps.viewerId, now: deps.now, repeat: deps.repeat, stopRepeat: deps.stopRepeat, shown, bye });
+    return session.captions;
   };
 
   const userOf = (userId: string | null, participantId: string | null): string | null => userId ?? (participantId === null ? null : (session.participantIds.get(participantId) ?? null));
@@ -734,18 +751,10 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         for (const link of session.links.values()) link.setIceServers(refresh.iceServers);
         return;
       }
-      case SERVER_EVENTS.CALL_TRANSLATED_SEGMENT: {
-        const segment = decodeTranslatedSegment(payload);
-        const call = read();
-        if (segment === null || call === null || call.callId !== segment.callId) return;
-        const speakerName = segment.speakerName ?? call.members[segment.speakerId]?.name ?? '';
-        if (call.captionsOn) session.telemetry = markCaptions(session.telemetry);
-        update((current) => ({
-          ...current,
-          captions: withCaption(current.captions, { id: segment.id, speakerId: segment.speakerId, speakerName, text: segment.text, original: segment.original, isFinal: segment.isFinal, at: deps.now() }),
-        }));
+      case SERVER_EVENTS.CALL_TRANSLATED_SEGMENT:
+      case SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE:
+        captions()?.receive(event, payload);
         return;
-      }
       case SERVER_EVENTS.CALL_QUALITY_ALERT:
       case SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT:
         onPeerAlert(event, payload);
@@ -944,6 +953,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         resetToIdle();
         return;
       }
+      session.captions?.stop(true);
       generation += 1;
       hangupWith('local');
     },
@@ -953,11 +963,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     toggleScreen,
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
-    toggleCaptions: () => {
-      update((call) => ({ ...call, captionsOn: !call.captionsOn }));
-      const call = read();
-      if (call?.captionsOn === true && call.captions.length > 0) session.telemetry = markCaptions(session.telemetry);
-    },
+    toggleCaptions: () => captions()?.toggle(),
     answerWaiting,
     declineWaiting,
     retry: async () => {

@@ -1,6 +1,7 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+import type { CallCaption, CaptionsMode, TranscriptionState } from './call-captions';
 import type { CallFeedbackPrompt } from './call-feedback';
 import type { SurvivalStage } from './call-survival';
 
@@ -43,16 +44,6 @@ export type CallMember = {
   readonly link: 'waiting' | 'connecting' | 'connected' | 'reconnecting';
 };
 
-export type CallCaption = {
-  readonly id: string;
-  readonly speakerId: string;
-  readonly speakerName: string;
-  readonly text: string;
-  readonly original: string;
-  readonly isFinal: boolean;
-  readonly at: number;
-};
-
 /**
  * Ce que la boucle de qualité (`call-quality-loop.ts`, #8047) a lu au dernier
  * relevé : le niveau du PIRE lien, son détail, et le stade de survie de MA vidéo.
@@ -93,8 +84,12 @@ export type ActiveCall = {
   readonly display: CallDisplay;
   readonly localStream: MediaStream | null;
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
+  /** Le journal des sous-titres de l'appel (#8048), les deux sens, borné. */
   readonly captions: readonly CallCaption[];
-  readonly captionsOn: boolean;
+  readonly captionsMode: CaptionsMode;
+  /** Les pairs qui ont ouvert LEUR panneau (`call:transcription-active`) : mon micro est transcrit pour eux. */
+  readonly captionPeers: readonly string[];
+  readonly transcription: TranscriptionState;
   readonly quality: CallQuality | null;
 };
 
@@ -169,11 +164,4 @@ export function meshPhase(members: Readonly<Record<string, CallMember>>): 'conne
   if (links.includes('reconnecting')) return 'reconnecting';
   if (links.includes('connecting')) return 'connecting';
   return null;
-}
-
-export const CAPTIONS_KEPT = 3;
-
-export function withCaption(captions: readonly CallCaption[], next: CallCaption): readonly CallCaption[] {
-  const others = captions.filter((caption) => caption.id !== next.id);
-  return [...others, next].slice(-CAPTIONS_KEPT);
 }

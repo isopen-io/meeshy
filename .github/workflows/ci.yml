@@ -812,6 +812,21 @@ jobs:
           cd apps/web
           node scripts/check-calls-quality.mjs
 
+      # #8048 — les sous-titres traduits d'un appel marchent dans les deux sens :
+      # le pair de fixtures ouvre ses sous-titres et parle (call:translated-
+      # segment) ; modes traduit / original / masqué, journal, aria-live. Une
+      # SpeechRecognition simulée fait parler le lecteur : le FINAL seul part en
+      # call:transcription-segment (forme du schéma de la passerelle), brouillon
+      # et final sur le canal de données « transcription », bye au raccroché,
+      # transcriptionUsed dans call:analytics. Puis la bulle d'appel du fil
+      # déplie la transcription gravée, servie par le Prisme du lecteur. Sans
+      # reconnaissance vocale : on reçoit, rien ne part.
+      - name: Gate sous-titres d'appel (deux sens, journal, transcription du fil)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-captions.mjs
+
       # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
       # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
       # retirent la ligne et font baisser le compte de l'onglet ET du barreau au

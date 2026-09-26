@@ -156,27 +156,6 @@ export function decodeIceRefresh(payload: unknown): { readonly callId: string; r
   return callId === null || iceServers === null ? null : { callId, iceServers };
 }
 
-export type DecodedSegment = { readonly callId: string; readonly id: string; readonly speakerId: string; readonly speakerName: string | null; readonly text: string; readonly original: string; readonly isFinal: boolean };
-
-export function decodeTranslatedSegment(payload: unknown): DecodedSegment | null {
-  if (!isRecord(payload) || !isRecord(payload.segment)) return null;
-  const callId = str(payload.callId);
-  const segment = payload.segment;
-  const speakerId = str(segment.speakerId);
-  const original = str(segment.text);
-  if (callId === null || speakerId === null || original === null) return null;
-  const startMs = num(segment.startMs) ?? 0;
-  return {
-    callId,
-    id: str(segment.id) ?? `${speakerId}:${startMs}`,
-    speakerId,
-    speakerName: str(segment.speakerDisplayName),
-    text: str(segment.translatedText) ?? original,
-    original,
-    isFinal: bool(segment.isFinal) ?? true,
-  };
-}
-
 /** La réponse d'un accusé `{ success, data?, error? }`. */
 export function decodeAck(value: unknown): { readonly ok: true; readonly data: Json } | { readonly ok: false; readonly code: string; readonly endReason: string | null } {
   if (!isRecord(value)) return { ok: false, code: 'NO_ACK', endReason: null };

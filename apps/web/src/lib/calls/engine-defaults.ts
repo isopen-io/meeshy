@@ -6,6 +6,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { fetchActiveCallId } from './active-call';
 import { deviceLabel } from './call-analytics';
+import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { preferredInputs } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
@@ -48,6 +49,24 @@ function lazyQualityLoop(deps: QualityLoopDeps): QualityLoop {
   return { tick: () => loop.then((ready) => ready.tick()) };
 }
 
+/**
+ * Les sous-titres sont un chunk à part (`budgets.json` › `call_captions`, #8048),
+ * chargé au premier besoin d'un appel. Les gestes arrivés avant lui attendent,
+ * dans l'ordre ; ensuite ils passent tout de suite — le « bye » d'un raccroché
+ * doit partir AVANT que les liens se ferment.
+ */
+function lazyCaptions(ctx: CaptionsContext): CaptionsPort {
+  let ready: CaptionsPort | null = null;
+  const loading = import('./call-captions-runtime').then((module) => (ready = module.createBrowserCaptions(ctx)));
+  const run = (fn: (port: CaptionsPort) => void): void => (ready === null ? void loading.then(fn) : fn(ready));
+  return {
+    receive: (event, payload) => run((port) => port.receive(event, payload)),
+    toggle: () => run((port) => port.toggle()),
+    attach: (userId, channel) => run((port) => port.attach(userId, channel)),
+    stop: (bye) => run((port) => port.stop(bye)),
+  };
+}
+
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   return {
     transport: currentCallTransport,
@@ -69,5 +88,6 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     watchNetwork: watchBrowserNetwork,
     platform: () => (__SHELL__ ? 'android-shell' : 'web'),
     deviceModel: () => (typeof navigator === 'undefined' ? 'web' : deviceLabel(navigator.userAgent)),
+    createCaptions: lazyCaptions,
   };
 }

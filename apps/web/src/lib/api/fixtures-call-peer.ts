@@ -46,6 +46,16 @@ export type FixtureCallPeerProbe = {
   readonly capture: (isCapturing: boolean) => void;
   readonly share: () => void;
   readonly stopShare: () => void;
+  /** L'appel que le pair a rejoint — celui que chaque charge du client doit nommer (#8048). */
+  readonly callId: () => string | null;
+  /** Le pair PARLE : la passerelle relaie son segment final, traduit dans la langue du lecteur (#8048). */
+  readonly speak: (line: { readonly id: string; readonly text: string; readonly translatedText?: string; readonly isFinal?: boolean }) => void;
+  /** Le pair ouvre ou ferme ses sous-titres (`call:transcription-active` diffusé, #8048). */
+  readonly transcribing: (active: boolean) => void;
+  /** `call:transcription-segment` et `call:transcription-active` émis par le client, dans l'ordre (#8048). */
+  readonly transcripts: ReadonlyArray<{ readonly event: string; readonly payload: unknown }>;
+  /** Chaque message BRUT reçu sur le canal de données `transcription` ouvert par le client (#8048). */
+  readonly channelMessages: readonly unknown[];
 };
 
 export type FixtureCallPeer = {
@@ -64,6 +74,8 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
   let screen: MediaStreamTrack | null = null;
   const toggles: Array<{ readonly event: string; readonly enabled: boolean }> = [];
   const reports: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const transcripts: Array<{ readonly event: string; readonly payload: unknown }> = [];
+  const channelMessages: unknown[] = [];
 
   const signal = (payload: SignalOut): void => {
     if (callId === null || viewerId === null) return;
@@ -77,6 +89,10 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       const candidate = event.candidate;
       if (candidate === null || candidate.candidate === '') return;
       signal({ type: 'ice-candidate', candidate: candidate.candidate, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex });
+    };
+    created.ondatachannel = (event) => {
+      if (event.channel.label !== 'transcription') return;
+      event.channel.onmessage = (message) => void channelMessages.push(message.data);
     };
     created.onnegotiationneeded = () => {
       if (created.signalingState !== 'stable' || created.remoteDescription === null) return;
@@ -120,6 +136,8 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
 
   const TOGGLES: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, CLIENT_EVENTS.CALL_TOGGLE_VIDEO, CLIENT_EVENTS.CALL_TOGGLE_AUDIO]);
   const REPORTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_QUALITY_REPORT, CLIENT_EVENTS.CALL_ANALYTICS]);
+  const TRANSCRIPTS: ReadonlySet<string> = new Set([CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT, CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]);
+  let spoken = 0;
 
   const inbound = async (kind: 'audio' | 'video', field: 'framesDecoded' | 'packetsReceived'): Promise<number> => {
     const report = await pc?.getStats();
@@ -151,6 +169,7 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       }
       if (TOGGLES.has(event) && isRecord(payload) && typeof payload.enabled === 'boolean') toggles.push({ event, enabled: payload.enabled });
       if (REPORTS.has(event)) reports.push({ event, payload });
+      if (TRANSCRIPTS.has(event)) transcripts.push({ event, payload });
     },
     probe: {
       toggles,
@@ -178,6 +197,34 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
         screen = null;
         void transceiver?.sender.replaceTrack(null).then(() => announce(false));
       },
+      callId: () => callId,
+      speak: (line) => {
+        if (callId === null) return;
+        const startMs = spoken * 3_000;
+        spoken += 1;
+        deps.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, {
+          callId,
+          segment: {
+            id: line.id,
+            text: line.text,
+            ...(line.translatedText === undefined ? {} : { translatedText: line.translatedText }),
+            speakerId: CALL_PEER_USER_ID,
+            speakerDisplayName: CALL_PEER_NAME,
+            startMs,
+            endMs: startMs + 2_000,
+            isFinal: line.isFinal ?? true,
+            sourceLanguage: 'en',
+            targetLanguage: 'fr',
+            confidence: 0.92,
+            capturedAtMs: Date.now(),
+          },
+        });
+      },
+      transcribing: (active) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId, speakerId: CALL_PEER_USER_ID, active });
+      },
+      transcripts,
+      channelMessages,
     },
   };
 }

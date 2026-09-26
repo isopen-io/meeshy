@@ -32,7 +32,7 @@ const itCall = {
   'call.hangup': 'Riaggancia',
   'call.minimize': 'Riduci chiamata',
   'call.expand': 'Torna alla chiamata',
-  'call.captions.on': 'Mostra sottotitoli',
+  'call.captions.on': 'Mostra sottotitoli tradotti',
   'call.captions.off': 'Nascondi sottotitoli',
   'call.quality.poor': 'Connessione instabile',
   'call.ended.local': 'Chiamata terminata',
