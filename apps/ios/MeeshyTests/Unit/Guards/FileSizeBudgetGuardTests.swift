@@ -473,7 +473,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'un lien de partage : `ShareLinkEntryResolver.Resolution.landing(...)`
     // le rend, et le `switch` de cinq cas devient une garde (−10) — le plafond
     // reprend les 10 lignes dans le même lot.
-    private static let legacyLineCeiling = 52_062
+    //
+    // **52 005 depuis #8009.** Le toucher d'un message protégé devait passer
+    // par `BubbleStandardLayout` et l'aperçu d'appui long par
+    // `MessageOverlayMenu`, tous deux hors budget : `BlurRevealModifier` a
+    // quitté le premier (−16), la grille d'images de l'aperçu a quitté le
+    // second pour `MessageOverlayPreviewMedia.swift` (−39). Le plafond reprend
+    // les 55 lignes, et les 2 que `ConversationView` rend (garde de l'appui
+    // long), dans le même lot.
+    private static let legacyLineCeiling = 52_005
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

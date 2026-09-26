@@ -318,6 +318,7 @@ struct ThemedMessageBubble: View {
                     isDark: isDark,
                     protection: content.protection,
                     timeString: content.meta.timeString,
+                    hint: content.protectedTap().accessibilityHint,
                     onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
                         HapticFeedback.medium()
                         onConsumeViewOnce?(messageId) { _ in }
@@ -628,6 +629,10 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        // #8009 — ouvrir une vue unique ne bouge ni `updatedAt` ni un compteur :
+        // sans ces deux champs, la puce touchée ne se changeait pas en texte.
+        lhs.message.isViewOnceRevealed == rhs.message.isViewOnceRevealed &&
+        lhs.message.viewOnceOpenedAt == rhs.message.viewOnceOpenedAt &&
         // Effects (flags can flip without updatedAt for some appearance changes)
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
         // Reaction identity, not just count (emoji swap with same count)

@@ -118,6 +118,11 @@ struct MessageMenuContext: Equatable {
     /// à ce qui a un sens — Supprimer et Infos. Verdict posé au point d'usage
     /// par `MeeshyMessage.holdsViewOnce`.
     var isViewOnce: Bool = false
+    /// **Le message est flouté** (#8009) — verdict `Message.holdsBlur`. Le flou
+    /// retient le contenu dans le fil ; le menu ne doit pas le rendre par une
+    /// autre porte : ni copie, ni traduction, ni transfert, ni partage, ni
+    /// enregistrement, ni historique d'édition.
+    var isBlurred: Bool = false
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -263,15 +268,16 @@ enum MessageActionResolver {
         // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
         // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
         out.append(.select)
-        if ctx.hasText { out.append(.translate) }
-        if ctx.hasText { out.append(.copy) }
-        if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
+        let showsContent = !ctx.isBlurred
+        if ctx.hasText && showsContent { out.append(.translate) }
+        if ctx.hasText && showsContent { out.append(.copy) }
+        if ctx.saveableAttachmentCount == 1 && showsContent { out.append(.saveMedia) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
         // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
         // geste partagent. Le résolveur n'en tient qu'un fait.
-        if ctx.canComposeMedia { out.append(.compose) }
+        if ctx.canComposeMedia && showsContent { out.append(.compose) }
         // Le repli « jamais de menu réduit à Plus… seul » (média-seul non
         // enregistrable, localisation…) est devenu SANS OBJET : `.select`,
         // toujours ajouté ci-dessus, garantit déjà `out` non vide.
@@ -289,12 +295,13 @@ enum MessageActionResolver {
         // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
         // éditer (si éditable), copier (si texte), partager, épingler/favori,
         // supprimer.
+        let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = [.reply]
-        if ctx.isForwardable { actions.append(.forward) }
+        if ctx.isForwardable && showsContent { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
-        if ctx.hasText { actions.append(.copy) }
-        actions.append(.share)
+        if ctx.hasText && showsContent { actions.append(.copy) }
+        if showsContent { actions.append(.share) }
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
         // **La décoration, juste après le favori du MESSAGE** — c'est le
@@ -311,12 +318,12 @@ enum MessageActionResolver {
         // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
         // vues, sentiment (texte), historique (édité).
         var info: [MoreItem] = []
-        if ctx.hasText || ctx.hasTimebasedMedia { info.append(.language) }
-        if ctx.hasTimebasedMedia { info.append(.transcription) }
+        if (ctx.hasText || ctx.hasTimebasedMedia) && showsContent { info.append(.language) }
+        if ctx.hasTimebasedMedia && showsContent { info.append(.transcription) }
         info.append(.reactions)
         if ctx.showReadReceipts { info.append(.views) }
-        if ctx.hasText { info.append(.sentiment) }
-        if ctx.isEdited && ctx.hasEditRevisions { info.append(.history) }
+        if ctx.hasText && showsContent { info.append(.sentiment) }
+        if ctx.isEdited && ctx.hasEditRevisions && showsContent { info.append(.history) }
         sections.append(.info(info))
 
         sections.append(.moderation([.report]))

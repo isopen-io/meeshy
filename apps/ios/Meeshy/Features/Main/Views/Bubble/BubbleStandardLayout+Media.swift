@@ -28,6 +28,21 @@ import MeeshyUI
 // MARK: - Visual Media Grid (extension on BubbleStandardLayout)
 extension BubbleStandardLayout {
 
+    /// **Le média caché d'un message flouté s'ouvre en plein écran** (#8009),
+    /// depuis le voile de la bulle, en appelant l'hôte DIRECTEMENT.
+    ///
+    /// Le détour par la liaison `fullscreenAttachment` (posée, puis relayée par
+    /// `adaptiveOnChange`) ne présentait rien quand l'écriture partait du voile :
+    /// mesuré au simulateur, le rappel de l'hôte n'était jamais atteint. La
+    /// liaison ne reste que pour l'hôte sans galerie (`onMediaTap == nil`).
+    func openProtectedMedia(_ media: MessageAttachment) {
+        guard let onMediaTap else {
+            fullscreenAttachment = media
+            return
+        }
+        onMediaTap(media)
+    }
+
     /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
     /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
     /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois
@@ -557,7 +572,7 @@ fileprivate struct BubbleGridCell: View {
     // MARK: - Actions
 
     private func handleTap() {
-        guard !attachmentIsProtected || isRevealed else { return }
+        guard !attachmentIsProtected || isRevealed else { return handleReveal() }
         openFullscreen()
         HapticFeedback.light()
     }
@@ -579,31 +594,18 @@ fileprivate struct BubbleGridCell: View {
         }
     }
 
+    /// **Un toucher sur une pièce cachée ouvre DIRECTEMENT son plein écran**
+    /// (#8009), sans dévoilement dans la bulle — ni appui long, ni vignette
+    /// dévoilée cinq secondes avant un second toucher.
+    ///
+    /// On OUVRE, on ne consomme pas (#7499) : la consommation d'une vue unique
+    /// part à la FERMETURE du plein écran, depuis l'hôte qui possède la galerie
+    /// (`onMediaTap` l'arme). Le plein écran s'ouvre sur CETTE pièce, même dans
+    /// une grille qui déborde : le carrousel en ligne dévoilerait les autres.
     private func handleReveal() {
+        guard case .openFullscreen(let media) = ProtectedContentTap.resolve(cell: attachment) else { return }
         HapticFeedback.medium()
-        if attachment.isViewOnce {
-            // #7499 — **on OUVRE, on ne consomme pas.**
-            //
-            // Ce site appelait `onConsumeViewOnce` AVANT d'afficher quoi que ce
-            // soit : le contenu était détruit sans avoir été montré, puis
-            // révélé cinq secondes en vignette. « lorsqu'on tap pour afficher,
-            // ça supprime directement au lieu d'afficher le contenu en plein
-            // écran » — le geste n'avait aucun sens, on touche pour VOIR.
-            //
-            // La consommation part à la FERMETURE du plein écran
-            // (`ViewOnceConsumption.moment(hasOpenableMedia: true)`), depuis
-            // l'hôte qui possède la galerie — le seul qui sache quand on en
-            // sort. La révélation locale n'est donc plus conditionnée au
-            // serveur : elle ne fait qu'ouvrir.
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                _ = revealedAttachmentIds.insert(attachment.id)
-            }
-            openFullscreen()
-        } else {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                _ = revealedAttachmentIds.insert(attachment.id)
-            }
-        }
+        fullscreenAttachment = media
     }
 }
 
@@ -751,7 +753,7 @@ private struct AttachmentBlurOverlayView: View {
                     .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white)
 
-                Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
+                Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
                     .font(MeeshyFont.relative(9))
                     .foregroundStyle(.white.opacity(0.7))
             }
@@ -759,10 +761,9 @@ private struct AttachmentBlurOverlayView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
-        .onLongPressGesture(minimumDuration: 0.3) {
-            onReveal()
-        }
+        .accessibilityHint(ProtectedContentTap.openFullscreenHint)
+        .accessibilityAddTraits(.isButton)
+        .onTapGesture { onReveal() }
     }
 }
 
