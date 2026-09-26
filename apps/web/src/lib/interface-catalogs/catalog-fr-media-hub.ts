@@ -33,6 +33,6 @@ const frMediaHub = {
   'media_hub.open_file': 'Ouvrir {name}',
   'media_hub.contact.fallback': 'Carte de contact',
   'media_hub.all_loaded': 'Tout est chargé',
-};
+} as const;
 
 export default frMediaHub;
