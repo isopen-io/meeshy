@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
+import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
 import deStoriesMine from './catalog-de-stories-mine';
@@ -188,6 +189,7 @@ const de = {
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
   ...deVerifyEmail,
+  ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
   'report.body': 'Wählen Sie den Grund für Ihre Meldung. Unser Moderationsteam erhält sie.',

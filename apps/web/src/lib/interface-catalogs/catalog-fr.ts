@@ -14,6 +14,7 @@ import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
 import frVerifyEmail from './catalog-fr-verify-email';
+import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
 
@@ -178,6 +179,7 @@ const fr = {
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
   ...frVerifyEmail,
+  ...frSignup,
   'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
