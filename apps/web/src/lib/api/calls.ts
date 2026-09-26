@@ -21,7 +21,7 @@ import type { ApiResult, HttpTransport } from './http';
  * téléphone du pair et sa présence ; le cache de requêtes est persisté
  * (`query-client.ts`) et ni l'un ni l'autre n'y entre — la présence d'autrui
  * n'entre jamais dans un cache persisté (D-60), et le numéro du pair n'est
- * servi par AUCUNE surface web (D-127, #6383 : la fiche d'un appel ne le montre
+ * servi par AUCUNE surface web (D-129, #6383 : la fiche d'un appel ne le montre
  * pas). Les OCTETS échangés, eux, entrent depuis #6383 : ils décrivent l'appel
  * du lecteur, pas le pair, et la fiche de détail les montre (« Données »).
  */

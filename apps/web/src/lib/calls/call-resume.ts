@@ -22,9 +22,11 @@ export function resumableCall(params: {
   readonly local: Pick<ActiveCall, 'phase'> | null;
   readonly viewerId: string;
   readonly identityOf: (conversationId: string) => CallIdentity | undefined;
+  readonly openThread?: string | null;
 }): JoinCallRequest | null {
   const { active, local } = params;
   if (active === null || !active.live) return null;
+  if (active.conversationId === params.openThread) return null;
   if (local !== null && local.phase.kind !== 'ended') return null;
   const detail = callDetailFromSession(active, { viewerId: params.viewerId, unknown: '', identity: params.identityOf(active.conversationId) });
   return { conversationId: active.conversationId, callId: active.callId, media: active.media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup };

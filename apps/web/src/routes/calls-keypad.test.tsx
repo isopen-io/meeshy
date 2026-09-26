@@ -114,7 +114,7 @@ describe('la fiche d’un appel', () => {
     expect(html).not.toContain('data-call-detail-row="date"');
   });
 
-  test('le numéro du pair n’y paraît jamais (D-127)', () => {
+  test('le numéro du pair n’y paraît jamais (D-129)', () => {
     const html = renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />);
     expect(html).not.toMatch(/tel:|\+\d{6,}|Téléphone/);
   });

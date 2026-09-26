@@ -55,6 +55,11 @@ describe('la bannière « Reprendre l’appel »', () => {
     }
   });
 
+  test('dans le fil de la conversation de l’appel, la pastille « Rejoindre » de l’en-tête parle, pas la bannière', () => {
+    expect(resumableCall({ active: session(), local: null, viewerId: 'u-me', identityOf: noIdentity, openThread: 'c-1' })).toBeNull();
+    expect(resumableCall({ active: session(), local: null, viewerId: 'u-me', identityOf: noIdentity, openThread: 'c-2' })).not.toBeNull();
+  });
+
   test('aucun appel côté passerelle : rien', () => {
     expect(resumableCall({ active: null, local: null, viewerId: 'u-me', identityOf: noIdentity })).toBeNull();
   });

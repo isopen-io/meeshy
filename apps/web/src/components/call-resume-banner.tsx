@@ -14,6 +14,7 @@ import { resumableCall } from '@/lib/calls/call-resume';
 import { callStore } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useOptionalRoute } from '@/lib/router';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
@@ -30,6 +31,10 @@ import { CALLS_GLYPHS } from './glyphs-calls';
  * focus et toutes les 30 s. La charge persistée est une PROJECTION
  * (`call-sessions.ts`) : ni présence ni numéro.
  *
+ * Dans le fil de la conversation de l'appel, elle se TAIT : la pastille
+ * « Rejoindre » de l'en-tête (`thread-call-button.tsx`) dit la même chose à
+ * l'endroit du geste, et la bannière la recouvrait.
+ *
  * Un appel qui se termine EN LOCAL invalide la lecture : sans cela, la
  * bannière rejouerait l'appel qu'on vient de raccrocher jusqu'au prochain
  * sondage.
@@ -41,6 +46,8 @@ export default function CallResumeBanner() {
   const session = useStore(sessionStore, (state) => state.session);
   const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const local = useStore(callStore, (state) => state.call);
+  const route = useOptionalRoute();
+  const openThread = route?.key === 'thread' ? (route.params.conversation ?? null) : null;
   const localPhase = local?.phase.kind ?? null;
   const previous = useRef(localPhase);
 
@@ -65,7 +72,7 @@ export default function CallResumeBanner() {
 
   if (!signedIn) return null;
   const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
-  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf });
+  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread });
   if (request === null) return null;
 
   return (

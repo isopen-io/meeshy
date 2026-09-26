@@ -112,7 +112,7 @@ export function ThreadCallButton({
         <span
           aria-hidden="true"
           className="flex items-center gap-1 whitespace-nowrap rounded-chip px-2.5 text-check font-semibold"
-          style={{ height: 30, color: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 14%, transparent)' }}
+          style={{ height: 30, color: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 8%, transparent)' }}
         >
           <Glyph name="phone" size={12} />
           {translate(language, 'callJoin.action')}

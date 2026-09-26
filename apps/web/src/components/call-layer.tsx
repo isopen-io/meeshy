@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callStore } from '@/lib/calls/call-store';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LA COUCHE D'APPEL** (#6382) — montée par la coquille sur TOUTES les
@@ -13,8 +15,12 @@ import { callStore } from '@/lib/calls/call-store';
 const loadOverlay = () => import('./call-overlay').then((module) => ({ default: module.CallOverlay }));
 const CallOverlay = lazy(loadOverlay);
 /* « Reprendre l'appel » (#3586) — son propre chunk, chargé APRÈS la première
-   peinture : la coquille n'en paie que l'`import()`. */
-const CallResumeBanner = lazy(() => import('./call-resume-banner'));
+   peinture : la coquille n'en paie que l'`import()`. Monté sur toutes les
+   routes, il peut précéder l'écran qui charge le catalogue : il l'attend
+   avec son chunk, comme les menus flottants. */
+const CallResumeBanner = lazy(() =>
+  Promise.all([import('./call-resume-banner'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+);
 
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);

@@ -18,7 +18,7 @@ import { Link } from '@/routes/route-table';
  * **LES PIÈCES DE LA FICHE D'UN APPEL** (#6383) — miroir de `CallDetailSheet.swift` :
  * l'avatar et le nom, la ligne d'état (direction · heure relative), deux
  * boutons de rappel (vocal, vidéo), puis Type, Date, Durée et Données. Le
- * numéro du pair n'y est pas (D-127). Chaque pièce est PURE : `routes/
+ * numéro du pair n'y est pas (D-129). Chaque pièce est PURE : `routes/
  * call-detail.test.tsx` les rend sans DOM ni TanStack Query.
  *
  * iOS présente une FEUILLE au-dessus du journal ; le web sert une ADRESSE

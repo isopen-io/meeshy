@@ -11,7 +11,7 @@ import { callAvatarOf, callDisplayNameOf, type CallHistoryData } from './view';
  * **LA FICHE D'UN APPEL** (#6383) — miroir de `CallDetailSheet.swift` : le nom
  * et l'avatar, la direction, puis Type, Date (absolue), Durée et Données.
  *
- * **Le numéro du pair n'y est pas, et n'y entrera pas sans décision** (D-127).
+ * **Le numéro du pair n'y est pas, et n'y entrera pas sans décision** (D-129).
  * iOS l'affiche depuis `peer.phoneNumber` ; le web ne le décode même pas
  * (`calls.ts`) : un numéro de téléphone est une donnée d'identité que la
  * passerelle sert sans loi de visibilité propre (aucune règle « qui a le droit

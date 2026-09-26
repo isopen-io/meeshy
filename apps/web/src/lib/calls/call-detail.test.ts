@@ -8,7 +8,7 @@ import { callAbsoluteDate, callDataLabel, callDetailFromRecord, callDetailFromSe
 /**
  * LA FICHE D'UN APPEL (#6383) — miroir de `CallDetailSheet.swift` : nom,
  * direction, type, date ABSOLUE, durée, données. Le numéro du pair n'y est
- * PAS (décision prudente, D-127) : aucun type de ce module ne le porte.
+ * PAS (décision prudente, D-129) : aucun type de ce module ne le porte.
  */
 
 const record = (overrides: Partial<CallRecord> = {}): CallRecord => ({

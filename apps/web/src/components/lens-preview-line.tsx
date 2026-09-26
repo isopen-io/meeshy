@@ -197,7 +197,7 @@ export function LensJoinCallButton({
         aria-hidden="true"
         data-lens-join-pill
         className="flex items-center gap-1 whitespace-nowrap rounded-chip px-2.5 text-check font-semibold"
-        style={{ height: 28, color: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 14%, transparent)' }}
+        style={{ height: 28, color: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 8%, transparent)' }}
       >
         <PreviewGlyph icon={request.media === 'video' ? 'call-video' : 'call-audio'} />
         {text}
