@@ -49,6 +49,8 @@ export type MagicLinkPanelDeps = {
   readonly now: () => number;
   /** La saisie du code reçu (#8034) — `auth.verifyEmail` si absent. */
   readonly verifyEmail?: typeof auth.verifyEmail;
+  /** L'état de l'adresse via le jeton d'attente (#8083) — `auth.verificationStatus` si absent. */
+  readonly verificationStatus?: typeof auth.verificationStatus;
 };
 
 export const defaultMagicLinkDeps: MagicLinkPanelDeps = {
@@ -111,6 +113,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
   const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
   const [focused, setFocused] = useState(false);
   const [codeVerified, setCodeVerified] = useState(false);
+  const [pendingSessionToken, setPendingSessionToken] = useState<string | null>(null);
   const howItWorks = useInfoHint();
 
   const remaining = useCountdown(deadline, deps.clock, deps.now);
@@ -125,6 +128,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
     setSubmitting(false);
     const resolved = resolveMagicLinkRequest(result);
     if (resolved.kind === 'sent') {
+      setPendingSessionToken(result.ok ? (result.data?.pendingSessionToken ?? null) : null);
       setDeadline({ startedAt: deps.now(), expiresInSeconds: resolved.expiresInSeconds });
       setStep('waiting');
       return;
@@ -134,6 +138,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
 
   function cancel() {
     setStep('input');
+    setPendingSessionToken(null);
     setCodeVerified(false);
     setOutcome(null);
     onCancel?.();
@@ -185,6 +190,8 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
                 email={email}
                 next={next}
                 {...(deps.verifyEmail === undefined ? {} : { verifyEmail: deps.verifyEmail })}
+                {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
+                pendingSessionToken={pendingSessionToken}
                 onVerified={() => setCodeVerified(true)}
               />
             )}

@@ -28,6 +28,9 @@ const esVerifyEmail = {
   'verifyEmail.resend.done': '¡Código reenviado!',
   'verifyEmail.link.checking': 'Comprobando el enlace…',
   'verifyEmail.link.invalid': 'Este enlace ya no es válido. Introduce el código del mismo correo.',
+  'verifyEmail.proven': 'Dirección confirmada ✓ — introduce el código recibido para iniciar sesión aquí.',
+  'verifyEmail.handoff.opened': 'El enlace se abrió en la app Meeshy.',
+  'verifyEmail.handoff.stay': 'Continuar en el navegador',
   'verifyEmail.signingIn': 'Iniciando sesión…',
   'emailSent.codeOrLink': 'Introduce el código de 6 dígitos recibido en {email} o abre el enlace del mismo correo.',
 };
