@@ -27,6 +27,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   micMuted: false,
   cameraOn: false,
   facing: 'user',
+  screenSharing: false,
   members: {},
   display: 'full',
   localStream: null,
@@ -39,7 +40,9 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 
 const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-peer', name: 'Amina Diallo', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, link: 'connected', ...overrides });
 
-const screen = (overrides: Partial<ActiveCall> = {}) => renderToStaticMarkup(<CallScreen call={call(overrides)} />);
+const screen = (overrides: Partial<ActiveCall> = {}, canShare = false) => renderToStaticMarkup(<CallScreen call={call(overrides)} canShare={canShare} />);
+
+const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }], getTracks: () => [] } as unknown as MediaStream;
 
 describe('CallScreen', () => {
   test('un appel vidéo entrant propose Refuser, Répondre sans vidéo, Accepter', () => {
@@ -81,6 +84,36 @@ describe('CallScreen', () => {
 
   test('l’écran est un dialogue nommé', () => {
     expect(screen()).toContain('role="dialog"');
+  });
+});
+
+describe('CallScreen — partage d’écran (#8063)', () => {
+  test('connecté, sur un navigateur qui sait, le bouton « Partager l’écran » est offert', () => {
+    const html = screen({ members: { 'u-peer': member() } }, true);
+    expect(html).toContain('data-call-screen-share=""');
+    expect(html).toContain('aria-label="Partager l’écran"');
+  });
+
+  test('sans getDisplayMedia (coque Android, Safari iOS), aucun bouton ne le promet', () => {
+    expect(screen({ members: { 'u-peer': member() } }, false)).not.toContain('data-call-screen-share');
+  });
+
+  test('pendant la sonnerie, le partage n’est pas offert', () => {
+    expect(screen({ phase: { kind: 'outgoing' } }, true)).not.toContain('data-call-screen-share');
+  });
+
+  test('celui qui partage lit « Vous partagez votre écran » et peut arrêter', () => {
+    const html = screen({ screenSharing: true, members: { 'u-peer': member() } }, true);
+    expect(html).toContain('data-call-pill="screen-sharing"');
+    expect(html).toContain('aria-label="Arrêter le partage d’écran"');
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  test('le pair qui partage : son écran en grand, ENTIER, sous une bannière qui le nomme', () => {
+    const html = screen({ members: { 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': liveVideo } });
+    expect(html).toContain('data-call-shared-screen=""');
+    expect(html).toContain('object-fit:contain');
+    expect(html).toContain('Amina Diallo partage son écran');
   });
 });
 

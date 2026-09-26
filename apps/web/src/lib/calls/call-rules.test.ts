@@ -77,8 +77,8 @@ describe('ce que l’écran dit', () => {
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
-    expect(statusPills({ micMuted: true, members: { a: member({ micMuted: true }) }, quality: 'poor', isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
-    expect(statusPills({ micMuted: false, members: { a: member({ micMuted: true }) }, quality: 'good', isGroup: true })).toEqual([]);
+    expect(statusPills({ micMuted: true, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'poor', isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
+    expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: 'good', isGroup: true })).toEqual([]);
   });
 
   test('la grille range les connectés d’abord, puis par nom', () => {

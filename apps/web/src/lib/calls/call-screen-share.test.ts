@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { decodeMediaToggled } from './call-decode';
+import { pipSource } from './call-pip';
 import type { CallMember } from './call-store';
 import { callLayout, canShareScreen, screenSharer, statusPills } from './call-view';
 
@@ -55,5 +56,19 @@ describe('la capacité du navigateur', () => {
     expect(canShareScreen({ getDisplayMedia: () => Promise.resolve() })).toBe(true);
     expect(canShareScreen({ getUserMedia: () => Promise.resolve() })).toBe(false);
     expect(canShareScreen(undefined)).toBe(false);
+  });
+});
+
+describe('l’écran partagé hors de l’écran d’appel', () => {
+  test('l’image dans l’image montre l’écran partagé d’abord, sans miroir', () => {
+    const camera = { getVideoTracks: () => [{ readyState: 'live' }] } as unknown as MediaStream;
+    const source = pipSource({
+      members: { a: member({ cameraOn: true }), b: member({ userId: 'u-b', screenSharing: true }) },
+      remoteStreams: { 'u-a': camera, 'u-b': liveVideo },
+      localStream: null,
+      cameraOn: false,
+      phase: { kind: 'connected' },
+    });
+    expect(source).toEqual({ stream: liveVideo, mirrored: false });
   });
 });
