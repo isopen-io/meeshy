@@ -357,7 +357,14 @@ export const parseCatalogBlock = (blockLines) => {
 // (`apps/web/src/lib/api/stickers.ts`) écrit l'adresse en littéral comme tout
 // `apps/web` : mortes ici au même titre que `me.starredMessages`, jusqu'à
 // #7716. Valeur MESURÉE sur la branche du 2026-09-25 fusionnée avec `dev`.
-const BASELINE_DEAD_ENTRIES = 467;
+// 467 → 470 (#7999) : `admin.conversationsByConversationId`,
+// `admin.conversationsByConversationIdParticipantsByUserId` et
+// `admin.conversationsByConversationIdParticipantsByUserIdRemove` — configurer
+// une conversation, le rang et le retrait d'un de ses membres, sans en être
+// membre. Leur client (`apps/web/src/lib/api/admin-conversation-settings.ts`)
+// écrit l'adresse en littéral comme tout `apps/web` : mortes ici au même titre
+// que leurs voisines admin, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 470;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

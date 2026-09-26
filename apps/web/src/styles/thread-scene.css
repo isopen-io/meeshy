@@ -178,14 +178,12 @@ main[data-scene='idle'] .focus-stamp {
   pointer-events: none;
 }
 /*
- * `.thread-composer-chrome` ET `.thread-scroll-to-bottom` PARTAGENT cette
- * règle — miroir `ConversationView.swift:1918-1928` : le bouton « revenir
- * en bas » est posé sous le MÊME modificateur que le composeur
- * (`.hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)`), pas une
- * règle voisine qui aurait pu diverger.
+ * Le composeur seul : le bouton « revenir en bas » (`.thread-scroll-to-bottom`)
+ * ne suit PAS le repli (#8002, directive porteur 2026-09-26) — c'est pendant
+ * le défilement qu'on le cherche. Miroir iOS : `scrollToBottomButton` n'est
+ * plus posé sous `.hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)`.
  */
-[data-chrome-composer='hidden'] .thread-composer-chrome,
-[data-chrome-composer='hidden'] .thread-scroll-to-bottom {
+[data-chrome-composer='hidden'] .thread-composer-chrome {
   transform: translateY(var(--chrome-edge-travel));
   opacity: 0;
   pointer-events: none;

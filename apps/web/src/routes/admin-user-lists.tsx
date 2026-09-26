@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CONVERSATION_TYPES } from '@/lib/admin/conversation-list';
@@ -9,6 +9,7 @@ import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
   ADMIN_USER_CONVERSATION_SORTS,
   adminUserConversationsQueryKey,
+  adminUserConversationsRootKey,
   type AdminUserConversationSort,
   loadAdminUserConversations,
   type AdminConversation,
@@ -32,6 +33,7 @@ import { AdminSkeleton } from './admin-parts';
 import { AdminFilterBar, AdminSelect } from './admin-table';
 import { Link } from './route-table';
 import { AdminConversationReading } from './admin-conversation-reading';
+import { AdminConversationSettingsSheet } from './admin-conversation-settings-sheet';
 
 /**
  * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819, étendu par #6862) — les
@@ -65,6 +67,18 @@ import { AdminConversationReading } from './admin-conversation-reading';
  * MÊME composant que `/adm/conversations/$id`, donc la même vue que le
  * produit, avec **le Prisme DU MEMBRE** : on lit ce que ce membre-là a lu, pas
  * la traduction que l'administrateur aurait vue.
+ *
+ * ## « CONFIGURER » OUVRE LES ÉCRITURES SOUVERAINES (#7845, #7999)
+ *
+ * Titre, description, images, droits d'écriture, archive, fermeture, et le
+ * rang ou le retrait du membre — sans que l'administrateur soit membre de la
+ * conversation (`AdminConversationSettingsSheet`). Le geste n'existe que pour
+ * qui a la section Conversations (`gerer`, résolu par la fiche depuis
+ * `GET /me/permissions`) : la passerelle garde ces écritures par
+ * `canManageConversations` au rang ADMIN, et un bouton qui rend un 403 à qui le
+ * touche est pire que son absence. Après une écriture, TOUTES les pages de la
+ * liste sont invalidées (`adminUserConversationsRootKey`) : un archivage change
+ * ce que chaque tri et chaque filtre rendent.
  */
 
 const INK = 'var(--color-ios-ink)';
@@ -217,11 +231,14 @@ function viewerDuMembre(membre: AdminUserDetail): Viewer {
 export function AdminUserConversationsSection({
   membre,
   language,
+  onAnnounce = () => undefined,
   gerer = null,
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: InterfaceLanguage;
+  /** Le verdict d'une configuration, dit au lecteur d'écran par la fiche. */
+  readonly onAnnounce?: (texte: string) => void;
   /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
   readonly gerer?: 'adminConversation' | 'admConversation' | null;
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
@@ -233,6 +250,9 @@ export function AdminUserConversationsSection({
    * doit savoir LAQUELLE elle lit, et la remonter à chaque ouverture remet le
    * motif à zéro, ce qui est voulu (un motif par lecture). */
   const [ouverte, setOuverte] = useState<AdminConversation | null>(null);
+  /** La conversation dont la feuille « Configurer » est ouverte — même raison. */
+  const [configuree, setConfiguree] = useState<AdminConversation | null>(null);
+  const client = useQueryClient();
 
   const [tri, setTri] = useState<AdminUserConversationSort>('lastMessageAt');
   const [ordre, setOrdre] = useState<'asc' | 'desc'>('desc');
@@ -308,6 +328,7 @@ export function AdminUserConversationsSection({
                   conversation={conversation}
                   language={language}
                   onOpen={() => setOuverte(conversation)}
+                  onConfigure={gerer === null ? null : () => setConfiguree(conversation)}
                   gerer={gerer}
                 />
               ))}
@@ -342,6 +363,20 @@ export function AdminUserConversationsSection({
           </div>
         </Sheet>
       )}
+
+      {configuree === null ? null : (
+        <AdminConversationSettingsSheet
+          conversation={configuree}
+          userId={membre.id}
+          language={language}
+          deps={deps}
+          onAnnounce={onAnnounce}
+          onClose={() => setConfiguree(null)}
+          onChanged={() => {
+            void client.invalidateQueries({ queryKey: adminUserConversationsRootKey(membre.id) });
+          }}
+        />
+      )}
     </>
   );
 }
@@ -356,11 +391,13 @@ function ConversationRow({
   conversation,
   language,
   onOpen,
+  onConfigure,
   gerer,
 }: {
   readonly conversation: AdminConversation;
   readonly language: InterfaceLanguage;
   readonly onOpen: () => void;
+  readonly onConfigure: (() => void) | null;
   readonly gerer: 'adminConversation' | 'admConversation' | null;
 }) {
   return (
@@ -386,6 +423,18 @@ function ConversationRow({
           </p>
         </div>
       </button>
+      {onConfigure === null ? null : (
+        <button
+          type="button"
+          data-admin-conversation-configure={conversation.id}
+          aria-label={`${translateAdmin(language, 'admin.conv.configure')} — ${conversation.title ?? conversation.identifier ?? conversation.id}`}
+          onClick={onConfigure}
+          className="grid shrink-0 place-items-center rounded-card px-3 text-caption font-semibold"
+          style={{ ...CARTE, color: 'var(--color-ios-brand)', minHeight: 44 }}
+        >
+          {translateAdmin(language, 'admin.conv.configure')}
+        </button>
+      )}
       {gerer === null ? null : (
         <Link
           to={gerer}

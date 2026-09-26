@@ -46,7 +46,7 @@ final class FocalChromeReturnTests: XCTestCase {
 
     func test_host_decidesTheChromeWithTheRule_fromTheDecelerationTarget() throws {
         let code = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        XCTAssertTrue(code.contains("setChromeHiddenForScroll(FocalChromeReturn.isHidden( isTracking: scrollView.isTracking, isDecelerating: scrollView.isDecelerating, remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y } ))"),
+        XCTAssertTrue(code.contains("setChromeHiddenForScroll(FocalChromeReturn.isHidden( isTracking: scrollView.isTracking, isDecelerating: scrollView.isDecelerating, remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y } ) && keyboardFirst.chromeMayCollapse)"),
                       "Le chrome suit la règle, alimentée par l'offset d'arrivée de la décélération.")
         XCTAssertTrue(code.contains("func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) { decelerationTargetOffsetY = targetContentOffset.pointee.y }"),
                       "L'offset d'arrivée est capturé à la fin du geste.")
@@ -57,9 +57,9 @@ final class FocalChromeReturnTests: XCTestCase {
     func test_conversationView_slidesEachChromePiece_towardsItsOwnEdge() throws {
         let code = try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
         XCTAssertTrue(code.contains("AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))"), "l'en-tête glisse vers le HAUT")
-        XCTAssertTrue(code.contains(".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)"), "le composeur et la bulle « retour en bas » glissent vers le BAS")
-        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 2,
-                       "composeur + bulle : deux composants vers le bas")
+        XCTAssertTrue(code.contains(".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)"), "le composeur glisse vers le BAS")
+        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 1,
+                       "le composeur seul glisse vers le bas — la bulle « retour en bas » reste (#8002)")
         XCTAssertFalse(code.contains(".opacity(hidesComposerChromeForScroll ? 0 : 1)"), "plus de simple fondu sans glissement")
         XCTAssertFalse(code.contains("else if hidesEntireHeaderForScroll { AnyView(EmptyView()) }"), "plus de démontage de l'en-tête")
     }
