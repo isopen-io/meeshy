@@ -62,3 +62,27 @@ export function webPushConfig(payload: WebPushSource): WebpushConfig {
     ...(payload.collapseId ? { headers: { Topic: webPushTopic(payload.collapseId) } } : {}),
   };
 }
+
+/**
+ * UN PUSH D'APPEL WEB (#8043) — data-only : le service worker compose la
+ * notification d'appel, avec ses actions, depuis `data`. RFC 8030 § 5.2-5.3 :
+ * `TTL` borne la garde du message à la fenêtre de sonnerie, `Urgency: high`
+ * le livre à un appareil en économie d'énergie.
+ */
+export function callWebPushConfig(ttlMs: number): WebpushConfig {
+  return { headers: { TTL: String(Math.round(ttlMs / 1000)), Urgency: 'high' } };
+}
+
+/**
+ * La config webpush d'un jeton WEB, ou rien : l'appel (#8043) part data-only et
+ * urgent, borné à la sonnerie — le service worker compose lui-même la
+ * notification avec Répondre / Refuser ; une bannière ordinaire porte sa
+ * config ; un autre push data-only (silencieux) n'en porte aucune.
+ */
+export function webPushFor(
+  payload: WebPushSource,
+  push: { readonly isCallPush: boolean; readonly dataOnly: boolean; readonly callTtlMs: number }
+): { webpush?: WebpushConfig } {
+  if (push.isCallPush) return { webpush: callWebPushConfig(push.callTtlMs) };
+  return push.dataOnly ? {} : { webpush: webPushConfig(payload) };
+}

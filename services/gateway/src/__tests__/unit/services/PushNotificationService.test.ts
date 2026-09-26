@@ -2522,51 +2522,39 @@ describe('PushNotificationService', () => {
     // JAMAIS — le full-screen ring, StopRing (call_cancel/answered_elsewhere)
     // et SeenCallRing étaient donc morts précisément dans le scénario visé.
 
-    it('un push silent android part data-only — aucun bloc notification', async () => {
+    // #8043 — le web suit la même règle : le service worker compose la
+    // notification d'appel (Répondre / Refuser) depuis `data`.
+    const ringWindow = {
+      android: (m: any) => expect(m?.android).toEqual({ priority: 'high', ttl: 60_000 }),
+      web: (m: any) => expect(m?.webpush).toEqual({ headers: { TTL: '60', Urgency: 'high' } }),
+    } as const;
+    const sendCallPush = async (platform: keyof typeof ringWindow, payload: object) => {
       const service = await getFCMService();
-
       mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+        { id: 'tok', token: `fcm-${platform}`, type: 'fcm', platform, bundleId: null, apnsEnvironment: null },
       ]);
+      await service.sendToUser({ userId: `user-${platform}`, payload: payload as any });
+      return mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+    };
 
-      await service.sendToUser({
-        userId: 'user-android',
-        payload: {
-          title: '',
-          body: '',
-          silent: true,
-          data: { type: 'call_cancel', callId: 'call-1' },
-        } as any,
-      });
-
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+    it.each(['android', 'web'] as const)('un push silent %s part data-only, borné à la sonnerie — aucun bloc notification', async (platform) => {
+      const sentMsg = await sendCallPush(platform, { title: '', body: '', silent: true, data: { type: 'call_cancel', callId: 'call-1' } });
       expect(sentMsg?.notification).toBeUndefined();
-      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
+      ringWindow[platform](sentMsg);
       expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
     });
 
-    it('le ring android part data-only avec le title/body localisés DANS data', async () => {
-      const service = await getFCMService();
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-android',
-        payload: {
-          title: 'Alice vous appelle',
-          body: 'Appel audio',
-          data: { type: 'call', callId: 'call-1', callerName: 'Alice' },
-        } as any,
+    it.each(['android', 'web'] as const)('le ring %s part data-only avec title/body/actions localisés DANS data', async (platform) => {
+      const sentMsg = await sendCallPush(platform, {
+        title: 'Alice vous appelle',
+        body: 'Appel audio',
+        data: { type: 'call', callId: 'call-1', answerLabel: 'Répondre', declineLabel: 'Refuser' },
       });
-
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.notification).toBeUndefined();
-      expect(sentMsg?.data?.title).toBe('Alice vous appelle');
-      expect(sentMsg?.data?.body).toBe('Appel audio');
-      expect(sentMsg?.data?.callId).toBe('call-1');
-      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
+      expect(sentMsg?.data).toEqual({
+        type: 'call', callId: 'call-1', answerLabel: 'Répondre', declineLabel: 'Refuser', title: 'Alice vous appelle', body: 'Appel audio',
+      });
+      ringWindow[platform](sentMsg);
     });
 
     it('un push d’appel iOS-via-FCM garde son bloc notification (hors périmètre android)', async () => {
