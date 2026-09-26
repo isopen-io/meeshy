@@ -380,7 +380,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // fichier qui annonçait une extension de `FeedView`.
         let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
-        XCTAssertTrue(publish.contains("location: pendingPlace"),
+        // Le lieu est CAPTURÉ avant `onDismiss()` (la feuille est démontée
+        // aussitôt, une lecture tardive depuis la Task ne trouverait plus
+        // rien) : c'est la capture qui part, jamais le `@State` relu.
+        XCTAssertTrue(publish.contains("let capturedPlace = pendingPlace"),
+                      "publishPost doit capturer la position avant de refermer la feuille.")
+        XCTAssertTrue(publish.contains("location: capturedPlace"),
                       "publishPost perd la position dans sa branche sans fichier.")
 
         XCTAssertTrue(publish.contains("pendingPlace != nil"),
