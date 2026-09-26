@@ -298,9 +298,8 @@ final class MessageListViewController: UIViewController {
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var onReadMore: ((FocalReadMorePayload) -> Void)?
-    /// Lot 3.2 — carte lieu de la rangée plate : plein écran présenté par
-    /// ConversationView (même chaîne que `onReadMore`).
+    var expandedLongMessageLocalId: String? // #8147 — un seul message long déplié
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
     var onFocalShareFile: ((URL) -> Void)?
@@ -1414,7 +1413,6 @@ final class MessageListViewController: UIViewController {
             let retryHandler = self.onRetry
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
-            let readMoreHandler = self.onReadMore
             let tapLocationHandler = self.onFocalTapLocation
             let shareFileHandler = self.onFocalShareFile
             let callBackHandler = self.onCallBack
@@ -1712,6 +1710,7 @@ final class MessageListViewController: UIViewController {
                     // Focal : le message en focus (posé à la POSE par
                     // `syncFocalFocusDetails`) porte ses détails complets.
                     isFocused: self.focalDetailedLocalId == localId,
+                    isExpanded: self.expandedLongMessageLocalId == localId,
                     sentAt: message.createdAt,
                     // Pré-calculée ici, jamais dans un body (directive 2026-08-22).
                     focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
@@ -1732,7 +1731,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onReactToAttachment = { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) }
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
-                focalActions.onReadMore = readMoreHandler
+                focalActions.onToggleExpanded = { [weak self] in self?.toggleLongMessageExpansion(localId) }
                 focalActions.onTapLocation = tapLocationHandler
                 focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
@@ -1788,7 +1787,7 @@ final class MessageListViewController: UIViewController {
             // Chips du message en focus SUR la ligne de la carte : elles
             // débordent du bas de la cellule — jamais rognées, et la cellule
             // passe au-dessus de ses voisines le temps du focus.
-            let isFocusedCell = self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId
+            let isFocusedCell = (self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId) || self.expandedLongMessageLocalId == localId
             cell.clipsToBounds = false
             cell.contentView.clipsToBounds = false
             cell.layer.zPosition = isFocusedCell ? 1 : 0
@@ -1839,7 +1838,7 @@ final class MessageListViewController: UIViewController {
                     if let focalRow {
                         focalRow.equatable()
                     } else {
-                        messageBubble
+                        messageBubble.longMessageFocus(self.longMessageExpansion(for: localId), accentHex: accent)
                     }
                 }
                 .environmentObject(host)
@@ -1884,11 +1883,10 @@ final class MessageListViewController: UIViewController {
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear
-            // Cellule (re)configurée : à plat, sans carte. Focal la reposera à
-            // l'affichage (`willDisplay`) puis à chaque tick — jamais une pose
-            // héritée d'un recyclage.
+            // Cellule (re)configurée : à plat. Focal (et le dépliage, #8147) la
+            // reposent à l'affichage (`willDisplay`) — jamais une pose héritée
+            // d'un recyclage.
             FocalScrollPerspective.reset(cell.contentView.layer)
-            FocalScrollPerspective.hideFocusCard(in: cell.contentView)
         }
 
         // Séparateur de premier non-lu (#7222) — cluster dédié, voir
@@ -2937,6 +2935,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         forItemAt indexPath: IndexPath
     ) {
         applyFocalPerspectiveOnCellDisplay()
+        applyLongMessageExpansionPresentation(animated: false)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -2948,6 +2947,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
+        applyLongMessageExpansionPresentation(animated: true, excluding: cell)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now

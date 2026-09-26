@@ -224,11 +224,8 @@ struct ConversationView: View {
     /// retirée de la liste (critère §7 « un mode indisponible n'est jamais
     /// un écran vide »).
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
-    /// « Lire plus » Focal (spec Magnificence §3) — présentée par item :
-    /// l'identité du payload est le message.
-    @State private var focalReadMorePayload: FocalReadMorePayload?
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (même patron
-    /// que `BubbleFullscreenPlace` côté bulle, même chaîne que « Lire plus »).
+    /// que `BubbleFullscreenPlace` côté bulle).
     @State private var focalFullscreenPlace: BubbleFullscreenPlace?
     /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
     @State private var focalShareFileItem: FocalShareFileItem?
@@ -831,14 +828,10 @@ struct ConversationView: View {
             // UNE SEULE FOIS dans `init` (aucune seconde résolution).
             // Sélection ET retour-auto passent PAR `readingModeController`
             // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
-            .sheet(item: $focalReadMorePayload) { payload in
-                FocalReadMoreSheet(payload: payload)
-            }
             // Lot 3.2 — plein écran du lieu depuis la rangée plate : mêmes
             // primitives que la bulle (`BubbleStandardLayout`,
             // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
-            // parce que la rangée vit dans une cellule de collection (même
-            // chaîne que « Lire plus »).
+            // parce que la rangée vit dans une cellule de collection.
             .fullScreenCover(item: $focalFullscreenPlace) { item in
                 LocationFullscreenView(
                     latitude: item.place.latitude,
@@ -1603,9 +1596,6 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
-                },
-                onReadMore: { payload in
-                    focalReadMorePayload = payload
                 },
                 onFocalTapLocation: { place in
                     focalFullscreenPlace = BubbleFullscreenPlace(place: place)

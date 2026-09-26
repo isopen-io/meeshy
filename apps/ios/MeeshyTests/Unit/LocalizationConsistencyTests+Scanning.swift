@@ -57,6 +57,7 @@ extension LocalizationConsistencyTests {
             "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
             "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
             "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
+            "/MeeshyBroadcastExtension/": "apps/ios/MeeshyBroadcastExtension/Localizable.xcstrings",
         ]
 
         let repoRoot: URL
