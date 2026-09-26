@@ -232,7 +232,8 @@ const DETTE_PRODUCTION: Readonly<Record<string, number>> = {
   // peut que rétrécir — cette entrée n'y revient pas.
   'utils/validation.ts': 2697,
   'utils/languages.ts': 1718,
-  'types/video-call.ts': 1238,
+  // #8063 — 1238 → 1165 : les effets audio sont partis vers `types/call-audio-effects.ts`.
+  'types/video-call.ts': 1165,
   'types/voice-api.ts': 1170,
   'utils/river-lanes.ts': 1044,
 };
