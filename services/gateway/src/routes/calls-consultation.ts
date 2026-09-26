@@ -10,6 +10,7 @@ import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { logger } from '../utils/logger.js';
+import { AUTH_ERROR_CODES } from '../utils/auth-error-codes.js';
 import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
 import { validatePagination } from '../utils/pagination.js';
@@ -586,7 +587,7 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
   }, async (request, reply) => {
     try {
       const userId = (request as unknown as UnifiedAuthRequest).authContext.userId;
-      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
+      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
       const outcome = await hideCallFromHistory(prisma, userId, request.params.callId);
       if (outcome === 'not-found') return sendNotFound(reply, 'CALL_NOT_FOUND');
       return sendSuccess(reply, { callId: request.params.callId, hidden: true });
@@ -621,7 +622,7 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
   }, async (request, reply) => {
     try {
       const userId = (request as unknown as UnifiedAuthRequest).authContext.userId;
-      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
+      if (!userId) return sendUnauthorized(reply, 'NOT_AUTHENTICATED', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
       const cleared = await clearCallHistory(prisma, userId);
       return sendSuccess(reply, { cleared });
     } catch (error: unknown) {

@@ -13,17 +13,14 @@ jest.mock('../../../services/calls/callHistoryList', () => ({
   hideCallFromHistory: (...args: any[]) => mockHide(...args),
   clearCallHistory: (...args: any[]) => mockClear(...args),
 }));
-jest.mock('../../../services/CallService', () => ({ CallService: jest.fn<any>().mockImplementation(() => ({})), CallAlreadyEndedError: class extends Error {} }));
+jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
+  CallService: jest.fn<any>().mockImplementation(() => ({})),
+}));
 jest.mock('../../../middleware/auth', () => ({ createUnifiedAuthMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()) }));
 jest.mock('../../../middleware/validation', () => ({ createValidationMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()) }));
 jest.mock('../../../middleware/rate-limit', () => ({ ROUTE_RATE_LIMITS: { initiateCall: {}, joinCall: {}, callOperations: {} } }));
 jest.mock('../../../utils/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  callSessionSchema: { type: 'object' },
-  callSessionMinimalSchema: { type: 'object' },
-  startCallRequestSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
 
 import callRoutes from '../../../routes/calls';
 
@@ -86,5 +83,6 @@ describe('effacer le journal des appels', () => {
     await route('DELETE', '/calls/history')(request({ authContext: { type: 'anonymous' } }), reply);
     expect(mockClear).not.toHaveBeenCalled();
     expect(reply.status).toHaveBeenCalledWith(401);
+    expect(reply.body).toMatchObject({ success: false, code: 'UNAUTHORIZED' });
   });
 });
