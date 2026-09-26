@@ -1,12 +1,12 @@
 /**
- * Les QUATRE VUES de la collection de messages (#4340 critère 1).
+ * Les CINQ VUES de la collection de messages (#4340 critère 1, #8095).
  *
  * ## Ce que ce module change, et ce qu'il ne change pas
  *
  * Trois adresses lisaient la même collection : `GET .../messages` (chronologie
  * et fil de réponses), `GET .../messages/search` et `GET .../pinned-messages`.
- * Ce module fait de `?view=timeline|thread|pinned|search` le SÉLECTEUR de la
- * collection unique — sans retirer aucune adresse : les deux routes dédiées
+ * Ce module fait de `?view=timeline|thread|pinned|search|media` le SÉLECTEUR de
+ * la collection unique — sans retirer aucune adresse : les deux routes dédiées
  * restent servies, inchangées, et leur transformation en alias est un lot
  * suivant.
  *
@@ -36,10 +36,20 @@
  *   comptage, la route ne sélectionnant pas `_count`.
  *
  * Un paramètre `view` qui se contenterait de router vers ces trois formes
- * n'aurait rien unifié. Les quatre vues passent donc par le MÊME `select`, le
+ * n'aurait rien unifié. Les cinq vues passent donc par le MÊME `select`, le
  * MÊME sérialiseur et les MÊMES gardes que la chronologie ; ce module ne rend
  * que ce qui les distingue vraiment — un prédicat, un ordre, et la façon de
  * résoudre l'ensemble cherché.
+ *
+ * ## La vue des médias (#8095)
+ *
+ * `view=media` n'a PAS de route dédiée à unifier : elle est née dans la
+ * collection, pour que la galerie d'une conversation (iOS, web #6303) indexe
+ * TOUS ses médias — y compris ceux des messages qu'aucun client n'a encore
+ * chargés — sous les mêmes portes, le même plancher, le même masquage
+ * personnel et le même sérialiseur que le fil. Une route jumelle aurait dû
+ * recopier chacune de ces gardes, et la table de `messages-collection-view-parity`
+ * montre ce qu'une recopie finit par oublier.
  *
  * ## Le rang de `?replyToId=`
  *
@@ -50,13 +60,13 @@
  * donc rien à migrer côté client.
  */
 
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
 
-/** Les quatre sous-collections que `?view=` sait désigner. */
-export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search';
+/** Les cinq sous-collections que `?view=` sait désigner. */
+export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search' | 'media';
 
-const VUES: readonly CollectionView[] = ['timeline', 'thread', 'pinned', 'search'];
+const VUES: readonly CollectionView[] = ['timeline', 'thread', 'pinned', 'search', 'media'];
 
 /** La longueur minimale d'un terme de recherche — celle du schéma de `…/messages/search`. */
 const LONGUEUR_MINIMALE_RECHERCHE = 2;
@@ -97,6 +107,36 @@ export type ParametresDeVue = {
   readonly replyToId?: string;
   readonly q?: string;
 };
+
+/**
+ * Un message porteur d'au moins une image ou une vidéo que la galerie peut
+ * feuilleter.
+ *
+ * La vue unique est exclue aux DEUX niveaux qui la déclarent — le message et la
+ * pièce — parce qu'une galerie rouvre à volonté ce qu'une vue unique ne montre
+ * qu'une fois. Un message mixte (une image à vue unique, une vidéo ordinaire)
+ * entre par sa pièce ordinaire ; c'est au sérialiseur, déjà gardé, de masquer
+ * l'autre.
+ *
+ * `NOT: { isViewOnce: true }` et non `isViewOnce: false` : sur MongoDB, un
+ * document écrit AVANT le champ ne le porte pas, et un champ ABSENT ne matche
+ * pas `false` — la galerie perdrait en silence toute l'histoire ancienne.
+ * La négation d'un filtre POSITIF, elle, rend vrai sur l'absent. `isSet`
+ * n'est pas une option : le client Prisma ne l'expose que sur les champs
+ * optionnels (leçon 622), et `isViewOnce` est requis.
+ *
+ * `satisfies` fait valider la forme par `tsc` contre le client GÉNÉRÉ — le
+ * double Prisma des témoins accepterait n'importe quelle clé.
+ */
+const PREDICAT_MEDIAS = {
+  NOT: { isViewOnce: true },
+  attachments: {
+    some: {
+      NOT: { isViewOnce: true },
+      OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }],
+    },
+  },
+} satisfies Prisma.MessageWhereInput;
 
 const CHRONOLOGIE: VueResolue = {
   genre: 'ok',
@@ -150,6 +190,18 @@ export function resolveCollectionView(params: ParametresDeVue): ResolutionDeVue 
   }
 
   if (view === 'timeline') return CHRONOLOGIE;
+
+  if (view === 'media') {
+    return {
+      genre: 'ok',
+      view,
+      predicate: PREDICAT_MEDIAS,
+      orderBy: { createdAt: 'desc' },
+      // Même raison que `pinned` : la fenêtre remplirait ses deux moitiés de
+      // messages sans média, puis les perdrait au filtrage.
+      allowsAround: false,
+    };
+  }
 
   if (view === 'pinned') {
     return {
@@ -208,7 +260,7 @@ export const MESSAGES_VIEW_QUERY_PROPERTIES = {
   view: {
     type: 'string',
     description:
-      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q). Les quatre passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
+      "#4340 — sous-collection lue : 'timeline' (défaut), 'thread' (avec parentId), 'pinned', 'search' (avec q), 'media' (#8095 — messages portant au moins une image ou une vidéo non vue-unique, le message lui-même n'étant pas vue-unique ; createdAt desc, pagination par before, around ignoré). Les cinq passent par les mêmes gardes et le même sérialiseur. Une valeur inconnue est refusée en 400 plutôt que servie comme la chronologie.",
   },
   parentId: {
     type: 'string',
