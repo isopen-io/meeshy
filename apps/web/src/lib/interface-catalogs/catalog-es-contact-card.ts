@@ -16,6 +16,7 @@ const esContactCard = {
   'contactCard.state.requestSent': 'Solicitud enviada',
   'contactCard.state.requestReceived': 'Te envió una solicitud',
   'contactCard.sheet.title': 'Tarjeta de contacto',
+  'contactCard.shared': 'Contacto compartido',
   'contactCard.close': 'Cerrar',
   'contactCard.copy': 'Copiar: {field}',
   'contactCard.copied': 'Copiado al portapapeles',

@@ -20,6 +20,8 @@ import {
   receiptCategoriesOf,
 } from '@/lib/view/message-receipts';
 
+import { contactCardLabelOf } from '@/lib/contact-card/label';
+
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyphs';
@@ -252,14 +254,16 @@ function AttachmentReceiptCard({
 }) {
   const kind = kindOf(attachment);
   const { opens, downloads } = attachmentAggregateOf(rows);
-  const name = attachment.title !== undefined && attachment.title.length > 0 ? attachment.title : attachment.originalName;
+  const contactLabel = contactCardLabelOf(attachment, lang);
+  const name =
+    attachment.title !== undefined && attachment.title.length > 0 ? attachment.title : (contactLabel ?? attachment.originalName);
   const durationLabel = attachmentDurationLabel(attachment.duration);
   const isTimebased = kind === 'audio' || kind === 'video';
   /** L'OUVERTURE (#7363, W6) — `image`/`file` seulement : `audio`/`video`
    * restent sur `PlaybackRow` (progression, pas une simple ouverture). */
   const isOpenable = kind === 'image' || kind === 'file';
   const opened = isOpenable ? openedRowsOf(rows) : [];
-  const kindGlyph: GlyphName = kind === 'audio' ? 'microphone' : kind === 'video' ? 'fillPlay' : kind === 'image' ? 'image' : 'file';
+  const kindGlyph: GlyphName = contactLabel !== null ? 'user' : kind === 'audio' ? 'microphone' : kind === 'video' ? 'fillPlay' : kind === 'image' ? 'image' : 'file';
 
   return (
     <li className="px-4 py-2" data-message-receipts-attachment={attachment.id}>

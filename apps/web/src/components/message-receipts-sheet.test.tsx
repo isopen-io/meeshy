@@ -162,6 +162,19 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
     expect(card?.textContent ?? '').toContain('1 ouverture');
     expect(card?.querySelector('[data-message-receipts-playback]')).toBe(null);
   });
+
+  test('une carte de visite se nomme par son contact, jamais par son fichier technique (#8122)', async () => {
+    const fileName = 'contact_17E8744F-9AC7-45A6-9D0E-1AE50724FF9B_Collègue Bravo.vcf';
+    const host = await mountSheet({
+      conversationId: 'c-deploiement',
+      messageId: 'm-x',
+      attachments: [attachment({ id: 'att-test-6', mimeType: 'text/vcard', originalName: fileName, fileName })],
+    });
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    expect(card?.textContent ?? '').toContain('Collègue Bravo');
+    expect(card?.textContent ?? '').not.toContain('contact_');
+  });
 });
 
 /**

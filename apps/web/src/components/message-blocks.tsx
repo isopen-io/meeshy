@@ -563,6 +563,7 @@ const QUOTE_GLYPH: Readonly<Record<QuotedMediaKind, GlyphShape>> = {
   video: THREAD_STATES_GLYPHS.videoCamera,
   audio: GLYPHS.microphone,
   file: GLYPHS.file,
+  contact: GLYPHS.user,
 };
 
 /** `Self.thumbnailSize` (`BubbleQuotedReply.swift`) — la vignette carrée de la citation. */

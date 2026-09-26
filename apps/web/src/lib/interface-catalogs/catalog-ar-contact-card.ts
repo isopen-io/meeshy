@@ -16,6 +16,7 @@ const arContactCard = {
   'contactCard.state.requestSent': 'تم إرسال الطلب',
   'contactCard.state.requestReceived': 'أرسل إليك طلبًا',
   'contactCard.sheet.title': 'بطاقة جهة اتصال',
+  'contactCard.shared': 'جهة اتصال مشتركة',
   'contactCard.close': 'إغلاق',
   'contactCard.copy': 'نسخ: {field}',
   'contactCard.copied': 'تم النسخ إلى الحافظة',
