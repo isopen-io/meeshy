@@ -57,6 +57,8 @@ final class CallScreenShareController: ObservableObject {
     private var changeForwarding: AnyCancellable?
     private let logger = Logger(subsystem: "me.meeshy.app", category: "screen-share")
 
+    nonisolated deinit {}
+
     init(
         service: (any ScreenShareServiceProviding)? = nil,
         emitToggle: ((String, Bool) -> Void)? = nil,

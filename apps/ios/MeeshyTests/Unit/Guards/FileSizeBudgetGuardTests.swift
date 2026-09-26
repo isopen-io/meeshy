@@ -50,7 +50,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "CallManager.swift",
         "CallView.swift",
         "ConversationDashboardView.swift",
-        "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
@@ -513,7 +512,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // de directions SDP (−16), `CallView.swift` ses libellés de fin d'appel et
     // d'échec des sous-titres (−20). Le reste de l'écart (1 892) était du mou
     // laissé par des lots antérieurs : un plafond cumulatif se remesure.
-    private static let legacyLineCeiling = 48_703
+    //
+    // #8103 — 48 703 → 47 652 (−1 051). `ConversationInfoSheet.swift` est
+    // repassé SOUS le budget (1 051 lignes comptées) quand ses épinglés l'ont
+    // quitté pour `ConversationInfoSheet+Pinned.swift` : il sort de
+    // `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    private static let legacyLineCeiling = 47_652
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
