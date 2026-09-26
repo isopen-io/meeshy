@@ -234,3 +234,29 @@ describe('le mot de passe ne s’annonce pas facultatif — il se PROUVE', () =>
     expect(detail.textContent).toContain('e-mail reçu dans votre boîte');
   });
 });
+
+/**
+ * UN PSEUDO TROP LONG SE SIGNALE PENDANT LA SAISIE (#8082) — sous le champ,
+ * avec la borne, et le bouton ne l'envoie pas. La recette avait `direction_recette`
+ * (17 caractères) accepté par l'écran puis refusé par la passerelle.
+ */
+describe('le pseudo tient sa borne pendant la frappe', () => {
+  test('17 caractères ⇒ message sous le pseudo, bouton inactif', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada@meeshy.example');
+    type(el, '#signup-username', 'direction_recette');
+
+    expect(el.querySelector('#signup-username-error')?.textContent ?? '').toContain('16');
+    expect(el.querySelector('#signup-username')?.getAttribute('aria-invalid')).toBe('true');
+    const bouton = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent ?? '').includes('Créer mon compte'));
+    expect(bouton?.disabled).toBe(true);
+  });
+
+  test('16 caractères ⇒ aucun message', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada@meeshy.example');
+    type(el, '#signup-username', 'direction_recett');
+
+    expect(el.querySelector('#signup-username-error')).toBeNull();
+  });
+});

@@ -606,4 +606,59 @@ final class SignupViewModelTests: XCTestCase {
 
         XCTAssertNil(sut.pendingVerification)
     }
+
+    // MARK: - La borne du pseudo (#8082)
+
+    /// Recette 2026-09-26 : `direction_recette` (17 caractères) passait l'écran,
+    /// la passerelle le refusait, et l'app disait « réessayez ». La borne se
+    /// dit désormais PENDANT la saisie, sous le pseudo, et rien ne part.
+    func test_tooLongUsername_showsTheBoundUnderTheFieldWhileTyping() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recette"
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRefusalMessage(.tooLong))
+        XCTAssertTrue(sut.error(for: .username)?.contains("16") ?? false)
+        XCTAssertFalse(sut.canSubmit)
+    }
+
+    func test_tooLongUsername_submitSendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.username = "direction_recette"
+
+        let outcome = await sut.requestSubmit()
+
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_validUsername_hasNoFieldMessage() {
+        let (sut, _) = makeSUT()
+        fillValidForm(sut)
+
+        sut.form.username = "direction_recett"
+
+        XCTAssertNil(sut.error(for: .username))
+        XCTAssertTrue(sut.canSubmit)
+    }
+
+    /// La passerelle sert `violations: [{ path: "username", message: "must NOT
+    /// have more than 16 characters" }]` : le refus se pose SOUS le pseudo,
+    /// dans la langue du lecteur — jamais le texte d'Ajv, jamais « réessayez ».
+    func test_schemaRefusalOnUsername_landsUnderTheFieldInTheReadersLanguage() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .failure(
+            rejection(code: "VALIDATION_ERROR", message: "body/username must NOT have more than 16 characters", violations: [
+                .init(path: "username", message: "must NOT have more than 16 characters"),
+            ])
+        )
+
+        _ = await sut.submit()
+
+        XCTAssertEqual(sut.error(for: .username), SignupViewModel.usernameRuleMessage)
+        XCTAssertNil(sut.bannerError)
+    }
 }
