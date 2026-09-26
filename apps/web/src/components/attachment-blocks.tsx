@@ -1,9 +1,9 @@
-import { Fragment, Suspense, lazy, useCallback, useMemo, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useContext, useMemo, useState } from 'react';
 
 import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 
-import type { Attachment } from '@/lib/api/types';
+import type { Attachment, Message } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { reportAttachmentStatus } from '@/lib/api/attachments';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -20,6 +20,7 @@ import {
   segmentSeekTarget,
   type KaraokeTone,
 } from '@/lib/view/transcript-karaoke';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -61,6 +62,8 @@ import { revealedAttachment, useAttachmentMasked } from './view-once-opened';
  * multi-pistes, l'anneau de téléchargement.
  */
 const MediaViewer = lazy(() => import('./media-viewer'));
+/** DEPUIS LE FIL (#6303) : la visionneuse conversation-entière, chunk à la demande (D-54 amendé). */
+const ThreadMediaViewer = lazy(() => import('./thread-media-viewer'));
 
 /** La carte de visite (#8101) — son lecteur vCard et sa fiche en chunk à la demande. */
 const ContactCard = lazy(() => import('./contact-card'));
@@ -456,6 +459,7 @@ export function Attachments({
   mediaFrame,
   isMine = false,
   deps,
+  message,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -476,8 +480,16 @@ export function Attachments({
   readonly isMine?: boolean;
   /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut. */
   readonly deps?: ConversationsDeps;
+  /**
+   * LE MESSAGE QUI PORTE CES PIÈCES (#6303) — posé par les rangées du fil.
+   * Avec le `ThreadMediaContext` du fil, une tuile touchée ouvre la
+   * visionneuse de TOUTE la conversation et ses actions ; sans lui (écran des
+   * médias, flux), la pellicule reste celle du message.
+   */
+  readonly message?: Message;
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
+  const thread = useContext(ThreadMediaContext);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const maskedAttachment = useAttachmentMasked();
   /* LA PIÈCE MASQUÉE QU'ON VIENT DE TOUCHER S'OUVRE EN CLAIR (#8008) — elle
@@ -530,7 +542,23 @@ export function Attachments({
         ),
       )}
 
-      {openIndex !== null ? (
+      {openIndex !== null && thread !== null && message !== undefined ? (
+        <Suspense fallback={null}>
+          <ThreadMediaViewer
+            opened={message}
+            openedVisual={visual}
+            startIndex={openIndex}
+            viewerId={thread.viewerId}
+            onReplyToMedia={thread.onReplyToMedia}
+            onClose={() => setOpenIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : openIndex !== null ? (
         <Suspense fallback={null}>
           <MediaViewer
             items={viewerItems}

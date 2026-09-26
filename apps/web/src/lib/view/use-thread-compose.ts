@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { Message } from '@/lib/api/types';
 import type { PendingAttachment } from '@/lib/send/attachments';
+import { withAttachmentReply } from '@/lib/send/attachment-reply';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
 import type { ComposerDraft, DraftStore } from '@/lib/send/draft-store';
 import type { SharedPlace } from '@/lib/send/shared-place';
@@ -25,6 +26,8 @@ export type ThreadComposeSendInput = {
 export type ThreadComposeState = {
   readonly initialDraft: ComposerDraft | null;
   readonly setReplyTarget: (id: string | null) => void;
+  /** Répondre à une PIÈCE (#6303) — la citation nomme la pièce regardée en plein écran. */
+  readonly setReplyToMedia: (messageId: string, attachmentId: string) => void;
   readonly replyTo: ReplyToPreview | undefined;
   readonly reportComposerDraft: (report: ComposerDraftReport) => void;
   readonly onSend: (input: ThreadComposeSendInput) => void;
@@ -66,7 +69,7 @@ export function useThreadCompose(params: {
 }): ThreadComposeState {
   const { store, scope, conversationId, messages, readerLanguages, send } = params;
 
-  const { initial: initialDraft, replyTarget, setReplyTarget, reportComposerDraft } = useThreadDraft({
+  const { initial: initialDraft, replyTarget, setReplyTarget: setDraftReplyTarget, reportComposerDraft } = useThreadDraft({
     store,
     scope,
     conversationId,
@@ -84,7 +87,32 @@ export function useThreadCompose(params: {
      props (`mention-source.ts`). */
   usePublishMentionSource({ conversationId, messages });
 
-  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  /* LA PIÈCE NOMMÉE (#6303) — posée par « Répondre » de la visionneuse, retirée
+     par toute autre cible (menu, Résumé Vivant, envoi, annulation) : une
+     citation de message ne garde jamais la pièce d'une citation précédente.
+     Elle voyage SUR le message cité (`withAttachmentReply`) : la bande, la
+     bulle optimiste et le corps du POST lisent la même valeur. */
+  const [replyPiece, setReplyPiece] = useState<string | null>(null);
+  const setReplyTarget = useCallback(
+    (id: string | null) => {
+      setReplyPiece(null);
+      setDraftReplyTarget(id);
+    },
+    [setDraftReplyTarget],
+  );
+  const setReplyToMedia = useCallback(
+    (messageId: string, attachmentId: string) => {
+      setDraftReplyTarget(messageId);
+      setReplyPiece(attachmentId);
+    },
+    [setDraftReplyTarget],
+  );
+
+  const quotedMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  const replyToMessage = useMemo(
+    () => (quotedMessage === undefined ? undefined : withAttachmentReply(quotedMessage, replyPiece)),
+    [quotedMessage, replyPiece],
+  );
   const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
 
   const onSend = useCallback(
@@ -110,5 +138,5 @@ export function useThreadCompose(params: {
 
   const onCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
 
-  return { initialDraft, setReplyTarget, replyTo, reportComposerDraft, onSend, onCancelReply };
+  return { initialDraft, setReplyTarget, setReplyToMedia, replyTo, reportComposerDraft, onSend, onCancelReply };
 }

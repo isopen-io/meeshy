@@ -373,6 +373,8 @@ export type SendMessageBody = {
   readonly messageType?: 'image' | 'file' | 'audio' | 'video';
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
+  /** La pièce NOMMÉE d'une réponse (#6303, #6164) — `messages-send.ts:70`, vérifiée côté passerelle. */
+  readonly attachmentReplyTo?: { readonly attachmentId: string };
   /**
    * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
    * un transfert EST un envoi qui désigne sa source, et la passerelle copie

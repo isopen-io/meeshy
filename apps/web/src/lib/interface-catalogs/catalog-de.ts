@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deMediaHub from './catalog-de-media-hub';
+import deMediaViewer from './catalog-de-media-viewer';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
@@ -203,6 +204,7 @@ const de = {
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
   ...deMediaHub,
+  ...deMediaViewer,
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,

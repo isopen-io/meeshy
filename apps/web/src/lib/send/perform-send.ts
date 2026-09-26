@@ -7,6 +7,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
 import type { ApiFailure } from '@/lib/api/http';
 import { messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
+import { attachmentReplyOf } from './attachment-reply';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
@@ -107,6 +108,7 @@ function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurr
 
 function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
   const declared = declaredAttachmentType(message.messageType);
+  const namedPiece = attachmentReplyOf(message.replyTo);
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
@@ -114,6 +116,10 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    /* LA PIÈCE NOMMÉE (#6303) — relue sur le message CITÉ, comme la bande et la
+       bulle optimiste : la passerelle la range dans `metadata.attachmentReplyTo`
+       et la ressert sur `replyTo.attachmentReplyTo`. */
+    ...(namedPiece === undefined ? {} : { attachmentReplyTo: namedPiece }),
     /* LE LIEU SE RELIT SUR LE MESSAGE (#7328), comme la protection deux lignes
        plus bas — un seul site de vérité entre ce qui s'affiche et ce qui part.
        `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
