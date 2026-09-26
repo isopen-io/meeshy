@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { CallHistoryPage, CallRecord } from '@/lib/api/calls';
 
-import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, seededCallHistory } from './view';
+import { callDisplayNameOf, callDurationLabel, callFilterFromSearch, searchCallRecords, seededCallHistory } from './view';
 
 /**
  * LES RÈGLES PURES DU JOURNAL D'APPELS (#6362) — miroir des accesseurs de
@@ -70,5 +70,34 @@ describe('« Manqués » se peint depuis « Tous » déjà en cache', () => {
   test('aucun manqué dans une liste COMPLÈTE : le vide est juste ; dans une liste tronquée, il mentirait', () => {
     expect(seededCallHistory(cached([{ records: [record()], nextCursor: null }]), 'missed')?.pages[0]?.records).toEqual([]);
     expect(seededCallHistory(cached([{ records: [record()], nextCursor: 'a1' }]), 'missed')).toBeUndefined();
+  });
+});
+
+describe('chercher dans le journal (#8066)', () => {
+  const journal = [
+    record({ callId: 'a1' }),
+    record({ callId: 'b2', peer: { userId: 'u-eloi', username: 'eloi_b', displayName: 'Éloi Bâ', avatar: null } }),
+    record({ callId: 'g3', peer: null, conversationType: 'group', conversationTitle: 'Équipe produit' }),
+    record({ callId: 'x4', peer: null, conversationTitle: null }),
+  ];
+  const found = (query: string) => searchCallRecords(journal, query, 'Inconnu').map((r) => r.callId);
+
+  test('une recherche vide ou blanche rend le journal tel quel', () => {
+    expect(found('')).toEqual(['a1', 'b2', 'g3', 'x4']);
+    expect(found('   ')).toEqual(['a1', 'b2', 'g3', 'x4']);
+  });
+
+  test('sans accents ni casse : « eloi » trouve « Éloi », « EQUIPE » trouve « Équipe »', () => {
+    expect(found('eloi')).toEqual(['b2']);
+    expect(found('EQUIPE')).toEqual(['g3']);
+  });
+
+  test('l’identifiant du pair compte aussi, pas seulement le nom affiché', () => {
+    expect(found('eloi_b')).toEqual(['b2']);
+  });
+
+  test('le NOM AFFICHÉ se cherche, repli compris', () => {
+    expect(found('inconnu')).toEqual(['x4']);
+    expect(found('zzz')).toEqual([]);
   });
 });
