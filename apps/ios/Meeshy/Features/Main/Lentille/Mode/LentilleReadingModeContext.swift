@@ -211,7 +211,7 @@ nonisolated enum LentilleReadingModeContext {
 nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePreferenceStoring, @unchecked Sendable {
 
     private let store: FocalReadingModePreferenceStoring
-    private let scopeProvider: @Sendable () async -> ReadingModePreferenceScope
+    private let scopeProvider: @Sendable @concurrent () async -> ReadingModePreferenceScope
     private let lock = NSLock()
     private var subscribers: [UUID: @Sendable (String, ReadingModePreference) -> Void] = [:]
 

@@ -10,7 +10,7 @@ import MeeshyUI
 /// peut aboutir, et remplit le lecteur déjà ouvert (`ReelsPresenter`).
 struct ReelOpenFailureView: View {
     let failure: ContentFetchFailure
-    let onRetry: () async -> Void
+    let onRetry: @MainActor () async -> Void
     let onClose: () -> Void
 
     @State private var isRetrying = false

@@ -74,8 +74,8 @@ public nonisolated struct StoryRecentCameraRollAsset: Equatable, @unchecked Send
 /// meilleur moyen d'obtenir un refus définitif. `requestAccess()` n'est appelé
 /// que depuis le tap sur la capsule « Galerie ».
 public nonisolated struct StoryRecentCameraRollProvider: Sendable {
-    public typealias Latest = @Sendable () async -> StoryRecentCameraRollAsset?
-    public typealias FullImage = @Sendable (String) async -> UIImage?
+    public typealias Latest = @Sendable @concurrent () async -> StoryRecentCameraRollAsset?
+    public typealias FullImage = @Sendable @concurrent (String) async -> UIImage?
 
     private let latestProvider: Latest
     private let fullImageProvider: FullImage

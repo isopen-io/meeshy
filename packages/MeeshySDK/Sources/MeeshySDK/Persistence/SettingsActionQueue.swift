@@ -74,7 +74,7 @@ public actor SettingsActionQueue {
 
     /// Closure that runs each pending action. Return `true` if it succeeded
     /// (item is removed); `false` keeps it queued for the next attempt.
-    public var onFlush: (@Sendable (SettingsAction) async -> Bool)?
+    public var onFlush: (@Sendable @concurrent (SettingsAction) async -> Bool)?
 
     public func setFlushHandler(_ handler: @escaping @Sendable (SettingsAction) async -> Bool) {
         onFlush = handler

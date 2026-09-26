@@ -209,8 +209,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// the open conversation until the next REST revalidation completes.
     /// Invoked from `handleNewMessage`, `ensureMessages` and
     /// `fetchOlderMessages` with the exact decoded payloads.
-    private var _apiMessagePersistor: (@Sendable ([APIMessage]) async -> Void)?
-    public var apiMessagePersistor: (@Sendable ([APIMessage]) async -> Void)? {
+    private var _apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)?
+    public var apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)? {
         get { stateQueue.sync { _apiMessagePersistor } }
         set { stateQueue.sync { _apiMessagePersistor = newValue } }
     }
@@ -223,8 +223,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// offline the timeline still showed the pre-edit text, the deleted
     /// bubble and the missing reaction. Installed by the host app, which owns
     /// the store; `nil` in tests that only exercise the cache surfaces.
-    private var _realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)?
-    public var realtimeMessagePersistor: (@Sendable (RealtimeMessageMutation) async -> Void)? {
+    private var _realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)?
+    public var realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)? {
         get { stateQueue.sync { _realtimeMessagePersistor } }
         set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
     }

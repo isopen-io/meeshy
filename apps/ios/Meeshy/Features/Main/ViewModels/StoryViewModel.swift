@@ -424,10 +424,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Seams injectables (tests) — closures plutôt qu'une extension des
     /// protocols services : ajouter `getProfile` à `UserServiceProviding`
     /// ferait dériver tous les mocks existants pour une seule feature.
-    var introProfileResolver: (String) async throws -> MeeshyUser = { userId in
+    var introProfileResolver: @MainActor (String) async throws -> MeeshyUser = { userId in
         try await UserService.shared.getProfile(idOrUsername: userId)
     }
-    var introMoodFeedLoader: () async throws -> [APIPost] = {
+    var introMoodFeedLoader: @MainActor () async throws -> [APIPost] = {
         try await StatusService.shared.list(mode: .friends, cursor: nil, limit: 50).data
     }
 
@@ -441,7 +441,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// durable (`.markStoryViewed`, anchor = storyId pour le coalescing) au
     /// lieu du POST fire-and-forget historique — le « vu » survit à un
     /// kill/offline et se rejoue FIFO au reconnect via OutboxDispatcher.
-    var markViewedOutboxEnqueuer: (String) async throws -> Void = { storyId in
+    var markViewedOutboxEnqueuer: @MainActor (String) async throws -> Void = { storyId in
         try await StoryViewModel.enqueueMarkStoryViewed(storyId)
     }
 
@@ -464,7 +464,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Le chemin réel traverse `StoryPublishService` (queue actor singleton +
     /// rafraîchissement du `failedItems` publié) — un état global qu'une
     /// suite de tests ne doit pas muter.
-    var failedItemDiscarder: (StoryPublishQueueItem) async -> Void = { item in
+    var failedItemDiscarder: @MainActor (StoryPublishQueueItem) async -> Void = { item in
         await StoryPublishService.shared.discard(item)
     }
 
