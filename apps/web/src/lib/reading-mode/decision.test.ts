@@ -20,10 +20,10 @@ const BASE = {
 };
 
 describe('resolveThreadMode — ouverture par défaut (D-7)', () => {
-  test('lecteur inscrit, 0 non-lu, rien de collant ⇒ focal/default', () => {
+  test('lecteur inscrit, 0 non-lu, rien de collant ⇒ script/default', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 });
 
@@ -34,10 +34,10 @@ describe('resolveThreadMode — #5695 : « summary » entre au catalogue de rend
     ).toEqual({ mode: 'summary', reason: 'unread-over-cap' });
   });
 
-  test('25 non-lus (pile au seuil) ⇒ toujours sous le plafond ⇒ focal/default', () => {
+  test('25 non-lus (pile au seuil) ⇒ toujours sous le plafond ⇒ script/default', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 25, lastOpenedAt: BASE.now, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
   test('absence (25 h, 10 non-lus — le plancher) ⇒ summary/stale-absence', () => {
@@ -47,18 +47,18 @@ describe('resolveThreadMode — #5695 : « summary » entre au catalogue de rend
     ).toEqual({ mode: 'summary', reason: 'stale-absence' });
   });
 
-  test('présence récente (23 h, 10 non-lus) ⇒ pas absent ⇒ focal/default', () => {
+  test('présence récente (23 h, 10 non-lus) ⇒ pas absent ⇒ script/default', () => {
     const lastOpenedAt = new Date(BASE.now.getTime() - 23 * 60 * 60 * 1000);
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
-  test('absence (25 h) mais 9 non-lus (sous le plancher de 10) ⇒ focal/default — la seconde moitié du plancher', () => {
+  test('absence (25 h) mais 9 non-lus (sous le plancher de 10) ⇒ script/default — la seconde moitié du plancher', () => {
     const lastOpenedAt = new Date(BASE.now.getTime() - 25 * 60 * 60 * 1000);
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 9, lastOpenedAt, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 });
 
@@ -93,10 +93,10 @@ describe('resolveThreadMode — le choix collant', () => {
     ).toEqual({ mode: 'summary', reason: 'sticky' });
   });
 
-  test('collant riviere ⇒ mode listé qu\'on ne sait pas rendre ⇒ focal/clamped-unavailable', () => {
+  test('collant riviere ⇒ mode listé qu\'on ne sait pas rendre ⇒ script/clamped-unavailable', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'riviere' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   test('le collant gagne TOUJOURS sur les branches numériques, y compris > 25 non-lus', () => {
@@ -157,7 +157,7 @@ describe('resolveThreadMode — horloge injectée', () => {
 
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto', now: near }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto', now: far }),
     ).toEqual({ mode: 'summary', reason: 'stale-absence' });
@@ -174,19 +174,19 @@ describe('resolveThreadMode — identité et type de conversation', () => {
   test('un invité à 26 non-lus reste clampé — la LOI retire summary du catalogue anonyme (reading-modes.ts:284-285)', () => {
     expect(
       resolveThreadMode({ ...BASE, isAnonymous: true, unreadCount: 26, lastOpenedAt: BASE.now, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   test('un invité avec un choix collant « resume » reste clampé — même raison', () => {
     expect(
       resolveThreadMode({ ...BASE, isAnonymous: true, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'resume' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   test('une conversation directe suit la même loi de choix', () => {
     expect(
       resolveThreadMode({ ...BASE, conversationType: 'direct', unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 });
 
@@ -263,10 +263,10 @@ describe("threadCapabilities — #5696 : l'éligibilité de la Rivière lit memb
 });
 
 describe('resolveThreadMode — memberCount ne change PAS la décision de ce travail', () => {
-  test('collant riviere, memberCount 5 ⇒ focal/clamped-unavailable (river listé, non rendu)', () => {
+  test('collant riviere, memberCount 5 ⇒ script/clamped-unavailable (river listé, non rendu)', () => {
     expect(
       resolveThreadMode({ ...BASE, memberCount: 5, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'riviere' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 });
 

@@ -166,7 +166,7 @@ describe('resolveOrchestratorDecision — choix collant PRIME toujours (drapeau 
           capabilities,
           isFlagEnabled: true,
         }),
-      ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+      ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
     });
   });
 
@@ -229,7 +229,7 @@ describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)'
         capabilities: anonymousCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   it("invité absent > 24h avec >= 10 non-lus : la branche d'absence est clampée elle aussi", () => {
@@ -242,7 +242,7 @@ describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)'
         capabilities: anonymousCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   it("stickyChoice='riviere' avec river HORS catalogue ⇒ focal/'clamped-unavailable'", () => {
@@ -255,7 +255,7 @@ describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)'
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   it("stickyChoice='resume' pour un invité ⇒ focal/'clamped-unavailable' (le choix collant ne force pas un mode interdit)", () => {
@@ -268,7 +268,7 @@ describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)'
         capabilities: anonymousCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'script', reason: 'clamped-unavailable' });
   });
 
   it("un mode collant PRÉSENT au catalogue n'est jamais clampé", () => {
@@ -355,8 +355,8 @@ describe("toBridgeSuggestedMode — décision d'orchestrateur → suggestion du 
   });
 });
 
-describe('resolveOrchestratorDecision — branche ≤ 25 non-lus → focal', () => {
-  it('0 non-lu → focal', () => {
+describe('resolveOrchestratorDecision — branche ≤ 25 non-lus → script (défaut, directive porteur 2026-09-26, #8147)', () => {
+  it('0 non-lu → script', () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: 0,
@@ -366,10 +366,10 @@ describe('resolveOrchestratorDecision — branche ≤ 25 non-lus → focal', () 
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
-  it(`exactement ${ORCHESTRATOR_UNREAD_CAP} non-lus (borne incluse) → focal`, () => {
+  it(`exactement ${ORCHESTRATOR_UNREAD_CAP} non-lus (borne incluse) → script`, () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: ORCHESTRATOR_UNREAD_CAP,
@@ -379,7 +379,7 @@ describe('resolveOrchestratorDecision — branche ≤ 25 non-lus → focal', () 
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 });
 
@@ -438,7 +438,7 @@ describe('resolveOrchestratorDecision — branche absence > 24h ET >= 10 non-lus
     ).toEqual({ mode: 'summary', reason: 'stale-absence' });
   });
 
-  it('absence exactement égale à 24h (borne EXCLUE, pas strictement > 24h) → focal', () => {
+  it('absence exactement égale à 24h (borne EXCLUE, pas strictement > 24h) → script', () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: 20,
@@ -448,10 +448,10 @@ describe('resolveOrchestratorDecision — branche absence > 24h ET >= 10 non-lus
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
-  it('absence > 24h mais < 10 non-lus (9) → focal (le plancher de non-lus tient)', () => {
+  it('absence > 24h mais < 10 non-lus (9) → script (le plancher de non-lus tient)', () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: ORCHESTRATOR_ABSENCE_UNREAD_FLOOR - 1,
@@ -461,10 +461,10 @@ describe('resolveOrchestratorDecision — branche absence > 24h ET >= 10 non-lus
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
-  it('lecteur présent (< 24h) avec 10 non-lus → focal (pas de summary sans absence)', () => {
+  it('lecteur présent (< 24h) avec 10 non-lus → script (pas de summary sans absence)', () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: ORCHESTRATOR_ABSENCE_UNREAD_FLOOR,
@@ -474,7 +474,7 @@ describe('resolveOrchestratorDecision — branche absence > 24h ET >= 10 non-lus
         capabilities: baseCapabilities,
         isFlagEnabled: true,
       }),
-    ).toEqual({ mode: 'focal', reason: 'default' });
+    ).toEqual({ mode: 'script', reason: 'default' });
   });
 
   it('now et lastOpenedAt acceptent des dates ISO string (fonction pure, now injecté)', () => {
