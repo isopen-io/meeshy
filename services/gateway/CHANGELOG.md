@@ -1,5 +1,134 @@
 # @meeshy/gateway
 
+## 1.71.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - défiler vers les anciens ferme d'abord le clavier ; la bulle « retour en bas » ne se replie plus — run test
+  - défiler vers les anciens ferme d'abord le clavier ; le bouton « revenir en bas » ne se replie plus
+  - le fil ne montre plus la capsule « Messages récents » — la bulle de retour en bas suffit — run test
+  - configurer une conversation depuis la fiche d'un membre, sans en être membre (Closes #7999)
+  - la pill de jour démarre sous la hauteur MESURÉE de l'en-tête (#7998) — run test
+  - la barre d'outils du composer défile au lieu d'élargir l'écran en Dynamic Type XXXL — run test
+  - en Script et Focal, le contenu s'aligne sur ses citations, l'avatar seul dans sa marge — run test
+  - une réponse reçue en direct garde sa citation — l'écho message:new ne la jette plus
+  - en Script et Focal, le contenu s'aligne sur ses citations, l'avatar seul dans sa marge
+  - la feuille de profil se referme dans le geste qui ouvre la page complète
+  - un double appui sur Envoyer n'envoie plus l'emoji revenu sous le doigt — run test
+  - le démarrage à froid ne construit plus la pile d'appel ; la profondeur du type de la racine est plafonnée — run test
+  - le nom de l'auteur d'un message d'historique ouvre de nouveau son profil
+  - trois emojis rapides en permanence, envois en série, retour après envoi adouci (#7985)
+  - les emojis partent en série — le filet de dédoublonnage par contenu épargne un message d'emojis seuls — run test (Refs #7985)
+  - la barre de langue d'une publication prend rounded-full, rounded-pill n'existe pas
+  - les gardes suivent le panneau des effets de #7967 — clés mortes retirées, seule la barre choisit la protection — run test
+  - le retour de la coque Android se réarme après une sortie (#7988)
+  - repartager une publication depuis la carte du Flux, la publication citée se lit en carte
+  - repartager depuis le Flux ouvre une confirmation avant d'envoyer (Refs #6278)
+  - trois emojis rapides en permanence, envoi en série sans dédoublonnage de contenu, retour après envoi adouci — run test (Refs #7985)
+  - le composeur suit iOS — emojis rapides en cadre sur tout le côté droit, trois au focus, effets en petit panneau (#7980)
+  - le cliquet des couleurs admet le filet de citation partagé (433 → 434)
+  - une story retirée et un éphémère expiré atteignent GRDB, conversation ouverte ou fermée — run test
+  - le retrait d'une story citée s'annonce aux conversations qui la citent ; une citation d'éphémère expiré est scellée
+  - « Vous » se décide sur l'identité utilisateur servie avec l'aperçu — run test
+  - la liste dit « Vous » sur l'identité utilisateur servie avec l'aperçu
+  - en Focal, aucune pastille du message magnifié ne recouvre plus de texte ; la carte de story citée porte le filet de citation — run test
+  - seul index.html reçoit le réglage de la barre du navigateur (#7970)
+  - finir la carte citée d'un repost — pastille de Prisme, vignette « +N », geste optimiste mesuré au pixel, extraction sous budget (Refs #6278)
+  - le script d'amorçage allume la barre du thème choisi (#7970)
+  - la story supprimée se rend « Story indisponible » depuis postReplyTo.deletedAt — run test
+  - check-curve relit slots(for:) paramétré par maxWidth — le gate suit #7881
+  - au focus, trois emojis rapides sur une rangée ; les effets s'ouvrent en panneau comme la durée éphémère — run test (#7966, #7967)
+  - la traduction de mon propre message ne remplace plus « Vous » par mon nom dans la liste (#7952)
+  - le cadre des emojis rapides prend tout le côté droit du composeur — run test (#7961)
+  - Script et Focal — média sous l'avatar, crayon « modifié » visible, texte atténué lisible en sombre, témoins de rendu qui ne plantent plus — run test
+  - un favori posé ou retiré d'un autre appareil suit conversation fermée — run test
+  - « ma réaction » se lit sur la page de messages, plus aucun GET /reactions/:id (#7936)
+  - les témoins de la citation recompilent — la fusion de #7929 avait mangé la fermeture d'un bloc
+  - referme le test et le describe que la fusion de #7944 avait tronqués dans quoted-preview.test.ts
+  - la suite SDK recompile — StoryCanvasInlineEditTouchPolicyTests passe sur le MainActor comme la règle qu'elle teste (#7943)
+  - referme le bloc de test tronqué par la fusion eaa49e30 dans quoted-preview.test.ts
+  - « Mes stickers » dans le composeur — créer depuis une image ou un collage, envoyer en un geste (#7938)
+  - le profil d'un auteur s'ouvre par-dessus l'écran courant (#7946)
+  - port « Mes stickers » et préparation d'une image collée ou choisie (#7938)
+  - en Script et Focal, le contenu part sous l'avatar et seules les citations sont en retrait
+  - solde les sept avertissements de concurrence Swift 6 relevés sur dev
+  - le témoin de colonne centrée attend jusqu'à 20 s sur un runner lent — run test
+  - réactions, modifications et suppressions suivent en direct (run test)
+  - cinq emojis rapides sur deux rangées, l'appui long ouvre la feuille des emojis — run test (#7931)
+  - la coque Android déclare la requête IMAGE_CAPTURE (#7930)
+  - story disparue « indisponible », citations alignées et citation d'un média en Script/Focal — run test
+  - réactions, édition et suppression d'un message suivent en direct
+  - dev reçoit le dernier correctif de #7885 — chaînes mortes de la pastille retirées, témoin de la Recherche à jour — run test
+  - chaînes mortes de la pastille retirées, témoin de la Recherche à jour — run test (#7884, #7921)
+  - onboarding — carte du courriel, points servis élan compris, récapitulatif sans chiffres inventés
+  - une story citée sans instantané est « indisponible » — prédicat unique et cache aligné (Refs #7895)
+  - onglet « Personnalisés », lieu à la position exacte, autour de soi et sur la carte — run test (#7921, #7922)
+  - carte « valide ton adresse », refus définitif d'une story, crédit réel, célébrations et permission différées — run test
+  - bouton d'envoi dès qu'il y a du texte, tuiles du (+) réduites, emojis rapides en verre — run test (#7884)
+  - le passage prononcé d'un vocal passe en gras à l'encre primaire, lisible sur chaque fond
+  - squelette — étape email, champs de vérification et refus définitif d'une story (SDK)
+  - le nom affiché tiré d'une adresse ne garde que ses lettres — une adresse à chiffres s'inscrit enfin, run test (Closes #7912)
+  - réactions d'une pièce jointe et coins de la tuile protégée en grille
+  - les réactions d'une pièce s'affichent sur cette pièce, en direct
+  - la coque annonce une version publiée sur le magasin (#6937)
+  - nom affiché et pseudo en saisie directe, mot de passe expliqué à la demande
+  - nom affiché et pseudo en saisie directe, prénom et nom hors de l'inscription
+  - la coque Android reçoit ses notifications par FCM natif, application fermée (Refs #7307)
+  - recette du verre nonisolated + témoin inscrit au projet — run test (#7884)
+  - un lien meeshy.me ouvre la coque Android sur son écran
+  - l'inscription montre prénom, nom, nom affiché et pseudo en saisie directe
+  - VoiceOver lit l'aperçu d'une conversation sans la notation markdown
+  - chiffres, préférences éditables et conversations triables dans la fiche d'un membre
+  - statistiques, préférences et tri des conversations d'un membre
+  - toutes les vidéos et sons d'une scène suivent sa timeline, en lecture comme au seek (#7879)
+  - sticker sans débord, citations de story, d'humeur et de pièce nommée
+  - la tuile protégée d'une grille se lit sur la boîte noire des Bulles
+  - le fond vidéo BOUCLÉ suit le doigt pendant le parcours d'une scène — run test
+  - quoter le chemin UniversalComposerBar+Format.swift du pbxproj — run test
+  - carrousel d'images et métadonnées complètes sur le profil d'un membre
+  - une réponse à une story ne s'applique que dans le DM de son auteur — run test
+  - mes stories ne tracent que les barres des stories en cours — run test (#7887)
+  - la fiche d'un membre sert sa bannière avec son avatar
+  - le verre du champ n'est pas interactif, le curseur reste au doigt — run test (#7884)
+  - la barre de composition repose sur un panneau de verre liquide — run test (#7884)
+  - la pause d'un glissé se pose sans réécrire le reflet de la pause hôte
+  - la barre du réel à scène et celle de la story se parcourent au doigt
+  - la loi de la piste parcourue quitte media-transport.ts pour seek-track.ts (#7879)
+  - le segment actif d'une story se parcourt au doigt — l'avance attend, la scène suit (#7879)
+  - la barre d'un réel à scène se parcourt au doigt — elle s'agrandit, la scène suit (#7879)
+  - une scène se parcourt au doigt — ScenePlaybackScrubber jusqu'au canvas du lecteur
+  - le moteur de scène remet son horloge à l'hôte et recale ses médias au temps pointé (#7879)
+  - la PWA installée tourne en paysage comme les coques (#7877)
+  - l'horloge de scène se parcourt — seek, subscribeSeek, now (#7879)
+  - les listes d'administration montrent la photo par la loi partagée, et le budget du catalogue d'administration est remesuré (Refs #7873)
+  - la fiche d'un membre s'organise en onglets — profil, conversations, médias, contacts, communautés, profil vocal, sécurité, signalements (Refs #7845, #7873)
+  - décodeurs du dossier d'un membre (contacts, communautés, voix, sessions, sécurité, signalements) (Refs #7845)
+  - la liste des conversations se trie dans les deux ordres et se filtre par type et état (Refs #7873)
+  - l'administration prend toute la largeur, menu latéral repliable, comptes et anonymes en tableaux triables (Refs #7873)
+  - un ban jamais levé est ABSENT de liftedAt — listActiveBans et le balayage l'apparient enfin (Refs #7999)
+  - la garde des surfaces de lecture déclare announceCitedPostWithdrawal — run test
+  - chaque aperçu de dernier message porte l'identité utilisateur de son auteur
+  - la citation d'une story supprimée par son auteur sort expurgée, marquée postReplyTo.deletedAt
+  - une réponse à une story ne vit que dans le DM de son auteur ; un sticker seul est un corps
+  - la liste des messages et /sync servent à nouveau mes réactions par message (#7936)
+  - routes /api/v1/me/stickers — créer depuis une image, lister, utiliser, retirer (#7938)
+  - bibliothèque « Mes stickers » — modèle UserSticker, normalisation serveur, stickerId de message (#7938)
+  - l'édition d'une réponse passe sa citation par la garde unique
+  - la citation d'un message supprimé ne sert plus son texte
+  - première story sans courriel vérifié, et l'état d'onboarding qui le dit
+  - /me/engagement sans balayage de base, et « premier message » après un premier message
+  - la story citée doit être visible par l'expéditeur de la réponse
+  - une réponse à une story n'est admise que si son auteur est membre de la conversation
+  - l'administration lit les communautés et le profil vocal d'un membre, et la fiche d'un anonyme (Refs #7873, #7845)
+  - définition d'un sticker de bibliothèque — types, bornes, reniflage (#7938)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.26.0
+
 ## 1.70.0
 
 ### Minor Changes
