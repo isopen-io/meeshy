@@ -3,6 +3,7 @@ import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
+import enCall from './catalog-en-call';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
@@ -191,6 +192,7 @@ const en = {
   ...enIdentity,
   ...enVerifyEmail,
   ...enPassword,
+  ...enCall,
   ...enSignup,
   'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',

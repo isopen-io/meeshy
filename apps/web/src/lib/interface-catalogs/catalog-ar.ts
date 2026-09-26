@@ -3,6 +3,7 @@ import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
+import arCall from './catalog-ar-call';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
@@ -191,6 +192,7 @@ const ar = {
   ...arIdentity,
   ...arVerifyEmail,
   ...arPassword,
+  ...arCall,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',

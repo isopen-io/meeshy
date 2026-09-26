@@ -34,6 +34,10 @@ export type SocketClient = {
   on<T = unknown>(event: string, handler: SocketHandler<T>): void;
   off<T = unknown>(event: string, handler: SocketHandler<T>): void;
   emit(event: string, payload?: unknown): void;
+  /** Émission avec accusé (`call:initiate`, `call:join`…) ; rejette passé
+   * `timeoutMs`. Facultatif : le bouchon de fixtures et les faux sockets de
+   * témoin n'accusent rien, et le port d'appel le sait (`calls/call-transport.ts`). */
+  emitWithAck?(event: string, payload: unknown, timeoutMs: number): Promise<unknown>;
 };
 
 /**

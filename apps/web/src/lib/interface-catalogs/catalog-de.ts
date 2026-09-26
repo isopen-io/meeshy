@@ -3,6 +3,7 @@ import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
+import deCall from './catalog-de-call';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
@@ -191,6 +192,7 @@ const de = {
   ...deIdentity,
   ...deVerifyEmail,
   ...dePassword,
+  ...deCall,
   ...deSignup,
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
