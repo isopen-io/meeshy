@@ -1,57 +1,55 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
+/// #8147 — le texte d'un message long se replie sur son EXTRAIT (un quart,
+/// coupé au mot, loi `LongMessageExcerpt`) suivi de « … », et se déplie EN
+/// PLACE ; « Réduire » le replie.
 @MainActor
 final class BubbleExpandableTextStateTests: XCTestCase {
-    func test_truncateAtWord_returnsFullStringWhenShorterThanLimit() {
-        XCTAssertEqual(BubbleExpandableText.truncateAtWord("hello", limit: 100), "hello")
+
+    private func longText(words: Int = 400) -> String {
+        Array(repeating: "lecture", count: words).joined(separator: " ")
     }
 
-    func test_truncateAtWord_truncatesAtLastSpace() {
-        let input = "hello world this is a test"
-        let result = BubbleExpandableText.truncateAtWord(input, limit: 14)
-        XCTAssertEqual(result, "hello world")
+    func test_displayedText_shortMessage_isTheWholeTextWithoutToggle() {
+        let state = BubbleExpandableText.State(content: "Bonjour", isExpanded: false)
+        XCTAssertEqual(state.displayedText, "Bonjour")
+        XCTAssertFalse(state.showsReadMore)
+        XCTAssertFalse(state.showsCollapse)
     }
 
-    func test_truncateAtWord_fallsBackToHardCutWhenNoSpace() {
-        let input = "abcdefghijklmnop"
-        let result = BubbleExpandableText.truncateAtWord(input, limit: 5)
-        XCTAssertEqual(result, "abcde")
+    func test_displayedText_longCollapsed_isTheExcerptFollowedByAnEllipsis() throws {
+        let text = longText()
+        let excerpt = try XCTUnwrap(LongMessageExcerpt.excerpt(text))
+        let state = BubbleExpandableText.State(content: text, isExpanded: false)
+        XCTAssertEqual(state.displayedText, excerpt + "…")
+        XCTAssertTrue(state.showsReadMore)
+        XCTAssertFalse(state.showsCollapse)
     }
 
-    func test_needsTruncation_respectsExpandedFlag() {
-        let state = BubbleExpandableText.State(content: String(repeating: "x", count: 600), isExpanded: false)
-        XCTAssertTrue(state.needsTruncation(limit: 512))
-
-        let expanded = BubbleExpandableText.State(content: String(repeating: "x", count: 600), isExpanded: true)
-        XCTAssertFalse(expanded.needsTruncation(limit: 512))
+    func test_displayedText_longCollapsed_showsLessThanHalf() {
+        let text = longText()
+        let state = BubbleExpandableText.State(content: text, isExpanded: false)
+        XCTAssertLessThan(state.displayedText.count * 2, text.count)
     }
 
-    // MARK: - exceeds (bounded length threshold, replaces O(n) `count > limit`)
-
-    func test_exceeds_shorterThanLimit_isFalse() {
-        XCTAssertFalse(BubbleExpandableText.exceeds("hello", 10))
+    func test_displayedText_longExpanded_isTheWholeTextWithACollapseToggle() {
+        let text = longText()
+        let state = BubbleExpandableText.State(content: text, isExpanded: true)
+        XCTAssertEqual(state.displayedText, text)
+        XCTAssertFalse(state.showsReadMore)
+        XCTAssertTrue(state.showsCollapse)
     }
 
-    func test_exceeds_exactlyAtLimit_isFalse() {
-        // count == limit is NOT "exceeds" — mirrors `count > limit` exactly.
-        XCTAssertFalse(BubbleExpandableText.exceeds("12345", 5))
-    }
-
-    func test_exceeds_oneOverLimit_isTrue() {
-        XCTAssertTrue(BubbleExpandableText.exceeds("123456", 5))
-    }
-
-    func test_exceeds_countsGraphemeClusters_notBytes() {
-        // "👋🎉" is 2 characters (grapheme clusters), like String.count.
-        XCTAssertFalse(BubbleExpandableText.exceeds("👋🎉", 2))
-        XCTAssertTrue(BubbleExpandableText.exceeds("👋🎉a", 2))
-    }
-
-    func test_exceeds_matchesCountComparison_forBoundaryCases() {
-        let cases: [(String, Int)] = [("", 0), ("a", 0), ("a", 1), ("abc", 3), ("abcd", 3)]
-        for (s, limit) in cases {
-            XCTAssertEqual(BubbleExpandableText.exceeds(s, limit), s.count > limit, "exceeds('\(s)', \(limit))")
-        }
+    func test_expansion_equality_readsTheStateOnly_notTheClosure() {
+        XCTAssertEqual(
+            LongMessageExpansion(isExpanded: true, toggle: {}),
+            LongMessageExpansion(isExpanded: true, toggle: { _ = 1 })
+        )
+        XCTAssertNotEqual(
+            LongMessageExpansion(isExpanded: true, toggle: {}),
+            LongMessageExpansion(isExpanded: false, toggle: {})
+        )
     }
 }

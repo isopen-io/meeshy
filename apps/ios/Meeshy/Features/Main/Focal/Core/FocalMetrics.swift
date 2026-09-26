@@ -173,6 +173,12 @@ nonisolated public enum FocalMetrics {
         /// s'exerce sur un fond teinté à ce point.
         public static let surfaceLightAlpha: CGFloat = 0.055
         public static let surfaceDarkAlpha: CGFloat = 0.10
+
+        /// Teinte d'accent posée sur le BLOC DE VERRE (#8147), qui remplace
+        /// la carte opaque : le verre porte la couleur de la conversation
+        /// sans masquer ce qui passe dessous. Un seul alpha — le verre (natif
+        /// ou fait main) module lui-même clair et sombre.
+        public static let glassTintOpacity: Double = 0.22
     }
 
     // MARK: - Gabarit large de la rangée
@@ -222,6 +228,10 @@ nonisolated public enum FocalMetrics {
         /// la scène, ses voisins restent à plat (directive 2026-08-24).
         /// `FocalScrollPerspective.loupeScale` l'écrête à la marge de la carte.
         public static let loupeGain: CGFloat = 0.05
+
+        /// Durée du dépliage / repliage en place (animation de hauteur) —
+        /// `expandDurationMs` de `packages/shared/utils/focal-metrics.ts`.
+        public static let expandDuration: TimeInterval = 0.3
     }
 
     // MARK: - Citation

@@ -453,10 +453,23 @@ struct RiverBubbleView: View, Equatable {
 
     /// Le texte du message, nu. Extrait pour que le voile de protection
     /// l'enveloppe sans dupliquer sa typographie.
+    ///
+    /// #8147 — la Rivière tronque désormais comme les autres modes : l'extrait
+    /// d'un message long, « … Lire la suite », dépliage en place. L'état vient
+    /// de l'hôte par l'environnement (`longMessageFocus`).
     private var riverText: some View {
-        Text(content.text)
-            .font(MeeshyFont.relative(FocalMetrics.Text.size))
-            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+        BubbleExpandableText(
+            content: content.text,
+            isMe: false,
+            mentionDisplayNames: [:],
+            highlightTerm: nil,
+            mentionTint: MeeshyColors.mentionColor(isDark: isDark),
+            hashtagTint: MeeshyColors.hashtagColor(isDark: isDark),
+            linkTint: laneColor,
+            isDark: isDark,
+            fontSize: FocalMetrics.Text.size
+        )
+        .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
     }
 
     // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots

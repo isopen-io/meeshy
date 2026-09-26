@@ -1,12 +1,15 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
 final class BubbleExpandableTextLayoutTests: XCTestCase {
 
-    func test_truncateLimit_isConstant() {
-        XCTAssertEqual(BubbleExpandableText.truncateLimit, 512)
+    /// #8147 — le seuil de « Lire la suite » reste celui d'aujourd'hui : il
+    /// appartient désormais à la loi partagée, jamais à la vue.
+    func test_readMoreThreshold_isTheSharedLawThreshold() {
+        XCTAssertEqual(LongMessageExcerpt.threshold, 512)
     }
 
     func test_equatable_excludesState() {
@@ -61,15 +64,20 @@ final class BubbleExpandableTextLayoutTests: XCTestCase {
         XCTAssertNotEqual(text1, text2)
     }
 
-    func test_truncateAtWord_preservesShortText() {
-        let short = "Short text"
-        XCTAssertEqual(BubbleExpandableText.truncateAtWord(short, limit: 100), short)
-    }
-
-    func test_truncateAtWord_truncatesAtSpace() {
-        let long = "This is a very long text that should be truncated at some point"
-        let limit = 15 // "This is a very l"
-        let expected = "This is a very"
-        XCTAssertEqual(BubbleExpandableText.truncateAtWord(long, limit: limit), expected)
+    func test_equatable_detectsExpansionChange() {
+        let make: (Bool) -> BubbleExpandableText = { isExpanded in
+            BubbleExpandableText(
+                content: "hello",
+                isMe: true,
+                mentionDisplayNames: [:],
+                highlightTerm: nil,
+                mentionTint: .blue,
+                hashtagTint: .purple,
+                linkTint: .blue,
+                isDark: false,
+                expansion: LongMessageExpansion(isExpanded: isExpanded, toggle: {})
+            )
+        }
+        XCTAssertNotEqual(make(true), make(false))
     }
 }

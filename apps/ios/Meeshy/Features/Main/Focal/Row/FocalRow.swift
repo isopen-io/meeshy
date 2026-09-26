@@ -92,7 +92,27 @@ struct FocalRow: View {
         // le prescrit).
         .accessibilityElement(children: .combine)
         .accessibilityLabel(MessageAccessibilityLabelComposer.compose(content))
-        .accessibilityActions { quotedZoneAccessibilityActions }
+        .accessibilityValue(expansionAccessibilityValue)
+        .accessibilityActions {
+            quotedZoneAccessibilityActions
+            expansionAccessibilityActions
+        }
+    }
+
+    /// #8147 — la rangée fusionnée absorbe le libellé « Lire la suite » :
+    /// l'état se DIT par la valeur, et le geste reste une action nommée.
+    private var isLongText: Bool { LongMessageExcerpt.isLong(effectiveText) }
+
+    private var expansionAccessibilityValue: String {
+        guard isLongText else { return "" }
+        return input.isExpanded ? BubbleExpandableText.expandedValue : BubbleExpandableText.collapsedValue
+    }
+
+    @ViewBuilder
+    private var expansionAccessibilityActions: some View {
+        if isLongText, let toggle = actions.onToggleExpanded {
+            Button(input.isExpanded ? BubbleExpandableText.collapseTitle : BubbleExpandableText.readMoreTitle) { toggle() }
+        }
     }
 
     /// **LOI DES ZONES — la moitié VoiceOver.** Les zones 1 (avatar → profil) et
@@ -192,7 +212,7 @@ struct FocalRow: View {
         // BASSE — des superpositions, aucune hauteur réservée : tout apparaît
         // AVEC la carte, au tick d'élection.
         .background {
-            if input.isFocused {
+            if input.isFocused || input.isExpanded {
                 focusCardBackground.padding(.bottom, -focusDrop)
             }
         }
@@ -715,8 +735,8 @@ struct FocalRow: View {
     /// `activeDisplayLangCode`), le même que la bulle. L'ancienne préférence
     /// `preferredContent ?? raw` court-circuitait la bascule V.O. : le
     /// drapeau-toggle changeait `activeLangCode` sans jamais changer le
-    /// texte de la rangée plate. Partagé par le rendu, la sheet « Lire
-    /// plus » et la clé du cross-fade.
+    /// texte de la rangée plate. Partagé par le rendu, l'extrait du message
+    /// long et la clé du cross-fade.
     private var effectiveText: String {
         content.text?.raw ?? ""
     }
@@ -740,14 +760,11 @@ struct FocalRow: View {
                 isDark: input.isDark,
                 trackedLinks: content.text?.trackedLinks ?? [:],
                 fontSize: textSize,
-                expandLabel: String(localized: "focal.readmore", defaultValue: "Lire plus", bundle: .main),
                 // Aucune entrée gouvernant la HAUTEUR ne dépend de
-                // `isFocused` (decisions.md 2026-08-22 bis) : le tick
-                // d'élection reconfigure la rangée élue en plein geste, un
-                // plafond de texte variable y ferait sauter le fil. Plafond
-                // constant, comme `indent` et `textSize` avant lui.
-                truncateLimit: BubbleExpandableText.truncateLimit,
-                onExpandOverride: { actions.onReadMore?(readMorePayload) }
+                // `isFocused` (decisions.md 2026-08-22 bis) : seul le
+                // dépliage, geste explicite, change la hauteur — et l'hôte
+                // l'anime sans saut de défilement (#8147).
+                expansion: expansion
             )
             .equatable()
             .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
@@ -763,8 +780,6 @@ struct FocalRow: View {
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
     }
 
-    /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
-    /// rangée (Prisme déjà résolu), jamais une seconde résolution.
     /// En focus : « Aujourd'hui 12:30 », « Hier 18:30 », « Mardi 23:40 »,
     /// « Sam. 3 oct. 2025 · 14:41 » (`FocalFocusTimestamp`) ; sinon l'heure seule.
     /// En focus : la date complète PRÉ-CALCULÉE par la configuration
@@ -785,15 +800,10 @@ struct FocalRow: View {
         )
     }
 
-    private var readMorePayload: FocalReadMorePayload {
-        FocalReadMorePayload(
-            messageId: content.messageId,
-            senderName: content.senderName ?? "",
-            timeString: content.meta.timeString,
-            text: effectiveText,
-            accentHex: input.accentHex,
-            isDark: input.isDark
-        )
+    /// Le dépliage EN PLACE (#8147), tenu par l'hôte : un seul message
+    /// déplié à la fois. Sans hôte, le texte garde son état local.
+    private var expansion: LongMessageExpansion? {
+        actions.onToggleExpanded.map { LongMessageExpansion(isExpanded: input.isExpanded, toggle: $0) }
     }
 
     // `flagEmoji` a vécu ici, repliant sur 🌐 et lisant `LanguageData` quand la
@@ -1036,8 +1046,7 @@ struct FocalRow: View {
     /// dépasse le bloc de `focusCardInnerMargin` en haut et en bas, et
     /// s'arrête à `focusCardHorizontalInset` du bord de la cellule.
     private var focusCardBackground: some View {
-        RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-            .fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))
+        FocalGlassBlock(accentHex: input.accentHex)
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }

@@ -129,6 +129,11 @@ struct RiverStreamHost: View {
     /// au repos (`RiverTimeHandleMetrics.restDelay`).
     @State private var isTimeHandleVisible = false
     @State private var timeHandleRest: Task<Void, Never>?
+    /// #8147 — le message long DÉPLIÉ en place (un seul à la fois), et s'il
+    /// est dans la fenêtre de la pile : ses voisins ne s'atténuent que tant
+    /// qu'on le lit.
+    @State private var expandedMessageId: String?
+    @State private var isExpandedMessageOnScreen = false
 
 
     private var laneCount: Int { max(1, geometry.laneCount) }
@@ -561,11 +566,24 @@ struct RiverStreamHost: View {
                 onConsumeViewOnce: onConsumeViewOnce
             )
                 .equatable()
+                .longMessageFocus(expansion(for: bubble.messageId), accentHex: DynamicColorGenerator.colorForName(content.colorSeed))
+                .longMessageLoupe(isActive: expandedMessageId == bubble.messageId && !reduceMotion)
+                .opacity(LongMessageExpansionLaw.alpha(
+                    isExpandedCell: expandedMessageId == bubble.messageId,
+                    expansionVisible: isExpandedMessageOnScreen
+                ))
+                .zIndex(expandedMessageId == bubble.messageId ? 1 : 0)
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))
                 }
-                .onAppear { completeLanding(rank: rank, laneIndex: laneIndex) }
+                .onAppear {
+                    completeLanding(rank: rank, laneIndex: laneIndex)
+                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = true }
+                }
+                .onDisappear {
+                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = false }
+                }
         } else {
             // Cellule VIDE — préserve l'alignement de colonne pour que
             // `LazyVGrid` garde la grille synchronisée avec `RiverColumnLayout`.
@@ -574,6 +592,20 @@ struct RiverStreamHost: View {
             Color.clear
                 .frame(width: laneWidth, height: 1)
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
+    /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même.
+    private func expansion(for messageId: String) -> LongMessageExpansion {
+        LongMessageExpansion(isExpanded: expandedMessageId == messageId) {
+            let next = LongMessageExpansionLaw.nextExpanded(current: expandedMessageId, toggled: messageId)
+            let apply = {
+                expandedMessageId = next
+                isExpandedMessageOnScreen = next != nil
+            }
+            guard !reduceMotion else { return apply() }
+            withAnimation(.easeInOut(duration: FocalMetrics.Focus.expandDuration), apply)
         }
     }
 

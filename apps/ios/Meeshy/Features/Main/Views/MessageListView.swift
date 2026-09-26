@@ -636,7 +636,6 @@ struct MessageListView: UIViewControllerRepresentable {
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
-    var onReadMore: ((FocalReadMorePayload) -> Void)?
     /// Lot 3.2 — carte lieu / partage fichier de la rangée plate.
     var onFocalTapLocation: ((SharedPlace) -> Void)?
     var onFocalShareFile: ((URL) -> Void)?
@@ -723,7 +722,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
-        vc.onReadMore = onReadMore
         vc.onFocalTapLocation = onFocalTapLocation
         vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
@@ -842,7 +840,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
-        vc.onReadMore = onReadMore
         vc.onFocalTapLocation = onFocalTapLocation
         vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
