@@ -132,3 +132,23 @@ final class BubbleBlurRevealController: ObservableObject {
         }
     }
 }
+
+/// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
+/// dans `BubbleStandardLayout.contentStack` pour le rationale (perf GPU au
+/// scroll). Sorti de `BubbleStandardLayout.swift`, hors budget de taille (#8009).
+struct BlurRevealModifier: ViewModifier {
+    let isBlurrable: Bool
+    let shouldBlur: Bool
+    func body(content: Content) -> some View {
+        if isBlurrable {
+            content
+                .blur(radius: shouldBlur ? 20 : 0)
+                .mask(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .blur(radius: shouldBlur ? 5 : 0)
+                )
+        } else {
+            content
+        }
+    }
+}

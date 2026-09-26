@@ -245,7 +245,8 @@ struct FocalGridCell: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
-            guard case .none = protectionState else { return }
+            // #8009 — protégée ou non, le toucher ouvre le plein écran sur
+            // CETTE pièce : aucun dévoilement préalable dans la rangée.
             onTap?(attachment)
         }
         .overlay { protectionOverlay }
@@ -350,7 +351,7 @@ struct FocalGridCell: View {
                         : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(.white)
-                    Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
+                    Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
                         .font(MeeshyFont.relative(9))
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -360,13 +361,11 @@ struct FocalGridCell: View {
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
-            .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
-            .onLongPressGesture(minimumDuration: 0.3) {
+            .accessibilityHint(ProtectedContentTap.openFullscreenHint)
+            .accessibilityAddTraits(.isButton)
+            .onTapGesture {
                 HapticFeedback.medium()
-                revealController.requestReveal(
-                    request: BubbleBlurRevealLifecycle.RevealRequest(messageId: attachment.id, isViewOnce: isViewOnce),
-                    consumeViewOnce: onConsumeViewOnce
-                )
+                onTap?(attachment)
             }
         }
     }

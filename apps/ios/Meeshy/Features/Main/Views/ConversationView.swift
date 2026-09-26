@@ -949,7 +949,7 @@ struct ConversationView: View {
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
+                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -2681,7 +2681,7 @@ struct ConversationView: View {
             // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
             // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
             // unique, et la clause O13 tomberait par un simple défaut.
-            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce
+            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide

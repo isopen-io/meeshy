@@ -23,6 +23,10 @@ struct FocalProtectedContent<Content: View>: View {
     var isDark: Bool = false
     let messageId: String
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    /// Ce que fait le toucher (#8009) — un média caché s'ouvre en plein écran
+    /// par `onMediaTap`, sans dévoilement préalable de la rangée.
+    var tap: ProtectedContentTap = .revealText
+    var onMediaTap: ((MessageAttachment) -> Void)? = nil
     @ViewBuilder let content: Content
 
     @StateObject private var reveal = BubbleBlurRevealController()
@@ -56,8 +60,9 @@ struct FocalProtectedContent<Content: View>: View {
         // MeeshyUI) : même libellé, même indice, même geste. Elle était
         // dupliquée ici avec ses propres clés i18n, et ni l'une ni l'autre ne
         // disait qu'une vue unique se CONSOMME au toucher.
-        ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark) {
+        ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark, hint: tap.accessibilityHint) {
             HapticFeedback.medium()
+            if case .openFullscreen(let media) = tap, let onMediaTap { onMediaTap(media); return }
             reveal.requestReveal(
                 request: BubbleBlurRevealLifecycle.RevealRequest(
                     messageId: messageId,

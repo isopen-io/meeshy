@@ -318,6 +318,7 @@ struct ThemedMessageBubble: View {
                     isDark: isDark,
                     protection: content.protection,
                     timeString: content.meta.timeString,
+                    hint: content.protectedTap().accessibilityHint,
                     onOpen: { [messageId = content.messageId, onConsumeViewOnce] in
                         HapticFeedback.medium()
                         onConsumeViewOnce?(messageId) { _ in }

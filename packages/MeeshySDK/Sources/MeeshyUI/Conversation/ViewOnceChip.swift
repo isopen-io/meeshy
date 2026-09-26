@@ -24,16 +24,20 @@ public struct ViewOnceChip: View, Equatable {
 
     public let state: State
     public let isDark: Bool
+    /// Ce que fait le toucher, dit à VoiceOver (#8009) : ouvrir un plein écran
+    /// ou lire sur place. L'hôte le sait (le contenu scellé n'est pas ici).
+    public let hint: String?
     private let onOpen: () -> Void
 
-    public init(state: State, isDark: Bool, onOpen: @escaping () -> Void) {
+    public init(state: State, isDark: Bool, hint: String? = nil, onOpen: @escaping () -> Void) {
         self.state = state
         self.isDark = isDark
+        self.hint = hint
         self.onOpen = onOpen
     }
 
     public static func == (lhs: ViewOnceChip, rhs: ViewOnceChip) -> Bool {
-        lhs.state == rhs.state && lhs.isDark == rhs.isDark
+        lhs.state == rhs.state && lhs.isDark == rhs.isDark && lhs.hint == rhs.hint
     }
 
     public var body: some View {
@@ -67,6 +71,7 @@ public struct ViewOnceChip: View, Equatable {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: state))
+        .accessibilityHint(state == .sealed ? (hint ?? "") : "")
         .accessibilityAddTraits(state == .sealed ? .isButton : .isStaticText)
         .allowsHitTesting(state == .sealed)
     }
