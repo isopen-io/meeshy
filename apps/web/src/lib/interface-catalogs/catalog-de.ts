@@ -1024,6 +1024,8 @@ const de = {
 
   'thread.unread-separator.one': '{count} ungelesene Nachricht',
   'thread.unread-separator.other': '{count} ungelesene Nachrichten',
+  'thread.long-message.read-more': 'Weiterlesen',
+  'thread.long-message.collapse': 'Weniger anzeigen',
   'message-detail.info.title': 'Nachrichteninfo',
   'message-detail.received-by': 'Erhalten von',
   'message-detail.read-by': 'Gelesen von',

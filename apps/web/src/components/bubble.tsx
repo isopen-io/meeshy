@@ -21,7 +21,7 @@ import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
-import { RichText } from './rich-text';
+import { LongMessageText } from './long-message-text';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
@@ -395,13 +395,15 @@ export function Bubble({
             le paragraphe entier rendrait chaque mention focusable ET invisible
             (violation `aria-hidden-focus`, pire qu'un texte nu). Les liens
             restent atteignables, nommés et au clavier. */
-        <RichText
+        <LongMessageText
+          messageId={message.id}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
           linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
+          toggleColor={isMine ? 'white' : 'var(--color-ios-ink)'}
           plainTextHidden
         />
       ) : null}

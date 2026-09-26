@@ -1066,6 +1066,8 @@ const fr = {
 
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
+  'thread.long-message.read-more': 'Lire la suite',
+  'thread.long-message.collapse': 'Réduire',
   'message-detail.info.title': 'Infos du message',
   'message-detail.received-by': 'Reçu par',
   'message-detail.read-by': 'Vu par',

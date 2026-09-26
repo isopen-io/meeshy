@@ -14,6 +14,8 @@
  */
 import type { CSSProperties } from 'react';
 
+import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
+
 /** `FocalMetrics.Row.paddingVertical` / `.paddingHorizontal` — `3/16`. */
 export const ROW_PADDING_VERTICAL = 3;
 export const ROW_PADDING_HORIZONTAL = 16;
@@ -130,12 +132,12 @@ export const FOCUS_CARD_HORIZONTAL_INSET = 6;
 export const FOCUS_CARD_MARGIN_VERTICAL = 8;
 export const FOCUS_LOUPE_GAIN = 0.05;
 
-/**
- * `FocalScrollPerspective.focusCardFillOpacityDark` / `.Light` — la teinte de
- * la carte (accent de la conversation mélangé à cette opacité).
+/*
+ * `FOCUS_CARD_FILL_DARK` / `_LIGHT` (la teinte d'accent de la carte) ont
+ * quitté ce fichier avec #8147 : la carte de l'élue est désormais un BLOC DE
+ * VERRE (`glass glass-card`, `thread-scene.css`), qui ne lit plus aucune
+ * opacité de teinte.
  */
-export const FOCUS_CARD_FILL_DARK = 0.16;
-export const FOCUS_CARD_FILL_LIGHT = 0.10;
 
 /**
  * `FocalScrollPerspective.focusChipFillOpacity(isDark:isActive:)` — les
@@ -272,8 +274,6 @@ export const DAY_PILL_FADE_MS = 180;
  */
 export function sceneStyleVars(): CSSProperties {
   return {
-    '--focus-fill-dark': String(FOCUS_CARD_FILL_DARK),
-    '--focus-fill-light': String(FOCUS_CARD_FILL_LIGHT),
     '--focus-chip-fill-dark': String(FOCUS_CHIP_FILL_DARK),
     '--focus-chip-fill-light': String(FOCUS_CHIP_FILL_LIGHT),
     '--focus-card-radius': `${FOCUS_CARD_RADIUS}px`,
@@ -295,6 +295,10 @@ export function sceneStyleVars(): CSSProperties {
     '--focus-text-indent': `${TEXT_INDENT}px`,
     '--focus-identity-overhang': `${IDENTITY_OVERHANG}px`,
     '--focus-strip-overhang': `${FOCUS_STRIP_OVERHANG}px`,
+    /* Le dépliage d'un message long (#8147) — cotes PARTAGÉES avec iOS
+       (`@meeshy/shared/utils/focal-metrics`), lues par `thread-scene.css`. */
+    '--unfold-dim': String(FOCAL_METRICS.neighborOpacity),
+    '--unfold-enter-ms': `${FOCAL_METRICS.enterDurationMs}ms`,
   } as CSSProperties;
 }
 

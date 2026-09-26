@@ -1024,6 +1024,8 @@ const es = {
 
   'thread.unread-separator.one': '{count} mensaje no leído',
   'thread.unread-separator.other': '{count} mensajes no leídos',
+  'thread.long-message.read-more': 'Leer más',
+  'thread.long-message.collapse': 'Mostrar menos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',

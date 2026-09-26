@@ -358,8 +358,6 @@ const PERSPECTIVE_MAPPINGS = [
   ['highVelocityThreshold', 'HIGH_VELOCITY_THRESHOLD', "seuil de vitesse d'armement immédiat (FocalMagnificationLaw.highVelocityThreshold)"],
   ['focusCardCornerRadius', 'FOCUS_CARD_RADIUS', 'rayon de la carte de focus (focusCardCornerRadius)'],
   ['focusCardHorizontalInset', 'FOCUS_CARD_HORIZONTAL_INSET', 'débord horizontal de la carte (focusCardHorizontalInset)'],
-  ['focusCardFillOpacityDark', 'FOCUS_CARD_FILL_DARK', 'teinte de la carte, schéma sombre (focusCardFillOpacityDark)'],
-  ['focusCardFillOpacityLight', 'FOCUS_CARD_FILL_LIGHT', 'teinte de la carte, schéma clair (focusCardFillOpacityLight)'],
 ];
 
 for (const [swiftName, downstreamName, what] of PERSPECTIVE_MAPPINGS) {

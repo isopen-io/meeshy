@@ -1021,6 +1021,8 @@ const ar = {
 
   'thread.unread-separator.one': '{count} رسالة غير مقروءة',
   'thread.unread-separator.other': '{count} رسائل غير مقروءة',
+  'thread.long-message.read-more': 'اقرأ المزيد',
+  'thread.long-message.collapse': 'عرض أقل',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',
