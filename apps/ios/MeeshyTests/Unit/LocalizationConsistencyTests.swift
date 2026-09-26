@@ -785,6 +785,23 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// Un `bundle:` PASSÉ EN PARAMÈTRE (`MeeshyPasswordField`, #8054) désigne le
+    /// catalogue que ses appelants lui donnent : `.module` seul ⇒ le SDK ; le
+    /// moindre `.main` ⇒ l'app, où la clé reste exigée.
+    func test_leScannerSuitUnBundlePasséEnParamètre() {
+        let forwarded = """
+        var label: String { label(bundle: .module) }
+        func label(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: forwarded).map(\.isModuleBundle), [true])
+
+        let mixed = forwarded + "\nlet b = label(bundle: .main)"
+        XCTAssertEqual(localizedCalls(in: mixed).map(\.isModuleBundle), [false],
+                       "un paramètre aussi rempli par `.main` reste compté contre le catalogue de l'app")
+    }
+
     /// Keys with at least one locale expressed as plural variations.
     private func pluralizedKeys(_ url: URL) throws -> [String] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]

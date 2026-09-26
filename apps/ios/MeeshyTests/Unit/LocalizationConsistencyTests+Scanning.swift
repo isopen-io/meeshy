@@ -314,13 +314,29 @@ extension LocalizationConsistencyTests {
                 calls.append(LocalizedCall(
                     key: key,
                     hasDefaultValue: segment.contains("defaultValue:"),
-                    isModuleBundle: segment.contains(".module"),
+                    isModuleBundle: segment.contains(".module") || forwardsModuleBundle(segment, in: source),
                     defaultValue: inlineDefaultValue(in: segment)
                 ))
             }
             searchStart = end + 1
         }
         return calls
+    }
+
+    /// A call whose `bundle:` is a PARAMETER (`bundle: bundle`) resolves against
+    /// whatever its callers pass. It belongs to the module catalog when the same
+    /// file fills that parameter with `.module` and never with `.main` — the shape
+    /// `MeeshyPasswordField` uses so its tests can inject a bundle (#8054). A
+    /// parameter the file also fills with `.main`, or never fills at all, stays
+    /// counted against the app catalog.
+    func forwardsModuleBundle(_ segment: String, in source: String) -> Bool {
+        guard let range = segment.range(of: #"bundle:\s*[A-Za-z_][A-Za-z0-9_]*"#, options: .regularExpression)
+        else { return false }
+        let parameter = segment[range].dropFirst("bundle:".count).trimmingCharacters(in: .whitespaces)
+        let fills = { (value: String) in
+            source.range(of: "\\b\(parameter):\\s*\\.\(value)\\b", options: .regularExpression) != nil
+        }
+        return fills("module") && !fills("main")
     }
 
     /// The inline `defaultValue:` literal of a call segment, when it is written on
