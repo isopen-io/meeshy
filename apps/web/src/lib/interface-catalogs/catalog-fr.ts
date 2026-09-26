@@ -128,6 +128,7 @@ const fr = {
      taille) ; ces deux-ci restent ICI parce qu'elles ne portent pas ce
      préfixe. */
   'media.unavailable': 'Média indisponible',
+  'media.retry': 'Réessayer',
   'report.post.title': 'Signaler cette publication',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
   'bookmarks.title': 'Publications enregistrées',

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import { apiConfig } from '@/lib/api/config';
@@ -17,6 +19,7 @@ import { navigate } from '@/routes/route-table';
 import { Attachments } from './attachment-blocks';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { Glyph } from './glyph';
+import { MediaUnavailable } from './media-unavailable';
 import { LocationCard } from './message-body-blocks';
 
 /**
@@ -76,6 +79,7 @@ export function MediaTile({
   readonly onOpen: (key: string) => void;
 }) {
   const { attachment, message } = item;
+  const [failedThumb, setFailedThumb] = useState<string | null>(null);
   const masked = maskedAttachment(attachment);
   const isVideo = attachment.mimeType.startsWith('video/');
   const thumb =
@@ -107,8 +111,22 @@ export function MediaTile({
           <span className="absolute inset-0 grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>
             <Glyph name="eyeSlash" size={22} />
           </span>
-        ) : thumb === undefined ? null : (
-          <img src={thumb} alt="" loading="lazy" decoding="async" className="size-full object-cover" draggable={false} />
+        ) : thumb === undefined ? null : failedThumb === thumb ? (
+          /* Une vignette introuvable (#8141) : l'état dessiné compact, jamais
+             l'icône brisée du navigateur. */
+          <span className="absolute inset-0">
+            <MediaUnavailable language={language} tone="on-card" compact />
+          </span>
+        ) : (
+          <img
+            src={thumb}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover"
+            draggable={false}
+            onError={() => setFailedThumb(thumb)}
+          />
         )}
         {isVideo ? (
           <span className="absolute bottom-1 left-1 grid place-items-center rounded-full text-white" style={{ width: 22, height: 22, backgroundColor: 'rgba(0,0,0,0.55)' }}>
