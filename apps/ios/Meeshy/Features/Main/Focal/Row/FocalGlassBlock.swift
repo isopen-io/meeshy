@@ -16,12 +16,17 @@ import MeeshyUI
 struct FocalGlassBlock: View, Equatable {
     let accentHex: String
 
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
+    }
+
+    /// Le verre reste NEUTRE — le texte y garde son contraste clair/sombre ;
+    /// l'accent de la conversation ne tient qu'au FILET de bordure (parité
+    /// web, #8147).
     var body: some View {
         Color.clear
-            .adaptiveLiquidGlass(
-                in: RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous),
-                tint: Color(hex: accentHex).opacity(FocalMetrics.FocusCard.glassTintOpacity)
-            )
+            .adaptiveLiquidGlass(in: shape)
+            .overlay(shape.strokeBorder(Color(hex: accentHex).opacity(FocalMetrics.FocusCard.glassRimOpacity), lineWidth: FocalMetrics.FocusCard.ringSize))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

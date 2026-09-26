@@ -143,9 +143,12 @@ struct BubbleExpandableText: View, Equatable {
     ///   `.accessibilityAction`, et l'état se dit par `accessibilityValue`.
     private func toggleLabel(isExpanded: Bool, textColor: Color) -> some View {
         let title = isExpanded ? Self.collapseTitle : Self.readMoreTitle
+        // À l'ENCRE du texte et souligné (parité web, #8147) : la couleur de
+        // marque posée sur le verre mesurait 2,6:1, sous le seuil AA.
         return Text(title)
+            .underline()
             .font(MeeshyFont.relative(12, weight: .semibold))
-            .foregroundColor(textColor.opacity(0.6))
+            .foregroundColor(textColor)
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
             .padding(.trailing, 48)
             .contentShape(DownwardExtendedTapShape(extraBottom: 20))
