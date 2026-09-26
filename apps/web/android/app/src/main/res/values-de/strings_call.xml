@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #8049 — l'appel natif de la coque : notification d'appel entrant,
+     service au premier plan. Sept langues, les memes cles partout. -->
+<resources>
+    <string name="call_channel_incoming_name">Eingehende Anrufe</string>
+    <string name="call_channel_incoming_description">Lässt Meeshy-Anrufe klingeln, auch wenn die App geschlossen ist</string>
+    <string name="call_channel_ongoing_name">Laufender Anruf</string>
+    <string name="call_incoming_fallback_title">Eingehender Anruf</string>
+    <string name="call_incoming_audio">Sprachanruf</string>
+    <string name="call_incoming_video">Videoanruf</string>
+    <string name="call_action_answer">Annehmen</string>
+    <string name="call_action_decline">Ablehnen</string>
+    <string name="call_ongoing_audio">Sprachanruf läuft</string>
+    <string name="call_ongoing_video">Videoanruf läuft</string>
+    <string name="call_ongoing_return">Tippen, um zum Anruf zurückzukehren</string>
+</resources>

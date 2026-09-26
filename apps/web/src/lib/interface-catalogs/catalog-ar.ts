@@ -4,6 +4,7 @@ import arIdentity from './catalog-ar-identity';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
+import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arSignup from './catalog-ar-signup';
 
@@ -194,6 +195,7 @@ const ar = {
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,
+  ...arCallShell,
   ...arCallJoin,
   ...arSignup,
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
