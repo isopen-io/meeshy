@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
+import deMediaHub from './catalog-de-media-hub';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
@@ -11,6 +12,7 @@ import deSignup from './catalog-de-signup';
 import deMentions from './catalog-de-mentions';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
+import deContactCard from './catalog-de-contact-card';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -193,6 +195,7 @@ const de = {
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
+  ...deMediaHub,
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,
@@ -1126,6 +1129,7 @@ const de = {
   ...deMentions,
   ...deConversationCard,
   ...deStoriesMine,
+  ...deContactCard,
 } satisfies InterfaceCatalog;
 
 export default de;

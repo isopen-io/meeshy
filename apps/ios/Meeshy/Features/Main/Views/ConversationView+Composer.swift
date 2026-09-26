@@ -3,6 +3,8 @@ import SwiftUI
 import Combine
 import PhotosUI
 import AVFoundation
+import Contacts
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -175,6 +177,7 @@ extension ConversationView {
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
+            onContactPicker: { composerState.showContactPicker = true },
             onShowAttachments: {
                 // Carrousel de pièces jointes ouvert → ferme le panneau emoji
                 // pour ne jamais empiler deux surfaces d'entrée sous la barre.
@@ -493,14 +496,25 @@ extension ConversationView {
 
     // MARK: - Contact Selection Handler
 
-    func handleContactSelection(_ contact: SharedContact) {
-        // For now, send the contact info as a text message
-        var parts: [String] = [contact.fullName]
-        for phone in contact.phoneNumbers { parts.append(phone) }
-        for email in contact.emails { parts.append(email) }
-        let contactText = parts.joined(separator: "\n")
-
-        composerText.text = contactText
-        HapticFeedback.success()
+    /// Le contact choisi part en PIÈCE JOINTE vCard (#8101) — plus jamais en
+    /// texte collé. Il rejoint le tiroir par la même voie qu'un fichier
+    /// importé : bulle optimiste, brouillon durable et envoi inchangés.
+    func handleContactSelection(_ contact: CNContact) {
+        guard let export = ContactCardExporter.export(contact) else {
+            FeedbackToastManager.shared.showError(
+                String(localized: "contact-card.export-failed", defaultValue: "Ce contact ne peut pas être partagé", bundle: .main)
+            )
+            return
+        }
+        do {
+            let url = try ContactCardExporter.writeTemporaryFile(export)
+            appendPendingFileAttachment(tempURL: url, fileName: export.fileName, mimeType: ContactCardMime.mimeType, fileSize: export.data.count)
+            HapticFeedback.light()
+        } catch {
+            Logger.messages.error("Contact card export failed: \(error.localizedDescription, privacy: .public)")
+            FeedbackToastManager.shared.showError(
+                String(localized: "contact-card.export-failed", defaultValue: "Ce contact ne peut pas être partagé", bundle: .main)
+            )
+        }
     }
 }

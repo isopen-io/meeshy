@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
+import itMediaHub from './catalog-it-media-hub';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
@@ -11,6 +12,7 @@ import itSignup from './catalog-it-signup';
 import itMentions from './catalog-it-mentions';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
+import itContactCard from './catalog-it-contact-card';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -193,6 +195,7 @@ const it = {
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
+  ...itMediaHub,
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
@@ -1126,6 +1129,7 @@ const it = {
   ...itMentions,
   ...itConversationCard,
   ...itStoriesMine,
+  ...itContactCard,
 } satisfies InterfaceCatalog;
 
 export default it;

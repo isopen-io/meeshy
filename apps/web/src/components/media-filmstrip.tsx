@@ -111,7 +111,7 @@ export function MediaFilmstrip({
 
         return (
           <button
-            key={attachment.id}
+            key={`${index}:${attachment.id}`}
             type="button"
             data-filmstrip-item
             {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
@@ -131,7 +131,7 @@ export function MediaFilmstrip({
               <Glyph name="eyeSlash" size={14} className="media-filmstrip-masked-glyph" />
             ) : (
               <>
-                {thumb !== undefined ? <img src={thumb} alt="" aria-hidden className="size-full object-cover" /> : null}
+                {thumb !== undefined ? <img src={thumb} alt="" aria-hidden loading="lazy" decoding="async" className="size-full object-cover" /> : null}
                 {kindOf(attachment) === 'video' ? (
                   <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
                 ) : null}

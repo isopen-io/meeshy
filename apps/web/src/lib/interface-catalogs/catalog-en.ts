@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
+import enMediaHub from './catalog-en-media-hub';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
@@ -11,6 +12,7 @@ import enSignup from './catalog-en-signup';
 import enMentions from './catalog-en-mentions';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
+import enContactCard from './catalog-en-contact-card';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -193,6 +195,7 @@ const en = {
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
+  ...enMediaHub,
   ...enVerifyEmail,
   ...enPassword,
   ...enCall,
@@ -1126,6 +1129,7 @@ const en = {
   ...enMentions,
   ...enConversationCard,
   ...enStoriesMine,
+  ...enContactCard,
 } satisfies InterfaceCatalog;
 
 export default en;

@@ -14,6 +14,7 @@ import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
+import frMediaHub from './catalog-fr-media-hub';
 import frVerifyEmail from './catalog-fr-verify-email';
 import frPassword from './catalog-fr-password';
 import frCall from './catalog-fr-call';
@@ -22,6 +23,7 @@ import frCallJoin from './catalog-fr-call-join';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
 import frFeedPost from './catalog-fr-feed-post';
+import frContactCard from './catalog-fr-contact-card';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -183,6 +185,7 @@ const fr = {
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
   ...frIdentity,
+  ...frMediaHub,
   ...frVerifyEmail,
   ...frPassword,
   ...frCall,
@@ -1154,6 +1157,7 @@ const fr = {
 
   ...frStoriesMine,
   ...frFeedPost,
+  ...frContactCard,
 } as const;
 
 export default fr;

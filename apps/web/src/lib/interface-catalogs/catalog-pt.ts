@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
+import ptMediaHub from './catalog-pt-media-hub';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
@@ -11,6 +12,7 @@ import ptSignup from './catalog-pt-signup';
 import ptMentions from './catalog-pt-mentions';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
+import ptContactCard from './catalog-pt-contact-card';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -197,6 +199,7 @@ const pt = {
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
+  ...ptMediaHub,
   ...ptVerifyEmail,
   ...ptPassword,
   ...ptCall,
@@ -1130,6 +1133,7 @@ const pt = {
   ...ptMentions,
   ...ptConversationCard,
   ...ptStoriesMine,
+  ...ptContactCard,
 } satisfies InterfaceCatalog;
 
 export default pt;

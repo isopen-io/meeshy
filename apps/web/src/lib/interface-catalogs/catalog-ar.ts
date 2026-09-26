@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import arComposerAttach from './catalog-ar-composer-attach';
 import arIdentity from './catalog-ar-identity';
+import arMediaHub from './catalog-ar-media-hub';
 import arVerifyEmail from './catalog-ar-verify-email';
 import arPassword from './catalog-ar-password';
 import arCall from './catalog-ar-call';
@@ -11,6 +12,7 @@ import arSignup from './catalog-ar-signup';
 import arMentions from './catalog-ar-mentions';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
+import arContactCard from './catalog-ar-contact-card';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -193,6 +195,7 @@ const ar = {
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
   ...arIdentity,
+  ...arMediaHub,
   ...arVerifyEmail,
   ...arPassword,
   ...arCall,
@@ -1123,6 +1126,7 @@ const ar = {
   ...arMentions,
   ...arConversationCard,
   ...arStoriesMine,
+  ...arContactCard,
 } satisfies InterfaceCatalog;
 
 export default ar;
