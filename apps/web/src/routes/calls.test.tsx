@@ -5,7 +5,17 @@ import { CALLS_GLYPHS } from '@/components/glyphs-calls';
 import type { CallRecord } from '@/lib/api/calls';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallFilterRail, CallRow, CallsEmpty, CallsError, CallsHeader, CallsOfflineNotice } from './calls-parts';
+import {
+  CallFilterRail,
+  CallRow,
+  CallsClearAll,
+  CallsEmpty,
+  CallsEraseFailed,
+  CallsError,
+  CallsHeader,
+  CallsOfflineNotice,
+  CallsSearchEmpty,
+} from './calls-parts';
 
 /**
  * LE JOURNAL D'APPELS DESSINÉ (#6362) — miroir `CallsTab` et `CallJournalRow`
@@ -135,5 +145,57 @@ describe('les états', () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('Le journal se chargera dès le retour du réseau.');
     expect(html).not.toContain('dernier chargement');
+  });
+});
+
+describe('effacer et chercher (#8066)', () => {
+  test('l’en-tête offre « Modifier », puis « OK » en mode édition ; l’état se lit', () => {
+    const idle = renderToStaticMarkup(<CallsHeader language="fr" edit={{ editing: false, onToggle: noop }} />);
+    expect(idle).toMatch(/data-calls-edit[^>]*aria-pressed="false"[^>]*>Modifier</);
+    const editing = renderToStaticMarkup(<CallsHeader language="fr" edit={{ editing: true, onToggle: noop }} />);
+    expect(editing).toMatch(/data-calls-edit[^>]*aria-pressed="true"[^>]*>OK</);
+  });
+
+  test('sans journal à modifier, l’en-tête ne montre pas « Modifier »', () => {
+    expect(renderToStaticMarkup(<CallsHeader language="fr" />)).not.toContain('data-calls-edit');
+  });
+
+  test('en mode édition, la ligne troque « Rappeler » contre « Effacer », nommé', () => {
+    const html = renderToStaticMarkup(<CallRow language="fr" record={record()} now={NOW} onHide={noop} />);
+    expect(html).toContain('data-call-hide');
+    expect(html).toContain('aria-label="Effacer l’appel avec Amina Diallo du journal"');
+    expect(html).not.toContain('data-call-back');
+  });
+
+  test('« Tout effacer » demande confirmation avant d’agir, et dit que les autres gardent leur journal', () => {
+    const ask = renderToStaticMarkup(<CallsClearAll language="fr" confirming={false} onAsk={noop} onConfirm={noop} onCancel={noop} />);
+    expect(ask).toContain('data-calls-clear="ask"');
+    expect(ask).toContain('Tout effacer');
+    expect(ask).not.toContain('data-calls-clear="confirm"');
+    const confirm = renderToStaticMarkup(<CallsClearAll language="fr" confirming onAsk={noop} onConfirm={noop} onCancel={noop} />);
+    expect(confirm).toContain('role="alertdialog"');
+    expect(confirm).toContain('Les autres participants gardent le leur.');
+    expect(confirm).toContain('data-calls-clear="confirm"');
+    expect(confirm).toContain('data-calls-clear="cancel"');
+  });
+
+  test('un effacement refusé s’annonce', () => {
+    const html = renderToStaticMarkup(<CallsEraseFailed language="fr" />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('L’effacement n’a pas abouti. Réessayez.');
+  });
+
+  test('le filtre porte un champ de recherche nommé, qui s’efface quand il est rempli', () => {
+    const empty = renderToStaticMarkup(<CallFilterRail language="fr" selected="all" onSelect={noop} search={{ value: '', onChange: noop }} />);
+    expect(empty).toContain('type="search"');
+    expect(empty).toContain('aria-label="Rechercher un nom"');
+    expect(empty).not.toContain('data-calls-search-clear');
+    const filled = renderToStaticMarkup(<CallFilterRail language="fr" selected="all" onSelect={noop} search={{ value: 'ami', onChange: noop }} />);
+    expect(filled).toContain('value="ami"');
+    expect(filled).toContain('aria-label="Effacer la recherche"');
+  });
+
+  test('une recherche sans résultat nomme ce qu’on a cherché', () => {
+    expect(renderToStaticMarkup(<CallsSearchEmpty language="fr" query="zed" />)).toContain('Aucun appel ne correspond à « zed »');
   });
 });

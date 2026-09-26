@@ -26,7 +26,8 @@ struct RootRouteDestination: View {
                 // I-075 — override éphémère, jamais persistant :
                 // consommé ici comme `pendingReplyContext`
                 // ci-dessus, jamais écrit en préférence.
-                forcedReadingMode: router.pendingForcedReadingMode
+                forcedReadingMode: router.pendingForcedReadingMode,
+                landsOnMessage: router.landsOnMessage(in: conv.id)
             )
             // Identité par conversation — même fix que iPadRootView.
             // `Router.navigateToConversation` REMPLACE la pile en une

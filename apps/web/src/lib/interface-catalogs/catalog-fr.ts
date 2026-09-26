@@ -23,6 +23,7 @@ import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
+import frCallsErase from './catalog-fr-calls-erase';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
 import frSignup from './catalog-fr-signup';
@@ -200,6 +201,7 @@ const fr = {
   ...frCallJoin,
   ...frCallDecline,
   ...frCallFeedback,
+  ...frCallsErase,
   ...frCallDevices,
   ...frCallScreen,
   ...frSignup,

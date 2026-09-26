@@ -36,6 +36,7 @@ public enum ConversationPreviewStringKey: String, Sendable, CaseIterable {
     case attachmentVideo = "attachment.video"
     case attachmentPhoto = "attachment.photo"
     case attachmentFile = "attachment.file"
+    case attachmentContact = "attachment.contact"
     case attachmentLocation = "attachment.location"
     case attachmentSticker = "attachment.sticker"
     case attachmentVoiceMany = "attachment.voice.many"

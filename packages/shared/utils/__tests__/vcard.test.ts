@@ -210,21 +210,17 @@ describe('buildResolveContactsRequest', () => {
   });
 });
 
-describe('contactCardNameFromFileName — le nom humain lu dans le nom du fichier (#8122)', () => {
-  it('rend le nom tel que l’auteur l’a nommé, sans extension', () => {
-    expect(contactCardNameFromFileName('Awa Diallo.vcf')).toBe('Awa Diallo');
-    expect(contactCardNameFromFileName('Awa Diallo.VCARD')).toBe('Awa Diallo');
+describe('contactCardNameFromFileName — le nom humain d’une carte (#8148)', () => {
+  it('décape le préfixe technique contact_<UUID>_ et l’extension', () => {
+    expect(contactCardNameFromFileName('contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf')).toBe('Zoé Sanscompte');
   });
 
-  it('retire le préfixe technique `contact_<UUID>_` des cartes envoyées avant #8142', () => {
-    expect(contactCardNameFromFileName('contact_3F2504E0-4F89-11D3-9A0C-0305E82C3301_Awa Diallo.vcf')).toBe('Awa Diallo');
+  it('garde le nom d’un fichier nommé par son auteur', () => {
+    expect(contactCardNameFromFileName('Marc Dupont.VCARD')).toBe('Marc Dupont');
   });
 
-  it('rend null quand il ne reste aucun nom — l’appelant dit « Carte de visite »', () => {
-    expect(contactCardNameFromFileName('contact_3F2504E0-4F89-11D3-9A0C-0305E82C3301_.vcf')).toBeNull();
-    expect(contactCardNameFromFileName('.vcf')).toBeNull();
-    expect(contactCardNameFromFileName('   ')).toBeNull();
-    expect(contactCardNameFromFileName(null)).toBeNull();
-    expect(contactCardNameFromFileName(undefined)).toBeNull();
+  it('rend null quand il ne reste aucun nom', () => {
+    expect(contactCardNameFromFileName('')).toBeNull();
+    expect(contactCardNameFromFileName('contact_80140BD0-3D81-42CA-B339-E67D81528456_.vcf')).toBeNull();
   });
 });

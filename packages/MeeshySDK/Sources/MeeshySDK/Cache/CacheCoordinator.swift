@@ -448,6 +448,10 @@ public actor CacheCoordinator {
         // conversations du compte sortant : RAM pure, aucun autre appelant de
         // clear() — sans cette ligne il survivait au logout ET au switch.
         UserDisplayNameCache.shared.clear()
+        // #8120 — cartes de conversation et verdicts 403/404 : RAM pure d'un
+        // singleton du processus, sans quoi le compte B verrait la carte
+        // « membre » résolue pour le compte A.
+        ConversationCardService.shared.invalidateAll()
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
