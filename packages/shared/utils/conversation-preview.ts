@@ -35,6 +35,7 @@ import type { AttachmentProtectionFlags } from './attachment-protection.js';
 import { resolvePrismTranslation } from './conversation-helpers.js';
 import { formatClock } from './duration-format.js';
 import { ephemeralDeadline } from './ephemeral-deadline.js';
+import { contactCardNameFromFileName, isContactCardAttachment } from './vcard.js';
 import { behavioralEffects, messageProtection, type BehavioralEffect } from './message-protection.js';
 import {
   conversationPreviewString,
@@ -53,6 +54,7 @@ export type PreviewIcon =
   | 'video'
   | 'photo'
   | 'file'
+  | 'contact'
   | 'location'
   | 'sticker'
   | 'attachments'
@@ -485,6 +487,10 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
     return { icon, segments: [head, ...size], labelled: [head, ...size] };
   }
 
+  if (attachment && isContactCardAttachment({ mimeType: attachment.mimeType, fileName: attachment.originalName })) {
+    return contactCardBody(attachment, text, str);
+  }
+
   const kind = attachmentKindOf(attachment, message.messageType);
   if (text) return { icon: kind, segments: [text], labelled: [text] };
   const name = attachment?.originalName?.trim() ?? '';
@@ -493,6 +499,17 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
   const details = detailsOf(kind, attachment, input.language, str);
   const labelledHead = named ? [label(str(ONE_KEY[kind])), head] : [head];
   return { icon: kind, segments: [head, ...details], labelled: [...labelledHead, ...details] };
+}
+
+/**
+ * Une carte de visite se dit par son CONTACT, jamais par son fichier (#8122,
+ * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids.
+ */
+function contactCardBody(attachment: ConversationPreviewAttachment, text: PreviewSegment | null, str: Str): Body {
+  if (text) return { icon: 'contact', segments: [text], labelled: [text] };
+  const name = contactCardNameFromFileName(attachment.originalName);
+  const segments = [label(str('attachment.contact')), ...(name ? [label(name)] : [])];
+  return { icon: 'contact', segments, labelled: segments };
 }
 
 function detailsOf(kind: AttachmentKind, attachment: ConversationPreviewAttachment | null, language: string, str: Str): readonly PreviewSegment[] {
@@ -602,6 +619,7 @@ export const PREVIEW_ICON_GLYPH: Readonly<Record<PreviewIcon, string>> = {
   video: '🎬',
   photo: '📷',
   file: '📄',
+  contact: '👤',
   location: '📍',
   sticker: '🏷',
   attachments: '📎',

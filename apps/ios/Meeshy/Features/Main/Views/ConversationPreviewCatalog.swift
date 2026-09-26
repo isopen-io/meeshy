@@ -50,6 +50,7 @@ nonisolated enum ConversationPreviewCatalog {
         case .attachmentVideo: return String(localized: "attachment.video", bundle: .main)
         case .attachmentPhoto: return String(localized: "attachment.photo", bundle: .main)
         case .attachmentFile: return String(localized: "attachment.file", bundle: .main)
+        case .attachmentContact: return String(localized: "attachment.contact", bundle: .main)
         case .attachmentLocation: return String(localized: "attachment.location", bundle: .main)
         case .attachmentSticker: return String(localized: "attachment.sticker", bundle: .main)
         case .attachmentVoiceMany: return String(localized: "attachment.voice.many", bundle: .main)

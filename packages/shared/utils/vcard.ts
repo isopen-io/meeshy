@@ -100,7 +100,20 @@ export function isContactCardAttachment(attachment: {
   return normalizeContactCardMimeType(attachment.mimeType ?? '', attachment.fileName) === CONTACT_CARD_MIME_TYPE;
 }
 
-const indexOutsideQuotes = (text: string, target: string): number => {
+const TEMPORARY_CONTACT_PREFIX = /^contact_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+
+/**
+ * Le nom HUMAIN d'une carte de visite lu dans son nom de fichier (#8142, #8148) :
+ * sans extension ni le préfixe `contact_<UUID>_` que les anciens envois
+ * portent encore. `null` quand il ne reste aucun nom. Miroir de
+ * `ContactCardFile.displayName(fromFileName:)` (SDK Swift).
+ */
+export function contactCardNameFromFileName(fileName: string | null | undefined): string | null {
+  const name = (fileName ?? '').trim().replace(CONTACT_CARD_FILE, '').replace(TEMPORARY_CONTACT_PREFIX, '').trim();
+  return name === '' ? null : name;
+}
+
+const indexOutsideQuotes =(text: string, target: string): number => {
   let inQuotes = false;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
