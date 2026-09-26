@@ -8,6 +8,7 @@ import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
+import esCallDecline from './catalog-es-call-decline';
 import esCallDevices from './catalog-es-call-devices';
 import esCallScreen from './catalog-es-call-screen';
 import esSignup from './catalog-es-signup';
@@ -206,6 +207,7 @@ const es = {
   ...esRowActions,
   ...esCallShell,
   ...esCallJoin,
+  ...esCallDecline,
   ...esCallDevices,
   ...esCallScreen,
   ...esSignup,
