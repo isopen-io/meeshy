@@ -62,7 +62,7 @@ import {
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { buildIncomingCallPushes } from '../services/call-incoming-push';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -2242,40 +2242,27 @@ export class CallEventsHandler {
 
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
-            // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
-            // configures WebRTC immediately, before any socket reconnect).
-            // Serialized as JSON string because APNs `data` is Record<string,string>.
-            const memberIceServers = this.callService.generateIceServers(offlineUserId);
-            const isChinaDevice = offlineCountries.get(offlineUserId) === 'CN';
-            this.pushService.sendToUser({
-              userId: offlineUserId,
-              payload: {
-                title: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.title', { actor: callerName }),
-                body: notificationString(offlineLangs.get(offlineUserId), 'call.incoming.body', {
-                  callType: data.type === 'video' ? 'video' : 'audio',
-                }),
-                callId: callSession.id,
-                callerName,
-                callerAvatar,
-                data: {
-                  type: 'call',
-                  callId: callSession.id,
-                  conversationId: data.conversationId,
-                  callerName,
-                  callerUserId: userId,
-                  callerAvatar: callerAvatar || '',
-                  // String "true"/"false" — iOS VoIPPushManager parses both bool and string forms.
-                  isVideo: String(data.type === 'video'),
-                  // JSON-encoded; iOS deserializes into [SocketIceServer] before
-                  // calling WebRTCService.configure(iceServers:).
-                  iceServers: JSON.stringify(memberIceServers),
-                },
-              },
-              types: isChinaDevice || !voipCapableUsers.has(offlineUserId) ? ['apns'] : ['voip'],
-              bypassDnd: true,
-            }).catch(err => {
-              logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });
+            // TURN at construction time (VoIPPushManager configures WebRTC
+            // before any socket reconnect). Apple via voip/apns, Android and
+            // web via FCM (#8043) — see buildIncomingCallPushes.
+            const pushes = buildIncomingCallPushes({
+              calleeUserId: offlineUserId,
+              callId: callSession.id,
+              conversationId: data.conversationId,
+              callerUserId: userId,
+              callerName,
+              callerAvatar,
+              isVideo: data.type === 'video',
+              language: offlineLangs.get(offlineUserId),
+              iceServersJson: JSON.stringify(this.callService.generateIceServers(offlineUserId)),
+              isChinaDevice: offlineCountries.get(offlineUserId) === 'CN',
+              voipCapable: voipCapableUsers.has(offlineUserId),
             });
+            for (const push of pushes) {
+              this.pushService.sendToUser(push).catch(err => {
+                logger.error('Failed to send incoming-call push', { userId: offlineUserId, types: push.types, error: err });
+              });
+            }
           }
 
           if (offlineUserIds.length > 0) {

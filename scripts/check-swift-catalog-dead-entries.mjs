@@ -300,7 +300,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `.conversationsByConversationIdParticipantsByUserIdRemove` — GÉNÉRÉES depuis
 // `route-manifest.json` ; leur seul appelant est la fiche d'administration WEB.
 // Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 275;
+// 275 → 276 (#8083, phase passerelle) : `AuthEndpoint.verificationStatus`,
+// générée avant son appelant iOS ; la phase iOS du même lot la consomme et
+// rend la référence à 275.
+const BASELINE_DEAD_ENTRIES = 276;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

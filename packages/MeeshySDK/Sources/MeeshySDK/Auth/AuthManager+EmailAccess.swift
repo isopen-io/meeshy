@@ -28,16 +28,23 @@ extension AuthManager {
         defer { isLoading = false }
 
         do {
-            let data = try await authService.validateMagicLink(token: token)
-            guard let token = data.token, let user = data.user else {
-                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
-            }
-            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+            openSession(try await verifyMagicLink(token: token))
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Valide le lien de connexion SANS poser la session (#8076) : un lien
+    /// ouvert pendant qu'une présentation d'accès est affichée attend qu'elle
+    /// se referme, sinon elle resterait orpheline sous la nouvelle racine.
+    public func verifyMagicLink(token: String) async throws -> EmailProvenSession {
+        let data = try await authService.validateMagicLink(token: token)
+        guard let token = data.token, let user = data.user else {
+            throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+        }
+        return EmailProvenSession(token: token, sessionToken: data.sessionToken, user: user)
     }
 
     // MARK: - Email Verification

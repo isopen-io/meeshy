@@ -40,6 +40,7 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import { notifyIfLoginFromNewDevice } from './notify-new-device';
+import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
 import {
   rememberPendingDeviceTrust,
   consumePendingDeviceTrust
@@ -90,7 +91,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
     );
 
     if (issue.kind === 'verification-required') {
-      sendSuccess(reply, { status: issue.kind, accountCreated: issue.accountCreated, email: issue.email });
+      // #8083 — le jeton d'attente de CET appareil : il dira à l'écran du code
+      // que l'adresse a été prouvée ailleurs. Un état, jamais une session.
+      const attente = await pendingSessionTokenFor(context.prisma, issue.email);
+      sendSuccess(reply, { status: issue.kind, accountCreated: issue.accountCreated, email: issue.email, ...attente });
       return true;
     }
     if (issue.kind === 'rate-limited') {

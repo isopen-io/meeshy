@@ -27,11 +27,17 @@ struct LoginView: View {
     /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
     /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
     @State private var codeEntry: CodeEntryContext?
-    /// La session prouvée par un code (#8059), posée UNIQUEMENT dans le
-    /// `onDismiss` de la présentation qui l'a obtenue : la poser plus tôt
-    /// démonte cet écran pendant que sa feuille est encore là, et la feuille
-    /// reste orpheline — figée sur « Email vérifié ! », « Fermer » inerte.
-    @State private var provenSessionOpener: ProvenSessionOpener?
+    /// Le point UNIQUE où une session prouvée s'ouvre (#8059, #8076) : jamais
+    /// pendant qu'une présentation d'accès est là — ouvrir la session démonte
+    /// cet écran, et sa feuille resterait orpheline, figée, « Fermer » inerte.
+    /// Code, lien reçu par e-mail, inscription : la session attend le
+    /// `onDismiss` de la présentation.
+    private let sessionGate = SessionOpeningGate.shared
+
+    /// Une porte d'accès est-elle présentée par cet écran ?
+    private var hasAccessPresentation: Bool {
+        codeEntry != nil || showMagicLink || showRegister || showForgotPassword
+    }
 
     private struct CodeEntryContext: Identifiable {
         let pending: PendingEmailVerification
@@ -184,22 +190,22 @@ struct LoginView: View {
             // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
             .iPadFormWidth()
         }
-        .sheet(isPresented: $showForgotPassword) {
+        .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
             MeeshyForgotPasswordView()
         }
-        .sheet(item: $codeEntry, onDismiss: openProvenSession) { entry in
+        .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
             EmailVerificationView(
                 email: entry.pending.email,
                 password: entry.password,
                 accountCreated: entry.pending.accountCreated,
-                onVerified: { provenSessionOpener = $0 }
+                onVerified: { sessionGate.openWhenDismissed($0) }
             )
         }
-        .sheet(isPresented: $showMagicLink, onDismiss: openProvenSession) {
-            MagicLinkView(onVerified: { provenSessionOpener = $0 })
+        .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
+            MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) })
                 .environmentObject(authManager)
         }
-        .fullScreenCover(isPresented: $showRegister, onDismiss: openProvenSession) {
+        .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
             // se contente de refermer : la session est déjà appliquée par
             // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
@@ -208,10 +214,25 @@ struct LoginView: View {
                 onComplete: { showRegister = false },
                 onSwitchToLogin: { showRegister = false },
                 onVerified: { opener in
-                    provenSessionOpener = opener
+                    sessionGate.openWhenDismissed(opener)
                     showRegister = false
                 }
             )
+        }
+        .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
+            if presenting { sessionGate.presentationBegan() }
+        }
+        // Un lien reçu par e-mail a prouvé une session pendant qu'une porte
+        // d'accès est affichée (#8076) : la refermer, la session s'ouvrira
+        // dans son `onDismiss`.
+        .onReceive(sessionGate.$dismissalRequested.filter { $0 }) { _ in
+            codeEntry = nil
+            showMagicLink = false
+            showRegister = false
+            showForgotPassword = false
+        }
+        .onAppear {
+            if !hasAccessPresentation { sessionGate.presentationEnded() }
         }
         // « Créer un compte » depuis une invitation (#7795) ouvre l'inscription ;
         // « Se connecter » n'a rien à ouvrir de plus que cet écran même.
@@ -708,11 +729,11 @@ struct LoginView: View {
     }
 
 
-    /// Pose la session prouvée — la présentation qui l'a obtenue est partie (#8059).
-    private func openProvenSession() {
-        guard let open = provenSessionOpener else { return }
-        provenSessionOpener = nil
-        open()
+    /// La présentation d'accès est partie : la session prouvée peut s'ouvrir
+    /// (#8059, #8076) — sauf si une autre porte a pris sa place.
+    private func accessPresentationDismissed() {
+        guard !hasAccessPresentation else { return }
+        sessionGate.presentationEnded()
     }
 
     private func presentCodeEntryIfNeeded(_ outcome: LoginOutcome, password: String) {

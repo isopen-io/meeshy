@@ -364,7 +364,10 @@ export const parseCatalogBlock = (blockLines) => {
 // membre. Leur client (`apps/web/src/lib/api/admin-conversation-settings.ts`)
 // écrit l'adresse en littéral comme tout `apps/web` : mortes ici au même titre
 // que leurs voisines admin, jusqu'à #7716. Valeur MESURÉE le 2026-09-26.
-const BASELINE_DEAD_ENTRIES = 470;
+// 470 → 471 (#8083) : `auth.verificationStatus` — la route d'état de l'écran
+// du code ; son client web écrit l'adresse en littéral, comme toutes les
+// routes `auth.*` de `apps/web`. Valeur MESURÉE le 2026-09-26.
+const BASELINE_DEAD_ENTRIES = 471;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

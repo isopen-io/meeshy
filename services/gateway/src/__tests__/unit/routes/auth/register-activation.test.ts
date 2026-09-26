@@ -21,6 +21,9 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+jest.mock('../../../../services/auth/email-verification-watch', () => ({
+  pendingSessionTokenFor: jest.fn(async () => ({ pendingSessionToken: 'attente-opaque' })),
+}));
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn(() => ({
@@ -228,7 +231,7 @@ describe('inscription SANS numéro — le compte attend son code', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { status: 'verification-required', accountCreated: true, email: 'alice@test.com' },
+      data: { status: 'verification-required', accountCreated: true, email: 'alice@test.com', pendingSessionToken: 'attente-opaque' },
     });
     await app.close();
   });
@@ -314,7 +317,7 @@ describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'faux' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: true, email: 'alice@test.com' });
+    expect(res.json().data).toEqual({ status: 'verification-required', accountCreated: true, email: 'alice@test.com', pendingSessionToken: 'attente-opaque' });
     expect(authService.register).toHaveBeenCalledTimes(1);
     await app.close();
   });

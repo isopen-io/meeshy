@@ -372,6 +372,19 @@ export const verifyEmailRequestSchema = {
 } as const;
 
 /**
+ * Le jeton d'ATTENTE remis à l'appareil qui vient de demander un code (#8083).
+ *
+ * Il ne sert qu'à `POST /auth/verification/status`, qui rend `pending` ou
+ * `proven` — jamais une session (décision porteur « si et seulement si » :
+ * l'appareil ne se connecte que par le code saisi sur lui ou le lien ouvert
+ * sur lui), jamais l'adresse. Le nom historique du contrat est gardé.
+ */
+export const pendingSessionTokenProperty = {
+  type: 'string',
+  description: 'Opaque watch token for THIS device (#8083). Present it to POST /auth/verification/status to learn whether the address was proven elsewhere (`pending` / `proven`). It never yields a session.'
+} as const;
+
+/**
  * La branche « vérification requise » de `POST /auth/login` (#8033) et de
  * `POST /auth/register` (#8055) — UNE forme, deux routes.
  *
@@ -397,7 +410,8 @@ export const verificationRequiredProperties = {
   email: {
     type: 'string',
     description: 'The normalized address the code was sent to'
-  }
+  },
+  pendingSessionToken: pendingSessionTokenProperty
 } as const;
 
 /** Nom historique (#8033) de `verificationRequiredProperties`. */
@@ -428,6 +442,41 @@ export const verifyEmailResponseSchema = {
         passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
         requires2FA: { type: 'boolean' },
         twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' }
+      }
+    }
+  }
+} as const;
+
+/**
+ * `POST /auth/verification/status` (#8083) — l'écran du code demande si
+ * l'adresse a été prouvée ailleurs.
+ */
+export const verificationStatusRequestSchema = {
+  type: 'object',
+  required: ['pendingSessionToken'],
+  properties: {
+    pendingSessionToken: { type: 'string', minLength: 1, maxLength: 256 }
+  },
+  additionalProperties: false
+} as const;
+
+/**
+ * Réponse de `POST /auth/verification/status` : un ÉTAT, rien d'autre. Un jeton
+ * inconnu rend 401 (`PENDING_TOKEN_INVALID`), un jeton expiré 410
+ * (`PENDING_TOKEN_EXPIRED`).
+ */
+export const verificationStatusResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['pending', 'proven'],
+          description: '`proven`: the address was proven (code or link) after this token was issued — the device still signs in only with the code typed on it or the link opened on it'
+        }
       }
     }
   }

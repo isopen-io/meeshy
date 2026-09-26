@@ -444,6 +444,10 @@ async function afficher(payload) {
   if (payload === null) return;
   const data = objet(payload.data);
   const notification = objet(payload.notification);
+  if (estPushDAppel(data)) {
+    await traiterAppel(data);
+    return;
+  }
 
   /* Démarré EN PARALLÈLE de la logique de bannière, jamais attendu avant —
      un accusé de remise ne doit pas retarder ce que le lecteur VOIT. Le
@@ -481,6 +485,127 @@ async function afficher(payload) {
   }
 }
 
+/**
+ * L'APPEL ENTRANT, ONGLET FERMÉ (#8043) — la sonnerie iOS (CallKit) et
+ * Android (plein écran) a son équivalent web : une notification qui RESTE
+ * (`requireInteraction`), avec Répondre et Refuser.
+ *
+ * La passerelle pousse l'appel DATA-ONLY (`call-incoming-push.ts`), titre,
+ * corps et libellés des deux actions déjà localisés à la langue du lecteur :
+ * ce worker ne charge aucun catalogue. D-11 vaut ici aussi — un onglet
+ * visible sonne déjà par le socket, une notification le doublerait.
+ *
+ * Elle porte le tag `call:<id>` : `call_cancel` (l'appelant a raccroché,
+ * personne n'a répondu) et `call_answered_elsewhere` (un autre appareil a
+ * décroché) la RETIRENT. Une sonnerie qui survit à l'appel est un contrôle
+ * qui ment (loi 4).
+ */
+const CALL_PUSH_TYPE = 'call';
+const CALL_CLOSING_TYPES = ['call_cancel', 'call_answered_elsewhere'];
+const CALL_TAG_PREFIX = 'call:';
+const CALL_ANSWER_ACTION = 'answer';
+const CALL_DECLINE_ACTION = 'decline';
+/** JUMEAU de `CALL_ANSWER_PARAM` (`src/lib/calls/call-answer-intent.ts`). */
+const CALL_ANSWER_PARAM = 'repondre';
+
+function estPushDAppel(data) {
+  const type = texte(data.type);
+  return type === CALL_PUSH_TYPE || CALL_CLOSING_TYPES.indexOf(type) >= 0;
+}
+
+async function fermerSonnerie(callId) {
+  if (callId === '') return;
+  try {
+    const affichees = await self.registration.getNotifications({ tag: CALL_TAG_PREFIX + callId });
+    affichees
+      .filter((affichee) => affichee && affichee.tag === CALL_TAG_PREFIX + callId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Rien à fermer, ou l'API refuse sous cette portée : l'expiration du push
+       (TTL de sonnerie) borne de toute façon ce qui pourrait rester. */
+  }
+}
+
+async function sonner(data) {
+  const callId = texte(data.callId);
+  const conversationId = texte(data.conversationId);
+  const titre = texte(data.title) || texte(data.callerName);
+  if (callId === '' || conversationId === '' || titre === '') return;
+
+  const ouvertes = await fenetres();
+  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+
+  const actions = [
+    { action: CALL_ANSWER_ACTION, title: texte(data.answerLabel) },
+    { action: CALL_DECLINE_ACTION, title: texte(data.declineLabel) },
+  ].filter((action) => action.title !== '');
+
+  await self.registration.showNotification(titre, {
+    body: texte(data.body),
+    tag: CALL_TAG_PREFIX + callId,
+    renotify: true,
+    requireInteraction: true,
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    actions: actions,
+    data: { type: CALL_PUSH_TYPE, callId: callId, conversationId: conversationId },
+  });
+}
+
+async function traiterAppel(data) {
+  if (texte(data.type) === CALL_PUSH_TYPE) {
+    await sonner(data);
+    return;
+  }
+  await fermerSonnerie(texte(data.callId));
+}
+
+/** Refuse sans socket — `DELETE /api/v1/calls/:callId?reason=rejected`, le refus AVANT d'avoir rejoint. */
+async function refuserAppel(callId) {
+  const stocke = await lireCredential();
+  if (stocke === null) return;
+  const entetes = entetesCredential(stocke.credential);
+  if (entetes === null) return;
+  try {
+    await self.fetch(texte(stocke.apiBase) + '/api/v1/calls/' + encodeURIComponent(callId) + '?reason=rejected', {
+      method: 'DELETE',
+      headers: entetes,
+      keepalive: true,
+    });
+  } catch {
+    /* Le refus manqué laisse l'appelant sonner jusqu'à la fin de sa sonnerie :
+       c'est ce que faisait un onglet fermé avant ce lot, jamais pire. */
+  }
+}
+
+/**
+ * Répondre ouvre le fil de l'appel et le fait DÉCROCHER : l'onglet ouvert
+ * reçoit l'identifiant de l'appel, un onglet neuf le lit dans son adresse
+ * (`?repondre=<id>`). Le toucher du corps ouvre seulement le fil, où
+ * `call:check-active` rejoue la sonnerie à la connexion.
+ */
+async function ouvrirAppel(data, action) {
+  const callId = texte(data.callId);
+  if (action === CALL_DECLINE_ACTION) {
+    await refuserAppel(callId);
+    return;
+  }
+  const fil = pushTargetUrl({ conversationId: data.conversationId });
+  const repondre = action === CALL_ANSWER_ACTION;
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
+    return;
+  }
+  try {
+    await client.focus();
+  } catch {
+    /* Voir `ouvrir()`. */
+  }
+  client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: fil, data: data, ...(repondre ? { answerCallId: callId } : {}) });
+}
+
 async function ouvrir(data) {
   const url = pushTargetUrl(data);
   const ouvertes = await fenetres();
@@ -504,7 +629,10 @@ self.addEventListener('push', (evenement) => {
 
 self.addEventListener('notificationclick', (evenement) => {
   evenement.notification.close();
-  evenement.waitUntil(ouvrir(objet(evenement.notification.data)));
+  const data = objet(evenement.notification.data);
+  evenement.waitUntil(
+    texte(data.type) === CALL_PUSH_TYPE ? ouvrirAppel(data, texte(evenement.action)) : ouvrir(data),
+  );
 });
 
 /**
