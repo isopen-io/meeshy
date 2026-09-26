@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import itComposerAttach from './catalog-it-composer-attach';
 import itIdentity from './catalog-it-identity';
+import itMediaHub from './catalog-it-media-hub';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
@@ -194,6 +195,7 @@ const it = {
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   ...itIdentity,
+  ...itMediaHub,
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,

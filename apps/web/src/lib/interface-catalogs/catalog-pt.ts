@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import ptComposerAttach from './catalog-pt-composer-attach';
 import ptIdentity from './catalog-pt-identity';
+import ptMediaHub from './catalog-pt-media-hub';
 import ptVerifyEmail from './catalog-pt-verify-email';
 import ptPassword from './catalog-pt-password';
 import ptCall from './catalog-pt-call';
@@ -198,6 +199,7 @@ const pt = {
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
   ...ptIdentity,
+  ...ptMediaHub,
   ...ptVerifyEmail,
   ...ptPassword,
   ...ptCall,

@@ -21,6 +21,7 @@ import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
+import { ConversationMediaSection } from './conversation-media-section';
 import { AvatarMenuTrigger } from './avatar-menu';
 import { Glyph } from './glyph';
 import { Sheet } from './sheet';
@@ -28,9 +29,10 @@ import { Sheet } from './sheet';
 /**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
  * `ConversationInfoSheet.swift` : l'EN-TÊTE (photo, nom, description, type,
- * nombre de membres), l'action « Partager un lien » et l'onglet « Membres ».
- * Médias (#7834), statistiques (#7835), options (#7836) et « Quitter »
- * (#7837) ne sont pas encore portés.
+ * nombre de membres), l'action « Partager un lien », la section « Médias »
+ * (#7834, #8103 — l'aperçu et l'entrée vers l'écran « Médias, liens et
+ * documents ») et l'onglet « Membres ». Statistiques (#7835), options (#7836)
+ * et « Quitter » (#7837) ne sont pas encore portés.
  *
  * Une FEUILLE du fil, pas une adresse (D-118) : comme sur iOS, elle se pose
  * au-dessus du fil qui garde son défilement, le retour matériel la referme
@@ -87,6 +89,8 @@ export function ConversationDetailsSheet({
   origin,
   portail,
   onClose,
+  onJumpToMessage,
+  canJumpTo,
 }: {
   readonly conversation: Conversation;
   readonly title: string;
@@ -97,6 +101,9 @@ export function ConversationDetailsSheet({
   readonly origin: string;
   readonly portail?: PortailPartage | undefined;
   readonly onClose: () => void;
+  /** « Aller au message » depuis l'écran des médias — le fil referme la feuille et y saute. */
+  readonly onJumpToMessage?: ((messageId: string) => void) | undefined;
+  readonly canJumpTo?: ((messageId: string) => boolean) | undefined;
 }) {
   const language = currentInterfaceLanguage();
   const membersHeadingId = useId();
@@ -160,6 +167,15 @@ export function ConversationDetailsSheet({
             </p>
           </div>
         ) : null}
+
+        <ConversationMediaSection
+          conversationId={conversation.id}
+          viewerId={viewerId}
+          accent={accent}
+          deps={deps}
+          {...(onJumpToMessage === undefined ? {} : { onJumpToMessage })}
+          {...(canJumpTo === undefined ? {} : { canJumpTo })}
+        />
 
         <section aria-labelledby={membersHeadingId} className="pb-6">
           <h4 id={membersHeadingId} className="px-4 pb-2 text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-ink-2)' }}>
