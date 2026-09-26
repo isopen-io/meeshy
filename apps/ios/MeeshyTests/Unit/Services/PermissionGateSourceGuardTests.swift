@@ -646,6 +646,17 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         )
     }
 
+    /// `fieldBlock` posait `.accessibilityLabel(label)` sur tout son contenu :
+    /// l'œil du mot de passe se lisait « Mot de passe, Masqué » au lieu de
+    /// « Afficher le mot de passe » (mesuré au simulateur, #8054). Le champ de
+    /// mot de passe se libelle LUI-MÊME, et le bloc ne l'écrase pas.
+    func test_signupPasswordField_keepsTheEyeButtonAccessibilityLabel() throws {
+        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
+        let block = try XCTUnwrap(src.range(of: "private var passwordField: some View").map { String(src[$0.lowerBound...].prefix(1200)) })
+        XCTAssertTrue(block.contains("labelsContent: false"), "Le bloc ne doit pas écraser le libellé de l'œil.")
+        XCTAssertTrue(block.contains("accessibilityLabel:"), "Le champ porte son propre libellé VoiceOver.")
+    }
+
     /// `webcredentials:` est ce qui associe l'app au domaine dans le trousseau
     /// iCloud. L'AASA sert déjà cette section côté web.
     func test_entitlements_declareWebCredentialsDomain() throws {

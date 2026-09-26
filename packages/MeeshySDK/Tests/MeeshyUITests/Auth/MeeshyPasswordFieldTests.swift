@@ -58,6 +58,36 @@ final class MeeshyPasswordFieldTests: XCTestCase {
         XCTAssertEqual(reveal.toggleLabel(bundle: Self.english), "Hide password")
     }
 
+    // MARK: - Reprise après re-masquage
+    //
+    // UIKit vide un champ sécurisé à la première frappe qui suit sa prise de
+    // focus : re-masquer puis taper « Y » rendait « Y » au lieu de la saisie
+    // + « Y » (mesuré au simulateur, #8054).
+
+    func test_resume_typingAfterRemask_appendsToWhatWasTyped() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "Secret123", received: "Y"), "Secret123Y")
+    }
+
+    func test_resume_pastingAfterRemask_appendsThePastedText() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "Secret", received: "123"), "Secret123")
+    }
+
+    func test_resume_deletingAfterRemask_removesOnlyTheLastCharacter() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "Secret123", received: ""), "Secret12")
+    }
+
+    func test_resume_whenUIKitDidNotReset_keepsTheAppendedText() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "Secret", received: "SecretY"), "SecretY")
+    }
+
+    func test_resume_whenUIKitDidNotReset_keepsTheNormalDeletion() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "Secret", received: "Secre"), "Secre")
+    }
+
+    func test_resume_emptySnapshot_keepsWhatWasReceived() {
+        XCTAssertEqual(MeeshySecureEntryResume.restore(snapshot: "", received: "Y"), "Y")
+    }
+
     // MARK: - AutoFill
 
     func test_role_current_isPasswordContentType() {
