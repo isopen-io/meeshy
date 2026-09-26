@@ -49,21 +49,19 @@ describe('mediaPageOffers', () => {
     expect(mediaPageOffers({ attachment: piece({ mimeType: 'application/pdf' }), message: message(), capabilities: ALL }).compose).toBe(false);
   });
 
-  test.each([
+  const PROTECTED: readonly (readonly [string, Partial<ProtectableMessage>, Partial<Attachment>])[] = [
     ['message à vue unique', { isViewOnce: true }, {}],
     ['message flouté', { isBlurred: true }, {}],
     ['message chiffré', { isEncrypted: true }, {}],
     ['message au drapeau de flou', { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }, {}],
-    ['pièce à vue unique', {}, { isViewOnce: true }],
-    ['pièce floutée', {}, { isBlurred: true }],
-  ] as const)('%s : aucune action (loi 4, la protection au rang de l’existence)', (_label, onMessage, onPiece) => {
-    const offers = mediaPageOffers({
-      attachment: piece(onPiece as Partial<Attachment>),
-      message: message(onMessage as Partial<ProtectableMessage>),
-      capabilities: ALL,
+    ['pièce à vue unique', {}, { isViewOnce: true } as Partial<Attachment>],
+    ['pièce floutée', {}, { isBlurred: true } as Partial<Attachment>],
+  ];
+  for (const [label, onMessage, onPiece] of PROTECTED) {
+    test(`${label} : aucune action (loi 4, la protection au rang de l’existence)`, () => {
+      expect(mediaPageOffers({ attachment: piece(onPiece), message: message(onMessage), capabilities: ALL })).toEqual(NO_MEDIA_OFFERS);
     });
-    expect(offers).toEqual(NO_MEDIA_OFFERS);
-  });
+  }
 
   test('ce que l’hôte ne sait pas faire n’existe pas', () => {
     const offers = mediaPageOffers({
@@ -74,11 +72,13 @@ describe('mediaPageOffers', () => {
     expect(offers).toEqual({ save: true, react: false, reply: false, compose: true });
   });
 
-  test('un envoi encore local ne se cite ni ne reçoit de réaction : la passerelle n’en connaît pas l’identifiant', () => {
-    const offers = mediaPageOffers({ attachment: piece({ id: 'cid_local-1' }), message: message({ id: 'cid_local-1' }), capabilities: ALL });
-    expect(offers.react).toBe(false);
-    expect(offers.reply).toBe(false);
-    expect(offers.save).toBe(true);
+  test('un envoi encore local n’offre rien : la passerelle n’en connaît pas l’identifiant, ses pièces sont des aperçus locaux', () => {
+    const offers = mediaPageOffers({
+      attachment: piece({ id: 'local-1', fileUrl: 'blob:http://localhost/1' }),
+      message: message({ id: 'cid_4f1c2a9e-8b7d-4c3e-9a1b-2c3d4e5f6a7b' }),
+      capabilities: ALL,
+    });
+    expect(offers).toEqual(NO_MEDIA_OFFERS);
   });
 
   test('une pièce sans fichier ne s’enregistre ni ne se compose', () => {

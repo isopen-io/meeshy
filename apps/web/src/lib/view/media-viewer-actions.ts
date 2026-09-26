@@ -22,8 +22,9 @@ import { quotedIsProtected } from './quoted-protection';
  *     l'écran des médias non ; un hôte sans porte de fichier ne sait pas
  *     enregistrer).
  *
- * Réagir et Répondre visent un message CONFIRMÉ : un envoi encore local
- * (`cid_…`) n'a pas d'identifiant que la passerelle accepte.
+ * Un envoi encore LOCAL (`cid_…`, `client-message-id.ts`) n'offre rien : la
+ * passerelle n'en connaît pas l'identifiant (Réagir, Répondre), et ses pièces
+ * ne sont encore que des aperçus `blob:` de l'appareil (Enregistrer, Créer).
  */
 export type MediaViewerCapabilities = {
   readonly save: boolean;
@@ -36,7 +37,7 @@ export type MediaPageOffers = MediaViewerCapabilities;
 
 export const NO_MEDIA_OFFERS: MediaPageOffers = { save: false, react: false, reply: false, compose: false };
 
-const SERVER_ID = /^[0-9a-f]{24}$/i;
+const isLocalSend = (id: string): boolean => id.startsWith('cid_');
 
 export type ProtectableMessage = Pick<Message, 'id' | 'isViewOnce' | 'isBlurred' | 'isEncrypted'> & {
   readonly effectFlags?: number;
@@ -48,15 +49,14 @@ export function mediaPageOffers(params: {
   readonly capabilities: MediaViewerCapabilities;
 }): MediaPageOffers {
   const { attachment, message, capabilities } = params;
-  if (quotedIsProtected(message) || quotedIsProtected(attachment)) return NO_MEDIA_OFFERS;
-  const confirmed = SERVER_ID.test(message.id) && SERVER_ID.test(attachment.id);
+  if (quotedIsProtected(message) || quotedIsProtected(attachment) || isLocalSend(message.id)) return NO_MEDIA_OFFERS;
   const kind = kindOf(attachment);
   const visual = kind === 'image' || kind === 'video';
   const hasFile = attachment.fileUrl !== '';
   return {
     save: capabilities.save && hasFile,
-    react: capabilities.react && confirmed,
-    reply: capabilities.reply && confirmed,
+    react: capabilities.react,
+    reply: capabilities.reply,
     compose: capabilities.compose && visual && hasFile,
   };
 }

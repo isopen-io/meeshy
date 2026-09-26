@@ -342,6 +342,7 @@ export function Bubble({
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
           isMine={isMine}
+          message={message}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}

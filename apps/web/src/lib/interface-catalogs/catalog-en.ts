@@ -2,6 +2,7 @@ import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import enComposerAttach from './catalog-en-composer-attach';
 import enIdentity from './catalog-en-identity';
 import enMediaHub from './catalog-en-media-hub';
+import enMediaViewer from './catalog-en-media-viewer';
 import enVerifyEmail from './catalog-en-verify-email';
 import enPassword from './catalog-en-password';
 import enCall from './catalog-en-call';
@@ -203,6 +204,7 @@ const en = {
   'feed.newPosts.other': '{count} new posts',
   ...enIdentity,
   ...enMediaHub,
+  ...enMediaViewer,
   ...enVerifyEmail,
   ...enPassword,
   ...enCall,

@@ -657,6 +657,14 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await waitForRowSettled(page, QUAD_ID);
   const historyLengthBefore = await page.evaluate(() => window.history.length);
   const secondTile = rowOf(QUAD_ID).locator('[data-media-tile]').nth(1);
+  /* D-134 (#6303) — la pièce se nomme par son IDENTITÉ : depuis le fil, la
+     pellicule porte TOUTE la conversation, et la position de la 2ᵉ tuile n'y
+     est plus « 1 ». */
+  const quadIds = await rowOf(QUAD_ID)
+    .locator('[data-media-tile]')
+    .evaluateAll((tiles) => tiles.map((tile) => tile.closest('[data-attachment]')?.getAttribute('data-attachment') ?? ''));
+  const secondId = quadIds[1] ?? '';
+  expect(quadIds.length === 4 && quadIds.every((id) => id !== ''), `[${skin}/${scheme}] media-13 nomme ses 4 pièces (${JSON.stringify(quadIds)})`);
   await secondTile.click();
   await page.waitForSelector('[data-media-viewer]');
 
@@ -664,8 +672,8 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect((await dialog.getAttribute('role')) === 'dialog', `[${skin}/${scheme}] la visionneuse porte role="dialog"`);
   expect((await dialog.getAttribute('aria-modal')) === 'true', `[${skin}/${scheme}] la visionneuse porte aria-modal="true"`);
   expect(
-    (await dialog.getAttribute('data-viewer-index')) === '1',
-    `[${skin}/${scheme}] la visionneuse s'ouvre sur l'index 1 (2ᵉ tuile) (obtenu ${await dialog.getAttribute('data-viewer-index')})`,
+    (await dialog.getAttribute('data-viewer-attachment')) === secondId,
+    `[${skin}/${scheme}] la visionneuse s'ouvre sur la 2ᵉ tuile (obtenu ${await dialog.getAttribute('data-viewer-attachment')}, attendu ${secondId})`,
   );
   const rootInert = await page.evaluate(() => document.getElementById('root')?.hasAttribute('inert') ?? false);
   expect(rootInert, `[${skin}/${scheme}] #root porte inert le temps de l'ouverture`);
@@ -683,11 +691,28 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   const porte = await confinementDe(page, '[data-media-viewer] .media-viewer-close', { nom: 'la croix de la visionneuse' });
   expect(porte.ok, `[${skin}/${scheme}] #7040 : ${porte.message}`);
 
+  /* D-134 (#6303) — LA PELLICULE DU FIL PORTE LA CONVERSATION. Elle s'ouvre sur
+     les pièces de la bulle (aucune attente), puis GRANDIT quand l'index arrive :
+     on attend la croissance, puis on mesure ce qui est promis — plus que les
+     quatre pièces du message, les quatre à la suite dans l'ordre du fil, la
+     vignette courante étant celle de la tuile touchée. */
   const filmstripItems = dialog.locator('[data-filmstrip-item]');
-  expect((await filmstripItems.count()) === 4, `[${skin}/${scheme}] la pellicule compte 4 vignettes (media-13)`);
+  await page.waitForFunction(() => document.querySelectorAll('[data-media-viewer] [data-filmstrip-item]').length > 4);
+  const stripIds = await filmstripItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-attachment') ?? ''));
+  const quadAt = stripIds.indexOf(quadIds[0] ?? '');
+  expect(stripIds.length > 4, `[${skin}/${scheme}] la pellicule compte TOUTE la conversation (${stripIds.length} vignettes, plus que les 4 de media-13)`);
   expect(
-    (await filmstripItems.nth(1).getAttribute('aria-current')) === 'true',
-    `[${skin}/${scheme}] la 2ᵉ vignette porte aria-current="true"`,
+    quadAt >= 0 && quadIds.every((id, offset) => stripIds[quadAt + offset] === id),
+    `[${skin}/${scheme}] les 4 pièces de media-13 s'y suivent dans l'ordre du fil (${JSON.stringify(stripIds)})`,
+  );
+  const openedAt = stripIds.indexOf(secondId);
+  expect(
+    (await filmstripItems.nth(openedAt).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] la vignette de la 2ᵉ tuile porte aria-current="true" (position ${openedAt})`,
+  );
+  expect(
+    (await dialog.getAttribute('data-viewer-attachment')) === secondId,
+    `[${skin}/${scheme}] la croissance de la pellicule n'a pas déplacé la page regardée`,
   );
 
   /**
@@ -725,19 +750,28 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * (`filmstripIndexAtPlayhead` calculée, jamais lue). Miroir
    * `ConversationMediaFilmstrip` iOS 17+ (`scrollPosition(id:anchor:)`).
    */
-  await dialog.locator('[data-filmstrip]').evaluate((el) => {
-    el.scrollLeft = 179; // filmstripIndexAtPlayhead(179, 4) === 3 (media-stage.test.ts)
+  /* Deux pas de bande (le pas se MESURE entre deux vignettes, jamais codé en
+     dur) vers l'intérieur de la pellicule : la tête de lecture y sélectionne la
+     vignette visée. */
+  const scrollTarget = openedAt >= 2 ? openedAt - 2 : openedAt + 2;
+  await dialog.locator('[data-filmstrip]').evaluate((el, target) => {
+    const items = el.querySelectorAll('[data-filmstrip-item]');
+    const step = items[1].getBoundingClientRect().left - items[0].getBoundingClientRect().left;
+    el.scrollLeft = Math.round(target * step);
     el.dispatchEvent(new Event('scroll', { bubbles: false }));
-  });
-  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '3');
-  expect(
-    (await filmstripItems.nth(3).getAttribute('aria-current')) === 'true',
-    `[${skin}/${scheme}] défiler la pellicule à la main jusqu'à l'index 3 pose aria-current sur la 4ᵉ vignette`,
+  }, scrollTarget);
+  await page.waitForFunction(
+    (target) => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === String(target),
+    scrollTarget,
   );
-  // Restauré à l'index 1 (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
+  expect(
+    (await filmstripItems.nth(scrollTarget).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] défiler la pellicule à la main de deux pas pose aria-current sur la vignette visée (${scrollTarget})`,
+  );
+  // Restauré sur la 2ᵉ tuile (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
   // focus REMIS sur « Fermer » : le clic de restauration l'a déplacé sur la vignette.
-  await filmstripItems.nth(1).click();
-  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '1');
+  await filmstripItems.nth(openedAt).click();
+  await page.waitForFunction((id) => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-attachment') === id, secondId);
   await dialog.getByRole('button', { name: 'Fermer' }).focus();
 
   // Shift+Tab depuis « Fermer » (le premier focalisable) revient au DERNIER

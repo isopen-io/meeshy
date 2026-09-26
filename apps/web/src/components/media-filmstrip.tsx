@@ -119,6 +119,7 @@ export function MediaFilmstrip({
             key={`${index}:${attachment.id}`}
             type="button"
             data-filmstrip-item
+            data-attachment={attachment.id}
             {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
             aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
