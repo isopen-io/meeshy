@@ -195,6 +195,13 @@ targets:
       # `ForwardPickerModel.swift` pour l'extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #8063 — le CONTRAT du partage d'écran (trames, en-tête, socket Unix de
+      # l'App Group) : l'extension écrit, l'app lit. Compilé dans les DEUX
+      # cibles pour qu'une seule définition tienne les deux bouts du fil, et
+      # atteignable par `@testable import Meeshy` (`ScreenShareWireTests`).
+      # Foundation/Darwin uniquement, tout est `nonisolated`.
+      - path: MeeshyBroadcastExtension/ScreenShareWire.swift
+      - path: MeeshyBroadcastExtension/ScreenShareUnixSocket.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
@@ -213,6 +220,10 @@ targets:
       # APP_GROUPS activée. Le provisioning profile absent est créé à la volée
       # par le signing automatique via `-allowProvisioningUpdates` (Gymfile).
       - target: MeeshyShareExtension
+      # #8063 — partage d'écran pendant un appel (ReplayKit). L'App ID
+      # `me.meeshy.app.broadcast` (capability APP_GROUPS) doit exister au
+      # portail et figurer dans Matchfile / Fastfile avant l'archive de release.
+      - target: MeeshyBroadcastExtension
       - package: MeeshySDK
         product: MeeshySDK
       - package: MeeshySDK
@@ -318,6 +329,23 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyShareExtension/MeeshyShareExtension.entitlements
+
+  # #8063 — Broadcast Upload Extension (ReplayKit) : capte l'écran pendant un
+  # appel et en pousse les trames, en JPEG réduit, à l'app par un socket Unix
+  # dans le conteneur App Group `group.me.meeshy.apps`. Aucune dépendance SDK
+  # (50 Mo de plafond mémoire pour une extension de diffusion) : frameworks
+  # système seulement.
+  MeeshyBroadcastExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyBroadcastExtension
+    settings:
+      INFOPLIST_FILE: MeeshyBroadcastExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.broadcast
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyBroadcastExtension/MeeshyBroadcastExtension.entitlements
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby
