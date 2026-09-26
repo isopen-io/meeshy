@@ -104,6 +104,7 @@ export function CommentComposer({ language, onSend, canWrite, mentionSource = nu
         id={fieldId}
         ref={fieldRef}
         data-comment-field
+        enterKeyHint="send"
         value={text}
         rows={1}
         maxLength={COMMENT_MAX_LENGTH}
