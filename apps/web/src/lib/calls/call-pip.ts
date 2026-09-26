@@ -33,7 +33,26 @@ export function browserPipSupport(): PipSupport {
   return pipSupport({ documentPictureInPicture: env.documentPictureInPicture, pictureInPictureEnabled: (document as { readonly pictureInPictureEnabled?: boolean }).pictureInPictureEnabled });
 }
 
-export type PipSource ={ readonly stream: MediaStream; readonly mirrored: boolean };
+let opener: (() => Promise<boolean>) | null = null;
+
+/**
+ * La fenêtre PiP s'enregistre ici en montant (`call-pip-window.tsx`) : le
+ * bouton l'appelle SYNCHRONEMENT, dans le geste. Passer par un `import()` au
+ * clic laissait filer l'activation de l'utilisateur, et le navigateur
+ * refusait la fenêtre (mesuré par `check-calls-during.mjs`).
+ */
+export function registerPipOpener(next: () => Promise<boolean>): () => void {
+  opener = next;
+  return () => {
+    if (opener === next) opener = null;
+  };
+}
+
+export function requestCallPip(): void {
+  void opener?.();
+}
+
+export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean };
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'>;
 

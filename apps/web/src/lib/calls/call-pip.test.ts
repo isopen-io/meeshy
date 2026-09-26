@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armAutoPip, pipSource, pipSupport, shouldOfferPip } from './call-pip';
+import { armAutoPip, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -52,6 +52,21 @@ describe('shouldOfferPip', () => {
     expect(shouldOfferPip(call({ phase: { kind: 'incoming' } }), 'document')).toBe(false);
     expect(shouldOfferPip(call({ phase: { kind: 'ended', reason: 'local', detail: null } }), 'document')).toBe(false);
     expect(shouldOfferPip(call({ members: { peer: member('peer', false) }, cameraOn: false }), 'document')).toBe(false);
+  });
+});
+
+describe('requestCallPip', () => {
+  test('appelle SYNCHRONEMENT la fenêtre enregistrée (dans le geste), et plus rien une fois retirée', () => {
+    const calls: string[] = [];
+    const unregister = registerPipOpener(async () => {
+      calls.push('ouverte');
+      return true;
+    });
+    requestCallPip();
+    expect(calls).toEqual(['ouverte']);
+    unregister();
+    requestCallPip();
+    expect(calls).toEqual(['ouverte']);
   });
 });
 

@@ -21,7 +21,7 @@ import {
   type Size,
 } from '@/lib/calls/call-bubble';
 import { browserPreferenceStorage } from '@/lib/calls/call-devices';
-import { browserPipSupport, pipSource, shouldOfferPip } from '@/lib/calls/call-pip';
+import { browserPipSupport, pipSource, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callStatusKey } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
@@ -176,7 +176,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
           {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
         </button>
         {offerPip ? (
-          <button type="button" onClick={() => void import('@/components/call-pip-window').then((module) => module.openCallPip())} aria-label={translate(language, 'call.pip.enter')} className="grid size-11 place-items-center rounded-full" data-call-bubble-control="pip">
+          <button type="button" onClick={requestCallPip} aria-label={translate(language, 'call.pip.enter')} className="grid size-11 place-items-center rounded-full" data-call-bubble-control="pip">
             <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={20} />
           </button>
         ) : null}

@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
-import { browserPipSupport, shouldOfferPip } from '@/lib/calls/call-pip';
+import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -25,7 +25,7 @@ export function CallScreenTools({ call }: { readonly call: ActiveCall }) {
   return (
     <div className="flex items-center gap-1">
       {offerPip ? (
-        <button type="button" aria-label={translate(language, 'call.pip.enter')} onClick={() => void import('@/components/call-pip-window').then((module) => module.openCallPip())} className="grid size-11 place-items-center rounded-full" style={{ color: '#fff' }} data-call-pip="">
+        <button type="button" aria-label={translate(language, 'call.pip.enter')} onClick={requestCallPip} className="grid size-11 place-items-center rounded-full" style={{ color: '#fff' }} data-call-pip="">
           <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />
         </button>
       ) : null}

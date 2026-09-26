@@ -9,7 +9,7 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { armAutoPip, browserPipSupport, pipSource, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
+import { armAutoPip, browserPipSupport, pipSource, registerPipOpener, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -172,5 +172,6 @@ function CallPip({ call }: { readonly call: ActiveCall }) {
 /** Monté par `call-layer.tsx` en chunk à part, frère de l'écran d'appel : il vit tant qu'un appel existe. */
 export function CallPipLayer() {
   const call = useStore(callStore, (state) => state.call);
+  useEffect(() => registerPipOpener(openCallPip), []);
   return call === null ? null : <CallPip call={call} />;
 }
