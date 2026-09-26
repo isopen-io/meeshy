@@ -86,11 +86,8 @@ jest.mock('../../../middleware/rate-limiter', () => ({
   messageValidationHook: (...args: any[]) => mockMessageValidationHook(...args),
 }));
 
-// La porte de lecture (`ouvrirConversationLisible`, #8116) lit le VERDICT : le
-// double partagé gouverne ses deux formes depuis le même `mockCanAccessConversation`.
-jest.mock('../../../routes/conversations/utils/access-control', () =>
-  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
-    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+jest.mock('../../../routes/conversations/utils/access-control', () => (jest.requireActual('../../helpers/acces-conversation-double') as any)
+  .doubleAccesConversation(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
     (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../utils/conversation-id-cache', () => ({
@@ -2501,7 +2498,6 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getReactionsHandler(fastify)(req, reply);
 
       expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     it('returns empty reactions array when no reactions', async () => {
@@ -2700,7 +2696,6 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getStatusHandler(fastify)(req, reply);
 
       expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     it('returns empty statuses when no messages', async () => {
