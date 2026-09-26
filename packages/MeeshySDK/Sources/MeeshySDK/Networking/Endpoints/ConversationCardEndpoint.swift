@@ -25,10 +25,4 @@ public enum ConversationCardEndpoint: MeeshyEndpoint, Sendable {
     /// derrière des réessais ne ferait que retarder ce repli.
     public var retryPolicy: MeeshyEndpointRetryPolicy { .never }
 
-    public init(target: ConversationCardTarget) {
-        switch target {
-        case .shareLink(let identifier): self = .shareLink(identifier: identifier)
-        case .direct(let conversationId): self = .direct(conversationId: conversationId)
-        }
-    }
 }
