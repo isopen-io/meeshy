@@ -99,6 +99,13 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:call:analytics'
   },
+  // La note d'après-appel (#8072) : une par appel terminé, quelques-unes
+  // par minute laissent la marge d'une correction.
+  CALL_QUALITY_FEEDBACK: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:call:quality-feedback'
+  },
   CALL_SCREEN_CAPTURE: {
     maxRequests: 20,
     windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream

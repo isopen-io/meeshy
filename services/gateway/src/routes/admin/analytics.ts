@@ -4,7 +4,7 @@ import { logError } from '../../utils/logger';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
-import { coerceCallAnalytics, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
+import { coerceCallAnalytics, coerceCallFeedback, summarizeCallFeedback, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
 import { requirePermission } from '../../middleware/authorize';
 
 const CACHE_TTL = {
@@ -402,7 +402,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       // skipped.
       const rows = await fastify.prisma.callParticipant.findMany({
         where: { joinedAt: { gte: windowStart } },
-        select: { analytics: true },
+        select: { analytics: true, feedback: true },
         orderBy: { joinedAt: 'desc' },
         take: ROW_CAP,
       });
@@ -412,6 +412,12 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         .filter((r): r is NonNullable<typeof r> => r !== null);
 
       const summary = summarizeCallReliability(records);
+      // La note d'après-appel (#8072) : une par participant qui a noté.
+      const feedback = summarizeCallFeedback(
+        rows
+          .map((row) => coerceCallFeedback(row.feedback))
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+      );
       const responseBody = {
         success: true,
         data: {
@@ -419,6 +425,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           sampled: rows.length >= ROW_CAP,
           rowsWithTelemetry: records.length,
           ...summary,
+          feedback,
         }
       };
 

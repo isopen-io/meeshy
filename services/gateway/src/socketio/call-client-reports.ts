@@ -2,7 +2,7 @@
  * Ce que l'app cliente RAPPORTE sur elle-même pendant un appel — extrait de
  * `CallEventsHandler.ts` (#7632, budget de taille).
  *
- * Une responsabilité, et elle n'est pas celle du reste du handler : les quatre
+ * Une responsabilité, et elle n'est pas celle du reste du handler : les cinq
  * événements ci-dessous ne font ni naître, ni joindre, ni terminer un appel.
  * Ils portent l'état de l'APPLICATION qui participe — son premier plan, sa
  * capture d'écran, sa télémétrie de fin. Le reste de `CallEventsHandler`
@@ -10,7 +10,7 @@
  *
  * ─── LA DOCTRINE QUI LES RÉUNIT TOUS LES QUATRE ─────────────────────────────
  *
- * **Le `participantId` du client n'est JAMAIS cru sur parole.** Les quatre
+ * **Le `participantId` du client n'est JAMAIS cru sur parole.** Les cinq
  * gestionnaires le RÉSOLVENT côté serveur depuis le `userId` authentifié, et
  * chacun paie une raison différente de le faire :
  *
@@ -38,17 +38,18 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../services/CallService';
 import type { MeeshySocket as Socket } from './typed-socket';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
   socketCallScreenCaptureDetectedSchema,
-  socketCallAnalyticsSchema
+  socketCallAnalyticsSchema,
+  socketCallQualityFeedbackSchema
 } from '../validation/call-schemas';
 import { checkSocketRateLimit, SOCKET_RATE_LIMITS, getSocketRateLimiter } from '../utils/socket-rate-limiter';
 import { logger } from '../utils/logger';
-import type { CallError, CallScreenCaptureEvent, CallAnalyticsEvent } from '@meeshy/shared/types/video-call';
+import type { CallError, CallScreenCaptureEvent, CallAnalyticsEvent, CallQualityFeedbackEvent } from '@meeshy/shared/types/video-call';
 
 /**
  * Ce que ces gestionnaires empruntent à l'instance.
@@ -80,7 +81,7 @@ export type CallSocketAuth = {
   readonly rememberAuth: (userId: string) => void;
 };
 
-/** Le refus de validation, identique sur les quatre gestionnaires. */
+/** Le refus de validation, identique sur les cinq gestionnaires. */
 function emitValidationError(socket: Socket, error: string, details: unknown, callId?: string): void {
   socket.emit(CALL_EVENTS.ERROR, {
     code: CALL_ERROR_CODES.VALIDATION_ERROR,
@@ -91,7 +92,7 @@ function emitValidationError(socket: Socket, error: string, details: unknown, ca
 }
 
 /**
- * Enregistre les quatre gestionnaires de rapport client sur ce socket.
+ * Enregistre les cinq gestionnaires de rapport client sur ce socket.
  *
  * Appelé une fois par socket depuis `setupCallEvents`.
  */
@@ -340,6 +341,58 @@ export function registerCallClientReportEvents(
       }
     } catch (error) {
       logger.error('Error handling call:analytics', { error });
+    }
+  });
+  // ─── call:quality-feedback (#8072) ───────────────────────────────────────
+  // La note d'après-appel, demandée par échantillon. Même garde que
+  // `analytics` : une ligne `CallParticipant` pour CET appel, quel que soit
+  // `leftAt` (on note APRÈS avoir raccroché), et la note s'écrit sur la ligne
+  // la plus récente de celui qui note — jamais sur celle d'un autre.
+  socket.on(CLIENT_EVENTS.CALL_QUALITY_FEEDBACK, async (data: CallQualityFeedbackEvent) => {
+    try {
+      const userId = getUserId(socket.id);
+      if (!userId) return;
+      rememberAuth(userId);
+
+      const rateLimitPassed = await checkSocketRateLimit(
+        socket,
+        userId,
+        SOCKET_RATE_LIMITS.CALL_QUALITY_FEEDBACK,
+        deps.rateLimiter,
+        CALL_EVENTS.ERROR
+      );
+      if (!rateLimitPassed) return;
+
+      const validation = validateSocketEvent(socketCallQualityFeedbackSchema, data);
+      if (isValidationFailure(validation)) {
+        emitValidationError(socket, validation.error, validation.details, data?.callId);
+        return;
+      }
+
+      const raterParticipantId = await deps.resolveEverCallParticipantId(userId, validation.data.callId);
+      if (!raterParticipantId) return;
+
+      const row = await deps.prisma.callParticipant.findFirst({
+        where: { callSessionId: validation.data.callId, participantId: raterParticipantId },
+        orderBy: { joinedAt: 'desc' },
+        select: { id: true }
+      });
+      if (!row) return;
+
+      const { rating, issues, comment } = validation.data;
+      await deps.prisma.callParticipant.update({
+        where: { id: row.id },
+        data: {
+          feedback: {
+            rating,
+            issues: [...new Set(issues ?? [])],
+            ...(comment ? { comment } : {}),
+            ratedAt: new Date().toISOString()
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Error handling call:quality-feedback', { error });
     }
   });
 }
