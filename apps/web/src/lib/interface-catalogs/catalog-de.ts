@@ -1085,6 +1085,7 @@ const de = {
   'attachment.protected.video': 'Geschütztes Video',
   'attachment.protected.audio': 'Geschützte Sprachnachricht',
   'attachment.protected.file': 'Geschützter Anhang',
+  'attachment.protected.open.hint': 'zum Anzeigen im Vollbild tippen',
   'media.reactions.badge.a11y': 'Reaktionen',
   'media.reactions.badge.mine.a11y': 'darunter Ihre',
   'attachment.kind.image': 'Foto',

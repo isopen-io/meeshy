@@ -27,7 +27,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
-import { useAttachmentMasked } from './view-once-opened';
+import { revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
  * LES WIDGETS DE MÉDIA DU FIL (#5805, redécoupé #6221 « la grille de
@@ -475,6 +475,13 @@ export function Attachments({
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const maskedAttachment = useAttachmentMasked();
+  /* LA PIÈCE MASQUÉE QU'ON VIENT DE TOUCHER S'OUVRE EN CLAIR (#8008) — elle
+     seule : ses voisines masquées gardent leur substitut dans la visionneuse
+     (`ViewerMaskedPage`), faute d'avoir été touchées. */
+  const viewerItems =
+    openIndex === null
+      ? visual
+      : visual.map((attachment, index) => (index === openIndex && maskedAttachment(attachment) ? revealedAttachment(attachment) : attachment));
 
   return (
     <>
@@ -514,7 +521,7 @@ export function Attachments({
       {openIndex !== null ? (
         <Suspense fallback={null}>
           <MediaViewer
-            items={visual}
+            items={viewerItems}
             startIndex={openIndex}
             onClose={() => setOpenIndex(null)}
             languages={languages}

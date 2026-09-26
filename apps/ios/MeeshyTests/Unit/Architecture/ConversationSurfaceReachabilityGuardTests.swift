@@ -914,7 +914,9 @@ final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
         let corps = String(grille[reveal.upperBound...].prefix(1200))
         XCTAssertFalse(corps.contains("onConsumeViewOnce?("),
                        "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
-        XCTAssertTrue(corps.contains("openFullscreen()"),
+        // #8009 — le plein écran s'ouvre sur CETTE pièce, jamais par le
+        // carrousel en ligne qui dévoilerait les autres dans la bulle.
+        XCTAssertTrue(corps.contains("fullscreenAttachment = media"),
                       "La révélation doit ouvrir le plein écran dans le même geste.")
     }
 

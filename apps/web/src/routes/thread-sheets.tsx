@@ -4,7 +4,7 @@ import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
 import type { Message } from '@/lib/api/types';
-import { translationChoices } from '@/lib/view/message-actions';
+import { messageDetailExposureOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
@@ -110,13 +110,14 @@ export function ThreadMessageSheets({
         const detailMessage = messages.find((m) => m.id === detailFor);
         if (detailMessage === undefined) return null;
         const servedDetail = messageMenu.servedOf(detailFor);
+        /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
+        const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
         return (
           <MessageDetailSheet
-            /* Une vue unique (#7580) : ni langues ni pièces — rien de son contenu. */
             choices={
-              detailMessage.isViewOnce
-                ? []
-                : translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+              exposed
+                ? translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+                : []
             }
             reactions={reactionEntries(detailMessage.reactionSummary)}
             sentAt={new Date(detailMessage.createdAt)}
@@ -124,7 +125,7 @@ export function ThreadMessageSheets({
             locale={readerLocale}
             conversationId={conversationId}
             messageId={detailMessage.id}
-            attachments={detailMessage.isViewOnce ? [] : (detailMessage.attachments ?? [])}
+            attachments={exposed ? (detailMessage.attachments ?? []) : []}
             star={messageMenu.starOf(detailFor)}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);

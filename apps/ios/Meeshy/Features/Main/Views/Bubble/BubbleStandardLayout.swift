@@ -440,7 +440,7 @@ struct BubbleStandardLayout: View {
         if let replyLabel = replyAccessibilityLabel {
             parts.append(replyLabel)
         }
-        if let raw = content.text?.raw, !raw.isEmpty {
+        if let raw = content.text?.raw, !raw.isEmpty, !content.isBlurred {
             parts.append(raw)
         }
         if !visualAttachments.isEmpty {
@@ -551,6 +551,7 @@ struct BubbleStandardLayout: View {
                         ProtectedVeilAffordance(
                             isViewOnce: content.isViewOnce,
                             isDark: isDark,
+                            hint: content.protectedTap().accessibilityHint,
                             onReveal: revealBlurredContent
                         )
                     }
@@ -929,25 +930,6 @@ struct BubbleStandardLayout: View {
         // statique par message → branche stable, pas de churn d'identité. Pour
         // une bulle floutable on garde les modifiers pour animer la révélation.
         .modifier(BlurRevealModifier(isBlurrable: content.requiresVeil, shouldBlur: shouldBlur))
-    }
-
-    /// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
-    /// dans `contentStack` pour le rationale (perf GPU au scroll).
-    private struct BlurRevealModifier: ViewModifier {
-        let isBlurrable: Bool
-        let shouldBlur: Bool
-        func body(content: Content) -> some View {
-            if isBlurrable {
-                content
-                    .blur(radius: shouldBlur ? 20 : 0)
-                    .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .blur(radius: shouldBlur ? 5 : 0)
-                    )
-            } else {
-                content
-            }
-        }
     }
 
     // MARK: - Emoji-only path
@@ -1536,8 +1518,10 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Blur reveal action (delegated to controller)
 
+    /// #8009 — un média caché s'ouvre en plein écran, sans dévoilement dans la bulle.
     private func revealBlurredContent() {
         HapticFeedback.medium()
+        if case .openFullscreen(let media) = content.protectedTap() { return openProtectedMedia(media) }
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
                 messageId: content.messageId,

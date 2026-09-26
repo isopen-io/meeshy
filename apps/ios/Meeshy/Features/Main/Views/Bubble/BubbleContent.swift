@@ -323,6 +323,9 @@ nonisolated struct BubbleContent: Equatable {
     /// fait passer à « déjà ouvert ». Projection de
     /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
     var isViewOnceRevealed: Bool = false
+    /// Vue unique scellée dont le toucher ouvre un PLEIN ÉCRAN (#8009) —
+    /// l'image ou la vidéo que le sceau a retirée du modèle.
+    var viewOnceOpensFullscreen: Bool = false
     let isViewOnce: Bool
     let isPinned: Bool
     /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
@@ -439,6 +442,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
+            && lhs.viewOnceOpensFullscreen == rhs.viewOnceOpensFullscreen
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned

@@ -20,13 +20,16 @@ import {
   wavDataUri,
 } from './fixtures-media';
 import {
+  MEDIA_BLURRED_GRID_WITNESS_ID,
   MEDIA_GRID_MINE_WITNESS_ID,
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
   MEDIA_GRID_PAIR_WITNESS_ID,
   MEDIA_GRID_QUAD_WITNESS_ID,
   MEDIA_GRID_TRIPLE_WITNESS_ID,
   MEDIA_SOLO_VIDEO_WITNESS_ID,
+  MEDIA_MINE_BLURRED_WITNESS_ID,
   MEDIA_VIDEO_DATA_URI,
+  MEDIA_VIEW_ONCE_VIDEO_WITNESS_ID,
 } from './fixtures-media-grid';
 import { decodeMessages } from './decode';
 import { electDescription } from '../view/media';
@@ -125,9 +128,9 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les SEIZE messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1)', () => {
+test('les DIX-NEUF messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1 ; #8008, +3)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(16);
+  expect(messages).toHaveLength(19);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
@@ -142,6 +145,9 @@ test('les SEIZE messages du corpus médias sont servis par messagesOf, dans l’
   expect(messages.some((m) => m.id === MEDIA_GRID_QUAD_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_GRID_OVERFLOW_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_GRID_MINE_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_VIEW_ONCE_VIDEO_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_MINE_BLURRED_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_BLURRED_GRID_WITNESS_ID)).toBe(true);
 });
 
 /**

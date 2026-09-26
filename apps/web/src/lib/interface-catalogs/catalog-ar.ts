@@ -1082,6 +1082,7 @@ const ar = {
   'attachment.protected.video': 'فيديو محمي',
   'attachment.protected.audio': 'رسالة صوتية محمية',
   'attachment.protected.file': 'مرفق محمي',
+  'attachment.protected.open.hint': 'المس للعرض بملء الشاشة',
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'attachment.kind.image': 'صورة',

@@ -803,6 +803,14 @@ export const FocalRow = memo(function FocalRow({
                 surface="row"
                 revealable={revealable}
                 onConsumeViewOnce={onConsumeViewOnce}
+                media={{
+                  frame: 'tiles',
+                  languages,
+                  fallbackLanguage: message.originalLanguage,
+                  carrier: mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto }),
+                  isMine,
+                  ...(displayLanguage !== undefined ? { displayLanguage } : {}),
+                }}
                 now={now}
               >
                 {contentBlock}
