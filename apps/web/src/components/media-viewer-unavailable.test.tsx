@@ -53,13 +53,12 @@ afterEach(() => {
 
 const answering = (status: number) => {
   const probes: string[] = [];
-  globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      probes.push(`${init?.method ?? 'GET'} ${String(input)}`);
-      return new Response(null, { status });
-    },
-    { preconnect: realFetch.preconnect },
-  );
+  // Le faux `fetch` du dépôt (motif `composer-sticker-sheet.test.tsx`) : seule
+  // la signature d'appel sert à la sonde, jamais les membres statiques.
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    probes.push(`${init?.method ?? 'GET'} ${String(input)}`);
+    return new Response(null, { status });
+  }) as unknown as typeof fetch;
   return probes;
 };
 
