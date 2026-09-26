@@ -4,6 +4,7 @@ import esIdentity from './catalog-es-identity';
 import esVerifyEmail from './catalog-es-verify-email';
 import esPassword from './catalog-es-password';
 import esCall from './catalog-es-call';
+import esCallJoin from './catalog-es-call-join';
 import esSignup from './catalog-es-signup';
 
 import esMentions from './catalog-es-mentions';
@@ -193,6 +194,7 @@ const es = {
   ...esVerifyEmail,
   ...esPassword,
   ...esCall,
+  ...esCallJoin,
   ...esSignup,
   'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',

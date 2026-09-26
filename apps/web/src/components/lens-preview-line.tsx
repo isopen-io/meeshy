@@ -148,3 +148,60 @@ export function LensPreviewLine({
     </>
   );
 }
+
+export type JoinCallRequest = {
+  readonly conversationId: string;
+  readonly callId: string;
+  readonly media: 'audio' | 'video';
+  readonly title: string;
+  readonly avatar: string | null;
+  readonly isGroup: boolean;
+};
+
+/**
+ * « REJOINDRE » SUR LA LIGNE D'UN APPEL EN COURS (H4, #7616 iOS) — la ligne 2
+ * DIT l'appel (`active-call`, vert) ; ce bouton le REJOINT. Il vit HORS du
+ * lien de la rangée (un bouton dans un `<a>` est un contenu interactif
+ * imbriqué, que ni le clavier ni le lecteur d'écran n'atteignent proprement) :
+ * `lens-row.tsx` le pose en frère du lien, au bout de la rangée. D-113 le
+ * réservait à « quand le web appelle » — c'est fait (#6382).
+ *
+ * L'encre est le vert SÉMANTIQUE de la ligne 2 (`--color-success`, AA dans
+ * les deux schémas) sur son propre voile : un texte blanc sur l'émeraude du
+ * schéma sombre descend sous AA. Le bouton ne tire pas le moteur — l'appelant
+ * passe `callActions.join`, qui le charge au geste.
+ */
+export function LensJoinCallButton({
+  request,
+  label,
+  text,
+  onJoin,
+}: {
+  readonly request: JoinCallRequest;
+  /** Le nom accessible — « Rejoindre l’appel avec {name} ». */
+  readonly label: string;
+  /** Le mot visible — « Rejoindre ». */
+  readonly text: string;
+  readonly onJoin: (request: JoinCallRequest) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-lens-join={request.callId}
+      aria-label={label}
+      onClick={() => onJoin(request)}
+      className="relative z-10 grid min-h-11 min-w-11 shrink-0 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ outlineColor: 'var(--color-success)' }}
+    >
+      <span
+        aria-hidden="true"
+        data-lens-join-pill
+        className="flex items-center gap-1 whitespace-nowrap rounded-chip px-2.5 text-check font-semibold"
+        style={{ height: 28, color: 'var(--color-success)', backgroundColor: 'color-mix(in srgb, var(--color-success) 14%, transparent)' }}
+      >
+        <PreviewGlyph icon={request.media === 'video' ? 'call-video' : 'call-audio'} />
+        {text}
+      </span>
+    </button>
+  );
+}
