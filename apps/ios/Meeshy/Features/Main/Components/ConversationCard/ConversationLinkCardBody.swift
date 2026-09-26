@@ -27,6 +27,11 @@ struct ConversationLinkCardBody: View, Equatable {
         return raw.isEmpty ? ConversationLinkCardCopy.privateTitle : raw
     }
 
+    private var initials: String {
+        let words = title.split(whereSeparator: \.isWhitespace).prefix(2)
+        return words.compactMap(\.first).map { String($0).uppercased() }.joined()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if card.kind == .shareLink, let inviter = card.inviter {
@@ -77,7 +82,7 @@ struct ConversationLinkCardBody: View, Equatable {
             .accessibilityHidden(true)
     }
 
-    private var gradient: some View {
+    private var gradient: LinearGradient {
         LinearGradient(colors: [accent, accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
@@ -103,7 +108,7 @@ struct ConversationLinkCardBody: View, Equatable {
                 CachedAsyncImage(url: card.avatarUrl,
                                  targetSize: CGSize(width: Self.avatarSide, height: Self.avatarSide),
                                  showsStatusOverlays: false) {
-                    Text(MeeshyAvatar.makeInitials(from: title))
+                    Text(verbatim: initials)
                         .font(MeeshyFont.relative(18, weight: .heavy, design: .rounded))
                         .foregroundColor(.white)
                 }

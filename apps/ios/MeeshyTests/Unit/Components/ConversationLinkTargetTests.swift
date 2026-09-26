@@ -3,6 +3,7 @@ import MeeshySDK
 @testable import Meeshy
 
 /// #8099 — quelles URL d'un message deviennent une carte de conversation.
+@MainActor
 final class ConversationLinkTargetTests: XCTestCase {
 
     func test_target_chatShareLink_isShareLink() {
