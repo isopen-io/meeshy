@@ -16,7 +16,7 @@ import {
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
-import { callWebPushConfig, webPushConfig } from './web-push-config';
+import { webPushFor } from './web-push-config';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -655,13 +655,8 @@ export class PushNotificationService {
                 ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
               },
             };
-      } else if (tokenRecord.platform === 'web' && isCallPush) {
-        // #8043 — le service worker compose lui-même la notification d'appel
-        // (Répondre / Refuser) : data-only, urgence haute, et la même durée de
-        // vie que la sonnerie — une sonnerie morte ne s'affiche pas au réveil.
-        message.webpush = callWebPushConfig(CALL_PUSH_TTL_MS);
-      } else if (tokenRecord.platform === 'web' && !dataOnly) {
-        message.webpush = webPushConfig(payload);
+      } else if (tokenRecord.platform === 'web') {
+        Object.assign(message, webPushFor(payload, { isCallPush, dataOnly, callTtlMs: CALL_PUSH_TTL_MS }));
       }
 
       if (payload.collapseId) {
