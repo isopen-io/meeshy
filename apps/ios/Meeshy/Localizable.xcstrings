@@ -39798,6 +39798,53 @@
         }
       }
     },
+    "auth.magiclink.sent.codeAndLink": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إرسال الرمز والرابط إلى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code und Link gesendet an"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code and link sent to"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código y enlace enviados a"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code et lien envoyés à"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codice e link inviati a"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código e link enviados para"
+          }
+        }
+      }
+    },
     "auth.magiclink.title": {
       "extractionState": "manual",
       "localizations": {
@@ -96321,6 +96368,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Digite o código de 6 dígitos enviado para **%@**"
+          }
+        }
+      }
+    },
+    "emailVerification.subtitle.accountCreated": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إنشاء حسابك. أُرسل رمز ورابط للتحقق إلى **%@**."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Konto wurde erstellt. Ein Bestätigungscode und ein Link wurden an **%@** gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account has been created. A verification code and link have been sent to **%@**."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta ha sido creada. Se han enviado un código y un enlace de verificación a **%@**."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte est créé. Un code et un lien de validation ont été envoyés à **%@**."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo account è stato creato. Un codice e un link di verifica sono stati inviati a **%@**."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua conta foi criada. Um código e um link de verificação foram enviados para **%@**."
           }
         }
       }

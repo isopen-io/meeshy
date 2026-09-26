@@ -161,7 +161,7 @@ extension iPadRootView {
                        defaultValue: "Ce lien n'a pas pu être ouvert",
                        bundle: .main)
             )
-        case .magicLink:
+        case .magicLink, .emailVerificationLink:
             break
         }
     }

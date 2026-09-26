@@ -672,7 +672,7 @@ struct RootView: View {
                        bundle: .main)
             )
 
-        case .magicLink:
+        case .magicLink, .emailVerificationLink:
             break
         }
     }

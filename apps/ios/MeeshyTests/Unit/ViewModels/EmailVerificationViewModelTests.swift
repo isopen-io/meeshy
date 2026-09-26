@@ -3,62 +3,91 @@ import XCTest
 import MeeshySDK
 
 @MainActor
+private final class MockEmailVerificationConfirmer: EmailVerificationConfirming {
+    nonisolated deinit {}
+    var result: Result<Bool, Error> = .success(true)
+    private(set) var requests: [EmailVerificationRequest] = []
+
+    func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
+        requests.append(request)
+        return try result.get()
+    }
+}
+
+@MainActor
 final class EmailVerificationViewModelTests: XCTestCase {
 
     // MARK: - Factory
 
     private func makeSUT(
         email: String = "test@example.com",
-        authService: MockAuthServiceSDK = MockAuthServiceSDK()
-    ) -> (sut: EmailVerificationViewModel, authService: MockAuthServiceSDK) {
-        let sut = EmailVerificationViewModel(email: email, authService: authService)
-        return (sut, authService)
+        password: String? = nil,
+        accountCreated: Bool = false
+    ) -> (sut: EmailVerificationViewModel, authService: MockAuthServiceSDK, confirmer: MockEmailVerificationConfirmer) {
+        let authService = MockAuthServiceSDK()
+        let confirmer = MockEmailVerificationConfirmer()
+        let sut = EmailVerificationViewModel(
+            email: email,
+            password: password,
+            accountCreated: accountCreated,
+            authService: authService,
+            confirmer: confirmer
+        )
+        return (sut, authService, confirmer)
     }
 
     // MARK: - verifyCode
 
-    func test_verifyCode_success_setsVerificationSuccess() async {
-        let (sut, mock) = makeSUT()
-        mock.verifyEmailWithCodeResult = .success(())
+    func test_verifyCode_sessionServed_opensSessionAndSucceeds() async {
+        let (sut, _, confirmer) = makeSUT()
+        confirmer.result = .success(true)
 
         await sut.verifyCode("123456")
 
         XCTAssertTrue(sut.verificationSuccess)
+        XCTAssertTrue(sut.sessionOpened)
         XCTAssertNil(sut.error)
         XCTAssertFalse(sut.isVerifying)
-        XCTAssertEqual(mock.verifyEmailWithCodeCallCount, 1)
-        XCTAssertEqual(mock.lastVerifyEmailCode, "123456")
-        XCTAssertEqual(mock.lastVerifyEmailEmail, "test@example.com")
+        XCTAssertEqual(confirmer.requests, [.code("123456", email: "test@example.com")])
+    }
+
+    func test_verifyCode_sendsThePasswordTypedAtLogin() async {
+        let (sut, _, confirmer) = makeSUT(email: "new@example.com", password: "typed-at-login")
+
+        await sut.verifyCode("111222")
+
+        XCTAssertEqual(confirmer.requests, [.code("111222", email: "new@example.com", password: "typed-at-login")])
+    }
+
+    func test_verifyCode_verifiedWithoutSession_succeedsWithoutOpeningSession() async {
+        let (sut, _, confirmer) = makeSUT()
+        confirmer.result = .success(false)
+
+        await sut.verifyCode("123456")
+
+        XCTAssertTrue(sut.verificationSuccess)
+        XCTAssertFalse(sut.sessionOpened)
     }
 
     func test_verifyCode_error_setsError() async {
-        let (sut, mock) = makeSUT()
-        mock.verifyEmailWithCodeResult = .failure(MeeshyError.server(statusCode: 400, message: "Invalid code"))
+        let (sut, _, confirmer) = makeSUT()
+        confirmer.result = .failure(MeeshyError.server(statusCode: 400, message: "Invalid code"))
 
         await sut.verifyCode("000000")
 
         XCTAssertFalse(sut.verificationSuccess)
+        XCTAssertFalse(sut.sessionOpened)
         XCTAssertNotNil(sut.error)
         XCTAssertFalse(sut.isVerifying)
     }
 
-    func test_verifyCode_genericError_setsError() async {
-        let (sut, mock) = makeSUT()
-        mock.verifyEmailWithCodeResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error"]))
-
-        await sut.verifyCode("999999")
-
-        XCTAssertFalse(sut.verificationSuccess)
-        XCTAssertNotNil(sut.error)
-    }
-
     func test_verifyCode_clearsOldError() async {
-        let (sut, mock) = makeSUT()
-        mock.verifyEmailWithCodeResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, _, confirmer) = makeSUT()
+        confirmer.result = .failure(NSError(domain: "test", code: 500))
         await sut.verifyCode("bad")
         XCTAssertNotNil(sut.error)
 
-        mock.verifyEmailWithCodeResult = .success(())
+        confirmer.result = .success(true)
         await sut.verifyCode("good")
         XCTAssertNil(sut.error)
         XCTAssertTrue(sut.verificationSuccess)
@@ -66,8 +95,8 @@ final class EmailVerificationViewModelTests: XCTestCase {
 
     // MARK: - resendCode
 
-    func test_resendCode_success_setsResendSuccess() async {
-        let (sut, mock) = makeSUT(email: "user@test.com")
+    func test_resendCode_success_callsResendVerification() async {
+        let (sut, mock, _) = makeSUT(email: "user@test.com")
         mock.resendVerificationEmailResult = .success(())
 
         await sut.resendCode()
@@ -79,7 +108,7 @@ final class EmailVerificationViewModelTests: XCTestCase {
     }
 
     func test_resendCode_error_setsError() async {
-        let (sut, mock) = makeSUT()
+        let (sut, mock, _) = makeSUT()
         mock.resendVerificationEmailResult = .failure(NSError(domain: "test", code: 429))
 
         await sut.resendCode()
@@ -88,21 +117,21 @@ final class EmailVerificationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isResending)
     }
 
-    // MARK: - email property
+    // MARK: - properties
 
-    func test_emailProperty_matchesInitialization() {
-        let (sut, _) = makeSUT(email: "hello@world.com")
+    func test_properties_matchInitialization() {
+        let (sut, _, _) = makeSUT(email: "hello@world.com", accountCreated: true)
         XCTAssertEqual(sut.email, "hello@world.com")
+        XCTAssertTrue(sut.accountCreated)
     }
 
-    // MARK: - initial state
-
     func test_initialState_allFlagsAreFalse() {
-        let (sut, _) = makeSUT()
+        let (sut, _, _) = makeSUT()
         XCTAssertFalse(sut.isVerifying)
         XCTAssertFalse(sut.isResending)
         XCTAssertFalse(sut.resendSuccess)
         XCTAssertFalse(sut.verificationSuccess)
+        XCTAssertFalse(sut.sessionOpened)
         XCTAssertNil(sut.error)
     }
 }
