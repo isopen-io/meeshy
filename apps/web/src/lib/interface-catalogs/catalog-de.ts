@@ -9,6 +9,7 @@ import deCallJoin from './catalog-de-call-join';
 import deSignup from './catalog-de-signup';
 
 import deMentions from './catalog-de-mentions';
+import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
 
@@ -1124,6 +1125,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deConversationCard,
   ...deStoriesMine,
   ...deContactCard,
 } satisfies InterfaceCatalog;

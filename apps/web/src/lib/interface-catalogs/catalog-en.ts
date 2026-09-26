@@ -9,6 +9,7 @@ import enCallJoin from './catalog-en-call-join';
 import enSignup from './catalog-en-signup';
 
 import enMentions from './catalog-en-mentions';
+import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
 
@@ -1124,6 +1125,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enConversationCard,
   ...enStoriesMine,
   ...enContactCard,
 } satisfies InterfaceCatalog;

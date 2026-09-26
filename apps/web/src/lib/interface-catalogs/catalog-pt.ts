@@ -9,6 +9,7 @@ import ptCallJoin from './catalog-pt-call-join';
 import ptSignup from './catalog-pt-signup';
 
 import ptMentions from './catalog-pt-mentions';
+import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 
@@ -1128,6 +1129,7 @@ const pt = {
   'message.detail.language.original': '{language} (original)',
 
   ...ptMentions,
+  ...ptConversationCard,
   ...ptStoriesMine,
   ...ptContactCard,
 } satisfies InterfaceCatalog;

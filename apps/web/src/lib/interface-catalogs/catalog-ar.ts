@@ -9,6 +9,7 @@ import arCallJoin from './catalog-ar-call-join';
 import arSignup from './catalog-ar-signup';
 
 import arMentions from './catalog-ar-mentions';
+import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 
@@ -1121,6 +1122,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arConversationCard,
   ...arStoriesMine,
   ...arContactCard,
 } satisfies InterfaceCatalog;
