@@ -62,11 +62,14 @@ const MediaTransport = lazy(() => import('./media-transport').then((module) => (
  * fantôme (`useBackDismiss`), piège à focus (`nextFocusIndex`), `#root`
  * `inert` le temps de l'ouverture.
  *
- * PELLICULE AU MESSAGE, PAS À LA CONVERSATION (D-54, Q2 de la spécification
- * #6221) : `items` est le tableau `visual` DÉJÀ partitionné par
- * `Attachments` — la projection conversation-entière est une ISSUE
- * COMPAGNON (avec réagir/répondre/composer), jamais un raccourci par un
- * magasin global depuis ce chunk.
+ * DEUX PELLICULES, UN SEUL CHUNK (D-54, amendé par #6303/#8103) : depuis le
+ * fil, `items` est le tableau `visual` DU MESSAGE (`Attachments`) ; depuis
+ * l'écran « Médias, liens et documents », c'est l'index VISUEL de la
+ * conversation ENTIÈRE (`conversation-media-hub.ts`), paginé — l'hôte
+ * l'étend quand la page courante approche du bout (`onNearEnd`) et remet
+ * l'auteur et la date de CHAQUE page (`carrierAt`). Ce chunk ne tient aucun
+ * magasin : la liste vient toujours de l'hôte, et ses octets ne se chargent
+ * que dans la fenêtre ±1.
  *
  * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
@@ -105,7 +108,33 @@ export type MediaViewerProps = {
    * médias ORDINAIRE, comportement STRICTEMENT inchangé.
    */
   readonly scenes?: ReadonlyMap<string, SceneGalleryEntry>;
+  /**
+   * LE PORTEUR DE CHAQUE PAGE (#6303) — une pellicule conversation-entière
+   * feuillette des pièces de messages DIFFÉRENTS : l'auteur et la date
+   * suivent la page, jamais la première. Prime sur `carrier` quand il est posé.
+   */
+  readonly carrierAt?: (index: number) => MediaCarrier | undefined;
+  /**
+   * L'EXTENSION (#6303) — appelée quand la page courante est à moins de
+   * `NEAR_END_PAGES` du bout de `items` : l'hôte charge la page suivante de
+   * l'index et REMET une liste plus longue. Les pages ne s'ajoutent qu'à la
+   * FIN, donc la page courante ne bouge pas.
+   */
+  readonly onNearEnd?: () => void;
+  /** L'AUTEUR DE CHAQUE PAGE (#6303) — le rapport d'ouverture se ferme sur SA
+   * propre pièce, page par page ; prime sur `isMine` quand il est posé. */
+  readonly isMineAt?: (index: number) => boolean;
+  /**
+   * OÙ SE POSE LA COUCHE (#8103) — `document.body` par défaut. Ouverte depuis
+   * une feuille (`<dialog>` en `showModal()`), elle doit vivre DANS ce
+   * dialogue : la couche supérieure du navigateur recouvre tout ce qui est
+   * hors d'elle, et le rend inerte.
+   */
+  readonly container?: Element | null;
 };
+
+/** À combien de pages du bout l'hôte est prié d'étendre la liste. */
+export const NEAR_END_PAGES = 3;
 
 /** Un seuil de balayage HORIZONTAL, indépendant du seuil vertical de fermeture — la pagination n'est pas un geste d'immersion. */
 const SWIPE_PAGE_THRESHOLD_PX = 60;
@@ -445,6 +474,10 @@ export default function MediaViewer({
   scenes,
   isMine = false,
   deps,
+  carrierAt,
+  onNearEnd,
+  isMineAt,
+  container,
 }: MediaViewerProps) {
   const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
@@ -461,6 +494,7 @@ export default function MediaViewer({
   const language = currentInterfaceLanguage();
 
   const current = items[index];
+  const currentCarrier = carrierAt?.(index) ?? carrier;
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
   // La hauteur du couloir HAUT — le haut du plateau dans le repère du
@@ -484,6 +518,12 @@ export default function MediaViewer({
       previouslyFocusedRef.current?.focus();
     };
   }, []);
+
+  const onNearEndRef = useRef(onNearEnd);
+  onNearEndRef.current = onNearEnd;
+  useEffect(() => {
+    if (items.length - 1 - index < NEAR_END_PAGES) onNearEndRef.current?.();
+  }, [index, items.length]);
 
   const goTo = (next: number): void => {
     setIndex(clampIndex(next, items.length));
@@ -639,7 +679,7 @@ export default function MediaViewer({
           const sceneEntry = scenes?.get(attachment.id);
           return (
             <div
-              key={attachment.id}
+              key={`${i}:${attachment.id}`}
               data-viewer-page
               data-full-pixels={fullPixels}
               className="media-viewer-page absolute inset-0"
@@ -662,7 +702,7 @@ export default function MediaViewer({
                   isActive={i === index}
                   preferredLanguages={languages}
                   topInset={topCorridorHeight}
-                  label={scenePageLabel(sceneEntry, carrier, language)}
+                  label={scenePageLabel(sceneEntry, carrierAt?.(i) ?? carrier, language)}
                   pausedOnEntry={presentation.kind === 'full' && presentation.pausedOnEntry}
                   onToggleRef={(fn) => {
                     if (i === index) activePlayToggleRef.current = fn;
@@ -687,7 +727,7 @@ export default function MediaViewer({
                   languages={languages}
                   fallbackLanguage={fallbackLanguage}
                   isActive={i === index}
-                  isMine={isMine}
+                  isMine={isMineAt?.(i) ?? isMine}
                   {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                   {...(deps !== undefined ? { deps } : {})}
                 />
@@ -724,13 +764,13 @@ export default function MediaViewer({
             : {}),
         }}
       >
-        <CarrierFooter attachment={current} carrier={carrier} {...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {})} />
+        <CarrierFooter attachment={current} carrier={currentCarrier} {...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {})} />
         {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
         <div ref={setTransportSlot} data-viewer-transport-slot />
 
         {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
       </div>
     </div>,
-    document.body,
+    container ?? document.body,
   );
 }

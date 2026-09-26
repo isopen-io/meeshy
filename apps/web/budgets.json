@@ -481,6 +481,15 @@
         "status": "CIBLE -- MESUREE PAR #7796/#7797, NON ARBITREE",
         "source": "Mesure du 2026-09-24 (`bun run build` puis gzip -9, zlib) : 19 195 o pour les SEPT catalogues des invitations (invite.* et linkDetail.*, 171 cles), de 2,49 Ko (en) a 2,99 Ko (ar). Charges avec /chat/:link et /links/share/:link seulement ; un lecteur n en telecharge qu UN (~2,7 Ko). Arrondi au Ko SUPERIEUR (19) + 1 Ko de marge."
       }
+    },
+    "conversation_media_hub": {
+      "pattern": "^assets/conversation-media-hub-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #8103, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,04 Ko gzip -9 -- l'ecran « Medias, liens et documents » d'une conversation (`components/conversation-media-hub.tsx` : sept segments, recherche posee, etats dessines, sentinelle de defilement). CHARGE A LA DEMANDE (`lazy()`, `conversation-media-section.tsx`) au tap sur « Tout voir » de la feuille de details ; ses rangees et sa grille (`conversation-media-hub-items.tsx`) sont partagees avec l'apercu de la feuille. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

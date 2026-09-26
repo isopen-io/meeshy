@@ -16,6 +16,14 @@ final class MockContactSyncService: ContactSyncProviding, @unchecked Sendable {
     var syncDirectoryCallCount = 0
     var lastSyncDirectoryMode: DirectorySyncMode?
 
+    /// Un carnet interdit par l'appareil : la proposition « retrouver tes
+    /// amis » n'existe pas — le parcours reste celui d'avant #8105.
+    static func restricted() -> MockContactSyncService {
+        let mock = MockContactSyncService()
+        mock.authorizationStatusResult = .restricted
+        return mock
+    }
+
     func authorizationStatus() -> CNAuthorizationStatus {
         authorizationStatusResult
     }

@@ -12,19 +12,13 @@ struct OnboardingCardView: View {
     let onRetryStory: () -> Void
     let onExplore: () -> Void
 
-    @State private var showsAllSuggestions = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduce
-    @Environment(\.meeshyForceReduceMotion) private var userForced
-
-    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) }
-
     var body: some View {
         switch model.card {
         case .step(.languages): languages
         case .step(.email): email
         case .step(.global): global
         case .step(.story): story
-        case .step(.friends): friends
+        case .step(.friends): OnboardingFriendsCard(model: model, isDark: isDark)
         case .step(.notifications): notifications
         case .recap: recap
         case .none: EmptyView()
@@ -356,61 +350,7 @@ struct OnboardingCardView: View {
         }
     }
 
-    // MARK: 4 — trouve ta bande
-
-    private var friends: some View {
-        OnboardingCardLayout(
-            title: String(localized: "onboarding.friends.title", bundle: .main),
-            message: String.localizedStringWithFormat(String(localized: "onboarding.friends.body", bundle: .main), OnboardingRewards.friendship),
-            isDark: isDark,
-            primary: friendsPrimary,
-            secondary: nil,
-            illustration: { OnboardingFriendsIllustration(names: model.suggestions.map(\.displayName), isDark: isDark) },
-            content: {
-                VStack(spacing: MeeshySpacing.sm) {
-                    ForEach(OnboardingCardFit.visibleSuggestions(model.suggestions, expanded: showsAllSuggestions)) { suggestion in
-                        OnboardingSuggestionRow(
-                            suggestion: suggestion,
-                            isRequested: model.requestedProfileIds.contains(suggestion.id),
-                            didFail: model.failedProfileId == suggestion.id,
-                            isDark: isDark
-                        ) { Task { await model.addFriend(id: suggestion.id) } }
-                    }
-                    let hidden = OnboardingCardFit.hiddenSuggestionCount(model.suggestions, expanded: showsAllSuggestions)
-                    if hidden > 0 {
-                        Button {
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showsAllSuggestions = true }
-                        } label: {
-                            Label(String(localized: "onboarding.friends.more", bundle: .main), systemImage: "chevron.down")
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                                .foregroundStyle(MeeshyColors.indigo500)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("onboarding.friends.more")
-                    }
-                    Label(String.localizedStringWithFormat(String(localized: "onboarding.friends.pending", bundle: .main), OnboardingRewards.friendship),
-                          systemImage: "hourglass")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
-                }
-            }
-        )
-    }
-
-    /// Avant tout ajout, « Plus tard » est la sortie réelle : elle tient la
-    /// place principale. « Continuer » ne la remplace qu'au premier ajout.
-    private var friendsPrimary: OnboardingAction {
-        switch OnboardingCardFit.friendsActions(hasRequests: !model.requestedProfileIds.isEmpty) {
-        case .laterOnly:
-            return OnboardingAction(title: String(localized: "onboarding.later", bundle: .main),
-                                    identifier: "onboarding.later") { Task { await model.continueFromFriends() } }
-        case .continueOnly:
-            return OnboardingAction(title: String(localized: "onboarding.continue", bundle: .main),
-                                    identifier: "onboarding.friends.continue") { Task { await model.continueFromFriends() } }
-        }
-    }
+    // MARK: 4 — trouve ta bande : `OnboardingFriendsCard` (#8105)
 
     // MARK: 5 — notifications
 

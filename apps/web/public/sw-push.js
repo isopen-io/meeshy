@@ -61,6 +61,7 @@ const PUSH_ROUTE_PATTERNS = {
   story: '/story/$post',
   post: '/post/$post',
   discover: '/discover',
+  userProfile: '/u/$username',
   progression: '/me/progression',
   settings: '/settings',
   notifications: '/notifications',
@@ -82,6 +83,7 @@ const EPHEMERAL_ONLY_TYPES = [
   'friend_new_mood',
 ];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
+const PROFILE_TYPES = ['contact_joined'];
 const PROGRESSION_TYPES = [
   'achievement_unlocked',
   'ACHIEVEMENT_UNLOCKED',
@@ -104,7 +106,17 @@ const HINTED_ROUTES = ['discover', 'progression', 'settings', 'notifications'];
  * `delete` des champs sensibles : une liste noire oublie le champ ajouté
  * demain, une liste blanche le refuse par défaut.
  */
-const TAP_FIELDS = ['notificationId', 'type', 'conversationId', 'postId', 'postType', 'contentType', 'friendRequestId', 'route'];
+const TAP_FIELDS = [
+  'notificationId',
+  'type',
+  'conversationId',
+  'postId',
+  'postType',
+  'contentType',
+  'friendRequestId',
+  'senderUsername',
+  'route',
+];
 
 /**
  * LE NOM DU MESSAGE remis à un client déjà ouvert — JUMEAU de
@@ -282,6 +294,9 @@ function resolvePushTarget(data) {
 
   const type = texte(data.type);
   if (texte(data.friendRequestId) !== '' || REQUEST_TYPES.indexOf(type) >= 0) return demandes();
+
+  const pseudo = texte(data.senderUsername);
+  if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
 
   const indice = texte(data.route);
   if (HINTED_ROUTES.indexOf(indice) >= 0) {
@@ -649,6 +664,7 @@ self.meeshyPushTarget = {
   EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
+  PROFILE_TYPES: PROFILE_TYPES,
   PROGRESSION_TYPES: PROGRESSION_TYPES,
   SECURITY_TYPES: SECURITY_TYPES,
   HINTED_ROUTES: HINTED_ROUTES,

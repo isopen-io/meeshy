@@ -142,7 +142,11 @@ export function Sheet({
               <input
                 type="search"
                 value={search ?? ''}
-                onChange={(e) => onSearchChange(e.currentTarget.value)}
+                /* `onInput`, la convention des champs texte du dépôt
+                   (`composer.tsx`, `test-support/react-events-probe.test.tsx`) :
+                   un `onChange` n'y est jamais rappelé sous happy-dom, et la
+                   recherche d'une feuille restait sans témoin (#8103). */
+                onInput={(e) => onSearchChange(e.currentTarget.value)}
                 placeholder={searchPlaceholder}
                 className="w-full bg-transparent py-2 text-body outline-none"
                 style={{ color: 'var(--color-ios-ink)' }}

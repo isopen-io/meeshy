@@ -475,6 +475,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
         "apps/ios/Meeshy/MeeshyApp.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/ContactCardView.swift",  // 5
+        // #8101 — la carte de visite partagée : règles (libellés des champs)
+        // et fiche. Épinglées dès leur naissance.
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardRules.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ContactCard/ContactCardDetailSheet.swift",
         "apps/ios/Meeshy/Features/Main/Components/LanguagePickerSheet.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift",  // 5

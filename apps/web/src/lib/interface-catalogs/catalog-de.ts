@@ -1,6 +1,7 @@
 import type { InterfaceCatalog } from '@/lib/i18n-catalog';
 import deComposerAttach from './catalog-de-composer-attach';
 import deIdentity from './catalog-de-identity';
+import deMediaHub from './catalog-de-media-hub';
 import deVerifyEmail from './catalog-de-verify-email';
 import dePassword from './catalog-de-password';
 import deCall from './catalog-de-call';
@@ -11,6 +12,7 @@ import deSignup from './catalog-de-signup';
 import deMentions from './catalog-de-mentions';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
+import deContactCard from './catalog-de-contact-card';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -193,6 +195,7 @@ const de = {
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
   ...deIdentity,
+  ...deMediaHub,
   ...deVerifyEmail,
   ...dePassword,
   ...deCall,
@@ -430,6 +433,9 @@ const de = {
   'settings.privacy.read_receipts.info':
     'Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.',
   'settings.privacy.typing_indicator': 'Schreibanzeige',
+  'settings.privacy.hide_from_search': 'Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben',
+  'settings.privacy.hide_from_search.info':
+    'Deine Kontakte finden dich nicht über deine Nummer oder E-Mail und werden nicht benachrichtigt, wenn du beitrittst.',
   'settings.section.appearance': 'Erscheinungsbild',
   'settings.theme': 'Design',
   'settings.theme.auto': 'Auto',
@@ -1126,6 +1132,7 @@ const de = {
   ...deMentions,
   ...deConversationCard,
   ...deStoriesMine,
+  ...deContactCard,
 } satisfies InterfaceCatalog;
 
 export default de;
