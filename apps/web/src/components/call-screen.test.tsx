@@ -55,6 +55,13 @@ describe('CallScreen', () => {
     expect(html).not.toContain('Raccrocher');
   });
 
+  test('un appel entrant propose « Message » pour refuser avec une réponse rapide (#8065)', () => {
+    const html = screen({ phase: { kind: 'incoming' }, direction: 'incoming' });
+    expect(html).toContain('data-call-control="decline-message"');
+    expect(html).toContain('aria-label="Refuser avec un message"');
+    expect(screen({ members: { 'u-peer': member() } })).not.toContain('decline-message');
+  });
+
   test('un appel VOCAL entrant ne propose pas « Répondre sans vidéo »', () => {
     expect(screen({ phase: { kind: 'incoming' }, direction: 'incoming' })).not.toContain('Répondre sans vidéo');
   });

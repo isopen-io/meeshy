@@ -21,6 +21,7 @@ import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
+import frCallDecline from './catalog-fr-call-decline';
 import frCallDevices from './catalog-fr-call-devices';
 import frCallScreen from './catalog-fr-call-screen';
 import frCallQuality from './catalog-fr-call-quality';
@@ -197,6 +198,7 @@ const fr = {
   ...frRowActions,
   ...frCallShell,
   ...frCallJoin,
+  ...frCallDecline,
   ...frCallDevices,
   ...frCallScreen,
   ...frCallQuality,

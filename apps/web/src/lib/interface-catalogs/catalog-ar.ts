@@ -8,6 +8,7 @@ import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
+import arCallDecline from './catalog-ar-call-decline';
 import arCallDevices from './catalog-ar-call-devices';
 import arCallScreen from './catalog-ar-call-screen';
 import arCallQuality from './catalog-ar-call-quality';
@@ -207,6 +208,7 @@ const ar = {
   ...arRowActions,
   ...arCallShell,
   ...arCallJoin,
+  ...arCallDecline,
   ...arCallDevices,
   ...arCallScreen,
   ...arCallQuality,

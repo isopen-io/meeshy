@@ -8,6 +8,7 @@ import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
+import ptCallDecline from './catalog-pt-call-decline';
 import ptCallDevices from './catalog-pt-call-devices';
 import ptCallScreen from './catalog-pt-call-screen';
 import ptCallQuality from './catalog-pt-call-quality';
@@ -211,6 +212,7 @@ const pt = {
   ...ptRowActions,
   ...ptCallShell,
   ...ptCallJoin,
+  ...ptCallDecline,
   ...ptCallDevices,
   ...ptCallScreen,
   ...ptCallQuality,
