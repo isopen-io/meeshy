@@ -64,7 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "MessageListViewController.swift",
-        "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "ProfileUserPostsList.swift",
@@ -497,10 +496,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // les 55 lignes, et les 2 que `ConversationView` rend (garde de l'appui
     // long), dans le même lot.
     //
-    // **51 915 à la réunion des deux lots** (52 062 à leur base commune) :
-    // G014 retire 90 lignes, #8009 en retire 57 ; aucun ne touche les lignes
-    // de l'autre, le plafond descend de la somme.
-    private static let legacyLineCeiling = 51_915
+    // **50 721 à la réunion des deux lots** (52 062 à leur base commune) :
+    // G014 retire 90 lignes, #8009 en retire 57 ; et `MessageOverlayMenu.swift`,
+    // que #7990 allège de son code mort pendant que #8009 en extrait la grille
+    // d'aperçu, repasse SOUS le budget (1 194 lignes comptées) : il quitte la
+    // liste, plafond compris.
+    private static let legacyLineCeiling = 50_721
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
