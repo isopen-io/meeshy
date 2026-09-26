@@ -5,6 +5,8 @@ import itMediaHub from './catalog-it-media-hub';
 import itVerifyEmail from './catalog-it-verify-email';
 import itPassword from './catalog-it-password';
 import itCall from './catalog-it-call';
+import itCallShell from './catalog-it-call-shell';
+import itCallJoin from './catalog-it-call-join';
 import itSignup from './catalog-it-signup';
 
 import itMentions from './catalog-it-mentions';
@@ -195,6 +197,8 @@ const it = {
   ...itVerifyEmail,
   ...itPassword,
   ...itCall,
+  ...itCallShell,
+  ...itCallJoin,
   ...itSignup,
   'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',

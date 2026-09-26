@@ -39,6 +39,9 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * (`src/lib/view/use-location-request.ts`). Les autres (`INTERNET`, `RECORD_AUDIO`,
  * `MODIFY_AUDIO_SETTINGS`) sont déjà posées (#5668) et restent gardées ici
  * pour que ce témoin soit la référence UNIQUE des permissions de la coque.
+ * `FOREGROUND_SERVICE` (+ `_MICROPHONE`, `_CAMERA`), `USE_FULL_SCREEN_INTENT`,
+ * `BLUETOOTH_CONNECT`, `WAKE_LOCK`, `VIBRATE` (#8049) : l'appel natif de la
+ * coque (`src/lib/calls/shell-call.ts`, `MeeshyCallPlugin.java`).
  */
 export const REQUIRED_PERMISSIONS = [
   'android.permission.INTERNET',
@@ -49,6 +52,13 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.CAMERA',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+  'android.permission.FOREGROUND_SERVICE_CAMERA',
+  'android.permission.USE_FULL_SCREEN_INTENT',
+  'android.permission.BLUETOOTH_CONNECT',
+  'android.permission.WAKE_LOCK',
+  'android.permission.VIBRATE',
 ];
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;
@@ -89,6 +99,49 @@ export const auditManifestPermissions = ({ manifest, required = REQUIRED_PERMISS
     .filter(({ count }) => count !== 1);
 };
 
+const PLUGIN_MESSAGING_SERVICE = 'com.capacitorjs.plugins.pushnotifications.MessagingService';
+const COMPONENT_ELEMENT = /<(service|receiver)(?=[\s/>])([^>]*?)(\/>|>([\s\S]*?)<\/\1>)/g;
+
+const componentsOf = (manifest) =>
+  [...manifest.replace(XML_COMMENT, '').matchAll(COMPONENT_ELEMENT)].map(([, tag, source, , body]) => ({
+    tag,
+    attributes: attributesOf(source),
+    body: body ?? '',
+  }));
+
+const named = (components, tag, name) =>
+  components.find((component) => component.tag === tag && component.attributes.get('android:name') === name);
+
+/**
+ * LES COMPOSANTS DE L'APPEL NATIF (#8049) — les violations, une phrase chacune.
+ * FCM ne remet un message qu'à UN service `MESSAGING_EVENT` : celui du plugin
+ * doit être RETIRÉ à la fusion, sans quoi le nôtre (qui l'étend et lui remet
+ * tout ce qui n'est pas un appel) ne reçoit rien. Le service au premier plan
+ * porte micro ET caméra (un appel vidéo coupe sinon la caméra écran éteint),
+ * et le récepteur de refus n'est pas exporté (sinon n'importe quelle app
+ * raccrocherait un appel au nom de l'utilisateur).
+ */
+export const auditCallComponents = ({ manifest }) => {
+  const components = componentsOf(manifest);
+  const plugin = named(components, 'service', PLUGIN_MESSAGING_SERVICE);
+  const messaging = named(components, 'service', '.MeeshyMessagingService');
+  const foreground = named(components, 'service', '.CallForegroundService');
+  const decline = named(components, 'receiver', '.DeclineCallReceiver');
+  const types = new Set((foreground?.attributes.get('android:foregroundServiceType') ?? '').split('|'));
+  return [
+    plugin?.attributes.get('tools:node') === 'remove'
+      ? null
+      : `${PLUGIN_MESSAGING_SERVICE} — non retiré (tools:node="remove") : deux services MESSAGING_EVENT se concurrencent`,
+    messaging?.body.includes('com.google.firebase.MESSAGING_EVENT') === true
+      ? null
+      : '.MeeshyMessagingService — absent ou sans com.google.firebase.MESSAGING_EVENT',
+    types.has('microphone') && types.has('camera')
+      ? null
+      : '.CallForegroundService — foregroundServiceType doit porter microphone ET camera',
+    decline?.attributes.get('android:exported') === 'false' ? null : '.DeclineCallReceiver — absent ou exporté',
+  ].filter((violation) => violation !== null);
+};
+
 const violationLine = ({ permission, count }) =>
   count === 0
     ? `  • ${permission} — manquante (commentée, tools:node="remove" ou android:maxSdkVersion ne comptent pas), ajouter <uses-permission android:name="${permission}" />`
@@ -113,6 +166,16 @@ function main() {
 
   if (violations.length > 0) {
     throw new Error(formatViolations({ manifestPath: MANIFEST_PATH, violations }));
+  }
+
+  const componentViolations = auditCallComponents({ manifest });
+  if (componentViolations.length > 0) {
+    throw new Error(
+      [
+        `check-android-manifest: composant(s) de l'appel natif en défaut dans ${MANIFEST_PATH} :`,
+        ...componentViolations.map((violation) => `  • ${violation}`),
+      ].join('\n'),
+    );
   }
 
   console.log(

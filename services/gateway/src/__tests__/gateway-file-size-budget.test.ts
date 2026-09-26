@@ -143,6 +143,10 @@ const MAX_LINES = 1000;
  * `services/CallService.ts` : entrée 3121 → 3064 (#7545, 2026-09-23). La
  * réservation d'appel (claim / reprise / libération) est partie vers
  * `services/calls/activeCallClaim.ts`, qui notifie la liste de conversations.
+ * Puis 3064 → 3049 (#8074, 2026-09-26) : les délais de sonnerie, les grâces et
+ * le plafond de participants sont partis vers `@meeshy/shared/types/call-rules`,
+ * le jeu unique que la passerelle et les clients lisent. Le même lot rabaisse
+ * `services/PushNotificationService.ts` de 1041 à 1035 (le TTL d'appel).
  *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
@@ -162,7 +166,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
-  'services/CallService.ts': 3064,
+  'services/CallService.ts': 3049,
   'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2269,
   'services/EmailService.ts': 1032,
@@ -170,7 +174,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/PostFeedService.ts': 1199,
   'services/AuthService.ts': 1324,
   'services/messaging/MessageProcessor.ts': 1110,
-  'services/PushNotificationService.ts': 1041,
+  'services/PushNotificationService.ts': 1035,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
   'services/AudioTranslateService.ts': 1017,
 };

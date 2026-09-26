@@ -25,7 +25,8 @@
  *     compris ;
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
- *  6. une ligne ouvre le fil de SA conversation, et le retour ramène au journal ;
+ *  6. une ligne ouvre la fiche de SON appel (#6383), la fiche le fil de sa
+ *     conversation, et le retour ramène au journal ;
  *  6 bis. « Rappeler » a un EFFET (loi : un contrôle n'existe que s'il agit) —
  *     il ouvre l'écran d'appel vers la personne de la ligne, au-dessus du
  *     journal, et « Raccrocher » l'en retire ;
@@ -223,10 +224,16 @@ try {
       await page.waitForFunction(() => document.querySelectorAll('[data-call]').length === 5);
       check(new URL(page.url()).search === '', `${label} : « Tous » retire le paramètre et rend les cinq`);
 
-      // ------------------------------------------------ 6. une ligne ouvre SON fil
+      // ------------------------------------------------ 6. une ligne ouvre SA fiche (#6383), la fiche SON fil
       await page.click('[data-call="call-kwame-video"] a');
+      await page.waitForURL('**/call/call-kwame-video');
+      await page.waitForSelector('[data-call-detail-name]', { timeout: 5000 }).catch(() => null);
+      check((await textOf(page, '[data-call-detail-name]')) === 'Kwame Mensah', `${label} : une ligne ouvre la fiche de son appel`);
+      await page.click('[data-call-detail-open]');
       await page.waitForURL('**/c/c-kwame');
-      check(true, `${label} : une ligne ouvre le fil de sa conversation`);
+      check(true, `${label} : la fiche ouvre le fil de sa conversation`);
+      await page.goBack();
+      await page.waitForURL('**/call/call-kwame-video');
       await page.goBack();
       await page.waitForURL('**/calls');
       await page.waitForSelector('[data-call]');
