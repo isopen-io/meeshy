@@ -56,7 +56,6 @@ final class WindowMetricsSSOTTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/VideoLegacySupport.swift",
         "Meeshy/Features/Main/Components/ComposerModels.swift",
-        "Meeshy/Features/Main/Components/IslandEmergingBanner.swift",
         "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
     ]
 

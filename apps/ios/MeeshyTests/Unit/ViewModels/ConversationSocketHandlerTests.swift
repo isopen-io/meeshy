@@ -123,21 +123,16 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        messageSocket: MockMessageSocket = MockMessageSocket(),
-        isApplicationActive: Bool = true
+        messageSocket: MockMessageSocket = MockMessageSocket()
     ) -> (
         sut: ConversationSocketHandler,
         delegate: MockConversationSocketDelegate,
         socket: MockMessageSocket
     ) {
-        // The XCTest host never reaches `.active`, so the production foreground
-        // probe would block the read-receipt gate. Inject a known value; tests
-        // exercising the gate flip it explicitly.
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: messageSocket,
-            isApplicationActive: { isApplicationActive }
+            messageSocket: messageSocket
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
@@ -268,7 +263,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // `test_messageReceived_fromOtherUser_appendsToDelegate` above.
 
     func test_messageReceived_backgrounded_doesNotMarkAsRead() async throws {
-        let (sut, delegate, socket) = makeSUT(isApplicationActive: false)
+        let (sut, delegate, socket) = makeSUT()
         _ = sut
 
         let apiMsg = makeAPIMessage(id: "bg_msg", senderId: otherUserId, content: "Ping")
@@ -287,7 +282,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     func test_messageReceived_scrolledAway_doesNotMarkAsRead() async throws {
-        let (sut, delegate, socket) = makeSUT(isApplicationActive: true)
+        let (sut, delegate, socket) = makeSUT()
         _ = sut
         // User is reading history near the top — the new message lands
         // off-screen at the bottom.
@@ -1587,8 +1582,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
             let sut = ConversationSocketHandler(
                 conversationId: conversationId,
                 currentUserId: currentUserId,
-                messageSocket: socket,
-                isApplicationActive: { true }
+                messageSocket: socket
             )
             sut.delegate = delegate
             sut.armSocketSubscriptions()
@@ -1624,8 +1618,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: socket,
-            isApplicationActive: { true }
+            messageSocket: socket
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
@@ -2485,8 +2478,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: socket,
-            isApplicationActive: { true }
+            messageSocket: socket
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
@@ -2512,8 +2504,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
-            messageSocket: socket,
-            isApplicationActive: { true }
+            messageSocket: socket
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate

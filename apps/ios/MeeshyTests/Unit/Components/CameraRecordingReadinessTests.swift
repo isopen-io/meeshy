@@ -114,7 +114,7 @@ final class CameraRecordingReadinessTests: XCTestCase {
     /// continuerait de compter une vidéo que rien n'écrit.
     func test_unSegmentRefuseApresBascule_termineLEnregistrement() throws {
         let source = try cameraViewSource()
-        XCTAssertTrue(source.contains("@discardableResult"),
+        XCTAssertTrue(source.contains("private func startSegment() -> Bool"),
                       "startSegment() doit RENDRE son verdict pour que l'appelant en tienne compte.")
         XCTAssertTrue(source.contains("endRecordingWithoutOutput"),
                       "Le refus d'un segment doit avoir une sortie NOMMÉE, pas un return muet.")

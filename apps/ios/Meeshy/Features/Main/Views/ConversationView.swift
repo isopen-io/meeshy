@@ -2554,27 +2554,12 @@ struct ConversationView: View {
                     HapticFeedback.success()
                 },
                 onEdit: { beginEdit(msg) },
-                onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
-                onToggleStar: {
-                    _ = viewModel.toggleStar(
-                        messageId: msg.id,
-                        conversationName: conversation?.name,
-                        conversationAccentColor: accentColor
-                    )
-                    HapticFeedback.success()
-                },
                 isStarred: viewModel.isStarred(messageId: msg.id),
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                },
-                onDelete: {
-                    // #4043 — un message jamais envoyé (.failed) se supprime
-                    // sans confirmation ; sinon la boîte de dialogue habituelle
-                    // (local-only vs pour tous) reste inchangée.
-                    requestDeleteMessage(msg.id)
                 },
                 onSaveMedia: {
                     // Composant unifié « Enregistrer » — l'action n'apparaît
@@ -2705,7 +2690,6 @@ struct ConversationView: View {
                 Divider()
 
                 ForEach(actions, id: \.self) { action in
-                    if action == .delete { Divider() }
                     nativeMenuButton(action, msg: msg)
                 }
             }
@@ -2717,8 +2701,8 @@ struct ConversationView: View {
     private static let nativeQuickReactionEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
 
     /// Un item du menu natif pour une `PrimaryAction` — mêmes actions que
-    /// l'overlay (`overlayMenuContent`). `.delete` porte `role: .destructive`
-    /// (rendu rouge système) et arme la confirmation, jamais de delete direct.
+    /// l'overlay (`overlayMenuContent`). Épingler/favori/suppression sont
+    /// routés vers « Plus… » (`MoreItem`), jamais affichés ici.
     @ViewBuilder
     private func nativeMenuButton(_ action: PrimaryAction, msg: Message) -> some View {
         switch action {
@@ -2772,46 +2756,12 @@ struct ConversationView: View {
             } label: {
                 Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main), systemImage: "wand.and.stars")
             }
-        case .pin:
-            Button {
-                Task { await viewModel.togglePin(messageId: msg.id) }
-                HapticFeedback.medium()
-            } label: {
-                Label(String(localized: "action.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin.fill")
-            }
-        case .unpin:
-            Button {
-                Task { await viewModel.togglePin(messageId: msg.id) }
-                HapticFeedback.medium()
-            } label: {
-                Label(String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main), systemImage: "pin.slash.fill")
-            }
-        case .star:
-            Button {
-                _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
-                HapticFeedback.success()
-            } label: {
-                Label(String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main), systemImage: "star.fill")
-            }
-        case .unstar:
-            Button {
-                _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
-                HapticFeedback.success()
-            } label: {
-                Label(String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash.fill")
-            }
         case .more:
             Button {
                 overlayState.moreSheetInitialItem = nil
                 overlayState.detailSheetMessage = msg
             } label: {
                 Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")
-            }
-        case .delete:
-            Button(role: .destructive) {
-                requestDeleteMessage(msg.id)
-            } label: {
-                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
         case .callDetail:
             Button {

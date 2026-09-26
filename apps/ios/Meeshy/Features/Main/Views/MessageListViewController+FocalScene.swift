@@ -123,7 +123,7 @@ extension MessageListViewController {
     /// Pose d'UNE cellule qui entre à l'écran (sur-réserve comprise) : la
     /// passe collective — elle a besoin des voisines pour la compaction.
     /// No-op scène inactive : la cellule arrive à plat, comme en Script.
-    func applyFocalPerspective(to cell: UICollectionViewCell) {
+    func applyFocalPerspectiveOnCellDisplay() {
         guard readingMode == .focal, focalSceneActive else { return }
         applyFocalPerspectiveToVisibleCells()
     }

@@ -56,7 +56,7 @@ final class MessageGroupLanguageFanOutTests: XCTestCase {
 
     func test_messageIdsInGroup_endingAtSecondOfGroup_includesBothMembers() async throws {
         let store = try makeTwoGroupsStore()
-        await store.loadInitial()
+        await store.refreshFromDB()
         let vc = makeVC(store: store)
 
         XCTAssertEqual(vc.messageIdsInGroup(endingAt: "m2"), ["m2", "m1"])
@@ -64,7 +64,7 @@ final class MessageGroupLanguageFanOutTests: XCTestCase {
 
     func test_messageIdsInGroup_endingAtSecondGroupTail_stopsAtSenderChange() async throws {
         let store = try makeTwoGroupsStore()
-        await store.loadInitial()
+        await store.refreshFromDB()
         let vc = makeVC(store: store)
 
         XCTAssertEqual(vc.messageIdsInGroup(endingAt: "m4"), ["m4", "m3"])
@@ -72,7 +72,7 @@ final class MessageGroupLanguageFanOutTests: XCTestCase {
 
     func test_messageIdsInGroup_soloMessage_returnsItselfOnly() async throws {
         let store = try makeTwoGroupsStore()
-        await store.loadInitial()
+        await store.refreshFromDB()
         let vc = makeVC(store: store)
 
         // m1 est en tête de son groupe : rien à remonter au-delà de lui-même.
@@ -81,7 +81,7 @@ final class MessageGroupLanguageFanOutTests: XCTestCase {
 
     func test_messageIdsInGroup_unknownId_returnsItselfOnly() async throws {
         let store = try makeTwoGroupsStore()
-        await store.loadInitial()
+        await store.refreshFromDB()
         let vc = makeVC(store: store)
 
         XCTAssertEqual(vc.messageIdsInGroup(endingAt: "does-not-exist"), ["does-not-exist"])

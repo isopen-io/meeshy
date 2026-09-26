@@ -133,7 +133,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
-        "Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",
+        // RELOCALISATION pure : `MessageEditsDetailView.emptyStateView` (son
+        // seul site figé, un glyphe 28pt dans un cadre fixe) a fusionné avec sa
+        // jumelle de `MessageViewsDetailView` dans `MessageDetailChrome.swift`
+        // (dédoublonnage audit L3-17). La POPULATION ne bouge pas — ni
+        // `totalCeiling` ni `textCeiling` — seul le NOM change ; le fichier
+        // d'origine n'en porte plus aucun et sort de la liste.
+        "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
         "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageDetailSentimentTab.swift",

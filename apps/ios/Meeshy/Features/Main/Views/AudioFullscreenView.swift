@@ -472,8 +472,6 @@ private struct AudioFullscreenPage: View {
             NavigationStack {
                 MessageLanguageDetailView(
                     message: translationMessage,
-                    contactColor: contactColor,
-                    conversationId: "",
                     transcription: transcription,
                     translatedAudios: translatedAudios,
                     onSelectAudioLanguage: { lang in

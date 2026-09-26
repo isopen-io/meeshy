@@ -8,38 +8,23 @@ import MeeshyUI
 struct MessageTranscriptionDetailView: View {
     let message: Message
     let contactColor: String
-    let conversationId: String
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
-    var onSelectAudioLanguage: ((String?) -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var isRequestingTranscription = false
-    @State private var translatingAudioLanguages: Set<String> = []
-    @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
 
     var body: some View {
         content
-            .onAppear {
-                if mergedTranslatedAudios.isEmpty { mergedTranslatedAudios = translatedAudios }
-            }
             .onReceive(
                 MessageSocketManager.shared.transcriptionFailed
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
             ) { _ in
                 isRequestingTranscription = false
-                translatingAudioLanguages = []
-            }
-            .onReceive(
-                MessageSocketManager.shared.audioTranslationFailed
-                    .filter { $0.messageId == message.id }
-                    .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingAudioLanguages = []
             }
     }
 
@@ -57,7 +42,7 @@ struct MessageTranscriptionDetailView: View {
                 transcriptionEmptyContent(mediaAttachments: mediaAttachments, accent: accent)
             }
 
-            if !mergedTranslatedAudios.isEmpty {
+            if !translatedAudios.isEmpty {
                 translatedAudioTranscriptions(accent: accent)
             }
         }
@@ -76,14 +61,14 @@ struct MessageTranscriptionDetailView: View {
                     .foregroundColor(langColor)
                     .accessibilityHidden(true)
 
-                Text(Self.languageName(for: transcription.language))
+                Text(MessageLanguageDetailView.languageName(for: transcription.language))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
 
                 Spacer()
 
                 if let conf = transcription.confidence {
-                    Text(String(format: "%.0f%%", conf * 100))
+                    Text(LocalizedNumber.percent(Int((conf * 100).rounded())))
                         .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(langColor)
                         .padding(.horizontal, 7)
@@ -263,7 +248,7 @@ struct MessageTranscriptionDetailView: View {
             .padding(.horizontal, 4)
             .accessibilityAddTraits(.isHeader)
 
-            ForEach(mergedTranslatedAudios, id: \.id) { audio in
+            ForEach(translatedAudios, id: \.id) { audio in
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: audio.targetLanguage))
                 let display = LanguageDisplay.from(code: audio.targetLanguage)
 
@@ -329,15 +314,11 @@ struct MessageTranscriptionDetailView: View {
         Task {
             do {
                 try await AttachmentService.shared.requestTranscription(attachmentId: attachmentId)
-                await MainActor.run {
-                    isRequestingTranscription = false
-                    HapticFeedback.success()
-                }
+                isRequestingTranscription = false
+                HapticFeedback.success()
             } catch {
-                await MainActor.run {
-                    isRequestingTranscription = false
-                    HapticFeedback.error()
-                }
+                isRequestingTranscription = false
+                HapticFeedback.error()
             }
         }
     }
@@ -352,7 +333,7 @@ struct MessageTranscriptionDetailView: View {
 
     private func transcriptionBannerA11yLabel(_ transcription: MessageTranscription) -> String {
         var parts: [String] = [
-            String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), Self.languageName(for: transcription.language))
+            String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), MessageLanguageDetailView.languageName(for: transcription.language))
         ]
         if let conf = transcription.confidence {
             parts.append(String(format: String(localized: "a11y.transcription.confidence", defaultValue: "confiance %d %%", bundle: .main), Int((conf * 100).rounded())))
@@ -380,9 +361,5 @@ struct MessageTranscriptionDetailView: View {
 
     private func formatDuration(_ seconds: Int) -> String {
         LocalizedNumber.duration(seconds: seconds)
-    }
-
-    static func languageName(for code: String) -> String {
-        LanguageDisplay.from(code: code)?.name ?? code.uppercased()
     }
 }

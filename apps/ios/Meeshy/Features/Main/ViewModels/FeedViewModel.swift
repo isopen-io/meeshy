@@ -413,24 +413,7 @@ class FeedViewModel: ObservableObject {
                 let langs = self.preferredLanguages
                 let payload = response.data
                 let comments = await Task.detached(priority: .utility) {
-                    payload.map { c -> FeedComment in
-                        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-                            translations: c.translations,
-                            originalLanguage: c.originalLanguage,
-                            preferredLanguages: langs
-                        )
-                        return FeedComment(
-                            id: c.id, author: c.author.name, authorId: c.author.id,
-                            authorAvatarURL: c.author.avatar,
-                            content: c.content, timestamp: c.createdAt,
-                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                            parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translatedContent,
-                            currentUserReactions: c.currentUserReactions,
-                            media: (c.media ?? []).map { $0.toFeedMedia() },
-                            location: c.location
-                        )
-                    }
+                    payload.map { FeedComment(api: $0, preferredLanguages: langs) }
                 }.value
                 try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
             } catch {
@@ -1592,24 +1575,7 @@ class FeedViewModel: ObservableObject {
                 // always in its original language (no resolveCommentTranslation),
                 // and lost the "liked by me" heart on a comment that already
                 // carried reactions when it landed (currentUserReactions dropped).
-                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-                    translations: data.comment.translations,
-                    originalLanguage: data.comment.originalLanguage,
-                    preferredLanguages: self.preferredLanguages
-                )
-                let feedComment = FeedComment(
-                    id: data.comment.id, author: data.comment.author.name,
-                    authorId: data.comment.author.id,
-                    authorAvatarURL: data.comment.author.avatar,
-                    content: data.comment.content, timestamp: data.comment.createdAt,
-                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: data.comment.parentId,
-                    effectFlags: data.comment.effectFlags ?? 0,
-                    originalLanguage: data.comment.originalLanguage,
-                    translatedContent: translatedContent,
-                    currentUserReactions: data.comment.currentUserReactions,
-                    location: data.comment.location
-                )
+                let feedComment = FeedComment(api: data.comment, preferredLanguages: self.preferredLanguages)
                 // Écho de NOTRE propre envoi : la ligne optimiste a été insérée
                 // sous l'id local `cmid` (sendComment) — la remplacer en place,
                 // sinon l'écho (id serveur ≠ cmid) passait la dédup par id et

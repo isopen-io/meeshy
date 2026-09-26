@@ -84,14 +84,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // `IceRestart: true` constraint, forcing new ICE credentials in the SDP.
     private var pendingIceRestart = false
 
-    private(set) var videoFilterPipeline = VideoFilterPipeline()
+    let videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?
-
-    var isConnected: Bool {
-        peerConnection?.connectionState == .connected
-    }
 
     var localVideoTrack: Any? { localVideoTrack_ }
     var remoteVideoTrack: Any? { remoteVideoTrack_ }
@@ -392,7 +388,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // SDP regex path entirely — libwebrtc 141 negotiates RED via the standard
     // API correctly.
     private func applyAudioCodecPreferences(audioTransceiver: RTCRtpTransceiver) {
-        let factory = WebRTCSharedFactory.factory
         // Audit P1-5 — `setCodecPreferences` is validated against
         // `RTCRtpSender.getCapabilities()` per the W3C WebRTC spec (and
         // libwebrtc's internal RTPMediaSection::CreateMediaContent). For
@@ -468,7 +463,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // - VP8: software but ubiquitous, fallback for clients without H264 HW
     // - VP9: better compression, software-only on most iOS, optional fallback
     private func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
-        let factory = WebRTCSharedFactory.factory
         // Audit P1-5 — see applyAudioCodecPreferences for rationale.
         let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
 
@@ -503,8 +497,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // Called once at capture start (720p30 / 2.5 Mbps) and again by the adaptive
     // quality loop (WebRTCService.adjustBitrate) with throttled targets.
     func applyVideoEncoding(
-        maxBitrateBps: Int = 2_500_000,
-        maxFramerate: Int = 30,
+        maxBitrateBps: Int = QualityThresholds.maxVideoBitrate,
+        maxFramerate: Int = VideoConfig.hd720p30.maxFrameRate,
         scaleResolutionDownBy: Double = 1.0,
         degradationPreference: VideoDegradationPreference = .maintainFramerate
     ) {
@@ -719,33 +713,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         let constraints = RTCMediaConstraints(mandatoryConstraints: mandatoryConstraints, optionalConstraints: nil)
 
-        let sdp: RTCSessionDescription = try await withCheckedThrowingContinuation { continuation in
-            pc.offer(for: constraints) { sdp, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let sdp else {
-                    continuation.resume(throwing: WebRTCError.failedToCreateSDP)
-                    return
-                }
-                continuation.resume(returning: sdp)
-            }
-        }
-
-        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
-        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
-        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
-        // regex entirely. The legacy addAudioRedundancy munger was removed.
-        // Reference §3.8 + ADR-4.
-        mungedSDP = Self.addTransportCC(mungedSDP)
-        mungedSDP = Self.addVideoBitrateHints(mungedSDP)
-        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
-        try await setLocalDescription(mungedDescription, on: pc)
-        Logger.webrtc.info("local OFFER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
-        Logger.webrtc.info("SDP offer created and set as local description (Opus munged)")
-        return SessionDescription(type: .offer, sdp: mungedSDP)
+        let sdp = try await localDescription(from: pc, constraints: constraints, asOffer: true)
+        return try await mungeAndSetLocal(sdp, type: .offer, on: pc)
     }
 
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription {
@@ -799,33 +768,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // only risks the Plan-B/Unified-Plan mixing that skews directions.
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
 
-        let sdp: RTCSessionDescription = try await withCheckedThrowingContinuation { continuation in
-            pc.answer(for: constraints) { sdp, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let sdp else {
-                    continuation.resume(throwing: WebRTCError.failedToCreateSDP)
-                    return
-                }
-                continuation.resume(returning: sdp)
-            }
-        }
-
-        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
-        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
-        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
-        // regex entirely. The legacy addAudioRedundancy munger was removed.
-        // Reference §3.8 + ADR-4.
-        mungedSDP = Self.addTransportCC(mungedSDP)
-        mungedSDP = Self.addVideoBitrateHints(mungedSDP)
-        let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
-        try await setLocalDescription(mungedDescription, on: pc)
-        Logger.webrtc.info("local ANSWER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
-        Logger.webrtc.info("SDP answer created and set as local description (Opus munged)")
-        return SessionDescription(type: .answer, sdp: mungedSDP)
+        let sdp = try await localDescription(from: pc, constraints: constraints, asOffer: false)
+        return try await mungeAndSetLocal(sdp, type: .answer, on: pc)
     }
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
@@ -1049,8 +993,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraAvailable
         }
 
-        let format = selectFormat(for: camera)
-        guard let selectedFormat = format else {
+        guard let selectedFormat = selectFormat(for: camera) else {
             usingFrontCamera.toggle()
             throw WebRTCError.noCameraFormatAvailable
         }
@@ -1376,6 +1319,29 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 if let error { cont.resume(throwing: error) }
                 else { cont.resume() }
             }
+        }
+    }
+
+    /// Phase 2 — RED is negotiated via setCodecPreferences (libwebrtc 141 API); the
+    /// legacy addAudioRedundancy SDP munger was removed (9e663039, PT/PT bug). §3.8 + ADR-4.
+    private func mungeAndSetLocal(_ sdp: RTCSessionDescription, type: SDPType, on pc: RTCPeerConnection) async throws -> SessionDescription {
+        var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
+        mungedSDP = Self.addTransportCC(mungedSDP)
+        mungedSDP = Self.addVideoBitrateHints(mungedSDP)
+        try await setLocalDescription(RTCSessionDescription(type: sdp.type, sdp: mungedSDP), on: pc)
+        Logger.webrtc.info("local \(type.rawValue.uppercased(), privacy: .public) directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
+        Logger.webrtc.info("SDP \(type.rawValue, privacy: .public) created and set as local description (Opus munged)")
+        return SessionDescription(type: type, sdp: mungedSDP)
+    }
+
+    private func localDescription(from pc: RTCPeerConnection, constraints: RTCMediaConstraints, asOffer: Bool) async throws -> RTCSessionDescription {
+        try await withCheckedThrowingContinuation { continuation in
+            let handler: @Sendable (RTCSessionDescription?, (any Error)?) -> Void = { sdp, error in
+                if let error { continuation.resume(throwing: error); return }
+                guard let sdp else { continuation.resume(throwing: WebRTCError.failedToCreateSDP); return }
+                continuation.resume(returning: sdp)
+            }
+            if asOffer { pc.offer(for: constraints, completionHandler: handler) } else { pc.answer(for: constraints, completionHandler: handler) }
         }
     }
 
@@ -1804,7 +1770,6 @@ private extension VideoDegradationPreference {
 
 final class P2PWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
-    var isConnected: Bool { false }
     var localVideoTrack: Any? { nil }
     var remoteVideoTrack: Any? { nil }
 
@@ -1839,13 +1804,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func disconnect() {}
     func disconnectAfterFlushingPendingSend() {}
 
-    var videoFilterPipeline = VideoFilterPipeline()
+    let videoFilterPipeline = VideoFilterPipeline()
 }
 
 #endif
-
-// MARK: - Logger Extension
-
-private extension Logger {
-    nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
-}

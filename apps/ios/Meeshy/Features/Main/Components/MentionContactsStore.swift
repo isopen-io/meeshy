@@ -170,7 +170,7 @@ final class MentionContactsStore: MentionContactsProviding {
             cursor = page.pagination?.nextCursor
             if !more || page.data.isEmpty || cursor == nil { break }
         }
-        return FriendListAggregator.aggregate(received: collected, sent: [], currentUserId: currentUserId)
+        return FriendListAggregator.aggregate(received: collected, currentUserId: currentUserId)
     }
 }
 

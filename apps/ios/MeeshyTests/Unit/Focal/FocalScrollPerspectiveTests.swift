@@ -110,7 +110,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(code.components(separatedBy: "applyFocalPerspectiveToVisibleCells()").count - 1, 3,
             "scrollViewDidScroll + fin d'apply + changement de mode, au minimum")
         XCTAssertTrue(code.contains("FocalScrollPerspective.reset(cell.contentView.layer)"))
-        XCTAssertTrue(code.contains("applyFocalPerspective(to: cell)"))
+        XCTAssertTrue(code.contains("applyFocalPerspectiveOnCellDisplay()"))
     }
 
     // MARK: - Compaction + focus (retours user 2026-08-21)

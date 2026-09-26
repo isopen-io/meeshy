@@ -10,7 +10,6 @@ struct CallsTab: View {
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var selectedCall: APICallRecord?
 
@@ -39,22 +38,9 @@ struct CallsTab: View {
 
     private func chip(_ filter: CallHistoryFilter, label: String) -> some View {
         let isSelected = viewModel.filter == filter
-        return Button {
+        return ContactsFilterChip(title: label, isSelected: isSelected, hitTarget: true) {
             viewModel.setFilter(filter)
             HapticFeedback.light()
-        } label: {
-            Text(label)
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
-                // The capsule stays visually compact, but the tappable area is
-                // widened to the 44x44pt HIG minimum (frame + contentShape) —
-                // the visible pill was ~27-30pt tall, under the tap-target floor.
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -102,7 +88,6 @@ private struct CallJournalRow: View, Equatable {
     let record: APICallRecord
     let onTap: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
 
     static func == (lhs: CallJournalRow, rhs: CallJournalRow) -> Bool {
@@ -187,14 +172,6 @@ private struct CallJournalRow: View, Equatable {
         }
     }
 
-    private var accessibilityDirection: String {
-        switch record.directionKind {
-        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
-        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
-        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
-        }
-    }
-
     // Recompose le label VoiceOver de la rangée pour refléter EXACTEMENT le contenu
     // visible : nom, direction, type (vocal/vidéo — réutilise les clés de CallDetailSheet),
     // ancienneté, puis durée si présente (mêmes segments que la pastille visuelle). Zéro clé
@@ -203,7 +180,7 @@ private struct CallJournalRow: View, Equatable {
         let type = record.isVideo
             ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
             : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
-        var parts = [name, accessibilityDirection, type, record.startedAt.relativeTimeString]
+        var parts = [name, record.directionKind.localizedLabel, type, record.startedAt.relativeTimeString]
         if !record.durationLabel.isEmpty {
             let durationWord = String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main)
             parts.append("\(durationWord) \(record.durationLabel)")
@@ -214,23 +191,34 @@ private struct CallJournalRow: View, Equatable {
 
 // MARK: - Dial Button (audio / video menu)
 
-private struct CallRowDialButton: View {
+struct CallRowDialButton: View {
     let userId: String
     let displayName: String
-    let conversationId: String
-    let defaultIsVideo: Bool
+    var conversationId: String? = nil
+    var defaultIsVideo: Bool = false
+    /// Repli quand aucune conversation directe n'existe (le clavier ouvre le profil).
+    var onUnavailable: (() -> Void)? = nil
+    /// Libellé VoiceOver ; « Rappeler » par défaut (journal), « Appeler » sur le clavier.
+    var accessibilityLabel: String? = nil
+
+    private func dial(isVideo: Bool) {
+        if let onUnavailable {
+            CallStarter.start(userId: userId, displayName: displayName, isVideo: isVideo, conversationId: conversationId, onUnavailable: onUnavailable)
+        } else {
+            CallStarter.start(userId: userId, displayName: displayName, isVideo: isVideo, conversationId: conversationId)
+        }
+        HapticFeedback.medium()
+    }
 
     var body: some View {
         Menu {
             Button {
-                CallStarter.start(userId: userId, displayName: displayName, isVideo: false, conversationId: conversationId)
-                HapticFeedback.medium()
+                dial(isVideo: false)
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                CallStarter.start(userId: userId, displayName: displayName, isVideo: true, conversationId: conversationId)
-                HapticFeedback.medium()
+                dial(isVideo: true)
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
             }
@@ -242,7 +230,7 @@ private struct CallRowDialButton: View {
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(MeeshyColors.indigo500.opacity(0.12)))
         }
-        .accessibilityLabel(String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
+        .accessibilityLabel(accessibilityLabel ?? String(localized: "calls.redial", defaultValue: "Rappeler", bundle: .main))
         .accessibilityHint(String(localized: "calls.redial.hint", defaultValue: "Ouvre le choix entre appel vocal et appel vidéo", bundle: .main))
     }
 }

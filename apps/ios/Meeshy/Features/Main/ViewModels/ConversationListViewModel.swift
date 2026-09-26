@@ -28,13 +28,7 @@ class ConversationListViewModel: ObservableObject {
         }
     }
     @Published var userCategories: [ConversationSection] = []
-    @Published var isLoading = false
-    /// Convenience accessor mirroring `paginationState == .loadingMore`.
-    /// Kept for compatibility with views that still bind to the boolean
-    /// (e.g. the spinner footer in ConversationListView). Updates flow
-    /// through `paginationState`'s @Published wrapper, so SwiftUI
-    /// re-evaluates dependents when this transitions.
-    var isLoadingMore: Bool { paginationState == .loadingMore }
+    var isLoading = false
     /// `true` when the last cold-start sync failed and the cache is still
     /// empty. The view reads this to swap the empty-state placeholder for
     /// a retryable error panel. We don't reuse `isLoading` because the
@@ -130,7 +124,6 @@ class ConversationListViewModel: ObservableObject {
         conversations.reduce(0) { $0 + $1.userState.unreadCount }
     }
 
-    private let api: APIClientProviding
     private let conversationService: ConversationServiceProviding
     private let preferenceService: PreferenceServiceProviding
     private let messageSocket: MessageSocketProviding
@@ -383,7 +376,7 @@ class ConversationListViewModel: ObservableObject {
             }
             await store.saveCursor(nextCursor: cursor, hasMore: more, for: "list")
             #if DEBUG
-            await MainActor.run { self?.persistCallCount += 1 }
+            self?.persistCallCount += 1
             #endif
         }
     }
@@ -440,9 +433,6 @@ class ConversationListViewModel: ObservableObject {
         case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
         case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
         case pushNotification       // APNs message notification for an unknown conversation
-        case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
-        case pullRefresh            // user pulled to refresh
-        case coldCache              // initial cache load on app start
     }
 
     /// Fetch a conversation that the gateway just told us about via
@@ -465,23 +455,21 @@ class ConversationListViewModel: ObservableObject {
             do {
                 let apiConv = try await service.getById(id)
                 let domain = apiConv.toConversation(currentUserId: userId)
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    // Defensive dedup: a concurrent fullSync / socket event
-                    // may have surfaced the conversation between the fetch
-                    // start and this point.
-                    if let existing = self.convIndex(for: domain.id) {
-                        self.conversations.remove(at: existing)
-                    }
-                    self.conversations.insert(domain, at: 0)
-                    // Mark this id as recently-created so the next destructive
-                    // snapshot (foreground delta sync, cache reload after
-                    // fullSync, etc.) doesn't clobber it during the gateway
-                    // aggregate's eventual-consistency window.
-                    self.recentlyCreatedAt[domain.id] = self.dateProvider()
-                    self.schedulePersist()
-                    Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
+                guard let self else { return }
+                // Defensive dedup: a concurrent fullSync / socket event
+                // may have surfaced the conversation between the fetch
+                // start and this point.
+                if let existing = self.convIndex(for: domain.id) {
+                    self.conversations.remove(at: existing)
                 }
+                self.conversations.insert(domain, at: 0)
+                // Mark this id as recently-created so the next destructive
+                // snapshot (foreground delta sync, cache reload after
+                // fullSync, etc.) doesn't clobber it during the gateway
+                // aggregate's eventual-consistency window.
+                self.recentlyCreatedAt[domain.id] = self.dateProvider()
+                self.schedulePersist()
+                Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
             } catch {
                 Logger.messages.error("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-error error=\(error.localizedDescription, privacy: .public)")
             }
@@ -496,13 +484,7 @@ class ConversationListViewModel: ObservableObject {
         return Date().timeIntervalSince(ts) < cacheTTL
     }
 
-    func invalidateCache() {
-        lastFetchedAt = nil
-        Task.detached { await CacheCoordinator.shared.conversations.invalidateAll() }
-    }
-
     init(
-        api: APIClientProviding = APIClient.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         preferenceService: PreferenceServiceProviding = PreferenceService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
@@ -515,7 +497,6 @@ class ConversationListViewModel: ObservableObject {
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared
     ) {
-        self.api = api
         self.conversationService = conversationService
         self.preferenceService = preferenceService
         self.messageSocket = messageSocket
@@ -1707,9 +1688,7 @@ class ConversationListViewModel: ObservableObject {
             lastFetchedAt = Date()
             Task { [weak self] in
                 await self?.syncEngine.syncSinceLastCheckpoint()
-                await MainActor.run { [weak self] in
-                    self?.loadState = .loaded
-                }
+                self?.loadState = .loaded
             }
         case .expired:
             // `load()` intentionally returns a data-less `.expired` once an
@@ -1917,7 +1896,7 @@ class ConversationListViewModel: ObservableObject {
             let cursorAdvanced = page.nextCursor != nil && page.nextCursor != previousCursor
             let madeProgress = !newIds.isEmpty && cursorAdvanced
             if !madeProgress, !page.items.isEmpty {
-                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(self.nextCursor ?? "nil") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
+                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(previousCursor ?? "<aucun>") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
                 nextCursor = page.nextCursor
                 hasMore = false
                 paginationState = .exhausted
@@ -2337,7 +2316,7 @@ class ConversationListViewModel: ObservableObject {
                                 let messages = response.data.reversed().map {
                                     $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
                                 }
-                                try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
+                                try? await CacheCoordinator.shared.messages.save(messages, for: conversationId)
                             }
                         } catch {
                             Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -2538,15 +2517,6 @@ class ConversationListViewModel: ObservableObject {
     /// (`focal.row.you`) : la liste vouvoie, comme ses autres libellés.
     /// Posé dans le SDK au démarrage (`MeeshyApp`), qui le relaie partout.
     static let youAuthorLabel = String(localized: "message.author.self", defaultValue: "Vous", bundle: .main)
-
-    /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
-    /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`
-    /// vide une fin d'appartenance, donc le retrait d'une ligne au hasard —
-    /// piège que la comparaison par `!=` (`participantJoined`) n'a pas.
-    private func isMe(_ userId: String) -> Bool {
-        let me = currentUserId
-        return !me.isEmpty && userId == me
-    }
 }
 
 extension Notification.Name {

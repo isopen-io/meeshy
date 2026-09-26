@@ -196,10 +196,6 @@ final class MessageListViewController: UIViewController {
     /// menu longpress ferme le clavier et remonte le message vers le centre
     /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
-    /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
-    /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
-    var nativeMessageMenu: ((Message) -> AnyView)?
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
     /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
     /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
@@ -1301,7 +1297,7 @@ final class MessageListViewController: UIViewController {
             // sur l'icône / chip plein écran d'une bulle audio ouvre un
             // ZStack contenant uniquement le `Color.black` de fond — d'où
             // l'écran noir observé en prod.
-            let allAudioItems = vm?.allAudioItems ?? []
+            let allAudioItems = vm?.allAudioItems ?? [], audioIndex = vm?.audioItemsByMessageId ?? [:]
             // Cold-open plein écran audio (F1) : sans lecture déjà active, la
             // carte Now Playing / l'avance auto doivent porter le même
             // contexte conversation que `ConversationViewModel.playAudio`
@@ -1557,7 +1553,7 @@ final class MessageListViewController: UIViewController {
                         onPlayAudio: { [weak self] attachmentId in
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },
-                        allAudioItems: allAudioItems,
+                        allAudioItems: allAudioItems, messageAudioItems: audioIndex[message.id] ?? [],
                         conversationName: conversationName,
                         audioQueueTailProvider: audioQueueTailProvider,
                         onScrollToMessage: scrollHandler,
@@ -1790,7 +1786,6 @@ final class MessageListViewController: UIViewController {
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
-                    messageId: messageId,
                     messageCreatedAt: message.createdAt,
                     // Masquée pendant que l'overlay d'appui long présente CETTE
                     // bulle : seule la copie élevée reste visible (anti ghost).
@@ -2931,7 +2926,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         willDisplay cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        applyFocalPerspective(to: cell)
+        applyFocalPerspectiveOnCellDisplay()
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now

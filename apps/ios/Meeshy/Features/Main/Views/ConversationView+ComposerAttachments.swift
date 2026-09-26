@@ -90,7 +90,7 @@ extension ConversationView {
                                 )
                                 .frame(width: 56, height: 56)
 
-                            Image(systemName: iconForAttachmentType(attachment.type))
+                            Image(systemName: attachment.type.composerGlyph)
                                 // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
                                 // (le libellé sous la tuile porte le nom du fichier).
                                 .font(.system(size: 22))
@@ -296,16 +296,6 @@ extension ConversationView {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             composerState.pendingPlace = nil
-        }
-    }
-
-    func iconForAttachmentType(_ type: MessageAttachment.AttachmentType) -> String {
-        switch type {
-        case .image: return "photo.fill"
-        case .video: return "video.fill"
-        case .audio: return "waveform"
-        case .file: return "doc.fill"
-        case .location: return "location.fill"
         }
     }
 

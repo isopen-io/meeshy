@@ -301,7 +301,7 @@ struct CameraView: View {
             Circle()
                 .fill(MeeshyColors.error)
                 .frame(width: 10, height: 10)
-            Text(formatDuration(camera.recordingDuration))
+            Text(LocalizedNumber.duration(seconds: camera.recordingDuration))
                 .font(MeeshyFont.relative(16, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
         }
@@ -312,10 +312,6 @@ struct CameraView: View {
         .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
         .accessibilityValue(LocalizedNumber.spokenDuration(seconds: camera.recordingDuration))
         .accessibilityAddTraits(.updatesFrequently)
-    }
-
-    private func formatDuration(_ t: TimeInterval) -> String {
-        LocalizedNumber.duration(seconds: t)
     }
 }
 
@@ -348,9 +344,8 @@ final class CameraModel: NSObject, ObservableObject {
     private var hasAudioInput = false
     private var didAnnounceMicrophoneRefusal = false
 
-    private var photoOutput = AVCapturePhotoOutput()
-    private var videoOutput = AVCaptureMovieFileOutput()
-    private var currentDevice: AVCaptureDevice?
+    private let photoOutput = AVCapturePhotoOutput()
+    private let videoOutput = AVCaptureMovieFileOutput()
     private var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
 
@@ -457,7 +452,6 @@ final class CameraModel: NSObject, ObservableObject {
         guard session.canAddInput(input) else { return }
 
         session.addInput(input)
-        currentDevice = device
         currentPosition = position
     }
 
@@ -543,7 +537,6 @@ final class CameraModel: NSObject, ObservableObject {
     /// **Rend son verdict** : `false` ⇒ AVFoundation n'aurait pas pu écrire, et
     /// l'appelant doit en tenir compte plutôt que de laisser l'écran croire
     /// qu'il filme.
-    @discardableResult
     private func startSegment() -> Bool {
         guard videoRecordingIsPossible else {
             Logger.media.error("Video recording refused: no active/enabled capture connection")
@@ -601,14 +594,7 @@ final class CameraModel: NSObject, ObservableObject {
         guard error == nil else {
             // A genuine recording error (not a deliberate mid-switch stop, which
             // always completes with error == nil) — end cleanly, discard segments.
-            isSwitchingCameraDuringRecording = false
-            isRecordingVideo = false
-            recordingTimer?.invalidate()
-            recordingTimer = nil
-            for segment in recordedSegmentURLs {
-                FileManager.default.removeItemLogging(at: segment, context: "discarded recording segment", logger: .media)
-            }
-            recordedSegmentURLs = []
+            endRecordingWithoutOutput()
             return
         }
         recordedSegmentURLs.append(url)
@@ -831,7 +817,6 @@ struct CameraPreviewLayer: UIViewRepresentable {
         view.backgroundColor = .black
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
-        context.coordinator.previewLayer = view.previewLayer
         return view
     }
 
@@ -841,17 +826,6 @@ struct CameraPreviewLayer: UIViewRepresentable {
         if uiView.previewLayer.session !== session {
             uiView.previewLayer.session = session
         }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    class Coordinator {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        var previewLayer: AVCaptureVideoPreviewLayer?
     }
 }
 

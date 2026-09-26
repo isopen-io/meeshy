@@ -941,7 +941,6 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
-    var isConnected: Bool = false
     var localVideoTrack: Any? = nil
     var remoteVideoTrack: Any? = nil
 
@@ -1028,7 +1027,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
         return createDataChannelResult
     }
     func sendDataChannelMessage(_ data: Data) { lastSentData = data }
-    func disconnect() { disconnectCallCount += 1; isConnected = false }
+    func disconnect() { disconnectCallCount += 1 }
     private(set) var disconnectAfterFlushingPendingSendCallCount = 0
     func disconnectAfterFlushingPendingSend() {
         disconnectAfterFlushingPendingSendCallCount += 1

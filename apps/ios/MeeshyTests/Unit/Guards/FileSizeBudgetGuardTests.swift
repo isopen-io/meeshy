@@ -473,7 +473,22 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'un lien de partage : `ShareLinkEntryResolver.Resolution.landing(...)`
     // le rend, et le `switch` de cinq cas devient une garde (−10) — le plafond
     // reprend les 10 lignes dans le même lot.
-    private static let legacyLineCeiling = 52_062
+    //
+    // **51 972 depuis l'application du relevé d'audit G014.**
+    // `ConversationDashboardView.swift` (1300 → 1211, −89) perd son code mort
+    // (`participants` non lu, deux `@State` de chargement jamais lus, la
+    // branche `activityChartSection` inatteignable + son placeholder, une
+    // garde `contentTypesSection` redondante) et déplace le calcul des
+    // statistiques dérivées des messages (sentiment `NLTagger`, comptages de
+    // mots/médias, activité par participant) — pur de `messages`, jamais de
+    // `chartPeriod`/`serverStats` — dans un type `nonisolated` neuf,
+    // `ConversationDashboardClientStats.swift`, calculé UNE fois par
+    // `Task.detached` plutôt qu'à chaque rendu sur le MainActor.
+    // `ConversationInfoSheet.swift` (1268 → 1267, −1) perd l'argument
+    // `participants:` que `ConversationDashboardView` ne lisait plus. Les
+    // deux hôtes RESTENT en dette ; le plafond baisse d'exactement ce que le
+    // lot retire.
+    private static let legacyLineCeiling = 51_972
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

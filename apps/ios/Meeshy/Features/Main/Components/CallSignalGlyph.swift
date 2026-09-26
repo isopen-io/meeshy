@@ -32,7 +32,7 @@ enum CallSignalStrength: Equatable {
         }
         switch connection {
         case .connected: return .good
-        case .reconnecting, .checking, .new: return .fair
+        case .new: return .fair
         case .disconnected, .failed, .closed: return .lost
         case .connecting: return .connecting
         }
@@ -88,8 +88,7 @@ enum CallSignalStrength: Equatable {
 
     /// `true` quand le lien mérite l'attention de l'utilisateur (ambre/rouge).
     /// `.connecting` n'est PAS dégradé : la négociation initiale ne doit pas
-    /// faire surgir le glyphe — seule une reconnexion mid-call (mappée `.fair`
-    /// via `PeerConnectionState.reconnecting`) le déclenche.
+    /// faire surgir le glyphe.
     var isDegraded: Bool {
         switch self {
         case .fair, .poor, .lost: return true

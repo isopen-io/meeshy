@@ -371,4 +371,11 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertNil(SignupViewModel.field(forServerName: "systemLanguage"))
         XCTAssertNil(SignupViewModel.field(forServerName: "regionalLanguage"))
     }
+
+    /// Le repli par CODE suit la même règle que le repli par NOM DE CHAMP
+    /// (#6479) : `USERNAME_TAKEN` vise le pseudo, qui a sa propre saisie
+    /// depuis que l'écran l'envoie — jamais le nom affiché.
+    func test_fieldForCode_usernameTaken_targetsTheUsernameInput() {
+        XCTAssertEqual(SignupViewModel.field(forCode: "USERNAME_TAKEN"), .username)
+    }
 }

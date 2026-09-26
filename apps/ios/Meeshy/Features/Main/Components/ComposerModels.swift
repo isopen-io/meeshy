@@ -14,6 +14,19 @@ enum ComposerAttachmentType: String, Equatable {
     case image, file, voice, location, video
 }
 
+extension ComposerAttachmentType {
+    /// Glyphe SF Symbols d'une pièce jointe de composeur — site unique.
+    var glyph: String {
+        switch self {
+        case .voice: return "mic.fill"
+        case .location: return "location.fill"
+        case .image: return "photo.fill"
+        case .file: return "doc.fill"
+        case .video: return "video.fill"
+        }
+    }
+}
+
 struct ComposerAttachment: Identifiable, Equatable {
     let id: String
     let type: ComposerAttachmentType
@@ -21,8 +34,6 @@ struct ComposerAttachment: Identifiable, Equatable {
     var url: URL?
     var size: Int?
     var duration: TimeInterval?
-    var latitude: Double?
-    var longitude: Double?
     var thumbnailColor: String = "808080"
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }

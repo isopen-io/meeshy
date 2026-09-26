@@ -25,14 +25,11 @@ struct MessageOverlayMenu: View {
     var canEdit: Bool = false
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
-    var onPin: (() -> Void)?
-    var onToggleStar: (() -> Void)?
     var isStarred: Bool = false
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var onReact: ((String) -> Void)?
-    var onDelete: (() -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
     var onSaveMedia: (() -> Void)? = nil
@@ -95,7 +92,7 @@ struct MessageOverlayMenu: View {
     // are the iMessage-style "popular" defaults (still visible without
     // any scroll); the tail extends with a curated selection so the
     // user always has something to discover when they swipe.
-    private let defaultEmojis = [
+    static let defaultEmojis = [
         "😂", "❤️", "👍", "😮", "😢", "🔥",
         "🎉", "💯", "🥰", "😎", "🙏", "💀",
         "🤣", "✨", "👏", "🤔", "🥺", "😍",
@@ -211,14 +208,8 @@ struct MessageOverlayMenu: View {
             onCompose?()
         case .select:
             onSelect?()
-        case .pin, .unpin:
-            onPin?()
-        case .star, .unstar:
-            onToggleStar?()
         case .more:
             onShowMore?()
-        case .delete:
-            onDelete?()
         case .callDetail:
             onShowCallDetail?()
         }
@@ -493,7 +484,7 @@ struct MessageOverlayMenu: View {
         // ré-évalue à chaque frame du spring d'entrée, et la table d'usage ne
         // change pas pendant que le menu est ouvert (recordUsage ⇒ dismiss).
         let topEmojis = cachedTopEmojis
-            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
@@ -512,7 +503,7 @@ struct MessageOverlayMenu: View {
         .frame(maxWidth: 280)
         .onAppear {
             if cachedTopEmojis == nil {
-                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
             }
         }
     }

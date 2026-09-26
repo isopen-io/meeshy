@@ -142,9 +142,7 @@ public extension APICallRecord {
     var dataLabel: String? {
         let total = (bytesSent ?? 0) + (bytesReceived ?? 0)
         guard bytesSent != nil || bytesReceived != nil, total > 0 else { return nil }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(total))
+        return Int64(total).formatted(.byteCount(style: .file))
     }
 }
 

@@ -69,16 +69,6 @@ final class VideoFrameConverterTests: XCTestCase {
         XCTAssertTrue(CMSampleBufferGetFormatDescription(first) === CMSampleBufferGetFormatDescription(second))
     }
 
-    func test_makeSampleBuffer_afterReset_stillProducesValidSample() {
-        let sut = makeSUT()
-        _ = sut.makeSampleBuffer(pixelBuffer: makePixelBuffer(), timeStampNs: 0)
-
-        sut.reset()
-        let sample = sut.makeSampleBuffer(pixelBuffer: makePixelBuffer(), timeStampNs: 0)
-
-        XCTAssertNotNil(sample)
-    }
-
     // MARK: - Placeholder pixel buffer (PiP "camera off" — never the frozen last frame)
 
     func test_makePlaceholderPixelBuffer_returnsBufferWithRequestedDimensions() {

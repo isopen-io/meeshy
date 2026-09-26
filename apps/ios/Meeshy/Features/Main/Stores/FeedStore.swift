@@ -50,7 +50,7 @@ public final class FeedStore: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    @Published private(set) var posts: [PostRecord] = []
+    private(set) var posts: [PostRecord] = []
     private let persistence: FeedPersistenceActor
     private var regionCancellable: AnyDatabaseCancellable?
 
@@ -62,7 +62,7 @@ public final class FeedStore: ObservableObject {
 
     // MARK: - Observation
 
-    func startObserving(dbPool: any DatabaseWriter) {
+    func startObserving() {
         stopObserving()
 
         // GRDB `ValueObservation` / `DatabaseRegionObservation` crash under
@@ -93,7 +93,6 @@ public final class FeedStore: ObservableObject {
         regionCancellable = AnyDatabaseCancellable {
             NotificationCenter.default.removeObserver(observer)
         }
-        _ = dbPool // signature parity with previous API; pool no longer needed
     }
 
     func stopObserving() {

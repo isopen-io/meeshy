@@ -184,7 +184,6 @@ struct MeeshyApp: App {
                                     isDeliberate: guestSession.isDeliberate
                                 )
                             },
-                            onDismiss: { dismissGuestSession() },
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()

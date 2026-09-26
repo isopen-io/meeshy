@@ -31,9 +31,6 @@ struct BubbleInlinePagingPreferenceKey: PreferenceKey {
 /// banding past the zone (15% resistance) and haptic feedback at commit.
 struct BubbleSwipeContainer<Content: View>: View {
     let isMine: Bool
-    /// Identifier published via `MessageFramePreferenceKey` so the long-press
-    /// overlay can locate this cell's screen frame at gesture fire time.
-    let messageId: String
     /// Used by the swipe indicator to display a "day month / hh:mm" stamp
     /// before the user has dragged past the reply threshold.
     let messageCreatedAt: Date
@@ -578,11 +575,6 @@ struct MessageListView: UIViewControllerRepresentable {
     /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
     /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
-    /// construit par `ConversationView` (là où toutes les actions sont déjà
-    /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
-    /// long-press custom → overlay reste alors le chemin).
-    var nativeMessageMenu: ((Message) -> AnyView)? = nil
     /// id de la bulle présentée dans l'overlay custom d'appui long — la
     /// cellule live correspondante est masquée (opacity 0) le temps de
     /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
@@ -709,7 +701,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
-        vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
@@ -828,7 +819,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
-        vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive

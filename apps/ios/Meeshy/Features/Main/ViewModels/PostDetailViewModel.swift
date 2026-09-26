@@ -54,8 +54,7 @@ class PostDetailViewModel: ObservableObject {
 
     // MARK: - Persistence Layer
 
-    private(set) var commentStore: CommentStore?
-    private var feedPersistence: FeedPersistenceActor?
+    private(set) var feedPersistence: FeedPersistenceActor?
 
     init(
         postService: PostServiceProviding = PostService.shared,
@@ -93,10 +92,9 @@ class PostDetailViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Wire persistence store for GRDB-backed comments.
-    /// Call once after init when the post ID and dependency container are available.
-    func setupPersistence(commentStore: CommentStore, persistence: FeedPersistenceActor) {
-        self.commentStore = commentStore
+    /// Wire the GRDB persistence layer used by comment-adjacent reads.
+    /// Call once after init when the dependency container is available.
+    func setupPersistence(persistence: FeedPersistenceActor) {
         self.feedPersistence = persistence
     }
 
@@ -237,27 +235,7 @@ class PostDetailViewModel: ObservableObject {
             // Map off the main actor — for a popular post's comment page this
             // decode + Prisme resolution would otherwise hitch the sheet.
             let newComments = await Task.detached(priority: .userInitiated) {
-                payload.map { c -> FeedComment in
-                    let translatedContent: String? = PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                    )
-                    return FeedComment(
-                        id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorUsername: c.author.username,
-                        authorAvatarURL: c.author.avatar,
-                        content: c.content, timestamp: c.createdAt,
-                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: c.parentId,
-                        effectFlags: c.effectFlags ?? 0,
-                        originalLanguage: c.originalLanguage, translatedContent: translatedContent,
-                        currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() },
-                        location: c.location,
-                        // #6578 — un relais qui RECOPIE champ par champ est un inventaire à
-                        // tenir à jour : la citation se perd en silence sur tout site oublié.
-                        quotedMedia: c.quotedCitation
-                    )
-                }
+                payload.map { FeedComment(api: $0, preferredLanguages: langs) }
             }.value
             let existingIds = Set(comments.map(\.id))
             let unique = newComments.filter { !existingIds.contains($0.id) }
@@ -394,28 +372,7 @@ class PostDetailViewModel: ObservableObject {
         _ payload: [APIPostComment], parentId: String, preferredLanguages: [String]
     ) async -> [FeedComment] {
         await Task.detached(priority: .userInitiated) {
-            payload.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage,
-                    preferredLanguages: preferredLanguages
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: parentId,
-                    effectFlags: c.effectFlags ?? 0,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location,
-                    // #6578 — un relais qui RECOPIE champ par champ est un inventaire à
-                    // tenir à jour : la citation se perd en silence sur tout site oublié.
-                    quotedMedia: c.quotedCitation
-                )
-            }
+            payload.map { FeedComment(api: $0, preferredLanguages: preferredLanguages, parentId: parentId) }
         }.value
     }
 
@@ -847,30 +804,7 @@ class PostDetailViewModel: ObservableObject {
                 // blank row for a media/effect comment (effectFlags dropped)
                 // and always in its original language (resolveCommentTranslation
                 // never consulted).
-                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-                    translations: data.comment.translations,
-                    originalLanguage: data.comment.originalLanguage,
-                    preferredLanguages: self.preferredLanguages
-                )
-                let comment = FeedComment(
-                    id: data.comment.id, author: data.comment.author.name,
-                    authorId: data.comment.author.id,
-                    authorUsername: data.comment.author.username,
-                    authorAvatarURL: data.comment.author.avatar,
-                    content: data.comment.content, timestamp: data.comment.createdAt,
-                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: parentId,
-                    effectFlags: data.comment.effectFlags ?? 0,
-                    originalLanguage: data.comment.originalLanguage,
-                    translatedContent: translatedContent,
-                    currentUserReactions: data.comment.currentUserReactions,
-                    media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-                    // #6578 — l'écho socket porte la citation comme la lecture
-                    // REST : sans cette ligne, le commentaire qu'on vient
-                    // d'envoyer PERD sa citation au moment où l'écho remplace la
-                    // ligne optimiste, c'est-à-dire sous les yeux de son auteur.
-                    quotedMedia: data.comment.quotedCitation
-                )
+                let comment = FeedComment(api: data.comment, preferredLanguages: self.preferredLanguages)
                 // Écho de NOTRE propre envoi : la ligne optimiste est keyée par
                 // le cmid (sendComment/sendReply/submitCommentWithMedia) — la
                 // remplacer EN PLACE. Sans cette réconciliation, l'écho (id
@@ -932,30 +866,7 @@ class PostDetailViewModel: ObservableObject {
             .filter { $0.postId == postId }
             .sink { [weak self] data in
                 guard let self else { return }
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: data.comment.translations,
-                    originalLanguage: data.comment.originalLanguage,
-                    preferredLanguages: self.preferredLanguages
-                )
-                let updated = FeedComment(
-                    id: data.comment.id, author: data.comment.author.name,
-                    authorId: data.comment.author.id,
-                    authorUsername: data.comment.author.username,
-                    authorAvatarURL: data.comment.author.avatar,
-                    content: data.comment.content, timestamp: data.comment.createdAt,
-                    likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: data.comment.parentId,
-                    effectFlags: data.comment.effectFlags ?? 0,
-                    originalLanguage: data.comment.originalLanguage,
-                    translatedContent: translated,
-                    currentUserReactions: data.comment.currentUserReactions,
-                    media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-                    // #6578 — l'écho socket porte la citation comme la lecture
-                    // REST : sans cette ligne, le commentaire qu'on vient
-                    // d'envoyer PERD sa citation au moment où l'écho remplace la
-                    // ligne optimiste, c'est-à-dire sous les yeux de son auteur.
-                    quotedMedia: data.comment.quotedCitation
-                )
+                let updated = FeedComment(api: data.comment, preferredLanguages: self.preferredLanguages)
                 self.applyCommentUpdated(updated)
                 // Invalidation locale par réécriture (écho d'un autre appareil) :
                 // les autres vues resservent la version éditée depuis le cache.

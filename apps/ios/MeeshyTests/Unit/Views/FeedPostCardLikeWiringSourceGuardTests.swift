@@ -26,15 +26,7 @@ import XCTest
 final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
 
     /// Montages délibérément muets, chacun justifié par une MESURE.
-    ///
-    /// `FeedCard` (`FeedCommentsSheet.swift`, section « Legacy Support ») a
-    /// **zéro appelant dans tout le dépôt** — mesuré par
-    /// `grep -rn "FeedCard(" --include=*.swift .` moins ses homonymes
-    /// `ReelFeedCard`/`FeedPostCard` : aucun résultat. Il ne peut donc mentir à
-    /// personne. Il n'est pas supprimé ici parce que ce lot corrige un défaut
-    /// de câblage, pas l'inventaire du code mort ; l'entrée porte sa mesure
-    /// pour que la prochaine session sache qu'elle a été prise, pas oubliée.
-    private static let deliberatelyUnwired: Set<String> = ["FeedCard"]
+    private static let deliberatelyUnwired: Set<String> = []
 
     private var viewsDirectory: URL {
         URL(fileURLWithPath: #filePath)

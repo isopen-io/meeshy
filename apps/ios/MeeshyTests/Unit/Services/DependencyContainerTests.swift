@@ -118,7 +118,7 @@ final class DependencyContainerTests: XCTestCase {
         XCTAssertEqual(value, "ok")
 
         XCTAssertTrue(diagnostics.recoveryAttempted)
-        XCTAssertTrue(diagnostics.recoveredFromCorruption)
+        XCTAssertFalse(diagnostics.fellBackToSecondaryPath)
         XCTAssertFalse(diagnostics.fellBackToEphemeralStorage)
         XCTAssertNotNil(diagnostics.firstAttemptError)
         XCTAssertNotNil(diagnostics.quarantinedFilePath)

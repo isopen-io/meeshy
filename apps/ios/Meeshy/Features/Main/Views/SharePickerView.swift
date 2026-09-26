@@ -62,6 +62,7 @@ struct SharePickerView: View {
     // MARK: - Body
 
     var body: some View {
+        let visible = filteredConversations   // filtre actif + recherche, UNE fois par rendu
         NavigationStack {
             VStack(spacing: 0) {
                 contentPreviewBanner
@@ -73,10 +74,10 @@ struct SharePickerView: View {
 
                 if isLoading {
                     loadingState
-                } else if filteredConversations.isEmpty {
+                } else if visible.isEmpty {
                     emptyState
                 } else {
-                    conversationList
+                    conversationList(visible)
                 }
             }
             .background(theme.backgroundPrimary)
@@ -249,10 +250,10 @@ struct SharePickerView: View {
 
     // MARK: - Conversation List
 
-    private var conversationList: some View {
+    private func conversationList(_ visible: [Conversation]) -> some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 0) {
-                ForEach(filteredConversations) { conv in
+                ForEach(visible) { conv in
                     shareRow(for: conv)
                 }
             }
@@ -279,7 +280,7 @@ struct SharePickerView: View {
                 )
 
                 HStack(spacing: 4) {
-                    Text(conversationTypeLabel(conv.type))
+                    Text(conv.type.displayName)
                         .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
@@ -343,21 +344,6 @@ struct SharePickerView: View {
             }
             .disabled(sendingToId != nil)
             .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Envoyer à", bundle: .main)) \(conv.displayName)")
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func conversationTypeLabel(_ type: MeeshyConversation.ConversationType) -> String {
-        switch type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
-        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
-        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 

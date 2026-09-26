@@ -1,5 +1,4 @@
 import SwiftUI
-import PhotosUI
 import Combine
 import os
 import MeeshySDK
@@ -57,38 +56,12 @@ struct FeedView: View {
     /// Source UNIQUE de « quel réel joue ». `@State` et NON `@StateObject` (#7010) :
     /// ce body n'en lit rien, et l'abonnement re-diffait tout `FeedView` au scroll.
     @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
-    /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
-    /// Set to false to keep the existing SwiftUI ScrollView path.
-    @State private var useUIKitList = false
     @State var showComposer = false
-    @FocusState var isComposerFocused: Bool
     @State var composerText = ""
-    /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
-    /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non
-    /// privée — `feedDeclaredReferences` vit dans l'extension
-    /// `FeedView+Attachments`, et c'est elle qui les remet aux deux chemins de
-    /// publication restants (`publishAudioPost`, `publishBorrowedSoundPost`).
-    @State var composerReferences: [ComposerReference] = []
-    @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
-    /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
-    /// sur une visibilité qui n'en demande pas.
+    /// Audience nommée de la publication en cours (EXCEPT/ONLY). Vide tant que
+    /// l'auteur reste sur une visibilité qui n'en demande pas.
     @State  var postVisibilityUserIds: [String] = []
-    @State  var audiencePickerMode: PostVisibility? = nil
-
-    /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
-    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
-    var selectedPostVisibility: PostVisibility {
-        PostVisibility(rawValue: postVisibility) ?? .public
-    }
-
-    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
-    /// tous. Le gateway les REFUSE (`CreatePostSchema`) : mieux vaut retenir
-    /// l'envoi ici que le laisser échouer après coup.
-    var postAudienceIncomplete: Bool {
-        selectedPostVisibility.requiresUserSelection && postVisibilityUserIds.isEmpty
-    }
 
     /// A QUALIFYING composition (video || audio || >= 2 images —
     /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
@@ -142,57 +115,16 @@ struct FeedView: View {
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
-    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
-    /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
-    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
-    @State var pendingPlace: SharedPlace? = nil
-    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : « rendre ce
-    /// contenu trouvable à proximité ». INDÉPENDANT de `pendingPlace`, qui
-    /// gouverne le badge affiché et ne bouge pas — on peut afficher un lieu
-    /// sans être trouvable, et l'inverse.
-    ///
-    /// `.disabled` à l'ouverture, et reconstruit à chaque choix de lieu :
-    /// l'état porte la mémoire PRÉ-SÉLECTIONNÉE et les paliers offerts, tous
-    /// deux lus au moment où le lieu entre. L'interrupteur, lui, repart fermé
-    /// à chaque publication — le consentement porte sur UNE publication.
-    @State var nearbyDiscoverability: NearbyDiscoverabilityChoice = .disabled
-    @State var pendingMediaFiles: [String: URL] = [:]
-    @State var pendingThumbnails: [String: UIImage] = [:]
-    @State var pendingAudioURL: URL?
     /// `clientMutationId` of a post/reel recovered from the offline queue and
     /// pre-filled as a draft when the composer opened onto a stuck unsent post.
     /// The re-send supersedes this row so it replaces the stuck one (no duplicate
     /// on reconnect). `nil` when the compose is fresh.
     @State var recoveredPostCmid: String?
 
-    /// In-flight preparations rendered as loading tiles in the attachments
-    /// row. Each entry is promoted to `pendingAttachments` once it reaches
-    /// `.ready`. Source-of-truth pipeline:
-    /// `AttachmentPreparationService` (apps/ios/.../Services).
-    @State var preparingAttachments: [PreparingAttachment] = []
-    @State var showPhotoPicker = false
-    @State var selectedPhotoItems: [PhotosPickerItem] = []
-    @State var showCamera = false
-    @State var showFilePicker = false
-    @State var showLocationPicker = false
-    @State var isUploading = false
-    @State var uploadProgress: UploadQueueProgress?
-    @State var isLoadingMedia = false
     // (#6226) `audioRecorder` retiré : déclaré ici, il n'était LU nulle part
     // dans `FeedView*` — un abonnement à vingt hertz et une instance
     // d'enregistreur vivante pour personne.
-    @State private var pendingAttachmentType: String?
-    @State var showEmojiPicker = false
     @State private var quoteTargetPost: FeedPost?
-
-    var composerHasContent: Bool {
-        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
-        // position seule et le chemin de publication ne devient jamais
-        // atteignable (Task 13, 2026-07-29). La règle est portée aujourd'hui par
-        // `ComposerDocumentSendRules` (`emptyDraft` accepte un lieu seul) ;
-        // `publishPostWithAttachments`, qui l'appliquait ici, est retirée (#6016).
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
-    }
 
     // MARK: - Post Heart Seeding (Prisme Linguistique — reaction state)
 
@@ -227,10 +159,8 @@ struct FeedView: View {
                     let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
                     let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
                     try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
-                    await MainActor.run {
-                        for p in posts where !postBookmarkInFlightIds.contains(p.id) {
-                            postBookmarkedIds.insert(p.id)
-                        }
+                    for p in posts where !postBookmarkInFlightIds.contains(p.id) {
+                        postBookmarkedIds.insert(p.id)
                     }
                 } catch { /* offline / 5xx — bookmarks stay unseeded, no UX harm */ }
             }
@@ -398,7 +328,7 @@ struct FeedView: View {
             // outside-capture would freeze a value that a `post:updated`
             // socket event might invalidate between the tap and the cache
             // save (race window ~100ms).
-            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
+            let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
             // Pre-populate the bookmarks cache optimistically so the Favoris
             // tab shows the post the moment the user opens it. Mirror the
             // pre-fix behaviour from FeedViewModel.bookmarkPost.
@@ -591,11 +521,7 @@ struct FeedView: View {
                     .offset(x: orb.offset.x, y: orb.offset.y)
             }
 
-            if useUIKitList, let store = viewModel.feedStore {
-                FeedListView(store: store)
-            } else {
-                feedScrollView
-            }
+            feedScrollView
 
             // Header shown on iPhone AND iPad: the scroll content already
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
@@ -735,9 +661,6 @@ struct FeedView: View {
             Button(action: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showComposer = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        isComposerFocused = true
-                    }
                 }
                 HapticFeedback.light()
             }) {
@@ -765,12 +688,8 @@ struct FeedView: View {
             // Add content button (+)
             Menu {
                 Button {
-                    pendingAttachmentType = "photo"
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showPhotoPicker = true
-                        }
                     }
                     HapticFeedback.light()
                 } label: {
@@ -781,12 +700,8 @@ struct FeedView: View {
                 }
 
                 Button {
-                    pendingAttachmentType = "camera"
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showCamera = true
-                        }
                     }
                     HapticFeedback.light()
                 } label: {
@@ -807,12 +722,8 @@ struct FeedView: View {
                 }
 
                 Button {
-                    pendingAttachmentType = "file"
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showFilePicker = true
-                        }
                     }
                     HapticFeedback.light()
                 } label: {
@@ -823,12 +734,8 @@ struct FeedView: View {
                 }
 
                 Button {
-                    pendingAttachmentType = "location"
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showComposer = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showLocationPicker = true
-                        }
                     }
                     HapticFeedback.light()
                 } label: {
@@ -971,7 +878,6 @@ struct FeedView: View {
                     latitude: place.latitude, longitude: place.longitude
                 )))
             },
-            isCommentsExpanded: expandedComments.contains(post.id),
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
             isHeartInFlight: postHeartInFlightIds.contains(post.id),
@@ -983,16 +889,6 @@ struct FeedView: View {
             isReposted: postRepostedIds.contains(post.id),
             isRepostInFlight: postRepostInFlightIds.contains(post.id),
             isShareInFlight: postShareInFlightIds.contains(post.id),
-            onToggleComments: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    if expandedComments.contains(post.id) {
-                        expandedComments.remove(post.id)
-                    } else {
-                        expandedComments.insert(post.id)
-                    }
-                }
-                HapticFeedback.light()
-            },
             onLike: { _ in
                 togglePostHeart(post: post)
             },
@@ -1243,7 +1139,7 @@ struct FeedView: View {
                     socketHandler: deps.feedSocketHandler,
                     persistence: deps.feedPersistence
                 )
-                store.startObserving(dbPool: deps.dbPool)
+                store.startObserving()
                 await store.loadInitial()
             }
 
@@ -1454,4 +1350,4 @@ struct FeedView: View {
 }
 
 // See FeedPostCard.swift, FeedPostCard+Media.swift
-// See FeedCommentsSheet.swift (CommentsSheetView, CommentRowView, FeedCard)
+// See FeedCommentsSheet.swift (CommentsSheetView, CommentRowView)

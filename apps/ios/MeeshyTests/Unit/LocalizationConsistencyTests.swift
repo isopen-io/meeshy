@@ -188,7 +188,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // dans le même commit (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
-        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 4
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
@@ -512,6 +512,14 @@ final class LocalizationConsistencyTests: XCTestCase {
         // quelqu'un qu'on est en train de perdre, et on lui parlait français.
         "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
+        // Dédoublonnage audit L3-18 — le switch « type de conversation → libellé »
+        // était recopié dans quatre fichiers ; trois d'entre eux étaient épinglés
+        // ici (`ConversationInfoSheet.swift`, `GlobalSearchView.swift`,
+        // `SharePickerView.swift`). Le cliquet suit le CODE, pas le chemin (#4084,
+        // #6040, #6145, #6693) : sans cette ligne, les huit clés `conversation.type.*`
+        // seraient sorties de la garde des trois en même temps, sans qu'une seule
+        // assertion rougisse.
+        "apps/ios/Meeshy/Features/Main/Components/ConversationTypeDisplayName.swift",  // 8
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not

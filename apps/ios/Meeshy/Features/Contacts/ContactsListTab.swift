@@ -12,9 +12,9 @@ struct ContactsListTab: View {
     @ObservedObject var affiliatesViewModel: AffiliatesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
-    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,28 +50,14 @@ struct ContactsListTab: View {
                 return count > 0 ? " (\(count))" : ""
             }
             guard filter == .all || filter == .online else { return "" }
-            let count = filter == .all ? viewModel.friends.count :
-                viewModel.friends.filter { $0.isOnline == true }.count
+            let count = filter == .all ? viewModel.friends.count : viewModel.onlineCount
             return count > 0 ? " (\(count))" : ""
         }()
 
-        return Button {
+        return ContactsFilterChip(title: "\(filter.title)\(countSuffix)", isSelected: isActive) {
             viewModel.setFilter(filter)
-        } label: {
-            Text("\(filter.title)\(countSuffix)")
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isActive ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule().fill(isActive ? MeeshyColors.indigo500 : Color.clear)
-                )
-                .overlay(
-                    Capsule().stroke(isActive ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
-                )
         }
         .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre : %@%@", bundle: .main), filter.title, countSuffix))
-        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     // MARK: - Content
@@ -92,30 +78,40 @@ struct ContactsListTab: View {
             )
         } else if viewModel.loadState == .loading && viewModel.friends.isEmpty {
             ContactsSkeletonList()
-        } else if viewModel.filteredFriends.isEmpty {
-            emptyState
         } else {
-            searchableList
+            friendsList(viewModel.filteredFriends)   // filtré UNE fois par rendu
         }
+    }
+
+    @ViewBuilder
+    private func friendsList(_ friends: [FriendRequestUser]) -> some View {
+        if friends.isEmpty { emptyState } else { searchableList(friends) }
     }
 
     // MARK: - Searchable List
 
-    private var searchableList: some View {
+    private func searchableList(_ friends: [FriendRequestUser]) -> some View {
         VStack(spacing: 0) {
             ContactsSearchField(
                 placeholder: String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main),
-                query: Binding(get: { viewModel.searchQuery }, set: { viewModel.search($0) })
+                query: $viewModel.searchQuery
             )
             .padding(.horizontal, 16)
             .padding(.bottom, 4)
 
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
-                let friends = viewModel.filteredFriends
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(friends.enumerated()), id: \.element.id) { index, friend in
-                        contactRow(friend, index: index, total: friends.count)
+                    ForEach(friends, id: \.id) { friend in
+                        ContactRow(
+                            user: friend,
+                            moodEmoji: statusViewModel.statusForUser(userId: friend.id)?.moodEmoji,
+                            presence: PresenceManager.shared.resolvedState(userId: friend.id, isOnline: friend.isOnline, lastActiveAt: friend.lastActiveAt),
+                            isDark: colorScheme == .dark,
+                            onOpen: { router.deepLinkProfileUser = ProfileSheetUser(username: friend.username) },
+                            onMoodTap: statusViewModel.moodTapHandler(for: friend.id)
+                        )
+                        .equatable()
                     }
                 }
                 .padding(.top, 4)
@@ -125,29 +121,52 @@ struct ContactsListTab: View {
         }
     }
 
-    // MARK: - Contact Row
+    // MARK: - Empty State
 
-    private func contactRow(_ user: FriendRequestUser, index: Int, total: Int) -> some View {
+    private var emptyState: some View {
+        EmptyStateView(
+            icon: "person.2.slash",
+            title: viewModel.searchQuery.isEmpty
+                ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main)
+                : String(localized: "contacts.list.no-results", defaultValue: "Aucun résultat", bundle: .main),
+            subtitle: ""
+        )
+    }
+}
+
+// MARK: - Contact Row
+
+/// Cellule feuille : `==` sur ses seules entrées de VALEUR (closures exclues) —
+/// une ligne ne se réévalue que si la personne, son humeur, sa présence ou le
+/// thème change, plus à chaque publication de `StatusViewModel`.
+private struct ContactRow: View, Equatable {
+    let user: FriendRequestUser
+    let moodEmoji: String?
+    let presence: PresenceState
+    let isDark: Bool
+    let onOpen: () -> Void
+    let onMoodTap: ((CGPoint) -> Void)?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static func == (lhs: ContactRow, rhs: ContactRow) -> Bool {
+        lhs.user == rhs.user && lhs.moodEmoji == rhs.moodEmoji
+            && lhs.presence == rhs.presence && lhs.isDark == rhs.isDark
+    }
+
+    var body: some View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
-        let presence = PresenceManager.shared.resolvedState(
-            userId: user.id,
-            isOnline: user.isOnline,
-            lastActiveAt: user.lastActiveAt
-        )
-
-        return Button {
-            router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
-        } label: {
+        return Button(action: onOpen) {
             HStack(spacing: 14) {
                 MeeshyAvatar(
                     name: name,
                     context: .userListItem,
                     accentColor: color,
                     avatarURL: user.avatar,
-                    moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
+                    moodEmoji: moodEmoji,
                     presenceState: presence,
-                    onMoodTap: statusViewModel.moodTapHandler(for: user.id)
+                    onMoodTap: onMoodTap
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -183,7 +202,6 @@ struct ContactsListTab: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(contactRowAccessibilityLabel(user, presence: presence))
-        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: total)
     }
 
     private func contactRowAccessibilityLabel(_ user: FriendRequestUser, presence: PresenceState) -> String {
@@ -196,17 +214,5 @@ struct ContactsListTab: View {
             parts.append(String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))
         }
         return parts.joined(separator: ", ")
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        EmptyStateView(
-            icon: "person.2.slash",
-            title: viewModel.searchQuery.isEmpty
-                ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main)
-                : String(localized: "contacts.list.no-results", defaultValue: "Aucun résultat", bundle: .main),
-            subtitle: ""
-        )
     }
 }

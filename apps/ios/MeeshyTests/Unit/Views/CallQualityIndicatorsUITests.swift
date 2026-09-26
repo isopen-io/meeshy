@@ -11,8 +11,6 @@ import XCTest
 ///  2. L'état de faiblesse réseau vit UNIQUEMENT dans des indicateurs discrets :
 ///     glyphe signal code couleur + status pills inline.
 ///  3. VoiceOver reste notifié à la bascule en dégradé (annonce a11y conservée).
-///  4. Le morph d'émergence de l'île (composant partagé encore utilisé ailleurs)
-///     n'interpole toujours pas de frame `nil` — il passe par `scaleEffect`.
 @MainActor
 final class CallQualityIndicatorsUITests: XCTestCase {
 
@@ -89,29 +87,6 @@ final class CallQualityIndicatorsUITests: XCTestCase {
             glyphCount, 2,
             "The color-coded signal glyph must live in BOTH duration badges " +
             "(audio capsule + video overlay badge)."
-        )
-    }
-
-    // MARK: - Island emergence morph safety
-
-    func test_islandBanner_neverMorphsLayoutFrames() throws {
-        let banner = try source("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
-        XCTAssertFalse(
-            banner.contains(".frame(width: born"),
-            "The emergence morph must not interpolate .frame(width: X → nil) — an " +
-            "unbounded nil dimension under an .infinity-proposing parent rendered the " +
-            "capsule full-screen (user screenshot IMG_0525, 2026-07-04)."
-        )
-        XCTAssertTrue(
-            banner.contains(".scaleEffect("),
-            "The morph must use scaleEffect — a render-only, Animatable effect that " +
-            "can never participate in layout, so the capsule is physically bounded " +
-            "by its settled size."
-        )
-        XCTAssertTrue(
-            banner.contains("ViewModifier, Animatable") && banner.contains("var animatableData"),
-            "The emergence modifier must be Animatable on a single scalar progress so " +
-            "SwiftUI interpolates the whole geometry deterministically along the curve."
         )
     }
 }

@@ -502,12 +502,12 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "checkmark.circle.fill",
                         text: MessageViewsLabels.deliveredBanner(receivedCount: status.receivedCount, totalMembers: status.totalMembers),
-                        detail: status.receivedBy.first.map { formatTimeFR($0.receivedAt) } ?? "",
+                        detail: status.receivedBy.first.map { MessageDetailClock.hourMinute($0.receivedAt) } ?? "",
                         count: "\(status.receivedCount)/\(status.totalMembers)",
                         accent: accent
                     )
@@ -538,12 +538,12 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
-                    emptyStateView(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "eye.fill",
                         text: MessageViewsLabels.readBanner(readCount: status.readCount, totalMembers: status.totalMembers),
-                        detail: status.readBy.first.map { formatTimeFR($0.readAt) } ?? "",
+                        detail: status.readBy.first.map { MessageDetailClock.hourMinute($0.readAt) } ?? "",
                         count: "\(status.readCount)/\(status.totalMembers)",
                         accent: accent
                     )
@@ -575,9 +575,9 @@ struct MessageViewsDetailView: View {
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a reçu le message", bundle: .main), accent: accent)
+                    MessageDetailEmptyState(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a reçu le message", bundle: .main))
                 } else {
-                    timelineBanner(
+                    MessageDetailTimelineBanner(
                         icon: "eye.slash.fill",
                         text: String(localized: "message-detail.views.not-seen.title", defaultValue: "Pas encore vu", bundle: .main),
                         detail: String(localized: "message-detail.views.not-seen.count", defaultValue: "^[\(notSeen.count) participant](inflect: true)", bundle: .main),
@@ -627,7 +627,7 @@ struct MessageViewsDetailView: View {
             if isLoadingAttachmentStatuses {
                 loadingIndicator(accent: accent)
             } else if attachments.isEmpty {
-                emptyStateView(icon: Self.emptyIcon(for: family), text: Self.emptyLabel(for: family), accent: accent)
+                MessageDetailEmptyState(icon: Self.emptyIcon(for: family), text: Self.emptyLabel(for: family))
             } else {
                 ForEach(attachments) { attachment in
                     mediaConsumptionCard(attachment: attachment, family: family, accent: accent)
@@ -668,48 +668,6 @@ struct MessageViewsDetailView: View {
         case .opened:
             return String(localized: "message-detail.views.not-opened", defaultValue: "Pas encore ouvert", bundle: .main)
         }
-    }
-
-    // MARK: - Shared Views Components
-
-    private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(accent)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(text)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundColor(theme.textMuted)
-            }
-
-            Spacer()
-
-            if let count {
-                Text(count)
-                    .font(.system(.caption, design: .monospaced).weight(.bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule()
-                            .fill(accent.opacity(0.12))
-                    )
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(accent.opacity(isDark ? 0.06 : 0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(accent.opacity(0.12), lineWidth: 0.5)
-                )
-        )
     }
 
     private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
@@ -926,25 +884,6 @@ struct MessageViewsDetailView: View {
         .padding(.vertical, 30)
     }
 
-    private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
-                // it with Dynamic Type so icon and caption grow in proportion.
-                .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                // Decorative — the caption below already states the empty state.
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
-        // Read the whole empty state as the single caption, not "image" + text.
-        .accessibilityElement(children: .combine)
-    }
-
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
@@ -981,9 +920,7 @@ struct MessageViewsDetailView: View {
     /// encore optimiste garde son id local `cid_…` (l'upgrade in-place ne
     /// change jamais l'identité SwiftUI) : il n'existe pas côté serveur, et
     /// les endpoints `/messages/:id/...` répondraient 400 "Validation failed".
-    private var messageHasServerId: Bool {
-        message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
-    }
+    private var messageHasServerId: Bool { ConversationViewModel.isServerMessageId(message.id) }
 
     private func loadSendAttempts() async {
         guard sendAttempts.isEmpty else { return }
@@ -1076,10 +1013,6 @@ struct MessageViewsDetailView: View {
 
     private func formatDateFR(_ date: Date) -> String {
         date.formatted(.dateTime.day().month().year().hour().minute())
-    }
-
-    private func formatTimeFR(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute())
     }
 
     private func formatDateTimeFR(_ date: Date) -> String {

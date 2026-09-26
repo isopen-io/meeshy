@@ -50,10 +50,8 @@ enum CallMediaType: Sendable {
 enum PeerConnectionState: String, Sendable {
     case new
     case connecting
-    case checking      // ICE checking — UX warning lors d'une nouvelle tentative de connexion
     case connected
     case disconnected
-    case reconnecting  // ICE restart en cours après perte de connectivité
     case failed
     case closed
 }
@@ -762,7 +760,6 @@ enum VideoDegradationPreference: String, Sendable, Equatable {
 
 protocol WebRTCClientProviding: AnyObject {
     var delegate: (any WebRTCClientDelegate)? { get set }
-    var isConnected: Bool { get }
     var localVideoTrack: Any? { get }
     var remoteVideoTrack: Any? { get }
 
