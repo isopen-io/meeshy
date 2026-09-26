@@ -7,6 +7,7 @@ import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
 
 import { conversationCardQueryKey } from '@/lib/api/conversation-card';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -250,5 +251,58 @@ describe('ConversationLinkCard — actions', () => {
     await click(confirm);
     expect(calls().some((call) => call.method === 'POST' && call.path === '/api/v1/conversations/c-beta/leave')).toBe(true);
     expect(buttons(host)).toEqual(['Join']);
+  });
+});
+
+/**
+ * **LES PORTRAITS DE LA CARTE (#8137).** La passerelle sert `inviter.avatarUrl`,
+ * `avatarUrl` et `bannerUrl` comme les autres portraits : une CLÉ de stockage
+ * (`avatars/user/<id>.jpg`). Posée telle quelle, elle se résolvait contre le
+ * CHEMIN du document et peignait une image brisée. La carte passe par la même
+ * résolution que tous les avatars (`attachmentSrc`), et une image qui échoue
+ * cède la place aux initiales — jamais l'icône brisée du navigateur.
+ */
+describe('ConversationLinkCard — portraits', () => {
+  const INVITER_KEY = 'avatars/user/68f2a81417a557e8ce4ddfc1.jpg';
+
+  test('l’avatar de l’inviteur passe par la route de flux, jamais la clé nue', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ inviter: { displayName: 'Alice Martin', username: 'alice', avatarUrl: INVITER_KEY } }),
+    });
+    const img = host.querySelector('[data-conversation-card-invite] img');
+    expect(img?.getAttribute('src')).toBe(attachmentSrc(INVITER_KEY));
+    expect(img?.getAttribute('src')).toContain('/api/v1/attachments/file/');
+  });
+
+  test('l’avatar et la bannière du groupe passent par la même résolution', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ avatarUrl: 'avatars/conversation/c1.jpg', bannerUrl: 'banners/conversation/c1.jpg' }),
+    });
+    const images = [...host.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(images).toContain(attachmentSrc('avatars/conversation/c1.jpg'));
+    const banner = host.querySelector('[data-conversation-card-banner] img');
+    expect(banner?.getAttribute('src')).toBe(attachmentSrc('banners/conversation/c1.jpg'));
+    await act(async () => {
+      banner?.dispatchEvent(new Event('error'));
+    });
+    expect(host.querySelector('[data-conversation-card-banner]')).not.toBeNull();
+    expect(host.querySelector('[data-conversation-card-banner] img')).toBeNull();
+  });
+
+  test('une image qui échoue cède la place aux initiales — jamais une image brisée', async () => {
+    const { host } = await mount({
+      target: SHARE,
+      seed: card({ inviter: { displayName: 'Théo (foot)', username: 'theo', avatarUrl: INVITER_KEY } }),
+    });
+    const img = host.querySelector('[data-conversation-card-invite] img');
+    expect(img).not.toBeNull();
+    await act(async () => {
+      img?.dispatchEvent(new Event('error'));
+    });
+    const invite = host.querySelector('[data-conversation-card-invite]');
+    expect(invite?.querySelector('img')).toBeNull();
+    expect(invite?.querySelector('[data-portrait-initials]')?.textContent).toBe('TF');
   });
 });
