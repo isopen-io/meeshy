@@ -26,7 +26,7 @@ import {
   clearFailedLoginAttempts,
   lockIsVisibleTo
 } from './LoginAttemptService';
-import { PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
+import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
 import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
@@ -238,6 +238,23 @@ export class AuthService {
 
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
 
+      /**
+       * SANS NUMÉRO, UN COMPTE N'EST ACTIF QU'UNE FOIS SON ADRESSE PROUVÉE
+       * (#8055, règle porteur 2026-09-26).
+       *
+       * Lu APRÈS le mot de passe et le verrou : seul qui connaît le mot de
+       * passe apprend que le compte attend son code — un essai faux reste un
+       * `null` ordinaire, compté. Lu AVANT le second facteur et toute écriture
+       * de présence : un compte inactif ne passe pas « en ligne ». Un numéro
+       * donné à l'inscription active le compte ; l'adresse se vérifie alors
+       * plus tard. Les comptes HISTORIQUES non vérifiés sans numéro passent
+       * désormais eux aussi par le code — c'est la règle voulue.
+       */
+      if (!user.emailVerifiedAt && !user.phoneNumber) {
+        logger.info(`[AUTH_SERVICE] compte non actif (adresse à prouver, aucun numéro): ${user.username}`);
+        throw new ActivationRequiresEmailProofError(user.email);
+      }
+
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
@@ -282,8 +299,8 @@ export class AuthService {
         }
       });
 
-      // Check email verification status
-      // If not verified, resend verification email
+      // Un compte actif par son NUMÉRO dont l'adresse reste à prouver (#8055) :
+      // la session s'ouvre, et le code de vérification est renvoyé.
       if (!user.emailVerifiedAt) {
         logger.info(`[AUTH_SERVICE] ⚠️ Email non vérifié pour user.email=${user.email}`);
         try {
@@ -329,7 +346,7 @@ export class AuthService {
       }
       // Un compte SANS mot de passe non plus (#6424) : même raison, autre
       // décision — la porte existe, elle est ailleurs.
-      if (error instanceof PasswordNotSetError) {
+      if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
         throw error;
       }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);

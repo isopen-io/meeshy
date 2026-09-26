@@ -34,6 +34,8 @@ public struct LoginResponseData: Decodable, Sendable {
     /// #8035 — `POST /auth/login` sur une adresse inconnue sert un 200 SANS
     /// session : `status == "verification-required"`, l'adresse, et si le
     /// compte vient d'être créé. Lu par `pendingEmailVerification(typedIdentifier:)`.
+    /// #8055 — `POST /auth/register` sans numéro de téléphone sert la même
+    /// branche (`accountCreated: true`) : le compte n'est pas encore actif.
     public let status: String?
     public let accountCreated: Bool?
     public let email: String?
